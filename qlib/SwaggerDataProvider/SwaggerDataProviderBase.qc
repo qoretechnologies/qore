@@ -42,6 +42,13 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
     #! Returns a field definition from Swagger parameters
     private addFieldsFromParameters(HashDataType rv, hash<string, AbstractParameterObject> parameters,
             reference<bool> required) {
+        RecursiveStore rfs();
+        addFieldsFromParametersIntern(rfs, rv, parameters, \required);
+    }
+
+    #! Returns a field definition from Swagger parameters
+    private addFieldsFromParametersIntern(RecursiveStore rfs, HashDataType rv,
+            hash<string, AbstractParameterObject> parameters, reference<bool> required) {
         # temporary hash for fields: loc -> name -> field
         hash<string, hash<string, AbstractDataField>> params;
         # required flag map for type: loc -> bool
@@ -50,7 +57,7 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
             switch (i.value.inLoc) {
                 # body and formData parameters are handled directly under the operation
                 case "query": {
-                    params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!query/" + i.value.name,
+                    params{i.value.inLoc}{i.value.name} = getFieldFromParameterIntern(rfs, "!query/" + i.value.name,
                         i.value.name, i.value.type, i.value.format, i.value.items, i.value.desc, i.value.required);
                     # if at least one query argument is required, then we set "required" to True for the hash
                     if (i.value.required && !req_map{i.value.inLoc}) {
@@ -60,7 +67,7 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
                 }
 
                 case "header": {
-                    params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!headers/" + i.value.name,
+                    params{i.value.inLoc}{i.value.name} = getFieldFromParameterIntern(rfs, "!headers/" + i.value.name,
                         i.value.name, "string", NOTHING, NOTHING, i.value.desc, i.value.required);
                     # if at least one query argument is required, then we set "required" to True for the hash
                     if (i.value.required) {
@@ -86,12 +93,13 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
     #! Returns a field definition from the Swagger parameter
     private AbstractDataField getFieldFromSchema(string name, *string desc, SchemaObject schema,
             bool required = True, *RestClient rest) {
-        return getFieldFromSchemaIntern(name, name, desc, schema, required, rest);
+        RecursiveStore rfs();
+        return getFieldFromSchemaIntern(rfs, name, name, desc, schema, required, rest);
     }
 
     #! Returns a field definition from the Swagger parameter
-    private AbstractDataField getFieldFromSchemaIntern(string path, string name, *string desc, SchemaObject schema,
-            bool required = True, *RestClient rest, auto default_value) {
+    private AbstractDataField getFieldFromSchemaIntern(RecursiveStore rfs, string path, string name,
+            *string desc, SchemaObject schema, bool required = True, *RestClient rest, auto default_value) {
         if (schema.desc.val()) {
             if (desc.val()) {
                 desc += ": " + schema.desc;
@@ -104,24 +112,31 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
         }
         if (schema.type == "object") {
             # check for recursive field definitions
-            RecursiveFieldHelper rfh(self, "schema", path);
+            RecursiveFieldHelper rfh(rfs, self, "schema", path);
             return rfh.get() ?? rfh.set(new QoreDataField({
                 "name": name,
                 "desc": desc,
-                "type": getSchemaDataType(path, schema, required, rest),
+                "type": getSchemaDataTypeIntern(rfs, path, schema, required, rest),
                 "allowed_values": keys schema.enum,
                 "default_value": default_value,
             }));
         }
-        return getFieldFromParameter(path, name, schema.type, schema.format, schema.items, desc, required,
+        return getFieldFromParameterIntern(rfs, path, name, schema.type, schema.format, schema.items, desc, required,
             keys schema.enum, default_value);
     }
 
     #! Returns the data type for the given schema
     private AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *RestClient rest) {
+        RecursiveStore rfs();
+        return getSchemaDataTypeIntern(rfs, path, schema, required, rest);
+    }
+
+    #! Returns the data type for the given schema
+    private AbstractDataProviderType getSchemaDataTypeIntern(RecursiveStore rfs, string path, SchemaObject schema,
+            bool required = True, *RestClient rest) {
         # check for recursive type definitions
-        RecursiveTypeHelper rth(schema.uniqueHash());
+        RecursiveTypeHelper rth(rfs, schema.uniqueHash());
         if (*AbstractDataProviderType t = rth.get()) {
             return t;
         }
@@ -138,15 +153,20 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
             }
         }
 
+        string uh = schema.uniqueHash();
+        if (self.schema.store.cache{uh}) {
+            return self.schema.store.cache{uh};
+        }
+
         HashDataType type(required ? AutoHashType : AutoHashOrNothingType);
         rth.set(type);
-        map type.addField(getFieldFromSchemaIntern(path + "/" + $1.key, $1.key, NOTHING, $1.value,
+        map type.addField(getFieldFromSchemaIntern(rfs, path + "/" + $1.key, $1.key, NOTHING, $1.value,
             exists schema.required{$1.key}, NOTHING, def_body{$1.key})), schema.properties.pairIterator();
         if (schema.additionalProperties === True) {
             type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
         } else if (schema.additionalProperties) {
             on_error printf("schema: %N\n", schema);
-            type.setDefaultOtherFieldType(getType(path + "/" + schema.additionalProperties.type,
+            type.setDefaultOtherFieldType(getTypeIntern(rfs, path + "/" + schema.additionalProperties.type,
                 schema.additionalProperties.type, schema.additionalProperties.format,
                 schema.additionalProperties.items,
                 !schema.additionalProperties.nullable));
@@ -154,18 +174,28 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
             # make sure that extra fields are not supported
             type.setDefaultOtherFieldType();
         }
-        return type;
+
+        return self.schema.store.cache{uh} = type;
     }
 
     #! Returns a field from a Swagger parameter
     private AbstractDataField getFieldFromParameter(string path, string name, string type, *string format,
             *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values, auto default_value) {
+        RecursiveStore rfs();
+        return getFieldFromParameterIntern(rfs, path, name, type, format, arrayItems, desc, required, allowed_values,
+            default_value);
+    }
+
+    #! Returns a field from a Swagger parameter
+    private AbstractDataField getFieldFromParameterIntern(RecursiveStore rfs, string path, string name, string type,
+            *string format, *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values,
+            auto default_value) {
         # check for recursive field definitions
-        RecursiveFieldHelper rfh(self, "field", path);
+        RecursiveFieldHelper rfh(rfs, self, "field", path);
         return rfh.get() ?? rfh.set(new QoreDataField({
             "name": name,
             "desc": desc,
-            "type": getType(path, type, format, arrayItems, required),
+            "type": getTypeIntern(rfs, path, type, format, arrayItems, required),
             "allowed_values": allowed_values,
             "default_value": default_value,
         }));
@@ -174,6 +204,13 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
     #! Returns the data type corresponding to the values
     private AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True) {
+        RecursiveStore rfs();
+        return getTypeIntern(rfs, path, typestr, format, arrayItems, required);
+    }
+
+    #! Returns the data type corresponding to the values
+    private AbstractDataProviderType getTypeIntern(RecursiveStore rfs, string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required = True) {
         hash<auto> type_options;
         if (required) {
             type_options += {"qore.no_null": True};
@@ -207,7 +244,7 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
                 if (!arrayItems) {
                     throw "SWAGGER-SCHEMA-ERROR", sprintf("no item definition for array path %y", path);
                 }
-                return new SoftListDataType(getSchemaDataType(path, arrayItems), !required);
+                return new SoftListDataType(getSchemaDataTypeIntern(rfs, path, arrayItems), !required);
 
             case "object":
                 return new HashDataType();
@@ -224,13 +261,19 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
 
     #! Returns a field of header fields
     private AbstractDataField getFieldForHeaders(string name, hash<auto> headers) {
-        RecursiveFieldHelper rfh(self, "headers", name);
+        RecursiveStore rfs();
+        return getFieldForHeadersIntern(rfs, name, headers);
+    }
+
+    #! Returns a field of header fields
+    private AbstractDataField getFieldForHeadersIntern(RecursiveStore rfs, string name, hash<auto> headers) {
+        RecursiveFieldHelper rfh(rfs, self, "headers", name);
         if (*QoreDataField f = rfh.get()) {
             return f;
         }
 
         HashDataType recordType();
-        map recordType.addField(getFieldFromParameter("!headers/" + $1.key, $1.key, $1.value.type, $1.value.format,
+        map recordType.addField(getFieldFromParameterIntern(rfs, "!headers/" + $1.key, $1.key, $1.value.type, $1.value.format,
             $1.value.items, $1.value.desc, False)), headers.pairIterator();
         return rfh.set(new QoreDataField(name, "HTTP headers", recordType));
     }
@@ -238,66 +281,55 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
 }
 
 namespace Priv {
-const RecursiveKey = "__swagger_dp_rec_key$$";
+class RecursiveStore {
+    public {
+        hash<auto> h;
+    }
+}
 
 class RecursiveFieldHelper {
     private {
-        *hash<auto> tld;
+        RecursiveStore store;
         string hash_str;
         string ptype;
         string name;
-        *QoreDataField f;
     }
 
-    constructor(object obj, string ptype, string name) {
-        tld := get_thread_data(RecursiveKey);
-        # check for recursive field definitions
+    constructor(RecursiveStore store, object obj, string ptype, string name) {
+        self.store := store;
         hash_str = obj.uniqueHash();
         self.ptype = ptype;
         self.name = name;
-
-        f := tld.field{hash_str}{ptype}{name};
     }
 
     *QoreDataField get() {
-        return f;
+        return store.h{hash_str}{ptype}{name};
     }
 
     QoreDataField set(QoreDataField new_field) {
-        tld.field{hash_str}{ptype}{name} := new_field;
-        save_thread_data(RecursiveKey, tld);
+        store.h{hash_str}{ptype}{name} := new_field;
         return new_field;
     }
 }
 
 class RecursiveTypeHelper {
     private {
-        *hash<auto> tld;
+        RecursiveStore store;
         string hash_str;
-        *AbstractDataProviderType t;
     }
 
-    constructor(string hash_str) {
-        tld := get_thread_data(RecursiveKey);
-        # check for recursive field definitions
+    constructor(RecursiveStore store, string hash_str) {
+        self.store := store;
         self.hash_str = hash_str;
-        t := tld.type{hash_str};
     }
 
     *AbstractDataProviderType get() {
-        return t;
+        return store.h{hash_str};
     }
 
     AbstractDataProviderType set(AbstractDataProviderType new_type) {
-        tld.type{hash_str} := new_type;
-        save_thread_data(RecursiveKey, tld);
+        store.h{hash_str} := new_type;
         return new_type;
-    }
-}
-
-class RecursiveSearchHelper {
-    destructor() {
-        delete_thread_data(RecursiveKey);
     }
 }
 }

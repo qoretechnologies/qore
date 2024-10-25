@@ -1267,6 +1267,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
          */
         list<TagObject> tags;
 
+        #! Free-form data storage for types or other related information
+        hash<auto> store;
+
         #! Additional external documentation.
         *ExternalDocumentationObject externalDocs;
 

@@ -71,7 +71,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         foreach hash<auto> i in (op.responses.responses.pairIterator()) {
             if (i.key =~ /^2/ && i.value) {
                 success_response = i.key;
-                record_type = getRecordTypeIntern();
+                break;
             }
         }
     }
@@ -101,13 +101,15 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     /** Returns the record type description for any successful response
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        if (!record_type) {
+            record_type = getRecordTypeIntern();
+        }
         return record_type;
     }
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
         *ResponseObject response = getSuccessResponse();
         if (response.schema) {
-            RecursiveSearchHelper rsh();
             AbstractDataField response_field = getFieldFromSchema("body", "REST response body argument",
                 response.schema);
             AbstractDataProviderType type = response_field.getType();
@@ -134,7 +136,6 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         }
         *AbstractParameterObject body = op.body ?? pio.body;
         if (body) {
-            RecursiveSearchHelper rsh();
             AbstractDataField body_field = getFieldFromSchema("body", "REST request body argument",
                 cast<BodyParameter>(body).schema, body.required ?? False, rest);
             rv.addField(body_field);
@@ -204,11 +205,9 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         label += " response";
         HashDataType rv();
         if (response.schema) {
-            RecursiveSearchHelper rsh();
             rv.addField(getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
         }
         if (response.headers) {
-            RecursiveSearchHelper rsh();
             rv.addField(getFieldForHeaders("headers", response.headers));
             response_headers = keys response.headers;
         }
