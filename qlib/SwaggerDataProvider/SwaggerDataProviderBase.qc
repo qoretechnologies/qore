@@ -107,8 +107,8 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
                 desc = schema.desc;
             }
         }
-        if (!desc) {
-            desc = sprintf("Property %y of path %y", name, path);
+        if (!exists desc) {
+            desc = "";
         }
         if (schema.type == "object") {
             # check for recursive field definitions
