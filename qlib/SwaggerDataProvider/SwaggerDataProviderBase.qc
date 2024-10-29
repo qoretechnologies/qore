@@ -136,7 +136,7 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
     private AbstractDataProviderType getSchemaDataTypeIntern(RecursiveStore rfs, string path, SchemaObject schema,
             bool required = True, *RestClient rest) {
         # check for recursive type definitions
-        RecursiveTypeHelper rth(rfs, schema.uniqueHash());
+        RecursiveTypeHelper rth(rfs, schema.uniqueHash(), required);
         if (*AbstractDataProviderType t = rth.get()) {
             return t;
         }
@@ -154,14 +154,19 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
         }
 
         string uh = schema.uniqueHash();
-        if (self.schema.store.cache{uh}) {
-            return self.schema.store.cache{uh};
+        string key = required ? "Y" : "N";
+        if (*AbstractDataProviderType rv = getCacheType(\self.schema.store.cache{uh}, key)) {
+            return rv;
         }
 
-        HashDataType type(required ? AutoHashType : AutoHashOrNothingType);
+        string typename = schema.name;
+        if (!required) {
+            typename = "*" + typename;
+        }
+        HashDataType type(required ? AutoHashType : AutoHashOrNothingType, typename);
         rth.set(type);
         map type.addField(getFieldFromSchemaIntern(rfs, path + "/" + $1.key, $1.key, NOTHING, $1.value,
-            exists schema.required{$1.key}, NOTHING, def_body{$1.key})), schema.properties.pairIterator();
+            schema.required{$1.key} ?? False, NOTHING, def_body{$1.key})), schema.properties.pairIterator();
         if (schema.additionalProperties === True) {
             type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
         } else if (schema.additionalProperties) {
@@ -175,7 +180,15 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
             type.setDefaultOtherFieldType();
         }
 
-        return self.schema.store.cache{uh} = type;
+        return self.schema.store.cache{uh}{key} = type;
+    }
+
+    #! Returns an object from the given cache
+    static *AbstractDataProviderType getCacheType(reference<hash<auto>> h, string key) {
+        if (h && (key == "N") && !h.N) {
+            h.N = h.Y.getOrNothingType();
+        }
+        return h{key};
     }
 
     #! Returns a field from a Swagger parameter
@@ -316,19 +329,21 @@ class RecursiveTypeHelper {
     private {
         RecursiveStore store;
         string hash_str;
+        string key;
     }
 
-    constructor(RecursiveStore store, string hash_str) {
+    constructor(RecursiveStore store, string hash_str, bool required) {
         self.store := store;
         self.hash_str = hash_str;
+        key = required ? "Y" : "N";
     }
 
     *AbstractDataProviderType get() {
-        return store.h{hash_str};
+        return SwaggerDataProviderBase::getCacheType(\store.h{hash_str}, key);
     }
 
     AbstractDataProviderType set(AbstractDataProviderType new_type) {
-        store.h{hash_str} := new_type;
+        store.h{hash_str}{key} := new_type;
         return new_type;
     }
 }

@@ -67,7 +67,7 @@ switch (v.typeCode()) {
     - <value>::complexType()
  */
 int <value>::typeCode() [flags=CONSTANT] {
-   return v.getType();
+    return v.getType();
 }
 
 //! Returns the string type for the value
@@ -86,7 +86,7 @@ string t = n.type();
     - <value>::complexType()
 */
 string <value>::type() [flags=CONSTANT] {
-   return new QoreStringNode(v.getTypeName());
+    return new QoreStringNode(v.getTypeName());
 }
 
 //! returns @ref True if the value has a complex type, @ref False if not
@@ -111,7 +111,7 @@ bool b = n.complexType();
     @since %Qore 0.8.13
 */
 bool <value>::complexType() [flags=CONSTANT] {
-   return false;
+    return false;
 }
 
 //! returns the full type name which differs from the simple type name in case of complex types and objects
@@ -162,7 +162,7 @@ if (i.empty())
     @see <value>::val()
 */
 bool <value>::empty() [flags=CONSTANT] {
-   return true;
+    return true;
 }
 
 //! Returns zero; this method will be reimplemented in container types where it may return a non-zero value
@@ -183,7 +183,7 @@ if (!i.size())
     - <value>::val()
 */
 int <value>::size() [flags=CONSTANT] {
-   return 0;
+    return 0;
 }
 
 //! Returns @ref False; this method is reimplemented in other types and will return @ref True if the given expression has a non-empty value
@@ -235,7 +235,7 @@ if (n.val())
     - @ref strict-bool-eval "%strict-bool-eval"
 */
 bool <value>::val() [flags=CONSTANT] {
-   return false;
+    return false;
 }
 
 //! Returns @ref False; this method is reimplemented in other types and will return @ref True if the given expression can be converted to an integer
@@ -251,7 +251,7 @@ if (n.intp())
     @see <string>::intp() for an example of an implementation of this method where the result depends on the value and not the type
 */
 bool <value>::intp() [flags=CONSTANT] {
-   return false;
+    return false;
 }
 
 //! Returns @ref False; this method is reimplemented in other types and will return @ref True if the given expression can be converted to a string
@@ -265,7 +265,7 @@ if (n.strp())
     @endcode
 */
 bool <value>::strp() [flags=CONSTANT] {
-   return false;
+    return false;
 }
 
 //! Returns @ref False; this method is reimplemented in other types and will return @ref True if the given expression is a callable value (ie @ref closure "closures" or @ref call_reference "call references")
@@ -279,7 +279,7 @@ if (n.callp())
     @endcode
 */
 bool <value>::callp() [flags=CONSTANT] {
-   return false;
+    return false;
 }
 
 //! Returns 1; the return value of this method should give the list size of the value, which is normally 1 for non-lists (except for @ref nothing where the size will be 0) and the number of the elements in the list for lists; this method will be reimplemented in other types where it may return other values
@@ -295,7 +295,7 @@ foreach any element in (val) {
     @endcode
 */
 int <value>::lsize() [flags=CONSTANT] {
-   return 1;
+    return 1;
 }
 
 //! Returns the string representation of the value; the default is an empty string
@@ -304,12 +304,12 @@ int <value>::lsize() [flags=CONSTANT] {
     @return the string representation of the value; the default is an empty string
 
     @note check pseudo-classes for each type for other variants of this method; some may take arguments to affect the output format
-
+    return false;
     @since %Qore 0.8.6
 */
-string <value>::toString() [flags=CONSTANT] {
-   QoreStringNodeValueHelper str(v);
-   return str.getReferencedValue();
+string <value>::toString(*string encoding) [flags=CONSTANT] {
+    QoreStringNodeValueHelper str(v, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, xsink);
+    return *xsink ? QoreValue() : str.getReferencedValue();
 }
 
 //! Returns the integer representation of the value; the default is 0
@@ -320,7 +320,7 @@ string <value>::toString() [flags=CONSTANT] {
     @since %Qore 0.8.6
 */
 int <value>::toInt() [flags=CONSTANT] {
-   return v.getAsBigInt();
+    return v.getAsBigInt();
 }
 
 //! Returns the floating-point representation of the value; the default is 0.0
@@ -331,7 +331,7 @@ int <value>::toInt() [flags=CONSTANT] {
     @since %Qore 0.8.6
 */
 float <value>::toFloat() [flags=CONSTANT] {
-   return v.getAsFloat();
+    return v.getAsFloat();
 }
 
 //! Returns the boolean representation of the value; the default is @ref False
@@ -342,7 +342,7 @@ float <value>::toFloat() [flags=CONSTANT] {
     @since %Qore 0.8.6
 */
 bool <value>::toBool() [flags=CONSTANT] {
-   return v.getAsBool();
+    return v.getAsBool();
 }
 
 //! Returns the arbitrary-precision numeric representation of the value; the default is 0
@@ -353,7 +353,7 @@ bool <value>::toBool() [flags=CONSTANT] {
     @since %Qore 0.8.8
 */
 number <value>::toNumber() [flags=CONSTANT] {
-   return QoreNumberNode::toNumber(v);
+    return QoreNumberNode::toNumber(v);
 }
 
 //! Returns an iterator object for the value; the default iterator object returned is @ref Qore::SingleValueIterator "SingleValueIterator"
@@ -367,7 +367,7 @@ map printf("+ %y\n", $1), v.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <value>::iterator() [flags=CONSTANT] {
-   return new QoreObject(QC_SINGLEVALUEITERATOR, 0, new SingleValueIterator(v));
+    return new QoreObject(QC_SINGLEVALUEITERATOR, 0, new SingleValueIterator(v));
 }
 
 //! Returns @ref True if the type can return a non-zero size (@ref True for containers including @ref binary "binary objects" and @ref string "strings", @ref False for everything else)
@@ -378,6 +378,5 @@ AbstractIterator <value>::iterator() [flags=CONSTANT] {
     @since %Qore 0.8.9
 */
 bool <value>::sizep() [flags=CONSTANT] {
-   return false;
+    return false;
 }
-
