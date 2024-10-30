@@ -854,6 +854,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.ref_data.val()) {
                     i.value.ref_data = info.attr.ref_data;
                 }
+                if (info.attr.required) {
+                    i.value.required = True;
+                }
                 if (info.attr.preselected) {
                     i.value.preselected = True;
                 }

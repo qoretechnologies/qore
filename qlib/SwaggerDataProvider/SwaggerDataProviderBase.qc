@@ -119,7 +119,12 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
                 "type": getSchemaDataTypeIntern(rfs, path, schema, required, rest),
                 "allowed_values": keys schema.enum,
                 "default_value": default_value,
-            }));
+            } + (required ? {
+                "attr": {
+                    "preselected": True,
+                    "required": True,
+                },
+            } : NOTHING)));
         }
         return getFieldFromParameterIntern(rfs, path, name, schema.type, schema.format, schema.items, desc, required,
             keys schema.enum, default_value);
