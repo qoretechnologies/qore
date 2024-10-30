@@ -3037,13 +3037,13 @@ public class OperationObject inherits ParameterGroup {
                 if (exists (*string op = (query_obj ?? pio.query_obj))) {
                     h.params{op}{key} = remove h.params{key};
                 } else {
-                    error("SCHEMA-VALIDATION-ERROR", "No query parameter named %y defined for this path and method; "
-                        "known query parameters: %y", key, keys (parameters + pio.parameters));
+                    error("SCHEMA-VALIDATION-ERROR", "No query parameter named %y defined for %s %s; known query "
+                        "parameters: %y", key, method, path, keys (parameters + pio.parameters));
                 }
             }
             if (po.inLoc != "query") {
-                error("SCHEMA-VALIDATION-ERROR", "invalid parameter %y given in the URI query; expected location %y",
-                    key, po.inLoc);
+                error("SCHEMA-VALIDATION-ERROR", "invalid parameter %y given in the URI query for %s %s; expected "
+                    "location %y", key, method.upr(), path, po.inLoc);
             }
 
             po.check(serialize, True, path, method, key, \h.params{key});
@@ -3076,7 +3076,8 @@ public class OperationObject inherits ParameterGroup {
                     i.value.check(serialize, True, path, method, "formData." + i.key, \body{i.key});
                 }
             } else if (body) {
-                error("SCHEMA-VALIDATION-ERROR", "No message body is accepted; body keys passed: %y", keys body);
+                error("SCHEMA-VALIDATION-ERROR", "No message body is accepted for %s %s; body keys passed: %y",
+                    method.upr(), path, keys body);
             }
         }
 
@@ -3084,8 +3085,8 @@ public class OperationObject inherits ParameterGroup {
         foreach string param in (path =~ x/{([^}]+)}/g) {
             *OtherParameter po = parameters{param} ?? pio.parameters{param};
             if (!po) {
-                error("SCHEMA-VALIDATION-ERROR", "No path parameter named %y defined for this path and method; "
-                    "known parameters: %y", param, keys (parameters + pio.parameters));
+                error("SCHEMA-VALIDATION-ERROR", "No path parameter %y defined for %s %s (%y); known "
+                    "parameters: %y", param, method.upr(), path, keys (parameters + pio.parameters));
             }
 
             string pattern = replace(path, "{" + param + "}", "(.*)");
