@@ -170,8 +170,7 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
         }
         HashDataType type(required ? AutoHashType : AutoHashOrNothingType, typename);
         rth.set(type);
-        map type.addField(getFieldFromSchemaIntern(rfs, path + "/" + $1.key, $1.key, NOTHING, $1.value,
-            schema.required{$1.key} ?? False, NOTHING, def_body{$1.key})), schema.properties.pairIterator();
+        getSchemaObjectFields(rfs, type, path, schema, def_body);
         if (schema.additionalProperties === True) {
             type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
         } else if (schema.additionalProperties) {
@@ -186,6 +185,17 @@ public class SwaggerDataProviderBase inherits SwaggerDataProviderCommon {
         }
 
         return self.schema.store.cache{uh}{key} = type;
+    }
+
+    #! Sets fields of a schema object
+    private getSchemaObjectFields(RecursiveStore rfs, HashDataType type, string path, SchemaObject schema,
+            auto def_body) {
+        if (schema.allOf) {
+            map getSchemaObjectFields(rfs, type, path, $1, def_body), schema.allOf;
+        } else {
+            map type.addField(getFieldFromSchemaIntern(rfs, path + "/" + $1.key, $1.key, NOTHING, $1.value,
+                schema.required{$1.key} ?? False, NOTHING, def_body{$1.key})), schema.properties.pairIterator();
+        }
     }
 
     #! Returns an object from the given cache

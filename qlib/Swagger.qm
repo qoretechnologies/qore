@@ -4313,7 +4313,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                 defaultVal = oh."default";
                 SchemaObject::checkValueType(\defaultVal, type, items);
             }
-        } else if (oh.properties) {
+        } else if (oh.properties || oh.allOf) {
             type = "object";
         } else {
             type = "any";
@@ -4394,7 +4394,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         optional_field(objType, oh, "readOnly", NT_BOOLEAN, \readOnly);
 
         {
-            *list allOfList;
+            *list<auto> allOfList;
             if (optional_field(objType, oh, "allOf", NT_LIST, \allOfList)) {
                 if (allOfList.size() < 1)
                     throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
