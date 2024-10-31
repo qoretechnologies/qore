@@ -4545,13 +4545,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
     #! validates a schema object against a value
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, hash<auto> v, reference<hash<auto>> value) {
+            string name, hash<auto> v, reference<hash<auto>> value, *bool no_check_others) {
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
 
         # check "allOf" schemas, if any
-        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value), allOf;
+        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value, True), allOf;
 
         /*
             If additionalProperties is set to true, any number of additionalProperties may be present of any data
@@ -4560,7 +4560,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             allowed and must match the schema
         */
         # check properties in this schema definition
-        if (additionalProperties !== True && type != "any") {
+        if (additionalProperties !== True && type != "any" && !no_check_others) {
             # issue #4825: write the hash keys to another hash in case values need to change type
             hash<auto> nv;
             foreach string key in (keys value) {
@@ -4570,7 +4570,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                         prop = additionalProperties;
                     }
                     if (!prop) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("property %y is not valid for object %y "
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Property %y is not valid for object %y "
                             "(value: %y); valid properties: %y",  key, name, value, keys properties);
                     }
                 }

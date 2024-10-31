@@ -314,7 +314,7 @@ public class DataProviderActionCatalog {
         static hash<string, hash<string, bool>> resolve_output_types;
 
         #! Default description
-        const DefaultDescription = "no description provided";
+        const DefaultDescription = "";
     }
 
     #! Registers a data provider application
@@ -861,9 +861,11 @@ public class DataProviderActionCatalog {
                     i.value.preselected = True;
                 }
             }
+            on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
                 "display_name": i.value.display_name ?? AbstractDataField::getDisplayName(i.key),
-                "short_desc": i.value.short_desc ?? AbstractDataField::getShortDescription(i.value.desc),
+                "short_desc": i.value.short_desc ??
+                    AbstractDataField::getShortDescription(i.value.desc ?? DefaultDescription),
                 "desc": i.value.desc ?? DefaultDescription,
             };
             auto type = i.value.type;
