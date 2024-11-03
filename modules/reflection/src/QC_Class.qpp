@@ -200,7 +200,7 @@ string Class::getPathName() [flags=RET_VALUE_ONLY] {
 //! Returns information about the given method if it's accessible in the class hierarchy or throws an exception if the method does not exist
 /** @par Example:
     @code{.py}
-MethodAccessInfo info = cls.findMethod(name);
+hash<MethodAccessInfo> info = cls.findMethod(name);
 printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls.getName(), name,
     info.method.getClass().getName(), info.access_string, info.method.getVariants().size());
     @endcode
@@ -235,7 +235,7 @@ hash<MethodAccessInfo> Class::findMethod(string name) [flags=RET_VALUE_ONLY] {
 //! Returns information about the given normal (non-static) method if it's accessible in the class hierarchy or throws an exception if the method does not exist
 /** @par Example:
     @code{.py}
-MethodAccessInfo info = cls.getNormalMethod(name);
+hash<MethodAccessInfo> info = cls.findNormalMethod(name);
 printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls.getName(), name,
     info.method.getClass().getName(), info.access_string, info.method.getVariants().size());
     @endcode
@@ -269,7 +269,7 @@ hash<MethodAccessInfo> Class::findNormalMethod(string name) [flags=RET_VALUE_ONL
 //! Returns information about the given static method if it's accessible in the class hierarchy or throws an exception if the method does not exist
 /** @par Example:
     @code{.py}
-MethodAccessInfo info = cls.getStaticMethod(name);
+hash<MethodAccessInfo> info = cls.findStaticMethod(name);
 printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls.getName(), name,
     info.method.getClass().getName(), info.access_string, info.method.getVariants().size());
     @endcode
