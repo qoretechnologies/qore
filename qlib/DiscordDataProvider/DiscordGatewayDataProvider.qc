@@ -140,7 +140,7 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     #! Returns the data provider name
     string getName() {
         return "discordws";
-    }ws.ob
+    }
 
     #! Returns the data provider description
     *string getDesc() {
