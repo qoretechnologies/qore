@@ -917,6 +917,13 @@ public class FileDelayedPollerDataProvider inherits FilePollerDataProviderBase, 
         poller.start();
     }
 
+    #! Called to stop generating events
+    /** Stops polling for new files
+    */
+    stopEvents() {
+        poller.stop();
+    }
+
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }

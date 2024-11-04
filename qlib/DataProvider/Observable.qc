@@ -228,6 +228,12 @@ public class DelayedObservable inherits Observable {
     /** This method is meant to trigger event generation
     */
     abstract observersReady();
+
+    #! Called to stop generating events
+    /** By default this method does nothing; override in subclasses to add functionality
+    */
+    stopEvents() {
+    }
 }
 
 #! This abstract class can be used to filter events that are raised on an Observer

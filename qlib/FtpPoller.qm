@@ -1421,6 +1421,13 @@ public class FtpDelayedPollerDataProvider inherits FtpPollerDataProviderBase, Da
         poller.start();
     }
 
+    #! Called to stop generating events
+    /** Disconnects from the server and stops polling
+    */
+    stopEvents() {
+        poller.stop();
+    }
+
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }

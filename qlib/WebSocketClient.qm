@@ -1528,6 +1528,13 @@ class MyObserver inherits Observer {
         start();
     }
 
+    #! Called to stop generating events
+    /** Disconnects from the server
+    */
+    stopEvents() {
+        disconnect();
+    }
+
     #! Sends string data over the web socket with timeout specified in options; if any errors occur, an exception is thrown
     /**
         @param value The value to serialize and send over the WebSocket

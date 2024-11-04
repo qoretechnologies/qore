@@ -114,21 +114,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
     #! Stops observing and deletes the object
     destructor() {
-        {
-            lck.lock();
-            on_exit lck.unlock();
-
-            if (io_tid) {
-                # set the stop flag
-                stop = True;
-                # signal the I/O thread to wake up
-                cond.signal();
-                # wait for the thread to terminate
-                while (io_tid) {
-                    cond.wait(lck);
-                }
-            }
-        }
+        stopIntern();
     }
 
     #! Called when all observers have been added to the object
@@ -145,6 +131,30 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
         # start the I/O thread
         io_tid = background pollThread();
+    }
+
+    #! Called to stop generating events
+    /** Stops polling for new events
+    */
+    stopEvents() {
+        stopIntern();
+    }
+
+    #! Stops polling
+    private stopIntern() {
+        lck.lock();
+        on_exit lck.unlock();
+
+        if (io_tid) {
+            # set the stop flag
+            stop = True;
+            # signal the I/O thread to wake up
+            cond.signal();
+            # wait for the thread to terminate
+            while (io_tid) {
+                cond.wait(lck);
+            }
+        }
     }
 
     #! Process constructor options

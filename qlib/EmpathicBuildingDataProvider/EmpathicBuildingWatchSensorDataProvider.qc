@@ -125,6 +125,13 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
         start();
     }
 
+    #! Called to stop generating events
+    /** Stops polling for new events
+    */
+    stopEvents() {
+        stop();
+    }
+
     #! Connects and starts receiving messages
     private start() {
         hash<auto> info;
