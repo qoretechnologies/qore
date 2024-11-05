@@ -74,7 +74,7 @@ public class Main inherits QUnit::Test {
             "access_token": "x",
             "client_token": "x",
         };
-        {
+        try {
             MewsRestConnection rc({
                 "url": "https://api.mews-demo.com",
                 "name": "test",
@@ -87,6 +87,13 @@ public class Main inherits QUnit::Test {
             # issue #3321: check default timeouts
             assertEq(45000, client.getTimeout());
             assertEq(45000, client.getConnectTimeout());
+        } catch (hash<ExceptionInfo> ex) {
+            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
+                remove mrc;
+                testSkip("rate limited");
+            }
+            rethrow;
         }
     }
 
@@ -111,7 +118,8 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.status_code == 429 || ex.arg.status_code == 408) {
+            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
                 remove mrc;
                 testSkip("rate limited");
             }
