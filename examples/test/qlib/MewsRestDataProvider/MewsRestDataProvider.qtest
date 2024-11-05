@@ -81,10 +81,9 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         try {
             rec = orderitems.searchSingleRecord(where_cond, {"limit": 1});
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg."response-code" == 408 || ex.arg."response-code" == 429) {
+            if (ex.arg.status_code == 429 || ex.arg.status_code == 408) {
                 delete mews;
-                testSkip(sprintf("timeout (%d %s); assuming no connection", ex.arg."response-code",
-                    ex.arg."response-headers".status_message));
+                testSkip("Rate limited");
             }
             rethrow;
         }

@@ -95,7 +95,7 @@ public class Main inherits QUnit::Test {
             testSkip("no connection");
         }
 
-        {
+        try {
             # first test a standard ping
             hash<PingInfo> ping = mrc.ping(True);
             assertTrue(ping.ok);
@@ -110,6 +110,12 @@ public class Main inherits QUnit::Test {
                 printf("%s\n", get_exception_string(info.ex));
             }
             assertEq("OK", info.result);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 429 || ex.arg.status_code == 408) {
+                remove mrc;
+                testSkip("rate limited");
+            }
+            rethrow;
         }
     }
 

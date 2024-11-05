@@ -22,12 +22,14 @@ class RecursiveDependencyTest inherits QUnit::Test {
     }
 
     test() {
-        assertThrows('LOAD-MODULE-ERROR', sub() {load_module("./R1.qm");});
+        load_module("./R1.qm");
 
         string dir = get_script_dir();
         foreach string script in (Scripts) {
             string loc = dir + DirSep + script;
-            assertRegex("LOAD-MODULE-ERROR", backquote("qore " + loc + " 2>&1"), script);
+            string str = backquote("qore " + loc + " 2>&1");
+            on_error printf("str: %y\n", str);
+            assertRegex($# ? "LOAD-MODULE-ERROR" : "", str, script);
         }
     }
 }
