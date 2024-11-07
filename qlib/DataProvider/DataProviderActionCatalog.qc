@@ -143,6 +143,11 @@ public hashdecl ActionOptionInfo {
     #! Is the option required or not?
     bool required;
 
+    #! Is the option part of a required group?
+    /** A required group is a group of options of which at least one must be set
+    */
+    *list<string> required_groups;
+
     #! Any default value for the option
     auto default_value;
 
@@ -156,7 +161,11 @@ public hashdecl ActionOptionInfo {
     *auto example_value;
 
     #! A list of other options that must be set before this option can be chosen
-    *list<string> depends_on;
+    /** Each element in the list is either
+       - a string: giving a single option that the element depends on
+       - a list of strings: giving a group of options, one of which must be set before this option can be chosen
+    */
+    *list<auto> depends_on;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -860,6 +869,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.preselected) {
                     i.value.preselected = True;
                 }
+                if (info.attr.required_groups) {
+                    i.value.required_groups = info.attr.required_groups;
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -892,7 +904,8 @@ public class DataProviderActionCatalog {
                 default:
                     throw "OPTION-ERROR", sprintf("Cannot set option type from \"type\" option with type %y", type);
             }
-            info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected"}
+            info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
+                "required_groups"}
                 + additional_fields;
             if (i.value.allowed_values) {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>

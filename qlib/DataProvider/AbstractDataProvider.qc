@@ -66,6 +66,11 @@ public hashdecl DataProviderOptionInfo {
     */
     bool required = False;
 
+    #! Is the option part of a required group?
+    /** A required group is a group of options of which at least one must be set
+    */
+    *list<string> required_groups;
+
     #! Any default value
     auto default_value;
 
