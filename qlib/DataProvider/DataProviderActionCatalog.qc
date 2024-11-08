@@ -860,6 +860,8 @@ public class DataProviderActionCatalog {
                     "allowed_values"} + {
                     "type": i.value.getType(),
                 };
+                # remove missing attributes
+                map remove i.value{$1.key}, i.value.pairIterator(), !exists $1.value;
                 if (info.attr.ref_data.val()) {
                     i.value.ref_data = info.attr.ref_data;
                 }

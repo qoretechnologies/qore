@@ -36,6 +36,9 @@
 %requires DbDataProvider
 %requires Util
 %requires Logger
+# for webhooks
+%requires HttpServer
+%requires RestHandler
 
 %try-module linenoise
 %define NoLinenoise
@@ -45,15 +48,30 @@
 
 class QdpCmd {
     public {
+        static HttpServer http;
+
         static string cmd;
         static string app;
         static string action;
 
         static bool ix;
 
+        #! hostname for any webhook
+        static string http_host = "localhost";
+
+        #! port for the HTTP server
+        static int http_port;
+
+        # Global mutex for webhook handlers
+        static Mutex wh_lock();
+
+        # Global map for webhook handlers: webhook -> handler
+        static hash<string, WebhookHandler> whm;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
+            "host": "H,host=s",
             "listapps": "a,list-apps",
             "listconnections": "c,list-connections",
             "listfactories": "f,list-factories",
@@ -218,6 +236,21 @@ class QdpCmd {
             }
         }
 
+        # Set up fake webhook interface for the TypeScriptActionInterface module if possible
+        if (get_module_hash().TypeScriptActionInterface) {
+            # make sure symbols are loaded in this Program
+            load_module("TypeScriptActionInterface");
+            Class cls = Class::forName("TypeScriptActionInterface::TypeScriptActionInterface");
+            hash<MethodAccessInfo> info = cls.findStaticMethod("registerWebhookCreateDestroyApis");
+            StaticMethodVariant v = info.method.getVariants()[0];
+            v.call(\QdpCmd::getWebhook(), \QdpCmd::deleteWebhook());
+        }
+
+        on_exit if (http) {
+            http.stop();
+            delete http;
+        }
+
         cmd = shift ARGV ?? "list";
         *code qdp_action = Cmds{cmd};
         if (!qdp_action) {
@@ -264,7 +297,61 @@ class QdpCmd {
         }
     }
 
-    private Logger getLogger() {
+    string getWebhook(hash<auto> h) {
+        if (h.method.typeCode() != NT_STRING) {
+            throw "WEBHOOK-ERROR", sprintf("\"method\" must be a string when registering a webhook; got type %y (%y)",
+                h.method.fullType(), h.method);
+        }
+        if (!h.callback.callp()) {
+            throw "WEBHOOK-ERROR", sprintf("\"callback\" must be a callable value when registering a webhook; got "
+                "type %y (%y)", h.callback.fullType(), h.method);
+        }
+        # auth is validated but ignored
+        if (exists h.auth && (h.auth.typeCode() != NT_INT)) {
+            throw "WEBHOOK-ERROR", sprintf("\"auth\" must be a valid auth code if present when registering a "
+                "webhook; got type %y (%y)", h.auth.fullType(), h.auth);
+        }
+        # perms is validated but ignored
+        if (exists h.perms && h.perms.typeCode() != NT_LIST) {
+            throw "WEBHOOK-ERROR", sprintf("\"perms\" must be a list of strings if present when registering a "
+                "webhook; got type %y (%y)", h.perms.fullType(), h.perms);
+        }
+
+        setupHttpServer();
+
+        string path = get_random_string();
+
+        WebhookHandler handler(h.method, path, h.callback);
+        hash<HttpHandlerConfigInfo> hinfo = <HttpHandlerConfigInfo>{
+            "path": path,
+            "handler": handler,
+        };
+
+        AutoLock al(wh_lock);
+        http.setDynamicHandler(path, hinfo);
+        whm{path} = handler;
+
+        return sprintf("https://%s:%d/webhooks/%s", http_host, http_port, path);
+    }
+
+    deleteWebhook(string url) {
+        string path = (url =~ /\/([^\/]+)$/)[0];
+        http.removeDynamicHandler(path, True);
+    }
+
+    synchronized setupHttpServer() {
+        if (http) {
+            return;
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": getLogger("http"),
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    private Logger getLogger(string name = "console") {
         LoggerLevel level;
         if (opts.verbose > 1) {
             level = LoggerLevel::getLevelDebug();
@@ -273,7 +360,7 @@ class QdpCmd {
         } else {
             level = LoggerLevel::getLevelError();
         }
-        Logger logger("console", level);
+        Logger logger(name, level);
         logger.addAppender(new ConsoleAppender());
         return logger;
     }
@@ -1199,6 +1286,7 @@ class QdpCmd {
  -b,--bulk                 use the bulk API for searches
  -c,--list-connections     list known connections and exit
  -f,--list-factories       list known data provider factories and exit
+ -H,--host=ARG             set the hostname for webhooks
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
  -s,--subtype=ARG          use Data Provider subtype when creating from a connection
@@ -1467,5 +1555,225 @@ class InputHelper {
         rv += map $1, keys Commands, $1.equalPartial(str);
         rv += map $1 + ": ", keys mmap, $1.equalPartial(str);
         return rv;
+    }
+}
+
+class WebhookHandler inherits RestHandler {
+    private {
+        string rest_method;
+        string root_path;
+        code callback;
+
+        static bool cors_enable = DefaultCorsEnable;
+        static *softlist<string> cors_accept_origin;
+        static *string cors_allow_methods = foldl $1 + ", " + $2, DefaultCorsAllowMethods;
+        static softstring cors_max_age = DefaultCorsMaxAge;
+        static *string cors_allow_headers = foldl $1 + ", " + $2, DefaultCorsAllowHeaders;
+        static bool cors_allow_credentials = DefaultCorsAllowCredentials;
+        static bool cors_accept_all_origins = DefaultCorsAcceptAllOrigins;
+        static hash<string, bool> cors_origin_map;
+
+        const DefaultCorsEnable = True;
+        const DefaultCorsAllowMethods = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+        const DefaultCorsMaxAge = 9999999;
+        const DefaultCorsAllowHeaders = (
+            "Content-Type", "content-type", "Content-Language", "content-language",
+            "Accept", "Accept-Language", "Authorization", "Qorus-Token", "Qorus-Client-Time-Zone",
+        );
+        const DefaultCorsAllowCredentials = True;
+        const DefaultCorsAcceptAllOrigins = True;
+    }
+
+    constructor(string method, string path, code callback) : RestHandler() {
+        rest_method = method;
+        root_path = (path =~ /^\//) ? path[1..] : path;
+        self.callback = callback;
+    }
+
+    removeRootPath(reference<string> path) {
+        if (path.startsWith(root_path)) {
+            splice path, 0, root_path.size();
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data b) {
+        #logDebug("Webhook headers: %N", hdr);
+
+        # handle OPTIONS requests
+        if (hdr.method == "OPTIONS" && (*hash<auto> cors_hdrs = getCorsResponseHeaders(cx))) {
+            # return a CORS response
+            return AbstractHttpRequestHandler::makeResponse(200, NOTHING, cors_hdrs);
+        }
+
+        # check for valid method
+        if (hdr.method != rest_method) {
+            # get rest class name
+            string path = cx.url.path ?? "";
+            removeRootPath(\path);
+            return AbstractHttpRequestHandler::makeResponse(405, sprintf("HTTP method %y is not supported with URI "
+                "path %y; supported method: %s", hdr.method, path, rest_method), getCorsResponseHeaders(cx) +
+                {"Allow": rest_method});
+        }
+
+        cx.sctx.listener = listener;
+        hash<HttpResponseInfo> rv = RestHandler::handleRequest(listener, s, cx, hdr, b);
+        if (!rv.hdr."Access-Control-Allow-Origin") {
+            rv.hdr += getCorsResponseHeaders(cx);
+        }
+        return rv;
+    }
+
+    hash<HttpHandlerResponseInfo> callWebhook(hash<auto> cx, *hash<auto> ah) {
+        logInfo("Webhook %y called", root_path);
+        logDebug("Webhook %y args: %y", root_path, ah);
+        on_error QdpCmd::http.logError("%s", get_exception_string($1));
+        try {
+            return <HttpHandlerResponseInfo>{
+                "code": 200,
+                "body": callback(ah),
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            QdpCmd::http.logError("Webhook %y args: %y error: %s", root_path, ah, get_exception_string(ex));
+            return <HttpHandlerResponseInfo>{
+                "code": 500,
+                "body": sprintf("%s: %s", ex.err, ex.desc),
+            };
+        }
+    }
+
+    private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
+        try {
+            if (ex.arg.typeCode() == NT_OBJECT) {
+                remove ex.arg;
+            }
+        } catch (hash<ExceptionInfo> ex0) {
+            remove ex.arg;
+        }
+        if (ex.err =~ /-ARG-ERROR$/) {
+            return <HttpHandlerResponseInfo>{
+                "code": 400,
+                "body": ex.desc,
+            };
+        }
+        if (ex.err == "AUTHORIZATION-ERROR" || ex.err =~ /-ACCESS-ERROR$/) {
+            return <HttpHandlerResponseInfo>{
+                "code": 403,
+                "body": ex,
+            };
+        }
+        if (ex.err == "REST-NOT-FOUND-ERROR") {
+            return <HttpHandlerResponseInfo>{
+                "code": 404,
+                "body": ex.desc,
+            };
+        }
+        # for all other errors, return the standard "409 Conflict" response
+        return RestHandler::returnRestException(ex);
+    }
+
+    private *hash<auto> errorResponseHeaders(hash<auto> cx) {
+        return getCorsResponseHeaders(cx);
+    }
+
+    static *hash<auto> getCorsResponseHeaders(hash<auto> cx) {
+        bool explicit_match;
+        if (!WebhookHandler::corsOriginOk(cx, \explicit_match)) {
+            return;
+        }
+        return WebhookHandler::getCorsResponseHeadersIntern(cx, explicit_match);
+    }
+
+    static private hash<auto> getCorsResponseHeadersIntern(hash<auto> cx, *bool explicit_match) {
+        hash<auto> rv;
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Origin
+        # if the server supports clients from multiple origins, it must return the origin for the specific client
+        # making the request
+        if (cx.hdr.origin && !cors_accept_all_origins) {
+            rv = {
+                "Access-Control-Allow-Origin": cx.hdr.origin,
+                "Vary": "Origin",
+            };
+        } else {
+            rv = {
+                "Access-Control-Allow-Origin": "*",
+            };
+        }
+        # return other headers for preflight (OPTIONS) requests
+        if (cx.hdr.method == "OPTIONS") {
+            rv += {
+                "Access-Control-Allow-Methods": cors_allow_methods,
+                "Access-Control-Max-Age": cors_max_age,
+            };
+            if (cors_allow_headers) {
+                rv."Access-Control-Allow-Headers" = cors_allow_headers;
+            }
+        }
+        if (cors_allow_credentials) {
+            rv."Access-Control-Allow-Credentials" = "true";
+        }
+        return rv;
+    }
+
+    static bool corsOriginOk(hash<auto> cx, *reference<bool> explicit_match) {
+        if (!cors_enable) {
+            return False;
+        }
+        if (cors_accept_all_origins) {
+            return True;
+        }
+        if (cors_origin_map{cx.hdr.origin}) {
+            explicit_match = True;
+            return True;
+        }
+        return False;
+    }
+
+    static corsUpdateOption(string opt, auto value) {
+        switch (opt) {
+            case "cors-enable":
+                cors_enable = value;
+                break;
+
+            case "cors-allow-origin": {
+                cors_accept_origin = value;
+                cors_accept_all_origins = False;
+                foreach string origin in (cors_accept_origin) {
+                    if (origin == "*") {
+                        cors_accept_all_origins = True;
+                    }
+                    cors_origin_map{origin} = True;
+                }
+                break;
+            }
+
+            case "cors-allow-methods":
+                cors_allow_methods = foldl $1 + ", " + $2, value;
+                break;
+
+            case "cors-max-age":
+                cors_max_age = value.toString();
+                break;
+
+            case "cors-allow-headers":
+                cors_allow_headers = foldl $1 + ", " + $2, value;
+                break;
+
+            case "cors-allow-credentials":
+                cors_allow_credentials = value;
+                break;
+        }
     }
 }
