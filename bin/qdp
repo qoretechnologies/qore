@@ -56,11 +56,8 @@ class QdpCmd {
 
         static bool ix;
 
-        #! hostname for any webhook
-        static string http_host = "localhost";
-
         #! port for the HTTP server
-        static int http_port;
+        static int http_port = 0;
 
         # Global mutex for webhook handlers
         static Mutex wh_lock();
@@ -331,12 +328,20 @@ class QdpCmd {
         http.setDynamicHandler(path, hinfo);
         whm{path} = handler;
 
-        return sprintf("https://%s:%d/webhooks/%s", http_host, http_port, path);
+        string http_host = opts.host ?? "localhost";
+        if (*softint p = (http_host =~ x/:([0-9]+)$/)[0]) {
+            http_host =~ s/:.*$//;
+            http_port = p;
+        }
+
+        return sprintf("http://%s:%d/webhooks/%s", http_host, http_port, path);
     }
 
     deleteWebhook(string url) {
-        string path = (url =~ /\/([^\/]+)$/)[0];
-        http.removeDynamicHandler(path, True);
+        if (http) {
+            string path = (url =~ x/\/([^\/]+)$/)[0];
+            http.removeDynamicHandler(path, True);
+        }
     }
 
     synchronized setupHttpServer() {
@@ -347,6 +352,9 @@ class QdpCmd {
             "logger": getLogger("http"),
             "debug": True,
         };
+
+
+
         http = new HttpServer(http_opts);
         http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
@@ -385,7 +393,12 @@ class QdpCmd {
     static event(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
         if (!exists event) {
-            QdpCmd::error("missing required event argument; valid events: %y", keys provider.getEventTypes());
+            *list<string> l = keys provider.getEventTypes();
+            if (l.size() == 1) {
+                event = l[0];
+            } else {
+                QdpCmd::error("Missing required event argument; valid events: %y", l);
+            }
         }
         QdpCmd::showType(provider, event, provider.getEventInfo(event));
     }
@@ -393,7 +406,12 @@ class QdpCmd {
     static exampleEvent(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
         if (!exists event) {
-            QdpCmd::error("missing required event argument; valid events: %y", keys provider.getEventTypes());
+            *list<string> l = keys provider.getEventTypes();
+            if (l.size() == 1) {
+                event = l[0];
+            } else {
+                QdpCmd::error("Missing required event argument; valid events: %y", l);
+            }
         }
         printf("%N\n", provider.getExampleEventData(event));
     }
@@ -1227,6 +1245,16 @@ class QdpCmd {
         show info for the given app action (must use @<app>/<action> for the data provider)
     create <new record> (ex create id=123,name=\"my name\")
         create a new record
+    example-error|exerror [error]
+        show an example error response
+    example-event|exevent [event]
+        show an example event
+    example-record|exrecord
+        show an example record
+    example-request|exrequest
+        show an example request
+    example-response|exresponse
+        show an example response
     field-add|fadd <name> <field desc hash>
         adds a field to a data provider
     field-delete|fdelete <name>
@@ -1286,7 +1314,7 @@ class QdpCmd {
  -b,--bulk                 use the bulk API for searches
  -c,--list-connections     list known connections and exit
  -f,--list-factories       list known data provider factories and exit
- -H,--host=ARG             set the hostname for webhooks
+ -H,--host=ARG             set the hostname (+ optionally port) for webhooks
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
  -s,--subtype=ARG          use Data Provider subtype when creating from a connection

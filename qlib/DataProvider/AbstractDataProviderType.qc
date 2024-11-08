@@ -570,9 +570,6 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return map {$1.key: $1.value.getExampleValue()}, fields.pairIterator();
         }
         int t = getBaseTypeCode();
-        if (t != NT_ALL && isOrNothingType()) {
-            return;
-        }
         switch (getBaseTypeCode()) {
             case NT_INT: return 100;
             case NT_STRING: return "example string";
@@ -582,7 +579,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             case NT_DATE: return now_us();
             case NT_BINARY: return <abcd>;
             case NT_LIST: {
-                if (self.hasCallableMethod("getElementType")) {
+                if (!isOrNothingType() && self.hasCallableMethod("getElementType")) {
                     *AbstractDataProviderType etype = cast<object>(self).getElementType();
                     if (etype) {
                         return map etype.getExampleValue(), xrange(3);
@@ -592,13 +589,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             }
             case NT_HASH: {
                 *AbstractDataProviderType etype;
-                if (self.hasCallableMethod("getElementType")) {
-                    etype = cast<object>(self).getElementType();
-                } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
-                    etype = cast<object>(self).getDefaultOtherElementType();
-                }
-                if (etype) {
-                    return map {$1: etype.getExampleValue()}, ("one", "two");
+                if (!isOrNothingType()) {
+                    if (self.hasCallableMethod("getElementType")) {
+                        etype = cast<object>(self).getElementType();
+                    } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
+                        etype = cast<object>(self).getDefaultOtherElementType();
+                    }
+                    if (etype) {
+                        return map {$1: etype.getExampleValue()}, ("one", "two");
+                    }
                 }
                 return {"a": 1, "b": 2};
             }
