@@ -525,6 +525,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         string refresh_token;
         #! If OAuth2 tokens should be automatically refreshed
         bool oauth2_auto_refresh = True;
+        #! If HTTP basic authentication should be used with the client_secret only when making token requests
+        bool oauth2_token_auth_secret_only = False;
         #! If HTTP basic authentication should be used with the client_id and client_secret when making token requests
         bool oauth2_token_use_basic_auth = False;
         #! If PKCE should be used with the OAuth2 authorization_code flow
@@ -604,6 +606,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as well
           when the request is made to the \c oauth2_alt_token_url
         - \c oauth2_token_url: The token URL OAuth2 flows; ignored if the \c token option is set
+        - \c oauth2_token_auth_secret_only: Use HTTP basic authentication with the client_secret only when making
+          OAuth2 taken requests
         - \c oauth2_token_use_basic_auth: Use HTTP basic authentication with the client_id and client_secret when
           making OAuth2 token requests
         - \c password: The password for authentication; only used if no username or password is set in the URL and if
@@ -713,6 +717,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_token_args) {
             oauth2_token_args = getHash(opts, "oauth2_token_args", True);
         }
+        if (opts.oauth2_token_auth_secret_only.val()) {
+            oauth2_token_auth_secret_only = parse_boolean(opts.oauth2_token_auth_secret_only);
+        }
         if (opts.oauth2_token_use_basic_auth.val()) {
             oauth2_token_use_basic_auth = parse_boolean(opts.oauth2_token_use_basic_auth);
         }
@@ -777,6 +784,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "oauth2_refresh_token": refresh_token,
             "oauth2_scopes": oauth2_scopes,
             "oauth2_token_args": oauth2_token_args,
+            "oauth2_token_auth_secret_only": oauth2_token_auth_secret_only,
             "oauth2_token_url": oauth2_token_url,
             "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
         };
@@ -1694,6 +1702,10 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             setUserPassword(oauth2_client_id, oauth2_client_secret);
             set_token_auth = True;
             login -= ("client_id", "client_secret");
+        } else if (oauth2_token_auth_secret_only && oauth2_client_secret.val()) {
+            setUserPassword(oauth2_client_secret, "");
+            set_token_auth = True;
+            login -= ("client_id", "client_secret");
         }
         # restore the username and password on exit
         on_exit if (username && self.password) {
@@ -2278,19 +2290,25 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         "`oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well "
                         "when the request is made to the `oauth2_alt_token_url`",
                 },
-                "oauth2_token_use_basic_auth": <ConnectionOptionInfo>{
-                    "display_name": "OAuth2 Token Use Basic Auth",
-                    "short_desc": "Use basic authorization with the client ID and client secret when making token "
-                        "requests",
+                "oauth2_token_auth_secret_only": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Token Auth Client Secret Only?",
+                    "short_desc": "Use basic authorization with the client secret only when making token requests",
                     "type": "bool",
-                    "desc": "Use basic authorization with the client ID and client secret when making token "
-                        "requests",
+                    "desc": "Use basic authorization with the client secret only when making token requests",
                 },
                 "oauth2_token_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token URL",
                     "short_desc": "The token URL for OAuth2 flows",
                     "type": "string",
                     "desc": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+                },
+                "oauth2_token_use_basic_auth": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Token Use Basic Auth?",
+                    "short_desc": "Use basic authorization with the client ID and client secret when making token "
+                        "requests",
+                    "type": "bool",
+                    "desc": "Use basic authorization with the client ID and client secret when making token "
+                        "requests",
                 },
                 "password": <ConnectionOptionInfo>{
                     "display_name": "Password",
@@ -2441,6 +2459,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "oauth2_scopes",
             "oauth2_token_args",
             "oauth2_token_url",
+            "oauth2_token_auth_secret_only",
             "oauth2_token_use_basic_auth",
             "password",
             "username",
