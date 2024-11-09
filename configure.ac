@@ -1054,6 +1054,11 @@ find_openssl() {
         #AC_MSG_ERROR([not found])
     fi
 
+
+    if test -f "$inc/openssl/engine.h"; then
+        AC_DEFINE(HAVE_OPNESSL_ENGINE_H, 1, [define if openssl/engine.h is available])
+    fi
+
     AC_MSG_RESULT([$lib ($openssl_type) $inc])
 
     QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $OPENSSL_LDFLAGS"
