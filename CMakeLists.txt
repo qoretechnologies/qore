@@ -352,7 +352,7 @@ qore_mpfr_checks()
 qore_check_headers_cxx(arpa/inet.h cxxabi.h dlfcn.h fcntl.h getopt.h glob.h grp.h iconv.h inttypes.h linux/if_packet.h memory.h netdb.h
     netinet/in.h netinet/tcp.h poll.h pwd.h stdbool.h stddef.h stdint.h stdlib.h string.h strings.h sys/select.h
     sys/socket.h sys/socket.h sys/stat.h sys/statvfs.h sys/time.h sys/types.h sys/un.h sys/wait.h termios.h umem.h
-    unistd.h vfork.h winsock2.h ws2tcpip.h
+    unistd.h vfork.h winsock2.h ws2tcpip.h openssl/engine.h
 )
 
 # net/if_dl.h is not self-contained

@@ -48,7 +48,9 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/conf.h>
+#ifdef HAVE_OPENSSL_ENGINE_H
 #include <openssl/engine.h>
+#endif
 
 #ifdef OPENSSL_3_PLUS
 #include <openssl/provider.h>
@@ -269,7 +271,9 @@ void qore_cleanup() {
         // cleanup openssl library
         ERR_free_strings();
 
+#ifdef HAVE_OPENSSL_ENGINE_H
         ENGINE_cleanup();
+#endif
         EVP_cleanup();
 
         CONF_modules_finish();
