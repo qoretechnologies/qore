@@ -132,6 +132,7 @@ printf("%N\n", ans.body);
     @subsection restclientv2_2_0 RestClient v2.2.0
     - implemented PKCE options for OAuth2 flows
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
+    - allow the username to be set without a password; assume an empty password
 
     @subsection restclientv2_1_1 RestClient v2.1.1
     - fixed a bug where the OAuth2 refresh token was sometimes dropped when an access token was acquired
@@ -755,8 +756,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         @since RestClient 2.1
     */
     setOAuth2Options(hash<auto> new_opts) {
-        if (new_opts.username.val() && new_opts.password.val()) {
-            setUserPassword(new_opts.username, new_opts.password);
+        if (new_opts.username.val()) {
+            setUserPassword(new_opts.username, new_opts.password ?? "");
         }
         checkOAuth2Options(new_opts);
     }
@@ -1620,10 +1621,14 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (opts.token) {
             setToken(opts.token_type ?? "Bearer", opts.token, opts.oauth2_refresh_token);
         } else {
-            if (!exists getUsername() && !exists getPassword() && exists opts.username && exists opts.password) {
-                setUserPassword(opts.username, opts.password);
+            if (!exists getUsername() && !exists getPassword() && exists opts.username) {
+                setUserPassword(opts.username, opts.password ?? "");
                 username = opts.username;
-                password = opts.password;
+                if (exists opts.password) {
+                    password = opts.password;
+                } else {
+                    remove opts.password;
+                }
             } else {
                 if (*string u = getUsername()) {
                     username = u;
@@ -1708,8 +1713,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             login -= ("client_id", "client_secret");
         }
         # restore the username and password on exit
-        on_exit if (username && self.password) {
-            setUserPassword(username, self.password);
+        on_exit if (username) {
+            setUserPassword(username, self.password ?? "");
         } else if (set_token_auth) {
             clearUserPassword();
         }
@@ -1727,8 +1732,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         # do not send a basic auth header in the request
         clearUserPassword();
         # restore the username and password on exit
-        on_exit if (username && password) {
-            setUserPassword(username, password);
+        on_exit if (username) {
+            setUserPassword(username, password ?? "");
         }
 
         return oauth2AuthIntern(login, \info);
@@ -1832,7 +1837,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (grant_type == "password") {
             login += {
                 "username": username ?? getUsername(),
-                "password": password ?? getPassword(),
+                "password": password ?? getPassword() ?? "",
             };
         }
         return login;
@@ -2065,8 +2070,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     - \c "token": Any bearer token to use for the connection; will be passed as <tt>Authorization: Bearer ...</tt>
       in request headers; cannot be used with username and password options or authentication information in the URL;
       if this option is set then any OAuth2 options are ignored
-    - \c "username": The username for authentication; only used if no username or password is set in the URL and if
-      the \c password option is also used
+    - \c "username": The username for authentication; only used if no username or password is set in the URL
     - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
       object to validate request and response messages; conflicts with \a swagger
 
@@ -2416,15 +2420,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "display_name": "Username",
                     "short_desc": "Sets the username for authentication",
                     "type": "string",
-                    "desc": "The username for authentication; only used if no username or password is set in the URL "
-                        "and if the `password` option is also used; conflicts with the `token` option",
+                    "desc": "The username for authentication; only used if no username or password is set in the "
+                        "URL; conflicts with the `token` option",
                 },
                 "validator": <ConnectionOptionInfo>{
                     "display_name": "Schema Validator",
                     "short_desc": "Sets a schema validator object",
                     "type": "any",
-                    "desc": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with "
-                        "`swagger`",
+                    "desc": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts "
+                        "with `swagger`",
                 },
             },
         };
@@ -2859,10 +2863,6 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         if (!opts.username && !urlh.username) {
                             throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
                                 "password; no username is set for the current connection";
-                        }
-                        if (!opts.password && !urlh.password) {
-                            throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
-                                "password; no password is set for the current connection";
                         }
                         break;
                     }
