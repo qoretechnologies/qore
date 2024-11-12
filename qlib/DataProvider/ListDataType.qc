@@ -73,9 +73,16 @@ public class ListDataType inherits QoreDataType {
         self.element_type = AbstractDataProviderType::get(element_type);
     }
 
+    #! Copies the object and assigns a new element type to the copy
+    ListDataType copyWithElementType(AbstractDataProviderType element_type) {
+        ListDataType rv = copy();
+        rv.element_type = element_type;
+        return rv;
+    }
+
     #! Returns the description
     string getDesc() {
-        return desc ?? sprintf("Qore type %slist<%s>", accept_type_hash{Type::NothingType} ? "*" : "",
+        return desc ?? sprintf("Qore type %slist<%s>", accept_type_hash."nothing" ? "*" : "",
             element_type ? element_type.getName() : "auto");
     }
 

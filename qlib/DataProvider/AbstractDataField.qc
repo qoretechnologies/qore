@@ -259,6 +259,18 @@ public class AbstractDataField inherits Qore::Serializable {
         return self;
     }
 
+    #! Returns a mandatory (i.e. not "or nothing") field equivalent to the current field
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory field
+
+        @return a mandatory (i.e. not "or nothing") field equivalent to the current field
+
+        @since DataProvider 3.0
+    */
+    AbstractDataField getMandatoryType() {
+        return self;
+    }
+
     #! Returns the display name of the field
     string getDisplayName() {
         return AbstractDataField::getDisplayName(getName());

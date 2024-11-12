@@ -103,8 +103,8 @@ public class SoftListDataType inherits ListDataType {
             Type::List: True,
         };
         if (or_nothing) {
-            accept_type_hash_simple{Type::NothingType} = accept_type_hash{Type::NothingType} = True;
-            return_type_hash_simple{Type::NothingType} = return_type_hash{Type::NothingType} = True;
+            accept_type_hash_simple."nothing" = accept_type_hash."nothing" = True;
+            return_type_hash_simple."nothing" = return_type_hash."nothing" = True;
         }
         *Type element_base_type = element_type.getValueType();
         if (element_base_type) {

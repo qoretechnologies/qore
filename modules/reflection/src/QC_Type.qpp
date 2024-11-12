@@ -658,7 +658,9 @@ auto v = t.getBaseType();
 
     @return the base type for the current type; if the type is already a base type (i.e. not an "or nothing" type), then the same type is returned
 
-    @see getOrNothingType()
+    @see
+    - getMandatoryType()
+    - getOrNothingType()
 
     @since %Qore 0.9.4
 */
@@ -691,10 +693,30 @@ auto v = t.getOrNothingType();
 
     @return the "or nothing" type for the current type; if the type is already an "or nothing" type (i.e. it already accepts @ref nothing), then the same type is returned
 
-    @see getBaseType()
+    @see
+    - getMandatoryType()
+    - getBaseType()
 */
 Type Type::getOrNothingType() [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(get_or_nothing_type_check(t->typeInfo)));
+    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_or_nothing_type(t->typeInfo)));
+}
+
+//! Returns the mandatory (i.e. not "or nothing") type for the current type
+/** If the type is already an "or nothing" type (i.e. it already accepts @ref nothing), then the same type is returned
+
+    @par Example:
+    @code{.py}
+auto v = t.getMandatoryType();
+    @endcode
+
+    @return the mandatory (i.e. not "or nothing") type for the current type
+
+    @see
+    - getOrNothingType()
+    - getBaseType()
+*/
+Type Type::getMandatoryType() [flags=CONSTANT] {
+    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_value_type(t->typeInfo)));
 }
 
 //! Returns the element type for complex list and hash types, if any, otherwise returns @ref nothing

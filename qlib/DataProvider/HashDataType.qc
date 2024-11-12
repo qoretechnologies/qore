@@ -87,6 +87,13 @@ public class HashDataType inherits QoreDataType {
         map addFieldIntern($1), t.getMembers();
     }
 
+    #! Copy and set new fields in the copy
+    HashDataType copyWithFields(hash<string, AbstractDataField> fields) {
+        HashDataType rv = copy();
+        rv.fields = fields;
+        return rv;
+    }
+
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         self.default_other_field_type = default_other_field_type;

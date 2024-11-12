@@ -306,12 +306,44 @@ public class QoreDataType inherits AbstractDataProviderType {
                 rv.display_name = "*" + display_name;
             }
             rv.or_nothing_type = True;
-            rv.accept_type_hash_simple{Type::NothingType} = rv.accept_type_hash{Type::NothingType} = True;
-            rv.return_type_hash_simple{Type::NothingType} = rv.return_type_hash{Type::NothingType} = True;
+            rv.accept_type_hash_simple."nothing" = rv.accept_type_hash."nothing" = True;
+            rv.return_type_hash_simple."nothing" = rv.return_type_hash."nothing" = True;
             if (!options."qore.no_null") {
-                rv.accept_type_hash_simple{Type::NullType} = rv.accept_type_hash{Type::NullType} = True;
+                rv.accept_type_hash_simple."null" = rv.accept_type_hash."null" = True;
             }
             rv.type = type.getOrNothingType();
+            return rv;
+        }
+        return self;
+    }
+
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory type
+
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+    */
+    AbstractDataProviderType getMandatoryType() {
+        if (or_nothing_type) {
+            QoreDataType rv = self.copy();
+            if (rv.name && rv.name =~ /^\*/) {
+                rv.name = rv.name[1..];
+            }
+            if (rv.display_name && rv.display_name =~ /^\*/) {
+                rv.display_name = rv.display_name[1..];
+            }
+            rv.or_nothing_type = False;
+            remove rv.accept_type_hash_simple."nothing";
+            remove rv.accept_type_hash."nothing";
+            remove rv.accept_type_hash_simple."null";
+            remove rv.accept_type_hash."null";
+            remove rv.return_type_hash_simple."nothing";
+            remove rv.return_type_hash."nothing";
+            remove rv.return_type_hash_simple."null";
+            remove rv.return_type_hash."null";
+            remove rv.base_type_hash{NT_NOTHING};
+            remove rv.base_type_hash{NT_NULL};
+            rv.type = type.getMandatoryType();
             return rv;
         }
         return self;

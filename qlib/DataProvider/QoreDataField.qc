@@ -184,6 +184,18 @@ public class QoreDataField inherits AbstractDataField {
         return getNewFieldType(type.getOrNothingType());
     }
 
+    #! Returns a mandatory (i.e. not "or nothing") field equivalent to the current field
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory field
+
+        @return a mandatory (i.e. not "or nothing") field equivalent to the current field
+
+        @since DataProvider 3.0
+    */
+    AbstractDataField getMandatoryType() {
+        return getNewFieldType(type.getMandatoryType());
+    }
+
     #! Updates the field type
     updateFieldType(AbstractDataProviderType type) {
         self.type = type;

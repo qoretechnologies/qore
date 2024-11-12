@@ -116,6 +116,7 @@ public const DataTypeMap = {
     "*softfloat": SoftFloatOrNothingType,
     "*softnumber": SoftNumberOrNothingType,
     "*softdate": SoftDateOrNothingType,
+    "*softlist": SoftListOrNothingType,
 
     "all": AbstractDataProviderType::anyType,
     "any": AbstractDataProviderType::anyType,
@@ -559,6 +560,18 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @note recursively updates fields to "or nothing" types as well
     */
     AbstractDataProviderType getOrNothingType() {
+        return self;
+    }
+
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory type
+
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+
+        @since DataProvider 3.0
+    */
+    AbstractDataProviderType getMandatoryType() {
         return self;
     }
 
