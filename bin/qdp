@@ -708,13 +708,6 @@ class QdpCmd {
     static showRecord(AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
             string offset = "") {
         foreach hash<auto> i in (rec.pairIterator()) {
-            {
-                string u = i.value.uniqueHash();
-                if (rmap{u}) {
-                    return;
-                }
-                rmap{u} = True;
-            }
             AbstractDataProviderType type = i.value.getType();
             if (opts.verbose) {
                 string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
@@ -753,14 +746,24 @@ class QdpCmd {
             }
             if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
                 && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
-                printf(": elements ->\n");
-                QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
+                string u = type.uniqueHash();
+                if (!rmap{u}) {
+                    rmap{u} = True;
+                    print(": elements ->\n");
+                    QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
+                } else {
+                    print(": (type already described)\n");
+                }
             } else {
                 print("\n");
             }
             *hash<string, AbstractDataField> fields = type.getFields();
             if (fields) {
-                QdpCmd::showRecord(prov, rmap, fields, offset + "  ");
+                string u = type.uniqueHash();
+                if (!rmap{u}) {
+                    rmap{u} = True;
+                    QdpCmd::showRecord(prov, rmap, fields, offset + "  ");
+                }
             }
         }
     }
