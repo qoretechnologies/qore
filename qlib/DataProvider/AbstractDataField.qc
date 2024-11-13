@@ -239,6 +239,21 @@ public class AbstractDataField inherits Qore::Serializable {
         };
     }
 
+    #! returns information about the field
+    hash<DataFieldInfo> getConfigInfo() {
+        return <DataFieldInfo>{
+            "name": getName(),
+            "display_name": getDisplayName(),
+            "short_desc": getShortDescription(),
+            "desc": getDescription(),
+            "default_value": default_value,
+            "allowed_values": allowed_values,
+            "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
+                "default_field_type_info"},
+            "attr": attr,
+        };
+    }
+
     #! returns a field with a "soft" type equivalent to the current type
     /** The base class method returns the same field; this method must be overridden in child classes to return a
         field with a usable "soft" type
@@ -301,12 +316,14 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! Returns any example value for the field, otherwise return example data from the type
-    /** @return if a default value exists, it is returned first, then the example value for the type, if any
+    /** @param emap a hash to ensure that examples are only produced once
+
+        @return if a default value exists, it is returned first, then the example value for the type, if any
 
         @since DataProvider 3.0
     */
-    auto getExampleValue() {
-        return default_value ?? getType().getExampleValue();
+    auto getExampleValue(*hash<string, bool> emap) {
+        return default_value ?? getType().getExampleValue(emap);
     }
 
     #! Converts a long description into a short description

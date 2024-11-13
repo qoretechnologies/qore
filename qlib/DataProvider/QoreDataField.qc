@@ -197,18 +197,37 @@ public class QoreDataField inherits AbstractDataField {
     }
 
     #! Updates the field type
-    updateFieldType(AbstractDataProviderType type) {
+    AbstractDataField updateFieldType(AbstractDataProviderType type) {
         self.type = type;
+        return self;
     }
 
     #! Returns any example value for the field, if present
-    /** @return any example value for the field, otherwise the default value for the field, otherwise the example
+    /** @param emap a hash to ensure that examples are only produced once
+
+        @return any example value for the field, otherwise the default value for the field, otherwise the example
         value for the type
 
         @since DataProvider 3.0
     */
-    auto getExampleValue() {
-        return example_value ?? default_value ?? AbstractDataField::getExampleValue();
+    auto getExampleValue(*hash<string, bool> emap) {
+        return example_value ?? default_value ?? AbstractDataField::getExampleValue(emap);
+    }
+
+    #! returns information about the field
+    hash<DataFieldInfo> getConfigInfo() {
+        return <DataFieldInfo>{
+            "name": name,
+            "display_name": display_name,
+            "short_desc": short_desc,
+            "desc": desc,
+            "default_value": default_value,
+            "example_value": example_value,
+            "allowed_values": allowed_values,
+            "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
+                "default_field_type_info"},
+            "attr": attr,
+        };
     }
 
     #! returns a field with the new type

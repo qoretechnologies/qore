@@ -270,6 +270,22 @@ public class HashDataType inherits QoreDataType {
         return self;
     }
 
+    #! Replaces an existing field with a new definition
+    HashDataType replaceField(AbstractDataField field) {
+        if (!(remove fields{field.getName()})) {
+            throw "REPLACE-FIELD-ERROR", sprintf("Field %y cannot be replaced, as it does not exist",
+                field.getName());
+        }
+        addFieldIntern(field);
+        return self;
+    }
+
+    #! Adds or replaces a field with a new definition
+    HashDataType addOrReplaceField(AbstractDataField field) {
+        remove fields{field.getName()};
+        addFieldIntern(field);
+    }
+
     #! Returns the given field, if present, or @ref nothing if not
     *AbstractDataField getField(string name) {
         return fields{name};

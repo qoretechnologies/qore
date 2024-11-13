@@ -575,7 +575,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         assertEq(NT_STRING, t1.getField("a").getType().getBaseTypeCode());
 
-        assertEq({"a": "example string"}, t1.getExampleValue());
+        assertEq({"a": "string"}, t1.getExampleValue());
 
         assertFalse(t1.isAssignableFrom(t2));
         assertTrue(t3.isAssignableFrom(t1));

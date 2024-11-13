@@ -334,7 +334,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "supported_options": getSupportedOptions(),
             "options": options
                 ? (map {
-                    $1.key: $1.value.typeCode() == NT_OBJECT || $1.value.callp() ? "<" + $1.value.fullType() + ">" : $1.value,
+                    $1.key: ($1.value.typeCode() == NT_OBJECT || $1.value.callp())
+                        ? "<" + $1.value.fullType() + ">"
+                        : $1.value,
                 }, options.pairIterator())
                 : NOTHING,
             "base_type": getBaseTypeName(),
@@ -576,43 +578,61 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     }
 
     #! Returns any example value for type, if any
-    /** @since DataProvider 3.0
+    /** @param emap a hash to ensure that examples are only produced once
+
+        @since DataProvider 3.0
     */
-    auto getExampleValue() {
+    auto getExampleValue(*hash<string, bool> emap) {
+        string u = self.uniqueHash();
+        if (emap{u}) {
+            return;
+        }
+        emap{u} = True;
+
         if (*hash<string, AbstractDataField> fields = getFields()) {
-            return map {$1.key: $1.value.getExampleValue()}, fields.pairIterator();
+            # do not return example values for complex "or nothing" types
+            if (isOrNothingType()) {
+                return;
+            }
+            return map {$1.key: $1.value.getExampleValue(emap)}, fields.pairIterator();
         }
         int t = getBaseTypeCode();
         switch (getBaseTypeCode()) {
             case NT_INT: return 100;
-            case NT_STRING: return "example string";
+            case NT_STRING: return "string";
             case NT_BOOLEAN: return True;
             case NT_FLOAT: return 3.1415927;
             case NT_NUMBER: return 3.1415927n;
             case NT_DATE: return now_us();
             case NT_BINARY: return <abcd>;
             case NT_LIST: {
-                if (!isOrNothingType() && self.hasCallableMethod("getElementType")) {
+                # do not return example values for complex "or nothing" types
+                if (isOrNothingType()) {
+                    return;
+                }
+                if (self.hasCallableMethod("getElementType")) {
                     *AbstractDataProviderType etype = cast<object>(self).getElementType();
                     if (etype) {
-                        return map etype.getExampleValue(), xrange(3);
+                        return map etype.getExampleValue(emap), xrange(1);
                     }
                 }
-                return (1, 2, 3);
+                return (1, 2);
             }
             case NT_HASH: {
-                *AbstractDataProviderType etype;
-                if (!isOrNothingType()) {
-                    if (self.hasCallableMethod("getElementType")) {
-                        etype = cast<object>(self).getElementType();
-                    } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
-                        etype = cast<object>(self).getDefaultOtherElementType();
-                    }
-                    if (etype) {
-                        return map {$1: etype.getExampleValue()}, ("one", "two");
-                    }
+                # do not return example values for complex "or nothing" types
+                if (isOrNothingType()) {
+                    return;
                 }
-                return {"a": 1, "b": 2};
+                *AbstractDataProviderType etype;
+                if (self.hasCallableMethod("getElementType")) {
+                    etype = cast<object>(self).getElementType();
+                } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
+                    etype = cast<object>(self).getDefaultOtherElementType();
+                }
+                if (etype) {
+                    return map {$1: etype.getExampleValue(emap)}, ("a", "b");
+                }
+                return {"a": 1, "b": "two"};
             }
             case NT_ALL: return "any value";
             case NT_NOTHING: return;

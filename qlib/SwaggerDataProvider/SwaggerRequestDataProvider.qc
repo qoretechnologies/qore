@@ -110,7 +110,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
         *ResponseObject response = getSuccessResponse();
         if (response.schema) {
-            AbstractDataField response_field = getFieldFromSchema("body", "REST response body argument",
+            AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
                 response.schema);
             AbstractDataProviderType type = response_field.getType();
             *hash<string, AbstractDataField> rv = type.getFields();
@@ -132,11 +132,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         bool required = False;
         *hash<string, AbstractParameterObject> params = pio.parameters + op.parameters;
         if (params) {
-            addFieldsFromParameters(rv, params, \required);
+            schema.addFieldsFromParameters(rv, params, \required);
         }
         *AbstractParameterObject body = op.body ?? pio.body;
         if (body) {
-            AbstractDataField body_field = getFieldFromSchema("body", "REST request body argument",
+            AbstractDataField body_field = schema.getFieldFromSchema("body", "REST request body argument",
                 cast<BodyParameter>(body).schema, body.required ?? False, rest);
             rv.addField(body_field);
             if (!required && body.required) {
@@ -147,7 +147,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
             HashDataType formData(getName() + ": request formData");
             foreach hash<auto> i in (op.formData.pairIterator()) {
                 TypedParameter formData = cast<TypedParameter>(i.value);
-                rv.addField(new QoreDataField(i.key, "formData." + i.key, getType("/request/" + i.key,
+                rv.addField(new QoreDataField(i.key, "formData." + i.key, schema.getType("/request/" + i.key,
                     i.value.type, i.value.format, i.value.items, i.value.required)));
                 if (!required && i.value.required) {
                     required = True;
@@ -205,10 +205,10 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         label += " response";
         HashDataType rv();
         if (response.schema) {
-            rv.addField(getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
+            rv.addField(schema.getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
         }
         if (response.headers) {
-            rv.addField(getFieldForHeaders("headers", response.headers));
+            rv.addField(schema.getFieldForHeaders("headers", response.headers));
             response_headers = keys response.headers;
         }
         return rv;
