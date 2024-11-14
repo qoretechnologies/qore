@@ -55,6 +55,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         *hash<string, AbstractDataField> record_type;
     }
 
+    private {
+        #! Disable checking the request type
+        bool disable_request_type_check;
+    }
+
     #! Creates the object from the arguments
     constructor(SwaggerSchema schema, *RestClient rest, string uri_path, PathItemObject pio, OperationObject op)
             : SwaggerDataProviderBase(rest) {
@@ -95,6 +100,27 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         });
         rv += getStaticInfoImpl();
         return rv;
+    }
+
+    #! Disable the request type check
+    disableRequestTypeCheck() {
+        disable_request_type_check = True;
+    }
+
+    #! Makes a request and returns the response
+    /** @param req the request to serialize and make according to the request type
+        @param request_options the request options; will be processed by validateRequestOptions()
+
+        @return the response to the request
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw INVALID-REQUEST the request argument provided do not match the expected request type
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        if (!disable_request_type_check) {
+            return AbstractDataProvider::doRequest(req, request_options);
+        }
+        return doRequestImpl(req, validateRequestOptions(request_options));
     }
 
     #! Returns the description of the record type, if any
@@ -312,12 +338,12 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         # perform validation
         hash<string, bool> mime_types;
         hash<UriQueryInfo> uri_info = parse_uri_query(uri_path);
-        op.validateRequest(True, pio, \uri_info, \req.body, \hdr, \mime_types);
+        op.validateRequest(True, pio, \uri_info, \req.body, \hdr, \mime_types, disable_request_type_check);
 
         # make the call
         hash<auto> info;
         try {
-            *data body = op.getRequestBody(pio, req.body, \hdr);
+            *data body = op.getRequestBody(pio, req.body, \hdr, disable_request_type_check);
 
             # ensure we specify JSON for the response if possible
             if (!hdr.Accept && op.produces{MimeTypeJson}) {

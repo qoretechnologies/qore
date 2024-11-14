@@ -33,16 +33,17 @@ public class ListDataType inherits QoreDataType {
 
     #! creates the object
     private constructor(string name, Type qelement_type, AbstractDataProviderType element_type, bool or_nothing,
-            *hash<auto> options, *hash<auto> tags)
-            : QoreDataType(qelement_type, options, tags) {
+            *hash<auto> options, *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(qelement_type, options, tags, default_value, attr) {
         self.name = name;
         self.element_type = element_type;
     }
 
     #! creates the object
     constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
-            *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags) {
+            *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+                default_value, attr) {
         if (!name) {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
@@ -50,8 +51,9 @@ public class ListDataType inherits QoreDataType {
     }
 
     #! creates the object
-    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags) {
+    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags, default_value, attr) {
         if (!name) {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
@@ -60,14 +62,16 @@ public class ListDataType inherits QoreDataType {
 
     #! creates the object
     constructor(string name, AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
-            *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags) {
+            *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+                default_value, attr) {
         self.name = name;
         self.element_type = element_type;
     }
 
     #! creates the object
-    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
+    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
             : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags) {
         self.name = name;
         self.element_type = AbstractDataProviderType::get(element_type);

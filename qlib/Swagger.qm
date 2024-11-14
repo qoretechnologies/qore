@@ -3255,14 +3255,16 @@ public class OperationObject inherits ParameterGroup {
     }
 
     #! Processes a generated request
-    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers) {
+    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers, *bool freeform) {
         *AbstractParameterObject body_po = self.body ?? pio.body;
         if (body_po) {
-            body_po.check(True, True, path, method, "body", \body);
+            if (!freeform) {
+                body_po.check(True, True, path, method, "body", \body);
+            }
         } else if (formData) {
             map $1.value.check(True, True, path, method, "formData." + $1.key, \body{$1.key}),
                 formData.pairIterator();
-        } else if (body) {
+        } else if (body && !freeform) {
             error("SCHEMA-VALIDATION-ERROR", "No message body is accepted; body keys passed: %y", keys body);
         }
 
@@ -3307,12 +3309,13 @@ public class OperationObject inherits ParameterGroup {
         @param body a reference to the deserialized HTTP message body data
         @param headers a reference to a hash of HTTP headers
         @param mime_types a reference to a hash of valid mime types for the operation
+        @param freeform do not validate types
 
         @throws SCHEMA-VALIDATION-ERROR invalid parameter name or location, missing parameter and parameter has no
         default value
     */
     validateRequest(bool serialize, PathItemObject pio, reference<hash<UriQueryInfo>> h, reference<auto> body,
-            reference<hash> headers, *reference<hash<string, bool>> mime_types) {
+            reference<hash> headers, *reference<hash<string, bool>> mime_types, *bool freeform) {
         # check query parameters
         *string query_obj = self.query_obj ?? pio.query_obj;
         if (exists query_obj) {
@@ -3359,12 +3362,14 @@ public class OperationObject inherits ParameterGroup {
         {
             *AbstractParameterObject body_po = self.body ?? pio.body;
             if (body_po) {
-                body_po.check(serialize, True, path, method, "body", \body);
+                if (!freeform) {
+                    body_po.check(serialize, True, path, method, "body", \body);
+                }
             } else if (formData) {
                 foreach hash<auto> i in (formData.pairIterator()) {
                     i.value.check(serialize, True, path, method, "formData." + i.key, \body{i.key});
                 }
-            } else if (body) {
+            } else if (body && !freeform) {
                 error("SCHEMA-VALIDATION-ERROR", "No message body is accepted for %s %s; body keys passed: %y",
                     method.upr(), path, keys body);
             }
@@ -4708,11 +4713,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         if (oh.hasKey("example"))
             example = oh.example;
-
-if (name == "EnvelopeRecipients" && !properties) {
-    throw "ERR", sprintf("oh: %N", oh);
-}
-
         addToCache(self);
     }
 
