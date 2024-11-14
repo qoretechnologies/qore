@@ -75,6 +75,7 @@ class QdpCmd {
             "listtypes": "t,list-types",
             "modules": "m,module=s@",
             "options": "o,options=s",
+            "required": "R,show-required",
             "subtype": "s,subtype=s",
             "verbose": "v,verbose:i+",
             "exp": "x,expressions",
@@ -708,11 +709,14 @@ class QdpCmd {
     static showRecord(AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
             string offset = "") {
         foreach hash<auto> i in (rec.pairIterator()) {
+            if (opts.required && (!i.value.isMandatory() || exists i.value.getDefaultValue())) {
+                continue;
+            }
             AbstractDataProviderType type = i.value.getType();
             if (opts.verbose) {
                 string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
                 string info;
-                if (*string desc = i.value.getDescription()) {
+                if (*string desc = i.value.getShortDescription()) {
                     info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
                 }
                 if (auto val = i.value.getDefaultValue()) {
@@ -1320,6 +1324,7 @@ class QdpCmd {
  -H,--host=ARG             set the hostname (+ optionally port) for webhooks
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
+ -R,--show-required        show only required attributes when showing types
  -s,--subtype=ARG          use Data Provider subtype when creating from a connection
  -t,--list-types           list known data provider types and exit
  -v,--verbose[=ARG]        show more output
@@ -1546,7 +1551,7 @@ class InputHelper {
                 continue;
             }
             if (line == "info") {
-                string msg = sprintf("using: %y: %s", provider.getName(), provider.getDesc());
+                string msg = sprintf("using: %y: %s", provider.getName(), provider.getShortDesc());
                 *hash<DataProviderConnectionInfo> cinfo = provider.getConnectionInfo();
                 if (cinfo.url) {
                     msg += sprintf(" (%s connected: %y auto reconnect: %y)", cinfo.url, cinfo.connected,

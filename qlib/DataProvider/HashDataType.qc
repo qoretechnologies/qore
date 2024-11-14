@@ -139,8 +139,8 @@ public class HashDataType inherits QoreDataType {
     auto acceptsValue(auto input_value) {
         # specific check to provide a better error message in case of a missing argument
         on_error if (!exists input_value && fields && $1.err == "RUNTIME-TYPE-ERROR") {
-            rethrow "MISSING-VALUE-ERROR", sprintf("no input value provided for hash with defined fields: %y",
-                keys fields);
+            rethrow "MISSING-VALUE-ERROR", sprintf("No input value provided for hash type %y with defined fields: "
+                "%y: %s", getName(), keys fields, $1.desc);
         }
         # {} + ensure that the hash value is "hash<auto>"
         auto value = {} + QoreDataType::acceptsValue(input_value);
