@@ -410,7 +410,11 @@ int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* 
 
 int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, int sd, X509* cert, EVP_PKEY* pk,
         ExceptionSink* xsink) {
+#ifdef HAVE_TLS_SERVER_METHOD
+    meth = TLS_client_method();
+#else
     meth = SSLv23_client_method();
+#endif
     int rc = setIntern(mname, sd, cert, pk, xsink);
     if (!rc && sni_target_host) {
         // issue #3053 set TLS server name for servers that require SNI
@@ -426,7 +430,11 @@ int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, i
 }
 
 int SSLSocketHelper::setServer(const char* mname, int sd, X509* cert, EVP_PKEY* pk, ExceptionSink* xsink) {
+#ifdef HAVE_TLS_SERVER_METHOD
+    meth = TLS_server_method();
+#else
     meth = SSLv23_server_method();
+#endif
     return setIntern(mname, sd, cert, pk, xsink);
 }
 

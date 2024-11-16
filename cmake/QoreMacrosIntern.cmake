@@ -213,6 +213,15 @@ return 0;
 }"
 HAVE_SSL_READ_EX)
 
+# check for TLS_server_method)
+check_cxx_source_compiles("
+#include <openssl/ssl.h>
+int main(void) {
+TLS_server_method();
+return 0;
+}"
+HAVE_SSL_READ_EX)
+
 unset(CMAKE_REQUIRED_INCLUDES)
 unset(CMAKE_REQUIRED_LIBRARIES)
 

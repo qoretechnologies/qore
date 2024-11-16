@@ -6,6 +6,10 @@ set(VERSION_MINOR 0)
 set(VERSION_SUB 0)
 #set(VERSION_PATCH 0)
 
+# set policy for interperting unquoted variables
+if (POLICY CMP0054)
+    cmake_policy(SET CMP0054 NEW)
+endif()
 # support <pkg>_ROOT in find_package
 if (POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
