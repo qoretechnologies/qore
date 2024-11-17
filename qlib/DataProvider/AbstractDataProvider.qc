@@ -1157,17 +1157,6 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         #! A list of members names of the DataProviderSummaryInfoKeys hashdecl
         const DataProviderSummaryInfoKeys = map $1.getName(),
             TypedHash::forName("DataProviderSummaryInfo").getMembers();
-    }
-
-    private {
-        #! flag if callbacks are locked
-        static bool callbacks_locked = False;
-
-        #! static callback the returns a bool if the value needs dynamic resolution
-        static code cb_value_needs_resolution;
-
-        #! static callback for dynamic value resolution
-        static code cb_resolve_value;
 
         #! Generic record search options; see details below
         /** Each record-based data provider should support the following search options:
@@ -1195,6 +1184,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "desc": "The offset in the record list for records to return",
             },
         };
+    }
+
+    private {
+        #! flag if callbacks are locked
+        static bool callbacks_locked = False;
+
+        #! static callback the returns a bool if the value needs dynamic resolution
+        static code cb_value_needs_resolution;
+
+        #! static callback for dynamic value resolution
+        static code cb_resolve_value;
     }
 
     #! Creates the data provider
