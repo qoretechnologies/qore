@@ -163,7 +163,7 @@ public hashdecl DataProviderSummaryInfo {
     #! Does the data provider provide a record?
     bool has_record = False;
 
-    #! Does this data provide support advanced search experssions?
+    #! Does this data provide support advanced search expressions?
     bool supports_search_expressions = False;
 
     #! Does this data provider support the event API / observer pattern?
