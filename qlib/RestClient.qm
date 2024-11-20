@@ -1757,9 +1757,11 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         on_exit setConnectionPath(path);
         setConnectionPath();
 
-        # remove tokens and Authorization header
-        remove token;
-        remove headers.Authorization;
+        # remove tokens and Authorization header; make sure and restore on error so that refreshes can be retried
+        *string old_token = remove token;
+        on_error token = old_token;
+        *string old_auth = remove headers.Authorization;
+        on_error headers.Authorization = old_auth;
 
         # temporarily remove any schema for the OAuth2 call
         AbstractRestSchemaValidator v;
