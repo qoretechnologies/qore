@@ -194,7 +194,7 @@ return 0;
 }"
 HAVE_SSL_SET1_HOST)
 
-# check for EVP_MAC_CTX_new)
+# check for EVP_MAC_CTX_new()
 check_cxx_source_compiles("
 #include <openssl/evp.h>
 int main(void) {
@@ -203,7 +203,7 @@ return 0;
 }"
 HAVE_EVP_MAC_CTX_NEW)
 
-# check for SSL_read_ex)
+# check for SSL_read_ex()
 check_cxx_source_compiles("
 #include <openssl/ssl.h>
 int main(void) {
@@ -212,6 +212,15 @@ SSL_read_ex(nullptr, nullptr, 0, &num);
 return 0;
 }"
 HAVE_SSL_READ_EX)
+
+# check for SSL_CTX_load_verify_file()
+check_cxx_source_compiles("
+#include <openssl/ssl.h>
+int main(void) {
+SSL_CTX_load_verify_file(nullptr, nullptr);
+return 0;
+}"
+HAVE_SSL_CTX_LOAD_VERIFY_FILE)
 
 unset(CMAKE_REQUIRED_INCLUDES)
 unset(CMAKE_REQUIRED_LIBRARIES)

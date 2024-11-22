@@ -350,11 +350,19 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
             assert(*xsink);
             return -1;
         }
+#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
         if (ca_cert_pem && !SSL_CTX_load_verify_file(ctx, ca_cert_pem)) {
             sslError(xsink, mname, "SSL_CTX_load_verify_file");
             assert(*xsink);
             return -1;
         }
+#else
+        if (ca_cert_pem && !SSL_CTX_load_verify_locations(ctx, ca_cert_pem, nullptr)) {
+            sslError(xsink, mname, "SSL_CTX_load_verify_locations");
+            assert(*xsink);
+            return -1;
+        }
+#endif
     }
     if (pk) {
         if (!SSL_CTX_use_PrivateKey(ctx, pk)) {
