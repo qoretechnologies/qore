@@ -405,9 +405,10 @@ struct qore_httpclient_priv {
 
         int rc;
         if (connect_ssl) {
-            rc = msock->socket->connectSSL(socketpath.c_str(), connect_timeout_ms,
+            rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms,
                 msock->cert ? msock->cert->getData() : nullptr,
-                msock->pk ? msock->pk->getData() : nullptr, xsink);
+                msock->pk ? msock->pk->getData() : nullptr,
+                msock->cert ? msock->cert->getVerifyCACertificate() : nullptr);
         } else {
             rc = msock->socket->connect(socketpath.c_str(), connect_timeout_ms, xsink);
         }
@@ -2216,7 +2217,8 @@ int HttpClientConnectSendRecvPollOperation::responseDone(ExceptionSink* xsink) {
 
         poll_state.reset(client->http_priv->msock->socket->startSslConnect(xsink,
             client->http_priv->msock->cert ? client->http_priv->msock->cert->getData() : nullptr,
-            client->http_priv->msock->pk ? client->http_priv->msock->pk->getData() : nullptr));
+            client->http_priv->msock->pk ? client->http_priv->msock->pk->getData() : nullptr,
+            client->http_priv->msock->cert ? client->http_priv->msock->cert->getVerifyCACertificate() : nullptr));
         if (*xsink) {
             return -1;
         }
@@ -3296,8 +3298,9 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             // set client target for SNI
             msock->socket->priv->client_target = this_connection.host;
 
-            if (msock->socket->upgradeClientToSSL(msock->cert ? msock->cert->getData() : nullptr,
-                msock->pk ? msock->pk->getData() : nullptr, xsink)) {
+            if (msock->socket->upgradeClientToSSL(xsink, msock->cert ? msock->cert->getData() : nullptr,
+                msock->pk ? msock->pk->getData() : nullptr,
+                msock->cert ? msock->cert->getVerifyCACertificate() : nullptr)) {
                 disconnect_unlocked();
                 return nullptr;
             }

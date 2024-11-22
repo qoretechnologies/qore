@@ -470,7 +470,7 @@ struct qore_ftp_private {
             return -1;
         }
 
-        if (control.upgradeClientToSSL(0, 0, timeout_ms, xsink))
+        if (control.upgradeClientToSSL(xsink, 0, 0, timeout_ms))
             return -1;
 
         if (secure_data)
@@ -488,11 +488,15 @@ struct qore_ftp_private {
         }
 
         FtpResp resp;
-        if (connectIntern(&resp, xsink))
+        if (connectIntern(&resp, xsink)) {
+            assert(*xsink);
             return -1;
+        }
 
-        if (secure && doAuth(&resp, xsink))
+        if (secure && doAuth(&resp, xsink)) {
+            assert(*xsink);
             return -1;
+        }
 
         int code;
 
@@ -567,7 +571,7 @@ struct qore_ftp_private {
             printd(FTPDEBUG, "QoreFtpClient::acceptDataConnection() negotiating client SSL connection\n");
 #endif
 
-        if (secure_data && data.upgradeClientToSSL(0, 0, timeout_ms, xsink))
+        if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms))
             return -1;
 
         printd(FTPDEBUG, "QoreFtpClient::acceptDataConnection() accepted PORT data connection\n");
@@ -640,7 +644,8 @@ struct qore_ftp_private {
                 xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno, "could not connect to extended passive data port (%s:%d)", host, data_port);
             return -1;
         }
-        printd(FTPDEBUG, "EPSV connected to %s:%d (open: %d family: %d)\n", host, data_port, data.isOpen(), qore_socket_private::get(data)->sfamily);
+        printd(FTPDEBUG, "EPSV connected to %s:%d (open: %d family: %d)\n", host, data_port, data.isOpen(),
+            qore_socket_private::get(data)->sfamily);
 
         mode = FTP_MODE_EPSV;
         return 0;
@@ -693,7 +698,7 @@ struct qore_ftp_private {
             return -1;
         }
 
-        if (secure_data && data.upgradeClientToSSL(0, 0, timeout_ms, xsink)) {
+        if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms)) {
             return -1;
         }
 
@@ -796,7 +801,7 @@ struct qore_ftp_private {
             data.close();
             return -1;
         }
-        else if (secure_data && data.upgradeClientToSSL(0, 0, timeout_ms, xsink)) {
+        else if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms)) {
             data.close();
             return -1;
         }
@@ -939,7 +944,7 @@ QoreStringNode* QoreFtpClient::list(const char* path, bool long_list, ExceptionS
     if ((priv->mode == FTP_MODE_PORT && priv->acceptDataConnection(xsink)) || *xsink) {
         priv->data.close();
         return nullptr;
-    } else if (priv->secure_data && priv->data.upgradeClientToSSL(0, 0, priv->timeout_ms, xsink))
+    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms))
         return nullptr;
 
     QoreStringNodeHolder l(new QoreStringNode);
@@ -1025,7 +1030,7 @@ int QoreFtpClient::put(const char* localpath, const char* remotename, ExceptionS
     if ((priv->mode == FTP_MODE_PORT && priv->acceptDataConnection(xsink)) || *xsink) {
         priv->data.close();
         return -1;
-    } else if (priv->secure_data && priv->data.upgradeClientToSSL(0, 0, priv->timeout_ms, xsink)) {
+    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms)) {
         return -1;
     }
 
@@ -1089,7 +1094,7 @@ int QoreFtpClient::put(InputStream *is, const char* remotename, ExceptionSink* x
         priv->data.close();
         return -1;
     }
-    else if (priv->secure_data && priv->data.upgradeClientToSSL(0, 0, xsink)) {
+    else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0)) {
         return -1;
     }
 
@@ -1153,7 +1158,7 @@ int QoreFtpClient::putData(const void *data, size_t len, const char* remotename,
       priv->data.close();
       return -1;
    }
-   else if (priv->secure_data && priv->data.upgradeClientToSSL(0, 0, priv->timeout_ms, xsink))
+   else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms))
       return -1;
 
    int rc = priv->data.send((const char*)data, len, priv->timeout_ms, xsink);

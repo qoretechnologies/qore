@@ -158,12 +158,15 @@ public:
     //! Starts a non-blocking upgrade to an SSL connection on a connected client connection
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param cert the client certificate to use
+        @param ca_cert_pem any CA certificate data to use for verification
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
         @since %Qore 1.12
     */
-    DLLEXPORT AbstractPollState* startSslConnect(ExceptionSink* xsink, X509* cert = nullptr, EVP_PKEY* pkey = nullptr);
+    DLLEXPORT AbstractPollState* startSslConnect(ExceptionSink* xsink, X509* cert = nullptr, EVP_PKEY* pkey = nullptr,
+            const char* ca_cert_pem = nullptr);
 
     //! Starts a non-blocking send operation on a connected socket
     /**
@@ -280,7 +283,8 @@ public:
         @see QoreSocket::connectINETSSL()
         @see QoreSocket::connectUNIXSSL()
     */
-    DLLEXPORT int connectINET2(const char* name, const char* service, int family = Q_AF_UNSPEC, int sock_type = Q_SOCK_STREAM, int protocol = 0, int timeout_ms = -1, ExceptionSink* xsink = nullptr);
+    DLLEXPORT int connectINET2(const char* name, const char* service, int family = Q_AF_UNSPEC,
+            int sock_type = Q_SOCK_STREAM, int protocol = 0, int timeout_ms = -1, ExceptionSink* xsink = nullptr);
 
     //! connects to an INET socket by hostname and port number and returns a status code, Qore-language exceptions are raised in the case of any errors
     /** @param host the name or IP address of the host
@@ -325,12 +329,17 @@ public:
     //! connects to a socket, negotiates an SSL connection, and returns a status code, Qore-language exceptions are raised in the case of any errors
     /** If "name" has a ':' in it; it's assumed to be a hostname:port specification and QoreSocket::connectINETSSL() is called.
         Otherwise "name" is assumed to be a file name for a UNIX domain socket and QoreSocket::connectUNIXSSL() is called.
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param name the name of the socket (either hostname:port or file name)
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate data to use for verification
+
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
+
         @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
         @see QoreSocket::connectUNIX()
@@ -338,18 +347,24 @@ public:
         @see QoreSocket::connectUNIXSSL()
         @see QoreSocket::upgradeClientToSSL()
     */
-    DLLEXPORT int connectSSL(const char* name, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int connectSSL(ExceptionSink* xsink, const char* name, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! connects to a socket, negotiates an SSL connection, and returns a status code, Qore-language exceptions are raised in the case of any errors
     /** If "name" has a ':' in it; it's assumed to be a hostname:port specification and QoreSocket::connectINETSSL() is called.
         Otherwise "name" is assumed to be a file name for a UNIX domain socket and QoreSocket::connectUNIXSSL() is called.
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param name the name of the socket (either hostname:port or file name)
         @param timeout_ms the timeout period in milliseconds
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate data to use for verification
+
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
+
         @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
         @see QoreSocket::connectUNIX()
@@ -357,16 +372,22 @@ public:
         @see QoreSocket::connectUNIXSSL()
         @see QoreSocket::upgradeClientToSSL()
     */
-    DLLEXPORT int connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! connects to an INET socket by hostname and port number, negotiates an SSL connection, and returns a status code, Qore-language exceptions are raised in the case of any errors
-    /** @param host the name or IP address of the host
+    /**
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param host the name or IP address of the host
         @param prt the port number of the remote socket
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
+
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
+
         @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
         @see QoreSocket::connectINET()
@@ -374,17 +395,23 @@ public:
         @see QoreSocket::connectUNIXSSL()
         @see QoreSocket::upgradeClientToSSL()
     */
-    DLLEXPORT int connectINETSSL(const char* host, int prt, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int connectINETSSL(ExceptionSink* xsink, const char* host, int prt, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! connects to an INET socket by hostname and port number, negotiates an SSL connection, and returns a status code, Qore-language exceptions are raised in the case of any errors
-    /** @param host the name or IP address of the host
+    /**
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param host the name or IP address of the host
         @param prt the port number of the remote socket
         @param timeout_ms the timeout period in milliseconds
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
+
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
+
         @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
         @see QoreSocket::connectINET()
@@ -392,10 +419,12 @@ public:
         @see QoreSocket::connectUNIXSSL()
         @see QoreSocket::upgradeClientToSSL()
     */
-    DLLEXPORT int connectINETSSL(const char* host, int prt, int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int connectINETSSL(ExceptionSink* xsink, const char* host, int prt, int timeout_ms, X509* cert,
+            EVP_PKEY* pkey, const char* ca_cert_pem = nullptr);
 
     //! connects to an INET or INET6 socket by hostname and port number or service name and returns a status code, Qore-language exceptions are raised in the case of any errors
-    /** @param name the name or address of the host
+    /** @param xsink if not 0, if an error occurs, the Qore-language exception information will be added here
+        @param name the name or address of the host
         @param service the port number or service name of the remote socket
         @param family should be either AF_INET (for ipv4) or AF_INET6 (for ipv6)
         @param sock_type the type of socket, normally SOCK_STREAM for tcp sockets or SOCK_DGRAM for udp sockets
@@ -403,15 +432,19 @@ public:
         @param timeout_ms the timeout period in milliseconds
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if not 0, if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
+
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
+
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
         @see QoreSocket::connectSSL()
         @see QoreSocket::connectINETSSL()
         @see QoreSocket::connectUNIXSSL()
     */
-    DLLEXPORT int connectINET2SSL(const char* name, const char* service, int family, int sock_type, int protocol, int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink = nullptr);
+    DLLEXPORT int connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
+            int sock_type, int protocol, int timeout_ms, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! connects to a UNIX domain socket, negotiates an SSL connection, and returns a status code, Qore-language exceptions are raised in the case of any errors
     /** @param p the file name of the UNIX domain socket
@@ -557,10 +590,11 @@ public:
     //! accepts a new connection on a listening socket, negotiates an SSL connection, and returns a new QoreSocket object for the new connection
     /** the socket must be opened and in a listening state before making this call.
 
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param source source connection information will be written to this object if not 0
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return a new QoreSocket object for the new connection (or 0 if an error occured)
 
@@ -570,7 +604,8 @@ public:
         - QoreSocket::listen()
         - SocketSource
     */
-    DLLEXPORT QoreSocket* acceptSSL(SocketSource* source, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT QoreSocket* acceptSSL(ExceptionSink* xsink, SocketSource* source, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! accepts a new connection on a listening socket and replaces the current socket with the new connection
     /** the socket must be opened and in a listening state before making this call.
@@ -603,18 +638,24 @@ public:
 
     //! accepts a new connection on a listening socket, negotiates an SSL connection, and returns a new QoreSocket object for the new connection with a timeout; if no connection is accepted within the timeout period 0 is returned
     /** the socket must be opened and in a listening state before making this call.
-        @param timeout_ms the timeout in milliseconds; if a timeout occurs then 0 is returned (no Qore-language excepton is raised)
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param timeout_ms the timeout in milliseconds; if a timeout occurs then 0 is returned (no Qore-language
+        excepton is raised)
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
+
         @return a new QoreSocket object for the new connection (or 0 if an error or timeout occured)
+
         @note the same as calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket
 
         @see
         - QoreSocket::accept(int timeout_ms, ExceptionSink* xsink)
         - QoreSocket::listen()
     */
-    DLLEXPORT QoreSocket* acceptSSL(int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT QoreSocket* acceptSSL(ExceptionSink* xsink, int timeout_ms, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! accepts a new connection on a listening socket and replaces the current socket with the new connection with a timeout; if no connection is accepted within the timeout period, -3 (QSE_TIMEOUT) is returned
     /** the socket must be opened and in a listening state before making this call.
@@ -1723,48 +1764,56 @@ public:
     //! negotiates an SSL connection from the client side
     /** The socket must be connected before this call is made.
 
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return 0 if OK, not 0 on error
     */
-    DLLEXPORT int upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int upgradeClientToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! negotiates an SSL connection from the client side
     /** The socket must be connected before this call is made.
 
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
         @param timeout_ms timeout in milliseconds, -1 = never timeout
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return 0 if OK, not 0 on error
     */
-    DLLEXPORT int upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT int upgradeServerToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, int timeout_ms,
+            const char* ca_cert_pem = nullptr);
 
     //! negotiates an SSL connection from the client side
     /** The socket must be connected before this call is made.
 
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
         @param timeout_ms timeout in milliseconds, -1 = never timeout
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return 0 if OK, not 0 on error
     */
-    DLLEXPORT int upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT int upgradeClientToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, int timeout_ms,
+            const char* ca_cert_pem = nullptr);
 
     //! negotiates an SSL connection from the client side
     /** The socket must be connected before this call is made.
 
+        @param xsink if an error occurs, the Qore-language exception information will be added here
         @param cert the X509 certificate to use for the connection, may be 0 if no certificate should be used
         @param pkey the private key to use for the connection, may be 0 if no private key should be used
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return 0 if OK, not 0 on error
     */
-    DLLEXPORT int upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink);
+    DLLEXPORT int upgradeServerToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem = nullptr);
 
     //! returns true if all write data has been written within the timeout period in milliseconds
     /** The socket must be connected before this call is made.

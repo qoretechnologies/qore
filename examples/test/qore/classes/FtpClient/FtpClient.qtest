@@ -259,7 +259,7 @@ class FtpTest inherits QUnit::Test {
 
         fc.cwd(path);
 
-        testAssertion("FtpClient::get()", \fc.get(), (file, local_read_path), new TestResultValue(NOTHING));
+        assertNothing(fc.get(file, local_read_path));
 
         *list l = stat(local_read_path);
         testAssertion("FtpClient::get() return value", int sub () {return l.typeCode();}, NOTHING, new TestResultValue(NT_LIST));
