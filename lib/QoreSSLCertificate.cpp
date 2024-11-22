@@ -36,13 +36,26 @@
 
 struct qore_sslcert_private {
     X509* cert;
+    char* ca_cert_pem = nullptr;
 
     DLLLOCAL qore_sslcert_private(X509* c) : cert(c) {
     }
 
     DLLLOCAL ~qore_sslcert_private() {
-        if (cert)
+        if (cert) {
             X509_free(cert);
+        }
+        if (ca_cert_pem) {
+            free(ca_cert_pem);
+        }
+    }
+
+    // assumes ownership of "str"
+    DLLLOCAL void setVerifyCACertificate(char* str) {
+        if (ca_cert_pem) {
+            free(ca_cert_pem);
+        }
+        ca_cert_pem = str;
     }
 
     DLLLOCAL ASN1_OBJECT* getAlgorithm() {
@@ -153,6 +166,14 @@ QoreValue QoreSSLCertificate::doPurposeValue(int id, int ca) const {
 
 X509* QoreSSLCertificate::getData() const {
    return priv->cert;
+}
+
+void QoreSSLCertificate::setVerifyCACertificate(char* str) {
+    priv->setVerifyCACertificate(str);
+}
+
+const char* QoreSSLCertificate::getVerifyCACertificate() {
+    return priv->ca_cert_pem;
 }
 
 QoreStringNode* QoreSSLCertificate::getPEM(ExceptionSink* xsink) const {

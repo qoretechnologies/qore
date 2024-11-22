@@ -895,7 +895,7 @@ sock.connectSSL("/tmp/socket"); @endcode
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
-    s->connectSSL(target->c_str(), timeout_ms, xsink);
+    s->connectSSL(xsink, target->c_str(), timeout_ms);
 }
 
 //! Connects to the given host and port and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -925,7 +925,7 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
 */
 nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectINET2SSL(host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms, xsink);
+    s->connectINET2SSL(xsink, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms);
 }
 
 //! Connects to the given UNIX domain socket file and attempts to establish a TLS/SSL connection
@@ -1144,7 +1144,7 @@ Socket Socket::accept() {
     @see Socket::accept(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::acceptSSL() {
-    QoreSocketObject *n = s->acceptSSL(-1, xsink);
+    QoreSocketObject *n = s->acceptSSL(xsink, -1);
     if (!n) {
         assert(*xsink);
         return QoreValue();
@@ -1178,7 +1178,7 @@ Socket Socket::acceptSSL() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::acceptSSL(timeout timeout_ms) {
-    QoreSocketObject* n = s->acceptSSL(timeout_ms, xsink);
+    QoreSocketObject* n = s->acceptSSL(xsink, timeout_ms);
     if (!n)
         return QoreValue();
 
@@ -3384,7 +3384,7 @@ sock.upgradeClientToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
-    s->upgradeClientToSSL(timeout_ms, xsink);
+    s->upgradeClientToSSL(xsink, timeout_ms);
 }
 
 //! Upgrades a server socket connection to a TLS/SSL connection
@@ -3403,7 +3403,7 @@ sock.upgradeServerToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
-    s->upgradeServerToSSL(timeout_ms, xsink);
+    s->upgradeServerToSSL(xsink, timeout_ms);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket

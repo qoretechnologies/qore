@@ -37,7 +37,8 @@
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 
-QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk) : priv(new my_socket_priv(s, cert, pk)) {
+QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
+        : priv(new my_socket_priv(s, cert, pk)) {
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
@@ -73,9 +74,10 @@ AbstractPollState* QoreSocketObject::startConnect(ExceptionSink* xsink, const ch
     return priv->socket->startConnect(xsink, name);
 }
 
-AbstractPollState* QoreSocketObject::startSslConnect(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey) {
+AbstractPollState* QoreSocketObject::startSslConnect(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
     AutoLocker al(priv->m);
-    return priv->socket->startSslConnect(xsink, cert, pkey);
+    return priv->socket->startSslConnect(xsink, cert, pkey, ca_cert_pem);
 }
 
 AbstractPollState* QoreSocketObject::startSend(ExceptionSink* xsink, const char* data, size_t size) {
@@ -707,27 +709,27 @@ bool QoreSocketObject::isOpen() const {
     return priv->socket->isOpen();
 }
 
-int QoreSocketObject::connectINETSSL(const char* host, int port, int timeout_ms, ExceptionSink* xsink) {
+int QoreSocketObject::connectINETSSL(ExceptionSink* xsink, const char* host, int port, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return -1;
     }
-    return priv->socket->connectINETSSL(host, port, timeout_ms,
-                        priv->cert ? priv->cert->getData() : 0,
-                        priv->pk ? priv->pk->getData() : 0,
-                        xsink);
+    return priv->socket->connectINETSSL(xsink, host, port, timeout_ms,
+        priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
-int QoreSocketObject::connectINET2SSL(const char* name, const char* service, int family, int sock_type, int protocol,
-        int timeout_ms, ExceptionSink* xsink) {
+int QoreSocketObject::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
+        int sock_type, int protocol, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return -1;
     }
-    return priv->socket->connectINET2SSL(name, service, family, sock_type, protocol, timeout_ms,
-                        priv->cert ? priv->cert->getData() : 0,
-                        priv->pk ? priv->pk->getData() : 0,
-                        xsink);
+    return priv->socket->connectINET2SSL(xsink, name, service, family, sock_type, protocol, timeout_ms,
+        priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
 int QoreSocketObject::connectUNIXSSL(const char* p, int sock_type, int protocol, ExceptionSink* xsink) {
@@ -736,20 +738,20 @@ int QoreSocketObject::connectUNIXSSL(const char* p, int sock_type, int protocol,
         return -1;
     }
     return priv->socket->connectUNIXSSL(p, sock_type, protocol,
-                        priv->cert ? priv->cert->getData() : 0,
-                        priv->pk ? priv->pk->getData() : 0,
-                        xsink);
+        priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        xsink);
 }
 
-int QoreSocketObject::connectSSL(const char* name, int timeout_ms, ExceptionSink* xsink) {
+int QoreSocketObject::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return -1;
     }
-    return priv->socket->connectSSL(name, timeout_ms,
-                    priv->cert ? priv->cert->getData() : 0,
-                    priv->pk ? priv->pk->getData() : 0,
-                    xsink);
+    return priv->socket->connectSSL(xsink, name, timeout_ms,
+        priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
 QoreSocketObject* QoreSocketObject::accept(SocketSource* source, ExceptionSink* xsink) {
@@ -765,15 +767,16 @@ QoreSocketObject* QoreSocketObject::accept(SocketSource* source, ExceptionSink* 
         priv->pk ? priv->pk->pkRefSelf() : nullptr) : nullptr;
 }
 
-QoreSocketObject* QoreSocketObject::acceptSSL(SocketSource* source, ExceptionSink* xsink) {
+QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, SocketSource* source) {
     QoreSocket* s;
     {
         AutoLocker al(priv->m);
         if (priv->checkNonBlock(xsink)) {
             return nullptr;
         }
-        s = priv->socket->acceptSSL(source, priv->cert ? priv->cert->getData() : nullptr,
-            priv->pk ? priv->pk->getData() : nullptr, xsink);
+        s = priv->socket->acceptSSL(xsink, source, priv->cert ? priv->cert->getData() : nullptr,
+            priv->pk ? priv->pk->getData() : nullptr,
+            priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
     }
     return s
         ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
@@ -796,15 +799,16 @@ QoreSocketObject* QoreSocketObject::accept(int timeout_ms, ExceptionSink* xsink)
         : nullptr;
 }
 
-QoreSocketObject* QoreSocketObject::acceptSSL(int timeout_ms, ExceptionSink* xsink) {
+QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, int timeout_ms) {
     QoreSocket* s;
     {
         AutoLocker al(priv->m);
         if (priv->checkNonBlock(xsink)) {
             return nullptr;
         }
-        s = priv->socket->acceptSSL(timeout_ms, priv->cert ? priv->cert->getData() : nullptr,
-            priv->pk ? priv->pk->getData() : nullptr, xsink);
+        s = priv->socket->acceptSSL(xsink, timeout_ms, priv->cert ? priv->cert->getData() : nullptr,
+            priv->pk ? priv->pk->getData() : nullptr,
+            priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
     }
     return s
         ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
@@ -845,8 +849,9 @@ void QoreSocketObject::upgradeClientToSSL(ExceptionSink* xsink) {
     if (priv->checkNonBlock(xsink)) {
         return;
     }
-    priv->socket->upgradeClientToSSL(priv->cert ? priv->cert->getData() : nullptr,
-        priv->pk ? priv->pk->getData() : nullptr, xsink);
+    priv->socket->upgradeClientToSSL(xsink, priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
 void QoreSocketObject::upgradeServerToSSL(ExceptionSink* xsink) {
@@ -854,26 +859,29 @@ void QoreSocketObject::upgradeServerToSSL(ExceptionSink* xsink) {
     if (priv->checkNonBlock(xsink)) {
         return;
     }
-    priv->socket->upgradeServerToSSL(priv->cert ? priv->cert->getData() : nullptr,
-        priv->pk ? priv->pk->getData() : nullptr, xsink);
+    priv->socket->upgradeServerToSSL(xsink, priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
-void QoreSocketObject::upgradeClientToSSL(int timeout_ms, ExceptionSink* xsink) {
+void QoreSocketObject::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return;
     }
-    priv->socket->upgradeClientToSSL(priv->cert ? priv->cert->getData() : nullptr,
-        priv->pk ? priv->pk->getData() : nullptr, timeout_ms, xsink);
+    priv->socket->upgradeClientToSSL(xsink, priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr, timeout_ms,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
-void QoreSocketObject::upgradeServerToSSL(int timeout_ms, ExceptionSink* xsink) {
+void QoreSocketObject::upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return;
     }
-    priv->socket->upgradeServerToSSL(priv->cert ? priv->cert->getData() : nullptr,
-        priv->pk ? priv->pk->getData() : nullptr, timeout_ms, xsink);
+    priv->socket->upgradeServerToSSL(xsink, priv->cert ? priv->cert->getData() : nullptr,
+        priv->pk ? priv->pk->getData() : nullptr, timeout_ms,
+        priv->cert ? priv->cert->getVerifyCACertificate() : nullptr);
 }
 
 void QoreSocketObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {

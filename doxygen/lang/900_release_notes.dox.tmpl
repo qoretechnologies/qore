@@ -26,6 +26,10 @@
       - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
         - added support for a data provider action catalog
           (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      - <a href="../../modules/HttpServerUtil/html/index.html">HttpServerUtil</a> module
+        - added support for CA cert locations to work around an openssl bug where the CA cert was not available in
+          server sockets even though it was in the original cert file
+          (<a href="https://github.com/qorelanguage/qore/issues/4915">issue 4915</a>)
       - <a href="../../modules/Logger/html/index.html">Logger</a> module
         - much faster faster execution with optimized code in th
           <a href="../../modules/logger_bin/html/index.html">logger_bin</a> module
@@ -39,6 +43,7 @@
       - @ref Qore::HTTPClient::getPersistentCount() "HTTPClient::getPersistentCount()"
       - @ref Qore::HTTPClient::isPersistent() "HTTPClient::isPersistent()"
       - @ref Qore::Socket::startPollRecvData() "Socket::startPollRecvData()"
+      - @ref Qore::SSLCertificate::setVerifyCACertificate() "SSLCertificate::setVerifyCACertificate()"
     - New Functions
       - @ref Qore::active_exception() "active_exception()"
     - Updated Functions

@@ -96,6 +96,9 @@ module HttpServerUtil {
 
     @subsection httputil1_2 HttpServerUtil 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
+    - added \c ca_cert_loc to listener info to work around an OpenSSL issue where CA certs were not available from
+      server sockets even though the CA cert was present in the cert file
+      (<a href="https://github.com/qorelanguage/qore/issues/4915">issue 4915</a>)
 
     @subsection httputil1_1 HttpServerUtil 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
@@ -396,6 +399,11 @@ public hashdecl HttpCertInfo {
     */
     *string key_password;
 
+    #! The X.509 CA certificate file location
+    /** For use when re-reading the certificate file from its original location
+    */
+    *string ca_cert_loc;
+
     #! X.509 certificate
     *SSLCertificate cert;
     #! private key for cert
@@ -427,6 +435,11 @@ public hashdecl HttpListenerOptionInfo {
     /** For use when re-reading the private key file from its original location
     */
     *string key_password;
+
+    #! The X.509 CA certificate file location
+    /** For use when re-reading the certificate file from its original location
+    */
+    *string ca_cert_loc;
 
     #! SSL cert
     *Qore::SSLCertificate cert;
@@ -613,17 +626,18 @@ public string sub http_mask_data(string msg) {
     the private key in it (this is actually a file location; supports schemes for file locations; ex:
         file:///path/to/file; if no scheme is present, defaults to \c file://)
     @param key_password the password to the private key, if any
+    @param ca_cert_loc the location of an X.509 CA certificate to be used for verification with socket connections
 
     @return a listener option info hash
 */
 public hash<HttpListenerOptionInfo> sub http_get_listener_options(*string node, *softstring service,
-        *string cert_loc, *string key_loc, *string key_password) {
+        *string cert_loc, *string key_loc, *string key_password, *string ca_cert_loc) {
     hash<HttpListenerOptionInfo> rv({
         "node": node,
         "service": service,
     });
     if (cert_loc) {
-        rv += http_get_ssl_objects(cert_loc, key_loc, key_password);
+        rv += http_get_ssl_objects(cert_loc, key_loc, key_password, ca_cert_loc);
     }
     return rv;
 }
@@ -636,14 +650,15 @@ public hash<HttpListenerOptionInfo> sub http_get_listener_options(*string node, 
     the private key in it (this is actually a file location; supports schemes for file locations; ex:
         file:///path/to/file; if no scheme is present, defaults to \c file://)
     @param key_password the password to the private key, if any
+    @param ca_cert_loc the location of an X.509 CA certificate to be used for verification with socket connections
 
     @return a listener option info hash
 */
 public hash<HttpListenerOptionInfo> sub http_get_listener_options_from_bind(*softstring bind, *string cert_loc,
-        *string key_loc, *string key_password) {
+        *string key_loc, *string key_password, *string ca_cert_loc) {
     hash<HttpListenerOptionInfo> rv();
     if (cert_loc) {
-        rv += http_get_ssl_objects(cert_loc, key_loc, key_password);
+        rv += http_get_ssl_objects(cert_loc, key_loc, key_password, ca_cert_loc);
     }
 
     if (bind =~ /:\w+/) {
@@ -725,10 +740,12 @@ public hash<HttpCertInfo> sub http_get_ssl_objects(hash<auto> listener_params) {
     the private key in it (this is actually a file location; supports schemes for file locations; ex:
         file:///path/to/file; if no scheme is present, defaults to \c file://)
     @param pwd the password to the private key file
+    @param ca_cert_loc the location of an X.509 CA certificate to be used for verification with socket connections
 
     @return an @ref HttpServer::HttpCertInfo "HttpCertInfo" hash
 */
-public hash<HttpCertInfo> sub http_get_ssl_objects(string cert_loc, *string key_loc, *string pwd) {
+public hash<HttpCertInfo> sub http_get_ssl_objects(string cert_loc, *string key_loc, *string pwd,
+        *string ca_cert_loc) {
     SSLCertificate cert;
     data cert_data;
     try {
@@ -749,6 +766,24 @@ public hash<HttpCertInfo> sub http_get_ssl_objects(string cert_loc, *string key_
         # rethrow user-friendly exception
         throw "HTTPSERVER-SSL-SETUP-ERROR", sprintf("cannot setup X.509 certificate from location %y: %s: %s",
             cert_loc, ex.err, ex.desc);
+    }
+
+    if (ca_cert_loc.val()) {
+        try {
+            string ca_cert_data = FileLocationHandler::getTextFileFromLocation(ca_cert_loc);
+            if (ca_cert_data.size() > MaxSslFileLen) {
+                throw "HTTPSERVER-SSL-SETUP-ERROR", sprintf("CA certificate file %y is %d bytes, exceeding the "
+                    "maximum length of %d bytes", ca_cert_loc, ca_cert_data.size(), MaxSslFileLen);
+            } else if (!ca_cert_data.size()) {
+                throw "HTTPSERVER-SSL-SETUP-ERROR", sprintf("CA certificate file %y is empty; cannot setup X.509 "
+                    "certificate from empty file", ca_cert_loc);
+            }
+            cert.setVerifyCACertificate(ca_cert_data);
+        } catch (hash<ExceptionInfo> ex) {
+            # rethrow user-friendly exception
+            throw "HTTPSERVER-SSL-SETUP-ERROR", sprintf("cannot setup X.509 CA certificate from location %y: %s: %s",
+                ca_cert_loc, ex.err, ex.desc);
+        }
     }
 
     SSLPrivateKey key;
@@ -782,6 +817,7 @@ public hash<HttpCertInfo> sub http_get_ssl_objects(string cert_loc, *string key_
         "cert_loc": cert_loc,
         "key_loc": key_loc,
         "key_password": pwd,
+        "ca_cert_loc": ca_cert_loc,
         "cert": cert,
         "key": key,
     };

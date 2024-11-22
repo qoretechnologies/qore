@@ -335,7 +335,8 @@ SSLSocketHelper::~SSLSocketHelper() {
     }
 }
 
-int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* pk, ExceptionSink* xsink) {
+int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, X509* cert, EVP_PKEY* pk,
+        const char* ca_cert_pem) {
     SSLSocketReferenceHelper ssrh(this);
 
     assert(!ssl);
@@ -349,6 +350,11 @@ int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* 
     if (cert) {
         if (!SSL_CTX_use_certificate(ctx, cert)) {
             sslError(xsink, mname, "SSL_CTX_use_certificate");
+            assert(*xsink);
+            return -1;
+        }
+        if (ca_cert_pem && !SSL_CTX_load_verify_file(ctx, ca_cert_pem)) {
+            sslError(xsink, mname, "SSL_CTX_load_verify_file");
             assert(*xsink);
             return -1;
         }
@@ -408,14 +414,14 @@ int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* 
     return 0;
 }
 
-int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, int sd, X509* cert, EVP_PKEY* pk,
-        ExceptionSink* xsink) {
+int SSLSocketHelper::setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd,
+        X509* cert, EVP_PKEY* pk, const char* ca_cert_pem) {
 #ifdef HAVE_TLS_SERVER_METHOD
     meth = TLS_client_method();
 #else
     meth = SSLv23_client_method();
 #endif
-    int rc = setIntern(mname, sd, cert, pk, xsink);
+    int rc = setIntern(xsink, mname, sd, cert, pk, ca_cert_pem);
     if (!rc && sni_target_host) {
         // issue #3053 set TLS server name for servers that require SNI
         assert(ssl);
@@ -429,13 +435,14 @@ int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, i
     return rc;
 }
 
-int SSLSocketHelper::setServer(const char* mname, int sd, X509* cert, EVP_PKEY* pk, ExceptionSink* xsink) {
+int SSLSocketHelper::setServer(ExceptionSink* xsink, const char* mname, int sd, X509* cert, EVP_PKEY* pk,
+        const char* ca_cert_pem) {
 #ifdef HAVE_TLS_SERVER_METHOD
     meth = TLS_server_method();
 #else
     meth = SSLv23_server_method();
 #endif
-    return setIntern(mname, sd, cert, pk, xsink);
+    return setIntern(xsink, mname, sd, cert, pk, ca_cert_pem);
 }
 
 // returns 0 for success
@@ -1168,7 +1175,7 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
 #endif
 
 SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert,
-        EVP_PKEY* pkey) : sock(sock) {
+        EVP_PKEY* pkey, const char* ca_cert_pem) : sock(sock) {
     assert(sock->sock);
     assert(!sock->ssl);
     SSLSocketHelperHelper sshh(sock, true);
@@ -1176,7 +1183,7 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     sock->do_start_ssl_event();
     // issue #3053: send target hostname to support SNI
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
-    if (sock->ssl->setClient("connectSsl", sni_target_host, sock->sock, cert, pkey, xsink)) {
+    if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey, ca_cert_pem)) {
         sshh.error();
     }
 }
@@ -2549,7 +2556,8 @@ AbstractPollState* QoreSocket::startConnect(ExceptionSink* xsink, const char* na
 #endif
 }
 
-AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey) {
+AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSslConnect", xsink);
         return nullptr;
@@ -2559,7 +2567,7 @@ AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, X509* cert,
         return nullptr;
     }
 
-    return new SocketConnectSslPollState(xsink, priv, cert, pkey);
+    return new SocketConnectSslPollState(xsink, priv, cert, pkey, ca_cert_pem);
 }
 
 AbstractPollState* QoreSocket::startSend(ExceptionSink* xsink, const char* data, size_t size) {
@@ -2659,7 +2667,8 @@ int QoreSocket::connect(const char* name, ExceptionSink* xsink) {
 // * QoreSocket::connectSSL("hostname:<port_number>");
 // for AF_UNIX sockets:
 // * QoreSocket::connectSSL("filename");
-int QoreSocket::connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
     const char* p;
     int rc;
 
@@ -2670,11 +2679,11 @@ int QoreSocket::connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKE
         if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
             host.terminate(host.strlen() - 1);
             //printd(5, "QoreSocket::connect(%s, %s) [ipv6]\n", host.c_str() + 1, service.c_str());
-            rc = connectINET2SSL(host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, timeout_ms,
-                cert, pkey, xsink);
+            rc = connectINET2SSL(xsink, host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, timeout_ms,
+                cert, pkey, ca_cert_pem);
         } else {
-            rc = connectINET2SSL(host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms, cert,
-                pkey, xsink);
+            rc = connectINET2SSL(xsink, host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms, cert,
+                pkey, ca_cert_pem);
         }
     } else {
         // else assume it's a file name for a UNIX domain socket
@@ -2684,12 +2693,13 @@ int QoreSocket::connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKE
     return rc;
 }
 
-int QoreSocket::connectSSL(const char* name, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
-   return connectSSL(name, -1, cert, pkey, xsink);
+int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
+   return connectSSL(xsink, name, -1, cert, pkey, ca_cert_pem);
 }
 
-int QoreSocket::connectINETSSL(const char* host, int prt, int timeout_ms, X509* cert, EVP_PKEY* pkey,
-        ExceptionSink* xsink) {
+int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, int timeout_ms, X509* cert,
+        EVP_PKEY* pkey, const char* ca_cert_pem) {
     QoreString service;
     service.sprintf("%d", prt);
 
@@ -2697,20 +2707,21 @@ int QoreSocket::connectINETSSL(const char* host, int prt, int timeout_ms, X509* 
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectINETSSL", host, cert, pkey, timeout_ms, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectINETSSL", host, cert, pkey, timeout_ms, ca_cert_pem);
 }
 
-int QoreSocket::connectINETSSL(const char* host, int prt, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
-   return connectINETSSL(host, prt, -1, cert, pkey, xsink);
+int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
+   return connectINETSSL(xsink, host, prt, -1, cert, pkey, ca_cert_pem);
 }
 
-int QoreSocket::connectINET2SSL(const char* name, const char* service, int family, int sock_type, int protocol,
-        int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
+        int sock_type, int protocol, int timeout_ms, X509* cert, EVP_PKEY* pkey, const char* ca_cert_pem) {
     int rc = connectINET2(name, service, family, sock_type, protocol, timeout_ms, xsink);
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectINET2SSL", name, cert, pkey, timeout_ms, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectINET2SSL", name, cert, pkey, timeout_ms, ca_cert_pem);
 }
 
 int QoreSocket::connectUNIXSSL(const char* p, int sock_type, int protocol, X509* cert, EVP_PKEY* pkey,
@@ -2719,7 +2730,7 @@ int QoreSocket::connectUNIXSSL(const char* p, int sock_type, int protocol, X509*
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectUNIXSSL", nullptr, cert, pkey, -1, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectUNIXSSL", nullptr, cert, pkey, -1);
 }
 
 int QoreSocket::sendi1(char i) {
@@ -3378,44 +3389,47 @@ int QoreSocket::asyncIoWait(int timeout_ms, bool read, bool write) const {
     return rc;
 }
 
-int QoreSocket::upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::upgradeClientToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, const char* ca_cert_pem) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "upgradeClientToSSL", xsink);
+        return -1;
+    }
+    if (priv->ssl) {
+        return 0;
+    }
+    return priv->upgradeClientToSSLIntern(xsink, "upgradeClientToSSL", nullptr, cert, pkey, -1, ca_cert_pem);
+}
+
+int QoreSocket::upgradeClientToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, int timeout_ms,
+        const char* ca_cert_pem) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "upgradeClientToSSL", xsink);
         return -1;
     }
     if (priv->ssl)
         return 0;
-    return priv->upgradeClientToSSLIntern("upgradeClientToSSL", nullptr, cert, pkey, -1, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "upgradeClientToSSL", nullptr, cert, pkey, timeout_ms, ca_cert_pem);
 }
 
-int QoreSocket::upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink) {
-    if (priv->sock == QORE_INVALID_SOCKET) {
-        se_not_open("Socket", "upgradeClientToSSL", xsink);
-        return -1;
-    }
-    if (priv->ssl)
-        return 0;
-    return priv->upgradeClientToSSLIntern("upgradeClientToSSL", nullptr, cert, pkey, timeout_ms, xsink);
-}
-
-int QoreSocket::upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::upgradeServerToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, const char* ca_cert_pem) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "upgradeServerToSSL", xsink);
         return -1;
     }
     if (priv->ssl)
         return 0;
-    return priv->upgradeServerToSSLIntern("upgradeServerToSSL", cert, pkey, -1, xsink);
+    return priv->upgradeServerToSSLIntern(xsink, "upgradeServerToSSL", cert, pkey, -1, ca_cert_pem);
 }
 
-int QoreSocket::upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink) {
+int QoreSocket::upgradeServerToSSL(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey, int timeout_ms,
+        const char* ca_cert_pem) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "upgradeServerToSSL", xsink);
         return -1;
     }
     if (priv->ssl)
         return 0;
-    return priv->upgradeServerToSSLIntern("upgradeServerToSSL", cert, pkey, timeout_ms, xsink);
+    return priv->upgradeServerToSSLIntern(xsink, "upgradeServerToSSL", cert, pkey, timeout_ms, ca_cert_pem);
 }
 
 /* currently hardcoded to SOCK_STREAM (tcp-only)
@@ -3574,7 +3588,8 @@ QoreSocket* QoreSocket::accept(SocketSource* source, ExceptionSink* xsink) {
 
 // QoreSocket::acceptSSL()
 // accepts a new connection, negotiates an SSL connection, and returns the new socket
-QoreSocket* QoreSocket::acceptSSL(SocketSource* source, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
     QoreSocket* s = accept(source, xsink);
     if (!s)
         return nullptr;
@@ -3584,7 +3599,7 @@ QoreSocket* QoreSocket::acceptSSL(SocketSource* source, X509* cert, EVP_PKEY* pk
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
-    if (s->priv->upgradeServerToSSLIntern("acceptSSL", cert, pkey, -1, xsink)) {
+    if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", cert, pkey, -1, ca_cert_pem)) {
         assert(*xsink);
         delete s;
         return nullptr;
@@ -3627,7 +3642,8 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
     return s;
 }
 
-QoreSocket* QoreSocket::acceptSSL(int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, X509* cert, EVP_PKEY* pkey,
+        const char* ca_cert_pem) {
     std::unique_ptr<QoreSocket> s(accept(timeout_ms, xsink));
     if (!s.get())
         return nullptr;
@@ -3637,7 +3653,7 @@ QoreSocket* QoreSocket::acceptSSL(int timeout_ms, X509* cert, EVP_PKEY* pkey, Ex
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
-    if (s->priv->upgradeServerToSSLIntern("acceptSSL", cert, pkey, timeout_ms, xsink)) {
+    if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", cert, pkey, timeout_ms, ca_cert_pem)) {
         assert(*xsink);
         return nullptr;
     }

@@ -83,13 +83,14 @@ public:
     /** @param xsink %Qore-language exceptions will be raised here
         @param cert the client cert to use, may be nullptr
         @param pkey the private key to use for the client cert, may be nullptr
+        @param ca_cert_pem any CA certificate to use for verification purposes in PEM format
 
         @return a socket poll state object or nullptr in case of an exception or an immediate SSL connection
 
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startSslConnect(ExceptionSink* xsink, X509* cert = nullptr,
-            EVP_PKEY* pkey = nullptr);
+            EVP_PKEY* pkey = nullptr, const char* ca_cert_pem = nullptr);
 
     //! Starts a non-blocking send operation on a connected socket
     /**
@@ -142,10 +143,10 @@ public:
     DLLEXPORT int connectINET2(const char* host, const char* service, int family, int sock_type, int protocol,
             int timeout_ms = -1, ExceptionSink* xsink = nullptr);
     DLLEXPORT int connectUNIX(const char* p, int socktype, int protocol, ExceptionSink* xsink = nullptr);
-    DLLEXPORT int connectSSL(const char* name, int timeout_ms, ExceptionSink* xsink);
-    DLLEXPORT int connectINETSSL(const char* host, int port, int timeout_ms, ExceptionSink* xsink);
-    DLLEXPORT int connectINET2SSL(const char* host, const char* service, int family, int sock_type, int protocol,
-            int timeout_ms = -1, ExceptionSink* xsink = nullptr);
+    DLLEXPORT int connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms);
+    DLLEXPORT int connectINETSSL(ExceptionSink* xsink, const char* host, int port, int timeout_ms);
+    DLLEXPORT int connectINET2SSL(ExceptionSink* xsink, const char* host, const char* service, int family,
+            int sock_type, int protocol, int timeout_ms = -1);
     DLLEXPORT int connectUNIXSSL(const char* p, int socktype, int protocol, ExceptionSink* xsink);
     // to bind to either a UNIX socket or an INET interface:port
     DLLEXPORT int bind(const char* name, bool reuseaddr = false);
@@ -161,9 +162,9 @@ public:
     // get port number for INET sockets
     DLLEXPORT int getPort();
     DLLEXPORT QoreSocketObject* accept(SocketSource* source, ExceptionSink* xsink);
-    DLLEXPORT QoreSocketObject* acceptSSL(SocketSource* source, ExceptionSink* xsink);
+    DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, SocketSource* source);
     DLLEXPORT QoreSocketObject* accept(int timeout_ms, ExceptionSink* xsink);
-    DLLEXPORT QoreSocketObject* acceptSSL(int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, int timeout_ms);
 
     DLLEXPORT int listen(int backlog);
     // send a buffer of a particular size
@@ -304,8 +305,8 @@ public:
     DLLEXPORT void upgradeClientToSSL(ExceptionSink* xsink);
     DLLEXPORT void upgradeServerToSSL(ExceptionSink* xsink);
 
-    DLLEXPORT void upgradeClientToSSL(int timeout_ms, ExceptionSink* xsink);
-    DLLEXPORT void upgradeServerToSSL(int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT void upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms);
+    DLLEXPORT void upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms);
 
     DLLEXPORT void clearWarningQueue(ExceptionSink* xsink);
     DLLEXPORT void setWarningQueue(ExceptionSink* xsink, int64 warning_ms, int64 warning_bs, Queue* wq, QoreValue arg,

@@ -313,7 +313,8 @@ private:
 
 class SocketConnectSslPollState : public AbstractPollState {
 public:
-    DLLLOCAL SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert, EVP_PKEY* pkey);
+    DLLLOCAL SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert, EVP_PKEY* pkey,
+            const char* ca_cert_pem);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -1529,8 +1530,8 @@ struct qore_socket_private {
         return 0;
     }
 
-    DLLLOCAL int upgradeClientToSSLIntern(const char* mname, const char* sni_target_host, X509* cert, EVP_PKEY* pkey,
-            int timeout_ms, ExceptionSink* xsink) {
+    DLLLOCAL int upgradeClientToSSLIntern(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
+            X509* cert, EVP_PKEY* pkey, int timeout_ms, const char* ca_cert_pem = nullptr) {
         assert(!ssl);
         SSLSocketHelperHelper sshh(this, true);
 
@@ -1540,7 +1541,8 @@ struct qore_socket_private {
         if (!sni_target_host && !client_target.empty()) {
             sni_target_host = client_target.c_str();
         }
-        if ((rc = ssl->setClient(mname, sni_target_host, sock, cert, pkey, xsink)) || ssl->connect(mname, timeout_ms,
+        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey, ca_cert_pem))
+            || ssl->connect(mname, timeout_ms,
             xsink)) {
             sshh.error();
             return rc ? rc : -1;
@@ -1550,14 +1552,14 @@ struct qore_socket_private {
         return 0;
     }
 
-    DLLLOCAL int upgradeServerToSSLIntern(const char* mname, X509* cert, EVP_PKEY* pkey, int timeout_ms,
-            ExceptionSink* xsink) {
+    DLLLOCAL int upgradeServerToSSLIntern(ExceptionSink* xsink, const char* mname, X509* cert, EVP_PKEY* pkey,
+            int timeout_ms, const char* ca_cert_pem = nullptr) {
         assert(!ssl);
         //printd(5, "qore_socket_private::upgradeServerToSSLIntern() this: %p mode: %d\n", this, ssl_verify_mode);
         SSLSocketHelperHelper sshh(this, true);
 
         do_start_ssl_event();
-        if (ssl->setServer(mname, sock, cert, pkey, xsink) || ssl->accept(mname, timeout_ms, xsink)) {
+        if (ssl->setServer(xsink, mname, sock, cert, pkey, ca_cert_pem) || ssl->accept(mname, timeout_ms, xsink)) {
             sshh.error();
             return -1;
         }
