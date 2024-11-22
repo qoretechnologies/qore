@@ -1240,6 +1240,15 @@ else
         AC_DEFINE([HAVE_TLS_SERVER_METHOD], 1, [Define if TLS_server_method() is present])],
        [AC_MSG_RESULT([no HAVE_TLS_SERVER_METHOD() present])])
 
+    # check for SSL_CTX_load_verify_file()
+    AC_MSG_CHECKING([SSL_CTX_load_verify_file() in openssl])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+    [[#include <openssl/ssl.h>]],
+    [[SSL_CTX_load_verify_file(nullptr, nullptr);]])],
+       [AC_MSG_RESULT([ok])
+        AC_DEFINE([HAVE_SSL_CTX_LOAD_VERIFY_FILE], 1, [Define if HAVE_SSL_CTX_LOAD_VERIFY_FILE() is present])],
+       [AC_MSG_RESULT([no HAVE_SSL_CTX_LOAD_VERIFY_FILE() present])])
+
     CPPFLAGS="$SAVE_CPPFLAGS"
     LIBS="$SAVE_LIBS"
 fi
