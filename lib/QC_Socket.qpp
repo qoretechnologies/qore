@@ -950,7 +950,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
     @note UNIX domain sockets are not available on native Windows ports
 */
 nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectUNIXSSL(path->c_str(), socktype, protocol, xsink);
+    s->connectUNIXSSL(xsink, path->c_str(), socktype, protocol);
 }
 
 //! Opens and binds the socket to a port, interface and port (if the bind_to string has a format "host:port"), or UNIX domain socket file.
@@ -1117,7 +1117,7 @@ Socket Socket::accept() {
         return QoreValue();
 
     // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
+    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
 
     // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
     my_socket_priv::setAccept(*n, ns);

@@ -40,6 +40,7 @@
 
 //! represents an X509 certificate, reference-counted, dynamically-allocated only
 class QoreSSLCertificate : public AbstractPrivateData, public QoreSSLBase {
+friend class SSLSocketHelper;
 public:
     //! creates the object from a pointer to an X509 data structure, the QoreSSLCertificate object takes ownership of the X509 pointer
     /** @param c a pointer to an X509 data structure, the QoreSSLCertificate object takes ownership of the X509 pointer
