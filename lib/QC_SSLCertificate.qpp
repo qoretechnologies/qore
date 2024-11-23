@@ -133,26 +133,6 @@ SSLCertificate::copy() {
     }
 }
 
-//! Add a CA certificate to the current certificate for verification
-/** This certificate will be used when a Socket is bound
-
-    @param pem the PEM data for the CA certificate
-
-    @note Only one CA certificate can be added; if this method is called more than one, subsequent calls will replace
-    data from the previous call
-
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the certificate's encoding cannot be converted
-    to the default encoding
-*/
-SSLCertificate::setVerifyCACertificate(string pem) {
-    TempEncodingHelper t(pem, QCS_UTF8, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    s->setVerifyCACertificate(t.giveBuffer());
-}
-
 //! Returns a string in PEM format representing the certificate
 /** @return a string in PEM format representing the certificate
 

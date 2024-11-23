@@ -68,12 +68,6 @@ public:
     //! returns true if the object is valid, false if not
     DLLEXPORT operator bool() const;
 
-    //! Sets the CA certificate in PEM format for verification when socket connections are upgraded to SSL
-    DLLEXPORT void setVerifyCACertificate(char* str);
-
-    //! Returns any CA certificate data in PEM format for verification when socket connetions are upgraded to SSL
-    DLLEXPORT const char* getVerifyCACertificate();
-
     //! returns a string in PEM format representing the certificate; caller owns the QoreStringNode reference returned
     /** @return a string in PEM format representing the certificate; caller owns the QoreStringNode reference returned
     */

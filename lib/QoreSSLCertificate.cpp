@@ -41,7 +41,8 @@ QoreSSLCertificate::~QoreSSLCertificate() {
 QoreSSLCertificate::QoreSSLCertificate(X509* c) : priv(new qore_sslcert_private(c)) {
 }
 
-QoreSSLCertificate::QoreSSLCertificate(const BinaryNode* bin, ExceptionSink* xsink) : priv(new qore_sslcert_private(0)) {
+QoreSSLCertificate::QoreSSLCertificate(const BinaryNode* bin, ExceptionSink* xsink)
+        : priv(new qore_sslcert_private(0)) {
     OPENSSL_CONST unsigned char* p = (OPENSSL_CONST unsigned char*)bin->getPtr();
     priv->cert = d2i_X509(0, &p, (int)bin->size());
     if (!priv->cert) {
@@ -72,14 +73,17 @@ QoreSSLCertificate::QoreSSLCertificate(const QoreString* str, ExceptionSink* xsi
     if (*xsink) {
         return;
     }
-#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
-    cert_pem = strdup(tstr->c_str());
-#endif
 
     QoreMemBIO mbio(str);
     PEM_read_bio_X509(mbio.getBIO(), &priv->cert, 0, 0);
     if (!priv->cert) {
         xsink->raiseException("SSLCERTIFICATE-CONSTRUCTOR-ERROR", "error parsing certificate PEM string");
+    }
+    while (!mbio.eof()) {
+        X509* cert = PEM_read_bio_X509(mbio.getBIO(), nullptr, 0, 0);
+        if (cert) {
+            priv->addCert(cert);
+        }
     }
 }
 
@@ -100,21 +104,7 @@ X509* QoreSSLCertificate::getData() const {
    return priv->cert;
 }
 
-void QoreSSLCertificate::setVerifyCACertificate(char* str) {
-    priv->setVerifyCACertificate(str);
-}
-
-const char* QoreSSLCertificate::getVerifyCACertificate() {
-    return priv->ca_cert_pem;
-}
-
 QoreStringNode* QoreSSLCertificate::getPEM(ExceptionSink* xsink) const {
-#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
-    if (priv->cert_pem) {
-        return new QoreStringNode(priv->cert_pem);
-    }
-#endif
-
     QoreMemBIO b;
 
     if (!b.writePEMX509(priv->cert)) {

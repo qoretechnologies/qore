@@ -222,15 +222,6 @@ return 0;
 }"
 HAVE_TLS_SERVER_METHOD)
 
-# check for SSL_CTX_load_verify_file()
-check_cxx_source_compiles("
-#include <openssl/ssl.h>
-int main(void) {
-SSL_CTX_load_verify_file(nullptr, nullptr);
-return 0;
-}"
-HAVE_SSL_CTX_LOAD_VERIFY_FILE)
-
 unset(CMAKE_REQUIRED_INCLUDES)
 unset(CMAKE_REQUIRED_LIBRARIES)
 
