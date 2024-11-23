@@ -39,4 +39,90 @@ DLLLOCAL QoreClass *initSSLCertificateClass(QoreNamespace& ns);
 
 #include <qore/QoreSSLCertificate.h>
 
+struct qore_sslcert_private {
+    X509* cert;
+#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
+    char* cert_pem = nullptr;
+#endif
+    char* ca_cert_pem = nullptr;
+
+    DLLLOCAL qore_sslcert_private(X509* c) : cert(c) {
+    }
+
+    DLLLOCAL ~qore_sslcert_private() {
+        if (cert) {
+            X509_free(cert);
+        }
+#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
+        if (cert_pem) {
+            free(cert_pem);
+        }
+#endif
+        if (ca_cert_pem) {
+            free(ca_cert_pem);
+        }
+    }
+
+    // assumes ownership of "str"
+    DLLLOCAL void setVerifyCACertificate(char* str) {
+        if (ca_cert_pem) {
+            free(ca_cert_pem);
+        }
+        ca_cert_pem = str;
+    }
+
+    DLLLOCAL ASN1_OBJECT* getAlgorithm() {
+#ifdef HAVE_X509_GET_SIGNATURE_NID
+        return OBJ_nid2obj(X509_get_signature_nid(cert));
+#else
+        return cert->sig_alg->algorithm;
+#endif
+    }
+
+    DLLLOCAL BinaryNode* getBinary() {
+#ifdef HAVE_X509_GET_SIGNATURE_NID
+        OPENSSL_X509_GET0_SIGNATURE_CONST ASN1_BIT_STRING* sig;
+        OPENSSL_X509_GET0_SIGNATURE_CONST X509_ALGOR* alg;
+        X509_get0_signature(&sig, &alg, cert);
+        BinaryNode* rv = new BinaryNode;
+        rv->append(sig->data, sig->length);
+        return rv;
+#else
+        int len = cert->signature->length;
+        char* buf = (char*)malloc(len);
+        // FIXME: should throw an out of memory exception here
+        if (!buf) {
+            return new BinaryNode;
+        }
+
+        memcpy(buf, cert->signature->data, len);
+        return new BinaryNode(buf, len);
+#endif
+    }
+
+    DLLLOCAL EVP_PKEY* getPublicKey() {
+#ifdef HAVE_X509_GET_SIGNATURE_NID
+#ifdef HAVE_X509_GET0_PUBKEY
+        return X509_get0_pubkey(cert);
+#else
+        return X509_get_pubkey(cert);
+#endif
+#else
+        return X509_PUBKEY_get(cert->cert_info->key);
+#endif
+    }
+
+    DLLLOCAL QoreStringNode* getPublicKeyAlgorithm() {
+#ifdef HAVE_X509_GET_SIGNATURE_NID
+        EVP_PKEY* pkey = getPublicKey();
+        int nid;
+        if (EVP_PKEY_get_default_digest_nid(pkey, &nid) <= 0)
+            return new QoreStringNode("unknown");
+        return QoreSSLBase::ASN1_OBJECT_to_QoreStringNode(OBJ_nid2obj(nid));
+#else
+        return QoreSSLBase::ASN1_OBJECT_to_QoreStringNode(cert->cert_info->key->algor->algorithm);
+#endif
+    }
+};
+
 #endif // _QORE_CLASS_SSLCERTIFICATE_H

@@ -313,8 +313,8 @@ private:
 
 class SocketConnectSslPollState : public AbstractPollState {
 public:
-    DLLLOCAL SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert, EVP_PKEY* pkey,
-            const char* ca_cert_pem);
+    DLLLOCAL SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -340,14 +340,14 @@ private:
 };
 
 class SocketAcceptSslPollState : public AbstractPollState {
-    DLLLOCAL SocketAcceptSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert, EVP_PKEY* pkey)
-            : sock(sock) {
+    DLLLOCAL SocketAcceptSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+            QoreSSLCertificate* cert = nullptr,QoreSSLPrivateKey* pkey = nullptr) : sock(sock) {
         assert(!sock->ssl);
         SSLSocketHelperHelper sshh(sock, true);
 
         sock->do_start_ssl_event();
         int rc;
-        if (rc = sock->ssl->setServer("acceptSSL", sock->sock, cert, pkey, xsink)) {
+        if (rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey)) {
             sshh.error();
             assert(*xsink);
             return;
@@ -814,20 +814,23 @@ struct qore_socket_private {
                 char host[NI_MAXHOST + 1];
                 char service[NI_MAXSERV + 1];
 
-                if (!getnameinfo((struct sockaddr *)&addr_in, qore_get_in_len((struct sockaddr *)&addr_in), host, sizeof(host), service, sizeof(service), NI_NUMERICSERV)) {
+                if (!getnameinfo((struct sockaddr *)&addr_in, qore_get_in_len((struct sockaddr *)&addr_in), host,
+                    sizeof(host), service, sizeof(service), NI_NUMERICSERV)) {
                     source->priv->setHostName(host);
                 }
 
                 // get ipv4 or ipv6 address
                 char ifname[INET6_ADDRSTRLEN];
-                if (inet_ntop(addr_in.ss_family, qore_get_in_addr((struct sockaddr *)&addr_in), ifname, sizeof(ifname))) {
+                if (inet_ntop(addr_in.ss_family, qore_get_in_addr((struct sockaddr *)&addr_in), ifname,
+                    sizeof(ifname))) {
                     //printd(5, "inet_ntop() '%s' host: '%s'\n", ifname, host);
                     source->priv->setAddress(ifname);
                 }
             }
         } else {
             // should not happen
-            xsink->raiseException("SOCKET-ACCEPT-ERROR", "do not know how to accept connections with address family %d", sfamily);
+            xsink->raiseException("SOCKET-ACCEPT-ERROR", "do not know how to accept connections with address "
+                "family %d", sfamily);
             rc = -1;
         }
         return rc;
@@ -895,7 +898,8 @@ struct qore_socket_private {
         }
     }
 
-    DLLLOCAL void do_connect_event(int af, const struct sockaddr* addr, const char* target, const char* service = nullptr, int prt = -1) {
+    DLLLOCAL void do_connect_event(int af, const struct sockaddr* addr, const char* target,
+            const char* service = nullptr, int prt = -1) {
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_CONNECTING);
             QoreStringNode* str = q_addr_to_string2(addr);
@@ -1506,7 +1510,7 @@ struct qore_socket_private {
     }
 
     DLLLOCAL int upgradeClientToSSLIntern(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
-            X509* cert, EVP_PKEY* pkey, int timeout_ms, const char* ca_cert_pem = nullptr) {
+            int timeout_ms, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
         SSLSocketHelperHelper sshh(this, true);
 
@@ -1516,7 +1520,7 @@ struct qore_socket_private {
         if (!sni_target_host && !client_target.empty()) {
             sni_target_host = client_target.c_str();
         }
-        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey, ca_cert_pem))
+        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey))
             || ssl->connect(mname, timeout_ms,
             xsink)) {
             sshh.error();
@@ -1527,14 +1531,14 @@ struct qore_socket_private {
         return 0;
     }
 
-    DLLLOCAL int upgradeServerToSSLIntern(ExceptionSink* xsink, const char* mname, X509* cert, EVP_PKEY* pkey,
-            int timeout_ms, const char* ca_cert_pem = nullptr) {
+    DLLLOCAL int upgradeServerToSSLIntern(ExceptionSink* xsink, const char* mname, int timeout_ms,
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
         //printd(5, "qore_socket_private::upgradeServerToSSLIntern() this: %p mode: %d\n", this, ssl_verify_mode);
         SSLSocketHelperHelper sshh(this, true);
 
         do_start_ssl_event();
-        if (ssl->setServer(xsink, mname, sock, cert, pkey, ca_cert_pem) || ssl->accept(mname, timeout_ms, xsink)) {
+        if (ssl->setServer(xsink, mname, sock, cert, pkey) || ssl->accept(mname, timeout_ms, xsink)) {
             sshh.error();
             return -1;
         }
@@ -2158,7 +2162,8 @@ struct qore_socket_private {
 
     DLLLOCAL int recv(int fd, ssize_t size, int timeout_ms, ExceptionSink* xsink);
 
-    DLLLOCAL BinaryNode* recvBinary(ExceptionSink* xsink, ssize_t bufsize, int timeout, ssize_t& rc, int source = QORE_SOURCE_SOCKET) {
+    DLLLOCAL BinaryNode* recvBinary(ExceptionSink* xsink, ssize_t bufsize, int timeout, ssize_t& rc,
+            int source = QORE_SOURCE_SOCKET) {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {
             se_not_open("Socket", "recvBinary", xsink, "recvBinary");

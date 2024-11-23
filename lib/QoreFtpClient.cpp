@@ -470,7 +470,7 @@ struct qore_ftp_private {
             return -1;
         }
 
-        if (control.upgradeClientToSSL(xsink, 0, 0, timeout_ms))
+        if (control.upgradeClientToSSL(xsink, timeout_ms))
             return -1;
 
         if (secure_data)
@@ -571,7 +571,7 @@ struct qore_ftp_private {
             printd(FTPDEBUG, "QoreFtpClient::acceptDataConnection() negotiating client SSL connection\n");
 #endif
 
-        if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms))
+        if (secure_data && data.upgradeClientToSSL(xsink, timeout_ms))
             return -1;
 
         printd(FTPDEBUG, "QoreFtpClient::acceptDataConnection() accepted PORT data connection\n");
@@ -698,7 +698,7 @@ struct qore_ftp_private {
             return -1;
         }
 
-        if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms)) {
+        if (secure_data && data.upgradeClientToSSL(xsink, timeout_ms)) {
             return -1;
         }
 
@@ -801,7 +801,7 @@ struct qore_ftp_private {
             data.close();
             return -1;
         }
-        else if (secure_data && data.upgradeClientToSSL(xsink, 0, 0, timeout_ms)) {
+        else if (secure_data && data.upgradeClientToSSL(xsink, timeout_ms)) {
             data.close();
             return -1;
         }
@@ -944,7 +944,7 @@ QoreStringNode* QoreFtpClient::list(const char* path, bool long_list, ExceptionS
     if ((priv->mode == FTP_MODE_PORT && priv->acceptDataConnection(xsink)) || *xsink) {
         priv->data.close();
         return nullptr;
-    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms))
+    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, priv->timeout_ms))
         return nullptr;
 
     QoreStringNodeHolder l(new QoreStringNode);
@@ -1030,7 +1030,7 @@ int QoreFtpClient::put(const char* localpath, const char* remotename, ExceptionS
     if ((priv->mode == FTP_MODE_PORT && priv->acceptDataConnection(xsink)) || *xsink) {
         priv->data.close();
         return -1;
-    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms)) {
+    } else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, priv->timeout_ms)) {
         return -1;
     }
 
@@ -1094,7 +1094,7 @@ int QoreFtpClient::put(InputStream *is, const char* remotename, ExceptionSink* x
         priv->data.close();
         return -1;
     }
-    else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0)) {
+    else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink)) {
         return -1;
     }
 
@@ -1158,7 +1158,7 @@ int QoreFtpClient::putData(const void *data, size_t len, const char* remotename,
       priv->data.close();
       return -1;
    }
-   else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, 0, 0, priv->timeout_ms))
+   else if (priv->secure_data && priv->data.upgradeClientToSSL(xsink, priv->timeout_ms))
       return -1;
 
    int rc = priv->data.send((const char*)data, len, priv->timeout_ms, xsink);

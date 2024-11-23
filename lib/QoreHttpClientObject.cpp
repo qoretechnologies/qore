@@ -405,10 +405,7 @@ struct qore_httpclient_priv {
 
         int rc;
         if (connect_ssl) {
-            rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms,
-                msock->cert ? msock->cert->getData() : nullptr,
-                msock->pk ? msock->pk->getData() : nullptr,
-                msock->cert ? msock->cert->getVerifyCACertificate() : nullptr);
+            rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms, msock->cert, msock->pk);
         } else {
             rc = msock->socket->connect(socketpath.c_str(), connect_timeout_ms, xsink);
         }
@@ -2216,9 +2213,7 @@ int HttpClientConnectSendRecvPollOperation::responseDone(ExceptionSink* xsink) {
         client->http_priv->msock->socket->priv->client_target = client->http_priv->connection.host;
 
         poll_state.reset(client->http_priv->msock->socket->startSslConnect(xsink,
-            client->http_priv->msock->cert ? client->http_priv->msock->cert->getData() : nullptr,
-            client->http_priv->msock->pk ? client->http_priv->msock->pk->getData() : nullptr,
-            client->http_priv->msock->cert ? client->http_priv->msock->cert->getVerifyCACertificate() : nullptr));
+            client->http_priv->msock->cert, client->http_priv->msock->pk));
         if (*xsink) {
             return -1;
         }
@@ -2309,8 +2304,7 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
         ? client->http_priv->proxy_connection.ssl
         : client->http_priv->connection.ssl) {
         poll_state.reset(client->http_priv->msock->socket->startSslConnect(xsink,
-            client->http_priv->msock->cert ? client->http_priv->msock->cert->getData() : nullptr,
-            client->http_priv->msock->pk ? client->http_priv->msock->pk->getData() : nullptr));
+            client->http_priv->msock->cert, client->http_priv->msock->pk));
         if (*xsink) {
             return -1;
         }
@@ -3298,9 +3292,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             // set client target for SNI
             msock->socket->priv->client_target = this_connection.host;
 
-            if (msock->socket->upgradeClientToSSL(xsink, msock->cert ? msock->cert->getData() : nullptr,
-                msock->pk ? msock->pk->getData() : nullptr,
-                msock->cert ? msock->cert->getVerifyCACertificate() : nullptr)) {
+            if (msock->socket->upgradeClientToSSL(xsink, -1, msock->cert, msock->pk)) {
                 disconnect_unlocked();
                 return nullptr;
             }

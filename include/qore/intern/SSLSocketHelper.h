@@ -92,10 +92,10 @@ public:
     DLLLOCAL int doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size, SslAction action,
             size_t& real_io);
 
-    DLLLOCAL int setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd, X509* cert,
-            EVP_PKEY* pk, const char* ca_cert_pem = nullptr);
-    DLLLOCAL int setServer(ExceptionSink* xsink, const char* mname, int sd, X509* cert, EVP_PKEY* pk,
-            const char* ca_cert_pem = nullptr);
+    DLLLOCAL int setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd,
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
+    DLLLOCAL int setServer(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert = nullptr,
+            QoreSSLPrivateKey* pkey = nullptr);
     // returns 0 for success
     DLLLOCAL int connect(const char* mname, int timeout_ms, ExceptionSink* xsink);
     // returns 0 for success
@@ -132,8 +132,8 @@ private:
     SSL* ssl = nullptr;
     unsigned refs = 1;
 
-    DLLLOCAL int setIntern(ExceptionSink* xsink, const char* meth, int sd, X509* cert, EVP_PKEY* pk,
-            const char* ca_cert_pem = nullptr);
+    DLLLOCAL int setIntern(ExceptionSink* xsink, const char* meth, int sd, QoreSSLCertificate* cert = nullptr,
+            QoreSSLPrivateKey* pkey = nullptr);
 
     // non-blocking I/O helper
     DLLLOCAL int doSSLUpgradeNonBlockingIO(int rc, const char* mname, int timeout_ms, const char* ssl_func,
