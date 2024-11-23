@@ -39,12 +39,12 @@ DLLLOCAL QoreClass *initSSLCertificateClass(QoreNamespace& ns);
 
 #include <qore/QoreSSLCertificate.h>
 
+#include <vector>
+
 struct qore_sslcert_private {
     X509* cert;
-#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
-    char* cert_pem = nullptr;
-#endif
-    char* ca_cert_pem = nullptr;
+    typedef std::vector<X509*> certvec_t;
+    certvec_t chain;
 
     DLLLOCAL qore_sslcert_private(X509* c) : cert(c) {
     }
@@ -53,22 +53,13 @@ struct qore_sslcert_private {
         if (cert) {
             X509_free(cert);
         }
-#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
-        if (cert_pem) {
-            free(cert_pem);
-        }
-#endif
-        if (ca_cert_pem) {
-            free(ca_cert_pem);
+        for (auto& i : chain) {
+            X509_free(i);
         }
     }
 
-    // assumes ownership of "str"
-    DLLLOCAL void setVerifyCACertificate(char* str) {
-        if (ca_cert_pem) {
-            free(ca_cert_pem);
-        }
-        ca_cert_pem = str;
+    DLLLOCAL void addCert(X509* cert) {
+        chain.push_back(cert);
     }
 
     DLLLOCAL ASN1_OBJECT* getAlgorithm() {

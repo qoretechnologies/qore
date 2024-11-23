@@ -345,25 +345,19 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
         return -1;
     }
     if (cert) {
-#ifdef HAVE_SSL_CTX_LOAD_VERIFY_FILE
-        if (cert->priv->cert_pem) {
-            if (SSL_CTX_load_verify_file(ctx, cert->priv->cert_pem)) {
-                sslError(xsink, mname, "SSL_CTX_load_verify_file");
-                assert(*xsink);
-                return -1;
-            }
-        } else
-#endif
         if (!SSL_CTX_use_certificate(ctx, cert->getData())) {
             sslError(xsink, mname, "SSL_CTX_use_certificate");
             assert(*xsink);
             return -1;
         }
-
-        if (cert->priv->ca_cert_pem && !SSL_CTX_load_verify_locations(ctx, cert->priv->ca_cert_pem, nullptr)) {
-            sslError(xsink, mname, "SSL_CTX_load_verify_locations");
-            assert(*xsink);
-            return -1;
+        if (!cert->priv->chain.empty()) {
+            for (auto& i : cert->priv->chain) {
+                if (!SSL_CTX_add_extra_chain_cert(ctx, X509_dup(i))) {
+                    sslError(xsink, mname, "SSL_CTX_add_extra_chain_cert");
+                    assert(*xsink);
+                    return -1;
+                }
+            }
         }
     }
     if (pkey) {
