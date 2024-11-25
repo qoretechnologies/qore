@@ -871,8 +871,14 @@ public class DataProviderActionCatalog {
                 if (info.attr.preselected) {
                     i.value.preselected = True;
                 }
+                if (info.attr.sensitive) {
+                    i.value.sensitive = True;
+                }
                 if (info.attr.required_groups) {
                     i.value.required_groups = info.attr.required_groups;
+                }
+                if (info.attr.depends_on) {
+                    i.value.depends_on = info.attr.depends_on;
                 }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
@@ -907,7 +913,7 @@ public class DataProviderActionCatalog {
                     throw "OPTION-ERROR", sprintf("Cannot set option type from \"type\" option with type %y", type);
             }
             info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                "required_groups"}
+                "required_groups", "depends_on"}
                 + additional_fields;
             if (i.value.allowed_values) {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>
