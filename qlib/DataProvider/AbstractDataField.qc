@@ -46,6 +46,9 @@ public hashdecl DataFieldInfo {
     #! Any example value for the field
     auto example_value;
 
+    #! Are allowed values elements of the list's element type that indicate what values the list can have?
+    bool multiselect;
+
     #! for enum fields; allowed values
     *list<hash<AllowedValueInfo>> allowed_values;
 
@@ -61,6 +64,9 @@ public class AbstractDataField inherits Qore::Serializable {
     private {
         #! the default value for the field, if any
         auto default_value;
+
+        #! Are allowed values elements of the list's element type that indicate what values the list can have?
+        bool multiselect;
 
         #! for enum fields; raw allowed values
         list<hash<AllowedValueInfo>> allowed_values;
@@ -92,6 +98,11 @@ public class AbstractDataField inherits Qore::Serializable {
     #! returns True if the field's type must have a value
     bool isMandatory() {
         return getType().isMandatory();
+    }
+
+    #! Returns True if the type is a list and the allowed values are allowed values of the list's type
+    bool isMultiselect() {
+        return multiselect ?? False;
     }
 
     #! returns the value of the given option on the field's type
@@ -150,8 +161,15 @@ public class AbstractDataField inherits Qore::Serializable {
             }, allowed_values;
         }
         on_error rethrow $1.err, sprintf("%s (allowed_values: %y)", $1.desc, allowed_values);
-        # check that the value can be assigned to the type
-        map self.allowed_values[$#].value = type.acceptsValue($1.value), self.allowed_values.iterator();
+        if (multiselect) {
+            if (*AbstractDataProviderType et = type.getElementType()) {
+                # check that the value can be assigned to the type
+                map self.allowed_values[$#].value = et.acceptsValue($1.value), self.allowed_values.iterator();
+            }
+        } else {
+            # check that the value can be assigned to the type
+            map self.allowed_values[$#].value = type.acceptsValue($1.value), self.allowed_values.iterator();
+        }
         # NOTE: requires that values can be converted to a string hash key to simulate a set
         allowed_values_map = map {$1.value: True}, self.allowed_values;
         return self;
@@ -197,9 +215,18 @@ public class AbstractDataField inherits Qore::Serializable {
             if (allowed_values) {
                 # first do any value / type filtering / conversions
                 value = getType().acceptsValue(value);
-                if (!allowed_values_map{value}) {
-                    throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y", getName(),
-                        value, (map $1.value, allowed_values));
+                if (multiselect) {
+                    foreach auto v in (value) {
+                        if (!allowed_values_map{v}) {
+                            throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y", getName(),
+                                v, (map $1.value, allowed_values));
+                        }
+                    }
+                } else {
+                    if (!allowed_values_map{value}) {
+                        throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y", getName(),
+                            value, (map $1.value, allowed_values));
+                    }
                 }
                 return value;
             }
@@ -233,6 +260,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "desc": getDescription(),
             "default_value": default_value,
             "example_value": getExampleValue(),
+            "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "type": getType().getInfo(),
             "attr": attr,
@@ -247,6 +275,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "short_desc": getShortDescription(),
             "desc": getDescription(),
             "default_value": default_value,
+            "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},

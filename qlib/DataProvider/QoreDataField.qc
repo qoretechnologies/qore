@@ -82,6 +82,9 @@ public class QoreDataField inherits AbstractDataField {
         if (exists h.default_value) {
             setDefaultValue(h.default_value);
         }
+        if (h.multiselect) {
+            multiselect = True;
+        }
         if (exists h.allowed_values) {
             setAllowedValues(h.allowed_values);
         }
@@ -103,7 +106,8 @@ public class QoreDataField inherits AbstractDataField {
     }
 
     #! creates the field from the arguments
-    constructor(string name, *string desc, Type type, auto default_value, *softlist<auto> allowed_values) {
+    constructor(string name, *string desc, Type type, auto default_value, *softlist<auto> allowed_values,
+            *bool multiselect) {
         self.name = name;
         display_name = AbstractDataField::getDisplayName(name);
         if (desc) {
@@ -114,6 +118,9 @@ public class QoreDataField inherits AbstractDataField {
         if (exists default_value) {
             setDefaultValue(default_value);
         }
+        if (multiselect) {
+            self.multiselect = True;
+        }
         if (exists allowed_values) {
             setAllowedValues(allowed_values);
         }
@@ -121,12 +128,15 @@ public class QoreDataField inherits AbstractDataField {
 
     #! creates the field from the arguments
     constructor(string name, *string desc, AbstractDataProviderType type, auto default_value,
-            *softlist<auto> allowed_values) {
+            *softlist<auto> allowed_values, *bool multiselect) {
         self.name = display_name = name;
         self.desc = short_desc = desc;
         self.type = type;
         if (exists default_value) {
             setDefaultValue(default_value);
+        }
+        if (multiselect) {
+            self.multiselect = True;
         }
         if (exists allowed_values) {
             setAllowedValues(allowed_values);

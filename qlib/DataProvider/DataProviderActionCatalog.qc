@@ -154,6 +154,9 @@ public hashdecl ActionOptionInfo {
     #! Is the option value sensitive?
     bool sensitive;
 
+    #! Are allowed values elements of the list's element type that indicate what values the list can have?
+    bool multiselect;
+
     #! List of allowed values (enum)
     *softlist<hash<AllowedValueInfo>> allowed_values;
 
@@ -857,7 +860,7 @@ public class DataProviderActionCatalog {
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "allowed_values"} + {
+                    "multiselect", "allowed_values"} + {
                     "type": i.value.getType(),
                 };
                 # remove missing attributes
@@ -914,11 +917,11 @@ public class DataProviderActionCatalog {
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                    "required_groups"}
+                    "required_groups", "multiselect"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                    "required_groups", "depends_on"}
+                    "required_groups", "multiselect", "depends_on"}
                     + additional_fields;
             }
             if (i.value.allowed_values) {

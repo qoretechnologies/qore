@@ -77,6 +77,9 @@ public hashdecl DataProviderOptionInfo {
     #! Is the option value sensitive?
     bool sensitive = False;
 
+    #! Are allowed values elements of the list's element type that indicate what values the list can have?
+    bool multiselect;
+
     #! List of allowed values (enum)
     /* In case the option type is a list, then this will provide the discrete values that can appear in the list
     */
@@ -474,6 +477,9 @@ public hashdecl DataProviderArgInfo {
 
     #! Is the argument value sensitive?
     bool sensitive = False;
+
+    #! Are allowed values elements of the list's element type that indicate what values the list can have?
+    bool multiselect;
 
     #! List of allowed values (enum)
     /* In case the arg type is a list, then this will provide the discrete values that can appear in the list
@@ -2812,9 +2818,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             if (i.value.allowed_values) {
                 bool ok = False;
                 foreach auto v in (i.value.allowed_values) {
-                    if (options{i.key} === v.value) {
-                        ok = True;
-                        break;
+                    if (i.value.multiselect) {
+                        foreach auto v0 in (v.value) {
+                            if (options{i.key} === v0) {
+                                ok = True;
+                                break;
+                            }
+                        }
+                    } else {
+                        if (options{i.key} === v.value) {
+                            ok = True;
+                            break;
+                        }
                     }
                 }
                 if (!ok) {

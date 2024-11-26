@@ -610,11 +610,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 if (isOrNothingType()) {
                     return;
                 }
-                if (self.hasCallableMethod("getElementType")) {
-                    *AbstractDataProviderType etype = cast<object>(self).getElementType();
-                    if (etype) {
-                        return map etype.getExampleValue(emap), xrange(1);
-                    }
+                if (*AbstractDataProviderType etype = getElementType()) {
+                    return map etype.getExampleValue(emap), xrange(1);
                 }
                 return (1, 2);
             }
@@ -623,10 +620,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 if (isOrNothingType()) {
                     return;
                 }
-                *AbstractDataProviderType etype;
-                if (self.hasCallableMethod("getElementType")) {
-                    etype = cast<object>(self).getElementType();
-                } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
+                *AbstractDataProviderType etype = getElementType();
+                if (!etype && self.hasCallableMethod("getDefaultOtherElementType")) {
                     etype = cast<object>(self).getDefaultOtherElementType();
                 }
                 if (etype) {
