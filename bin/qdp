@@ -691,7 +691,7 @@ class QdpCmd {
         QdpCmd::showRecord(prov, {}, rec, offset);
     }
 
-    static getAllowedValues(reference<string> info, list<auto> l) {
+    static getAllowedValues(reference<string> info, *list<auto> l) {
         if (info) {
             info += " ";
         }
@@ -728,10 +728,10 @@ class QdpCmd {
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceData(ref_data);
+                    l = prov.getReferenceData(ref_data, ImpliedArgumentHelper::get());
                     QdpCmd::getAllowedValues(\info, l);
                 } else if (!offset.val() && prov.getSupportedReferenceData(){i.key}
-                    && (l = prov.getReferenceDataEx(i.key))) {
+                    && (l = prov.getReferenceDataEx(i.key, ImpliedArgumentHelper::get()))) {
                     QdpCmd::getAllowedValues(\info, l);
                 }
                 if (info) {
@@ -743,7 +743,7 @@ class QdpCmd {
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceData(ref_data);
+                    l = prov.getReferenceData(ref_data, ImpliedArgumentHelper::get());
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                 }
                 printf("%s%s %s%s", offset, type.getName(), i.key, info);
