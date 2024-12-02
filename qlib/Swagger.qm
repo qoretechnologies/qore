@@ -4064,6 +4064,15 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
             # if we have a path and a missing value then ignore the missing value
             return;
         }
+        if (!exists value) {
+            if (exists defaultVal) {
+                value = defaultVal;
+                return;
+            }
+            if (!required || allowEmptyValue) {
+                return;
+            }
+        }
         SchemaBase::check(serialize, request, type, format, items, path, method, name, \value);
         switch (value.typeCode()) {
             case NT_NOTHING:

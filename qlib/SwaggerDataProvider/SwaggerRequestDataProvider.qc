@@ -172,8 +172,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         if (op.formData) {
             HashDataType formData(getName() + ": request formData");
             foreach hash<auto> i in (op.formData.pairIterator()) {
-                TypedParameter formData = cast<TypedParameter>(i.value);
-                rv.addField(new QoreDataField(i.key, "formData." + i.key, schema.getType("/request/" + i.key,
+                TypedParameter formDataParam = cast<TypedParameter>(i.value);
+                formData.addField(new QoreDataField(i.key, "formData." + i.key, schema.getType("/request/" + i.key,
                     i.value.type, i.value.format, i.value.items, i.value.required ?? False)));
                 if (!required && i.value.required) {
                     required = True;
@@ -338,12 +338,13 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         # perform validation
         hash<string, bool> mime_types;
         hash<UriQueryInfo> uri_info = parse_uri_query(uri_path);
-        op.validateRequest(True, pio, \uri_info, \req.body, \hdr, \mime_types, disable_request_type_check);
+        auto req_body = req.body ?? req.formData;
+        op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
 
         # make the call
         hash<auto> info;
         try {
-            *data body = op.getRequestBody(pio, req.body, \hdr, disable_request_type_check);
+            *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
 
             # ensure we specify JSON for the response if possible
             if (!hdr.Accept && op.produces{MimeTypeJson}) {
