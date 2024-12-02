@@ -272,7 +272,7 @@ public class HashDataType inherits QoreDataType {
 
     #! Replaces an existing field with a new definition
     HashDataType replaceField(AbstractDataField field) {
-        if (!(remove fields{field.getName()})) {
+        if (!fields{field.getName()}) {
             throw "REPLACE-FIELD-ERROR", sprintf("Field %y cannot be replaced, as it does not exist",
                 field.getName());
         }
@@ -282,7 +282,6 @@ public class HashDataType inherits QoreDataType {
 
     #! Adds or replaces a field with a new definition
     HashDataType addOrReplaceField(AbstractDataField field) {
-        remove fields{field.getName()};
         addFieldIntern(field);
     }
 

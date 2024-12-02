@@ -1867,7 +1867,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 return new SoftListDataType(getSchemaDataTypeIntern(rfs, path, arrayItems), !required);
 
             case "object":
-                return new HashDataType();
+                return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);
         }
 
         if (*string newname = OptimalQoreSoftDataTypeMap{typestr}) {
@@ -3469,9 +3469,11 @@ public class OperationObject inherits ParameterGroup {
         @param pio the PathItemObject corresponding to the URI path
         @param swagger the schema object itself
 
-        @return a @ref RestSchemaValidator::RestQoreExampleCodeInfo "RestQoreExampleCodeInfo" hash giving example Qore code to generate the given request message
+        @return a @ref RestSchemaValidator::RestQoreExampleCodeInfo "RestQoreExampleCodeInfo" hash giving example Qore
+        code to generate the given request message
     */
-    hash<RestQoreExampleCodeInfo> getQoreExampleRequest(string method, string path, PathItemObject pio, SwaggerSchema swagger) {
+    hash<RestQoreExampleCodeInfo> getQoreExampleRequest(string method, string path, PathItemObject pio,
+            SwaggerSchema swagger) {
         hash<RestQoreExampleCodeInfo> rv();
 
         #! URI query arguments
@@ -3495,7 +3497,8 @@ public class OperationObject inherits ParameterGroup {
         rv.example += "hash<auto> info;\n";
         if (headers) {
             rv.example += "hash<auto> hdr = (\n";
-            rv.example += foldl $1 + "\n" + $2, (map sprintf("    %y: %y,", $1.key, $1.value), headers.pairIterator());
+            rv.example += foldl $1 + "\n" + $2, (map sprintf("    %y: %y,", $1.key, $1.value),
+                headers.pairIterator());
             rv.example += "\n);\n";
         }
 
