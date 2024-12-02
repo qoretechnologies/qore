@@ -445,15 +445,18 @@ class RestCmd {
             AbstractConnection conn = get_connection(ping);
             conn.setLogger(getLogger());
             hash<auto> info = conn.ping();
-            if (opt.verbose) {
-                printf("ping result: %N\n", info);
-            } else {
-                printf("ping result: %y\n", info.info);
+            printf("ping result: %y\n", info.info);
+            if (opt.verbose || (info.ex && opt.fullex)) {
+                printf("%s\n", get_exception_string(info.ex));
             }
             thread_exit;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CONNECTION-ERROR") {
-                stderr.printf("%s: %s\n", ex.err, ex.desc);
+                if (opt.fullex) {
+                    stderr.printf("%s\n", get_exception_string(ex));
+                } else {
+                    stderr.printf("%s: %s\n", ex.err, ex.desc);
+                }
                 exit(1);
             }
             rethrow;
@@ -472,11 +475,18 @@ class RestCmd {
             monitor.add(conn);
 
             hash<auto> info = monitor.waitForResult();
-            printf("ping result: %y\n", info.result);
+            printf("ping result: %y\n", info.info);
+            if (opt.verbose || (info.ex && opt.fullex)) {
+                printf("%s\n", get_exception_string(info.ex));
+            }
             thread_exit;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CONNECTION-ERROR") {
-                stderr.printf("%s: %s\n", ex.err, ex.desc);
+                if (opt.fullex) {
+                    stderr.printf("%s\n", get_exception_string(ex));
+                } else {
+                    stderr.printf("%s: %s\n", ex.err, ex.desc);
+                }
                 exit(1);
             }
             rethrow;
