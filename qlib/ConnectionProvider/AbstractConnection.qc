@@ -980,8 +980,11 @@ scheme://user:pass@hostname:port/path
 
         sets the real HTTP URL for HTTP-based connections
     */
-    private setRealUrl(string url) {
-        real_url = url;
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = url;
+        }
+
     }
 
     #! Returns a hash of connection-defined features

@@ -92,8 +92,10 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
 
         sets the real HTTP URL for HTTP-based connections
     */
-    private setRealUrl(string url) {
-        real_url = getRealUrl(url, getConnectionSchemeInfo(), getType());
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = getRealUrl(url, getConnectionSchemeInfo(), getType());
+        }
     }
 }
 } # ConnectionProvider namespace

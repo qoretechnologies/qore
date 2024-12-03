@@ -666,9 +666,6 @@ hash<auto> h = ws.getInfo();
 */
 public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConnectionObject {
     public {
-        #! A string containing the real URL using a wss scheme
-        string real_url;
-
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Discord WebSocket Connection",
@@ -705,7 +702,6 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     */
     constructor(string name, string description, *string url, hash<auto> attributes = {}, hash<auto> options = {})
             : WebSocketConnectionObject(name, description, url, attributes, options) {
-        setRealUrl(url);
     }
 
     #! creates the DiscordWebSocketConnection connection object
