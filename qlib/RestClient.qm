@@ -1719,7 +1719,13 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             clearUserPassword();
         }
         string request_body = mime_get_form_urlencoded_string(login);
-        return startPollSendRecv("POST", oauth2_alt_token_url ?? oauth2_token_url, request_body, {
+        string path = oauth2_alt_token_url ?? oauth2_token_url;
+        # check if the path is a URL
+        if (path =~ /^http/) {
+            setURL(path);
+            path = "";
+        }
+        return startPollSendRecv("POST", path, request_body, {
             "Content-Type": MimeTypeFormUrlEncoded,
             "Accept": MimeTypeJson + "," + MimeTypeFormUrlEncoded,
         });
@@ -1743,15 +1749,6 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     /** @since %RestClient 2.0
     */
     private hash<auto> oauth2AuthIntern(hash<auto> login, *reference<hash<auto>> info) {
-        if (oauth2_token_args) {
-            login += oauth2_token_args;
-            if (oauth2_alt_token_url) {
-                if (!login.oauth2_token_url) {
-                    login.oauth2_token_url = oauth2_token_url;
-                };
-            }
-        }
-
         # clear connection path for login call
         *string path = getConnectionPath();
         on_exit setConnectionPath(path);
@@ -1827,7 +1824,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             "client_id": oauth2_client_id,
             "client_secret": oauth2_client_secret,
             "grant_type": grant_type,
-        };
+        } + oauth2_token_args;
         if (oauth2_alt_token_url) {
             login.oauth2_token_url = oauth2_token_url;
         }
@@ -1849,12 +1846,16 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     /** @since %RestClient 2.0
     */
     private hash<auto> getOAuth2RefreshInfo() {
-        return {
+        hash<auto> rv = {
             "client_id": oauth2_client_id,
             "client_secret": oauth2_client_secret,
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
-        };
+        } + oauth2_token_args;
+        if (oauth2_alt_token_url) {
+            rv.oauth2_token_url = oauth2_token_url;
+        }
+        return rv;
     }
 
     #! sets up the Content-Type header and encodes any body for sending
@@ -3245,6 +3246,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
     private doStartPing() {
         # if the path has already been prepared, use it directly
         if (use_path_as_is) {
+            checkUrl();
             string p = path;
             rc.prepareToSend(method, \p, \body, \headers);
         } else {
@@ -3255,6 +3257,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 rc.setURL(path);
                 rc.debug("setting ping URL: %y", path);
                 path = "";
+            } else {
+                checkUrl();
             }
 
             rc.prepareToSend(method, \path, \body, \headers);
@@ -3264,6 +3268,14 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         rc.debug("RestConnecton ping: start ping, url: %y path: %y", rc.getURL(), path);
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
+    }
+
+    private checkUrl() {
+        string url = rc.getURL();
+        int len = min(url.length(), conn.real_url.length());
+        if (url[0..len] != conn.real_url[0..len]) {
+            rc.setURL(conn.real_url);
+        }
     }
 }
 }

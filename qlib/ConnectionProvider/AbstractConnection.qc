@@ -64,6 +64,9 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         #! "safe" URL (password information removed)
         string safe_url;
 
+        #! A string containing the real URL using a non-abstract / technical scheme
+        string real_url;
+
         #! original connection options
         *hash<auto> orig_opts;
 
@@ -969,6 +972,16 @@ scheme://user:pass@hostname:port/path
         }
 
         setChildCapabilities();
+        setRealUrl(url);
+    }
+
+    #! Called by the constructor to set the real URL
+    /** @path the new URL
+
+        sets the real HTTP URL for HTTP-based connections
+    */
+    private setRealUrl(string url) {
+        real_url = url;
     }
 
     #! Returns a hash of connection-defined features

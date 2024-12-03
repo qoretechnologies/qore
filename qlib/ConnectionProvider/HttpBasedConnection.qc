@@ -30,11 +30,6 @@ public namespace ConnectionProvider {
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
 public class HttpBasedConnection inherits AbstractConnectionWithInfo {
-    public {
-        #! A string containing the real URL using a http/https scheme
-        string real_url;
-    }
-
     #! Creates the connection object
     /** @param name the name of the connection
         @param desc connection description
@@ -48,7 +43,6 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     */
     constructor(string name, string desc, string url, hash<auto> attributes, hash<auto> options, *Logger logger)
             : AbstractConnectionWithInfo(name, desc, url, attributes, options, logger) {
-        setRealUrl(url);
     }
 
     #! Creates the connection object
@@ -70,7 +64,6 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
-        setRealUrl(url);
     }
 
     #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
