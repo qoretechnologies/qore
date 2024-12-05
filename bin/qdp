@@ -354,8 +354,6 @@ class QdpCmd {
             "debug": True,
         };
 
-
-
         http = new HttpServer(http_opts);
         http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
@@ -1167,7 +1165,8 @@ class QdpCmd {
 
         # load providers from environment and try to load a connection
         try {
-            *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name, opts.subtype);
+            *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name, opts.subtype,
+                getLogger());
             if (dp) {
                 return dp;
             }

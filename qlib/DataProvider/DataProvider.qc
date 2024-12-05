@@ -432,19 +432,20 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Loads data providers from the environment
-    static loadProvidersFromEnvironment() {
-        DataProvider::loadFromEnvironment("get_data_provider_map", "data provider");
+    static loadProvidersFromEnvironment(*LoggerInterface logger) {
+        DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", NOTHING, logger);
     }
 
     #! Tries to load a data provider from the environment from the connection name
-    static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype) {
+    static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
+            *LoggerInterface logger) {
         load_module("ConnectionProvider");
         load_module("DatasourceProvider");
         *object v = DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", <SymbolInfo>{
             "type": "connection",
             "name": name,
             "subtype": subtype,
-        });
+        }, logger);
         if (v) {
             return cast<AbstractDataProvider>(v);
         }
@@ -466,8 +467,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Loads data types from the environment
-    static loadTypesFromEnvironment() {
-        DataProvider::loadFromEnvironment("get_type_provider_map", "type");
+    static loadTypesFromEnvironment(*LoggerInterface logger) {
+        DataProvider::loadFromEnvironment("get_type_provider_map", "type", NOTHING, logger);
     }
 
     #! Converts an info hash with objects to a hash with string descriptions instead of the objects
@@ -628,7 +629,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Loads modules from the QORE_DATA_PROVIDERS environment variable
-    private static *object loadFromEnvironment(string func, string type, *hash<SymbolInfo> info) {
+    private static *object loadFromEnvironment(string func, string type, *hash<SymbolInfo> info,
+            *LoggerInterface logger) {
         # load modules from the QORE_DATA_PROVIDERS environment variable
         *string prov = ENV.QORE_DATA_PROVIDERS;
         if (prov) {
@@ -641,7 +643,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                 Program p(PO_NO_USER_API);
                 try {
                     p.loadModule(mod);
-                    if (info && (*object rv = DataProvider::checkSymbol(info))) {
+                    if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
                         return rv;
                     }
                 } catch (hash<ExceptionInfo> ex) {
@@ -662,8 +664,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                         continue;
                     }
                     mod_map{mod_str} = True;
-                    if (DataProvider::tryLoad(mod_str)) {
-                        if (info && (*object rv = DataProvider::checkSymbol(info))) {
+                    if (DataProvider::tryLoad(mod_str, logger)) {
+                        if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
                             return rv;
                         }
                     }
@@ -674,11 +676,14 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Returns True if an object of the given type has been loaded
-    private static *object checkSymbol(hash<SymbolInfo> info) {
+    private static *object checkSymbol(hash<SymbolInfo> info, *LoggerInterface logger) {
         switch (info.type) {
             case "connection": {
                 try {
                     object conn = call_function("get_connection", info.name);
+                    if (logger) {
+                        conn.setLogger(logger);
+                    }
                     return info.subtype.val() ? conn.getDataProvider(info.subtype) : conn.getDataProvider();
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err != "CONNECTION-ERROR") {
