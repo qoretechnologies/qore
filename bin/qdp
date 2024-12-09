@@ -295,7 +295,7 @@ class QdpCmd {
         }
     }
 
-    string getWebhook(hash<auto> h) {
+    hash<auto> getWebhook(hash<auto> h) {
         if (h.method.typeCode() != NT_STRING) {
             throw "WEBHOOK-ERROR", sprintf("\"method\" must be a string when registering a webhook; got type %y (%y)",
                 h.method.fullType(), h.method);
@@ -335,12 +335,14 @@ class QdpCmd {
             http_port = p;
         }
 
-        return sprintf("http://%s:%d/webhooks/%s", http_host, http_port, path);
+        return {
+            "url": sprintf("http://%s:%d/webhooks/%s", http_host, http_port, path),
+        };
     }
 
-    deleteWebhook(string url) {
+    deleteWebhook(hash<auto> info) {
         if (http) {
-            string path = (url =~ x/\/([^\/]+)$/)[0];
+            string path = (info.url =~ x/\/([^\/]+)$/)[0];
             http.removeDynamicHandler(path, True);
         }
     }
