@@ -251,6 +251,7 @@ public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
+        addTestCase("get display name", \getDisplayNameTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
@@ -261,6 +262,22 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    getDisplayNameTest() {
+        assertEq("Get URL", AbstractDataField::getDisplayName("getURL"));
+        assertEq("Get URL", AbstractDataField::getDisplayName("GetURL"));
+        assertEq("Get User URL", AbstractDataField::getDisplayName("getUserURL"));
+        assertEq("Get User URL", AbstractDataField::getDisplayName("GetUserURL"));
+        assertEq("Client URLs", AbstractDataField::getDisplayName("clientURLs"));
+        assertEq("Client URLs", AbstractDataField::getDisplayName("ClientURLs"));
+        assertEq("User Id", AbstractDataField::getDisplayName("userId"));
+        assertEq("User Id", AbstractDataField::getDisplayName("UserId"));
+        assertEq("User ID", AbstractDataField::getDisplayName("userID"));
+        assertEq("User ID", AbstractDataField::getDisplayName("UserID"));
+        assertEq("Create TPS Reports", AbstractDataField::getDisplayName("createTPSReports"));
+        assertEq("Create TPS Reports", AbstractDataField::getDisplayName("CreateTPSReports"));
+        assertEq("FBI Code", AbstractDataField::getDisplayName("FBICode"));
     }
 
     actionCatalogTests() {

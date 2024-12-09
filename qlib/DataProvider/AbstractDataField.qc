@@ -395,6 +395,7 @@ public class AbstractDataField inherits Qore::Serializable {
     static string getDisplayName(string name) {
         # convert dashes and underscores to spaces
         name =~ s/[-_]/ /g;
+        # word break (space) before
         bool wb;
         string display_name;
         for (int i = 0, int e = name.length(); i < e; ++i) {
@@ -409,8 +410,13 @@ public class AbstractDataField inherits Qore::Serializable {
                 wb = True;
                 continue;
             }
-            if (c =~ /[a-z]/ && display_name =~ /[^ ][A-Z]$/ && i > 1) {
-                splice display_name, -1, 0, " ";
+            if (wb) {
+                wb = False;
+            }
+            if (c =~ /\p{Lu}/ && (display_name =~ /\p{Ll}$/) && i > 1) {
+                display_name += " ";
+            } else if (c =~ /[a-z]/ && display_name =~ / [A-Z]{2,}[a-z]$/ && i > 1) {
+                splice display_name, -2, 0, " ";
             }
             display_name += c;
         }
