@@ -86,7 +86,7 @@ public class QoreDataField inherits AbstractDataField {
             multiselect = True;
         }
         if (exists h.allowed_values) {
-            setAllowedValues(h.allowed_values);
+            setAllowedValues(h.allowed_values, h.allowed_values_creatable);
         }
         if (exists h.example_value) {
             example_value = type.acceptsValue(h.example_value);
@@ -107,7 +107,7 @@ public class QoreDataField inherits AbstractDataField {
 
     #! creates the field from the arguments
     constructor(string name, *string desc, Type type, auto default_value, *softlist<auto> allowed_values,
-            *bool multiselect) {
+            *bool multiselect, *bool allowed_values_creatable) {
         self.name = name;
         display_name = AbstractDataField::getDisplayName(name);
         if (desc) {
@@ -122,13 +122,13 @@ public class QoreDataField inherits AbstractDataField {
             self.multiselect = True;
         }
         if (exists allowed_values) {
-            setAllowedValues(allowed_values);
+            setAllowedValues(allowed_values, allowed_values_creatable);
         }
     }
 
     #! creates the field from the arguments
     constructor(string name, *string desc, AbstractDataProviderType type, auto default_value,
-            *softlist<auto> allowed_values, *bool multiselect) {
+            *softlist<auto> allowed_values, *bool multiselect, *bool allowed_values_creatable) {
         self.name = display_name = name;
         self.desc = short_desc = desc;
         self.type = type;
@@ -139,7 +139,7 @@ public class QoreDataField inherits AbstractDataField {
             self.multiselect = True;
         }
         if (exists allowed_values) {
-            setAllowedValues(allowed_values);
+            setAllowedValues(allowed_values, allowed_values_creatable);
         }
     }
 
@@ -234,6 +234,7 @@ public class QoreDataField inherits AbstractDataField {
             "default_value": default_value,
             "example_value": example_value,
             "allowed_values": allowed_values,
+            "allowed_values_creatable": allowed_values_creatable ?? False,
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},
             "attr": attr,

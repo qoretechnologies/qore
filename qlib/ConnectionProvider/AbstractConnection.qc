@@ -155,6 +155,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         #! Connection info keys mapped 1:1 to DataProviderOptionInfo keys
         const CommonConnectionKeys = (
             "allowed_values",
+            "allowed_values_creatable",
             "default_value",
             "desc",
             "display_name",

@@ -43,8 +43,14 @@ public hashdecl ConnectionOptionInfo {
     #! Is the value sensitive? (password or other authentication info)
     bool sensitive = False;
 
+    #! Are allowed values elements of the list's element type that indicate what values the list can have?
+    bool multiselect;
+
     #! List of allowed values (enum)
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    *bool allowed_values_creatable;
 
     #! Any default value
     auto default_value;
@@ -450,19 +456,37 @@ public class ConnectionSchemeCache {
                     options{i.key} = substitute_env_vars(i.value);
                 }
                 # verify against allowed values
-                if (info.allowed_values) {
-                    bool ok;
-                    foreach hash<AllowedValueInfo> v in (info.allowed_values) {
-                        if (v.value == options{i.key}) {
-                            ok = True;
-                            break;
+                if (info.allowed_values && !info.allowed_values_creatable) {
+                    if (info.multiselect) {
+                        foreach auto val in (i.value) {
+                            bool ok;
+                            foreach hash<AllowedValueInfo> v in (info.allowed_values) {
+                                if (v == val) {
+                                    ok = True;
+                                    break;
+                                }
+                            }
+                            if (!ok) {
+                                throw "CONNECTION-OPTION-ERROR",
+                                    sprintf("connection %y (type %y) option %y was passed with value %y, but allowed "
+                                        "values are: %y", conn_name, scheme_info.display_name, i.key, val,
+                                        (map $1.value, info.allowed_values));
+                            }
                         }
-                    }
-                    if (!ok) {
-                        throw "CONNECTION-OPTION-ERROR",
-                            sprintf("connection %y (type %y) option %y was passed with value %y, but allowed "
-                                "values are: %y", conn_name, scheme_info.display_name, i.key, i.value,
-                                (map $1.value, info.allowed_values));
+                    } else {
+                        bool ok;
+                        foreach hash<AllowedValueInfo> v in (info.allowed_values) {
+                            if (v.value == i.value) {
+                                ok = True;
+                                break;
+                            }
+                        }
+                        if (!ok) {
+                            throw "CONNECTION-OPTION-ERROR",
+                                sprintf("connection %y (type %y) option %y was passed with value %y, but allowed "
+                                    "values are: %y", conn_name, scheme_info.display_name, i.key, i.value,
+                                    (map $1.value, info.allowed_values));
+                        }
                     }
                 }
             }

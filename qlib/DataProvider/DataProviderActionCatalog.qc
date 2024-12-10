@@ -160,8 +160,11 @@ public hashdecl ActionOptionInfo {
     #! List of allowed values (enum)
     *softlist<hash<AllowedValueInfo>> allowed_values;
 
+    #! Does the option accept values not defined in allowed_values too?
+    bool allowed_values_creatable;
+
     #! An optional example value for the option
-    *auto example_value;
+    auto example_value;
 
     #! A list of other options that must be set before this option can be chosen
     /** Each element in the list is either
@@ -860,7 +863,7 @@ public class DataProviderActionCatalog {
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "multiselect", "allowed_values"} + {
+                    "multiselect", "allowed_values", "allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
                 # remove missing attributes
@@ -933,6 +936,9 @@ public class DataProviderActionCatalog {
                         "value": $1,
                         "desc": DefaultDescription,
                     }, i.value.allowed_values;
+                }
+                if (i.value.allowed_values_creatable) {
+                    info.allowed_values_creatable = True;
                 }
             }
             rv{i.key} = info;

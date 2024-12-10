@@ -85,6 +85,9 @@ public hashdecl DataProviderOptionInfo {
     */
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
 
+    #! Does the option accept values not defined in allowed_values too?
+    bool allowed_values_creatable;
+
     #! Any optional example value for the option
     /** This value must be in the one of the types in the \c type list
     */
@@ -485,6 +488,9 @@ public hashdecl DataProviderArgInfo {
     /* In case the arg type is a list, then this will provide the discrete values that can appear in the list
     */
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    *bool allowed_values_creatable;
 
     #! Any optional example value for the argument
     /** The value must be acceptable by the argument's type
@@ -2815,7 +2821,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
-            if (i.value.allowed_values) {
+            if (i.value.allowed_values && !i.value.allowed_values_creatable) {
                 bool ok = False;
                 foreach auto v in (i.value.allowed_values) {
                     if (i.value.multiselect) {
