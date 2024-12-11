@@ -109,19 +109,19 @@ public namespace NetSuiteRestClient {
 public class NetSuiteRestClient inherits RestClient::RestClient {
     public {
         #! Default REST URL
-        const DefaultUrl = "https://$accountid.suitetalk.api.netsuite.com/services/rest/record";
+        const DefaultUrl = "https://{{account_id}}.suitetalk.api.netsuite.com/services/rest/record";
 
         #! Default authorization request URL
-        const DefaultAuthUrl = "https://$accountid.netsuite.com/app/login/oauth2/authorize.nl";
+        const DefaultAuthUrl = "https://{{account_id}}.netsuite.com/app/login/oauth2/authorize.nl";
 
         #! Default OAuth2 grant type
         const DefaultGrantType = "authorization_code";
 
         #! Default token request URL
-        const DefaultTokenUrl = "https://$accountid.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token";
+        const DefaultTokenUrl = "https://{{account_id}}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token";
 
         #! Default token logout / deauthorize URL
-        const DefaultLogoutUrl = "https://$accountid.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/logout";
+        const DefaultLogoutUrl = "https://{{account_id}}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/logout";
 
         #! Default OAuth2 scopes
         const DefaultOAuth2Scopes = ("rest_webservices",);
@@ -221,20 +221,20 @@ NetSuiteRestClient rest(opts);
             if (h.company != account_id) {
                 new_opts.account_id = account_id = h.company;
             }
-            string new_oauth2_auth_url = replace(DefaultAuthUrl, "$accountid", account_id + ".app");
+            string new_oauth2_auth_url = replace(DefaultAuthUrl, "{{account_id}}", account_id + ".app");
             if (oauth2_auth_url != new_oauth2_auth_url) {
                 new_opts.oauth2_auth_url = oauth2_auth_url = new_oauth2_auth_url;
             }
-            string new_oauth2_token_url = replace(DefaultTokenUrl, "$accountid", account_id);
+            string new_oauth2_token_url = replace(DefaultTokenUrl, "{{account_id}}", account_id);
             if (oauth2_token_url != new_oauth2_token_url) {
                 new_opts.oauth2_token_url = oauth2_token_url = new_oauth2_token_url;
             }
-            string new_oauth2_logout_url = replace(DefaultLogoutUrl, "$accountid", account_id);
+            string new_oauth2_logout_url = replace(DefaultLogoutUrl, "{{account_id}}", account_id);
             if (oauth2_logout_url != new_oauth2_logout_url) {
                 new_opts.oauth2_token_url = oauth2_token_url = new_oauth2_token_url;
             }
 
-            string new_url = replace(DefaultUrl, "$accountid", account_id);
+            string new_url = replace(DefaultUrl, "{{account_id}}", account_id);
             if (new_url != getURL()) {
                 new_opts.url = new_url;
                 # use netsuite:// as scheme
@@ -339,15 +339,27 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         return "netsuite";
     }
 
+    #! Return OAuth2 options
+    /** @return a hash of OAuth2 options
+    */
+    hash<auto> getOAuth2Options() {
+        return RestConnection::getOAuth2Options() + {
+            "oauth2_auth_url": getAuthUrl(),
+            "oauth2_token_url": getTokenUrl(),
+        };
+    }
+
     #! Returns the OAuth2 authorization URL or throws an exception if not set
     /*  @param allow_relative if @ref True then a relative URL (path only) can be returned; the default (@ref False)
         is to return a full URL
     */
     string getAuthUrl(*bool allow_relative) {
-        return opts.oauth2_auth_url == "auto"
-            ? replace(NetSuiteRestClient::DefaultAuthUrl, "$accountid",
-                (opts.account_id ? opts.account_id + ".app" : "system"))
-            : getUrlOption("oauth2_auth_url", allow_relative);
+        string url = RestConnection::getAuthUrl(allow_relative);
+        if (url == "auto") {
+            return replace(NetSuiteRestClient::DefaultAuthUrl, "{{account_id}}",
+                (opts.account_id ? opts.account_id + ".app" : "system"));
+        }
+        return url;
     }
 
     #! Returns the OAuth2 token URL or throws an exception if not set
@@ -355,10 +367,11 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         is to return a full URL
     */
     string getTokenUrl(*bool allow_relative) {
-        if (opts.oauth2_token_url == "auto" && opts.account_id) {
-            return replace(NetSuiteRestClient::DefaultTokenUrl, "$accountid", opts.account_id);
+        string url = RestConnection::getTokenUrl(allow_relative);
+        if (url == "auto" && opts.account_id) {
+            return replace(NetSuiteRestClient::DefaultTokenUrl, "{{account_id}}", opts.account_id);
         }
-        return getUrlOption("oauth2_token_url", allow_relative);
+        return url;
     }
 
 %ifdef HaveNetSuiteDataProvider
@@ -388,6 +401,19 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     private setChildCapabilities() {
         #children_can_support_records = True;
         #children_can_support_apis = True;
+    }
+
+    #! Returns the value of a URL option or throws an exception if not set
+    /*  @param opt the URL option name
+        @param allow_relative if @ref True then a relative URL (path only) can be returned; the default (@ref False)
+        is to return a full URL
+    */
+    private string getUrlOption(string opt, *bool allow_relative) {
+        string url = RestConnection::getUrlOption(opt, allow_relative);
+        if (exists (*string account_id = real_opts.account_id)) {
+            url = replace(url, "{{account_id}}", account_id);
+        }
+        return url;
     }
 
     #! returns a @ref NetSuiteRestClient object
