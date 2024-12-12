@@ -354,12 +354,11 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         is to return a full URL
     */
     string getAuthUrl(*bool allow_relative) {
-        string url = RestConnection::getAuthUrl(allow_relative);
-        if (url == "auto") {
+        if (opts.oauth2_auth_url == "auto") {
             return replace(NetSuiteRestClient::DefaultAuthUrl, "{{account_id}}",
                 (opts.account_id ? opts.account_id + ".app" : "system"));
         }
-        return url;
+        return RestConnection::getAuthUrl(allow_relative);
     }
 
     #! Returns the OAuth2 token URL or throws an exception if not set
@@ -367,11 +366,10 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         is to return a full URL
     */
     string getTokenUrl(*bool allow_relative) {
-        string url = RestConnection::getTokenUrl(allow_relative);
-        if (url == "auto" && opts.account_id) {
+        if (opts.oauth2_token_url == "auto" && opts.account_id) {
             return replace(NetSuiteRestClient::DefaultTokenUrl, "{{account_id}}", opts.account_id);
         }
-        return url;
+        return RestConnection::getTokenUrl(allow_relative);
     }
 
 %ifdef HaveNetSuiteDataProvider
