@@ -194,6 +194,9 @@ public hashdecl ActionOptionInfo {
 
     #! Does the value of this option determine the structure of other options?
     bool structural_determinate;
+
+    #! Any information about how to react to changes
+    auto on_change;
 }
 
 #! DataProvider path var info
@@ -886,6 +889,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.depends_on) {
                     i.value.depends_on = info.attr.depends_on;
                 }
+                if (exists info.attr.on_change) {
+                    i.value.on_change = info.attr.on_change;
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -924,7 +930,7 @@ public class DataProviderActionCatalog {
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                    "required_groups", "multiselect", "depends_on"}
+                    "required_groups", "multiselect", "depends_on", "on_change"}
                     + additional_fields;
             }
             if (i.value.allowed_values) {

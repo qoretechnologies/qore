@@ -237,6 +237,12 @@ public hashdecl AllowedValueInfo {
 
     #! Messages related to the value
     *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the allowed value
+    *string icon;
+
+    #! Any image info for the allowed value
+    *string image;
 }
 
 #! the return value of the @ref Util::parse_uri_query() "parse_uri_query()" function

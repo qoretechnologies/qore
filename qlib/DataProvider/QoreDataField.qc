@@ -91,6 +91,12 @@ public class QoreDataField inherits AbstractDataField {
         if (exists h.example_value) {
             example_value = type.acceptsValue(h.example_value);
         }
+        if (h.allowed_values_creatable) {
+            allowed_values_creatable = True;
+            if (allowed_values_map) {
+                remove allowed_values_map;
+            }
+        }
         if (h.attr) {
             attr += h.attr;
         }
@@ -124,6 +130,9 @@ public class QoreDataField inherits AbstractDataField {
         if (exists allowed_values) {
             setAllowedValues(allowed_values, allowed_values_creatable);
         }
+        if (allowed_values_creatable) {
+            self.allowed_values_creatable = True;
+        }
     }
 
     #! creates the field from the arguments
@@ -140,6 +149,9 @@ public class QoreDataField inherits AbstractDataField {
         }
         if (exists allowed_values) {
             setAllowedValues(allowed_values, allowed_values_creatable);
+        }
+        if (allowed_values_creatable) {
+            self.allowed_values_creatable = True;
         }
     }
 
