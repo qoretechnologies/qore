@@ -209,6 +209,13 @@ public class Observable {
         # this method intentionally left blank
     }
 
+    #! Is this object still generating events
+    /** Override this method in base classes to signal when events are no longer being generated
+    */
+    bool isActive() {
+        return True;
+    }
+
     #! Registers observer events
     private hash<ObserverEventInfo> registerObserverEventsArgs(hash<ObserverEventInfo> info, list<auto> events) {
         foreach auto event_id in (events) {

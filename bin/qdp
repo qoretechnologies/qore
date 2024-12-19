@@ -666,15 +666,20 @@ class QdpCmd {
                 cast<DataProvider::DelayedObservable>(observable).observersReady();
             }
 
-            while (True) {
-                if (stdin.isDataAvailable()) {
+            while (observable.isActive()) {
+                if (stdin.isDataAvailable(250ms)) {
                     stdin.readBinary(1);
                     break;
                 }
             }
         }
+        bool active = observable.isActive();
         delete provider;
-        printf("listening stopped\n");
+        if (active) {
+            printf("listening stopped on user request\n");
+        } else {
+            printf("listening stopped due to an error\n");
+        }
     }
 
     static getRecord(AbstractDataProvider provider) {
