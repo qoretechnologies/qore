@@ -446,7 +446,7 @@ class RestCmd {
             conn.setLogger(getLogger());
             hash<auto> info = conn.ping();
             printf("ping result: %y\n", info.info);
-            if (opt.verbose || (info.ex && opt.fullex)) {
+            if (info.ex && (opt.fullex || opt.verbose)) {
                 printf("%s\n", get_exception_string(info.ex));
             }
             thread_exit;
@@ -476,7 +476,7 @@ class RestCmd {
 
             hash<auto> info = monitor.waitForResult();
             printf("ping result: %y\n", info.info);
-            if (opt.verbose || (info.ex && opt.fullex)) {
+            if (info.ex && (opt.fullex || opt.verbose)) {
                 printf("%s\n", get_exception_string(info.ex));
             }
             thread_exit;

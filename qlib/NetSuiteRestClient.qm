@@ -133,6 +133,8 @@ public class NetSuiteRestClient inherits RestClient::RestClient {
             "oauth2_token_url": "auto",
             "oauth2_logout_url": "auto",
             "oauth2_scopes": DefaultOAuth2Scopes,
+            "ping_method": "GET",
+            "ping_path": "v1/vendor?limit=1",
         };
 
         #! Default NetSuite ping method
@@ -167,8 +169,10 @@ NetSuiteRestClient rest(opts);
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(NetSuiteRestClient::getOptions(opts), True) {
-        if (opts.account_id) {
+        if (opts.account_id.val()) {
             account_id = opts.account_id;
+            string url = replace(DefaultUrl, "{{account_id}}", account_id);
+            setURL(url);
         }
         if (!do_not_connect) {
             if (!token || !account_id) {
@@ -191,6 +195,8 @@ NetSuiteRestClient rest(opts);
         RestClient::setOAuth2LoginInfo(h);
         if (h.company != account_id) {
             account_id = h.company;
+            string url = replace(DefaultUrl, "{{account_id}}", account_id);
+            setURL(url);
             debug("NetSuiteRestClient: set account ID to %y from OAuth2 response", h.company);
         }
     }
@@ -220,6 +226,8 @@ NetSuiteRestClient rest(opts);
         if (h.company) {
             if (h.company != account_id) {
                 new_opts.account_id = account_id = h.company;
+                string url = replace(DefaultUrl, "{{account_id}}", account_id);
+                setURL(url);
             }
             string new_oauth2_auth_url = replace(DefaultAuthUrl, "{{account_id}}", account_id + ".app");
             if (oauth2_auth_url != new_oauth2_auth_url) {
@@ -427,6 +435,19 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+
+    #! Called by the constructor to set the real URL
+    /** @path the new URL
+
+        sets the real HTTP URL for HTTP-based connections
+    */
+    private setRealUrl(*string url) {
+        if (exists url && exists opts.account_id) {
+            real_url = replace(NetSuiteRestClient::DefaultUrl, "{{account_id}}", opts.account_id);
+        } else {
+            RestConnection::setRealUrl(url);
+        }
     }
 }
 }

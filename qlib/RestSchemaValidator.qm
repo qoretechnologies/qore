@@ -592,6 +592,7 @@ public namespace RestSchemaValidator {
             const DataSerializationSupport = {
 %ifndef NoJson
                 MimeTypeJson: \make_json(),
+                "application/vnd.oracle.resource+json": \make_json(),
 %endif
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
@@ -678,10 +679,14 @@ public namespace RestSchemaValidator {
                     "in": \mime_parse_form_urlencoded_string(),
                 ),
 %ifndef NoJson
-                MimeTypeJson: (
+                MimeTypeJson: {
                     "code": "json",
                     "in": \parse_json(),
-                ),
+                },
+                "application/vnd.oracle.resource+json": {
+                    "code": "json",
+                    "in": \parse_json(),
+                },
 %endif
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,

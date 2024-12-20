@@ -2032,7 +2032,11 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             "hdr": hdr,
         ));
 
-        *string content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = hdr."content-type" ?? hdr."Content-Type";
+        if (content.typeCode() == NT_LIST) {
+            printf("content: %y\n", content);
+            content = content[0];
+        }
 
         # deserialize body according to Content-Type
         if (exists response_body && content) {

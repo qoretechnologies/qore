@@ -2887,7 +2887,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private string getUrlOption(string opt, *bool allow_relative) {
         string url_opt = getOAuth2OptionName(opt);
-        *string uri = opts{url_opt};
+        *string uri = url_opt == "url" ? url : opts{url_opt};
         if (!uri) {
             throw "OAUTH2-AUTH-ERROR", sprintf("no %y option is set on connection %y", url_opt, name);
         }
@@ -3271,7 +3271,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
     }
 
     private checkUrl() {
-        string url = rc.getURL();
+        string url = rc.getURL() ?? "";
         int len = min(url.length(), conn.real_url.length());
         if (url[0..len] != conn.real_url[0..len]) {
             rc.setURL(conn.real_url);
