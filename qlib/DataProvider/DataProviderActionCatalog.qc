@@ -943,9 +943,9 @@ public class DataProviderActionCatalog {
                         "desc": DefaultDescription,
                     }, i.value.allowed_values;
                 }
-                if (i.value.allowed_values_creatable) {
-                    info.allowed_values_creatable = True;
-                }
+            }
+            if (i.value.allowed_values_creatable) {
+                info.allowed_values_creatable = True;
             }
             rv{i.key} = info;
         }
