@@ -246,13 +246,15 @@ void QoreSignalManager::preFork() {
 }
 
 void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
-    if (!enabled())
+    if (!enabled()) {
         return;
+    }
 
     block = false;
     assert(!waiting);
 
     // set new default signal mask for new process
+#if !defined(__linux__) && !defined(__APPLE__)
     if (new_process) {
         // do not start signal thread after a fork(), pthread_create() is not async-signal safe
         is_enabled = false;
@@ -262,6 +264,7 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
         sigprocmask(SIG_SETMASK, &new_mask, 0);
         return;
     }
+#endif
 
     printd(5, "QoreSignalManager::postFork() pid: %d, new_process: %d, starting signal thread\n", getpid(),
         new_process);

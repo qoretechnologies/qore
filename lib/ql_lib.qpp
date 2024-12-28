@@ -560,41 +560,32 @@ int getppid() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 #endif
 }
 
-//! Creates a copy of the current process with a new PID; returns 0 in the child process; returns the child's PID in the parent process
-/** This function will throw an \c ILLEGAL-FORK exception if more than one thread is running
-
-    @par Platform Availability:
+//! Creates a copy of the current process with a new PID
+/** @par Platform Availability:
     @ref Qore::Option::HAVE_FORK
 
-    @return 0 in the child process; returns the child's PID in the parent process; if an error occurs, then -1 is returned, in this case no child process was started and the error number can be retrieved with the errno() function
+    @return 0 in the child process; returns the child's PID in the parent process; if an error occurs, then -1 is
+    returned, in this case no child process was started and the error number can be retrieved with the errno()
+    function
 
     @par Example:
     @code{.py}
 int pid;
-if (pid = fork())
+if (pid = fork()) {
     printf("child has PID %d\n", pid);
+}
     @endcode
 
-    @throw ILLEGAL-FORK Cannot fork if more than one thread is running
-
     @note
-    - after a fork(), the only safe call is @ref exec(), many system calls are not async-signal safe, including pthread_create() which is
-      used to start new threads.
-    - the %Qore process will crash if unsafe operations are called after a fork()
-    - the signal-handling thread cannot be reliably started on many platforms (ex: FreeBSD) after a fork(), therefore signal handling
-      is disabled in the child process after a fork()
-    - on Darwin (OS/X) threading primitives are unusable in the child process after a fork()
+    - no background threads will be running in the new process
+    - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
+      safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
+      crash if unsafe operations are called after a fork()
+    - the signal-handling thread cannot be reliably started on some platforms after a fork(), so signal handling is
+      currently disabled in the child process after a fork() on all platforms but Linux and macOS
  */
 int fork() [dom=PROCESS] {
 #ifdef HAVE_FORK
-#ifdef HAVE_SIGNAL_HANDLING
-   int QORE_THREAD_LIMIT = 1 + (QSM.thread_running ? 1 : 0);
-#else
-#define QORE_THREAD_LIMIT 1
-#endif
-   if (thread_list.getNumThreads() > (unsigned)(QORE_THREAD_LIMIT))
-      return xsink->raiseException("ILLEGAL-FORK", "cannot fork() when other threads are running");
-
 #ifdef HAVE_SIGNAL_HANDLING
    // we may not fork from within a signal handler
    if (QSM.thread_running && q_gettid() == QSM.q_gettid())
