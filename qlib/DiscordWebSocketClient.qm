@@ -730,6 +730,11 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
         return "discordwss";
     }
 
+    #! A hint for a data provider application that this connection is associated with
+    *string getAppHint() {
+        return "Discord";
+    }
+
     #! returns a @ref DiscordWebSocketClient object
     /** @param connect if @ref True "True", then @ref WebSocketClient::connect() is called
         @param rtopts runtime options

@@ -123,6 +123,9 @@ public class DataProvider {
 
         #! set of module already loaded
         static hash<string, bool> mod_map;
+
+        #! Shutdown handlers; key -> handler
+        static hash<string, code> smap;
     }
 
     #! Register a new data provider factory
@@ -546,6 +549,44 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         return rv;
     }
 
+    #! Shuts down background services related to data providers
+    /** @since DataProvider 3.0
+    */
+    static shutdown() {
+        foreach hash<auto> i in ((remove smap).pairIterator()) {
+            try {
+                i.value();
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Registers a handler to run when shutting down data provider services
+    /** @param key a unique key for the shutdown handler
+        @param handler the shutdown handler
+
+        @since DataProvider 3.0
+    */
+    static registerShutdownHandler(string key, code handler) {
+        if (smap{key}) {
+            throw "SHUTDOWN-HANDLER-ERROR", sprintf("A shutdown handler with key %y has already been registered",
+                key);
+        }
+        smap{key} = handler;
+    }
+
+    #! Deregisters a shutdown handler
+    /** @param key the key used to register the shutdown handler
+
+        @return True if the handler was deregistered, False if not (no such key)
+
+        @since DataProvider 3.0
+    */
+    static bool deregisterShutdownHandler(string key) {
+        return exists (remove smap{key});
+    }
+
     #! Sets the \a env_config_locked variable if not already set
     private static checkRequest() {
         if (!env_config_locked) {
@@ -671,7 +712,6 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                     }
                 }
             }
-
         }
     }
 

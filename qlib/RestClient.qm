@@ -2684,6 +2684,11 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         });
     }
 
+    #! A hint for a data provider application that this connection is associated with
+    *string getAppHint() {
+        return "GenericRest";
+    }
+
     #! processes options for the constructor
     /** In particular it parses any string as a value of the \c "headers" option to return a hash
     */

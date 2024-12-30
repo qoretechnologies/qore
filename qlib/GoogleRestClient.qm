@@ -491,6 +491,11 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         }
     }
 
+    #! A hint for a data provider application that this connection is associated with
+    *string getAppHint() {
+        return "GoogleCalendar";
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
@@ -626,6 +631,11 @@ public class GmailRestConnection inherits GoogleRestConnection {
                 "url": DefaultConnectionUrl,
             });
         }
+    }
+
+    #! A hint for a data provider application that this connection is associated with
+    *string getAppHint() {
+        return "Gmail";
     }
 
     #! returns a data provider object for the connection and subtype passed as an argument

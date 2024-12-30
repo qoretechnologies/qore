@@ -193,6 +193,10 @@ class QdpCmd {
             usage();
         }
 
+        on_exit {
+            DataProvider::shutdown();
+        }
+
         ImpliedArgumentHelper iah;
         if (opts.options.val()) {
             auto v = parse_to_qore_value(opts.options);

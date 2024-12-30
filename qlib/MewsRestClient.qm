@@ -360,6 +360,11 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         return create_object("MewsRestDataProvider", get());
     }
 
+    #! A hint for a data provider application that this connection is associated with
+    *string getAppHint() {
+        return "Mews";
+    }
+
     private auto getPingBody() {
         if (opts.ping_body == "auto") {
             return {
