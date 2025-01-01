@@ -330,6 +330,10 @@ number z = pow(x, y);
     @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
  */
 number pow(number x, number y) [flags=RET_VALUE_ONLY] {
+    // NOTE: mpfr_pow() will abort if zero is passed as y
+    if (y->zero()) {
+        return new QoreNumberNode(1ll);
+    }
     return qore_number_private::doBinary(*x, mpfr_pow, *y, xsink);
 }
 
@@ -349,13 +353,44 @@ float z = pow(x, y);
     @throw INVALID-POW-ARGUMENTS in pow(x, y), x cannot be negative when y is not an integer value
  */
 float pow(softfloat x = 0.0, softfloat y = 0.0) [flags=RET_VALUE_ONLY] {
-    if (x == 0.0 && y < 0)
+    if (x == 0.0 && y < 0) {
         return xsink->raiseException("DIVISION-BY-ZERO", "pow(x, y) if x = 0 then y must be a non-negative value");
+    }
 
-    if (x < 0 && y != ceil(y))
-        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(x, y) x cannot be negative when y is not an integer value");
+    if (x < 0 && y != ceil(y)) {
+        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(x, y) x cannot be negative when y is not an "
+            "integer value");
+    }
 
     return pow(x, y);
+}
+
+//! Returns a number raised to the power of another number
+/**
+    @param x the number to raise to the power of \a y
+    @param y the power to raise \a x to
+
+    @return a number raised to the power of another number
+
+    @par Example:
+    @code{.py}
+float z = pow(x, y);
+    @endcode
+
+    @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
+    @throw INVALID-POW-ARGUMENTS in pow(x, y), x cannot be negative when y is not an integer value
+ */
+float pow(int x = 0, int y = 0) [flags=RET_VALUE_ONLY] {
+    if (x == 0.0 && y < 0) {
+        return xsink->raiseException("DIVISION-BY-ZERO", "pow(x, y) if x = 0 then y must be a non-negative value");
+    }
+
+    if (x < 0 && y != ceil(y)) {
+        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(x, y) x cannot be negative when y is not an "
+            "integer value");
+    }
+
+    return pow((double)x, (double)y);
 }
 
 //! Returns the absolute value of the argument passed
