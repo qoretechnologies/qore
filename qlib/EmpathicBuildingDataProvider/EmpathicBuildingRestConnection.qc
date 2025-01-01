@@ -266,11 +266,6 @@ public class EmpathicBuildingRestConnection inherits RestClient::RestConnection 
         return new EmpathicBuildingDataProvider({"restclient": get()});
     }
 
-    #! A hint for a data provider application that this connection is associated with
-    *string getAppHint() {
-        return "EmpathicBuilding";
-    }
-
     #! Sets features during REST client initialization
     private setFeatures() {
         features{CF_UPDATE_OPTIONS} = True;

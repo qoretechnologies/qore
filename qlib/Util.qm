@@ -35,7 +35,7 @@
 %enable-all-warnings
 
 module Util {
-    version = "1.11";
+    version = "2.0";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -60,6 +60,7 @@ module Util {
     - @ref Util::check_exception_serializable()
     - @ref Util::compare_version()
     - @ref Util::flatten()
+    - @ref Util::get_bit_string()
     - @ref Util::get_byte_size()
     - @ref Util::get_exception_string()
     - @ref Util::get_marketing_byte_size()
@@ -88,6 +89,9 @@ module Util {
     - @ref Util::zip()
 
     @section utilrelnotes Release Notes
+
+    @subsection util_2_0 Util 2.0
+    - added @ref Util::get_bit_string() "get_bit_string()"
 
     @subsection util_1_11 Util 1.11
     - added @ref Util::AllowedValueInfo "AllowedValueInfo"
@@ -249,16 +253,63 @@ public hashdecl AllowedValueInfo {
 /** @since Util 1.3
 */
 public hashdecl UriQueryInfo {
-    #! the part of the URI path before the first \c "?" character or the entire path if no \c "?" character is present in the path
+    #! The URI method
+    /** The part of the URI path before the first \c "?" character or the entire path if no \c "?" character is
+        present in the path
+    */
     string method;
 
-    #! (only present if a "?" character is present in the input); the part of the path after the first \c "?" character; arguments should be separated by ";" characters (according to a w3c recommendation: http://www.w3.org/TR/1999/REC-html401-19991224/appendix/notes.html#h-B.2.2), however this function supports both \c ";" and \c "&" as argument separators; if the arguments are not key=value, then each element without a value is assigned @ref True "True"
+    #! Query parameters
+    /** The part of the path after the first \c "?" character; arguments should be separated by ";" characters
+        (according to a w3c recommendation:
+        http://www.w3.org/TR/1999/REC-html401-19991224/appendix/notes.html#h-B.2.2), however this function supports
+        both \c ";" and \c "&" as argument separators; if the arguments are not key=value, then each element without a
+        value is assigned @ref True "True"
+
+        @note Only present if a "?" character is present in the input)
+    */
     *hash<auto> params;
 
-    #! path params; only when matching a request with a REST schema
+    #! Path params; only when matching a request with a REST schema
     /** @Since Util 1.9
     */
     *hash<auto> path_params;
+}
+
+#! Returns a string of the bits set in an integer
+/** @param i the integer to process
+    @oaram min_bits the minimum bits to return; values less then 0 or greater than 64 will cause an \c INVALID-BITS
+    exception to be thrown
+
+    @return a string of the bits set in the integer
+
+    @throw INVALID-BITS Thrown if \a min_bits is less then 0 or greater than 64
+*/
+public string sub get_bit_string(int i, *int min_bits) {
+    if (min_bits < 0 || min_bits > 64) {
+        throw "INVALID-BITS", sprintf("Expecting a value between 0 - 64 inclusive; got %y", min_bits);
+    }
+    string str;
+    bool one;
+    for (int e = 63; e >=0; --e) {
+        if (i & pow(2, e)) {
+            str += "1";
+            if (!one) {
+                one = True;
+            }
+        } else if (one) {
+            str += "0";
+        }
+    }
+    if (min_bits) {
+        int d = min_bits - str.size();
+        if (d > 0) {
+            str = strmul("0", d);
+        }
+    } else if (!exists str) {
+        str = "0";
+    }
+    return str;
 }
 
 #! Returns a size in bytes from a string where "1M" = 1048576 and so forth

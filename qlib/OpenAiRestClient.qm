@@ -281,11 +281,6 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
         return create_object("OpenAiDataProvider", get());
     }
 
-    #! A hint for a data provider application that this connection is associated with
-    *string getAppHint() {
-        return "OpenAI";
-    }
-
     #! Sets child data provider capabilities
     private setChildCapabilities() {
         children_can_support_apis = True;

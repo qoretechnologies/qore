@@ -390,7 +390,7 @@ float pow(int x = 0, int y = 0) [flags=RET_VALUE_ONLY] {
             "integer value");
     }
 
-    return pow((double)x, (double)y);
+    return (int64)pow((double)x, (double)y);
 }
 
 //! Returns the absolute value of the argument passed

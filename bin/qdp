@@ -65,6 +65,9 @@ class QdpCmd {
         # Global map for webhook handlers: webhook -> handler
         static hash<string, WebhookHandler> whm;
 
+        # console logger
+        LoggerInterface logger;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
@@ -76,6 +79,7 @@ class QdpCmd {
             "modules": "m,module=s@",
             "options": "o,options=s",
             "required": "R,show-required",
+            "servers": "S,servers",
             "subtype": "s,subtype=s",
             "verbose": "v,verbose:i+",
             "exp": "x,expressions",
@@ -206,6 +210,13 @@ class QdpCmd {
             iah = new ImpliedArgumentHelper(v);
         }
 
+        logger = getLogger();
+        DataProvider::setGlobalLogger(logger);
+
+        if (opts.servers) {
+            DataProvider::addOptions(DPO_EnableServers);
+        }
+
         AbstractDataProvider provider;
         {
             # first extract any data provider options
@@ -232,8 +243,6 @@ class QdpCmd {
             } else {
                 list<string> path = name.split("/");
                 provider = getDataProvider((shift path) + opts);
-                # set logger on data provider
-                provider.setLogger(getLogger());
                 map provider = provider.getChildProviderEx($1), path;
             }
         }
@@ -1146,7 +1155,7 @@ class QdpCmd {
                 prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
             }
             # set logger on data provider
-            prov.setLogger(getLogger());
+            prov.setLogger(logger);
 
             ImpliedArgumentHelper iah(options);
             foreach string seg in (action.path[1..].split("/")) {
@@ -1165,7 +1174,10 @@ class QdpCmd {
     private AbstractDataProvider getDataProvider(string name) {
         if (name =~ /{([^}]*)}/) {
             try {
-                return DataProvider::getFactoryObjectFromStringUseEnv(name);
+                AbstractDataProvider dp = DataProvider::getFactoryObjectFromStringUseEnv(name);
+                # set logger on data provider
+                dp.setLogger(logger);
+                return dp;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "FACTORY-ERROR") {
                     error("%s", ex.desc);
@@ -1177,8 +1189,10 @@ class QdpCmd {
         # load providers from environment and try to load a connection
         try {
             *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name, opts.subtype,
-                getLogger());
+                logger);
             if (dp) {
+                # set logger on data provider
+                dp.setLogger(logger);
                 return dp;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -1335,6 +1349,7 @@ class QdpCmd {
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
  -R,--show-required        show only required attributes when showing types
+ -S,--servers              enable data provider background threads and processes
  -s,--subtype=ARG          use Data Provider subtype when creating from a connection
  -t,--list-types           list known data provider types and exit
  -v,--verbose[=ARG]        show more output

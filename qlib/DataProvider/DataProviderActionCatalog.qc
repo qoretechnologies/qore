@@ -331,8 +331,34 @@ public class DataProviderActionCatalog {
         #! Set of actions requiring output type resolution; app -> action -> True
         static hash<string, hash<string, bool>> resolve_output_types;
 
+        #! Pending application init handler map: app -> init handler
+        static hash<string, code> initmap;
+
         #! Default description
         const DefaultDescription = "";
+    }
+
+    #! Registers an app for deferred initialization / initialization on demand
+    /** @param app the application to register
+        @param init the initialization code that will register the app
+    */
+    static registerPendingApp(string app, code init) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (appcache{app}) {
+            throw "APP-ERROR", sprintf("Application %y is already registered", app);
+        }
+        if (initmap{app}) {
+            throw "APP-ERROR", sprintf("Application %y is already pending", app);
+        }
+
+        initmap{app} = init;
     }
 
     #! Registers a data provider application
@@ -343,25 +369,33 @@ public class DataProviderActionCatalog {
     static registerApp(hash<DataProviderAppInfo> app) {
         # check for required keys
         if (*hash<auto> missing = RequiredAppKeys - keys app) {
-            throw "APP-ERROR", sprintf("application is missing the following required keys: %y (app: %y)",
+            throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
                 keys missing, app);
         }
         if (*list<string> missing = (map $1.key, app{keys RequiredAppKeys}.pairIterator(), !$1.value.val())) {
-            throw "APP-ERROR", sprintf("application is missing the following required keys: %y (app: %y)",
+            throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
                 missing, app);
         }
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
 
-        AutoLock al(lck);
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
         if (*hash<DataProviderAppInfo> existing_app = appcache{app.name}) {
             # ignore if the application has the same definition
             if (existing_app == app) {
                 return;
             }
-            throw "APP-ERROR", sprintf("application %y already registered: %y", app.name, existing_app);
+            throw "APP-ERROR", sprintf("Application %y already registered: %y", app.name, existing_app);
         }
+        remove initmap{app};
+
         # add to cache
         appcache{app.name} = app;
 
@@ -421,6 +455,9 @@ public class DataProviderActionCatalog {
 
         AutoLock al(lck);
         # check that the application exists
+        if (*code init = remove initmap{action.app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         *hash<DataProviderAppInfo> app = appcache{action.app};
         if (!app) {
             throw "ACTION-ERROR", sprintf("application %y not registered (action %y)", action.app, action);
@@ -548,6 +585,9 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         if (*hash<DataProviderAppInfo> rv = appcache{app}) {
             return rv;
         }
@@ -564,12 +604,16 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        # initialize any matching pending apps
+        map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap,
+            regex($1, regex_pattern, regex_options);
         return map $1, appcache.values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
 
     #! Searches for applications whose names or descriptions match a substring
-    /** @param substr A substring to match in the \c name and \c desc fields
+    /** @param substr A substring to match in the \c name and \c desc fields; pending apps only are matched with the
+        name
         @param ignore_case Ignore case when searching
 
         @return All applications that match the substring argument in the \c name or \c desc fields
@@ -580,6 +624,10 @@ public class DataProviderActionCatalog {
         }
         if (ignore_case) {
             substr = substr.upr();
+
+            # initialize any matching pending apps
+            map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap, ($1.upr().find(substr) >= 0);
+
             return map $1, appcache.values(),
                 ($1.name.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
         }
@@ -686,6 +734,10 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         return app_actionmap{app}{action};
     }
 
@@ -704,6 +756,10 @@ public class DataProviderActionCatalog {
     static hash<DataProviderActionInfo> getAppActionEx(string app, string action) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
+        }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
         }
         *hash<string, hash<DataProviderActionInfo>> actionmap = app_actionmap{app};
         if (!actionmap) {
@@ -747,6 +803,10 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         return map $1, app_actionmap{app}.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -764,6 +824,10 @@ public class DataProviderActionCatalog {
             bool ignore_case = True) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
+        }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
         }
         if (ignore_case) {
             substr = substr.upr();
@@ -789,6 +853,10 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
             throw "APP-ERROR", sprintf("application %y is not registered", app);
@@ -812,6 +880,10 @@ public class DataProviderActionCatalog {
             bool ignore_case = True) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
+        }
+        # check that the application exists
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
         }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
@@ -998,6 +1070,15 @@ public class DataProviderActionCatalog {
         }
         map remove top_actionmap{name + "/" + $1.action}, app_actionmap{name}.values();
         remove app_actionmap{name};
+    }
+
+    #! Runs initialization and catches exceptions
+    private static doInit(code init) {
+        try {
+            init();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s\n", get_exception_string(ex));
+        }
     }
 }
 }

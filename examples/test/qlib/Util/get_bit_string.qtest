@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%new-style
+%require-types
+%enable-all-warnings
+
+%exec-class GetBitStringTest
+
+public class GetBitStringTest inherits QUnit::Test {
+    constructor() : Test ("GetBitStringTest", "1.0") {
+        addTestCase ("Tests for the get_bit_string() function", \test_getbitstring());
+        set_return_value(main());
+    }
+
+    test_getbitstring() {
+        assertEq("0", get_bit_string(0));
+        assertEq("00000000", get_bit_string(0, 8));
+        assertEq("10", get_bit_string(2));
+        assertEq("11100110101101101100100100110", get_bit_string(483842342));
+    }
+}

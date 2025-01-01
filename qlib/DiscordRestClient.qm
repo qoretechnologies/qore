@@ -598,11 +598,6 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         }
     }
 
-    #! A hint for a data provider application that this connection is associated with
-    *string getAppHint() {
-        return "Discord";
-    }
-
     #! returns a data provider object for the connection and subtype passed as an argument
     /** @param subtype the subtype of data provider supported, in case the connection can return multiple data
         providers

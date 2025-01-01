@@ -27,6 +27,34 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
+/** @defgroup DataProviderGlobalOptions Data Provider Global Options
+    These are constants for global data provider behavior
+
+    @see
+    - DataProvider::addOptions()
+    - DataProvider::getOptions()
+    - DataProvider::setOptions()
+*/
+#/@{
+#! Enable servers
+/** If this is set, then external server threads or programs may be started for data provider functionality; in this
+    case the user must call @ref DataProvider::shutdown() before exiting
+*/
+public const DPO_EnableServers                  = (1 << 0);
+
+#! Disable on-demand initialization
+/** This option ensures that all eligible data providers are initialized immediately instead of when they are used;
+    this can be useful for testing
+*/
+public const DPO_DisableOnDemandInitialization  = (1 << 1);
+
+#! The mask of all data provider options
+public const DPO_AllOptions = (
+    DPO_EnableServers
+    | DPO_DisableOnDemandInitialization
+);
+#/@}
+
 #! Data provider class
 public class DataProvider {
     public {
@@ -95,6 +123,9 @@ public class DataProvider {
         #! List of data provider factory modules
         const FactoryModuleList = keys (map {$1: True}, FactoryMap.iterator());
         # "map" is used above to ensure that the values only appear once in the final list
+
+        #! An invalid app name
+        const NoApp = "$NO_APP";
     }
 
     private {
@@ -124,8 +155,93 @@ public class DataProvider {
         #! set of module already loaded
         static hash<string, bool> mod_map;
 
+        #! Static initializer list
+        static list<code> ilist;
+
         #! Shutdown handlers; key -> handler
         static hash<string, code> smap;
+
+        #! Global options
+        static int options = 0;
+
+        #! Global logger
+        static *LoggerInterface logger;
+    }
+
+    #! Sets or clears the global logger
+    /** @param logger the global data provider logger
+
+        @since DataProvider 3.0
+    */
+    static setGlobalLogger(*LoggerInterface logger) {
+        DataProvider::logger = logger;
+    }
+
+    #! Returns the global data provider logger
+    /** @return the global data provider logger
+
+        @since DataProvider 3.0
+    */
+    static *LoggerInterface getGlobalLogger() {
+        return logger;
+    }
+
+    #! Adds the given global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static addOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options |= options;
+    }
+
+    #! Removes the given global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static removeOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options &= ~options;
+    }
+
+    #! Returns global data provider options
+    /** @return global data provider options
+
+        @since DataProvider 3.0
+    */
+    static int getOptions() {
+        return options;
+    }
+
+    #! Replaces data provider global options with the value provided
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static setOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options = options;
+    }
+
+    #! Checks for valid global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @since DataProvider 3.0
+    */
+    static checkOptions(int options) {
+        if (!(options & ~DPO_AllOptions)) {
+            return;
+        }
+        throw "INVALID-OPTIONS", sprintf("Data provider option value %s has invalid bits set (mask: %s)",
+            get_bit_string(options), get_bit_string(DPO_AllOptions));
     }
 
     #! Register a new data provider factory
@@ -549,6 +665,27 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         return rv;
     }
 
+    #! Registers a static initializer
+    /** @since DataProvider 3.0
+    */
+    static registerStaticInitializer(code init) {
+        ilist += init;
+    }
+
+    #! Checks for static initialization
+    static checkStaticInit() {
+        if (ilist) {
+            DataProvider::checkStaticInitIntern();
+        }
+    }
+
+    #! Checks for static initialization
+    private static synchronized checkStaticInitIntern() {
+        if (ilist) {
+            map $1(), (remove ilist);
+        }
+    }
+
     #! Shuts down background services related to data providers
     /** @since DataProvider 3.0
     */
@@ -614,7 +751,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s\n", mod, ex.err, ex.desc);
+                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                        ex.err, ex.desc);
                     continue;
                 }
                 try {
@@ -688,7 +826,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                         return rv;
                     }
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s\n", mod, ex.err, ex.desc);
+                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                        ex.err, ex.desc);
                 }
                 hash<string, string> dmap;
                 try {

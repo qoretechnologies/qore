@@ -217,11 +217,37 @@ public class ConnectionSchemeCache {
             "https": HttpConnection::ConnectionScheme,
         };
 
+        #! Pending connection provider init handler map: scheme -> init handler
+        static hash<string, code> initmap;
+
         #! Connection provider cache lock
         static Mutex lck();
 
         #! Load all flag
         static bool load_all;
+    }
+
+    #! Registers a scheme for deferred initialization / initialization on demand
+    /** @param scheme the scheme to register
+        @param init the initialization code that will register the scheme
+    */
+    static registerPendingScheme(string scheme, code init) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (cache{scheme}) {
+            throw "SCHEMA-ERROR", sprintf("Scheme %y is already registered", scheme);
+        }
+        if (initmap{scheme}) {
+            throw "SCHEMA-ERROR", sprintf("Scheme %y is already pending", scheme);
+        }
+
+        initmap{scheme} = init;
     }
 
     #! Register a new connection provider in the cache
@@ -243,6 +269,7 @@ public class ConnectionSchemeCache {
         if (cache{scheme}) {
             return False;
         }
+        remove initmap{scheme};
 
         cache{scheme} = entry;
         # sort connection options when caching
@@ -270,6 +297,8 @@ public class ConnectionSchemeCache {
         if (needs_lock && load_all) {
             return cache;
         }
+        # load all pending schemes
+        map $1(), initmap.iterator();
         map ConnectionSchemeCache::getSchemeImpl($1, False), keys SchemeMap, !cache{$1};
         return cache;
     }
@@ -337,6 +366,9 @@ public class ConnectionSchemeCache {
         }
         on_exit if (needs_lock) {
             lck.unlock();
+        }
+        if (*code init = remove initmap{scheme}) {
+            init();
         }
 
         *hash<ConnectionSchemeInfo> rv = cache{scheme};

@@ -1211,10 +1211,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Creates the data provider
     constructor() {
+        DataProvider::checkStaticInit();
     }
 
     #! Creates the data provider with the given Logger
     constructor(LoggerInterface logger) : LoggerWrapper(logger) {
+        DataProvider::checkStaticInit();
     }
 
     #! Returns static provider information as data; no objects are returned

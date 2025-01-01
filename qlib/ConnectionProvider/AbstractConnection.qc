@@ -747,11 +747,6 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         status = err;
     }
 
-    #! A hint for a data provider application that this connection is associated with
-    *string getAppHint() {
-        # intentionally blank
-    }
-
     #! Returns a ConnectionOptionInfo hash from a DataProviderOptionInfo hash
     static hash<ConnectionOptionInfo> getConnectionOptionInfo(hash<DataProviderOptionInfo> dinfo) {
         hash<ConnectionOptionInfo> rv = cast<hash<ConnectionOptionInfo>>(dinfo{CommonConnectionKeys});

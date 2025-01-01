@@ -76,11 +76,6 @@ public class ElasticSearchRestConnection inherits RestClient::RestConnection {
         return new ElasticSearchDataProvider({"restclient": get()});
     }
 
-    #! A hint for a data provider application that this connection is associated with
-    *string getAppHint() {
-        return "ElasticSearch";
-    }
-
     #! returns a @ref RestClient::RestClient "RestClient" object
     /** @param connect if @ref True "True", then the connection is returned already connected
         @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
