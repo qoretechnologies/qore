@@ -72,7 +72,7 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {
             EVENT_EMAIL_MATCHED: <DataProviderMessageInfo>{
-                "desc": "A email has been matched",
+                "desc": "An email has been matched",
                 "type": gmailMessageEventDataType ?? (gmailMessageEventDataType = new GmailMessageEventDataType()),
             },
         };

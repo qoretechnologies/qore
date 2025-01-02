@@ -199,8 +199,9 @@ void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, con
     } else {
         if (host && host[0]) {
             desc->sprintf(" (target: %s", host);
-            if (svc)
+            if (svc && strcmp(svc, "-1")) {
                 desc->sprintf(":%s", svc);
+            }
             desc->concat(")");
         }
     }
@@ -258,8 +259,9 @@ void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, con
     } else {
         if (host) {
             desc->sprintf(" (target: %s", host);
-            if (svc)
+            if (svc && strcmp(svc, "-1")) {
                 desc->sprintf(":%s", svc);
+            }
             desc->concat(")");
         }
     }
@@ -287,7 +289,12 @@ void concat_target(QoreString& str, const struct sockaddr *addr, const char* typ
     QoreString host;
     q_addr_to_string2(addr, host);
     if (!host.empty()) {
-        str.sprintf(" (%s: %s:%d)", type, host.c_str(), q_get_port_from_addr(addr));
+        int port = q_get_port_from_addr(addr);
+        str.sprintf(" (%s: %s", type, host.c_str());
+        if (port != -1) {
+            str.sprintf(":%d", port);
+        }
+        str.concat(')');
     }
 }
 
