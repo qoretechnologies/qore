@@ -374,20 +374,15 @@ float pow(softfloat x = 0.0, softfloat y = 0.0) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-float z = pow(x, y);
+int z = pow(x, y);
     @endcode
 
     @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
     @throw INVALID-POW-ARGUMENTS in pow(x, y), x cannot be negative when y is not an integer value
  */
-float pow(int x = 0, int y = 0) [flags=RET_VALUE_ONLY] {
-    if (x == 0.0 && y < 0) {
+int pow(int x = 0, int y = 0) [flags=RET_VALUE_ONLY] {
+    if (!x && y < 0) {
         return xsink->raiseException("DIVISION-BY-ZERO", "pow(x, y) if x = 0 then y must be a non-negative value");
-    }
-
-    if (x < 0 && y != ceil(y)) {
-        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(x, y) x cannot be negative when y is not an "
-            "integer value");
     }
 
     return (int64)pow((double)x, (double)y);
