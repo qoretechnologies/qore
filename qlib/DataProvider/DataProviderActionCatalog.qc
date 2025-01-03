@@ -334,6 +334,9 @@ public class DataProviderActionCatalog {
         #! Pending application init handler map: app -> init handler
         static hash<string, code> initmap;
 
+        #! Pending application action init handler map: app -> action -> init handler
+        static hash<string, hash<string, code>> initactionmap;
+
         #! Default description
         const DefaultDescription = "";
     }
@@ -341,6 +344,8 @@ public class DataProviderActionCatalog {
     #! Registers an app for deferred initialization / initialization on demand
     /** @param app the application to register
         @param init the initialization code that will register the app
+
+        @since DataProvider 3.0
     */
     static registerPendingApp(string app, code init) {
         bool needs_lock = !lck.lockOwner();
@@ -359,6 +364,32 @@ public class DataProviderActionCatalog {
         }
 
         initmap{app} = init;
+    }
+
+    #! Registers an app action for deferred initialization / initialization on demand
+    /** @param app the application to register
+        @param action the action to register
+        @param init the initialization code that will register the app
+
+        @since DataProvider 3.0
+    */
+    static registerPendingAppAction(string app, string action, code init) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (app_actionmap{app}{action}) {
+            throw "APP-ERROR", sprintf("Application %y action %y is already registered", app, action);
+        }
+        if (initactionmap{app}{action}) {
+            throw "APP-ERROR", sprintf("Application %y action %y is already pending", app, action);
+        }
+
+        initactionmap{app}{action} = init;
     }
 
     #! Registers a data provider application
@@ -458,6 +489,8 @@ public class DataProviderActionCatalog {
         if (*code init = remove initmap{action.app}) {
             DataProviderActionCatalog::doInit(init);
         }
+        remove initactionmap{action.app}{action.action};
+
         *hash<DataProviderAppInfo> app = appcache{action.app};
         if (!app) {
             throw "ACTION-ERROR", sprintf("application %y not registered (action %y)", action.app, action);
@@ -565,6 +598,10 @@ public class DataProviderActionCatalog {
         @see getAppEx()
     */
     static *hash<DataProviderAppInfo> getApp(string app) {
+        # initialize any pending app
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -582,11 +619,12 @@ public class DataProviderActionCatalog {
         @see getApp()
     */
     static hash<DataProviderAppInfo> getAppEx(string app) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         if (*hash<DataProviderAppInfo> rv = appcache{app}) {
             return rv;
@@ -601,12 +639,12 @@ public class DataProviderActionCatalog {
         @return All applications that match the regular expression pattern in the \c name or \c desc fields
     */
     static *list<hash<DataProviderAppInfo>> searchAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         # initialize any matching pending apps
         map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap,
             regex($1, regex_pattern, regex_options);
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
+        }
         return map $1, appcache.values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -654,6 +692,12 @@ public class DataProviderActionCatalog {
         @see getActionHashEx()
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHash(string app) {
+        # initialize any pending app
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -670,6 +714,12 @@ public class DataProviderActionCatalog {
         @see getActionHash()
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHashEx(string app) {
+        # initialize any pending app
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -687,6 +737,12 @@ public class DataProviderActionCatalog {
         @see getActionsEx()
     */
     static *list<hash<DataProviderActionInfo>> getActions(string app) {
+        # initialize any pending app
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -703,6 +759,12 @@ public class DataProviderActionCatalog {
         @see getActions()
     */
     static list<hash<DataProviderActionInfo>> getActionsEx(string app) {
+        # initialize any pending app
+        if (*code init = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -716,6 +778,10 @@ public class DataProviderActionCatalog {
     /** @return all actions in the cache
     */
     static *list<hash<DataProviderActionInfo>> getAllActions() {
+        # initialize all pending apps
+        map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap;
+        # initialize all pending actions
+        map (map DataProviderActionCatalog::doInit($1), $1.value.iterator()), (remove initactionmap).pairIterator();
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -731,12 +797,19 @@ public class DataProviderActionCatalog {
         @see getAppActionEx()
     */
     static *hash<DataProviderActionInfo> getAppAction(string app, string action) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending action for the app
+        if (*code init = remove initactionmap{app}{action}) {
+            DataProviderActionCatalog::doInit(init);
+            if (!initactionmap{app}) {
+                remove initactionmap{app};
+            }
+        }
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         return app_actionmap{app}{action};
     }
@@ -754,12 +827,19 @@ public class DataProviderActionCatalog {
         @see getAppAction()
     */
     static hash<DataProviderActionInfo> getAppActionEx(string app, string action) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending action for the app
+        if (*code init = remove initactionmap{app}{action}) {
+            DataProviderActionCatalog::doInit(init);
+            if (!initactionmap{app}) {
+                remove initactionmap{app};
+            }
+        }
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         *hash<string, hash<DataProviderActionInfo>> actionmap = app_actionmap{app};
         if (!actionmap) {
@@ -800,12 +880,14 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         return map $1, app_actionmap{app}.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
@@ -822,12 +904,14 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstr(string app, string substr,
             bool ignore_case = True) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         if (ignore_case) {
             substr = substr.upr();
@@ -850,12 +934,14 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegexEx(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
@@ -878,12 +964,14 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstrEx(string app, string substr,
             bool ignore_case = True) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
-        # check that the application exists
+        # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
+        }
+        # initialize any pending actions for the app
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
+        if (resolve_output_types) {
+            DataProviderActionCatalog::resolveOutputTypes();
         }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
