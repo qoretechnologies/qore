@@ -1587,10 +1587,10 @@ class InputHelper {
                     printf("info: %N\n", cinfo.info);
                 }
                 print("messages:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType($1.value.type)),
+                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
                     provider.getMessageTypes().pairIterator();
                 print("events:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType($1.value.type)),
+                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
                     provider.getEventTypes().pairIterator();
                 continue;
             }
