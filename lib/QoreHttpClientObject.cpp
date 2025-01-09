@@ -297,8 +297,9 @@ struct qore_httpclient_priv {
 
     method_map_t additional_methods_map;
 
-    // characters that must be encoded when pre_encoded_urls is enabled
-    static constexpr const char* must_encode_chars = "{}|\\^~[]`";
+    // characters that must be encoded when pre_encoded_urls is enabled - all control chars plus {}|\\^~[]`
+    static constexpr const char* must_encode_chars = "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e"
+        "\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f{}|\\^~[]`";
 
     // characters subject to percent encoding by Qore
     typedef std::map<char, const char*> pct_encoding_map_t;
@@ -934,7 +935,7 @@ struct qore_httpclient_priv {
             const char* p = strchrs(mpath, must_encode_chars);
             if (p) {
                 xsink->raiseException("URL-ENCODING-ERROR", "URI path '%s' contains at least one unencoded character "
-                    "('%c'), when the 'pre_encoded_urls' option is set, URLs must be already encoded with percent "
+                    "('%%%02X'), when the 'pre_encoded_urls' option is set, URLs must be already encoded with percent "
                     "encoding", mpath, *p);
                 return nullptr;
             }
@@ -943,17 +944,22 @@ struct qore_httpclient_priv {
             // concat mpath to pstr, performing minimal URL encoding until '?'
             const char* p = mpath;
             while (*p) {
-                pct_encoding_map_t::const_iterator i = pct_encoding_map.find(*p);
-                if (i == pct_encoding_map.end()) {
-                    pct_encoding_set_t::iterator j = local_pct_encoding_set.find(*p);
-                    if (j == local_pct_encoding_set.end()) {
-                        pstr.concat(*p);
-                    } else {
-                        QoreStringMaker tmp("%%%X", *p);
-                        pstr.concat(tmp.c_str());
-                    }
+                // always encode control characters
+                if ((*p) < 32) {
+                    pstr.concat("%%%02X", *p);
                 } else {
-                    pstr.concat(i->second);
+                    pct_encoding_map_t::const_iterator i = pct_encoding_map.find(*p);
+                    if (i == pct_encoding_map.end()) {
+                        pct_encoding_set_t::iterator j = local_pct_encoding_set.find(*p);
+                        if (j == local_pct_encoding_set.end()) {
+                            pstr.concat(*p);
+                        } else {
+                            QoreStringMaker tmp("%%%X", *p);
+                            pstr.concat(tmp.c_str());
+                        }
+                    } else {
+                        pstr.concat(i->second);
+                    }
                 }
                 ++p;
             }

@@ -108,6 +108,8 @@
         (<a href="https://github.com/qorelanguage/qore/issues/4825">issue 4825</a>)
       - fixed a bug where any additionalProperties would cause all properties to be accepted
         (<a href="https://github.com/qorelanguage/qore/issues/4823">issue 4823</a>)
+    - fixed a bug where control characters were not percent-encoded by @ref Qore::encode_url() "encode_url()"
+        (<a href="https://github.com/qorelanguage/qore/issues/4917">issue 4917</a>)
     - fixed a crash in @ref Qore::pow(number, number) when \a y was \c 0n
       (<a href="https://github.com/qorelanguage/qore/issues/4916">issue 4916</a>)
     - improved the weak assignment operator to allow weak references to hashes and list containers

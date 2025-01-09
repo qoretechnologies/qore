@@ -331,6 +331,11 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
         return msgq.get();
     }
 
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
     private handlePingSuccess(string name, date delta, *bool oldok) {
         PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
         msgq.push({"name": name, "result": "OK"});

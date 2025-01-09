@@ -2967,6 +2967,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         if (!opts.ping_method || !exists (ping_path = getPingPath())) {
             return;
         }
+
         auto ping_body;
         if (opts.ping_method != "GET") {
             ping_body = getPingBody();
@@ -3260,7 +3261,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             } else {
                 checkUrl();
             }
-
             rc.prepareToSend(method, \path, \body, \headers);
             rc.debug("prepared ping path: %y", path);
         }

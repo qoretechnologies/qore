@@ -154,7 +154,7 @@ MewsRestClient rest(opts);
         if (*string client = getString(opts, "client")) {
             self.client = client;
         }
-        {
+        if (validator && !validator.managesUriPath()) {
             *string cp = getConnectionPath();
             if (!cp.val() || cp == "/") {
                 setConnectionPath(DefaultUriPathPrefix);
@@ -358,6 +358,35 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         # object dynamically
         load_module("MewsRestDataProvider");
         return create_object("MewsRestDataProvider", get());
+    }
+
+    #! Called to start a non-blocking polling ping operation on the remote REST server
+    /**
+        @return a socket poll operation object that will allow the connection goal to be reached with polling
+
+        @see supportsPollingApi()
+    */
+    Qore::AbstractPollOperation startPollConnect() {
+        # ensure that no validator is used, as loading the schema cannot be done in a nonblocking way in the polling
+        # thread
+        hash<auto> new_opts = real_opts + {
+            "ping_path": "/" + MewsRestClient::DefaultUriPathPrefix + "/" + real_opts.ping_path,
+            "ping_body": getPingBody(),
+        };
+        if (real_opts.validator instanceof AbstractRestSchemaValidator) {
+            new_opts.validator = real_opts.validator;
+        } else {
+            new_opts.validator = new NullRestSchemaValidator(logger);
+        }
+        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
+        return new RestPingPollOperation(self, getImpl(False, new_opts), new_opts);
+    }
+
+    #! Returns the ping path from the \c ping_path option
+    private *string getPingPath() {
+        return real_opts.validator
+            ? real_opts.ping_path
+            : MewsRestClient::DefaultUriPathPrefix + "/" + real_opts.ping_path;
     }
 
     private auto getPingBody() {

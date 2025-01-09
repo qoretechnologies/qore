@@ -822,7 +822,8 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
     }
 
     if (!getEncoding()->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode to non-ASCII-compatible encoding \"%s\"", getEncoding()->getCode());
+        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode to non-ASCII-compatible encoding \"%s\"",
+            getEncoding()->getCode());
         return -1;
     }
 
@@ -836,7 +837,8 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
         p = cstr->priv;
     } else {
         if (!str.priv->getEncoding()->isAsciiCompat()) {
-            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode from non-ASCII-compatible encoding \"%s\"", str.priv->getEncoding()->getCode());
+            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode from non-ASCII-compatible encoding \"%s\"",
+                str.priv->getEncoding()->getCode());
             return -1;
         }
         p = str.priv;
@@ -2516,8 +2518,11 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
             }
             p += len;
             continue;
+        // issue #4917 always encode control characters
+        } else if ((*p) < 32) {
+            sprintf("%%%02X", (unsigned)*p);
         } else if (encode_all && url_reserved.find(*p) != url_reserved.end()) {
-            sprintf("%%%X", (unsigned)*p);
+            sprintf("%%%02X", (unsigned)*p);
         } else {
             concat(*p);
         }

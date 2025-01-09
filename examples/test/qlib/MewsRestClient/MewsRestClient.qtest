@@ -47,13 +47,23 @@ public class Main inherits QUnit::Test {
                 printf("%s: %s\n", ex.err, ex.desc);
             }
         }
+        setupLogger();
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
-    setUp() {
-        Logger logger("test", LoggerLevel::getLevelInfo());
+    setupLogger() {
+        LoggerLevel ll;
+        if (m_options.verbose > 3) {
+            ll = LoggerLevel::LevelDebug;
+        } else if (m_options.verbose > 2) {
+            ll = LoggerLevel::LevelInfo;
+        } else {
+            ll = LoggerLevel::LevelWarn;
+        }
+
+        logger = new Logger("test", ll);
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
@@ -168,7 +178,12 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 
     hash<auto> waitForResult() {
-        return msgq.get();
+        return msgq.get(ping_timeout);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {

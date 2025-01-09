@@ -474,8 +474,8 @@ class RestCmd {
 
             monitor.add(conn);
 
-            hash<auto> info = monitor.waitForResult();
-            printf("ping result: %y\n", info.info);
+            hash<auto> info = monitor.waitForResult(opt.to ?? 20s);
+            printf("ping result: %y\n", info.result);
             if (info.ex && (opt.fullex || opt.verbose)) {
                 printf("%s\n", get_exception_string(info.ex));
             }
@@ -646,8 +646,13 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
         ping_timeout = 5s;
     }
 
-    hash<auto> waitForResult() {
-        return msgq.get();
+    hash<auto> waitForResult(timeout to) {
+        return msgq.get(to);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {
