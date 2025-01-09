@@ -3252,7 +3252,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             rc.prepareToSend(method, \p, \body, \headers);
         } else {
             use_path_as_is = True;
-
             # check if the path is a URL
             if (path =~ /^http/) {
                 rc.setURL(path);
@@ -3272,7 +3271,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 
     private checkUrl() {
         string url = rc.getURL() ?? "";
-        int len = min(url.length(), conn.real_url.length());
+        int len = min(url.length(), conn.real_url.length()) - 1;
         if (url[0..len] != conn.real_url[0..len]) {
             rc.setURL(conn.real_url);
         }

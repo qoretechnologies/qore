@@ -154,11 +154,8 @@ MewsRestClient rest(opts);
         if (*string client = getString(opts, "client")) {
             self.client = client;
         }
-        if (validator && !validator.managesUriPath()) {
-            *string cp = getConnectionPath();
-            if (!cp.val() || cp == "/") {
-                setConnectionPath(DefaultUriPathPrefix);
-            }
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(DefaultUriPathPrefix);
         }
         if (!do_not_connect) {
             connect();
