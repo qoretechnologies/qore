@@ -1888,9 +1888,15 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     int rc;
     while (true) {
         rc = ::poll(&fds[0], poll_list->size(), timeout_ms);
+        // poll() returns 0 when there is a timeout
+        if (!rc) {
+            break;
+        }
+        // continue if interrupted
         if (rc == -1 && errno == EINTR) {
             continue;
         }
+        // throw an exception if there was an error
         if (rc < 0) {
             qore_socket_error(xsink, "SOCKET-POLL-ERROR", "poll(2) returned an error");
             break;

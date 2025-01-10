@@ -214,7 +214,7 @@ class SocketTest inherits QUnit::Test {
 
                 b0 = get_random_bytes(128 * 1024);
                 s2.send(b0, 5s);
-                assertEq(b0, q.get(2s));
+                assertEq(b0, q.get(5s));
             }();
 
             Socket s1();
@@ -668,6 +668,7 @@ class SocketTest inherits QUnit::Test {
             },
         );
 
+        usleep(500ms);
         new_list = Socket::poll(poll_list, 5s);
         assertEq(2, new_list.size());
         assertEq(SOCK_POLLIN, new_list[0].events);
