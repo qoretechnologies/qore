@@ -3270,10 +3270,11 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
     }
 
     private checkUrl() {
-        string url = rc.getURL() ?? "";
-        int len = min(url.length(), conn.real_url.length()) - 1;
-        if (url[0..len] != conn.real_url[0..len]) {
-            rc.setURL(conn.real_url);
+        if (*string url = rc.getURL()) {
+            int len = min(url.length(), conn.real_url.length()) - 1;
+            if (url[0..len] != conn.real_url[0..len]) {
+                rc.setURL(conn.real_url);
+            }
         }
     }
 }

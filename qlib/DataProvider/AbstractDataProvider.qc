@@ -2084,6 +2084,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     AbstractDataProvider getChildProviderPath(string path) {
         AbstractDataProvider provider = self;
+        if (path =~ /^\//) {
+            path =~ s/^\/+//;
+        }
         map provider = provider.getChildProviderEx($1), path.split("/");
         if (logger && !provider.logger) {
             provider.setLogger(logger);
