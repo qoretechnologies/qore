@@ -291,7 +291,12 @@ public string sub get_bit_string(int i, *int min_bits) {
     }
     string str;
     bool one;
-    for (int e = 63; e >=0; --e) {
+    # must do high bit separately
+    if (i < 0) {
+        str += "1";
+        one = True;
+    }
+    for (int e = 62; e >= 0; --e) {
         if (i & pow(2, e)) {
             str += "1";
             if (!one) {
