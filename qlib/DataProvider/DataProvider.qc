@@ -545,9 +545,9 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Registers all known data provider factories
-    static registerKnownFactories(*Logger::LoggerInterface logger) {
+    static registerKnownFactories() {
         # load known modules
-        map DataProvider::tryLoad($1, logger, True), FactoryModuleList;
+        map DataProvider::tryLoad($1, True), FactoryModuleList;
     }
 
     #! Loads data providers from the environment
@@ -571,7 +571,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Registers all known data provider types
-    static registerKnownTypes(*Logger::LoggerInterface logger) {
+    static registerKnownTypes() {
         # register basic qore types
         DataProvider::registerType("qore/hash", new HashDataType());
         DataProvider::registerType("qore/string", new QoreStringDataType());
@@ -582,7 +582,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         DataProvider::registerType("qore/bool", new QoreBoolDataType());
         DataProvider::registerType("qore/binary", new QoreBinaryDataType());
 
-        map DataProvider::tryLoad($1, logger, True), TypeMap.iterator();
+        map DataProvider::tryLoad($1, True), TypeMap.iterator();
     }
 
     #! Loads data types from the environment
@@ -789,7 +789,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Try to load the given module
-    private static bool tryLoad(string module_str, *Logger::LoggerInterface logger, *bool init) {
+    private static bool tryLoad(string module_str, *bool init) {
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);

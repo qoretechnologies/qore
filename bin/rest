@@ -423,11 +423,16 @@ class RestCmd {
                 printf("%N\n", h.body);
             }
             if (opt.output) {
-                File f();
-                f.open2(opt.output, O_CREAT | O_TRUNC | O_WRONLY);
-                f.write(info."response-body");
-                int len = info."response-body".size();
-                printf("Saved output to %y (%d byte%s)\n", opt.output, len, len == 1 ? "" : "s");
+                if (*data output_data = info."response-body-raw") {
+                    File f();
+                    f.open2(opt.output, O_CREAT | O_TRUNC | O_WRONLY);
+                    f.write(output_data);
+                    int len = output_data.size();
+                    printf("Saved output to %y; %y; %d byte%s\n", opt.output,
+                        info."response-headers"."content-type", len, len == 1 ? "" : "s");
+                } else {
+                    stderr.print("No output to save\n");
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
             if (opt.fullex) {
