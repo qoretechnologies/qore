@@ -547,7 +547,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     #! Registers all known data provider factories
     static registerKnownFactories(*Logger::LoggerInterface logger) {
         # load known modules
-        map DataProvider::tryLoad($1, logger), FactoryModuleList;
+        map DataProvider::tryLoad($1, logger, True), FactoryModuleList;
     }
 
     #! Loads data providers from the environment
@@ -571,7 +571,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Registers all known data provider types
-    static registerKnownTypes() {
+    static registerKnownTypes(*Logger::LoggerInterface logger) {
         # register basic qore types
         DataProvider::registerType("qore/hash", new HashDataType());
         DataProvider::registerType("qore/string", new QoreStringDataType());
@@ -582,7 +582,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         DataProvider::registerType("qore/bool", new QoreBoolDataType());
         DataProvider::registerType("qore/binary", new QoreBinaryDataType());
 
-        map DataProvider::tryLoad($1), TypeMap.iterator();
+        map DataProvider::tryLoad($1, logger, True), TypeMap.iterator();
     }
 
     #! Loads data types from the environment
@@ -789,7 +789,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Try to load the given module
-    private static bool tryLoad(string module_str, *Logger::LoggerInterface logger) {
+    private static bool tryLoad(string module_str, *Logger::LoggerInterface logger, *bool init) {
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);
@@ -799,7 +799,11 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         } catch (hash<ExceptionInfo> ex) {
             string err = sprintf("DataProvider load module %y: %s\n", module_str, get_exception_string(ex));
             if (logger) {
-                logger.error("%s", err);
+                if (init) {
+                    logger.debug("INIT: %s", err);
+                } else {
+                    logger.error("%s", err);
+                }
             } else {
                 stderr.print(err + "\n");
             }

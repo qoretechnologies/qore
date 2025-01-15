@@ -181,6 +181,9 @@ class QdpCmd {
         # load any modules
         map load_module($1), opts.modules;
 
+        logger = getLogger();
+        DataProvider::setGlobalLogger(logger);
+
         if (opts.listconnections) {
             listConnections();
         }
