@@ -69,6 +69,7 @@ class RestCmd {
             "grant_type":    "grant-type=s",
             "header":        "H,header=s@",
             "oauth2":        "O=s@",
+            "output":        "o,output=s",
             "ignoreerr":     "i,ignore-errors",
             "key":           "k,key=s",
             "keypass":       "K,keypass=s",
@@ -88,7 +89,7 @@ class RestCmd {
             "example":       "x,example:s",
             "tokentype":     "y,token-type=s",
 
-            "help":      "h,help",
+            "help":          "h,help",
         };
 
         #! recognized HTTP methods
@@ -273,6 +274,10 @@ class RestCmd {
                     # if the path is absolute, then override the connection path
                     rest.setConnectionPath();
                 }
+
+                if (opt.to) {
+                    rest.setTimeout(opt.to * 1000);
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (opt.fullex) {
                     stderr.printf("%s\n", get_exception_string(ex));
@@ -407,8 +412,22 @@ class RestCmd {
             on_error rethrow $1.err, sprintf("%s (using url: %y request path: %y)", $1.desc, rest.getURL(),
                 request_path ?? "");
             h = rest.doRequest(meth, request_path ?? "", body, \info);
-            if (!opt.lit) {
+            if ((*string fn = (h."content-disposition" =~ x/filename="([^"]+)"/)[0]).val()) {
+                if (!opt.output.val()) {
+                    opt.output = fn;
+                } else {
+                    printf("Overriding filename %y -> %y\n", fn, opt.output);
+                }
+            }
+            if (!opt.lit && !exists opt.output) {
                 printf("%N\n", h.body);
+            }
+            if (opt.output) {
+                File f();
+                f.open2(opt.output, O_CREAT | O_TRUNC | O_WRONLY);
+                f.write(info."response-body");
+                int len = info."response-body".size();
+                printf("Saved output to %y (%d byte%s)\n", opt.output, len, len == 1 ? "" : "s");
             }
         } catch (hash<ExceptionInfo> ex) {
             if (opt.fullex) {
@@ -608,6 +627,7 @@ class RestCmd {
  -k, --key=ARG              key to use for client certificate
  -L, --list                 list URI paths and methods supported by the schema
  -l, --literal              show literal API calls (more l's, more info)
+ -o, --output=ARG           save output with the given file name
  -OG,--grant-type=ARG       set OAuth2 grant type
  -OI,--client-id=ARG        set OAuth2 client ID
  -OS,--client-secret=ARG    set OAuth2 client secret

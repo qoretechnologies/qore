@@ -593,6 +593,7 @@ public namespace RestSchemaValidator {
 %ifndef NoJson
                 MimeTypeJson: \make_json(),
                 "application/vnd.oracle.resource+json": \make_json(),
+                "application/swagger+json": \make_json(),
 %endif
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
@@ -684,6 +685,10 @@ public namespace RestSchemaValidator {
                     "in": \parse_json(),
                 },
                 "application/vnd.oracle.resource+json": {
+                    "code": "json",
+                    "in": \parse_json(),
+                },
+                "application/swagger+json":  {
                     "code": "json",
                     "in": \parse_json(),
                 },

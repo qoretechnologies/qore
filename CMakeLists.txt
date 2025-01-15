@@ -339,7 +339,7 @@ endif()
 
 # in case we want to the jni module, we need to link with libjsig if available
 find_package(JNI)
-if (JNI_FOUND AND DEFINED JAVA_JVM_LIBRARY)
+if (JNI_FOUND AND DEFINED JAVA_JVM_LIBRARY AND NOT DEFINED ENV{QORE_WITHOUT_JSIG})
     get_filename_component(JAVA_LIB_DIR ${JAVA_JVM_LIBRARY} DIRECTORY)
     set(LIBJSIG "${JAVA_LIB_DIR}/libjsig${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()

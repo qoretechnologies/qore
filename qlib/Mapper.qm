@@ -1486,8 +1486,8 @@ Mapper mapv(DataMap);
                             k = field_list[0];
                         }
                     } else {
-                        error("output field %y is not a defined output field; known output fields: %y", getFieldName(k),
-                            keys output);
+                        error("output field %y is not a defined output field; known output fields: %y",
+                            getFieldName(k), keys output);
                     }
                 }
                 if (!field) {

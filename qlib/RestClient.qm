@@ -1338,9 +1338,23 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         @param m the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR
         exception is raised)
         @param path the URI path to add (will be appended to any root path given in the constructor)
-        @param body an optional message body to be included in the request; if a value for this parameter is
-        passed to the method, then the body will be serialized according to the serialization rules set in
-        @ref RestClient::RestClient::constructor() "RestCde any content encoding)
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to
+        the method, then the body will be serialized according to the serialization rules set in
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param info an optional reference to a hash that will be used as an output variable giving a hash of request
+        headers and other information about the HTTP request; if present the hash will contain the following keys:
+        - \c headers: a hash of outgoing HTTP request headers
+        - \c request-uri: the request URI string sent (ex: \c "DELETE /services/async/38.0/job HTTP/1.1")
+        - \c body-content-type: the outgoing message body Mime \c Content-Type value
+        - \c response-headers: a hash of processed incoming HTTP headers in the response with keys converted to
+            lower case and additional information added
+        - \c response-headers-raw: a hash of raw unprocessed incoming HTTP headers
+        - \c chunked: set to @ref True "True" if the response was received with chunked transfer encoding
+        - \c response-code: the HTTP response code
+        - \c response-body: the raw message body in the response (after any content decoding)
+        - \c response-serialization: the type of message serialization in the response; see
+          @ref DataSerializationOptions for possible values when used with the null REST schema validator
+        - \c request-body: the raw message body in the request (before any content encoding)
         - \c request-serialization: the type of message serialization in the request; see
           @ref DataSerializationOptions for possible values when used with the null REST schema validator
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the
