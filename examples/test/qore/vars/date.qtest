@@ -32,7 +32,7 @@ class DateTest inherits QUnit::Test {
     }
 
     dateTests() {
-        assertLe(1000, (now_us() + 10s).durationMilliseconds());
+        assertLe(10000, (now_us() + 10s).durationMilliseconds());
 
         # issue #3239: test invalid year masks
         assertThrows("INVALID-DATE", \date(), ("01-03-218", "DD-MM-YYYY"));
