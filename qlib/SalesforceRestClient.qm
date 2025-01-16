@@ -1554,7 +1554,7 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
 
     private gotOAuth2LoginInfo(hash<auto> h) {
         SalesforceRestClient src = cast<SalesforceRestClient>(rc);
-        src.gotOAuth2LoginInfo(h);
+        src.gotOAuth2LoginInfo(h, True);
         # set the URL to the Salesforce.com URL for REST API calls
         src.setURL(h.instance_url);
 

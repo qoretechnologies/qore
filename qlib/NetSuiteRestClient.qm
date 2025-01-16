@@ -189,7 +189,7 @@ NetSuiteRestClient rest(opts);
     }
 
     #! Sets options from the OAuth2 login response on the local object
-    /** @since %SalesforceRestClient 2.0
+    /** @since %RestClient 2.0
     */
     private setOAuth2LoginInfo(hash<auto> h) {
         RestClient::setOAuth2LoginInfo(h);
@@ -204,7 +204,7 @@ NetSuiteRestClient rest(opts);
     #! Perform OAuth2 authentication
     /** @since %RestClient 2.0
     */
-    private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info) {
+    private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info, *bool refresh) {
         if (login.client_id && login.client_secret) {
             # use basic auth for client info
             clearUserPassword();
@@ -213,13 +213,13 @@ NetSuiteRestClient rest(opts);
                 setUserPassword(username, self.password);
             }
             setUserPassword(remove login.client_id, remove login.client_secret);
-            return RestClient::oauth2AuthIntern(login, \info);
+            return RestClient::oauth2AuthIntern(login, \info, refresh);
         }
-        return RestClient::oauth2Auth(login, \info);
+        return RestClient::oauth2Auth(login, \info, refresh);
     }
 
     #! Returns options to update after an OAuth2 login
-    /** @since %SalesforceRestClient 2.0
+    /** @since %RestClient 2.0
     */
     private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
         *hash<auto> new_opts = RestClient::getUpdateOptionsAfterLogin(h);

@@ -848,7 +848,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                         continue;
                     }
                     mod_map{mod_str} = True;
-                    if (DataProvider::tryLoad(mod_str, logger)) {
+                    if (DataProvider::tryLoad(mod_str)) {
                         if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
                             return rv;
                         }

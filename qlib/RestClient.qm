@@ -1418,7 +1418,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     */
     private hash<auto> refreshTokenIntern(*reference<hash<auto>> info) {
         # get a new token with the refresh token
-        hash<auto> rv = oauth2Auth(getOAuth2RefreshInfo(), \info);
+        hash<auto> rv = oauth2Auth(getOAuth2RefreshInfo(), \info, True);
         if (token && update_options) {
             hash<auto> new_opts = {
                 "token": token,
@@ -1521,15 +1521,17 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     }
 
     #! Called when OAuth2 login information has been received
-    /** @since %RestClient 2.0
+    /** @bool refresh used to distinguish an initial login or new information from a token refresh
+
+        @since %RestClient 2.0
     */
-    hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+    hash<auto> gotOAuth2LoginInfo(hash<auto> h, *bool refresh) {
         debug("login info: %y", h);
         if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
             throw "REST-LOGIN-ERROR", sprintf("OAuth2 response for grant type %y is invalid, needs both "
                 "token_type (%y) and access_token (%y)", oauth2_grant_type, h.token_type, h.access_token);
         }
-        *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h) : NOTHING;
+        *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h, refresh) : NOTHING;
         # set the token
         setOAuth2LoginInfo(h);
         if (update_options && new_opts) {
@@ -1560,7 +1562,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     #! Returns options to update after an OAuth2 login
     /** @since %RestClient 2.0
     */
-    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
         hash<auto> new_opts;
         if (h.token_type && h.token_type != token_type) {
             new_opts.token_type = h.token_type;
@@ -1664,14 +1666,16 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         # do not send a basic auth header with the username and password in the request
         clearUserPassword();
         bool set_token_auth;
-        if (oauth2_token_use_basic_auth && oauth2_client_id.val() && oauth2_client_secret.val()) {
-            setUserPassword(oauth2_client_id, oauth2_client_secret);
-            set_token_auth = True;
-            login -= ("client_id", "client_secret");
-        } else if (oauth2_token_auth_secret_only && oauth2_client_secret.val()) {
-            setUserPassword(oauth2_client_secret, "");
-            set_token_auth = True;
-            login -= ("client_id", "client_secret");
+        if (!oauth2_alt_token_url) {
+            if (oauth2_token_use_basic_auth && oauth2_client_id.val() && oauth2_client_secret.val()) {
+                setUserPassword(oauth2_client_id, oauth2_client_secret);
+                set_token_auth = True;
+                login -= ("client_id", "client_secret");
+            } else if (oauth2_token_auth_secret_only && oauth2_client_secret.val()) {
+                setUserPassword(oauth2_client_secret, "");
+                set_token_auth = True;
+                login -= ("client_id", "client_secret");
+            }
         }
         # restore the username and password on exit
         on_exit if (username) {
@@ -1695,7 +1699,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     #! Perform OAuth2 authentication
     /** @since %RestClient 2.0
     */
-    private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info) {
+    private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info, *bool refresh) {
         # do not send a basic auth header in the request
         clearUserPassword();
         # restore the username and password on exit
@@ -1703,13 +1707,13 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             setUserPassword(username, password ?? "");
         }
 
-        return oauth2AuthIntern(login, \info);
+        return oauth2AuthIntern(login, \info, refresh);
     }
 
     #! Perform OAuth2 authentication
     /** @since %RestClient 2.0
     */
-    private hash<auto> oauth2AuthIntern(hash<auto> login, *reference<hash<auto>> info) {
+    private hash<auto> oauth2AuthIntern(hash<auto> login, *reference<hash<auto>> info, *bool refresh) {
         # clear connection path for login call
         *string path = getConnectionPath();
         on_exit setConnectionPath(path);
@@ -1752,7 +1756,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         setSerialization("url");
 
         # make the authorization call
-        return gotOAuth2LoginInfo(doOAuth2LoginRequest(set_url ? "/" : oauth2_token_url, login, \info));
+        return gotOAuth2LoginInfo(doOAuth2LoginRequest(set_url ? "/" : oauth2_token_url, login, \info), refresh);
     }
 
     #! Returns the deserialized response body of an OAuth2 authorization / token request
@@ -1788,6 +1792,11 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         } + oauth2_token_args;
         if (oauth2_alt_token_url) {
             login.oauth2_token_url = oauth2_token_url;
+            if (oauth2_token_use_basic_auth) {
+                login.oauth2_token_use_basic_auth = True;
+            } else if (oauth2_token_auth_secret_only) {
+                login.oauth2_token_auth_secret_only = True;
+            }
         }
         if (oauth2_scopes) {
             login += {
@@ -3179,7 +3188,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
     }
 
     private gotOAuth2LoginInfo(hash<auto> h) {
-        rc.gotOAuth2LoginInfo(h);
+        rc.gotOAuth2LoginInfo(h, True);
         doStartPing();
     }
 

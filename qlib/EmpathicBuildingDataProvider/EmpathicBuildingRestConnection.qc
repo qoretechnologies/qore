@@ -99,7 +99,7 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
 
         # get a new token with the refresh token
         try {
-            return gotOAuth2LoginInfo(doHaltianTokenRefreshRequest(\info));
+            return gotOAuth2LoginInfo(doHaltianTokenRefreshRequest(\info), True);
         } catch (hash<ExceptionInfo> ex) {
             if (refreshTokenInvalid(ex, info) && username.val() && password.val()) {
                 debug("");
@@ -125,12 +125,12 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     }
 
     #! Called when OAuth2 login information has been received
-    hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+    hash<auto> gotOAuth2LoginInfo(hash<auto> h, *bool refresh) {
         # prefer "token" to "access_token"
         if (h.token && h.token != h.access_token) {
             h.access_token = h.token;
         }
-        return RestClient::gotOAuth2LoginInfo(h);
+        return RestClient::gotOAuth2LoginInfo(h, refresh);
     }
 
     #! Returns the deserialized response body of a Haltian token refresh request
