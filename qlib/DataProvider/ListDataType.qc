@@ -48,6 +48,9 @@ public class ListDataType inherits QoreDataType {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
         self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
     }
 
     #! creates the object
@@ -67,6 +70,9 @@ public class ListDataType inherits QoreDataType {
                 default_value, attr) {
         self.name = name;
         self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
     }
 
     #! creates the object
@@ -81,6 +87,9 @@ public class ListDataType inherits QoreDataType {
     ListDataType copyWithElementType(AbstractDataProviderType element_type) {
         ListDataType rv = copy();
         rv.element_type = element_type;
+        if (rv.element_type.getTags().dynamic) {
+            rv.setDynamicTag();
+        }
         return rv;
     }
 

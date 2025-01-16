@@ -543,6 +543,11 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return tags;
     }
 
+    #! Sets the dynamic tag on the type
+    setDynamicTag() {
+        tags.dynamic = True;
+    }
+
     #! Returns a "soft" type equivalent to the current type
     /** The base class method returns the same type; this method must be overridden in child classes to return a
         usable "soft" type

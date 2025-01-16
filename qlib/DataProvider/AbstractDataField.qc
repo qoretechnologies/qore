@@ -341,7 +341,7 @@ public class AbstractDataField inherits Qore::Serializable {
         return AbstractDataField::getShortDescription(getDescription());
     }
 
-    #! Returns custom attributes set on the type
+    #! Returns custom attributes set on the field
     *hash<auto> getAttributes() {
         return attr;
     }

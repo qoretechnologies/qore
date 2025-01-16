@@ -99,6 +99,9 @@ public class HashDataType inherits QoreDataType {
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
             has_default_other_field_type = default_other_field_type.hasType();
+            if (default_other_field_type.getTags().dynamic) {
+                setDynamicTag();
+            }
         } else {
             has_default_other_field_type = False;
         }
@@ -254,6 +257,9 @@ public class HashDataType inherits QoreDataType {
             if (exists (auto fv = field.getDefaultValue())) {
                 default_value{i.key} = fv;
             }
+            if (field.getType().getTags().dynamic) {
+                setDynamicTag();
+            }
         }
         return self;
     }
@@ -348,6 +354,9 @@ public class HashDataType inherits QoreDataType {
                 type = AutoHashOrNothingType;
             }
             default_value{field.getName()} = val;
+        }
+        if (!tags.dynamic && field.getAttributes().dynamic) {
+            tags.dynamic = True;
         }
     }
 
