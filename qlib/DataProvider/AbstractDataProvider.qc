@@ -3547,8 +3547,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
         # the default is to return the standard request data and verify the request data against it
         *AbstractDataProviderType rv = getRequestTypeImpl();
-        if (rv) {
-            rv.acceptsValue(req);
+        if (rv && exists req) {
+            try {
+                rv.acceptsValue(req);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "MISSING-VALUE-ERROR") {
+                    rethrow;
+                }
+            }
         }
         return rv;
     }
