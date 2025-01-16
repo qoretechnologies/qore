@@ -17,8 +17,8 @@ class DateTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DateTest", "1.0") {
-        addTestCase("subtraction", \subtractionTests());
         addTestCase("DateTests", \dateTests());
+        addTestCase("subtraction", \subtractionTests());
         addTestCase("TimeZoneTests", \timeZoneTests());
         addTestCase("WindowsTimeZoneTests", \windowsTimeZoneTests());
         addTestCase("issue 2546", \issue2546());
@@ -32,6 +32,8 @@ class DateTest inherits QUnit::Test {
     }
 
     dateTests() {
+        assertLe(1000, (now_us() + 10s).durationMilliseconds());
+
         # issue #3239: test invalid year masks
         assertThrows("INVALID-DATE", \date(), ("01-03-218", "DD-MM-YYYY"));
         assertThrows("INVALID-DATE", \date(), ("01-03-2", "DD-MM-YY"));
@@ -282,6 +284,7 @@ class DateTest inherits QUnit::Test {
         {
             date now = Qore::now();
             string region = now.info().zone.region();
+            on_error printf("region: %y\n", region);
             assertEq(2, region.split("/").size());
             assertEq(now, Serializable::deserialize(Serializable::serialize(now)));
         }
