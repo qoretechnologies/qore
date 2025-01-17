@@ -1676,7 +1676,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto doRequest(auto req, *hash<auto> request_options) {
         checkRequest();
-        *AbstractDataProviderType request_type = getRequestType();
+        *AbstractDataProviderType request_type = getRequestTypeWithData(req);
         if (request_type) {
             try {
                 req = request_type.acceptsValue(req);
@@ -2384,6 +2384,49 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, bool> getSupportedReferenceData() {
         # intentionally empty
+    }
+
+    #! Returns reference data of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getReferenceDataSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getReferenceDataSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedReferenceData()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data type %y is unsupported; supported "
+                "reference data types: %y", type, rd);
+        }
     }
 
     #! Returns reference data of the given kind if available
