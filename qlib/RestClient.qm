@@ -1836,7 +1836,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
 
         # we need to prepend any connection path to the path before validation to ensure correct matches
         # must get the path from the HTTPClient object if not given in the request
-        if ((*string p = getConnectionPath()).val()) {
+        if (!validator.managesUriPath() && (*string p = getConnectionPath()).val()) {
             if (p =~ /\/$/) {
                 splice p, -1, 1;
             }
@@ -1868,8 +1868,11 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         # strip leading "/" off the given path
         path =~ s/^\/+//;
 
-        # prepare path = connection path + base path + path
-        *string p = getConnectionPath();
+        # prepare path = connection path (if the validator does not manage the base path) + base path + path
+        *string p;
+        if (!validator.managesUriPath()) {
+            p = getConnectionPath();
+        }
         string base_path = validator.getBasePath();
         if (base_path.val()) {
             if (base_path[0] != "/") {
@@ -3068,7 +3071,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             use_path_as_is = True;
         }
 
-        if (real_opts.swagger) {
+        if (real_opts.swagger && !rc.getValidator().managesUriPath()) {
             rc.debug("RestConnection ping: get Swagger schema: %y", real_opts.swagger);
             state = SPS_GET_SWAGGER;
             poller = FileLocationHandler::getIoPollerForLocation(real_opts.swagger);
@@ -3221,18 +3224,20 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             checkUrl();
             string p = path;
             rc.prepareToSend(method, \p, \body, \headers);
+            rc.debug("Using ping path: %y", path);
         } else {
             use_path_as_is = True;
             # check if the path is a URL
             if (path =~ /^http/) {
                 rc.setURL(path);
-                rc.debug("setting ping URL: %y", path);
+                rc.debug("Setting ping URL: %y", path);
                 path = "";
             } else {
                 checkUrl();
+                rc.debug("Using ping path: %y", path);
             }
             rc.prepareToSend(method, \path, \body, \headers);
-            rc.debug("prepared ping path: %y", path);
+            rc.debug("Prepared ping path: %y", path);
         }
 
         rc.debug("RestConnecton ping: start ping, url: %y path: %y", rc.getURL(), path);
