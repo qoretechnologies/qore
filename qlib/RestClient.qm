@@ -1339,23 +1339,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
             *hash<auto> hdr) {
         checkLogin(\info);
-        try {
-            return doRequestIntern(m, path, body, \info, decode_errors, hdr);
-        } catch (hash<ExceptionInfo> ex) {
-            # in case of a 401 error, try to get a new token
-            if (needsRefresh(ex, info, decode_errors)) {
-                on_error {
-                    rethrow;
-                };
-
-                # error details already logged
-                debug("RestClient: authorization error; using refresh_token to acquire a new token");
-                getNewTokenIntern();
-                # try request again
-                return doRequestIntern(m, path, body, \info, decode_errors, hdr);
-            }
-            rethrow;
-        }
+        return doRequestIntern(m, path, body, \info, decode_errors, hdr);
     }
 
     #! Returns True if the request error indicates that a refresh operation should be performed
@@ -1910,29 +1894,43 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type) {
         hash<auto> h;
 
-        try {
-            debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
-            h = send(body, m, path, hdr, False, \info);
-            info."response-code" = h.status_code;
-            debug("RestClient sent: %y received: %y (%s bytes%s)", info."request-uri", info."response-uri",
-                h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
-            if (!h."content-type".val() && assume_content_type.val()) {
-                debug("missing content-type from response; assuming %y", assume_content_type);
-                h."content-type" = assume_content_type;
-            }
-            info."response-body-raw" = h.body;
-        } catch (hash<ExceptionInfo> ex) {
-            debug("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
-                ex.desc);
-            info."response-code" = info."response-headers".status_code;
-            if (ex.arg) {
-                if (decode_errors && ex.arg.body) {
-                    decodeError(ex.arg, \info);
-                    ex.arg.deserialized_body = info."response-body";
+        bool retry = True;
+        while (True) {
+            try {
+                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                h = send(body, m, path, hdr, False, \info);
+                info."response-code" = h.status_code;
+                debug("RestClient sent: %y received: %y (%s bytes%s)", info."request-uri", info."response-uri",
+                    h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
+                if (!h."content-type".val() && assume_content_type.val()) {
+                    debug("missing content-type from response; assuming %y", assume_content_type);
+                    h."content-type" = assume_content_type;
                 }
+                info."response-body-raw" = h.body;
+            } catch (hash<ExceptionInfo> ex) {
+                debug("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
+                    ex.desc);
+                info."response-code" = info."response-headers".status_code;
+                if (retry && needsRefresh(ex, info, decode_errors)) {
+                    on_error rethrow;
+                    debug("RestClient: authorization error; trying to acquire a new token");
+                    getNewTokenIntern();
+                    # only retry once
+                    retry = False;
+                    debug("RestClient retrying with new token");
+                    hdr.Authorization = headers.Authorization;
+                    continue;
+                }
+                debug("RestClient not retrying");
+                if (ex.arg) {
+                    if (decode_errors && ex.arg.body) {
+                        decodeError(ex.arg, \info);
+                        ex.arg.deserialized_body = info."response-body";
+                    }
+                }
+                rethrow ex.err, ex.desc, ex.arg;
             }
-
-            rethrow ex.err, ex.desc, ex.arg;
+            break;
         }
 
         on_error {
