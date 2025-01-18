@@ -501,13 +501,13 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             SelfFunctionCallNode* sfcn = nullptr;
             if (!strcmp(c_str, "copy")) {
                 if (args) {
-                    parse_error(*loc, "no arguments may be passed to copy methods (%lu argument%s given in " \
+                    parse_error(*loc, "no arguments may be passed to copy methods (%lu argument%s given in "
                         "call to %s::copy())", args->size(), args->size() == 1 ? "" : "s", qc->getName());
                     return -1;
                 }
                 sfcn = new SelfFunctionCallNode(loc, takeName(), 0);
             } else {
-                const QoreMethod *m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
+                const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
                 if (m) {
                     if (!m->isStatic()) {
                         sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
@@ -523,6 +523,17 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 val = sfcn;
                 deref();
                 return sfcn->parseInitCall(val, parse_context);
+            }
+        }
+    } else {
+        qore_class_private* class_ctx = parse_get_class_priv();
+        // look for a static method
+        if (class_ctx) {
+            const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
+            if (m) {
+                val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                deref();
+                return parse_init_value(val, parse_context);
             }
         }
     }
