@@ -123,9 +123,8 @@ public:
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
-        CodeContextHelper cch(xsink, CT_BUILTIN, name);
-
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+        CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
         return func(ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
     }
 };
@@ -149,9 +148,8 @@ public:
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
-        CodeContextHelper cch(xsink, CT_BUILTIN, name);
-
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+        CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
         return func(ptr, ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
     }
 };

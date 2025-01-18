@@ -253,33 +253,31 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         }
     }
 
-    if (!variant) {
-        const qore_class_private* class_ctx = qc ? (cctx ? cctx : runtime_get_class()) : nullptr;
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*qc->cls, class_ctx)) {
-            class_ctx = nullptr;
-        }
-
-        variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx);
-        if (!variant) {
-            assert(*xsink);
-            return;
-        }
-
-        // check for accessible variants
-        if (qc) {
-            const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
-            ClassAccess va = mv->getAccess();
-            if ((va > Public && !class_ctx) || (va == Internal
-                && !qore_class_private::get(*mv->getClass())->equal(*qc))) {
-                xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
-                    mv->className(), func->getName(), mv->getSignature()->getSignatureText());
+    if (variant) {
+        // retry finding a variant in case arg matching fails
+        const AbstractQoreFunctionVariant* v = variant;
+        ExceptionSink xsink2;
+        if (processDefaultArgs(&xsink2, func, variant, true, is_copy, self)) {
+            // if no match can be found, return with the exception raised
+            if (findVariant(func, variant, cctx)) {
+                return;
+            }
+            if (v == variant) {
+                xsink->assimilate(xsink2);
+                return;
+            }
+            xsink2.clear();
+            if (processDefaultArgs(xsink, func, variant, true, is_copy, self)) {
                 return;
             }
         }
-    }
-
-    if (processDefaultArgs(func, variant, true, is_copy, self)) {
-        return;
+    } else {
+        if (findVariant(func, variant, cctx)) {
+            return;
+        }
+        if (processDefaultArgs(xsink, func, variant, true, is_copy, self)) {
+            return;
+        }
     }
 
     setCallType(variant->getCallType());
@@ -294,8 +292,35 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     restore_stack = true;
 }
 
-int CodeEvaluationHelper::processDefaultArgs(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
-    bool check_args, bool is_copy, QoreObject* self) {
+int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
+        const qore_class_private* cctx) {
+    const qore_class_private* class_ctx = qc ? (cctx ? cctx : runtime_get_class()) : nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*qc->cls, class_ctx)) {
+        class_ctx = nullptr;
+    }
+
+    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx);
+    if (!variant) {
+        assert(*xsink);
+        return -1;
+    }
+
+    // check for accessible variants
+    if (qc) {
+        const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
+        ClassAccess va = mv->getAccess();
+        if ((va > Public && !class_ctx) || (va == Internal
+            && !qore_class_private::get(*mv->getClass())->equal(*qc))) {
+            xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
+                mv->className(), func->getName(), mv->getSignature()->getSignatureText());
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, bool check_args, bool is_copy, QoreObject* self) {
     // get default argument list of variant
     AbstractFunctionSignature* sig = variant->getSignature();
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
@@ -809,7 +834,7 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
             // get actual value and include in warning
             ExceptionSink xsink;
             CodeEvaluationHelper ceh(&xsink, func, variant, "noop-dummy");
-            ValueHolder v(variant->evalFunction(func->getName(), ceh, 0), 0);
+            ValueHolder v(variant->evalFunction(nullptr, ceh), nullptr);
             //ReferenceHolder<AbstractQoreNode> v(variant->evalFunction(func->getName(), ceh, 0), 0);
             if (v->isNothing())
                 desc->concat("NOTHING");
@@ -1816,8 +1841,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     return variant;
 }
 
-// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is identified at run time
-QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args, QoreProgram *pgm, ExceptionSink* xsink) const {
+// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
+// identified at run time
+QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        QoreProgram *pgm, ExceptionSink* xsink) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -1839,22 +1866,26 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     }
 
     CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
-    if (*xsink) return QoreValue();
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-
-    return variant->evalFunction(fname, ceh, xsink);
+    return variant->evalFunction(xsink, ceh);
 }
 
-// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is identified at run time
-QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args, QoreProgram *pgm, ExceptionSink* xsink) const {
+// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
+// identified at run time
+QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+        QoreProgram *pgm, ExceptionSink* xsink) const {
     const char* fname = getName();
     CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
-    if (*xsink) return QoreValue();
+    if (*xsink) {
+        return QoreValue();
+    }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-
-    return variant->evalFunction(fname, ceh, xsink);
+    return variant->evalFunction(xsink, ceh);
 }
 
 // finds a variant and checks variant capabilities against current
@@ -1863,9 +1894,10 @@ QoreValue QoreFunction::evalDynamic(const QoreListNode* args, ExceptionSink* xsi
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = 0;
     CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
-    if (*xsink) return QoreValue();
-
-    return variant->evalFunction(fname, ceh, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return variant->evalFunction(xsink, ceh);
 }
 
 void QoreFunction::addBuiltinVariant(AbstractQoreFunctionVariant* variant) {
