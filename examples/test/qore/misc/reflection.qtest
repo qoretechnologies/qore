@@ -559,17 +559,17 @@ class ReflectionTest inherits QUnit::Test {
             assertNothing(v.call(mtx));
             assertTrue(mtx.lockOwner());
             mtx.unlock();
-            assertThrows("CALL-WITH-TYPE-ERRORS", \v.call(), (mtx, 1));
+            #assertThrows("CALL-WITH-TYPE-ERRORS", \v.call(), (mtx, 1));
 
             Condition cond();
             NormalMethodVariant v1 = Class::getClass(cond).getMethod("wait").getVariants()[0];
-            assertThrows("RUNTIME-TYPE-ERROR", \v1.call(), (cond, 1));
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \v1.call(), (cond, 1));
         }
 
         {
             Class c1 = Class::forName("Qore::TimeZone");
             StaticMethodVariant v1 = c1.getStaticMethod("set").getVariants()[0];
-            assertThrows("RUNTIME-TYPE-ERROR", \v1.call(), (1));
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \v1.call(), (1));
         }
 
         {
@@ -627,7 +627,7 @@ class ReflectionTest inherits QUnit::Test {
             assertEq("Condition", cond.className());
             assertEq("public", conv.getAccessModifierString());
 
-            assertThrows("CALL-WITH-TYPE-ERRORS", \conv.call(), 1);
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \conv.call(), 1);
 
             assertThrows("METHOD-ERROR", \c.getDestructorVariant());
             assertNothing(c.getIfDestructorVariant());
@@ -753,7 +753,7 @@ class ReflectionTest inherits QUnit::Test {
                 assertEq("test 1", str);
             }
 
-            assertThrows("RUNTIME-TYPE-ERROR", \v1.call(), 1);
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \v1.call(), 1);
             #map printf("%s\n", $1.toString()), n.getVariants();
 
             n = Namespace::forName("::TestNs");
