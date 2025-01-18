@@ -260,6 +260,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         if (processDefaultArgs(&xsink2, func, variant, true, is_copy, self)) {
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
+                xsink2.clear();
                 return;
             }
             if (v == variant) {
