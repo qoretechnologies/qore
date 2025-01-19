@@ -1343,11 +1343,31 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     }
 
     #! Returns True if the request error indicates that a refresh operation should be performed
-    private bool needsRefresh(hash<ExceptionInfo> ex, *hash<auto> info, bool decode_errors) {
-        return oauth2_grant_type && oauth2_grant_type != "none" && oauth2_auto_refresh
-            && ((now_us() - token_timestamp) > MinimumTokenRefresh) && info."response-code"
-            && isAuthTokenError(info."response-code", info."response-headers", decode_errors,
-            info."body-content-type", info."response-body");
+    private bool needsRefresh(hash<ExceptionInfo> ex, *hash<auto> info, *bool decode_errors) {
+        if (!oauth2_grant_type || oauth2_grant_type == "none") {
+            debug("RestClient: not retrying; oauth2_grant_type: %y", oauth2_grant_type);
+            return False;
+        }
+        if (!oauth2_auto_refresh) {
+            debug("RestClient: not retrying; oauth2_auto_refresh: False");
+            return False;
+        }
+        if ((now_us() - token_timestamp) < MinimumTokenRefresh) {
+            debug("RestClient: not retrying; last token acquired %y; minimum refresh interval is %y",
+                token_timestamp, MinimumTokenRefresh);
+            return False;
+        }
+        *int status_code = info."response-code" ?? info."response-header".status_code;
+        if (!exists status_code) {
+            debug("RestClient: not retrying; no HTTP response code available");
+            return False;
+        }
+        if (!isAuthTokenError(status_code, info."response-headers", decode_errors, info."body-content-type",
+            info."response-body")) {
+            debug("RestClient: isAuthTokenError() returned False");
+            return False;
+        }
+        return True;
     }
 
     #! Returns @ref True if the response was related to an authorization token error
@@ -1911,7 +1931,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
                 debug("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
                     ex.desc);
                 info."response-code" = info."response-headers".status_code;
-                if (retry && needsRefresh(ex, info, decode_errors)) {
+                if (retry && needsRefresh(ex, info)) {
                     on_error rethrow;
                     debug("RestClient: authorization error; trying to acquire a new token");
                     getNewTokenIntern();
@@ -1921,7 +1941,6 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
                     hdr.Authorization = headers.Authorization;
                     continue;
                 }
-                debug("RestClient not retrying");
                 if (ex.arg) {
                     if (decode_errors && ex.arg.body) {
                         decodeError(ex.arg, \info);

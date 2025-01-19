@@ -454,6 +454,7 @@ nothing HTTPClient::disconnect() {
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the MIME \c Content-Type for the response body (if any)
+      - \c [response-body]: the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI
@@ -491,6 +492,7 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the Content-Type for the response body (if any)
+      - \c [response-body]: the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI

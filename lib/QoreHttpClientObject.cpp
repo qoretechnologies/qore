@@ -2308,6 +2308,8 @@ int HttpClientConnectSendRecvPollOperation::processReceivedBody(ExceptionSink* x
         }
     }
 
+    info->setKeyValue("response-body", recv_data_holder->refSelf(), xsink);
+
     //printd(5, "HttpClientConnectSendRecvPollOperation::processReceivedBody() this: %p received body: %ld "
     //    "(Content-Encoding: '%s')\n", this, recv_data_holder ? recv_data_holder->size() : 0l,
     //    content_encoding ? content_encoding : "n/a");
@@ -3691,6 +3693,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             } else {
                 ans->setKeyValue("body", body, xsink);
             }
+        }
+
+        if (info) {
+            info->setKeyValue("response-body", body.refSelf(), xsink);
         }
     }
 
