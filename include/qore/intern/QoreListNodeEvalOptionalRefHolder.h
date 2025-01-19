@@ -49,7 +49,9 @@ private:
     DLLLOCAL void evalIntern(const QoreListNode* exp) {
         if (exp) {
             val = exp->evalList(needs_deref, xsink);
-            //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' (%d)\n", this, exp, exp ? get_full_type_name(exp) : "n/a", exp->size(), val, val ? get_full_type_name(val) : "n/a", val ? val->size() : 0);
+            //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' "
+            //    "(%d)\n", this, exp, exp ? get_full_type_name(exp) : "n/a", exp->size(), val,
+            //    val ? get_full_type_name(val) : "n/a", val ? val->size() : 0);
         } else {
             val = nullptr;
             needs_deref = false;

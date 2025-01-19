@@ -1873,12 +1873,12 @@ OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
     }
 }
 
-OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj)
-        : subst(obj ? true : false) {
+OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj) {
     if (obj) {
-        ThreadData* td = thread_data.get();
-        old_obj = td->current_obj;
-        td->current_obj = obj;
+#ifdef DEBUG
+        old_obj = nullptr;
+#endif
+        set(obj);
     }
 }
 
@@ -1886,6 +1886,15 @@ OptionalObjectOnlySubstitutionHelper::~OptionalObjectOnlySubstitutionHelper() {
     if (subst) {
         thread_data.get()->current_obj = old_obj;
     }
+}
+
+void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
+    assert(!old_obj);
+    assert(!subst);
+    ThreadData* td = thread_data.get();
+    old_obj = td->current_obj;
+    td->current_obj = obj;
+    subst = true;
 }
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,

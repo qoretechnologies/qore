@@ -254,10 +254,13 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 
     if (variant) {
-        // retry finding a variant in case arg matching fails
+        // get default argument list of variant
+        AbstractFunctionSignature* sig = variant->getSignature();
+
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
-        if (processDefaultArgs(&xsink2, func, variant, true, is_copy, self)) {
+        // first process all non-default args; no evaluation, so we can try to find another variant
+        if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_OTHER)) {
             // if no match can be found, return with the exception raised
             if (findVariant(func, variant, cctx)) {
                 xsink2.clear();
@@ -268,15 +271,29 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
                 return;
             }
             xsink2.clear();
-            if (processDefaultArgs(xsink, func, variant, true, is_copy, self)) {
+            tmp.discard();
+            sig = variant->getSignature();
+            // prepare all args
+            if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
                 return;
             }
+        } else if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_DEF)) {
+            return;
+        }
+        if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
+            return;
         }
     } else {
         if (findVariant(func, variant, cctx)) {
             return;
         }
-        if (processDefaultArgs(xsink, func, variant, true, is_copy, self)) {
+        // get default argument list of variant
+        AbstractFunctionSignature* sig = variant->getSignature();
+        // prepare all args
+        if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
+            return;
+        }
+        if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
             return;
         }
     }
@@ -320,62 +337,80 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
     return 0;
 }
 
-int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
-        const AbstractQoreFunctionVariant* variant, bool check_args, bool is_copy, QoreObject* self) {
-    // get default argument list of variant
-    AbstractFunctionSignature* sig = variant->getSignature();
+int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
     unsigned max = QORE_MAX(defaultArgList.size(), typeList.size());
+    if (!max) {
+        return 0;
+    }
+    OptionalObjectOnlySubstitutionHelper self_helper;
+    bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
         if (i < defaultArgList.size() && defaultArgList[i] && (!tmp || tmp->retrieveEntry(i).isNothing())) {
-            QoreValue& p = tmp.getEntryReference(i);
+            if (arg_type & ARG_DEF) {
+                QoreValue& p = tmp.getEntryReference(i);
 
-            // issue #3240: set self in case the default arg expression references a member of the current object
-            // must be set only for evaluation, cannot be set when verifying types below in
-            // QoreTypeInfo::acceptInputParam() as it will cause errors handling references related to the current
-            // object - "self" is the object for the call but not necessarily the current "self"
-            OptionalObjectOnlySubstitutionHelper self_helper(self);
+                // issue #3240: set self in case the default arg expression references a member of the current object
+                // must be set only for evaluation, cannot be set when verifying types below in
+                // QoreTypeInfo::acceptInputParam() as it will cause errors handling references related to the current
+                // object - "self" is the object for the call but not necessarily the current "self"
+                if (self && !self_helper) {
+                    self_helper.set(self);
+                }
 
-            p = defaultArgList[i].eval(xsink);
-            if (*xsink)
-                return -1;
-
-            // process default argument with accepting type's filter if necessary
-            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, p)) {
-                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
-                if (*xsink)
+                p = defaultArgList[i].eval(xsink);
+                if (*xsink) {
                     return -1;
+                }
+
+                // process default argument with accepting type's filter if necessary
+                const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+                if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, p)) {
+                    QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                }
             }
         } else if (i < typeList.size()) {
-            QoreValue n;
-            if (tmp)
-                n = tmp->retrieveEntry(i);
+            if (arg_type & ARG_OTHER) {
+                QoreValue n;
+                if (tmp) {
+                    n = tmp->retrieveEntry(i);
+                }
 
-            if (is_copy && !i && n.isNothing())
-                continue;
+                if (is_copy && !i && n.isNothing()) {
+                    continue;
+                }
 
-            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-            if (!paramTypeInfo)
-                continue;
+                const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+                if (!paramTypeInfo) {
+                    continue;
+                }
 
-            // issue #3184: do not create a NOTHING argument if none is needed
-            if (!QoreTypeInfo::hasType(paramTypeInfo)
-                || (tmp.size() < i && QoreTypeInfo::parseAcceptsReturns(paramTypeInfo, NT_NOTHING))) {
-                continue;
-            }
-            // test for change or incompatibility
-            if (check_args || QoreTypeInfo::mayRequireFilter(paramTypeInfo, n)) {
+                // issue #3184: do not create a NOTHING argument if none is needed
+                if (!QoreTypeInfo::hasType(paramTypeInfo)
+                    || (tmp.size() < i && QoreTypeInfo::parseAcceptsReturns(paramTypeInfo, NT_NOTHING))) {
+                    continue;
+                }
+                // test for change or incompatibility
                 QoreValue& p = tmp.getEntryReference(i);
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
-                if (*xsink)
+                if (*xsink) {
                     return -1;
+                }
             }
         }
     }
+    return 0;
+}
 
+int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, AbstractFunctionSignature* sig, bool is_copy,
+        QoreObject* self) {
     // check for excess args exception
     unsigned nargs = tmp.size();
     if (!nargs)
@@ -454,7 +489,6 @@ UserSignature::UserSignature(int first_line, int last_line, QoreValue params, Re
         parseReturnTypeInfo(retTypeInfo ? retTypeInfo->takeParseTypeInfo() : nullptr),
         loc(qore_program_private::get(*getProgram())->getLocation(first_line, last_line)),
         lv(0), argvid(0), selfid(0), resolved(false) {
-
     bool needs_types = (bool)(po & (PO_REQUIRE_TYPES | PO_REQUIRE_PROTOTYPES));
     bool bare_refs = (bool)(po & PO_ALLOW_BARE_REFS);
 

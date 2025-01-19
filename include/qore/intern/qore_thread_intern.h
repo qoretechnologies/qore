@@ -697,8 +697,21 @@ private:
 
 class OptionalObjectOnlySubstitutionHelper {
 public:
+    DLLLOCAL OptionalObjectOnlySubstitutionHelper() : subst(false) {
+#ifdef DEBUG
+        old_obj = nullptr;
+#endif
+    }
+
     DLLLOCAL OptionalObjectOnlySubstitutionHelper(QoreObject* obj);
+
     DLLLOCAL ~OptionalObjectOnlySubstitutionHelper();
+
+    DLLLOCAL void set(QoreObject* obj);
+
+    DLLLOCAL operator bool() const {
+        return subst;
+    }
 
 private:
     bool subst;

@@ -298,6 +298,9 @@ public:
 
 class AbstractQoreFunctionVariant;
 
+#define ARG_DEF   (1 << 0)
+#define ARG_OTHER (1 << 1)
+
 class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -348,12 +351,14 @@ public:
         ct = n_ct;
     }
 
+    DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
+
     //! process default arguments for a function, method, or closure call
     /** @param xsink the exception sink to use
         @param func the code being called
         @param variant the variant to be called, if known, may be nullptr, in which case it will be resolved in the
         call
-        @param check_args set to true if argument compatibility with parameters should be validated
         @param is_copy set to true if this is a call to a copy method
         @param self the object of the call target; not (necessarily) the current contextual object where the call is
         made.  "self" is needed to handle executing default argument expressions for normal (non-static) methods in
@@ -362,7 +367,8 @@ public:
         @return 0 = OK, -1 Qore-language exception raised
     */
     DLLLOCAL int processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
-            const AbstractQoreFunctionVariant* variant, bool check_args, bool is_copy, QoreObject* self);
+            const AbstractQoreFunctionVariant* variant, AbstractFunctionSignature* sig, bool is_copy,
+            QoreObject* self);
 
     DLLLOCAL void setArgs(QoreListNode* n_args) {
         assert(!*tmp);
