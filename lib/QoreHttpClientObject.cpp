@@ -2308,6 +2308,7 @@ int HttpClientConnectSendRecvPollOperation::processReceivedBody(ExceptionSink* x
         }
     }
 
+    assert(info);
     info->setKeyValue("response-body", recv_data_holder->refSelf(), xsink);
 
     //printd(5, "HttpClientConnectSendRecvPollOperation::processReceivedBody() this: %p received body: %ld "
@@ -3681,6 +3682,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         }
 
         if (body) {
+            if (info) {
+                info->setKeyValue("response-body", body.refSelf(), xsink);
+            }
+
             // send data to recv_callback (already unlocked)
             if (recv_callback) {
                 ValueHolder bh(body, xsink);
@@ -3693,10 +3698,6 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             } else {
                 ans->setKeyValue("body", body, xsink);
             }
-        }
-
-        if (info) {
-            info->setKeyValue("response-body", body.refSelf(), xsink);
         }
     }
 
