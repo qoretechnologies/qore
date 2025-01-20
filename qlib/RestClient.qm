@@ -1375,7 +1375,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
 
         @since RestClient 2.2
     */
-    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_decoded, *string body_content_type,
+    bool isAuthTokenError(int status_code, hash<auto> headers, *bool body_decoded, *string body_content_type,
             auto body) {
         return status_code == 401;
     }
