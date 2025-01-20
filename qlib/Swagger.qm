@@ -158,6 +158,7 @@ RestHandler handler(NOTHING, swagger);
       (<a href="https://github.com/qorelanguage/qore/issues/4907">issue 4907</a>)
     - fixed validating Swagger schemas with objects that declare no properties
       (<a href="https://github.com/qorelanguage/qore/issues/4906">issue 4906</a>)
+    - implemented the \c utc_dates and \c query_date_format options
 
     @subsection swagger_2_2_1 Swagger v2.2.1
     - fixed a bug converting arguments to fit the Swagger schema to avoid spurious and very difficult to debug type
@@ -972,14 +973,7 @@ public class SwaggerLoader {
         @param swaggerSpecification <a href="https://swagger.io/">Swagger</a> API specification
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerSchema::SwaggerOptions
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with JSON module unavailable
         @throws YAML-MODULE-MISSING trying to parse a YAML %Swagger specification with YAML module unavailable
@@ -998,14 +992,7 @@ public class SwaggerLoader {
     #! Load <a href="https://swagger.io/">Swagger</a> definition from a file.
     /**
         @param filepath path to the <a href="https://swagger.io/">Swagger</a> file
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerSchema::SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -1023,14 +1010,7 @@ public class SwaggerLoader {
         @ref filelocationhandlerintro "FileLocationHandler" to load the file
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -1275,11 +1255,23 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         *ExternalDocumentationObject externalDocs;
 
         #! SwaggerSchema options
+        /** Options are as follows:
+            - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
+              strings
+            - \c def_path: (type *string) the default path to use when retrieving external schema references
+            - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
+              references, must take a string argument (the resource name) and return a string (the resource data)
+            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+            - \c utc_dates: (type *bool) send date/time values in queries in UTC format
+            - \c query_date_format: (type *string) the format string for date/time values in queries
+        */
         const SwaggerOptions = (
             "compact_serialization": True,
             "def_path": True,
             "try_import": True,
             "parse_flags": True,
+            "utc_dates": True,
+            "query_date_format": True,
         );
     }
 
@@ -1301,6 +1293,12 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         #! parse option flags
         *int opt_flags;
 
+        #! Send dates in UTC format
+        *softbool utc_dates;
+
+        #! Date format for serializing dates in queries
+        *string query_date_format;
+
         #! maps name -> SHA1 hash of the config -> schema objects for recursive references
         hash<string, hash<string, SchemaObject>> so_map;
     }
@@ -1313,14 +1311,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /**
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -1337,14 +1328,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /** @param logger the logger to use
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -1368,6 +1352,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         def_path = remove opts.def_path;
         try_import = remove opts.try_import;
         opt_flags = remove opts.parse_flags;
+        utc_dates = remove opts.utc_dates;
+        query_date_format = remove opts.query_date_format;
         if (opts) {
             throw "SWAGGER-OPTION-ERROR", sprintf("unknown options in SwaggerSchema constructor: %y; known "
                 "options: %y", keys opts, keys SwaggerOptions);
@@ -1486,6 +1472,14 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     *int getParseFlags() {
         return opt_flags;
+    }
+
+    *bool getUtcDates() {
+        return utc_dates;
+    }
+
+    *string getQueryDateFormat() {
+        return query_date_format;
     }
 
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {

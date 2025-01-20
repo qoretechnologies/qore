@@ -380,10 +380,10 @@ hashdecl IsoWeekInfo {
     |\c IY|the <a href="http://en.wikipedia.org/wiki/ISO_week_date">ISO-8601 week year number</a> with zero padding to 4 digits (ex: \c "2018")
     |\c m|non zero-padded minute number (0 - 59)
     |\c mm|zero-padded minute number (00 - 59)
-    |\c S|non zero-padded second number (0 - 59)
-    |\c SS|zero-padded second number (00 - 59)
     |\c P|\c "AM" or \c "PM" (upper-case)
     |\c p|\c "am" or \c "pm" (lower-case)
+    |\c S|non zero-padded second number (0 - 59)
+    |\c SS|zero-padded second number (00 - 59)
     |\c u|non zero-padded millisecond number (0 - 999)
     |\c uu or \c ms|zero-padded millisecond number (000 - 999)
     |\c x|non zero-padded microsecond number (0 - 999999)
@@ -391,10 +391,12 @@ hashdecl IsoWeekInfo {
     |\c y|microseconds, with trailing zeros removed (suitable for use after the '.')
     |\c z|local time zone name (ex: \c "EST") if available, otherwise the UTC offset (ex: \c "+01:00")
     |\c Z|time zone UTC offset like +HH:mm[:SS] (ex: \c "+01:00"), seconds are only included if non-zero
+    |\c @|time zone UTC offset like +HH:mm[:SS] (ex: \c "+01:00"), seconds only included if non-zero, for UTZ only \c "Z" is added
 
     @since
     - \c us was added in %Qore 0.8.7
     - \c Dn, \c DN, \c I, \c Id, \c ID, \c IF, \c Iw, \c IW, \c Iy, \c IY format codes were added in %Qore 0.9
+    - \c @ was added in %Qore 2.0
 
     @bug the \c "u" and \c "uu" format codes work with milliseconds and not microseconds since they were implemented before
     qore supported microsecond time resolution; this cannot be changed without breaking backwards-compatibility

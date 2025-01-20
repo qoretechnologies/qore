@@ -381,8 +381,16 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                 return v ? "true" : "false";
             case NT_LIST:
                 return foldl $1 + "," + $2, (map getUriValue($1), v);
-            case NT_DATE:
+            case NT_DATE: {
+                if (schema.getUtcDates()) {
+                    TimeZone utc(0);
+                    v = utc.date(v);
+                }
+                if (exists (*string fmt = schema.getQueryDateFormat())) {
+                    return v.format(fmt);
+                }
                 return v.format("IF");
+            }
             default:
                 return v.toString();
         }

@@ -245,6 +245,7 @@ class DateTest inherits QUnit::Test {
 
         date1 = 2018-03-10T05:39:57Z;
         assertEq("2018-03-10 05:39:57+00:00", date1.format("YYYY-MM-DD HH:mm:SSZ"));
+        assertEq("2018-03-10T05:39:57Z", date1.format("YYYY-MM-DDTHH:mm:SS@"));
 
         # issue #2716 & #2721
         # test the "IF" format

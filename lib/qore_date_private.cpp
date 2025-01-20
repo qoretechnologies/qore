@@ -484,7 +484,7 @@ void qore_absolute_time::getAsString(QoreString &str) const {
     str.sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", i.year, i.month, i.day, i.hour, i.minute, i.second, i.us);
     const char *wday = days[qore_date_info::getDayOfWeek(i.year, i.month, i.day)].abbr;
     str.sprintf(" %s ", wday);
-    concatOffset(i.utcoffset, str);
+    concatOffset(i.utcoffset, str, false);
     // only concat zone name if it exists and is not the same as the offset just output
     if (*i.zname && *i.zname != '+' && *i.zname != '-')
         str.sprintf(" (%s)", i.zname);
@@ -653,24 +653,31 @@ void qore_relative_time::set(const char* str) {
     setLiteral(date, us);
 }
 
-void concatOffset(int utcoffset, QoreString &str) {
-   //printd(0, "concatOffset(%d)", utcoffset);
+void concatOffset(int utcoffset, QoreString& str, bool allow_z) {
+    //printd(0, "concatOffset(%d)", utcoffset);
 
-   // issue #2684 do not concatenate a "Z" with no offset, output +00:00
-   str.concat(utcoffset < 0 ? '-' : '+');
-   if (utcoffset < 0)
-      utcoffset = -utcoffset;
-   int h = utcoffset / SECS_PER_HOUR;
-   // the remaining seconds after hours
-   int r = utcoffset % SECS_PER_HOUR;
-   // minutes
-   int m = r / SECS_PER_MINUTE;
-   // we have already output the hour sign above
-   str.sprintf("%02d:%02d", h < 0 ? -h : h, m);
-   // see if there are any seconds
-   int s = utcoffset - h * SECS_PER_HOUR - m * SECS_PER_MINUTE;
-   if (s)
-      str.sprintf(":%02d", s);
+    // issue #2684 do not concatenate a "Z" with no offset, output +00:00
+    // unless allow_z is set
+    if (allow_z && !utcoffset) {
+        str.concat('Z');
+        return;
+    }
+    str.concat(utcoffset < 0 ? '-' : '+');
+    if (utcoffset < 0) {
+        utcoffset = -utcoffset;
+    }
+    int h = utcoffset / SECS_PER_HOUR;
+    // the remaining seconds after hours
+    int r = utcoffset % SECS_PER_HOUR;
+    // minutes
+    int m = r / SECS_PER_MINUTE;
+    // we have already output the hour sign above
+    str.sprintf("%02d:%02d", h < 0 ? -h : h, m);
+    // see if there are any seconds
+    int s = utcoffset - h * SECS_PER_HOUR - m * SECS_PER_MINUTE;
+    if (s) {
+        str.sprintf(":%02d", s);
+    }
 }
 
 void qore_date_private::format(QoreString &str, const char *fmt) const {
@@ -793,9 +800,8 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {
                             // trim trailing zeros
                             str.trim_trailing("0");
                         }
-                        concatOffset(i.utcoffset, str);
-                    }
-                    else {
+                        concatOffset(i.utcoffset, str, false);
+                    } else {
                         str.concat('P');
                         size_t len = str.size();
                         if (i.year) {
@@ -920,7 +926,10 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {
                 break;
                 // add iso8601 UTC offset
             case 'Z':
-                concatOffset(i.utcoffset, str);
+                concatOffset(i.utcoffset, str, false);
+                break;
+            case '@':
+                concatOffset(i.utcoffset, str, true);
                 break;
             default:
                 str.concat(*s);

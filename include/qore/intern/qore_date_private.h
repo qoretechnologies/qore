@@ -483,7 +483,7 @@ struct qore_simple_tm2 : public qore_simple_tm {
     DLLLOCAL void getISOWeek(int& yr, int& week, int& wday) const;
 };
 
-DLLLOCAL void concatOffset(int utcoffset, QoreString& str);
+DLLLOCAL void concatOffset(int utcoffset, QoreString& str, bool allow_z = false);
 
 class qore_absolute_time {
     friend class qore_relative_time;
@@ -501,7 +501,8 @@ protected:
         // get standard time UTC offset
         int off = AbstractQoreZoneInfo::getUTCOffset(zone);
 
-        printd(5, "qore_absolute_time::setLocalIntern() epoch: %lld -> %lld (std off: %d)\n", epoch, epoch - off, off);
+        printd(5, "qore_absolute_time::setLocalIntern() epoch: %lld -> %lld (std off: %d)\n", epoch, epoch - off,
+            off);
         epoch -= off;
 
         // now get actual UTC offset
