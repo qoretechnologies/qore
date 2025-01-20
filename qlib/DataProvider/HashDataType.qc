@@ -349,13 +349,15 @@ public class HashDataType inherits QoreDataType {
         if (default_other_field_type && !manual_default_other_field_type) {
             remove default_other_field_type;
         }
-        if (exists (auto val = field.getDefaultValue())) {
+        *bool dyn = field.getAttributes().dynamic;
+        # do not run getDefaultValue() for dynamic fields
+        if (!dyn && (exists (auto val = field.getDefaultValue()))) {
             if (type == AutoHashType) {
                 type = AutoHashOrNothingType;
             }
             default_value{field.getName()} = val;
         }
-        if (!tags.dynamic && field.getAttributes().dynamic) {
+        if (!tags.dynamic && dyn) {
             tags.dynamic = True;
         }
     }
