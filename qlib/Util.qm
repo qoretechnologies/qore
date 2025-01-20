@@ -34,6 +34,16 @@
 # enable all warnings
 %enable-all-warnings
 
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires reflection
+
 module Util {
     version = "2.0";
     desc    = "user module for generally useful routines";
@@ -92,6 +102,7 @@ module Util {
 
     @subsection util_2_0 Util 2.0
     - added @ref Util::get_bit_string() "get_bit_string()"
+    - added file references to @ref Util::parse_to_qore_value() "parse_to_qore_value()"
 
     @subsection util_1_11 Util 1.11
     - added @ref Util::AllowedValueInfo "AllowedValueInfo"
@@ -641,7 +652,11 @@ int sub _get_size(string num, number mult) {
 }
 
 # private, non-exported constant hashes for scan_exp() below
-const ParenMap = (")": "(", "}": "{", "]": "[",);
+const ParenMap = {
+    ")": "(",
+    "}": "{",
+    "]": "[",
+};
 const FwdParenMap = map {$1.value: $1.key}, ParenMap.pairIterator();
 
 # private, non-exported constants for parsing
@@ -651,11 +666,13 @@ const ET_BracketString = 2;
 const ET_CurlyBracketString = 3;
 const ET_Eq = 4;
 const ET_Comma = 5;
+const ET_FileRef = 6;
 const EtMap = {
     ET_RawString: "raw string",
     ET_QuotedString: "quoted string",
     ET_BracketString: "bracket expression",
     ET_CurlyBracketString: "curly bracket expression",
+    ET_FileRef: "file reference",
     ET_Eq: "=",
     ET_Comma: ",",
 };
@@ -673,83 +690,122 @@ list<hash> sub scan_exp(string arg) {
     # active quote character
     *string quote;
 
+    # active file ref
+    *string fileref;
+
     int len = arg.length();
     string str;
 
     for (int i = 0; i < len; ++i) {
         string c = arg[i];
-        if (c == ",") {
-            if (!quote && !bracket_stack) {
-                #printf("DBG: got comma i:%d\n", i);
-                trim str;
-                if (str.val()) {
-                    l += ("type": ET_RawString, "val": str);
-                    str = "";
-                }
-                l += ("type": ET_Comma);
+        if (fileref) {
+            if (c == ">") {
+                l += {
+                    "type": ET_FileRef,
+                    "val": {
+                        "type": remove fileref,
+                        "path": str,
+                    },
+                };
+                str = "";
                 continue;
             }
-        } else if (c == "=") {
-            if (!quote && !bracket_stack) {
-                trim str;
-                if (str.val()) {
-                    l += ("type": ET_RawString, "val": str);
-                    str = "";
-                }
-                l += ("type": ET_Eq);
-                continue;
-            }
-        } else if (c == '"' || c == "'") {
-            if (quote) {
-                if (c == quote) {
-                    delete quote;
-                    if (!bracket_stack) {
-                        l += ("type": ET_QuotedString, "val": str);
-                        str = "";
-                        continue;
-                    }
-                }
-            } else {
-                quote = c;
-                if (!bracket_stack) {
+        } else {
+            if (c == ",") {
+                if (!quote && !bracket_stack) {
+                    #printf("DBG: got comma i:%d\n", i);
                     trim str;
                     if (str.val()) {
                         l += ("type": ET_RawString, "val": str);
                         str = "";
                     }
+                    l += ("type": ET_Comma);
                     continue;
                 }
-            }
-        } else if (!quote) {
-            *string p = FwdParenMap{c};
-            if (p) {
-                bool first;
-                if (!bracket_stack) {
-                    first = True;
+            } else if (c == "=") {
+                if (!quote && !bracket_stack) {
                     trim str;
+                    if (str.val()) {
+                        l += ("type": ET_RawString, "val": str);
+                        str = "";
+                    }
+                    l += ("type": ET_Eq);
+                    continue;
+                }
+            } else if (c == '"' || c == "'") {
+                if (quote) {
+                    if (c == quote) {
+                        delete quote;
+                        if (!bracket_stack) {
+                            l += ("type": ET_QuotedString, "val": str);
+                            str = "";
+                            continue;
+                        }
+                    }
+                } else {
+                    quote = c;
+                    if (!bracket_stack) {
+                        trim str;
+                        if (str.val()) {
+                            l += ("type": ET_RawString, "val": str);
+                            str = "";
+                        }
+                        continue;
+                    }
+                }
+            } else if (!quote) {
+                *string p = FwdParenMap{c};
+                if (p) {
+                    bool first;
+                    if (!bracket_stack) {
+                        first = True;
+                        trim str;
+                        if (str.val()) {
+                            l += {"type": ET_RawString, "val": str};
+                            str = "";
+                        }
+                    }
+                    bracket_stack += p;
+                    if (first) {
+                        continue;
+                    }
+                } else if (ParenMap{c} && (c == bracket_stack[-1])) {
+                    splice bracket_stack, -1;
+                    if (!bracket_stack) {
+                        #printf("DBG: got bracket string: %y\n", str);
+                        l += {
+                            "type": c == "}" ? ET_CurlyBracketString : ET_BracketString,
+                            "val": str,
+                        };
+                        str = "";
+                        continue;
+                    }
+                } else if (!bracket_stack && (c == "$")
+                    && exists (*string ft = (arg[(i + 1)..] =~ x/^([a-z]*<)/i)[0])) {
                     if (str.val()) {
                         l += {"type": ET_RawString, "val": str};
                         str = "";
                     }
-                }
-                bracket_stack += p;
-                if (first) {
-                    continue;
-                }
-            } else if (ParenMap{c} && (c == bracket_stack[-1])) {
-                splice bracket_stack, -1;
-                if (!bracket_stack) {
-                    #printf("DBG: got bracket string: %y\n", str);
-                    l += {
-                        "type": c == "}" ? ET_CurlyBracketString : ET_BracketString,
-                        "val": str,
-                    };
-                    str = "";
+                    i += ft.length();
+                    if (ft == "<") {
+                        fileref = "string";
+                    } else {
+                        splice ft, -1;
+                        fileref = ft;
+                    }
                     continue;
                 }
             }
         }
         str += c;
+    }
+
+    if (quote) {
+        throw "PARSE-ERROR", sprintf("Unterminated quoted string in %y", quote + str);
+    }
+    if (fileref) {
+        throw "PARSE-ERROR", sprintf("Unterminated file reference in %y", "$" +
+            (fileref == "string" ? "" : fileref) + "<" + str);
     }
 
     trim str;
@@ -844,6 +900,35 @@ auto sub parse_to_basic_value(*string arg) {
     return arg;
 }
 
+string sub get_string_file_data(string loc) {
+    load_module("FileLocationHandler");
+    Class c = Class::forName("FileLocationHandler");
+    StaticMethod m = c.getStaticMethod("getTextFileFromLocation");
+    return m.call(loc);
+}
+
+binary sub get_binary_file_data(string loc) {
+    load_module("FileLocationHandler");
+    Class c = Class::forName("FileLocationHandler");
+    StaticMethod m = c.getStaticMethod("getBinaryFileFromLocation");
+    return m.call(loc);
+}
+
+auto sub get_file_ref(string type, string path) {
+    switch (type) {
+%ifndef NoYaml
+        case "yaml": return parse_yaml(get_string_file_data(path));
+%endif
+%ifndef NoJson
+        case "json": return parse_json(get_string_file_data(path));
+%endif
+        case "bin": return get_binary_file_data(path);
+        case "string": return get_string_file_data(path);
+        default:
+            throw "PARSE-ERROR", sprintf("Do not know how to handle files of type %y", type);
+    }
+}
+
 #! tries to convert a string (such as an argument given from the command-line) to a Qore value
 /** This function recognizes two special prefixes in the string:
     - \c %STR= this prefix indicates that the rest of the string should be passed literally and not parsed
@@ -855,6 +940,10 @@ auto sub parse_to_basic_value(*string arg) {
     |!Format|!Description
     |<tt><i>key_string</i> = <i>value</i>[, ...]</tt>|a @ref hash "hash"
     |<tt><i>value</i>, [...]</tt>|a @ref list "list"
+    |<tt>$&lt;</tt><i>location</i><tt>&gt;</tt>|a string file reference; <i>location</i> can be a URL
+    |<tt>$bin&lt;</tt><i>location</i><tt>&gt;</tt>|a binary file reference; <i>location</i> can be a URL
+    |<tt>$yaml&lt;</tt><i>location</i><tt>&gt;</tt>|a YAML file reference; the result of parsing the YAML data at the given location will be used as the value; <i>location</i> can be a URL
+    |<tt>$json&lt;</tt><i>location</i><tt>&gt;</tt>|a JSON file reference; the result of parsing the JSON data at the given location will be used as the value; <i>location</i> can be a URL
     |integers|an @ref integer "integer"
     |floats|a @ref float "float"
     |arbitrary-numeric value|a @ref number "number"
@@ -912,7 +1001,8 @@ public auto sub parse_to_qore_value(string arg) {
             case ET_RawString: val = parse_to_basic_value(l[i+2].val); break;
             case ET_QuotedString: val = l[i+2].val; break;
             case ET_Comma: --i; break;
-            case ET_Eq: throw "PARSE-ERROR", sprintf("cannot parse %y after %y", EtMap{ET_Eq}, EtMap{ET_Eq});
+            case ET_Eq: throw "PARSE-ERROR", sprintf("Cannot parse %y after %y", EtMap{ET_Eq}, EtMap{ET_Eq});
+            case ET_FileRef: val = get_file_ref(l[i+2].val.type, l[i+2].val.path); break;
         }
         #printf("do_eq() i: %d key: %y v: %y val: %y\n", i, key, v, val);
         if (!exists v) {
@@ -968,7 +1058,8 @@ public auto sub parse_to_qore_value(string arg) {
         if (i) {
             int lt = l[i-1].type;
             if (lt != ET_Comma && lt != ET_Eq) {
-                throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{l[i].type}, l[i].val, EtMap{lt}, l[i-1].val);
+                throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{l[i].type}, l[i].val,
+                    EtMap{lt}, l[i-1].val);
             }
         }
     };
@@ -1037,6 +1128,12 @@ public auto sub parse_to_qore_value(string arg) {
                     throw "PARSE-ERROR", sprintf("cannot parse %y after %y (%y)", EtMap{h.type}, EtMap{l[i-1].type}, h.val);
                 else
                     throw "PARSE-ERROR", sprintf("cannot parse %y at the beginning of the expression", EtMap{h.type});
+            }
+            case ET_FileRef: {
+                check_val(i);
+                do_val(get_file_ref(h.val.type, h.val.path));
+                do_break = False;
+                break;
             }
         }
     }
