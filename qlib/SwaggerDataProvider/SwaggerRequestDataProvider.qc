@@ -381,6 +381,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                 return v ? "true" : "false";
             case NT_LIST:
                 return foldl $1 + "," + $2, (map getUriValue($1), v);
+            case NT_DATE:
+                return v.format("IF");
             default:
                 return v.toString();
         }
