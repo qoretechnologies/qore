@@ -56,5 +56,17 @@ public class UnixTimestampMsOrNothingType inherits UnixTimestampOrNothingType {
                     value.fullType(), value);
         }
     }
+
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory type
+
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+
+        @since DataProvider 3.0
+    */
+    AbstractDataProviderType getMandatoryType() {
+        return UnixTimestampMsType;
+    }
 }
 }

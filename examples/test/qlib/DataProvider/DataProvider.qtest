@@ -1723,6 +1723,8 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456));
             assertEq(1737461067, t.acceptsValue(1737461067));
             assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
             t = AbstractDataProviderTypeMap."*unixts";
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456));
             assertEq(1737461067, t.acceptsValue(1737461067));
@@ -1733,6 +1735,8 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456));
             assertEq(1737461067123, t.acceptsValue(1737461067123));
             assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
             t = AbstractDataProviderTypeMap."*unixtsms";
             assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456));
             assertEq(1737461067123, t.acceptsValue(1737461067123));

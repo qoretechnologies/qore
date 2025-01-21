@@ -57,5 +57,15 @@ public class UnixTimestampMsType inherits UnixTimestampType {
                     value.fullType(), value);
         }
     }
+
+    #! Returns an "or nothing" type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable "or nothing" type
+
+        @return an "or nothing" type equivalent to the current type
+    */
+    AbstractDataProviderType getOrNothingType() {
+        return UnixTimestampMsOrNothingType;
+    }
 }
 }
