@@ -37,6 +37,29 @@ public class UnixTimestampMsType inherits UnixTimestampType {
         return "unixtsms";
     }
 
+    #! Returns the type's display name
+    /** @return the type's display name
+
+        @since DataProvider 3.0
+    */
+    string getDisplayName() {
+        return "Unix Timestamp Milliseconds";
+    }
+
+    #! Returns the type's short description
+    /** @return the plain-text short description for the type
+
+        @since DataProvider 3.0
+    */
+    string getShortDescription() {
+        return "Accepts a date/time value and returns the number of milliseconds after 1970-01-01Z";
+    }
+
+    #! Returns the description
+    string getDesc() {
+        return "Accepts a date/time value and returns the number of milliseconds after 1970-01-01Z";
+    }
+
     #! returns the value if the value can be assigned to the type
     /** @param value the value to assign to the type
 

@@ -37,6 +37,29 @@ public class UnixTimestampType inherits AbstractDataProviderType {
         return "unixts";
     }
 
+    #! Returns the type's display name
+    /** @return the type's display name
+
+        @since DataProvider 3.0
+    */
+    string getDisplayName() {
+        return "Unix Timestamp";
+    }
+
+    #! Returns the type's short description
+    /** @return the plain-text short description for the type
+
+        @since DataProvider 3.0
+    */
+    string getShortDescription() {
+        return "Accepts a date/time value and returns the number of seconds after 1970-01-01Z";
+    }
+
+    #! Returns the description
+    string getDesc() {
+        return "Accepts a date/time value and returns the number of seconds after 1970-01-01Z";
+    }
+
     #! Returns the base type for the type, if any
     *Type getValueType() {
         return DateType;

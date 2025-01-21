@@ -32,6 +32,41 @@ public class UnixTimestampOrNothingType inherits UnixTimestampType {
     constructor(*hash<auto> options, *hash<auto> tags) : UnixTimestampType(options, tags) {
     }
 
+    #! Returns the type name
+    string getName() {
+        return "*unixts";
+    }
+
+    #! Returns the type's display name
+    /** @return the type's display name
+
+        @since DataProvider 3.0
+    */
+    string getDisplayName() {
+        return "Unix Timestamp Or Nothing";
+    }
+
+    #! Returns the type's short description
+    /** @return the plain-text short description for the type
+
+        @since DataProvider 3.0
+    */
+    string getShortDescription() {
+        return "Accepts a date/time value and returns the number of seconds after 1970-01-01Z; also accepts and "
+            "returns no value";
+    }
+
+    #! Returns the description
+    string getDesc() {
+        return "Accepts a date/time value and returns the number of seconds after 1970-01-01Z; also accepts and "
+            "returns no value";
+    }
+
+    #! Returns the base type for the type, if any
+    *Type getValueType() {
+        return DateOrNothingType;
+    }
+
     #! Returns a hash of types accepted by this type; keys are type names
     hash<string, bool> getAcceptTypeHash(*bool simple) {
         return {
