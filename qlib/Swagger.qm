@@ -358,15 +358,20 @@ const YamlSerialization = {
 };
 %endif
 
+%ifndef NoJson
+const JsonSerialization = {
+    "serialize": \make_json(),
+    "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
+    "deserialize": \parse_json(),
+    "module": "json",
+};
+%endif
+
 #! supported mime types for de/serializing data
 public const MimeDataTypes = {
 %ifndef NoJson
-    MimeTypeJson: (
-        "serialize": \make_json(),
-        "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
-        "deserialize": \parse_json(),
-        "module": "json",
-    ),
+    "application/vnd.oracle.resource+json": JsonSerialization,
+    MimeTypeJson: JsonSerialization,
 %endif
 %ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
@@ -376,19 +381,19 @@ public const MimeDataTypes = {
     "application/yaml": YamlSerialization,
 %endif
 %ifndef NoXml
-    MimeTypeXmlApp: (
+    MimeTypeXmlApp: {
         "serialize": \make_xml(),
         "serialize_verbose": string sub (auto val) {return make_xml(val, XGF_ADD_FORMATTING);},
         "deserialize": \parse_xml(),
         "module": "xml",
-    ),
+    },
 %endif
     # Content-Type: application/x-www-form-urlencoded
-    MimeTypeFormUrlEncoded: (
+    MimeTypeFormUrlEncoded: {
         "serialize": \mime_get_form_urlencoded_string(),
         "serialize_verbose": \mime_get_form_urlencoded_string(),
         "deserialize": \mime_parse_form_urlencoded_string(),
-    ),
+    },
     # Content-Type: multipart/form-data (handled manually)
     MimeTypeMultipartFormData: {},
 };
@@ -1374,8 +1379,20 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             throw "INVALID-SWAGGER-VERSION", sprintf("invalid schema version %y; expecting \"2.0\"", swaggerSpec);
 
         optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes);
+        foreach string mt in (keys consumes) {
+            if (mt =~ /;/) {
+                mt =~ s/;.*$//;
+                consumes{mt} = True;
+            }
+        }
 
         optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces);
+        foreach string mt in (keys produces) {
+            if (mt =~ /;/) {
+                mt =~ s/;.*$//;
+                produces{mt} = True;
+            }
+        }
         {
             optional_field(objType, oh, "definitions", NT_HASH, \source_definition_hash);
             map processDefinition($1.key, $1.value), source_definition_hash.pairIterator();
@@ -2031,6 +2048,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             printf("content: %y\n", content);
             content = content[0];
         }
+        # remove any qualifiers from the content type
+        content =~ s/;.*$//;
 
         # deserialize body according to Content-Type
         if (exists response_body && content) {
@@ -3134,11 +3153,25 @@ public class OperationObject inherits ParameterGroup {
         # use the global "consumes" definition if none is defined on the operation
         if (!optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes) && swagger.consumes) {
             consumes = swagger.consumes;
+        } else {
+            foreach string mt in (keys consumes) {
+                if (mt =~ /;/) {
+                    mt =~ s/;.*$//;
+                    consumes{mt} = True;
+                }
+            }
         }
 
         # use the global "produces" definition if none is defined on the operation
         if (!optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces) && swagger.produces) {
             produces = swagger.produces;
+        } else {
+            foreach string mt in (keys produces) {
+                if (mt =~ /;/) {
+                    mt =~ s/;.*$//;
+                    produces{mt} = True;
+                }
+            }
         }
         {
             list listObj;
