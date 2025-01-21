@@ -149,6 +149,12 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "softbyte": new QoreSoftSignedByteDataType(),
     "*softbyte": new QoreSoftSignedByteOrNothingDataType(),
 
+    "unixts": UnixTimestampType,
+    "*unixts": UnixTimestampOrNothingType,
+
+    "unixtsms": UnixTimestampMsType,
+    "*unixtsms": UnixTimestampMsOrNothingType,
+
     "ubyte": new QoreUnsignedByteDataType(),
     "*ubyte": new QoreUnsignedByteOrNothingDataType(),
     "softubyte": new QoreSoftUnsignedByteDataType(),

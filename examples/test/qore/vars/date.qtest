@@ -32,6 +32,14 @@ class DateTest inherits QUnit::Test {
     }
 
     dateTests() {
+        assertEq(1737461067, 2025-01-21T13:04:27.123456.getEpochSeconds());
+        assertEq(1737461067123, 2025-01-21T13:04:27.123456.getEpochMilliseconds());
+        assertEq(1737461067123456, 2025-01-21T13:04:27.123456.getEpochMicroseconds());
+
+        assertEq(1737461067, get_epoch_seconds(2025-01-21T13:04:27.123456));
+        assertEq(1737461067123, get_epoch_milliseconds(2025-01-21T13:04:27.123456));
+        assertEq(1737461067123456, get_epoch_microseconds(2025-01-21T13:04:27.123456));
+
         assertLe(10000, (now_us() + 10s).durationMilliseconds());
 
         # issue #3239: test invalid year masks

@@ -205,7 +205,7 @@ public class QoreDataType inherits AbstractDataProviderType {
     #/! Returns @ref True if this type has a default value
     /** @par Example:
         @code{.py}
-    bool b = t.canConvertToScalar();
+    bool b = t.hasDefaultValue();
         @endcode
 
         @return @ref True if this type has a default value
