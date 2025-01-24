@@ -364,14 +364,12 @@ public class HashDataType inherits QoreDataType {
 
     #! adds a field to the type
     private addFieldIntern(AbstractDataField field) {
-        fields{field.getName()} = field;
-        postProcessAddedField(field);
+        postProcessAddedField(fields{field.getName()} = field);
     }
 
     #! adds a field to the type from a typed hash member
     private addFieldIntern(Qore::Reflection::TypedHashMember mem) {
-        fields{mem.getName()} = new QoreDataField(mem);
-        postProcessAddedField(fields{mem.getName()});
+        postProcessAddedField(fields{mem.getName()} = new QoreDataField(mem));
     }
 }
 }

@@ -205,8 +205,8 @@ public hashdecl DataTypeInfo {
     #! Input: list of types returned
     list<string> types_returned;
 
-    #! Any fields supported by the type
-    hash<string, hash<DataFieldInfo>> fields;
+    #! Any fields supported by the type; will be NOTHING when \a recursive is @ref True
+    *hash<string, hash<DataFieldInfo>> fields;
 
     #! The default value for the type
     auto default_value;
@@ -216,6 +216,12 @@ public hashdecl DataTypeInfo {
 
     #! Default type for fields not listed in \a fields
     *hash<DataTypeInfo> default_field_type_info;
+
+    #! Unique type identifier
+    string unique_key;
+
+    #! Recursive flag
+    bool recursive;
 
     #! Any tags set on the type
     *hash<auto> tags;
@@ -322,16 +328,37 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         - \c base_type
     */
     hash<DataTypeInfo> getInputInfo(*bool simple) {
+        # to catch recursive fields
+        string uh = self.uniqueHash();
+        bool recursive = rimap{uh} ?? False;
+        if (!recursive) {
+            rimap{uh} = True;
+        }
+        on_exit if (!recursive) {
+            remove rimap{uh};
+        }
         return <DataTypeInfo>{
             "name": getName(),
             "types_returned": keys getReturnTypeHash(simple),
-            "fields": getFieldInfo(),
+            "fields": !recursive ? getFieldInfo() : NOTHING,
+            "recursive": recursive,
+            "unique_key": uh,
             "base_type": getBaseTypeName(),
         };
     }
 
     #! Returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
+        # to catch recursive fields
+        string uh = self.uniqueHash();
+        bool recursive = rimap{uh} ?? False;
+        if (!recursive) {
+            rimap{uh} = True;
+        }
+        on_exit if (!recursive) {
+            remove rimap{uh};
+        }
+        on_error rethrow $1.err, sprintf("%s (while reading type %s %s recursive: %y rimap: %y)", $1.desc, getName(), uh, recursive, rimap.size());
         hash<DataTypeInfo> rv = <DataTypeInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -349,7 +376,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "mandatory": getDirectTypeHash(){NT_NOTHING} ? False : True,
             "types_accepted": keys getAcceptTypeHash(simple),
             "types_returned": keys getReturnTypeHash(simple),
-            "fields": getFieldInfo(),
+            "fields": !recursive ? getFieldInfo() : NOTHING,
+            "recursive": recursive,
+            "unique_key": uh,
             "tags": tags,
         };
         if (exists (auto v = getDefaultValue())) {
@@ -745,4 +774,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         options{opt} = value;
     }
 }
+}
+
+namespace Priv {
+#! Recursive info map: unique key -> True
+thread_local hash<string, bool> rimap;
 }

@@ -55,8 +55,11 @@ public hashdecl DataFieldInfo {
     #! Does the field accept values not defined in allowed_values too?
     *bool allowed_values_creatable;
 
-    #! type info
+    #! Type info
     hash<DataTypeInfo> type;
+
+    #! Unique field identifier
+    string unique_key;
 
     #! User-defined attributes set on the field
     *hash<auto> attr;
@@ -255,18 +258,21 @@ public class AbstractDataField inherits Qore::Serializable {
         information
     */
     hash<DataFieldInfo> getInputInfo() {
+        on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
         return <DataFieldInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
             "short_desc": getShortDescription(),
             "desc": getDescription(),
-            "type": getType().getInputInfo(),
+            "type": getType().getInfo(),
+            "unique_key": self.uniqueHash(),
             "attr": attr,
         };
     }
 
     #! returns information about the field
     hash<DataFieldInfo> getInfo() {
+        on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
         return <DataFieldInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -278,12 +284,14 @@ public class AbstractDataField inherits Qore::Serializable {
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "type": getType().getInfo(),
+            "unique_key": self.uniqueHash(),
             "attr": attr,
         };
     }
 
     #! returns information about the field
     hash<DataFieldInfo> getConfigInfo() {
+        on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
         return <DataFieldInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -295,6 +303,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},
+            "unique_key": self.uniqueHash(),
             "attr": attr,
         };
     }
