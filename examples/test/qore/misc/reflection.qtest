@@ -627,7 +627,7 @@ class ReflectionTest inherits QUnit::Test {
             assertEq("Condition", cond.className());
             assertEq("public", conv.getAccessModifierString());
 
-            assertThrows("RUNTIME-OVERLOAD-ERROR", \conv.call(), 1);
+            assertThrows("CALL-WITH-TYPE-ERRORS", \conv.call(), 1);
 
             assertThrows("METHOD-ERROR", \c.getDestructorVariant());
             assertNothing(c.getIfDestructorVariant());
