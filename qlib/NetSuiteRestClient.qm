@@ -347,6 +347,13 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         return "netsuite";
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "NetSuite";
+    }
+
     #! Return OAuth2 options
     /** @return a hash of OAuth2 options
     */

@@ -336,6 +336,13 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         return "mewsrest";
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Mews";
+    }
+
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
 

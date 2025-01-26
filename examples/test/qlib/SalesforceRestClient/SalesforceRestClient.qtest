@@ -38,14 +38,14 @@ class SalesforceTest inherits QUnit::Test {
 
         # command-line options
         const MyOpts = Opts + {
-            "client_id":      "i,client_id=s",
-            "client_secret":  "s,client_secret=s",
-            "user":           "u,username=s",
-            "pass":           "p,password=s",
-            "timeout":        "t,timeout=i",
+            "oauth2_client_id":      "i,oauth2_client_id=s",
+            "oauth2_client_secret":  "s,oauth2_client_secret=s",
+            "user":                  "u,username=s",
+            "pass":                  "p,password=s",
+            "timeout":               "t,timeout=i",
         };
 
-        const OptionColumn = 22;
+        const OptionColumn = 30;
 
         const AcctNo1 = "DEL_TEST_1";
         const AcctName1 = "My Test Account 1";
@@ -78,20 +78,20 @@ class SalesforceTest inherits QUnit::Test {
 
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
-        printOption("-i,--client_id=ARG", "set Salesforce.com consumer key", OptionColumn);
+        printOption("-i,--oauth2_client_id=ARG", "set Salesforce.com consumer key", OptionColumn);
         printOption("-p,--pass=ARG", "set Salesforce.com password", OptionColumn);
-        printOption("-s,--client_secret=ARG", "set Salesforce.com consumer secret", OptionColumn);
+        printOption("-s,--oauth2_client_secret=ARG", "set Salesforce.com consumer secret", OptionColumn);
         printOption("-t,--timeout=ARG", "set Salesforce.com timeout in seconds", OptionColumn);
         printOption("-u,--user=ARG", "set Salesforce.com user name", OptionColumn);
     }
 
     setupConnection() {
-        sfopts.client_id = m_options.client_id ?? ENV.SALESFORCE_CONSUMER_KEY;
-        if (!sfopts.client_id)
-            error("missing --client_id option or SALESFORCE_CONSUMER_KEY environment variable");
-        sfopts.client_secret = m_options.client_secret ?? ENV.SALESFORCE_CONSUMER_SECRET;
-        if (!sfopts.client_secret)
-            error("missing --client_secret option or SALESFORCE_CONSUMER_SECRET environment variable");
+        sfopts.oauth2_client_id = m_options.oauth2_client_id ?? ENV.SALESFORCE_CONSUMER_KEY;
+        if (!sfopts.oauth2_client_id)
+            error("missing --oauth2_client_id option or SALESFORCE_CONSUMER_KEY environment variable");
+        sfopts.oauth2_client_secret = m_options.oauth2_client_secret ?? ENV.SALESFORCE_CONSUMER_SECRET;
+        if (!sfopts.oauth2_client_secret)
+            error("missing --oauth2_client_secret option or SALESFORCE_CONSUMER_SECRET environment variable");
         sfopts.username = m_options.user ?? ENV.SALESFORCE_USER;
         if (!sfopts.username)
             error("missing --username option or SALESFORCE_USER environment variable");
@@ -233,13 +233,13 @@ class SalesforceTest inherits QUnit::Test {
         {
             SalesforceRestConnection rc("test", "test", "http://localhost", {}, {
                 "oauth2_grant_type": "authorization_code",
-                "client_id": get_random_string(),
-                "client_secret": get_random_string(),
+                "oauth2_client_id": get_random_string(),
+                "oauth2_client_secret": get_random_string(),
                 "oauth2_redirect_url": "auto",
             });
             assertEq("json", rc.getRealOptions()."data");
             string uri = rc.getAuthorizationCodeRequest();
-            assertTrue(uri.equalPartialPath(SalesforceRestClient::Defaults.oauth_url_auth));
+            assertTrue(uri.equalPartialPath(SalesforceRestClient::Defaults.oauth2_auth_url));
             hash<ConnectionInfo> cinfo = rc.getInfo();
             assertTrue(cinfo.features{AbstractConnection::CF_UPDATE_OPTIONS});
             assertTrue(cinfo.features{RestConnection::RCF_OAUTH2_AUTH_CODE});
@@ -248,13 +248,13 @@ class SalesforceTest inherits QUnit::Test {
         {
             SalesforceRestConnection rc("test", "test", "http://localhost", {}, {
                 "oauth2_grant_type": "authorization_code",
-                "client_id": get_random_string(),
-                "client_secret": get_random_string(),
+                "oauth2_client_id": get_random_string(),
+                "oauth2_client_secret": get_random_string(),
                 "oauth2_redirect_url": "cloud",
             });
             assertEq("json", rc.getRealOptions()."data");
             string uri = rc.getAuthorizationCodeRequest();
-            assertTrue(uri.equalPartialPath(SalesforceRestClient::Defaults.oauth_url_auth));
+            assertTrue(uri.equalPartialPath(SalesforceRestClient::Defaults.oauth2_auth_url));
             hash<ConnectionInfo> cinfo = rc.getInfo();
             assertTrue(cinfo.features{AbstractConnection::CF_UPDATE_OPTIONS});
             assertTrue(cinfo.features{RestConnection::RCF_OAUTH2_AUTH_CODE});

@@ -570,6 +570,13 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         return True;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Discord";
+    }
+
     #! returns a data provider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 

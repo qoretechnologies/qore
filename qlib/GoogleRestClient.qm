@@ -463,6 +463,13 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         return "gcal";
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "GoogleCalendar";
+    }
+
     #! returns a data provider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 
@@ -598,6 +605,13 @@ public class GmailRestConnection inherits GoogleRestConnection {
     #! returns \c "gmail"
     string getType() {
         return "gmail";
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Gmail";
     }
 
     #! returns a data provider object for this connection

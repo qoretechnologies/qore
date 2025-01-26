@@ -325,6 +325,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         return False;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+
+        @since %ConnectionProvider 2.0
+    */
+    *string getAppName() {
+        # intentionally empty
+    }
+
     #! returns a hash with the results of the ping operation
     /** @param throw_exception throw an exception if a connection error occurs
 

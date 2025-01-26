@@ -428,6 +428,13 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
         return "snrest";
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "ServiceNow";
+    }
+
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
 
