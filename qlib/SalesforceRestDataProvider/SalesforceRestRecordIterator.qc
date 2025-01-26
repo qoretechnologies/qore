@@ -50,7 +50,8 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         @param where_cond the search conditions
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(SalesforceRestClient rest, string name, hash<SalesforceRestRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options) {
+    constructor(SalesforceRestClient rest, string name, hash<SalesforceRestRecordInfo> record_info,
+            *hash<auto> where_cond, *hash<auto> search_options) {
         self.rest = rest;
         self.name = name;
         self.record_info = record_info;

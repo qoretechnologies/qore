@@ -46,10 +46,6 @@ typedef std::map<std::string, bool, ltstrcase> method_map_t;
 typedef std::set<std::string, ltstrcase> strcase_set_t;
 typedef std::map<std::string, std::string> header_map_t;
 
-constexpr int URL_NORMAL = 0;
-constexpr int URL_MASK_PASSWORD = 1;
-constexpr int URL_NO_AUTH = 2;
-
 struct con_info {
     int port;
     std::string host,
@@ -146,15 +142,15 @@ struct con_info {
         } else {
             pstr->concat("://");
         }
-        if (opts != URL_NO_AUTH) {
+        if (opts & (UC_USERNAME | UC_PASSWORD)) {
             bool has_username_or_password = false;
-            if (!username.empty()) {
+            if (!username.empty() && (opts & UC_USERNAME)) {
                 pstr->concat(username);
                 has_username_or_password = true;
             }
-            if (!password.empty()) {
+            if (!password.empty() && (opts & UC_PASSWORD)) {
                 pstr->concat(':');
-                if (opts == URL_MASK_PASSWORD) {
+                if (opts & UC_MASK_PASSWORD) {
                     pstr->concat("<masked>");
                 } else {
                     pstr->concat(password);
@@ -185,9 +181,10 @@ struct con_info {
         if (port && ((!ssl && port != 80) || (ssl && port != 443))) {
             pstr->sprintf(":%d", port);
         }
-        if (!path.empty()) {
-            if (path[0] != '/')
+        if (!path.empty() && (opts & UC_PATH)) {
+            if (path[0] != '/') {
                 pstr->concat('/');
+            }
             pstr->concat(path.c_str());
         }
         return pstr;

@@ -1062,6 +1062,16 @@ sfrest.logout();
         return body.error_description == "token validity expired";
     }
 
+    #! Return OAuth2 options
+    /** @return a hash of OAuth2 options
+    */
+    hash<auto> getOAuth2Options() {
+        return RestClient::getOAuth2Options() + {
+            "instance_url": instance_url,
+            "id_service_url": id_service_url,
+        };
+    }
+
     #! returns a date string for use with Salesforce.com Bulk REST API requests
     /** @param d the date to return as a formatted string using \c "YYYY-MM-DDTHH:mm:SSZ"
 
@@ -1082,6 +1092,7 @@ sfrest.logout();
     /** @since %SalesforceRestClient 2.0
     */
     private setApi() {
+        setHeaders();
         if (!api_hash) {
             # set the URL to the Salesforce.com URL for REST API calls
             setURL(instance_url);
@@ -1139,8 +1150,8 @@ sfrest.logout();
         }
     }
 
-    #! performs authentication and authorization with Salesforce.com using the OAuth2 authorization URL
-    private hash<auto> loginIntern(*reference<hash> info) {
+    #! Set headers for Salesforce REST communications
+    private setHeaders() {
         # ensure that if a non-xml serialization is set, we do not accept XML responses, because otherwise
         # Salesforce will prefer XML responses to JSON
         if (ds !~ /xml/) {
@@ -1148,6 +1159,11 @@ sfrest.logout();
         } else {
             delete headers.Accept;
         }
+    }
+
+    #! performs authentication and authorization with Salesforce.com using the OAuth2 authorization URL
+    private hash<auto> loginIntern(*reference<hash> info) {
+        setHeaders();
 
         # must set the final URL after login; RestClient::loginIntern() will reset the original URL
         on_success setURL(instance_url + api_hash{api_used}.url);

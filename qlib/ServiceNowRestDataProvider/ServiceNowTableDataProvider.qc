@@ -484,7 +484,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
     private hash<DataProviderExpression> getEqualityComparisonExpression(int role, hash<DataProviderInfo> info, string key,
             auto value) {
         return <DataProviderExpression>{
-            "exp": info.expressions.eq.label,
+            "exp": info.expressions.eq.name,
             "args": (<DataProviderFieldReference>{"field": key},) + value,
         };
     }

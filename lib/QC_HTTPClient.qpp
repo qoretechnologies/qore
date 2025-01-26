@@ -40,6 +40,30 @@
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/ssl_constants.h"
 
+/** @defgroup http_url_codes HTTP URL Codes
+
+    @since %Qore 2.0
+ */
+///@{
+//! Return the target portion of the URL
+const UC_TARGET = UC_TARGET;
+
+//! Return username (if any)
+const UC_USERNAME = UC_USERNAME;
+
+//! Return password (if any)
+const UC_PASSWORD = UC_PASSWORD;
+
+//! Mask any password returned
+const UC_MASK_PASSWORD = UC_MASK_PASSWORD;
+
+//! Return the path (if any)
+const UC_PATH = UC_PATH;
+
+//! Return all info
+const URL_NORMAL = URL_NORMAL;
+///@}
+
 extern QoreClass* QC_SOCKET;
 
 static QoreHashNode* HTTPClient_serializer(const QoreObject& self, const QoreHttpClientObject& z,
@@ -1418,7 +1442,9 @@ HTTPClient::setURL(string url) {
 }
 
 //! Returns the current URL
-/** @return the current URL with the scheme, address, port (if not the default) and also including any username,
+/** @param code see @ref http_url_codes the values for this bitfield
+
+    @return the current URL with the scheme, address, port (if not the default) and also including any username,
     password, and path
 
     @par Example:
@@ -1428,8 +1454,8 @@ HTTPClient::setURL(string url) {
 
     @see getSafeURL()
  */
-*string HTTPClient::getURL() [flags=CONSTANT] {
-    return client->getURL();
+*string HTTPClient::getURL(int code = URL_NORMAL) [flags=CONSTANT] {
+    return client->getUrl(code);
 }
 
 //! Returns the current URL without the password field
@@ -1446,7 +1472,7 @@ HTTPClient::setURL(string url) {
     @since %Qore 1.6.0
  */
 *string HTTPClient::getSafeURL() [flags=CONSTANT] {
-    return client->getSafeURL();
+    return client->getUrl(URL_MASK_PASSWORD);
 }
 
 //! Clears the new proxy URL value for the next connection

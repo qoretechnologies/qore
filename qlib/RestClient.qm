@@ -1530,10 +1530,13 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         @since %RestClient 2.0
     */
     hash<auto> gotOAuth2LoginInfo(hash<auto> h, *bool refresh) {
+        if (h.OAuth) {
+            h = h.OAuth;
+        }
         debug("login info: %y", h);
         if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
             throw "REST-LOGIN-ERROR", sprintf("OAuth2 response for grant type %y is invalid, needs both "
-                "token_type (%y) and access_token (%y)", oauth2_grant_type, h.token_type, h.access_token);
+                "token_type (%y) and access_token (%y): %y", oauth2_grant_type, h.token_type, h.access_token, h);
         }
         *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h, refresh) : NOTHING;
         # set the token
@@ -1795,7 +1798,19 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             "grant_type": grant_type,
         } + oauth2_token_args;
         if (oauth2_alt_token_url) {
-            login.oauth2_token_url = oauth2_token_url;
+            string uri = oauth2_token_url;
+            if (uri !~ /^http/) {
+                string url = uri =~ /^\// ? getURL(UC_TARGET) : getURL(UC_TARGET | UC_PATH);
+                if (url !~ /\/$/) {
+                    url += "/";
+                }
+                if (uri =~ /^\//) {
+                    uri = uri[1..];
+                }
+                uri = url + uri;
+                printf("URI: %y\n", uri);
+            }
+            login.oauth2_token_url = uri;
             if (oauth2_token_use_basic_auth) {
                 login.oauth2_token_use_basic_auth = True;
             } else if (oauth2_token_auth_secret_only) {
@@ -2776,8 +2791,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             url_opt = getOAuth2OptionName("oauth2_token_url");
             uri = opts{url_opt};
             if (!uri) {
-                throw "OAUTH2-AUTH-ERROR", sprintf("neither \"oauth2_alt_token_url\" nor \"oauth2_token_url\" is set on "
-                    "connection %y", name);
+                throw "OAUTH2-AUTH-ERROR", sprintf("neither \"oauth2_alt_token_url\" nor \"oauth2_token_url\" is set "
+                    "on connection %y", name);
             }
         }
         return getUrlOptionIntern(uri, allow_relative);

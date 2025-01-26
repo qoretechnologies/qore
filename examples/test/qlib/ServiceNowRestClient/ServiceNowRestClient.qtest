@@ -92,7 +92,7 @@ class ServiceNowTest inherits QUnit::Test {
 
     setupConnection() {
         # first try connection
-        *string conn_name = m_options.conn ?? ENV.GOOGLE_CONNECTION;
+        *string conn_name = m_options.conn ?? ENV.SERVICENOW_CONNECTION;
         if (conn_name.val()) {
             AbstractConnection conn = get_connection(conn_name);
             if (!(conn instanceof ServiceNowRestConnection)) {

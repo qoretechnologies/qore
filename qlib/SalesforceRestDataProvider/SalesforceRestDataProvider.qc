@@ -79,19 +79,19 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Salesforce API version to use (\"auto\" = latest version available)",
             },
-            "oauth_url_auth": <DataProviderOptionInfo>{
+            "oauth2_auth_url": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Auth URL",
                 "short_desc": "The OAuth2 auth URL",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The URL for logging in, overrides the default value",
             },
-            "oauth_url_token": <DataProviderOptionInfo>{
+            "oauth2_token_url": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Token URL",
                 "short_desc": "The OAuth2 token URL",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The URL for token acquisition, overrides the default value, used when logging in",
             },
-            "oauth_url_revoke": <DataProviderOptionInfo>{
+            "oauth2_logout_url": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Revoke URL",
                 "short_desc": "The OAuth2 token revoke URL",
                 "type": AbstractDataProviderType::get(StringType),
@@ -202,11 +202,11 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
     private *AbstractDataProvider getChildProviderImpl(string name) {
         hash<auto> info;
         try {
-            hash<auto> v = rest.get("sobjects/" + name, NOTHING, \info);
-            if (!v.body.objectDescribe) {
+            hash<auto> v = rest.get("sobjects/" + name, NOTHING, \info).body.objectDescribe;
+            if (!v.queryable) {
                 return;
             }
-            return new SalesforceRestObjectDataProvider(rest, name, v.body.objectDescribe);
+            return new SalesforceRestObjectDataProvider(rest, name, v);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && info."response-headers".status_code == 404) {
                 return;

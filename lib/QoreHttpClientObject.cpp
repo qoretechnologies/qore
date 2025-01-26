@@ -2958,22 +2958,12 @@ int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
     return http_priv->setUrlUnlocked(str, xsink);
 }
 
-QoreStringNode* QoreHttpClientObject::getURL() {
+QoreStringNode* QoreHttpClientObject::getUrl(int64 code) {
     SafeLocker sl(priv->m);
-
-    if (!http_priv->connection.has_url())
+    if (!http_priv->connection.has_url()) {
         return nullptr;
-
-    return http_priv->connection.get_url();
-}
-
-QoreStringNode* QoreHttpClientObject::getSafeURL() {
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->connection.has_url())
-        return nullptr;
-
-    return http_priv->connection.get_url(URL_MASK_PASSWORD);
+    }
+    return http_priv->connection.get_url(code);
 }
 
 int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsink) {

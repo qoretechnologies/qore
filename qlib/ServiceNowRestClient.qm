@@ -147,10 +147,14 @@ public class ServiceNowRestClient inherits RestClient::RestClient {
 
         #! Request URI path prefix
         const RequestUriPathPrefix = "/api/";
+
+        #! Default API key header
+        const DefaultApiKeyHeader = "x-sn-apikey";
     }
 
     private:internal {
         *string api;
+        *string apikey;
         string uri_path_pfx;
     }
 
@@ -219,6 +223,10 @@ ServiceNowRestClient rest({
         } else {
             # default: use latest API
             uri_path_pfx = RequestUriPathPrefix + DefaultApiVersion;
+        }
+        if (opts.apikey.val()) {
+            apikey = opts.apikey;
+            headers{opts.apikey_header ?? DefaultApiKeyHeader} = apikey;
         }
         setConnectionPath(uri_path_pfx);
 
@@ -304,6 +312,20 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "desc": "the API version for ServiceNow; if not set the latest version is used",
                     "default_value": ServiceNowRestClient::DefaultApiVersion,
                 },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "The REST API key",
+                    "type": "string",
+                    "desc": "the REST API key",
+                    "sensitive": True,
+                },
+                "apikey_header": <ConnectionOptionInfo>{
+                    "display_name": "API Key Header",
+                    "short_desc": "The REST API key header",
+                    "type": "string",
+                    "desc": "the REST API key header",
+                    "default_value": ServiceNowRestClient::DefaultApiKeyHeader,
+                },
                 "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
                     "desc": "the ServiceNow OAuth2 client ID",
                 },
@@ -338,7 +360,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "desc": "the ServiceNow username",
                 },
             },
-            "required_options": "username,password|token|oauth2_client_id,oauth2_client_secret",
+            "required_options": "apikey|token|oauth2_client_id,oauth2_client_secret",
         };
 
         #! Default ServiceNow ping method

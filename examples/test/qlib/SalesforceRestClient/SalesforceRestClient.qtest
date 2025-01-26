@@ -42,6 +42,7 @@ class SalesforceTest inherits QUnit::Test {
             "oauth2_client_secret":  "s,oauth2_client_secret=s",
             "user":                  "u,username=s",
             "pass":                  "p,password=s",
+            "conn":                  "c,connections=s",
             "timeout":               "t,timeout=i",
         };
 
@@ -78,6 +79,7 @@ class SalesforceTest inherits QUnit::Test {
 
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name", OptionColumn);
         printOption("-i,--oauth2_client_id=ARG", "set Salesforce.com consumer key", OptionColumn);
         printOption("-p,--pass=ARG", "set Salesforce.com password", OptionColumn);
         printOption("-s,--oauth2_client_secret=ARG", "set Salesforce.com consumer secret", OptionColumn);
@@ -86,22 +88,34 @@ class SalesforceTest inherits QUnit::Test {
     }
 
     setupConnection() {
-        sfopts.oauth2_client_id = m_options.oauth2_client_id ?? ENV.SALESFORCE_CONSUMER_KEY;
-        if (!sfopts.oauth2_client_id)
-            error("missing --oauth2_client_id option or SALESFORCE_CONSUMER_KEY environment variable");
-        sfopts.oauth2_client_secret = m_options.oauth2_client_secret ?? ENV.SALESFORCE_CONSUMER_SECRET;
-        if (!sfopts.oauth2_client_secret)
-            error("missing --oauth2_client_secret option or SALESFORCE_CONSUMER_SECRET environment variable");
-        sfopts.username = m_options.user ?? ENV.SALESFORCE_USER;
-        if (!sfopts.username)
-            error("missing --username option or SALESFORCE_USER environment variable");
-        sfopts.password = m_options.pass ?? ENV.SALESFORCE_PASS;
-        if (!sfopts.password)
-            error("missing --password option or SALESFORCE_PASS environment variable");
-        if (sfopts."timeout")
-            sfopts.connect_timeout = sfopts.timeout;
+        *string conn_name = m_options.conn ?? ENV.SALESFORCE_CONNECTION;
+        if (conn_name.val()) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (!(conn instanceof SalesforceRestConnection)) {
+                error("connection %y is type %y; expecting \"SalesforceRestConnection\"", conn_name,
+                    conn.className());
+            }
+            rc = conn.get();
+            rc.setLogger(logger);
+            sfopts = rc.getOAuth2Options();
+        } else {
+            sfopts.oauth2_client_id = m_options.oauth2_client_id ?? ENV.SALESFORCE_CONSUMER_KEY;
+            if (!sfopts.oauth2_client_id)
+                error("missing --oauth2_client_id option or SALESFORCE_CONSUMER_KEY environment variable");
+            sfopts.oauth2_client_secret = m_options.oauth2_client_secret ?? ENV.SALESFORCE_CONSUMER_SECRET;
+            if (!sfopts.oauth2_client_secret)
+                error("missing --oauth2_client_secret option or SALESFORCE_CONSUMER_SECRET environment variable");
+            sfopts.username = m_options.user ?? ENV.SALESFORCE_USER;
+            if (!sfopts.username)
+                error("missing --username option or SALESFORCE_USER environment variable");
+            sfopts.password = m_options.pass ?? ENV.SALESFORCE_PASS;
+            if (!sfopts.password)
+                error("missing --password option or SALESFORCE_PASS environment variable");
+            if (sfopts."timeout")
+                sfopts.connect_timeout = sfopts.timeout;
 
-        rc = new SalesforceRestClient(sfopts + {"logger": logger});
+            rc = new SalesforceRestClient(sfopts + {"logger": logger});
+        }
     }
 
     private error(string fmt) {
@@ -118,7 +132,7 @@ class SalesforceTest inherits QUnit::Test {
         if (!rc) testSkip("no Salesforce.com connection");
 
         SalesforceRestConnection sfrc("test", "test", rc.getURL(), {}, sfopts);
-        assertEq(True, sfrc instanceof SalesforceRestConnection);
+        assertTrue(sfrc instanceof SalesforceRestConnection);
         sfrc.setLogger(logger);
 
         TestPollingConnectionMonitor monitor(logger);
