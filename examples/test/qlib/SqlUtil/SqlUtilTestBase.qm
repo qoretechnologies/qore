@@ -343,6 +343,12 @@ public class SqlTestBase inherits QUnit::Test {
                 }
             }
 
+            # make sure AbstractDataProvider::getOrNothingRecordType() works
+            {
+                *hash<string, AbstractDataField> fields = dp.getOrNothingRecordType();
+                assertGt(0, fields.size());
+            }
+
             if (fname) {
                 # test update API
                 AbstractDatasource ds = table.getDatasource();

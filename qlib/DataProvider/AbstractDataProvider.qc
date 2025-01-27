@@ -3016,7 +3016,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Returns the description of the record type with "or nothing" types, if any
     *hash<string, AbstractDataField> getOrNothingRecordType(*hash<auto> search_options) {
         return map {
-            $1.key: $1.value.getOrNothingType(True)
+            $1.key: $1.value.getOrNothingType()
         }, getRecordType(search_options).pairIterator();
     }
 
