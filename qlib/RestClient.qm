@@ -535,6 +535,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         string oauth2_redirect_url;
         #! OAuth2 token URL
         string oauth2_token_url;
+        #! Alternate OAuth2 URL substitution info
+        *hash<auto> oauth2_alt_url_subst;
         #! Alternate OAuth2 token URL
         string oauth2_alt_token_url;
         #! The token type, if any
@@ -596,6 +598,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           message headers
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+        - \c oauth2_alt_url_subst: URL substitution info for \c oauth2_alt_token_url
         - \c oauth2_alt_token_url: Alternate token URL; if this is set then the token request is made to this URL
           with the \c oauth2_token_url value as an argument in the request
         - \c oauth2_auto_refresh: If OAuth2 tokens should be automatically refreshed (default \c True)
@@ -731,6 +734,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_auth_args) {
             oauth2_auth_args = getHash(opts, "oauth2_auth_args", True);
         }
+        if (opts.oauth2_alt_url_subst) {
+            oauth2_alt_url_subst = opts.oauth2_alt_url_subst;
+        }
         if (opts.oauth2_alt_token_url) {
             oauth2_alt_token_url = opts.oauth2_alt_token_url;
         }
@@ -793,6 +799,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "token": token,
             "token_type": token_type,
             "oauth2_alt_token_url": oauth2_alt_token_url,
+            "oauth2_alt_url_subst": oauth2_alt_url_subst,
             "oauth2_auth_args": oauth2_auth_args,
             "oauth2_auth_url": oauth2_auth_url,
             "oauth2_auto_refresh": oauth2_auto_refresh,
@@ -1580,6 +1587,9 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (h.refresh_token && h.refresh_token != refresh_token) {
             new_opts.oauth2_refresh_token = h.refresh_token;
         }
+        if (h.url && h.url != getURL()) {
+            new_opts.url = h.url;
+        }
         return new_opts;
     }
 
@@ -2187,6 +2197,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "desc": "An alternate token URL which will be used to wrap the call to get the token; if this is "
                         "set, then it takes precedence over `oauth2_token_url`",
                 },
+                "oauth2_alt_url_subst": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Alternate URL Substitution Info",
+                    "short_desc": "Optional URL substitution info for token requests to the alternate server",
+                    "type": "hash",
+                    "desc": "Optional URL substitution info for token requests to the alternate server",
+                },
                 "oauth2_app": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Application",
                     "short_desc": "Sets a hint to external programs for the OAuth2 config",
@@ -2460,6 +2476,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         #! All OAuth2 options
         const OAuth2Options = (
             "oauth2_alt_token_url",
+            "oauth2_alt_url_subst",
             "oauth2_app",
             "oauth2_auto_refresh",
             "oauth2_auth_args",
@@ -2940,6 +2957,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         }
         if (resp.refresh_token && resp.refresh_token != real_opts.oauth2_refresh_token) {
             new_opts.oauth2_refresh_token = resp.refresh_token;
+        }
+        if (resp.url && resp.url != url) {
+            new_opts.url = resp.url;
         }
         return new_opts;
     }
