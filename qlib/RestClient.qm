@@ -2558,6 +2558,11 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         }
     }
 
+    #! Returns the logger interface for logging
+    *LoggerInterface getLogger() {
+        return logger;
+    }
+
     #! Returns True if the connection requires OAuth2 authorization before it can be used
     /** @return @ref True if the connection requires OAuth2 authorization, @ref False if already authorized, or the
         connection does not support authorization
