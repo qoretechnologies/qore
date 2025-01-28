@@ -76,6 +76,9 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     private {
+        #! The connection object used to create the REST client
+        *DiscordWebSocketClient::DiscordWebSocketConnection conn;
+
         #! The WebSocket client object
         *DiscordWebSocketClient::DiscordWebSocketClient ws;
     }
@@ -88,8 +91,14 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object from a DiscordWebSocketClient
-    constructor(DiscordWebSocketClient ws) {
+    constructor(DiscordWebSocketClient::DiscordWebSocketClient ws) {
         self.ws = ws;
+    }
+
+    #! Creates the object from a DiscordWebSocketConnection
+    constructor(DiscordWebSocketClient::DiscordWebSocketConnection conn) {
+        self.conn = conn;
+        self.ws = conn.get();
     }
 
     #! Deletes the object

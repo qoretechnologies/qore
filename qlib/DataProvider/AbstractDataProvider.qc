@@ -3293,6 +3293,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getStaticInfoImpl().children_identical;
     }
 
+    #! Registers a child data provider if the data provider supports children and is extensible
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+
+        @throw UNSUPPORTED-ERROR this exception is thrown by default, to support adding children, override this method
+
+        @since DataProvider 3.0
+    */
+    static registerChild(string name, code generator) {
+        throw "UNSUPPORTED-ERROR", "This data provider does not support dynamically adding child providers";
+    }
+
     #! thrown an exception
     private error(string err, string fmt, ...) {
         string desc_name;

@@ -38,8 +38,11 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     private {
+        #! The connection object used to create the REST client
+        *DiscordRestConnection conn;
+
         #! The REST client object for API calls
-        *DiscordRestClient::DiscordRestClient rest;
+        *DiscordRestClient rest;
     }
 
     #! Creates the object
@@ -47,8 +50,17 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object
-    constructor(DiscordRestClient::DiscordRestClient rest, *Logger::LoggerInterface logger) {
+    constructor(DiscordRestClient rest, *Logger::LoggerInterface logger) {
         self.rest = rest;
+        if (logger) {
+            setLogger(logger);
+        }
+    }
+
+    #! Creates the object
+    constructor(DiscordRestConnection conn, *Logger::LoggerInterface logger) {
+        self.conn = conn;
+        rest = conn.get();
         if (logger) {
             setLogger(logger);
         }

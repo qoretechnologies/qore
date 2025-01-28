@@ -249,6 +249,7 @@ class QdpCmd {
                 map provider = provider.getChildProviderEx($1), path;
             }
         }
+        provider.setLogger(logger);
 
         # Set up fake webhook interface for the TypeScriptActionInterface module if possible
         if (get_module_hash().TypeScriptActionInterface) {

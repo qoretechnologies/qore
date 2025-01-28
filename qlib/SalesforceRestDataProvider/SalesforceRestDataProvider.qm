@@ -61,7 +61,7 @@ module SalesforceRestDataProvider {
         # register all supported actions
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "create",
             "display_name": "Create Record",
             "short_desc": "Create a record in Salesforce",
@@ -79,7 +79,7 @@ module SalesforceRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find_single",
             "display_name": "Find Single Record",
             "short_desc": "Find a single record in Salesforce",
@@ -97,7 +97,7 @@ module SalesforceRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find",
             "display_name": "Find Matching Records",
             "short_desc": "Find records in Salesforce",
@@ -115,7 +115,7 @@ module SalesforceRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "update",
             "display_name": "Update Records",
             "short_desc": "Update records in Salesforce",
@@ -133,7 +133,7 @@ module SalesforceRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "upsert",
             "display_name": "Upsert Records",
             "short_desc": "Upsert records in Salesforce",
@@ -151,7 +151,7 @@ module SalesforceRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "delete",
             "display_name": "Delete Records",
             "short_desc": "Delete records in Salesforce",
@@ -226,6 +226,8 @@ module SalesforceRestDataProvider {
 
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
+#! Application name
+public const AppName = "Salesforce";
 }
 
 namespace Priv {

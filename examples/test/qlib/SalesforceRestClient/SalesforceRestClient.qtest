@@ -157,7 +157,7 @@ class SalesforceTest inherits QUnit::Test {
     salesForceDataProviderTests() {
         if (!rc) testSkip("no Salesforce.com connection");
 
-        SalesforceRestDataProvider dp(rc);
+        SalesforceRestTablesDataProvider dp(rc);
 
         assertFalse(dp.requiresTransactionManagement());
         {

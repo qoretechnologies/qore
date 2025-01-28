@@ -406,7 +406,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the NetSuiteDataProvider and creates the data provider
         # object dynamically
         load_module("NetSuiteDataProvider");
-        return create_object("NetSuiteDataProvider", get());
+        return create_object("NetSuiteDataProvider", self);
     }
 %endif
 

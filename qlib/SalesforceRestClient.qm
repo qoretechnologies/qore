@@ -1409,7 +1409,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the SalesforceRestDataProvider and creates the data provider
         # object dynamically
         load_module("SalesforceRestDataProvider");
-        return create_object("SalesforceRestDataProvider", get());
+        return create_object("SalesforceRestDataProvider", self);
     }
 
     #! Returns the OAuth2 option name for this connection
