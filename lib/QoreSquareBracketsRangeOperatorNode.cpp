@@ -135,8 +135,7 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
                 for (int64 i = start; i <= stop; ++i) {
                     rv->push(l->getReferencedEntry(i), xsink);
                 }
-            }
-            else {
+            } else {
                 for (int64 i = start; i >= stop; --i) {
                     rv->push(l->getReferencedEntry(i), xsink);
                 }
@@ -281,7 +280,7 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
 
         if (start < 0)
             start = 0;
-        if (seq_type != NT_LIST && stop > seq_size - 1)
+        if (stop >= seq_size)
             stop = seq_size - 1;
     } else {
         if (stop > seq_size - 1 || start < 0)
@@ -289,7 +288,7 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
 
         if (stop < 0)
             stop = 0;
-        if (seq_type != NT_LIST && start > seq_size - 1)
+        if (start >= seq_size)
             start = seq_size - 1;
     }
     return true;
