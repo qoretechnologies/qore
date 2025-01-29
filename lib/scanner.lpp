@@ -812,6 +812,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%correct-cast{WS}*$                    parse_disable_parse_options(yylloc, PO_BROKEN_CAST);
 ^%broken-varargs{WS}*$                  parse_set_parse_options(yylloc, PO_BROKEN_VARARGS);
 ^%correct-varargs{WS}*$                 parse_disable_parse_options(yylloc, PO_BROKEN_VARARGS);
+^%broken-list-range{WS}*$               parse_set_parse_options(yylloc, PO_BROKEN_LIST_RANGE);
+^%correct-list-range{WS}*$              parse_disable_parse_options(yylloc, PO_BROKEN_LIST_RANGE);
 ^%allow-returns{WS}*$                   parse_set_parse_options(yylloc, PO_ALLOW_RETURNS);
 ^%allow-statement-no-effect{WS}*$       parse_set_parse_options(yylloc, PO_ALLOW_STATEMENT_NO_EFFECT);
 ^%strict-types{WS}*$                    parse_set_parse_options(yylloc, PO_STRICT_TYPES);

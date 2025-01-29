@@ -1134,7 +1134,7 @@ class Test inherits QUnit::Test {
         assertEq(23, foldl $1 + 2*$2, l[(0..2)]);    # lazy evaluation
         assertEq(NOTHING, l[8]);
         assertEq((NOTHING,), l[8,]);
-        assertEq((NOTHING,NOTHING,NOTHING,NOTHING,), l[8..11]);
+        assertEq((), l[8..11]);
 
         assertEq(   ((8,3,4), "asdf", 5, {"f":3, "g":2}),
                  (4, (8,3,4), "asdf", 5, {"f":3, "g":2}, 1) [1 .. 4]);
@@ -1312,14 +1312,14 @@ class Test inherits QUnit::Test {
             assertEq((1,4), l0);
             l0 = (1,2,3,4,5,6,7);
             assertEq((NOTHING, NOTHING), l0[45,46]);
-            assertEq((NOTHING, NOTHING), l0[45..46]);
+            assertEq((), l0[45..46]);
             assertEq((NOTHING, NOTHING, NOTHING), l0[45..46,47]);
             assertEq((NOTHING, NOTHING), map $1, l0[45,46]);
-            assertEq((NOTHING, NOTHING), map $1, l0[45..46]);
+            assertEq((), map $1, l0[45..46]);
             assertEq((NOTHING, NOTHING, NOTHING), map $1, l0[45..46,47]);
             assertEq((NOTHING, NOTHING), remove l0[45,46]);
-            assertEq((NOTHING, NOTHING), remove l0[45..46]);
-            assertEq((NOTHING, NOTHING, NOTHING), remove l0[45..46,47]);
+            assertEq((), remove l0[45..46]);
+            assertEq((NOTHING,), remove l0[45..46,47]);
         }
 
         {

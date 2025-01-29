@@ -617,6 +617,13 @@ const PO_NO_API = PO_NO_API;
 */
 const PO_BROKEN_LIST_PARSING = PO_BROKEN_LIST_PARSING;
 
+//! allows for old pre-%Qore 2.0 broken list range handling
+/** @see @ref broken-list-range "%broken-list-range"
+
+    @since %Qore 2.0
+*/
+const PO_BROKEN_LIST_RANGE = PO_BROKEN_LIST_RANGE;
+
 //! allows for old pre-%Qore 0.8.12 precedence of logical and bitwise operators
 /** @see @ref broken-logic-precedence "%broken-logic-precedence"
 
