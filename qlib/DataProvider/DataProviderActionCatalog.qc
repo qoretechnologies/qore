@@ -65,6 +65,51 @@ public hashdecl DataProviderAppInfo {
         - PNG: \c image/png
     */
     string logo_mime_type;
+
+    #! If the apps supports event actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_events = False;
+
+    #! If the apps supports API actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_apis = False;
+
+    #! If the apps supports message actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_messages = False;
+
+    #! If the apps supports find actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_find = False;
+
+    #! If the apps supports find_single actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_find_single = False;
+
+    #! If the apps supports create actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_create = False;
+
+    #! If the apps supports upsert actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_upsert = False;
+
+    #! If the apps supports update actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_update = False;
+
+    #! If the apps supports delete actions
+    /** This attribute is filled automatically when actions are registered
+    */
+    bool supports_delete = False;
 }
 
 /** @defgroup dp_action_type DataProvider Action Type Codes
@@ -100,7 +145,23 @@ public const DPAT_UPDATE = 8;
 public const DPAT_DELETE = 9;
 #/@}
 
-#! Maps a @ref db_action_type "action type code" to a data provider attribute string
+#! Maps @ref dp_action_type "action type codes"  to app action flags
+public const ActionCodeFlagMap = {
+    DPAT_EVENT: "supports_events",
+    DPAT_API: "supports_apis",
+    DPAT_SEND_MESSAGE: "supports_messages",
+    DPAT_FIND: "supports_find",
+    DPAT_FIND_SINGLE: "supports_find_single",
+    DPAT_CREATE: "supports_create",
+    DPAT_UPSERT: "supports_upsert",
+    DPAT_UPDATE: "supports_update",
+    DPAT_DELETE: "supports_delete",
+};
+
+#! List of app action flags
+public const AppActionFlags = ActionCodeFlagMap.values();
+
+#! Maps @ref dp_action_type "action type codes" to a data provider attribute string
 public const ActionAttrMap = {
     DPAT_EVENT: "supports_observable",
     DPAT_API: "supports_request",
@@ -113,7 +174,7 @@ public const ActionAttrMap = {
     DPAT_DELETE: "supports_delete",
 };
 
-#! Maps a @ref db_action_type "action type code" to a user-friendly name
+#! Maps @ref dp_action_type "action type codes" to a user-friendly name
 public const ActionNameMap = {
     DPAT_EVENT: "EVENT",
     DPAT_API: "API",
@@ -420,7 +481,7 @@ public class DataProviderActionCatalog {
         }
         if (*hash<DataProviderAppInfo> existing_app = appcache{app.name}) {
             # ignore if the application has the same definition
-            if (existing_app == app) {
+            if ((existing_app - AppActionFlags) == (app - AppActionFlags)) {
                 return;
             }
             throw "APP-ERROR", sprintf("Application %y already registered: %y", app.name, existing_app);
@@ -499,6 +560,7 @@ public class DataProviderActionCatalog {
             throw "ACTION-ERROR", sprintf("application %y has scheme %y and action has cls %y; it is not allowed to "
                 "provide an action class when the application has a scheme", action.app, app.scheme, action.cls);
         }
+        appcache{action.app}{ActionCodeFlagMap{action.action_code}} = True;
         if (*hash<DataProviderActionInfo> act = app_actionmap{action.app}{action.action}) {
             # ignore duplicates to cover injection scenarios
             if (!DataProviderActionCatalog::compareActions(action, act)) {
@@ -577,6 +639,14 @@ public class DataProviderActionCatalog {
             return -1;
         }
         return t0.isEqual(t1) ? 0 : -1;
+    }
+
+    #! Returns all applications in the cache without initializing actions
+    /**
+        @return all applications in the cache without initializing actions
+    */
+    static *list<hash<DataProviderAppInfo>> getAllAppsNoInit() {
+        return appcache.values();
     }
 
     #! Returns all applications in the cache

@@ -465,6 +465,7 @@ public class DataProviderTest inherits QUnit::Test {
             "action_code": DPAT_API,
         };
         DataProviderActionCatalog::registerAction(action);
+        my_app.supports_apis = True;
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
