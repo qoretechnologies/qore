@@ -158,6 +158,9 @@ public class DataProvider {
         #! Static initializer list
         static list<code> ilist;
 
+        #! Deferred static initializers
+        static list<list<code>> ilist_save;
+
         #! Shutdown handlers; key -> handler
         static hash<string, code> smap;
 
@@ -673,10 +676,26 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Checks for static initialization
+    /** @since DataProvider 3.0
+    */
     static checkStaticInit() {
         if (ilist) {
             DataProvider::checkStaticInitIntern();
         }
+    }
+
+    #! Defers static initialization until restoreStaticInitialization() is called
+    /** @since DataProvider 3.0
+    */
+    static deferStaticInitialization() {
+        push ilist_save, ilist;
+    }
+
+    #! Restores static initialization deferred by deferStaticInitialization()
+    /** @since DataProvider 3.0
+    */
+    static restoreStaticInitialization() {
+        ilist += pop ilist_save;
     }
 
     #! Checks for static initialization
