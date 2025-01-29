@@ -79,6 +79,12 @@
       - the \c AbstractDataProviderType::getAcceptTypeHash(*bool) and
         \c AbstractDataProviderType::getReturnTypeHash(*bool) abstract methods now take an optional argument; classes
         inheriting this class and reimplementing these methods must add the argument and the logic to respect it
+    - fixed the list range operator to no longer return @ref NOTHING values for out of range elements
+      - implemented the following parse options:
+        - @ref broken-list-range "%broken-list-range"
+        - @ref correct-list-range "%correct-list-range"
+      - implemented the following new constant:
+        - @ref Qore::PO_BROKEN_LIST_RANGE "PO_BROKEN_LIST_RANGE"
     - Subtracting @ref NOTHING from any value will result in the same value; previously this would result in
       @ref NOTHING
 

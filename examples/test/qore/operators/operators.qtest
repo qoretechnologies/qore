@@ -1122,10 +1122,10 @@ class Test inherits QUnit::Test {
         assertEq((5,1,8,7), l[2..5]);
         assertEq((7,8,1,5), l[5..2]);
         assertEq((8,7,2), l[4..]);
-        assertEq((8,7,2,NOTHING,NOTHING),          l[4..8]);
-        assertEq((8,7,2,NOTHING,NOTHING), map  $1, l[4..8]);  # lazy evaluation
-        assertEq((8,7,2,      0,      0), map +$1, l[4..8]);  # lazy evaluation
-        assertEq((NOTHING,NOTHING,2,7,8), l[8..4]);
+        assertEq((8,7,2),          l[4..8]);
+        assertEq((8,7,2), map  $1, l[4..8]);  # lazy evaluation
+        assertEq((8,7,2), map +$1, l[4..8]);  # lazy evaluation
+        assertEq((2,7,8), l[8..4]);
         assertEq((7,3,5,1), l[0..3]);
         assertEq((7,3,5,1), l[..3]);
         assertEq((16,2,10,6), map 2*$1, l[4..1]);    # lazy evaluation
@@ -1134,7 +1134,7 @@ class Test inherits QUnit::Test {
         assertEq(23, foldl $1 + 2*$2, l[(0..2)]);    # lazy evaluation
         assertEq(NOTHING, l[8]);
         assertEq((NOTHING,), l[8,]);
-        assertEq((NOTHING,NOTHING,NOTHING,NOTHING,), l[8..11]);
+        assertEq((), l[8..11]);
 
         assertEq(   ((8,3,4), "asdf", 5, {"f":3, "g":2}),
                  (4, (8,3,4), "asdf", 5, {"f":3, "g":2}, 1) [1 .. 4]);
@@ -1265,7 +1265,7 @@ class Test inherits QUnit::Test {
         }
 
         {
-            list l0 = (1,2,3,4,5,6,7);
+            list<auto> l0 = (1,2,3,4,5,6,7);
             assertEq((2,NOTHING,4,5,6), l0[1,45,3..4,5]);
             {
                 any x = (0,);
@@ -1274,28 +1274,28 @@ class Test inherits QUnit::Test {
                 assertEq((1,NOTHING,4,5,1,6), remove l1[0,45,3..4,x,5]);
                 assertEq((2,3,7), l1);
                 l1 = l0;
-                assertEq((NOTHING,NOTHING), l1[7..8]);
-                assertEq((NOTHING,NOTHING), remove l1[7..8]);
+                assertEq((), l1[7..8]);
+                assertEq((), remove l1[7..8]);
                 assertEq(l0, l1);
                 l1 = l0;
-                assertEq((7,NOTHING,NOTHING), l1[6..8]);
-                assertEq((7,NOTHING,NOTHING), remove l1[6..8]);
+                assertEq((7,), l1[6..8]);
+                assertEq((7,), remove l1[6..8]);
                 assertEq((1,2,3,4,5,6), l1);
                 l1 = l0;
-                assertEq((6,7,NOTHING,NOTHING), l1[5..8]);
-                assertEq((6,7,NOTHING,NOTHING), remove l1[5..8]);
+                assertEq((6,7,), l1[5..8]);
+                assertEq((6,7,), remove l1[5..8]);
                 assertEq((1,2,3,4,5), l1);
                 l1 = l0;
-                assertEq((NOTHING,NOTHING,7,6), l1[8..5]);
-                assertEq((NOTHING,NOTHING,7,6), remove l1[8..5]);
+                assertEq((7,6), l1[8..5]);
+                assertEq((7,6), remove l1[8..5]);
                 assertEq((1,2,3,4,5), l1);
                 l1 = l0;
-                assertEq((NOTHING,NOTHING,7), l1[8..6]);
-                assertEq((NOTHING,NOTHING,7), remove l1[8..6]);
+                assertEq((7,), l1[8..6]);
+                assertEq((7,), remove l1[8..6]);
                 assertEq((1,2,3,4,5,6), l1);
                 l1 = l0;
-                assertEq((NOTHING,NOTHING), l1[8..7]);
-                assertEq((NOTHING,NOTHING), remove l1[8..7]);
+                assertEq((), l1[8..7]);
+                assertEq((), remove l1[8..7]);
             }
             list l1 = remove l0[1,45,3,5,3];
             assertEq((2,NOTHING,4,6,4), l1);
@@ -1312,14 +1312,14 @@ class Test inherits QUnit::Test {
             assertEq((1,4), l0);
             l0 = (1,2,3,4,5,6,7);
             assertEq((NOTHING, NOTHING), l0[45,46]);
-            assertEq((NOTHING, NOTHING), l0[45..46]);
+            assertEq((), l0[45..46]);
             assertEq((NOTHING, NOTHING, NOTHING), l0[45..46,47]);
             assertEq((NOTHING, NOTHING), map $1, l0[45,46]);
-            assertEq((NOTHING, NOTHING), map $1, l0[45..46]);
+            assertEq((), map $1, l0[45..46]);
             assertEq((NOTHING, NOTHING, NOTHING), map $1, l0[45..46,47]);
             assertEq((NOTHING, NOTHING), remove l0[45,46]);
-            assertEq((NOTHING, NOTHING), remove l0[45..46]);
-            assertEq((NOTHING, NOTHING, NOTHING), remove l0[45..46,47]);
+            assertEq((), remove l0[45..46]);
+            assertEq((NOTHING,), remove l0[45..46,47]);
         }
 
         {

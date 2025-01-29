@@ -26,6 +26,7 @@
     |@ref broken-cast "%broken-cast"|Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
     |@ref broken-int-assignments "%broken-int-assignments"|Use old pre-0.8.12 broken @ref int_type "int" and @ref softint_type "softint" runtime handling where type errors were ignored at runtime
     |@ref broken-list-parsing "%broken-list-parsing"|Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid
+    |@ref broken-list-range "%broken-list-range"|Assume broken list range operator as per pre-2.0
     |@ref broken-logic-precedence "%broken-logic-precedence"|Use old pre-0.8.12 precedence of logical and bitwise operators
     |@ref broken-loop-statement "%broken-loop-statement"|Accept @ref break "break" and @ref continue "continue" outside of loops as with pre-0.8.13
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
@@ -36,6 +37,7 @@
     |@ref correct-cast "%correct-cast"|revert the effect of the @ref broken-cast "%broken-cast" parse option
     |@ref correct-int-assignments "%correct-int-assignments"|revert the effect of the @ref broken-int-assignments "%broken-int-assignments" parse option
     |@ref correct-list-parsing "%correct-list-parsing"|revert the effect of the @ref broken-list-parsing "%broken-list-parsing" parse option
+    |@ref correct-list-range "%correct-list-range"|revert the effect of the @ref broken-list-range "%broken-list-range" parse option
     |@ref correct-logic-precedence "%correct-logic-precedence"|revert the effect of the @ref broken-logic-precedence "%broken-logic-precedence" parse option
     |@ref correct-loop-statement "%correct-loop-statement"|revert the effect of the @ref broken-loop-statement "%broken-loop-statement" parse option
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
@@ -349,6 +351,26 @@
     @since %Qore 0.8.12
 
     <hr>
+    @section broken-list-range %broken-list-range
+
+    @par Parse Directive:
+    <tt>%%broken-list-range</tt>
+
+    @par Command Line:
+    <tt>-pbroken-list-range</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_BROKEN_LIST_RANGE
+
+    @par Description:
+    Use old pre-2.0 broken list range operator where out-of-range values would result in returning @ref NOTHING
+    values, breaking strongly-typed lists and contrary to the behavior of the same operator on a string
+
+    @see @ref correct-list-range "%correct-list-range"
+
+    @since %Qore 2.0
+
+    <hr>
     @section broken-logic-precedence %broken-logic-precedence
 
     @par Parse Directive:
@@ -577,6 +599,25 @@ i+ =4;
     @see @ref broken-list-parsing "%broken-list-parsing"
 
     @since %Qore 0.8.12.10
+
+    <hr>
+    @section correct-list-range %correct-list-range
+
+    @par Parse Directive:
+    n/a
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Reverts the effect of the @ref broken-list-range "%broken-list-range" parse option.
+
+    @see @ref broken-list-range "%broken-list-range"
+
+    @since %Qore 2.0
 
     <hr>
     @section correct-logic-precedence %correct-logic-precedence

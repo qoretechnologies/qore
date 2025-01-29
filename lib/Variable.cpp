@@ -1535,23 +1535,29 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 #endif
 }
 
-static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon, ind_set_t& iset, unsigned i) {
+static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon,
+        ind_set_t& iset, unsigned i, bool is_range = false) {
     QoreValue p;
+    bool push;
     if (ind >= 0 && ind < (int64)l.size()) {
         iset.insert(ind);
         p = l.getReferencedEntry(ind);
+        push = true;
+    } else {
+        push = !is_range || runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
     }
 
-    // process common type
-    if (!i) {
-        vtype = p.getTypeInfo();
-        vcommon = true;
-    }
-    else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, p.getTypeInfo())) {
-        vcommon = false;
-    }
+    if (push) {
+        // process common type
+        if (!i) {
+            vtype = p.getTypeInfo();
+            vcommon = true;
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, p.getTypeInfo())) {
+            vcommon = false;
+        }
 
-    v.push(p, nullptr);
+        v.push(p, nullptr);
+    }
 }
 
 static int do_string_value(QoreStringNode& v, QoreStringNode& str, int64 ind, ind_set_t& iset, size_t len, ExceptionSink* xsink) {
@@ -1588,11 +1594,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
     const QoreListNode* rl = nullptr;
     if (rh->getType() == NT_LIST) {
         rl = rh->get<const QoreListNode>();
-    }
-    else {
+    } else {
         ind = rh->getAsBigInt();
         if (ind < 0) {
-            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a non-negative integer)", ind);
+            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+                "non-negative integer)", ind);
             return;
         }
     }
@@ -1612,8 +1618,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
             if (!rl) {
                 if (ind < (int64)l->size())
                     v = qore_list_private::get(*l)->takeExists(ind);
-            }
-            else {
+            } else {
                 direct_list = true;
                 // calculate the runtime element type if possible
                 const QoreTypeInfo* vtype = nullptr;
@@ -1624,7 +1629,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 ConstListIterator li(rl);
                 v = new QoreListNode(autoTypeInfo);
                 while (li.next()) {
-                    do_list_value(*v->get<QoreListNode>(), *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, li.index());
+                    do_list_value(*v->get<QoreListNode>(), *l, li.getValue().getAsBigInt(), vtype, vcommon, iset,
+                        li.index());
                 }
 
                 // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -1667,8 +1673,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                     v = str->substr(ind, 1, xsink);
                 else
                     v = new QoreStringNode(str->getEncoding());
-            }
-            else {
+            } else {
                 v = new QoreStringNode(str->getEncoding());
                 // keep a set of offsets removed to remove them from the list in reverse order
                 ind_set_t iset;
@@ -1767,17 +1772,19 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             ind_set_t iset;
             for (unsigned i = 0; i < vl.size(); ++i) {
                 ValueEvalOptimizedRefHolder rh(vl[i], xsink);
-                if (*xsink)
+                if (*xsink) {
                     break;
-                bool is_range = (vl[i].getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
+                }
+                bool is_range = (vl[i].getType() == NT_OPERATOR &&
+                    dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
                     assert(rh->getType() == NT_LIST);
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
-                        do_list_value(**v, *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, i + li.index());
+                        do_list_value(**v, *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, i + li.index(),
+                            true);
                     }
-                }
-                else {
+                } else {
                     do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i);
                 }
             }
@@ -1825,7 +1832,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                 ValueEvalOptimizedRefHolder rh(vl[i], xsink);
                 if (*xsink)
                     break;
-                bool is_range = (vl[i].getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
+                bool is_range = (vl[i].getType() == NT_OPERATOR
+                    && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
                     assert(rh->getType() == NT_LIST);
                     ConstListIterator li(rh->get<const QoreListNode>());
@@ -1835,8 +1843,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     }
                     if (*xsink)
                         break;
-                }
-                else {
+                } else {
                     if (do_string_value(**v, *str, rh->getAsBigInt(), iset, len, xsink))
                         break;
                 }
@@ -1876,7 +1883,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                 ValueEvalOptimizedRefHolder rh(vl[i], xsink);
                 if (*xsink)
                     break;
-                bool is_range = (vl[i].getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
+                bool is_range = (vl[i].getType() == NT_OPERATOR
+                    && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 if (is_range) {
                     assert(rh->getType() == NT_LIST);
                     ConstListIterator li(rh->get<const QoreListNode>());
@@ -1927,21 +1935,25 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     if (!lvh)
         return;
 
+    bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
+
     int64 start, stop, seq_size;
     {
         QoreValue tmp = lvh.getValue();
-        if (!op->getEffectiveRange(tmp, start, stop, seq_size, *start_index, *stop_index, xsink)) {
+        if (!op->getEffectiveRange(tmp, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink)) {
             if (!*xsink) {
                 AbstractQoreNode* v;
                 switch (lvh.getType()) {
                     case NT_LIST: {
                         v = new QoreListNode(autoTypeInfo);
-                        int d = stop - start;
-                        if (d < 0)
-                            d = -d;
-                        ++d;
-                        while (d--) {
-                            static_cast<QoreListNode*>(v)->push(QoreValue(), xsink);
+                        if (broken_list_range) {
+                            int d = stop - start;
+                            if (d < 0)
+                                d = -d;
+                            ++d;
+                            while (d--) {
+                                static_cast<QoreListNode*>(v)->push(QoreValue(), xsink);
+                            }
                         }
                         break;
                     }
@@ -1972,8 +1984,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
         int64 t = stop;
         stop = start;
         start = t;
-    }
-    else
+    } else
         reverse = false;
 
     direct_list = true;

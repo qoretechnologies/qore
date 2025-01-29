@@ -118,12 +118,15 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
 
 QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder seq(e[0], xsink);
-    if (*xsink)
+    if (*xsink) {
         return QoreValue();
+    }
+
+    bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
 
     qore_type_t seq_type = seq->getType();
     int64 start, stop, seq_size;
-    bool empty = !getEffectiveRange(*seq, start, stop, seq_size, xsink);
+    bool empty = !getEffectiveRange(*seq, start, stop, seq_size, broken_list_range, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -131,21 +134,23 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
         case NT_LIST: {
             const QoreListNode* l = seq->get<const QoreListNode>();
             ReferenceHolder<QoreListNode> rv(new QoreListNode(l->getValueTypeInfo()), xsink);
-            if (start < stop) {
-                for (int64 i = start; i <= stop; ++i) {
-                    rv->push(l->getReferencedEntry(i), xsink);
-                }
-            }
-            else {
-                for (int64 i = start; i >= stop; --i) {
-                    rv->push(l->getReferencedEntry(i), xsink);
+            if (!empty || broken_list_range) {
+                if (start < stop) {
+                    for (int64 i = start; i <= stop; ++i) {
+                        rv->push(l->getReferencedEntry(i), xsink);
+                    }
+                } else {
+                    for (int64 i = start; i >= stop; --i) {
+                        rv->push(l->getReferencedEntry(i), xsink);
+                    }
                 }
             }
             return rv.release();
         }
         case NT_STRING: {
-            if (empty)
+            if (empty) {
                 return new QoreStringNode;
+            }
 
             if (start < stop)
                 return seq->get<const QoreStringNode>()->substr(start, stop - start + 1, xsink);
@@ -154,8 +159,9 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
             return tmp->substr(seq_size - start - 1, start - stop + 1, xsink);
         }
         case NT_BINARY: {
-            if (empty)
+            if (empty) {
                 return new BinaryNode;
+            }
 
             int64 length = start < stop ? stop - start + 1 : start - stop + 1;
             SimpleRefHolder<BinaryNode> bin(new BinaryNode);
@@ -175,7 +181,8 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
     return QoreValue();
 }
 
-FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type, ExceptionSink* xsink) const {
+FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalIteratorImpl(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
     value_type = list;
 
     ValueEvalOptimizedRefHolder seq(e[0], xsink);
@@ -183,8 +190,9 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
         return nullptr;
 
     if (seq->getType() == NT_LIST) {
+        bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
         int64 start, stop, seq_size;
-        if (getEffectiveRange(*seq, start, stop, seq_size, xsink)) {
+        if (getEffectiveRange(*seq, start, stop, seq_size, broken_list_range, xsink)) {
             if (!(runtime_get_parse_options() & PO_BROKEN_RANGE)) {
                 if (start <= stop) {
                     ++stop;
@@ -243,7 +251,8 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
 }
 
 // returns true iff the range is nonempty
-bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size, ExceptionSink* xsink) const {
+bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop,
+        int64& seq_size, bool broken_list_range, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder start_index(e[1], xsink);
     if (*xsink)
         return false;
@@ -251,10 +260,12 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     if (*xsink)
         return false;
 
-    return getEffectiveRange(seq, start, stop, seq_size, *start_index, *stop_index, xsink);
+    return getEffectiveRange(seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
 }
 
-bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size, const QoreValue& start_index, const QoreValue& stop_index, ExceptionSink* xsink) {
+bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop,
+        int64& seq_size, const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
+        ExceptionSink* xsink) {
     qore_type_t seq_type = seq.getType();
     if (seq_type != NT_LIST && seq_type != NT_STRING && seq_type != NT_BINARY) {
         xsink->raiseException("ILLEGAL-EXPRESSION", "Index range can be applied only to lists, strings and binaries");
@@ -272,25 +283,32 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     start = no_start ? 0 : start_index.getAsBigInt();
     stop = no_stop ? seq_size - 1 : stop_index.getAsBigInt();
 
-    if ((no_start && stop < 0) || (no_stop && start > seq_size - 1))
+    if ((no_start && stop < 0) || (no_stop && start >= seq_size)) {
         return false;
+    }
 
     if (start < stop) {
-        if (start > seq_size - 1 || stop < 0)
+        if (start >= seq_size || stop < 0) {
             return false;
+        }
 
-        if (start < 0)
+        if (start < 0) {
             start = 0;
-        if (seq_type != NT_LIST && stop > seq_size - 1)
+        }
+        if (stop >= seq_size && (!broken_list_range || seq_type != NT_LIST)) {
             stop = seq_size - 1;
+        }
     } else {
-        if (stop > seq_size - 1 || start < 0)
+        if (stop > seq_size - 1 || start < 0) {
             return false;
+        }
 
-        if (stop < 0)
+        if (stop < 0) {
             stop = 0;
-        if (seq_type != NT_LIST && start > seq_size - 1)
+        }
+        if (start >= seq_size && (!broken_list_range || seq_type != NT_LIST)) {
             start = seq_size - 1;
+        }
     }
     return true;
 }
