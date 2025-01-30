@@ -84,6 +84,10 @@ public class DataProvider {
             "gcal": "GoogleCalendarDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+
+            # provided by the jni module
+            "kafka": "KafkaDataProvider",
+
             "mewsrest": "MewsRestDataProvider",
 
             # provided by the jni module

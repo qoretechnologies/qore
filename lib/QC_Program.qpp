@@ -2415,8 +2415,10 @@ ProgramControl Program::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
    return QoreProgram::getQoreObject(p);
 }
 
-//! issues a module command for the given module; the module is loaded into the current %Program object if it is not already present
-/** @par Example:
+//! issues a module command for the given module
+/** The module is loaded into the current %Program object if it is not already present
+
+    @par Example:
     @code{.py}
 pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
     @endcode
@@ -2496,3 +2498,36 @@ Expression Program::getExpression(string source, string label) {
 list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
     return p->getFeatureList();
 }
+
+//! Issues a module command for the given module in the current Program object
+/** The module is loaded into the current %Program object if it is not already present
+
+    @par Example:
+    @code{.py}
+Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
+    @endcode
+
+    @param module the module name
+    @param cmd the command string to execute to be parsed by the module
+
+    @throw PARSE-COMMAND-ERROR the module does not support commands
+
+    @note command errors can result in other module- and command-specific exceptions being thrown; see
+    documentation for the module and command in question for more details
+
+    @since %Qore 2.0
+*/
+static nothing Program::issueModuleCmd(string module, string cmd) {
+    TempEncodingHelper tmp_module(module, QCS_DEFAULT, xsink);
+    if (!tmp_module) {
+        return QoreValue();
+    }
+
+    TempEncodingHelper tmp_cmd(cmd, QCS_DEFAULT, xsink);
+    if (!tmp_cmd) {
+        return QoreValue();
+    }
+
+    QMM.issueRuntimeCmd(tmp_module->c_str(), getProgram(), **tmp_cmd, xsink);
+}
+
