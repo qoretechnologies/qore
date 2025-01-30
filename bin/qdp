@@ -889,7 +889,8 @@ class QdpCmd {
         if (action.options) {
             printf("Options:\n");
             foreach hash<auto> i in (action.options.pairIterator()) {
-                printf(" - %s (%s%s): %s\n", i.key, i.value.required ? "" : "*", i.value.type.getName(),
+                string tn = i.value.type.getName();
+                printf(" - %s (%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn,
                     i.value.short_desc);
             }
         } else {
