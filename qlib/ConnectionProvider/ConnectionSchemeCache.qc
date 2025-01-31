@@ -90,6 +90,9 @@ public hashdecl ConnectionSchemeInfo {
     #! Connection options: name -> option info
     *hash<string, hash<ConnectionOptionInfo>> options;
 
+    #! Set of sensitive options: name -> True
+    *hash<string, bool> sensitive_options;
+
     #! URL provided automatically?
     bool auto_url = False;
 
@@ -271,11 +274,14 @@ public class ConnectionSchemeCache {
         }
         remove initmap{scheme};
 
+        # set sensitive option map
+        entry.sensitive_options = map {$1.key: True}, entry.options.pairIterator(), $1.value.sensitive;
+
         cache{scheme} = entry;
         # sort connection options when caching
         cache{scheme}.options = cache{scheme}.options{sort(keys cache{scheme}.options)};
 
-         # deregister the scheme automatically if module initialization fails
+        # deregister the scheme automatically if module initialization fails
         ImplicitModuleTransaction::add(sub () { ConnectionSchemeCache::deregisterScheme(scheme); });
 
         return True;

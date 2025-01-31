@@ -427,11 +427,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             "dataprovider_subtypes": getDataProviderSubtypes(),
             "needs_auth": needsAuth(),
         });
+        h.opts = orig_opts;
         if (!opts.with_passwords) {
             h.url = safe_url;
             delete h.url_hash.password;
+            # remove all sensitive option values as well
+            map remove h.opts{$1}, keys getConnectionSchemeInfo().sensitive_options;
         }
-        h.opts = orig_opts;
         # sort options by key
         if (h.opts) {
             h.opts = h.opts{sort(keys h.opts)};
