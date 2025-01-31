@@ -220,6 +220,11 @@ class QdpCmd {
             DataProvider::addOptions(DPO_EnableServers);
         }
 
+        on_error rethrow $1.err, sprintf("%s%s", $1.desc,
+            $1.arg instanceof object && $1.arg.hasCallableMethod("getCause")
+                ? ": " + $1.arg.getCause().toString()
+                : NOTHING);
+
         AbstractDataProvider provider;
         {
             # first extract any data provider options
