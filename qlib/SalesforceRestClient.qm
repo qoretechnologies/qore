@@ -1048,7 +1048,7 @@ sfrest.logout();
     #! Returns @ref True if the response was related to an authorization token error
     /** @return @ref True if the response was related to an authorization token error
     */
-    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_decoded, *string body_content_type,
+    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
             auto body) {
         if (status_code != 403) {
             return False;
@@ -1056,7 +1056,7 @@ sfrest.logout();
         if (body == "Bad_OAuth_Token") {
             return True;
         }
-        if (!body_decoded) {
+        if (!body_deserialized) {
             return body =~ /token validity expired/;
         }
         return body.error_description == "token validity expired";

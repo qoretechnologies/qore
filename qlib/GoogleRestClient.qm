@@ -199,12 +199,12 @@ GoogleRestClient rest(opts);
     #! Returns @ref True if the response was related to an authorization token error
     /** @return @ref True if the response was related to an authorization token error
     */
-    bool isAuthTokenError(int status_code, hash<auto> headers, *bool body_decoded, *string body_content_type,
+    bool isAuthTokenError(int status_code, hash<auto> headers, *bool body_deserialized, *string body_content_type,
             auto body) {
         if (status_code != 401) {
             return False;
         }
-        if (!body_decoded) {
+        if (!body_deserialized) {
             return body =~ /Invalid Credentials/;
         }
         return body.error.errors[0].message == "Invalid Credentials";
