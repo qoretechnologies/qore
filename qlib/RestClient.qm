@@ -525,6 +525,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         string oauth2_client_secret;
         #! OAuth2 scope
         *softlist<string> oauth2_scopes;
+        #! OAuth2 scope separator char
+        string oauth2_scope_separator_char;
         #! OAuth2 extra auth args
         *hash<auto> oauth2_auth_args;
         #! OAuth2 extra token args
@@ -627,6 +629,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           that implement OAuth2 authorization code client handling
         - \c oauth2_refresh_token: An OAuth2 refresh token (complements option \c token)
         - \c oauth2_scopes: A list of OAuth2 scopes to request; ignored if the \c token option is set
+        - \c oauth2_scope_separator_char: A separator character for OAuth2 scopes in URI arguments
         - \c oauth2_token_args: Extra arguments for OAuth2 token requests to \c oauth2_token_url; if this option is
           set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as well
           when the request is made to the \c oauth2_alt_token_url
@@ -756,6 +759,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_scopes) {
             oauth2_scopes = opts.oauth2_scopes;
         }
+        if (opts.oauth2_scope_separator_char) {
+            oauth2_scope_separator_char = opts.oauth2_scope_separator_char;
+        }
         if (opts.oauth2_pkce) {
             oauth2_pkce = True;
         }
@@ -822,6 +828,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "oauth2_redirect_url": oauth2_redirect_url,
             "oauth2_refresh_token": refresh_token,
             "oauth2_scopes": oauth2_scopes,
+            "oauth2_scope_separator_char": oauth2_scope_separator_char,
             "oauth2_token_args": oauth2_token_args,
             "oauth2_token_auth_secret_only": oauth2_token_auth_secret_only,
             "oauth2_token_url": oauth2_token_url,
@@ -1583,6 +1590,16 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         return request_body;
     }
 
+    #! Returns a scope string URI argument
+    /** @param scopes the list of scopes to use
+        @param separator the separator string to use
+
+        @since %RestClient 2.2
+    */
+    static *string getScopeString(*list<auto> scopes, string separator = " ") {
+        return scopes ? (foldl $1 + separator + $2, scopes) : NOTHING;
+    }
+
     #! Sets options from the OAuth2 login response on the local object
     /** @since %RestClient 2.0
     */
@@ -1848,7 +1865,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         }
         if (oauth2_scopes) {
             login += {
-                "scope": foldl $1 + " " + $2, oauth2_scopes,
+                "scope": getScopeString(oauth2_scopes, oauth2_scope_separator_char),
             };
         }
         if (grant_type == "password") {
@@ -2100,6 +2117,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
       that implement OAuth2 authorization code client handling
     - \c "oauth2_refresh_token": An OAuth2 refresh token (complements option \c "token")
     - \c "oauth2_scopes": A list of OAuth2 scopes to request; ignored if the \c token option is set
+    - \c "oauth2_scope_separator_char": A separator character for OAuth2 scopes in URI arguments
     - \c "oauth2_token_args": Extra arguments for OAuth2 authentication requests to \c oauth2_token_url; if this
       option is set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as
       well when the request is made to the \c oauth2_alt_token_url
@@ -2342,6 +2360,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "short_desc": "List of OAuth2 scopes to request",
                     "type": "list",
                     "desc": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+                },
+                "oauth2_scope_separator_char": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Scope Separator",
+                    "short_desc": "A separator character for OAuth2 scopes in URI arguments",
+                    "type": "string",
+                    "desc": "A separator character for OAuth2 scopes in URI arguments",
                 },
                 "oauth2_token_args": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token Refresh Args",
@@ -2810,7 +2834,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # get local names for options
         string oauth2_client_id_opt = getOAuth2OptionName("oauth2_client_id");
         *list<auto> scopes = info.hasKey("scopes") ? info.scopes : real_opts.oauth2_scopes;
-        *string scope = scopes ? (foldl $1 + " " + $2, scopes) : NOTHING;
+        *string scope = RestClient::getScopeString(scopes, real_opts.oauth2_scope_separator_char);
         if (scope.val()) {
             scope = encode_url(scope);
         }
@@ -2823,7 +2847,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         uri += sprintf("scope=%s&redirect_uri=%s&client_id=%s&response_type=%s", scope,
             info.redirect_uri ?? opts.oauth2_redirect_url, opts{oauth2_client_id_opt}, info.response_type);
         # add any optional auth args
-        map uri += sprintf("&%s=%s", $1.key, getUriValue($1.value)), opts.oauth2_auth_args.pairIterator();
+        map uri += sprintf("&%s=%s", $1.key, getUriValue($1.value, real_opts.oauth2_scope_separator_char)),
+            opts.oauth2_auth_args.pairIterator();
         if (info.state) {
             uri += sprintf("&state=%s", info.state);
         }
@@ -2987,13 +3012,13 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     /*
         @since %RestClient 2.0
     */
-    private static softstring getUriValue(auto v) {
+    private static softstring getUriValue(auto v, string separator = " ") {
         switch (v.typeCode()) {
             case NT_BOOLEAN:
                 return v ? "true" : "false";
 
             case NT_LIST:
-                return foldl $1 + " " + $2, v;
+                return RestClient::getScopeString(v, separator);
         }
         return v;
     }
