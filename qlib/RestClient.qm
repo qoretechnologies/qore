@@ -2948,8 +2948,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @since %RestClient 2.0
     */
     private static softstring getUriValue(auto v) {
-        if (v.typeCode() == NT_BOOLEAN) {
-            return v ? "true" : "false";
+        switch (v.typeCode()) {
+            case NT_BOOLEAN:
+                return v ? "true" : "false";
+
+            case NT_LIST:
+                return foldl $1 + " " + $2, v;
         }
         return v;
     }
