@@ -2730,9 +2730,19 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
     - the query, which is any string following a \c "?" character terminating the path and up to a possible \c "#" character
     - the fragment, which is any string following a \c "#" character
 
-    For all parts, any percent-encoded codes (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponinding character.  The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path component is subjected to standard percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a \c "#" character, and this is decoded with the same rules as in the path component.
+    For all parts, any percent-encoded codes
+    (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponding
+    character. The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path
+    component is subjected to standard percent encoding.  The query component is any part of the URI string following
+    a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is
+    subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any
+    \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with
+    @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a
+    \c "#" character, and this is decoded with the same rules as in the path component.
 
-    @note the difference between this function and @ref Qore::decode_url() is that this function employs special logic in the decoding of the different components of the URI string for compatibility with common AJAX libraries that encode ASCII spaces as \c "+" in the query component of the URI string.
+    @note the difference between this function and @ref Qore::decode_url() is that this function employs special logic
+    in the decoding of the different components of the URI string for compatibility with common AJAX libraries that
+    encode ASCII spaces as \c "+" in the query component of the URI string.
 
     @see
     - encode_uri_request()

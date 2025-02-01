@@ -1269,10 +1269,11 @@ string pass = get_random_string();
 */
 public string sub get_random_string(softint len = 15, int level = 3) {
     string str;
-    if (level < 1)
+    if (level < 1) {
         level = 1;
-    else if (level > 4)
+    } else if (level > 4) {
         level = 4;
+    }
     --level;
     level = (26, 52, 62, 88)[level];  # 15(77), 7(84), 4
     # do not seed the random number generator and use rand() as this requires PO_PROCESS_CONTROL permissions
@@ -1291,8 +1292,7 @@ public string sub get_random_string(softint len = 15, int level = 3) {
                         (v < 84 ? chr(v - 19) :
                             chr(v + 39))))));
         }
-    }
-    else {
+    } else {
         ReadOnlyFile f("/dev/urandom");
         for (int i = 0; i < len; ++i) {
             int v = f.readi2().abs() % level;
@@ -1304,7 +1304,7 @@ public string sub get_random_string(softint len = 15, int level = 3) {
                             chr(v + 39))))));
         }
     }
-    return str;
+    return str ?? "";
 }
 
 #! returns a multi-line string from the exception hash argument suitable for logging or output on the console
