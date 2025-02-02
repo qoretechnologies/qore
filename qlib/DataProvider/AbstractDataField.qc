@@ -225,8 +225,9 @@ public class AbstractDataField inherits Qore::Serializable {
         @return the value to be assigned; can be converted by the type
     */
     auto acceptsValue(auto value) {
-        if (!exists value && exists default_value) {
-            return default_value;
+        # do not reference default_value directly here in case it's provided with code
+        if (!exists value && exists (auto dv = getDefaultValue())) {
+            return dv;
         }
         try {
             if (allowed_values && !allowed_values_creatable) {
@@ -278,7 +279,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "display_name": getDisplayName(),
             "short_desc": getShortDescription(),
             "desc": getDescription(),
-            "default_value": default_value,
+            "default_value": getDefaultValue(),
             "example_value": getExampleValue(),
             "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
@@ -297,7 +298,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "display_name": getDisplayName(),
             "short_desc": getShortDescription(),
             "desc": getDescription(),
-            "default_value": default_value,
+            "default_value": getDefaultValue(),
             "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
@@ -377,7 +378,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.0
     */
     auto getExampleValue(*hash<string, bool> emap) {
-        return default_value ?? getType().getExampleValue(emap);
+        return getDefaultValue() ?? getType().getExampleValue(emap);
     }
 
     #! Converts a long description into a short description

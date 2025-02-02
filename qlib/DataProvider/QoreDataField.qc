@@ -243,7 +243,7 @@ public class QoreDataField inherits AbstractDataField {
             "display_name": display_name,
             "short_desc": short_desc,
             "desc": desc,
-            "default_value": default_value,
+            "default_value": getDefaultValue(),
             "example_value": example_value,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,

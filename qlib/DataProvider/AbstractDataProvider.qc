@@ -100,6 +100,8 @@ public hashdecl DataProviderOptionInfo {
     */
     *string ref_data;
 
+    *string default_ref_data;
+
     #! Should this option be preselected?
     *bool preselected;
 }
@@ -2466,6 +2468,95 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
     }
 
+    #! Returns information on supported reference data values
+    /** @return a hash of supported reference data values; keys in the hash returned are supported in calls to
+        @ref getReferenceDataValue()
+
+        @since DataProvider 3.0
+    */
+    *hash<string, bool> getSupportedReferenceDataValues() {
+        # intentionally empty
+    }
+
+    #! Returns a reference data value of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the reference data value
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the reference data value or nothing if an exception occured retrieving the reference data value
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceValueDataSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceDataValue(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValueSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceDataValue(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedReferenceDataValues()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data value type %y is unsupported; supported "
+                "reference data value types: %y", type, rd);
+        }
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @throw REFERENCE-DATA-ERROR thrown if there is an error retrieving the reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValue(string type, *hash<auto> action_opts) {
+        on_error rethrow "REFERENCE-DATA-ERROR", sprintf("Failed to retrieve reference data value of type %y: %s: %s",
+            type, $1.err, $1.desc);
+        return getReferenceDataValueImpl(type, action_opts);
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @throw REFERENCE-DATA-ERROR thrown if there is an error retrieving the reference data
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValueEx(string type, *hash<auto> action_opts) {
+        if (exists (auto rv = getReferenceDataValue(type, action_opts))) {
+            return rv;
+        }
+        if (!(*hash<string, bool> rd = getSupportedReferenceDataValues()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data value type %y is unsupported; supported "
+                "reference data value types: %y", type, rd);
+        }
+    }
+
     #! Update any connection used by the data provider
     /** @param conn the new connection object
 
@@ -3794,6 +3885,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        # intentionally empty
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @since DataProvider 3.0
+    */
+    private auto getReferenceDataValueImpl(string type, *hash<auto> action_opts) {
         # intentionally empty
     }
 

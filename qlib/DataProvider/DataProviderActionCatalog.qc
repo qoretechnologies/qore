@@ -241,6 +241,13 @@ public hashdecl ActionOptionInfo {
     */
     *string ref_data;
 
+    #! A tag allowing the default value to be returned dynamically as reference data
+    /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
+        @ref DataProvider::AbstractDataProvider::getReferenceDataValue() "AbstractDataProvider::getReferenceDataValue()"
+        in the available DataProvider when resolving application actions if this attribute is set
+    */
+    *string default_ref_data;
+
     #! If the option should be preselected
     bool preselected;
 

@@ -138,10 +138,12 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
                 if (start < stop) {
                     for (int64 i = start; i <= stop; ++i) {
                         rv->push(l->getReferencedEntry(i), xsink);
+                        assert(!*xsink);
                     }
                 } else {
                     for (int64 i = start; i >= stop; --i) {
                         rv->push(l->getReferencedEntry(i), xsink);
+                        assert(!*xsink);
                     }
                 }
             }
@@ -152,8 +154,9 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
                 return new QoreStringNode;
             }
 
-            if (start < stop)
+            if (start < stop) {
                 return seq->get<const QoreStringNode>()->substr(start, stop - start + 1, xsink);
+            }
 
             SimpleRefHolder<QoreStringNode> tmp(seq->get<const QoreStringNode>()->reverse());
             return tmp->substr(seq_size - start - 1, start - stop + 1, xsink);
@@ -165,9 +168,9 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, Excep
 
             int64 length = start < stop ? stop - start + 1 : start - stop + 1;
             SimpleRefHolder<BinaryNode> bin(new BinaryNode);
-            if (start < stop)
+            if (start < stop) {
                 bin->append(((char*)seq->get<const BinaryNode>()->getPtr()) + start, length);
-            else {
+            } else {
                 bin->preallocate(length);
                 for (int64 i = start; i >= stop; --i) {
                     char* p = (char*)bin->getPtr() + start - i;
@@ -207,8 +210,9 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     bool needs_deref;
     ValueHolder res(evalImpl(needs_deref, xsink), xsink);
 
-    if (*xsink)
+    if (*xsink) {
         return nullptr;
+    }
     if (res->getType() == NT_LIST) {
         value_type = list;
         return new QoreFunctionalListOperator(true, res.release().get<QoreListNode>(), xsink);
@@ -224,8 +228,9 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
     int64 i;
     {
         ValueHolder val(getValue(xsink), xsink);
-        if (*xsink)
+        if (*xsink) {
             return false;
+        }
         i = val->getAsBigInt();
     }
 
@@ -238,9 +243,9 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
             break;
         case NT_BINARY: {
             const BinaryNode* b = seq->get<const BinaryNode>();
-            if (i < 0 || (size_t)i >= b->size())
+            if (i < 0 || (size_t)i >= b->size()) {
                 val.setValue(new BinaryNode, true);
-            else {
+            } else {
                 BinaryNode* bin = new BinaryNode;
                 val.setValue(bin, true);
                 bin->append((unsigned char*)b->getPtr() + i, 1);
