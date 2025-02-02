@@ -692,14 +692,16 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     /** @since DataProvider 3.0
     */
     static deferStaticInitialization() {
-        push ilist_save, ilist;
+        push ilist_save, remove ilist;
     }
 
     #! Restores static initialization deferred by deferStaticInitialization()
     /** @since DataProvider 3.0
     */
     static restoreStaticInitialization() {
-        ilist += pop ilist_save;
+        if (*list<code> l = pop ilist_save) {
+            ilist += l;
+        }
     }
 
     #! Checks for static initialization
