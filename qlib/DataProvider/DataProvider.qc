@@ -163,7 +163,7 @@ public class DataProvider {
         static list<code> ilist;
 
         #! Deferred static initializers
-        static list<list<code>> ilist_save;
+        static list<*list<code>> ilist_save;
 
         #! Shutdown handlers; key -> handler
         static hash<string, code> smap;
