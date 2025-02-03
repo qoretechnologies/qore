@@ -40,8 +40,9 @@
  */
 class FileInputStream : public InputStream {
 public:
-    DLLLOCAL FileInputStream(const QoreStringNode *fileName, int64 timeout, int flags, ExceptionSink *xsink) : timeout(timeout) {
-        f.open2(xsink, fileName->getBuffer(), O_RDONLY | flags);
+    DLLLOCAL FileInputStream(const QoreStringNode* fileName, int64 timeout, int flags, ExceptionSink* xsink)
+            : timeout(timeout) {
+        f.open2(xsink, fileName->c_str(), O_RDONLY | flags);
     }
 
     DLLLOCAL FileInputStream(int fd) : timeout(-1) {
