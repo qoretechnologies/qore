@@ -664,6 +664,11 @@ public class DataProviderActionCatalog {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
+        foreach string app in (keys initmap) {
+            if (*code init = remove initmap{app}) {
+                DataProviderActionCatalog::doInit(init);
+            }
+        }
         return appcache.values();
     }
 
