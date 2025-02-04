@@ -282,12 +282,16 @@ bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata
     while (hi.next()) {
         QoreValue v = hi.get();
 #ifdef DEBUG
-        if (v.getType() == NT_OBJECT || v.getType() == NT_RUNTIME_CLOSURE)
-            printd(QRO_LVL, "RSetHelper::checkIntern() search %p '%s' key '%s' %p (%s)\n", obj, theclass->getName(), hi.getKey(), v.getInternalNode(), v.getTypeName());
+        if (v.getType() == NT_OBJECT || v.getType() == NT_RUNTIME_CLOSURE) {
+            printd(QRO_LVL, "RSetHelper::checkIntern() search %p '%s' key '%s' %p (%s)\n", obj, theclass->getName(),
+                hi.getKey(), v.getInternalNode(), v.getTypeName());
+        }
 #endif
-        if (v.hasNode() && scanCheck(rsh, v.getInternalNode()))
+        if (v.hasNode() && scanCheck(rsh, v.getInternalNode())) {
             return true;
-        printd(QRO_LVL, "RSetHelper::checkIntern() result %p '%s' key '%s' type %s\n", obj, theclass->getName(), hi.getKey(), v.getTypeName());
+        }
+        printd(QRO_LVL, "RSetHelper::checkIntern() result %p '%s' key '%s' type %s\n", obj, theclass->getName(),
+            hi.getKey(), v.getTypeName());
     }
 
     return false;

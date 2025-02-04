@@ -567,7 +567,11 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 SocketPollOperation spop = hc.startPollConnect();
                 assertEq("connect", spop.getGoal());
                 assertEq("connecting", spop.getState());
-                assertThrows("SOCKET-CONNECT-ERROR", \spop.continuePoll());
+                assertThrows("SOCKET-CONNECT-ERROR", sub () {
+                    while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                        Socket::poll((info,), 1s);
+                    }
+                });
             }
 
             HTTPClient hc({

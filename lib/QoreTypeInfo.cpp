@@ -1463,11 +1463,24 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
-        case QTS_TYPE:
+        case QTS_TYPE: {
+            qore_type_t t = n.getType();
+            // special handling for objects; check for object validity; if it's already been deleted,
+            // then we use NT_NOTHING
+            if (t == NT_OBJECT && !n.get<QoreObject>()->isValid()) {
+                t = NT_NOTHING;
+            }
+            if (u.t == NT_ALL || u.t == t) {
+                ok = true;
+            }
+            break;
+        }
+
         case QTS_EMPTYLIST:
         case QTS_EMPTYHASH:
-            if (u.t == NT_ALL || u.t == n.getType())
+            if (u.t == NT_ALL || u.t == n.getType()) {
                 ok = true;
+            }
             break;
     }
 
