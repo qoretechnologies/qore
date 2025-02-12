@@ -619,10 +619,11 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns any example value for type, if any
     /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
 
         @since DataProvider 3.0
     */
-    auto getExampleValue(*hash<string, bool> emap) {
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
         string u = self.uniqueHash();
         if (emap{u}) {
             return;
@@ -634,12 +635,12 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             if (isOrNothingType()) {
                 return;
             }
-            return map {$1.key: $1.value.getExampleValue(emap)}, fields.pairIterator();
+            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, fields.pairIterator();
         }
         int t = getBaseTypeCode();
         switch (getBaseTypeCode()) {
             case NT_INT: return 100;
-            case NT_STRING: return "string";
+            case NT_STRING: return fname.val() ? sprintf("Example %s", fname) : "example string";
             case NT_BOOLEAN: return True;
             case NT_FLOAT: return 3.1415927;
             case NT_NUMBER: return 3.1415927n;
@@ -651,7 +652,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                     return;
                 }
                 if (*AbstractDataProviderType etype = getElementType()) {
-                    return map etype.getExampleValue(emap), xrange(1);
+                    return map etype.getExampleValue(emap, fname), xrange(1);
                 }
                 return (1, 2);
             }
@@ -665,7 +666,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                     etype = cast<object>(self).getDefaultOtherElementType();
                 }
                 if (etype) {
-                    return map {$1: etype.getExampleValue(emap)}, ("a", "b");
+                    return map {$1: etype.getExampleValue(emap, fname ? fname + "." + $1 : $1)}, ("a", "b");
                 }
                 return {"a": 1, "b": "two"};
             }

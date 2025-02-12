@@ -226,14 +226,15 @@ public class QoreDataField inherits AbstractDataField {
 
     #! Returns any example value for the field, if present
     /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
 
         @return any example value for the field, otherwise the default value for the field, otherwise the example
         value for the type
 
         @since DataProvider 3.0
     */
-    auto getExampleValue(*hash<string, bool> emap) {
-        return example_value ?? default_value ?? AbstractDataField::getExampleValue(emap);
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+        return example_value ?? default_value ?? AbstractDataField::getExampleValue(emap, fname);
     }
 
     #! returns information about the field

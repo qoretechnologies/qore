@@ -516,7 +516,7 @@ class SchemaBase inherits Qore::Serializable {
     }
 
     #! returns an example value for the given type
-    private auto getExampleValue(string type, *string format) {
+    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
         if (enum) {
             auto rv = enum.firstKey();
             switch (type) {
@@ -552,7 +552,7 @@ class SchemaBase inherits Qore::Serializable {
                     case "date-time": return 1987-05-23T07:45:30Z;
                     case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
                     default:
-                        return "value";
+                        return sprintf("Example %s", fname ?? "string");
                 }
             }
             case "integer": {
@@ -3809,9 +3809,10 @@ public class BodyParameter inherits AbstractParameterObject {
 
     # returns an example value for a REST API call
     /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
     */
-    auto getExampleValue(*hash<string, bool> emap) {
-        return schema.getExampleValue(emap);
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+        return schema.getExampleValue(emap, fname);
     }
 }
 
@@ -4020,10 +4021,10 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
     }
 
     #! returns an example value of the parameter (default: @ref nothing)
-    auto getExampleValue(*hash<string, bool> emap) {
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
         if (exists defaultVal)
             return defaultVal;
-        return getExampleValue(type, format);
+        return getExampleValueWithFormat(type, format, fname);
     }
 
     #! validates default values
@@ -4892,21 +4893,21 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     }
 
     # returns an example value for a REST API call
-    auto getExampleValue(*hash<string, bool> emap) {
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
         if (exists example)
             return example;
         if (exists defaultVal)
             return defaultVal;
 
         if (type == "object") {
-            return map {$1.key: $1.value.getExampleValue(emap)}, properties.pairIterator();
+            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, properties.pairIterator();
         }
 
         if (type == "array") {
-            return (items.getExampleValue(emap),);
+            return (items.getExampleValue(emap, fname),);
         }
 
-        return SchemaBase::getExampleValue(type, format);
+        return SchemaBase::getExampleValueWithFormat(type, format);
     }
 
     #! validates the value against the schema definition
