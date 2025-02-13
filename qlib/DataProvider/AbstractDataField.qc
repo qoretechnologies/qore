@@ -379,7 +379,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.0
     */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
-        return getDefaultValue() ?? getType().getExampleValue(emap, getName());
+        return getDefaultValue() ?? getType().getExampleValue(emap, getDisplayName());
     }
 
     #! Converts a long description into a short description
