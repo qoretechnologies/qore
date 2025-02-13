@@ -736,7 +736,15 @@ class QdpCmd {
     static showRecord(AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
             string offset = "") {
         foreach hash<auto> i in (rec.pairIterator()) {
-            if (opts.required && (!i.value.isMandatory() || exists i.value.getDefaultValue())) {
+            auto dv = i.value.getDefaultValue();
+            if (!dv) {
+                if ((*string default_ref_data = i.value.getAttributes().default_ref_data).val()) {
+                    dv = prov.getReferenceDataValueSafe(default_ref_data, ImpliedArgumentHelper::get());
+                } else if (!offset.val() && prov.getSupportedReferenceDataValues(){i.key}) {
+                    dv = prov.getReferenceDataValueSafeEx(i.key, ImpliedArgumentHelper::get());
+                }
+            }
+            if (opts.required && (!i.value.isMandatory() || exists dv)) {
                 continue;
             }
             AbstractDataProviderType type = i.value.getType();
@@ -746,12 +754,13 @@ class QdpCmd {
                 if (*string desc = i.value.getShortDescription()) {
                     info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
                 }
-                if (auto val = i.value.getDefaultValue()) {
+                if (exists dv) {
                     if (info) {
                         info += " ";
                     }
-                    info += sprintf("default_value: %y", val);
+                    info += sprintf("default_value: %y", dv);
                 }
+
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {

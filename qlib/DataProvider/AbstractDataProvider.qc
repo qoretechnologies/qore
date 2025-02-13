@@ -1854,6 +1854,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getRequestTypeWithDataImpl(req);
     }
 
+    #! Returns action options corresponding to the request type with the given request data, if possible
+    /** @param req sample request data that can be used to determine the final type
+
+        @return action options corresponding to the request type
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsFromRequestTypeWithData(auto req) {
+        checkRequest();
+        *AbstractDataProviderType rt;
+        try {
+            rt = getRequestTypeWithData(req);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to request arg type with data, options: %y, ignoring options: %s",
+                req, get_exception_string(ex));
+            rt = getRequestType();
+        }
+        if (rt && (*hash<auto> fields = rt.getFields())) {
+            return DataProviderActionCatalog::getActionOptionFromFields(fields);
+        }
+    }
+
     #! Returns the description of a response message, if this object represents a response message
     /** @return the response type for this response message
 
@@ -2486,7 +2512,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.0
     */
-    auto getReferenceValueDataSafe(string type, *hash<auto> action_opts) {
+    auto getReferenceDataValueSafe(string type, *hash<auto> action_opts) {
         try {
             return getReferenceDataValue(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {

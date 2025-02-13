@@ -145,9 +145,17 @@ public class HashDataType inherits QoreDataType {
             rethrow "MISSING-VALUE-ERROR", sprintf("No input value provided for hash type %y with defined fields: "
                 "%y: %s", getName(), keys fields, $1.desc);
         }
-        # {} + ensure that the hash value is "hash<auto>"
-        auto value = {} + QoreDataType::acceptsValue(input_value);
-        hash<auto> value_copy = value;
+        auto value;
+        bool checked;
+        if (exists input_value) {
+            if (input_value.typeCode() != NT_HASH) {
+                value += QoreDataType::acceptsValue(input_value);
+                checked = True;
+            } else {
+                value += input_value;
+            }
+        }
+        *hash<auto> value_copy = value;
         # check fields if any are defined
         foreach AbstractDataField field in (fields.iterator()) {
             string key = field.getName();
