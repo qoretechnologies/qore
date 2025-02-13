@@ -149,10 +149,10 @@ public class HashDataType inherits QoreDataType {
         bool checked;
         if (exists input_value) {
             if (input_value.typeCode() != NT_HASH) {
-                value += QoreDataType::acceptsValue(input_value);
+                value = {} + QoreDataType::acceptsValue(input_value);
                 checked = True;
             } else {
-                value += input_value;
+                value = {} + input_value;
             }
         }
         *hash<auto> value_copy = value;
