@@ -219,6 +219,7 @@ module Logger {
     @subsection logger_v1_0 v1.0
     - Split classes into the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance reasons
       (<a href="https://github.com/qorelanguage/qore/issues/4884">issue 4884</a>)
+    - Added a reopen event for rotatable appenders
 
     @subsection logger_v0_6 v0.6
     - Fixed a bug where file rotate could result in logging exceptions; removed explicit atomic lock operations and
@@ -604,6 +605,8 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
     public {
         #! rotate event
         const EVENT_ROTATE = 10001;
+        #! reopen event
+        const EVENT_REOPEN = 10002;
         #! default value for rotation chain
         const DEFAULT_ROTATION_COUNT = 10;
     }
@@ -611,7 +614,7 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
     constructor(*string name, LoggerLayout layout, *string encoding)
             : LoggerAppenderFile(name, layout, "", encoding) {}
 
-    #! Pushes rotate event
+    #! Pushes a rotate event
     /**
         The current log file will be closed and opened. If the file exists, then it is ovewritten
 
@@ -623,6 +626,21 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
                 throw "LOGGER-ERROR", "Rotation is disabled";
             }
             pushEvent(EVENT_ROTATE, NOTHING);
+        }
+    }
+
+    #! Pushes a reopen event
+    /**
+        The current log file will be closed and opened. If the file exists, then it is ovewritten
+
+        @throw LOGGER-ERROR if rotation is disabled
+    */
+    public reopen() {
+        if (isOpen()) {
+            if (getCount() <= 0) {
+                throw "LOGGER-ERROR", "Rotation is disabled";
+            }
+            pushEvent(EVENT_REOPEN, NOTHING);
         }
     }
 
@@ -769,6 +787,12 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                     file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                 }
                 break;
+
+            case EVENT_REOPEN:
+                # reopen file atomically
+                file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                break;
+
             default:
                 LoggerAppenderFile::processEventImpl(type, params);
         }
