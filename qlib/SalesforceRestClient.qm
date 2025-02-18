@@ -1507,7 +1507,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         if (!opts.ping_method || !exists opts.ping_path) {
             return HttpBasedConnection::startPollConnect();
         }
@@ -1518,6 +1518,9 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         }
 
         SalesforceRestClient rc = getPollImpl();
+        if (logger) {
+            rc.setLogger(logger);
+        }
         rc.setSerialization("json");
 
         # returns a RestClient option without connecting and without retrieving any external schemas with I/O

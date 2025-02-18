@@ -104,14 +104,16 @@ void VarRefNode::resolve(const QoreTypeInfo* typeInfo) {
 
     bool in_closure;
     if (name.size() == 1 && (id = find_local_var(name.ostr, in_closure))) {
-        if (typeInfo)
+        if (typeInfo) {
             parse_error(*loc, "type definition given for existing local variable '%s'", id->getName());
+        }
 
         ref.id = id;
-        if (in_closure)
+        if (in_closure) {
             setClosureIntern();
-        else
+        } else {
             type = VT_LOCAL;
+        }
 
         printd(5, "VarRefNode::resolve(): local var %s resolved (id: %p, in_closure: %d)\n", name.ostr, ref.id,
             in_closure);

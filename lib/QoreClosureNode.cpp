@@ -30,20 +30,26 @@
 
 #include <qore/Qore.h>
 
-ThreadSafeLocalVarRuntimeEnvironmentHelper::ThreadSafeLocalVarRuntimeEnvironmentHelper(const QoreClosureBase* current) : prev(thread_set_runtime_closure_env(current)) {
-    //printd(5, "ThreadSafeLocalVarRuntimeEnvironmentHelper::ThreadSafeLocalVarRuntimeEnvironmentHelper() prev: %p current: %p\n", prev, current);
+ThreadSafeLocalVarRuntimeEnvironmentHelper::ThreadSafeLocalVarRuntimeEnvironmentHelper(
+        const QoreClosureBase* current
+    ) : prev(thread_set_runtime_closure_env(current)) {
+    //printd(5, "ThreadSafeLocalVarRuntimeEnvironmentHelper::ThreadSafeLocalVarRuntimeEnvironmentHelper() prev: %p "
+    //    "current: %p\n", prev, current);
 }
 
 ThreadSafeLocalVarRuntimeEnvironmentHelper::~ThreadSafeLocalVarRuntimeEnvironmentHelper() {
-    //printd(5, "ThreadSafeLocalVarRuntimeEnvironmentHelper::~ThreadSafeLocalVarRuntimeEnvironmentHelper() prev: %p\n", prev);
+    //printd(5, "ThreadSafeLocalVarRuntimeEnvironmentHelper::~ThreadSafeLocalVarRuntimeEnvironmentHelper() "
+    //    "prev: %p\n", prev);
     thread_set_runtime_closure_env(prev);
 }
 
 ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment(const lvar_set_t* vlist) {
-    //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p vlist: %p size: %d\n", this, vlist, vlist->size());
+    //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p vlist: %p "
+    //    "size: %d\n", this, vlist, vlist->size());
     for (lvar_set_t::const_iterator i = vlist->begin(), e = vlist->end(); i != e; ++i) {
         ClosureVarValue* cvar = thread_find_closure_var((*i)->getName());
-        //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p '%s' i: %p cvar: %p val: %s\n", this, (*i)->getName(), *i, cvar, cvar->val.getTypeName());
+        //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p '%s' "
+        //    "i: %p cvar: %p val: %s\n", this, (*i)->getName(), *i, cvar, cvar->val.getTypeName());
         cmap[*i] = cvar;
         cvvset.insert(cvar);
         cvar->ref();

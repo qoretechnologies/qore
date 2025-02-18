@@ -721,13 +721,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     #! Called to start the connection polling operation
     /** Only called if the connection supports the polling API
 
+        @param an optional logger interface for any object used for polling
+
         @return a socket poll operation object that will allow the connection goal to be reached with polling
 
         @see supportsPollingApi()
 
         @since ConnectionProvider 1.7
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         throw "UNSUPPORTED", sprintf("connection %y (%s) does not support the polling API", name, safe_url);
     }
 

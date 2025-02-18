@@ -1,11 +1,11 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   QC_AutoGate.qpp
- 
+
   Qore Programming Language
- 
+
   Copyright (C) 2003 - 2023 David Nichols
- 
+
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
   to deal in the Software without restriction, including without limitation
@@ -42,13 +42,14 @@
     @code{.py}
 our Gate gate();
 
-sub check_error(error) {
+sub check_error(bool error) {
     # note that the Gate is entered in the AutoGate constructor, and
     # the Gate will be exited as soon as the block is exited below.
     # (with either the throw statement or the return statement)
     AutoGate ag(gate);
-    if (error)
+    if (error) {
         throw "ERROR", "sorry, an error happened";
+    }
 
     return "OK";
 }
@@ -60,35 +61,32 @@ qclass AutoGate [dom=THREAD_CLASS; arg=QoreAutoGate* ag; ns=Qore::Thread];
 
 //! Creates the AutoGate object based on the Gate argument passed and immediately calls Gate::enter()
 /** @param gate the @ref Qore::Thread::Gate "Gate" object to enter for the lifetime of the AutoGate object
+
     @par Example:
     @code{.py}
 AutoGate ag(gate);
     @endcode
- */
+*/
 AutoGate::constructor(Gate[QoreGate] gate) {
-   QoreAutoGate *ag = new QoreAutoGate(gate, xsink);
-   if (*xsink)
-      ag->deref(xsink);
-   else
-      self->setPrivate(CID_AUTOGATE, ag);
+    QoreAutoGate* ag = new QoreAutoGate(gate, xsink);
+    if (*xsink) {
+        ag->deref(xsink);
+    } else {
+        self->setPrivate(CID_AUTOGATE, ag);
+    }
 }
 
 //! Calls Gate::exit() and destroys the AutoGate object
-/** 
-    @par Example:
-    @code{.py}
-delete ag;
-    @endcode
- */
+/**
+*/
 AutoGate::destructor() {
-   ag->destructor(xsink);
-   ag->deref(xsink);
+    ag->deref(xsink);
 }
 
 //! Throws an exception; objects of this class cannot be copied
-/** 
+/**
     @throw AUTOGATE-COPY-ERROR objects of this class cannot be copied
- */
+*/
 AutoGate::copy() {
-   xsink->raiseException("AUTOGATE-COPY-ERROR", "objects of this class cannot be copied");
+    xsink->raiseException("AUTOGATE-COPY-ERROR", "objects of this class cannot be copied");
 }

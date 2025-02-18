@@ -1590,6 +1590,11 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         return request_body;
     }
 
+    #! Returns the logger interface for logging
+    *LoggerInterface getLogger() {
+        return logger;
+    }
+
     #! Returns a scope string URI argument
     /** @param scopes the list of scopes to use
         @param separator the separator string to use
@@ -2762,15 +2767,20 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
-            return HttpBasedConnection::startPollConnect();
+            return HttpBasedConnection::startPollConnect(logger);
         }
         auto ping_body = getPingBody();
 
+        RestClient client = getPollImpl();
+        if (logger) {
+            client.setLogger(logger);
+        }
+
         # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new RestPingPollOperation(self, getPollImpl(), real_opts + {
+        return new RestPingPollOperation(self, client, real_opts + {
             "ping_path": ping_path,
             "ping_body": ping_body,
         });
@@ -3192,6 +3202,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         body = method != "GET" ? real_opts.ping_body : NOTHING;
         headers = real_opts.ping_headers;
 
+        rc.postponeUpdateOptions(rc.getLogger());
+
         if (real_opts.ping_path[0] == "/") {
             # use the path directly if it's an absolute path
             use_path_as_is = True;
@@ -3206,6 +3218,11 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         } else {
             doStartPing();
         }
+    }
+
+    #! Destroys the object and makes any connection option updates
+    destructor() {
+        rc.flushOptionUpdates();
     }
 
     #! Returns the goal
@@ -3281,6 +3298,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                     && !in_refresh;
                 if (check_auth && rc.isAuthTokenError(resp."code",
                         resp.info."response-headers", False, resp.info."body-content-type", body)) {
+                    rc.debug("Found auth error in response with code: %d Content-Type: %y body: %y", resp."code",
+                        resp.info."body-content-type", body);
                     doStartRefresh();
                     continue;
                 }
@@ -3302,6 +3321,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                         resp.info."response-headers", True, resp.info."body-content-type", respinfo.body)) {
                         if (check_auth) {
                             doStartRefresh();
+                            rc.debug("Found auth error in response with code: %d Content-Type: %y body: %y",
+                                resp."code", resp.info."body-content-type", respinfo.body);
                         }
                         err = True;
                     }
@@ -3362,7 +3383,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             checkUrl();
             string p = path;
             rc.prepareToSend(method, \p, \body, \headers);
-            rc.debug("Using ping path: %y", path);
+            rc.debug("Connection %y using ping path: %y", conn.name, path);
         } else {
             use_path_as_is = True;
             # check if the path is a URL
@@ -3372,13 +3393,13 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 path = "";
             } else {
                 checkUrl();
-                rc.debug("Using ping path: %y", path);
+                rc.debug("Connection %y using ping path: %y", conn.name, path);
             }
             rc.prepareToSend(method, \path, \body, \headers);
             rc.debug("Prepared ping path: %y", path);
         }
 
-        rc.debug("RestConnecton ping: start ping, url: %y path: %y", rc.getURL(), path);
+        rc.debug("RestConnecton ping: start ping url: %y path: %y hdr: %y", rc.getURL(), path, headers);
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
     }

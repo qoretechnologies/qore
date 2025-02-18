@@ -3356,8 +3356,6 @@ int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool
     return 0;
 }
 
-static void breakit() {}
-
 int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     if (thisclass->getID() == qc->getID()) {
         thisclass->priv->scl->valid = false;

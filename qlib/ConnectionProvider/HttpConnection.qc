@@ -309,7 +309,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
 
         @since ConnectionProvider 1.7
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         return getPollImpl().startPollConnect();
     }
 

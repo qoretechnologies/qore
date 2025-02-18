@@ -500,9 +500,14 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        ServiceNowRestClient client = getPollImpl();
+        if (logger) {
+            client.setLogger(logger);
+        }
+
         # start the polling operation manually using the full request path
-        return new RestPingPollOperation(self, getPollImpl(), real_opts);
+        return new RestPingPollOperation(self, client, real_opts);
     }
 
     #! Sets the auth code feature if supported

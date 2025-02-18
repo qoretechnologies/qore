@@ -370,7 +370,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         # ensure that no validator is used, as loading the schema cannot be done in a nonblocking way in the polling
         # thread
         hash<auto> new_opts = real_opts + {
@@ -382,8 +382,13 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         } else {
             new_opts.validator = new NullRestSchemaValidator(logger);
         }
+
+        MewsRestClient client = getImpl(False, new_opts);
+        if (logger) {
+            client.setLogger(logger);
+        }
         # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new RestPingPollOperation(self, getImpl(False, new_opts), new_opts);
+        return new RestPingPollOperation(self, client, new_opts);
     }
 
     #! Returns the ping path from the \c ping_path option

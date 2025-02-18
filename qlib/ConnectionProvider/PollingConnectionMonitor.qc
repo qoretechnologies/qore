@@ -167,6 +167,11 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         log(LoggerLevel::INFO, "removed all connections (%d connection%s removed)", count, count == 1 ? "" : "s");
     }
 
+    #! Waits for the monitoring thread to stop if it's running
+    waitStop() {
+        mcnt.waitForZero();
+    }
+
     #! Returns @ref True if the I/O thread is running
     bool running() {
         return mcnt.getCount() > 0;
@@ -175,14 +180,15 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     #! Adds a connection to be monitored
     /** @param conn the connection to be monitored; must support the connection polling API
         @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
 
         @throw MONITOR-CONNECTION-ERROR the connection does not support the connection polling API
         @throw MONITOR-ADD-ERROR a different connection with this name is already being monitored
     */
-    add(AbstractConnection conn, *hash<auto> other) {
+    add(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
-            throw "MONITOR-CONNECTION-ERROR", sprintf("connection %y does not support the polling API and cannot be "
+            throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
         AutoLock al(m);
@@ -192,7 +198,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 return;
             }
             # otherwise throw an exception
-            throw "MONITOR-ADD-ERROR", sprintf("connection %y with URL %y cannot be added, as connection %y with "
+            throw "MONITOR-ADD-ERROR", sprintf("Connection %y with URL %y cannot be added, as connection %y with "
                 "URL %y is already being monitored; update the connection if this definition should replace the "
                 "existing one", name, conn.getSafeUrl(), name, info.conn.getSafeUrl());
         }
@@ -203,7 +209,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (autostart && !tid) {
             startIntern();
         }
-        if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
+        if (start_pending) {
+            cache{name}.start = now_us();
+        } else if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
             failedToStartPing(name, ex);
         }
         sendCmd(IO_ADD);
@@ -218,11 +226,12 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     addOrUpdate(AbstractConnection conn, *hash<auto> other) {
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
-            throw "MONITOR-CONNECTION-ERROR", sprintf("connection %y does not support the polling API and cannot be "
+            throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
         string cmd;
-        RecursiveAutoLock al(m);
+        m.lock();
+        on_exit m.unlock();
         if (*hash<PollInfo> info = cache{name}) {
             # if the connection has already been added, then ignore
             if (info.conn == conn) {
@@ -255,7 +264,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         bool stopped;
 
         {
-            RecursiveAutoLock al(m);
+            m.lock();
+            on_exit m.unlock();
             if (remove cache{name}) {
                 rv = True;
                 sendCmd(IO_REMOVE);
@@ -342,8 +352,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                                 {
                                     # to avoid deadlocks with external code, such as with option update code,
                                     # we run with this unlocked
-                                    m.unlock();
-                                    on_exit m.lock();
+                                    #m.unlock();
+                                    #on_exit m.lock();
                                     info = value.spop.continuePoll();
                                 }
                                 if (value != cache{key}) {
@@ -446,7 +456,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             delete cache{name}.spop;
         } else {
             try {
-                cache{name}.spop = cache{name}.conn.startPollConnect();
+                cache{name}.spop = cache{name}.conn.startPollConnect(getLogger());
                 log(LoggerLevel::DEBUG, "%y: starting connect ping to %y; poll state: %y", name,
                     cache{name}.conn.getUrl(), cache{name}.spop.getState());
             } catch (hash<ExceptionInfo> ex) {
@@ -518,24 +528,5 @@ hashdecl PollInfo {
 
     # other data stored alongside the connection
     *hash<auto> other;
-}
-
-class RecursiveAutoLock {
-    private {
-        Mutex m;
-    }
-
-    constructor(Mutex m) {
-        if (!m.lockOwner()) {
-            m.lock();
-            self.m = m;
-        }
-    }
-
-    destructor() {
-        if (m) {
-            m.unlock();
-        }
-    }
 }
 }
