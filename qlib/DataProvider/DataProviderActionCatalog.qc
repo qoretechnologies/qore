@@ -251,6 +251,12 @@ public hashdecl ActionOptionInfo {
     #! If the option should be preselected
     bool preselected;
 
+    #! Is this option read-only?
+    bool readonly;
+
+    #! Is this option disabled?
+    bool disabled;
+
     #! Option location for record-based data providers and data providers provided by a class
     /** values:
         - \c where: in the where clause
@@ -1124,6 +1130,12 @@ public class DataProviderActionCatalog {
                 }
                 if (info.attr.sensitive) {
                     i.value.sensitive = True;
+                }
+                if (info.attr.disabled) {
+                    i.value.disabled = True;
+                }
+                if (info.attr.readonly) {
+                    i.value.readonly = True;
                 }
                 if (info.attr.required_groups) {
                     i.value.required_groups = info.attr.required_groups;
