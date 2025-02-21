@@ -1049,19 +1049,21 @@ list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family =
 close_all_fd();
     @endcode
 
-    @note if there are file descriptors open by Qore when this function is called, this function will also close those file descriptors; normally this function should only be used when starting a new process after a fork() and exec() to close any inherited descriptors, for example
+    @note if there are file descriptors open by Qore when this function is called, this function will also close those
+    file descriptors; normally this function should only be used when starting a new process after a fork() and exec()
+    to close any inherited descriptors, for example
  */
 nothing close_all_fd(*softbool strd) [dom=PROCESS] {
 #if defined(HAVE_UNISTD_H) && defined(_SC_OPEN_MAX)
-   int start = strd ? 0 : 2;
-   // get max file descriptor
-   int max = (int)sysconf(_SC_OPEN_MAX);
-   printd(5, "close_all_fd() start: %d max: %d\n", start, max);
+    int start = strd ? 0 : 3;
+    // get max file descriptor
+    int max = (int)sysconf(_SC_OPEN_MAX);
+    printd(5, "close_all_fd() start: %d max: %d\n", start, max);
 
-   for (;start < max; ++start)
-      close(start);
+    for (;start < max; ++start)
+        close(start);
 #else
-   missing_function_error("close_all_fd", xsink);
+    missing_function_error("close_all_fd", xsink);
 #endif // HAVE_UNISTD
 }
 
