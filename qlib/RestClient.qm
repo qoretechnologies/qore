@@ -3399,7 +3399,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             rc.debug("Prepared ping path: %y", path);
         }
 
-        rc.debug("RestConnecton ping: start ping url: %y path: %y hdr: %y", rc.getURL(), path, headers);
+        rc.debug("RestConnecton ping: start ping: %s %y path: %y hdr: %y", method, rc.getURL(), path, headers);
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
     }
