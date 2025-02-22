@@ -1479,7 +1479,7 @@ public namespace RestHandler {
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
 
-                logError(desc);
+                logError("%s", desc);
                 rv = returnRestException(ex);
             }
 

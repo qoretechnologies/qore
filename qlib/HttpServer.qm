@@ -1340,7 +1340,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-SEND-ERROR") {
                 string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
-                logError(estr);
+                logError("%s", estr);
             }
         }
     }
@@ -1580,7 +1580,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
                 listener.getListenerSocketInfo().address_desc);
-            listener.logError(str);
+            listener.logError("%s", str);
             cx.close = True;
             sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
             return;
@@ -1677,7 +1677,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError(str);
+                    listener.logError("%s", str);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
@@ -1699,7 +1699,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         hdr."content-length", ex.err, ex.desc);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError(str);
+                    listener.logError("%s", str);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
@@ -1820,7 +1820,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
             sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
-            logError(str);
+            logError("%s", str);
         }
     }
 
@@ -2343,8 +2343,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                             : get_exception_string(ex);
                         string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                             socket_info.address_desc);
-                        logError(str);
-                        logError(sprintf("hdr=%y", hdr));
+                        logError("%s", str);
+                        logError("hdr=%y", hdr);
                     }
                 }
             } else {
@@ -2492,7 +2492,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             lstr += sprintf(" size: %d", body.size());
         if (hdr."Content-Type")
             lstr += sprintf(" CT: %y", hdr."Content-Type");
-        log(lstr);
+        log("%s", lstr);
 
         if (log_send_headers)
             log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, hdr);
@@ -2509,7 +2509,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             lstr += sprintf(" user: %y", cx.user);
         if (hdr."Content-Type")
             lstr += sprintf(" CT: %y", hdr."Content-Type");
-        log(lstr);
+        log("%s", lstr);
 
         if (log_send_headers)
             log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, hdr);
@@ -2709,7 +2709,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                         # log error and close connection on timeout
                         string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
                         string str = sprintf("%s from %s via %s", err, info.address_desc, socket_info.address_desc);
-                        logError(str);
+                        logError("%s", str);
                         cx.close = True;
                         serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
                         break;
@@ -2719,7 +2719,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                     #    etxt += printf(" (%s)", ex.arg);
                     string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                         socket_info.address_desc);
-                    logError(str);
+                    logError("%s", str);
                     cx.close = True;
                     serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
                     break;
@@ -2783,7 +2783,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                     if (ssl)
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
                     lstr += ")";
-                    log(lstr);
+                    log("%s", lstr);
                 }
 
                 cx.uctx = get_thread_data("uctx");
@@ -2814,8 +2814,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             string str = sprintf("%s: received from %s via %s", etxt, info.address_desc, socket_info.address_desc);
-            logError(str);
-            logError(sprintf("hdr=%y", hdr));
+            logError("%s", str);
+            logError("hdr=%y", hdr);
             cx.close = True;
             serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
         }
