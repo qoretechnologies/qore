@@ -1165,6 +1165,9 @@ public class DataProviderActionCatalog {
                     } else {
                         info.type = AbstractDataProviderType::get(type);
                     }
+                    if (!exists i.value.required && info.type.isMandatory()) {
+                        i.value.required = True;
+                    }
                     break;
 
                 case NT_STRING:
