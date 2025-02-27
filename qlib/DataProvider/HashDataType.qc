@@ -297,6 +297,7 @@ public class HashDataType inherits QoreDataType {
     #! Adds or replaces a field with a new definition
     HashDataType addOrReplaceField(AbstractDataField field) {
         addFieldIntern(field);
+        return self;
     }
 
     #! Returns the given field, if present, or @ref nothing if not

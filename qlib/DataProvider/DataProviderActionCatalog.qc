@@ -248,6 +248,9 @@ public hashdecl ActionOptionInfo {
     */
     *string default_ref_data;
 
+    #! A tag allowing the type of the option to be retrieved at runtime
+    *string dynamic_type;
+
     #! If the option should be preselected
     bool preselected;
 
