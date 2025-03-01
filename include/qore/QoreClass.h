@@ -249,6 +249,59 @@ public:
     virtual void doDeref() = 0;
 };
 
+//! A holder class for AbstractQoreClassUserData objects
+/** @since %Qore 2.0
+*/
+class QoreClassUserDataHolder {
+public:
+    //! Creates the object
+    DLLLOCAL QoreClassUserDataHolder(AbstractQoreClassUserData* d) : d(d) {
+    }
+
+    //! Destroys the object by calling doDeref() on the user data object if it's still managed
+    DLLLOCAL ~QoreClassUserDataHolder() {
+        if (d) {
+            d->doDeref();
+        }
+    }
+
+    //! Returns the user data object if still managed
+    DLLLOCAL AbstractQoreClassUserData* release() {
+        AbstractQoreClassUserData* rv = d;
+        d = nullptr;
+        return rv;
+    }
+
+    //! Returns true if the user data object is still managed
+    DLLLOCAL operator bool() const {
+        return d ? true : false;
+    }
+
+    //! Returns the user data object, if any
+    DLLLOCAL const AbstractQoreClassUserData* operator*() const {
+        return d;
+    }
+
+    //! Returns the user data object, if any
+    DLLLOCAL AbstractQoreClassUserData* operator*() {
+        return d;
+    }
+
+    //! Returns the user data object, if any
+    DLLLOCAL const AbstractQoreClassUserData* operator->() const {
+        return d;
+    }
+
+    //! Returns the user data object, if any
+    DLLLOCAL AbstractQoreClassUserData* operator->() {
+        return d;
+    }
+
+private:
+    //! The user data object being managed
+    AbstractQoreClassUserData* d;
+};
+
 //! defines a Qore-language class
 /** Qore's classes can be either implemented by Qore language code (user classes)
     or in C++ (builtin classes), or both, as in the case of a builtin class that
