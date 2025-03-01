@@ -543,8 +543,10 @@ bool RSetHelper::checkIntern(RObject& obj) {
     // see if the object has been scanned
     omap_t::iterator fi = fomap.lower_bound(&obj);
     if (fi != fomap.end() && fi->first == &obj) {
-        printd(QRO_LVL, "RSetHelper::checkIntern() + found obj %p '%s' rcount: %d in_cycle: %d ok: %d\n", &obj, obj.getName(), fi->second.rcount, fi->second.in_cycle, fi->second.ok);
-        //printd(QRO_LVL, "RSetHelper::checkIntern() found obj %p '%s' incrementing rcount: %d -> %d\n", &obj, obj.getName(), fi->second.rcount, fi->second.rcount + 1);
+        printd(QRO_LVL, "RSetHelper::checkIntern() + found obj %p '%s' rcount: %d in_cycle: %d ok: %d\n", &obj,
+            obj.getName(), fi->second.rcount, fi->second.in_cycle, fi->second.ok);
+        //printd(QRO_LVL, "RSetHelper::checkIntern() found obj %p '%s' incrementing rcount: %d -> %d\n", &obj,
+        //    obj.getName(), fi->second.rcount, fi->second.rcount + 1);
 
         if (fi->second.ok) {
             assert(!fi->second.in_cycle);
@@ -558,44 +560,50 @@ bool RSetHelper::checkIntern(RObject& obj) {
             // 1) it's already in the current scan vector, or
             // 2) the parent object of the current object is already a part of the recursive set
             if (inCurrentSet(fi)) {
-                printd(QRO_LVL, " + recursive obj %p '%s' already finalized and in current cycle (rcount: %d -> %d)\n", &obj, obj.getName(), fi->second.rcount, fi->second.rcount + 1);
+                printd(QRO_LVL, " + recursive obj %p '%s' already finalized and in current cycle "
+                    "(rcount: %d -> %d)\n", &obj, obj.getName(), fi->second.rcount, fi->second.rcount + 1);
                 ++fi->second.rcount;
                 // rcount can never be more than real references for the target object
                 assert(fi->first->references >= fi->second.rcount);
-            }
-            else if (!ovec.empty()) {
+            } else if (!ovec.empty()) {
                 // FIXME: use this optimization in the loop below
                 if (ovec.back()->second.rset == fi->second.rset) {
-                    printd(QRO_LVL, " + %p '%s': parent object %p '%s' in same cycle (rcount: %d -> %d)\n", &obj, obj.getName(), ovec.back()->first, ovec.back()->first->getName(), fi->second.rcount, fi->second.rcount + 1);
+                    printd(QRO_LVL, " + %p '%s': parent object %p '%s' in same cycle (rcount: %d -> %d)\n", &obj,
+                        obj.getName(), ovec.back()->first, ovec.back()->first->getName(), fi->second.rcount,
+                        fi->second.rcount + 1);
                     ++fi->second.rcount;
                     // rcount can never be more than real references for the target object
                     assert(fi->first->references >= fi->second.rcount);
                     return false;
                 }
 
-                // see if any parent of the current object is already in the same recursive cycle, if so, we have a new chain (quick comparison first)
+                // see if any parent of the current object is already in the same recursive cycle, if so, we have a
+                // new chain (quick comparison first)
                 for (int i = ovec.size() - 1; i >= 0; --i) {
                     if (fi->second.rset == ovec[i]->second.rset) {
-                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
+                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in "
+                            "current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
 
                         return makeChain(i, fi, tid);
                     }
                 }
 
-                // see if any parent of the current object is already in a recursive cycle to be joined, if so, we have a new chain (slower comparison second)
+                // see if any parent of the current object is already in a recursive cycle to be joined, if so, we
+                // have a new chain (slower comparison second)
                 for (int i = ovec.size() - 1; i >= 0; --i) {
                     if (fi->second.rset->find((ovec[i])->first) != fi->second.rset->end()) {
-                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
+                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in "
+                            "current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
 
                         return makeChain(i, fi, tid);
                     }
                 }
 
-                printd(QRO_LVL, " + recursive obj %p '%s' already finalized but not in current cycle\n", &obj, obj.getName());
+                printd(QRO_LVL, " + recursive obj %p '%s' already finalized but not in current cycle\n", &obj,
+                    obj.getName());
                 return false;
             }
-        }
-        else {
+        } else {
             if (!inCurrentSet(fi)) {
                 printd(QRO_LVL, " + recursive obj %p '%s' not in current cycle\n", &obj, obj.getName());
                 return false;
@@ -620,15 +628,16 @@ bool RSetHelper::checkIntern(RObject& obj) {
             if (!oi->second.rset) {
                 if (!rset) {
                     rset = new RSet;
-                    printd(QRO_LVL, " + %p '%s': rcycle: %d second.rset: %p new RSet: %p\n", oi->first, oi->first->getName(), obj.rcycle, oi->second.rset, rset);
+                    printd(QRO_LVL, " + %p '%s': rcycle: %d second.rset: %p new RSet: %p\n", oi->first,
+                        oi->first->getName(), obj.rcycle, oi->second.rset, rset);
                 }
 
                 if (addToRSet(oi, rset, tid))
                     return true;
-            }
-            else {
+            } else {
                 if (i > 0 && oi->first != &obj && !ovec[i-1]->second.in_cycle) {
-                    printd(QRO_LVL, " + %p '%s': parent not yet in cycle (rcount: %d -> %d)\n", &obj, obj.getName(), oi->second.rcount, oi->second.rcount + 1);
+                    printd(QRO_LVL, " + %p '%s': parent not yet in cycle (rcount: %d -> %d)\n", &obj, obj.getName(),
+                        oi->second.rcount, oi->second.rcount + 1);
                     ++oi->second.rcount;
                 }
 
@@ -642,9 +651,9 @@ bool RSetHelper::checkIntern(RObject& obj) {
         }
 
         return false;
-    }
-    else {
-       printd(QRO_LVL, "RSetHelper::checkIntern() + adding new obj %p '%s' setting rcount = 0 (current: %d rset: %p)\n", &obj, obj.getName(), obj.rcount, obj.rset);
+    } else {
+        printd(QRO_LVL, "RSetHelper::checkIntern() + adding new obj %p '%s' setting rcount = 0 (current: %d "
+            "rset: %p)\n", &obj, obj.getName(), obj.rcount, obj.rset);
 
         // insert into total scanned object set
         fi = fomap.insert(fi, omap_t::value_type(&obj, RSetStat()));
@@ -654,7 +663,8 @@ bool RSetHelper::checkIntern(RObject& obj) {
             // remove from invalidation set if present
             tr_out.erase(&obj);
 
-            printd(QRO_LVL, "RSetHelper::checkIntern() obj %p '%s' will not be iterated since object count is 0\n", &obj, obj.getName());
+            printd(QRO_LVL, "RSetHelper::checkIntern() obj %p '%s' will not be iterated since object count is 0\n",
+                &obj, obj.getName());
             fi->second.ok = true;
             assert(!fi->second.rset);
             return false;
