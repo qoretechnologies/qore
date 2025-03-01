@@ -227,14 +227,14 @@ int QoreInternalSerializationContext::serializeStaticVars(const QoreClass& cls, 
     QoreClassStaticMemberIterator mi(cls);
     while (mi.next()) {
         const QoreExternalStaticMember& m = mi.getMember();
-        QoreValue v = m.getValue();
+        ValueHolder v(m.getValue(), xsink);
         if (!v) {
             continue;
         }
         if (!h) {
             h = new QoreHashNode(autoTypeInfo);
         }
-        h->setKeyValue(mi.getName(), serializeValue(v, xsink), xsink);
+        h->setKeyValue(mi.getName(), serializeValue(*v, xsink), xsink);
         if (*xsink) {
             return -1;
         }
@@ -1054,7 +1054,8 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
         while (ci.next()) {
             const QoreExternalStaticMember* m = cls->findLocalStaticMember(ci.getKey());
             if (!m) {
-                xsink->raiseException("DESERIALIZATION-ERROR", "Class '%s' has no static var '%s'", cname, ci.getKey());
+                xsink->raiseException("DESERIALIZATION-ERROR", "Class '%s' has no static var '%s'", cname,
+                    ci.getKey());
                 return -1;
             }
             ValueHolder v(deserializeData(ci.get(), context, xsink), xsink);
@@ -1062,9 +1063,10 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
                 return -1;
             }
             ReferenceHolder<QoreHashNode> h(xsink);
-            if (context.flags & QDF_MERGE_STATIC_CLASS_VARS && (m->getValue().getType() == NT_HASH)
+            ValueHolder vh(m->getValue(), xsink);
+            if (context.flags & QDF_MERGE_STATIC_CLASS_VARS && (vh->getType() == NT_HASH)
                 && (v->getType() == NT_HASH)) {
-                h = m->getValue().get<const QoreHashNode>()->realCopy();
+                h = vh->get<const QoreHashNode>()->realCopy();
                 h->merge(v->get<const QoreHashNode>(), xsink);
                 if (*xsink) {
                     return -1;
@@ -1135,7 +1137,7 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
         v = h->getKeyValue("_weak");
         if (v) {
             if (v.getType() != NT_STRING) {
-                xsink->raiseException("DESERIALIZATION-ERROR", "'_index' key has invalid type '%s'; expecting 'string'",
+                xsink->raiseException("DESERIALIZATION-ERROR", "'_weak' key has invalid type '%s'; expecting 'string'",
                     v.getTypeName());
                 return QoreValue();
             }
@@ -1148,11 +1150,11 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
         }
 
         xsink->raiseException("DESERIALIZATION-ERROR", "hash hash no type information for deserialization; expecting "
-            "either '_hash' or '_index' keys; neither was found");
+            "either '_hash', '_index', or '_weak' keys; none was found");
         return QoreValue();
     }
 
-    // ffor backwards compatibility with data serialized by serializer 1.0
+    // for backwards compatibility with data serialized by serializer 1.0
     if (val.getType() == NT_LIST) {
         return deserializeListData(*val.get<const QoreListNode>(), context, xsink);
     }
