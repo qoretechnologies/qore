@@ -1150,7 +1150,7 @@ public class ParameterGroup inherits ObjectBase {
             }
             query_obj = key;
         }
-        parameters{key} := p;
+        parameters{key} = p;
     }
 }
 
@@ -1353,7 +1353,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! common constructor implementation
     private constructorIntern(string schema_source, hash<auto> oh, *hash<auto> opts) {
-        hash_str = digest("sha256", schema_source).toHex();
+        hash_str = schema_source.toSHA256();
 
         # process options
         compact_serialization = remove opts.compact_serialization ?? True;
@@ -1419,7 +1419,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             foreach hash<auto> item in (obj.pairIterator()) {
                 if (item.value.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE", "Swagger Object: invalid response datatype: " + item.value.type();
-                responses{item.key} := ResponseObject::newResponse(item.key, item.value, self);
+                responses{item.key} = ResponseObject::newResponse(item.key, item.value, self);
             }
         }
 
@@ -1503,7 +1503,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {
-        hash_str = sprintf("%y", oh).toSHA1();
+        hash_str = sprintf("%y", oh).toSHA256();
         return so_map{name}{hash_str};
     }
 
@@ -2527,7 +2527,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (value.typeCode() != NT_HASH)
             throw "INVALID-FIELD-TYPE", sprintf("Swagger Object: invalid definition datatype %y (val %y) for key %y",
                 value.type(), value, key);
-        return definitions{key} := SchemaObject::newSchemaObject(key, value, self);
+        return definitions{key} = SchemaObject::newSchemaObject(key, value, self);
     }
 }
 
@@ -2881,14 +2881,14 @@ public class PathItemObject inherits ParameterGroup {
                     throw "INVALID-FIELD-TYPE",
                         sprintf("Path Item Object: 'parameters' list value has invalid type %y",
                             param.type());
-                AbstractParameterObject p := AbstractParameterObject::newParameter(
+                AbstractParameterObject p = AbstractParameterObject::newParameter(
                     sprintf("%d/%d", $# + 1, params.lsize()), param, swagger
                 );
                 if (p.inLoc == "body") {
                     if (body)
                         throw "INVALID-FIELD-VALUE", sprintf("path %y: more than one \"body\" parameter provided",
                             path);
-                    body := p;
+                    body = p;
                 } else {
                     addParameter(p);
                 }
@@ -3119,10 +3119,10 @@ public class OperationObject inherits ParameterGroup {
                     error("INVALID-FIELD-TYPE", "invalid 'parameters' list value datatype %y; expecing \"hash\"",
                         p.fullType());
                 }
-                AbstractParameterObject param := AbstractParameterObject::newParameter(sprintf("%d/%d", $# + 1,
+                AbstractParameterObject param = AbstractParameterObject::newParameter(sprintf("%d/%d", $# + 1,
                     listObj.lsize()), p, swagger);
                 if (param.inLoc == "body") {
-                    body := param;
+                    body = param;
                 } else if (param.inLoc == "formData") {
                     formData{param.name} = param;
                     if (opt_flags & LM_AUTO_FORM_DATA && !consumes{MimeTypeFormUrlEncoded}) {
@@ -3697,8 +3697,6 @@ public class AbstractParameterObject inherits ObjectBase {
     }
 
     private {
-        static hash<string, AbstractParameterObject> cache;
-
         const OtherParameterMap = (
             "query": True,
             "header": True,
@@ -3725,12 +3723,6 @@ public class AbstractParameterObject inherits ObjectBase {
         } else {
             optional_field(objType, oh, "required", NT_BOOLEAN, \required);
         }
-
-        addToCache(self);
-    }
-
-    copy(AbstractParameterObject old) {
-        addToCache(self);
     }
 
     #! verifies the parameter in an actual REST API call
@@ -3758,16 +3750,6 @@ public class AbstractParameterObject inherits ObjectBase {
         throw "INVALID-FIELD-VALUE", sprintf("Parameter Object %y: invalid location (\"in\") parameter value: %y",
             name, oh."in");
     }
-
-    #! Adds an AbstractParameterObject to the cache
-    static private addToCache(AbstractParameterObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes an AbstractParameterObject from the cache
-    static private removeFromCache(AbstractParameterObject obj) {
-        remove cache{obj.uniqueHash()};
-    }
 }
 
 #! @ref AbstractParameterObject specialization for \c "body" parameters.
@@ -3788,7 +3770,7 @@ public class BodyParameter inherits AbstractParameterObject {
     public constructor(hash<auto> oh, SwaggerSchema swagger) : AbstractParameterObject(oh, swagger.getParseFlags()) {
         hash schemaObj;
         required_field("Body Parameter", oh, "schema", NT_HASH, \schemaObj);
-        schema := SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
+        schema = SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
     }
 
     #! verifies the parameter in an actual REST API call
@@ -3885,7 +3867,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
         }
         if (type == "array") {
             if (exists oh.items) {
-                items := ParameterItemsSchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger,
+                items = ParameterItemsSchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger,
                     oh."in");
             }
             if (optional_field(objType, oh, "collectionFormat", NT_STRING, \collectionFormat)) {
@@ -4135,14 +4117,14 @@ public class ResponsesObject inherits ObjectBase {
         string objType = "Responses";
         *hash defaultObj;
         if (optional_field(objType, oh, "default", NT_HASH, \defaultObj))
-            defaultResp := ResponseObject::newResponse("default", defaultObj, swagger);
+            defaultResp = ResponseObject::newResponse("default", defaultObj, swagger);
 
         *hash r = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^[0-9]+$/;
         foreach hash resp in (r.pairIterator()) {
             if (resp.value.typeCode() != NT_HASH)
                 throw "INVALID-FIELD-TYPE", sprintf("%s %s: Responses Object: response has invalid type %y", method,
                     path, resp.value.type());
-            responses{resp.key} := ResponseObject::newResponse(resp.key, resp.value, swagger);
+            responses{resp.key} = ResponseObject::newResponse(resp.key, resp.value, swagger);
         }
 
         if (responses.empty() && !defaultObj)
@@ -4182,10 +4164,6 @@ public class ResponseObject inherits ObjectBase {
         hash examples;
     }
 
-    private {
-        static hash<string, ResponseObject> cache;
-    }
-
     #! private constructor; use newResponse() instead
     /**
         @param key the response code for error reporting
@@ -4201,7 +4179,7 @@ public class ResponseObject inherits ObjectBase {
 
         *hash<auto> schemaObj;
         if (optional_field(objType, oh, "schema", NT_HASH, \schemaObj))
-            schema := SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger);
+            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger);
 
         *hash<auto> headersObj;
         if (optional_field(objType, oh, "headers", NT_HASH, \headersObj))
@@ -4209,12 +4187,6 @@ public class ResponseObject inherits ObjectBase {
 
         optional_field(objType, oh, "examples", NT_HASH, \examples);
         # TODO keys should be Operation 'produces' values
-
-        addToCache(self);
-    }
-
-    copy(ResponseObject old) {
-        addToCache(self);
     }
 
     #! returns a new ResponseObject corresponding to the schema definition passed
@@ -4231,16 +4203,6 @@ public class ResponseObject inherits ObjectBase {
         if (oh.hasKey("$ref"))
             return swagger.resolveResponse(key, oh."$ref", oh);
         return new ResponseObject(key, oh, swagger);
-    }
-
-    #! Adds a ResponseObject to the cache
-    static private addToCache(ResponseObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a ResponseObject from the cache
-    static private removeFromCache(ResponseObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
@@ -4304,7 +4266,7 @@ public class HeaderObject inherits ObjectBase, SchemaBase {
             if (!exists oh.items) {
                 throw "INVALID-FIELD-VALUE", "Header Object: missing 'items' for array";
             }
-            items := SchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
+            items = SchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
             if (optional_field(objType, oh, "collectionFormat", NT_STRING, \collectionFormat)) {
                 if (!CollectionFormats{collectionFormat})
                     throw "INVALID-FIELD-VALUE",
@@ -4525,8 +4487,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         # maps fields: name -> {Y,N} -> field
         hash<string, hash<string, AbstractDataField>> fieldmap;
-
-        static hash<string, SchemaObject> cache;
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -4548,7 +4508,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         self.name = name;
         self.swagger := swagger;
         # add static map reference
-        swagger.cacheSchemaObject(name, hash_str ?? sprintf("%y", oh).toSHA1(), self);
+        if (!hash_str.val()) {
+            hash_str = sprintf("%y", oh).toSHA256();
+        }
+        swagger.cacheSchemaObject(name, hash_str, self);
         string objType = "Schema";
 
         *int opt_flags = swagger.getParseFlags();
@@ -4558,7 +4521,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
                     "expected one of: %y", name, type, keys ReferenceTypes);
             if (type == "array" && (require_items || exists oh.items)) {
-                items := newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
+                items = newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
             }
 
             if (oh.hasKey("default")) {
@@ -4605,7 +4568,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
                             "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} := SchemaObject::newSchemaObject(k, val, swagger);
+                    properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
                     if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
                         nullable_properties{k} = True;
                     }
@@ -4619,7 +4582,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             \additionalProperties)) {
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
-                additionalProperties := SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
+                additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
                     swagger);
         }
         if (opt_flags & LM_ACCEPT_ALL_PROPERTIES) {
@@ -4654,7 +4617,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
                             "datatype: %y", name, val.type());
-                    allOf[allOf.size()] := SchemaObject::newSchemaObject(name + "AllOf", val, swagger);
+                    allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, swagger);
                 }
             }
         }
@@ -4669,11 +4632,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         if (oh.hasKey("example"))
             example = oh.example;
-        addToCache(self);
-    }
-
-    copy(SchemaObject old) {
-        addToCache(self);
     }
 
     replaceType(AbstractDataProviderType t) {
@@ -5031,16 +4989,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     static SchemaObject newSchemaObject(string name, auto error, SwaggerSchema swagger) {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
-    }
-
-    #! Adds a SchemaObject to the cache
-    static private addToCache(SchemaObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a SchemaObject from the cache
-    static private removeFromCache(SchemaObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 

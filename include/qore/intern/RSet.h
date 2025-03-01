@@ -311,18 +311,18 @@ class RSetHelper;
 typedef vector_set_t<RSet*> rs_set_t;
 
 struct RSetStat {
-    RSet* rset;
-    int rcount;
+    RSet* rset = nullptr;
+    int rcount = 0;
     bool in_cycle : 1,
         ok : 1;
 
-    DLLLOCAL RSetStat() : rset(0), rcount(0), in_cycle(false), ok(false) {
+    DLLLOCAL RSetStat() : in_cycle(false), ok(false) {
     }
 
     DLLLOCAL RSetStat(const RSetStat& old) : rset(old.rset), rcount(old.rcount), in_cycle(old.in_cycle), ok(old.ok) {
     }
 
-    DLLLOCAL void finalize(RSet* rs = 0) {
+    DLLLOCAL void finalize(RSet* rs = nullptr) {
         assert(!ok);
         assert(!rset);
         rset = rs;
