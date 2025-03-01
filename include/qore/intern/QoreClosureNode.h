@@ -44,18 +44,22 @@ protected:
 
 public:
     DLLLOCAL CVecInstantiator(cvv_vec_t* cv, ExceptionSink* xs) : cvec(cv), xsink(xs) {
-        if (!cvec)
-        return;
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i)
-        thread_instantiate_closure_var((*i)->refSelf());
+        if (!cvec) {
+            return;
+        }
+        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
+            thread_instantiate_closure_var((*i)->refSelf());
+        }
     }
 
     DLLLOCAL ~CVecInstantiator() {
-        if (!cvec)
+        if (!cvec) {
             return;
+        }
         // elements are dereferenced when uninstantiated
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i)
-        thread_uninstantiate_closure_var(xsink);
+        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
+            thread_uninstantiate_closure_var(xsink);
+        }
     }
 };
 
@@ -69,8 +73,9 @@ protected:
     DLLLOCAL void del(ExceptionSink* xsink) {
         closure_env.del(xsink);
         if (cvec) {
-            for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i)
+            for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
                 (*i)->deref(xsink);
+            }
             delete cvec;
 #ifdef DEBUG
             cvec = nullptr;
@@ -80,9 +85,10 @@ protected:
 
 public:
    //! constructor is not exported outside the library
-    DLLLOCAL QoreClosureBase(const QoreClosureParseNode* n_closure, cvv_vec_t* cv, const qore_class_private* class_ctx)
+    DLLLOCAL QoreClosureBase(const QoreClosureParseNode* n_closure, cvv_vec_t* cv,
+            const qore_class_private* class_ctx)
             : ResolvedCallReferenceNode(false, NT_RUNTIME_CLOSURE), closure(n_closure),
-                closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
+            closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
         //printd(5, "QoreClosureBase::QoreClosureBase() this: %p closure: %p\n", this, closure);
         closure->ref();
     }
@@ -105,7 +111,8 @@ public:
         return closure_env.getMap();
     }
 
-    // returns true if at least one variable in the set of closure-bound local variables could contain an object or a closure (also through a container)
+    // returns true if at least one variable in the set of closure-bound local variables could contain an object or a
+    // closure (also through a container)
     DLLLOCAL bool needsScan() const {
         return closure->needsScan();
     }
@@ -135,7 +142,8 @@ protected:
 
 public:
     DLLLOCAL QoreClosureNode(const QoreClosureParseNode* n_closure, cvv_vec_t* cv = nullptr,
-            const qore_class_private* class_ctx = nullptr) : QoreClosureBase(n_closure, cv, class_ctx), pgm(::getProgram()) {
+            const qore_class_private* class_ctx = nullptr) : QoreClosureBase(n_closure, cv, class_ctx),
+            pgm(::getProgram()) {
         pgm->depRef();
     }
 
@@ -181,15 +189,6 @@ public:
 };
 
 class QoreObjectClosureNode : public QoreClosureBase {
-private:
-    QoreObject* obj;
-
-    DLLLOCAL QoreObjectClosureNode(const QoreObjectClosureNode&); // not implemented
-    DLLLOCAL QoreObjectClosureNode& operator=(const QoreObjectClosureNode&); // not implemented
-
-protected:
-    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
-
 public:
     DLLLOCAL QoreObjectClosureNode(QoreObject* n_obj, const qore_class_private* c_ctx,
             const QoreClosureParseNode* n_closure, cvv_vec_t* cv = nullptr)
@@ -209,7 +208,8 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        str.sprintf("function closure (%slambda, in object of class '%s', %p)", closure->isLambda() ? "" : "non-", obj->getClassName(), this);
+        str.sprintf("function closure (%slambda, in object of class '%s', %p)",
+            closure->isLambda() ? "" : "non-", obj->getClassName(), this);
         return 0;
     }
 
@@ -237,6 +237,15 @@ public:
     DLLLOCAL virtual QoreObject* getObject() const {
         return obj;
     }
+
+protected:
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
+
+private:
+    QoreObject* obj;
+
+    QoreObjectClosureNode(const QoreObjectClosureNode&) = delete;
+    QoreObjectClosureNode& operator=(const QoreObjectClosureNode&) = delete;
 };
 
 #endif
