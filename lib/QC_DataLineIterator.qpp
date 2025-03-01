@@ -66,14 +66,14 @@ qclass DataLineIterator [arg=DataLineIterator* i; ns=Qore; vparent=AbstractLineI
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
  */
 DataLineIterator::constructor(string str, *string eol, bool trim = True) {
-   if (eol && eol->empty())
-      eol = 0;
+    if (eol && eol->empty())
+        eol = nullptr;
 
-   SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, str, eol, trim));
-   if (*xsink)
-      return;
+    SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, str, eol, trim));
+    if (*xsink)
+        return;
 
-   self->setPrivate(CID_DATALINEITERATOR, dli.release());
+    self->setPrivate(CID_DATALINEITERATOR, dli.release());
 }
 
 //! Creates a new DataLineIterator object, based on the same object being iterated in the original object
@@ -83,10 +83,10 @@ DataLineIterator ni = i.copy();
     @endcode
  */
 DataLineIterator::copy() {
-   SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, *i));
+    SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, *i));
 
-   if (!*xsink)
-      self->setPrivate(CID_DATALINEITERATOR, dli.release());
+    if (!*xsink)
+        self->setPrivate(CID_DATALINEITERATOR, dli.release());
 }
 
 //! Moves the current position to the next line in the data; returns @ref False if there are no more lines to read; if the iterator is not pointing at a valid element before this call, the iterator will be positioned to the beginning of the data
@@ -105,9 +105,9 @@ while (i.next()) {
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
 bool DataLineIterator::next() {
-   if (i->check(xsink))
-      return false;
-   return i->next(xsink);
+    if (i->check(xsink))
+        return false;
+    return i->next(xsink);
 }
 
 //! returns the current line in the data or throws an \c ITERATOR-ERROR exception if the iterator is invalid
@@ -126,7 +126,7 @@ while (i.next()) {
     @see DataLineIterator::getLine()
  */
 string DataLineIterator::getValue() [flags=RET_VALUE_ONLY] {
-   return i->checkValid(xsink) ? 0 : i->getValue();
+    return i->checkValid(xsink) ? QoreValue() : i->getValue();
 }
 
 //! returns the current line in the data or throws an \c ITERATOR-ERROR exception if the iterator is invalid
@@ -145,7 +145,7 @@ while (i.next()) {
     @see DataLineIterator::getValue()
  */
 string DataLineIterator::getLine() [flags=RET_VALUE_ONLY] {
-   return i->checkValid(xsink) ? 0 : i->getValue();
+    return i->checkValid(xsink) ? QoreValue() : i->getValue();
 }
 
 //! returns @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not
@@ -158,7 +158,7 @@ if (i.valid())
     @endcode
  */
 bool DataLineIterator::valid() [flags=CONSTANT] {
-   return i->valid();
+    return i->valid();
 }
 
 //! returns the current iterator line number in the data (the first line is line 1) or 0 if not pointing at a valid element
@@ -172,7 +172,7 @@ while (i.next()) {
     @endcode
  */
 int DataLineIterator::index() [flags=CONSTANT] {
-   return i->index();
+    return i->index();
 }
 
 //! Returns the @ref character_encoding "character encoding" for the %DataLineIterator
@@ -184,7 +184,7 @@ string encoding = f.getEncoding();
     @return the @ref character_encoding "character encoding" for the %DataLineIterator
  */
 string DataLineIterator::getEncoding() [flags=CONSTANT] {
-   return new QoreStringNode(i->getEncoding()->getCode());
+    return new QoreStringNode(i->getEncoding()->getCode());
 }
 
 //! Reset the iterator instance to its initial state
@@ -198,7 +198,7 @@ i.reset();
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
 DataLineIterator::reset() {
-   if (i->check(xsink))
-      return QoreValue();
-   i->reset(xsink);
+    if (i->check(xsink))
+        return QoreValue();
+    i->reset(xsink);
 }

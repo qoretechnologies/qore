@@ -43,19 +43,18 @@
  */
 class DataLineIterator : public QoreIteratorBase {
 public:
-    DLLLOCAL DataLineIterator(ExceptionSink* xsink, const QoreStringNode* n_str, const QoreStringNode* n_eol = 0, bool n_trim = true) :
-        src(0),
-        str(n_str->stringRefSelf()),
-        eol(n_eol ? n_eol->stringRefSelf() : 0),
-        trim(n_trim) {
+    DLLLOCAL DataLineIterator(ExceptionSink* xsink, const QoreStringNode* n_str,
+            const QoreStringNode* n_eol = nullptr, bool n_trim = true) :
+            str(n_str->stringRefSelf()),
+            eol(n_eol ? n_eol->stringRefSelf() : nullptr),
+            trim(n_trim) {
         doReset(xsink);
     }
 
     DLLLOCAL DataLineIterator(ExceptionSink* xsink, const DataLineIterator& old) :
-        src(0),
-        str(old.str->stringRefSelf()),
-        eol(old.eol ? old.eol->stringRefSelf() : 0),
-        trim(old.trim) {
+            str(old.str->stringRefSelf()),
+            eol(old.eol ? old.eol->stringRefSelf() : nullptr),
+            trim(old.trim) {
         doReset(xsink);
     }
 
@@ -109,10 +108,12 @@ public:
 
 private:
     DLLLOCAL void doReset(ExceptionSink* xsink) {
-        if (!str->getEncoding()->isAsciiCompat())
-            src = new InputStreamLineIterator(xsink, new EncodingConversionInputStream(new StringInputStream(*str), str->getEncoding(), QCS_UTF8, xsink), QCS_UTF8, *eol, trim);
-        else
+        if (!str->getEncoding()->isAsciiCompat()) {
+            src = new InputStreamLineIterator(xsink, new EncodingConversionInputStream(new StringInputStream(*str),
+                str->getEncoding(), QCS_UTF8, xsink), QCS_UTF8, *eol, trim);
+        } else {
             src = new InputStreamLineIterator(xsink, new StringInputStream(*str), str->getEncoding(), *eol, trim);
+        }
     }
 
 private:

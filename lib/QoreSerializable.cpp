@@ -1090,8 +1090,7 @@ QoreValue QoreSerializable::deserializeIndexedContainer(const char* key, QoreInt
         return QoreValue();
     }
 
-    i->second.ref();
-    return i->second;
+    return i->second.refSelf();
 }
 
 QoreValue QoreSerializable::deserializeIndexedWeakReference(const char* key,
@@ -1250,7 +1249,7 @@ QoreValue QoreSerializable::deserializeListData(QoreValue v, const QoreHashNode&
     }
 
     if (elements.isNothing()) {
-        return new QoreListNode(vti);
+        return rval ? rval : new QoreListNode(vti);
     }
     ValueHolder rv(deserializeListData(*elements.get<const QoreListNode>(), context, xsink, rval), xsink);
     if (*xsink) {

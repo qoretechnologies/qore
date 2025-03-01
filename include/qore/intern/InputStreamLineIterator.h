@@ -45,16 +45,12 @@
  */
 class InputStreamLineIterator : public QoreIteratorBase {
 public:
-    DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding, const QoreStringNode* n_eol, bool n_trim, size_t bufsize = DefaultStreamBufferSize) :
+    DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding,
+            const QoreStringNode* n_eol, bool n_trim, size_t bufsize = DefaultStreamBufferSize) :
         src(is, xsink),
         reader(xsink),
         enc(encoding),
-        line(0),
-        eol(0),
-        num(0),
-        validp(false),
-        trim(n_trim)
-    {
+        trim(n_trim) {
         if (assignEol(n_eol, xsink))
             return;
 
@@ -63,45 +59,37 @@ public:
         reader = new BufferedStreamReader(xsink, *src, enc, bufsize);
     }
 
-    DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, StreamReader* sr, const QoreStringNode* n_eol = 0, bool n_trim = true) :
+    DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, StreamReader* sr, const QoreStringNode* n_eol = nullptr,
+            bool n_trim = true) :
         src(xsink),
         reader(sr, xsink),
         enc(sr->getEncoding()),
-        line(0),
-        eol(0),
-        num(0),
-        validp(false),
-        trim(n_trim)
-    {
+        trim(n_trim) {
         if (assignEol(n_eol, xsink))
             return;
 
         // update the stream reader's encoding if necessary
-        if (enc != sr->getEncoding())
+        if (enc != sr->getEncoding()) {
             sr->setEncoding(enc);
+        }
     }
 
     DLLLOCAL ~InputStreamLineIterator() {
-        if (eol)
-            eol->deref();
-        if (line)
-            line->deref();
     }
 
     DLLLOCAL bool next(ExceptionSink* xsink) {
         // Make sure to use a new string if the iterator was already valid.
         if (validp && line && !line->empty()) {
-            line->deref();
-            line = 0;
+            line.discard();
         }
         validp = getLine(xsink);
         if (validp) {
             ++num;   // Increment line number.
+        } else {
+            num = 0; // Reset iterator.
         }
-        else {
-            num = 0;   // Reset iterator.
-        }
-        //printd(5, "InputStreamLineIterator::next() this: %p line: %d offset: %lld validp: %d '%s'\n", this, num, offset, validp, line->getBuffer());
+        //printd(5, "InputStreamLineIterator::next() this: %p line: %d offset: %lld validp: %d '%s'\n", this, num,
+        //    offset, validp, line->getBuffer());
         return validp;
     }
 
@@ -120,7 +108,8 @@ public:
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) const {
         if (!validp) {
-            xsink->raiseException("ITERATOR-ERROR", "the %s is not pointing at a valid element; make sure %s::next() returns True before calling this method", getName(), getName());
+            xsink->raiseException("ITERATOR-ERROR", "the %s is not pointing at a valid element; make sure %s::next() "
+                "returns True before calling this method", getName(), getName());
             return -1;
         }
         return 0;
@@ -135,11 +124,14 @@ public:
     }
 
     DLLLOCAL virtual void deref() {
-        if (ROdereference())
+        if (ROdereference()) {
             delete this;
+        }
     }
 
-    DLLLOCAL virtual const char* getName() const { return "InputStreamLineIterator"; }
+    DLLLOCAL virtual const char* getName() const {
+        return "InputStreamLineIterator";
+    }
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
         return stringTypeInfo;
@@ -147,35 +139,34 @@ public:
 
 private:
     DLLLOCAL int assignEol(const QoreStringNode* n_eol, ExceptionSink* xsink) {
-        if (!n_eol || n_eol->empty())
+        if (!n_eol || n_eol->empty()) {
             return 0;
+        }
         if (enc != n_eol->getEncoding()) {
             SimpleRefHolder<QoreStringNode> neol(n_eol->convertEncoding(enc, xsink));
-            if (*xsink)
+            if (*xsink) {
                 return -1;
+            }
             eol = q_remove_bom_utf16(neol.release(), enc);
-        }
-        else {
+        } else {
             eol = n_eol->stringRefSelf();
         }
         return 0;
     }
 
     DLLLOCAL bool getLine(ExceptionSink* xsink) {
-        if (line)
-            line->deref();
-        line = reader->readLine(eol, trim, xsink);
-        return (line != 0);
+        line = reader->readLine(*eol, trim, xsink);
+        return (bool)line;
     }
 
 private:
     ReferenceHolder<InputStream> src;
     ReferenceHolder<StreamReader> reader;
     const QoreEncoding* enc;
-    QoreStringNode* line;
-    QoreStringNode* eol;
-    int64 num;
-    bool validp;
+    SimpleRefHolder<QoreStringNode> line;
+    SimpleRefHolder<QoreStringNode> eol;
+    int64 num = 0;
+    bool validp = false;
     bool trim;
 };
 

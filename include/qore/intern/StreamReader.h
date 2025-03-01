@@ -134,8 +134,9 @@ public:
 
     DLLLOCAL QoreStringNode* readLineEol(const QoreString* eol, bool trim, ExceptionSink* xsink) {
         TempEncodingHelper eolstr(eol, enc, xsink);
-        if (*xsink)
-            return 0;
+        if (*xsink) {
+            return nullptr;
+        }
         eolstr.removeBom();
 
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
@@ -224,26 +225,31 @@ public:
         while (true) {
             signed char c;
             int64 rc = readData(xsink, &c, 1, false);
-            if (*xsink)
-                return 0;
+            if (*xsink) {
+                return nullptr;
+            }
             if (!rc) { // End of stream.
-                return str->empty() ? 0 : str.release();
+                return str->empty() ? nullptr : str.release();
             }
 
             if (c == '\n') {
-                if (!trim)
-                str->concat(c);
+                if (!trim) {
+                    str->concat(c);
+                }
                 return str.release();
             } else if (c == '\r') {
-                if (!trim)
+                if (!trim) {
                     str->concat(c);
+                }
                 int64 p = peek(xsink);
-                if (*xsink)
-                    return 0;
+                if (*xsink) {
+                    return nullptr;
+                }
                 if (p == '\n') {
                     readData(xsink, &c, 1);
-                if (!trim)
-                    str->concat((char)p);
+                    if (!trim) {
+                        str->concat((char)p);
+                    }
                 }
                 return str.release();
             }

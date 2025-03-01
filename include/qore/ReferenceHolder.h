@@ -138,17 +138,26 @@ public:
 
     DLLLOCAL ~SimpleRefHolder() { if (p) p->deref(); }
 
+    DLLLOCAL void discard() {
+        if (p) {
+            p->deref();
+            p = nullptr;
+        }
+    }
+
     DLLLOCAL T* operator->() { return p; }
     DLLLOCAL T* operator*() { return p; }
     DLLLOCAL const T* operator->() const { return p; }
     DLLLOCAL const T* operator*() const { return p; }
+
     DLLLOCAL void operator=(T* nv) {
         if (p) {
             p->deref();
         }
         p = nv;
     }
-    DLLLOCAL T *release() {
+
+    DLLLOCAL T* release() {
         T* rv = p;
         p = nullptr;
         return rv;
@@ -163,7 +172,9 @@ public:
         return rv;
     }
 
-    DLLLOCAL operator bool() const { return p != 0; }
+    DLLLOCAL operator bool() const {
+        return p != nullptr;
+    }
 
 protected:
     T* p = nullptr;

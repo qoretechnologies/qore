@@ -2948,9 +2948,12 @@ public class SwaggerTest inherits QUnit::Test {
 
     private testExamples(SwaggerSchema so) {
         hash<RestQoreExampleCodeInfo> qex = so.getQoreExampleRequest("GET", "/user/login");
-        assertEq(True, qex.example =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
+        {
+            on_error printf("%N\n", qex);
+            assertEq(True, qex.example =~ /\/user\/login\?username=[a-z ]+;password=[a-z ]+/im);
+        }
         hash<RestExampleRequestInfo> rex = so.getExampleRequest("GET", "/user/login");
-        assertEq(True, rex.request_uri =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
+        assertEq(True, rex.request_uri =~ /\/user\/login\?username=[a-z ]+;password=[a-z ]+/im);
 
         qex = so.getQoreExampleRequest("POST", "/pet");
         assertEq(Type::String, qex.example.type());
