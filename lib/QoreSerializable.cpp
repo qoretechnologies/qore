@@ -76,15 +76,13 @@ constexpr bool code_is_string(qore_stream_type t) {
 
 ObjectIndexMap::~ObjectIndexMap() {
     for (auto& i : *this) {
-        if (*xs) {
-            // in case of an exception, we need to obliterate the object before dereferencing
-            if (i.second.getType() == NT_OBJECT) {
-                qore_object_private::get(*i.second.get<QoreObject>())->obliterate(xs);
-            }
-        } else {
-            // otherwise we just need to dereference
-            i.second.discard(xs);
+        // in case of an exception, we need to obliterate the object before dereferencing
+        if (*xs && (i.second.getType() == NT_OBJECT)) {
+            qore_object_private::get(*i.second.get<QoreObject>())->obliterate(xs);
+            continue;
         }
+        // otherwise we just need to dereference
+        i.second.discard(xs);
     }
 }
 
@@ -996,7 +994,7 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 }
 
                 // create the error string
-                SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("incompatible class hierarchy; %d "
+                SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("Incompatible class hierarchy; %d "
                     "class%s in serialization data, but %d used for deserialization; unmatched classes: ",
                     static_cast<int>(hsize), hsize == 1 ? "" : "es", static_cast<int>(found)));
 
@@ -1059,21 +1057,21 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
                 xsink->raiseException("DESERIALIZATION-ERROR", "Class '%s' has no static var '%s'", cname, ci.getKey());
                 return -1;
             }
-            QoreValue v = deserializeData(ci.get(), context, xsink);
+            ValueHolder v(deserializeData(ci.get(), context, xsink), xsink);
             if (*xsink) {
                 return -1;
             }
             ReferenceHolder<QoreHashNode> h(xsink);
             if (context.flags & QDF_MERGE_STATIC_CLASS_VARS && (m->getValue().getType() == NT_HASH)
-                && (v.getType() == NT_HASH)) {
+                && (v->getType() == NT_HASH)) {
                 h = m->getValue().get<const QoreHashNode>()->realCopy();
-                h->merge(v.get<const QoreHashNode>(), xsink);
+                h->merge(v->get<const QoreHashNode>(), xsink);
                 if (*xsink) {
                     return -1;
                 }
                 v = *h;
             }
-            if (m->setValue(v, xsink)) {
+            if (m->setValue(*v, xsink)) {
                 xsink->appendLastDescription(" (while setting static var '%s::%s')", cname, ci.getKey());
                 return -1;
             }
