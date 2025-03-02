@@ -342,20 +342,19 @@ QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSeri
         }
 
         case NT_WEAKREF: {
-            ValueHolder rv(serializeObjectToData(*val.get<WeakReferenceNode>()->get(),
-                context.flags & QSF_ALLOW_WEAKREFS ? true : false, context, xsink), xsink);
+            ValueHolder rv(serializeObjectToData(*val.get<WeakReferenceNode>()->get(), true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_HASH: {
-            ValueHolder rv(serializeHashToData(*val.get<WeakHashReferenceNode>()->get(),
-                context.flags & QSF_ALLOW_WEAKREFS ? true : false, context, xsink), xsink);
+            ValueHolder rv(serializeHashToData(*val.get<WeakHashReferenceNode>()->get(), true, context, xsink),
+                xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_LIST: {
-            ValueHolder rv(serializeListToData(*val.get<WeakListReferenceNode>()->get(),
-                context.flags & QSF_ALLOW_WEAKREFS ? true : false, context, xsink), xsink);
+            ValueHolder rv(serializeListToData(*val.get<WeakListReferenceNode>()->get(), true, context, xsink),
+                xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
@@ -536,7 +535,8 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
 
                 ValueHolder new_val(serializeValue(*val, context, xsink), xsink);
                 if (*xsink) {
-                    xsink->appendLastDescription(" (while serializing object member '%s::%s')", current_cls.getName(), mname);
+                    xsink->appendLastDescription(" (while serializing object member '%s::%s')", current_cls.getName(),
+                        mname);
                     return context.imap.end();
                 }
 

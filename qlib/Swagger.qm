@@ -1508,7 +1508,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     cacheSchemaObject(string name, string hash_str, SchemaObject so) {
-        so_map{name}{hash_str} = so;
+        so_map{name}{hash_str} := so;
     }
 
     #! resolves a reference to a schema object
@@ -1538,7 +1538,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             ref = ref.copy();
             ref.xml = new XmlObject(xmlObj);
         }
-        # additional subling elements are ignored...
+        # additional sibling elements are ignored...
         return ref;
     }
 
@@ -5083,7 +5083,7 @@ public class XmlObject inherits ObjectBase {
             When defined alongside \c type being \c array (outside the \c items),
             it will affect the wrapping element and only if \c wrapped is \c true.
             If \c wrapped is \c false, it will be ignored.
-         */
+        */
         *string name;
 
         #! The URL of the namespace definition. Value SHOULD be in the form of a URL.
@@ -5092,14 +5092,18 @@ public class XmlObject inherits ObjectBase {
         #! The prefix to be used for the @ref XmlObject::name "name".
         *string prefix;
 
-        #! Declares whether the property definition translates to an attribute instead of an element. Default value is \c false.
+        #! Declares whether the property definition translates to an attribute instead of an element
+        /** Default value is \c false
+        */
         bool attribute = False;
 
-        #! MAY be used only for an array definition. Signifies whether the array is wrapped (for example, \c &lt;books&gt;&lt;book/&gt;&lt;book/&gt;&lt;/books&gt;) or unwrapped (\c &lt;book/&gt;&lt;book/&gt;).
-        /**
-            Default value is \c false. The definition takes effect only when
-            defined alongside \c type being \c array (outside the \c items).
-         */
+        #! MAY be used only for an array definition
+        /** Signifies whether the array is wrapped (for example,
+            \c &lt;books&gt;&lt;book/&gt;&lt;book/&gt;&lt;/books&gt;) or unwrapped (\c &lt;book/&gt;&lt;book/&gt;)
+
+            Default value is \c false. The definition takes effect only when defined alongside \c type being \c array
+            (outside the \c items).
+        */
         bool wrapped = False;
     }
 

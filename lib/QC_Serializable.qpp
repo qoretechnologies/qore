@@ -56,11 +56,6 @@ static void Serializable_deserializer(QoreObject& self, const QoreHashNode* sdat
     @since %Qore 2.0
 */
 ///@{
-//! Serialize weak references as weak references
-/** Such data can only be deserialized if a strong reference to the same data is included in the serialized data set
-*/
-const QSF_ALLOW_WEAKREFS = QSF_ALLOW_WEAKREFS;
-
 //! Serialize static class vars of classes serialized
 const QSF_INCLUDE_STATIC_CLASS_VARS = QSF_INCLUDE_STATIC_CLASS_VARS;
 ///@}
