@@ -1619,7 +1619,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     */
     private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
         hash<auto> new_opts;
-        if (h.token_type && h.token_type != token_type) {
+        # do not update "Bearer" -> "bearer"; it can break oauth2 refresh for apps like HubSpot
+        if (h.token_type && h.token_type.lwr() != token_type.lwr()) {
             new_opts.token_type = h.token_type;
         }
         if (h.access_token && h.access_token != token) {
