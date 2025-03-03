@@ -1276,6 +1276,9 @@ hash<auto> ans = rest.del("/orders/1");
     /** @since %RestClient 2.0
     */
     setToken(string token_type, string token, *string refresh_token) {
+        if (token_type == "bearer") {
+            token_type = "Bearer";
+        }
         self.token_type = token_type;
         self.token = token;
         addDefaultHeaders({"Authorization": sprintf("%s %s", token_type, token)});
