@@ -184,7 +184,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
             },
             "body": {
                 "display_name": "Message Body",
-                "type": DataType,
+                "type": StringType,
                 "short_desc": "The message body",
                 "desc": "The message body",
             },
