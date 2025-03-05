@@ -348,6 +348,17 @@ public hashdecl ConnectionInfo {
     */
     bool locked;
 
+    #! Indicates if the connection supports customization or not
+    bool supports_customization;
+
+    #! The current customization status for the connection
+    /** @see ConnectionCustomizationStatuses for allowed values
+    */
+    string customization_status;
+
+    #! The timestamp of the last customization for the connection
+    *date customization_timestamp;
+
     #! a boolean value indicating whether the connection should be subject to data debugging
     /** This flag does not affect anything by default, it is for user re-implementations
     */
@@ -445,6 +456,17 @@ public hashdecl ConnectionDataInfo {
     /** This flag does not affect anything by default, it is for user re-implementations
     */
     bool locked;
+
+    #! Indicates if the connection supports customization or not
+    bool supports_customization;
+
+    #! The current customization status for the connection
+    /** @see ConnectionCustomizationStatuses for allowed values
+    */
+    string customization_status;
+
+    #! The timestamp of the last customization for the connection
+    *date customization_timestamp;
 
     #! a boolean value indicating whether the connection should be subject to data debugging
     /** This flag does not affect anything by default, it is for user re-implementations

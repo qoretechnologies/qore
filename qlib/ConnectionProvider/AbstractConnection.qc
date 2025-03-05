@@ -39,6 +39,28 @@ public const PF_THROW_EXCEPTION = (1 << 0);
 public const PF_AUTOMATIC_PING =  (1 << 1);
 #/@}
 
+/** @defgroup ConnectionCustomizationStatuses Connection Customization Statuses
+*/
+#/@{
+#! Customization status: unsupported
+public const CCS_UNSUPPORTED = "unsupported";
+
+#! Customization status: uncustomized
+/** The connection supports customization, but customization has not yet been started
+*/
+public const CCS_UNCUSTOMIZED = "uncustomized";
+
+#! Customization status: in-progress
+/** The connection supports customization, and customization is currently in progress
+*/
+public const CCS_IN_PROGRESS = "in-progress";
+
+#! Customization status: customized
+/** The connection supports customization, and customization has been completed
+*/
+public const CCS_CUSTOMIZED = "customized";
+#/@}
+
 #! Abstract base class for connections
 /** this class can be specialized to provide for user-defined connection types
 
@@ -93,6 +115,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         #! set to @ref True "True" for loopback connections
         bool loopback = False;
+
+        #! Customization support?
+        bool supports_customization = False;
+
+        #! Customization status
+        string customization_status = CCS_UNSUPPORTED;
+
+        #! Customization timestamp
+        *date customization_timestamp;
 
         #! optional code for default post-processing of objects created by getImpl()
         /** must take the connection object and the object created as arguments
@@ -376,6 +407,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
     }
 
+    #! Starts customization for the object
+    /** @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+    */
+    startCustomization() {
+        startCustomizationImpl();
+    }
+
     #! performs the ping by executing get(); returns a @ref PingInfo hash
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
@@ -416,7 +454,8 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = cast<hash<ConnectionInfo>>(self{
             "name", "display_name", "short_desc", "desc", "url", "monitor", "last_check", "updated", "status", "up",
-            "loopback", "enabled", "locked", "debug_data", "tags", "children_can_support_apis",
+            "loopback", "enabled", "locked", "supports_customization", "customization_status",
+            "customization_timestamp", "debug_data", "tags", "children_can_support_apis",
             "children_can_support_records", "children_can_support_observers", "children_can_support_messages",
             "children_can_support_transactions",
         } + {
@@ -794,6 +833,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
         string targ = "http" + (ssl ? "s" : "");
         return regex_subst(url, "^" + scheme, targ);
+    }
+
+    #! Starts customization for the object
+    /** @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+    */
+    private startCustomizationImpl() {
+        throw "CUSTOMIZATION-UNSUPPORTED", "This connection does not support customization";
     }
 
     #! returns a data provider object for the connection and subtype passed as an argument
