@@ -40,6 +40,15 @@ hashdecl SalesforceRestRecordInfo {
 
     #! Hash of time fields for this record
     hash<string, bool> time_fields;
+
+    #! Fields that cannot be included when creating records
+    hash<string, bool> no_create;
+
+    #! Fields that cannot be included when updating records
+    hash<string, bool> no_update;
+
+    #! Fields that get a default value on create
+    hash<string, bool> defaulted_on_create;
 }
 
 #! The SalesforceRestObjectDataProvider data provider class
@@ -80,6 +89,17 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return record_info.record_type;
+    }
+
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return record_info.record_type - keys record_info.no_update;
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+        *hash<string, QoreDataField> rv = record_info.record_type - keys record_info.no_create;
+        map rv{$1}.updateFieldType(rv{$1}.getType().getOrNothingType()), keys record_info.defaulted_on_create,
+            rv{$1} && rv{$1}.getType().isMandatory();
+        return rv;
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -351,7 +371,22 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     private getRecordInfoIntern() {
         desc = rest.get("sobjects/" + name + "/describe").body;
         foreach hash<auto> field in (desc.fields) {
-            AbstractDataProviderType type;
+            hash<auto> info += {
+                "name": field.name,
+                "display_name": field.label,
+                "short_desc": field.label,
+            };
+            if (field.hasKey("createable") && !field.createable) {
+                info.attr.createable = False;
+                record_info.no_create{field.name} = True;
+            }
+            if (field.hasKey("updateable") && !field.updateable) {
+                info.attr.updateable = False;
+                record_info.no_update{field.name} = True;
+            }
+            if (field.defaultedOnCreate) {
+                record_info.defaulted_on_create{field.name} = True;
+            }
             hash<auto> opts += {
                 "qore.no_null": True,
             };
@@ -367,7 +402,9 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     if (field.length) {
                         opts."string.max_size_chars" = field.length;
                     }
-                    type = AbstractDataProviderType::get(field.nillable ? SoftStringOrNothingType : SoftStringType, opts);
+                    info.type = AbstractDataProviderType::get(
+                        field.nillable ? SoftStringOrNothingType : SoftStringType, opts
+                    );
                     break;
                 }
 
@@ -376,48 +413,68 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     if (field.nillable) {
                         typename = "*" + typename;
                     }
-                    type = AbstractDataProviderType::get(typename, opts);
-                    # FIXME: add enum values when supported
+                    info.type = AbstractDataProviderType::get(typename, opts);
+                    info.allowed_values = ();
+                    foreach hash<auto> h in (field.picklistValues) {
+                        if (!h.active) {
+                            continue;
+                        }
+                        if (h.defaultValue) {
+                            info.default_value = h.value;
+                        }
+                        info.allowed_values += <AllowedValueInfo>{
+                            "display_name": h.label,
+                            "value": h.value,
+                        };
+                    }
                     break;
 
                 case "datetime":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType,
+                        opts);
                     record_info.date_time_fields{field.name} = True;
                     break;
 
                 case "date":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType,
+                        opts);
                     record_info.date_fields{field.name} = True;
                     break;
 
                 case "time":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftStringOrNothingType : SoftStringType, opts);
+                    info.type = AbstractDataProviderType::get(
+                        field.nillable ? SoftStringOrNothingType : SoftStringType, opts
+                    );
                     record_info.time_fields{field.name} = True;
                     break;
 
                 case "int":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftIntOrNothingType : SoftIntType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftIntOrNothingType : SoftIntType,
+                        opts);
                     break;
 
                 case "percent":
                 case "currency":
                 case "double":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftFloatOrNothingType : SoftFloatType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftFloatOrNothingType : SoftFloatType,
+                        opts);
                     break;
 
                 case "boolean":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftBoolOrNothingType : SoftBoolType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftBoolOrNothingType : SoftBoolType,
+                        opts);
                     break;
 
                 case "address":
-                    type = new HashDataType(field.nillable ? AutoHashOrNothingType : AutoHashType, field.type, opts);
+                    info.type = new HashDataType(field.nillable ? AutoHashOrNothingType : AutoHashType, field.type,
+                        opts);
                     break;
 
                 default:
-                    type = AbstractDataProviderType::get(AbstractDataProviderType::anyType, opts);
+                    info.type = AbstractDataProviderType::get(AbstractDataProviderType::anyType, opts);
                     break;
             }
-            record_info.record_type{field.name} = new QoreDataField(field.name, field.label, type);
+            record_info.record_type{field.name} = new QoreDataField(info);
         }
     }
 

@@ -3114,13 +3114,46 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
         is ignored
 
-        @return the record type or @ref NOTHING if the datas provider does not support a record type
+        @return the record type or @ref NOTHING if the data provider does not support a record type
     */
     *hash<string, AbstractDataField> getRecordType(*hash<auto> search_options) {
         if (!hasRecord()) {
             return;
         }
         return getRecordTypeImpl(recordRequiresSearchOptions() ? validateSearchOptions(search_options) : NOTHING);
+    }
+
+    #! Returns the description of the record type for creating records, if any
+    /** @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.0
+    */
+    *hash<string, AbstractDataField> getCreateRecordType(*hash<auto> create_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        return getCreateRecordTypeImpl(validateCreateOptions(create_options));
+    }
+
+    #! Returns the description of the record type for updating records, if any
+    /** @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.0
+    */
+    *hash<string, AbstractDataField> getUpdateRecordType(*hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        return getUpdateRecordTypeImpl(recordRequiresSearchOptions() ? validateSearchOptions(search_options) :
+            NOTHING);
     }
 
     #! Returns the description of the record type with soft types, if any
@@ -3507,12 +3540,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns the description of the record type, if any
-    /** @param search_options to be included and processed by validateSearchOptions() if
-        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
-        is ignored
+    /** @param search_options any search options
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         throwUnimplementedException();
+    }
+
+    #! Returns the description of the record type for updates, if any
+    /** @param search_options any search options
+    */
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return getRecordTypeImpl(search_options);
+    }
+
+    #! Returns the description of the record type for creating records, if any
+    /** @param create_options the create options
+    */
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+        return getRecordTypeImpl();
     }
 
     #! Returns an iterator for zero or more records matching the search options

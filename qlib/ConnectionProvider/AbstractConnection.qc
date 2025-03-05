@@ -408,9 +408,16 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Starts customization for the object
-    /** @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+    /** @bool restart Restart any customization in progress
+
+        @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+        @throw CUSTOMIZATION-IN-PROGRESS this exception is thrown if customization is already in progress and
+        \a restart is not @ref True
     */
-    startCustomization() {
+    startCustomization(*bool restart) {
+        if (customization_status == CCS_IN_PROGRESS) {
+            throw "CUSTOMIZATION-IN-PROGRESS", "";
+        }
         startCustomizationImpl();
     }
 

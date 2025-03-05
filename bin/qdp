@@ -92,6 +92,8 @@ class QdpCmd {
             "ai": \QdpCmd::actionInfo(),
             "ainfo": \QdpCmd::actionInfo(),
             "create": \QdpCmd::create(),
+            "create-record": \QdpCmd::getCreateRecord(),
+            "crecord": \QdpCmd::getCreateRecord(),
             "delete": \QdpCmd::del(),
             "dorequest": \QdpCmd::doRequest(),
             "errors": \QdpCmd::errors(),
@@ -141,6 +143,8 @@ class QdpCmd {
             "smsg": \QdpCmd::sendMessage(),
             "sp": \QdpCmd::showProviders(),
             "update": \QdpCmd::update(),
+            "update-record": \QdpCmd::getUpdateRecord(),
+            "urecord": \QdpCmd::getUpdateRecord(),
             "upsert": \QdpCmd::upsert(),
         };
 
@@ -707,6 +711,26 @@ class QdpCmd {
     static getRecord(AbstractDataProvider provider) {
         *hash<auto> search_options = QdpCmd::getHash("search options");
         *hash<string, AbstractDataField> rec = provider.getRecordType(search_options);
+        if (opts.verbose > 1) {
+            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+        } else {
+            QdpCmd::showRecord(provider, rec);
+        }
+    }
+
+    static getCreateRecord(AbstractDataProvider provider) {
+        *hash<auto> create_options = QdpCmd::getHash("create options");
+        *hash<string, AbstractDataField> rec = provider.getCreateRecordType(create_options);
+        if (opts.verbose > 1) {
+            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+        } else {
+            QdpCmd::showRecord(provider, rec);
+        }
+    }
+
+    static getUpdateRecord(AbstractDataProvider provider) {
+        *hash<auto> search_options = QdpCmd::getHash("search options");
+        *hash<string, AbstractDataField> rec = provider.getUpdateRecordType(search_options);
         if (opts.verbose > 1) {
             printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
         } else {
