@@ -260,6 +260,8 @@ class QdpCmd {
         }
         provider.setLogger(logger);
 
+        DataProviderContextHelper pctx(provider);
+
         # Set up fake webhook interface for the TypeScriptActionInterface module if possible
         if (get_module_hash().TypeScriptActionInterface) {
             # make sure symbols are loaded in this Program
