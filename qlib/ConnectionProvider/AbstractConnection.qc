@@ -415,8 +415,9 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         \a restart is not @ref True
     */
     startCustomization(*bool restart) {
-        if (customization_status == CCS_IN_PROGRESS) {
-            throw "CUSTOMIZATION-IN-PROGRESS", "";
+        if ((customization_status == CCS_IN_PROGRESS) && !restart) {
+            throw "CUSTOMIZATION-IN-PROGRESS", "Customization in progress; set the restart flag to restart "
+                "connection customization";
         }
         startCustomizationImpl();
     }

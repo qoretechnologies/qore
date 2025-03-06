@@ -5189,7 +5189,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
     assert(signature.numParams() <= 1);
 
     QoreListNode* args = new QoreListNode(autoTypeInfo);
-    args->push(self->refSelf(), nullptr);
+    args->push(old->refSelf(), nullptr);
     ceh.setArgs(args);
 
     UserVariantExecHelper uveh(this, &ceh, xsink);
