@@ -89,14 +89,15 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
-    updateConnectionObject(object conn) {
-        if (!(conn instanceof GoogleRestClient)) {
+    updateConnectionObjects(object conn, object connobj) {
+        if (!(connobj instanceof GoogleRestClient)) {
             throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"GoogleRestClient\" object; got "
-                "%y instead", self.className(), conn.className());
+                "%y instead", self.className(), connobj.className());
         }
-        rest = cast<GoogleRestClient>(conn);
+        rest = cast<GoogleRestClient>(connobj);
         rest.setConnectionPath("/");
         rest.setLogger(logger);
     }

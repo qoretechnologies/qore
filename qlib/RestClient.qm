@@ -2439,7 +2439,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 "ping_body": <ConnectionOptionInfo>{
                     "display_name": "Ping Body",
                     "short_desc": "The message body to send with pings",
-                    "type": "any",
+                    "type": "auto",
                     "desc": "Any message body to send when performing an advanced ping operation; ignored if either "
                         "one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
                 },
@@ -2524,7 +2524,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 "validator": <ConnectionOptionInfo>{
                     "display_name": "Schema Validator",
                     "short_desc": "Sets a schema validator object",
-                    "type": "any",
+                    "type": "auto",
                     "desc": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts "
                         "with `swagger`",
                 },

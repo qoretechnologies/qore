@@ -2696,7 +2696,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
 
         This is useful for event-driven providers that require a connection object to generate events.
 
@@ -2704,7 +2705,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.0
     */
-    updateConnectionObject(object conn) {
+    updateConnectionObjects(object conn, object connobj) {
         # intentially blank
     }
 
