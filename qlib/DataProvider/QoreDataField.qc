@@ -88,6 +88,9 @@ public class QoreDataField inherits AbstractDataField {
         if (exists h.allowed_values) {
             setAllowedValues(h.allowed_values, h.allowed_values_creatable);
         }
+        if (exists h.element_allowed_values) {
+            setElementAllowedValues(h.element_allowed_values, h.element_allowed_values_creatable);
+        }
         if (exists h.example_value) {
             example_value = type.acceptsValue(h.example_value);
         }
@@ -95,6 +98,12 @@ public class QoreDataField inherits AbstractDataField {
             allowed_values_creatable = True;
             if (allowed_values_map) {
                 remove allowed_values_map;
+            }
+        }
+        if (h.element_allowed_values_creatable) {
+            element_allowed_values_creatable = True;
+            if (element_allowed_values_map) {
+                remove element_allowed_values_map;
             }
         }
         if (h.attr) {
@@ -248,6 +257,8 @@ public class QoreDataField inherits AbstractDataField {
             "example_value": example_value,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
+            "element_allowed_values": element_allowed_values,
+            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},
             "attr": attr,

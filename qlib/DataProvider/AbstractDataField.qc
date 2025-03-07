@@ -55,6 +55,12 @@ public hashdecl DataFieldInfo {
     #! Does the field accept values not defined in allowed_values too?
     *bool allowed_values_creatable;
 
+    #! for enum fields; allowed values for elements for list types
+    *list<hash<AllowedValueInfo>> element_allowed_values;
+
+    #! Do elements of the field for list types accept values not defined in element_allowed_values too?
+    *bool element_allowed_values_creatable;
+
     #! Type info
     hash<DataTypeInfo> type;
 
@@ -80,10 +86,21 @@ public class AbstractDataField inherits Qore::Serializable {
         #! Does the field accept values not defined in allowed_values too?
         *bool allowed_values_creatable;
 
+        #! for enum fields; allowed values for elements for list types
+        *list<hash<AllowedValueInfo>> element_allowed_values;
+
+        #! Do elements of the field for list types accept values not defined in element_allowed_values too?
+        *bool element_allowed_values_creatable;
+
         #! for enum fields; allowed values
         /** only supported for types that convert to a string
         */
         hash<string, bool> allowed_values_map;
+
+        #! for enum fields; allowed values for elements for list types
+        /** only supported for types that convert to a string
+        */
+        hash<string, bool> element_allowed_values_map;
 
         #! User-defined custom attributes set on the field
         hash<auto> attr;
@@ -170,20 +187,43 @@ public class AbstractDataField inherits Qore::Serializable {
             }, allowed_values;
         }
         on_error rethrow $1.err, sprintf("%s (allowed_values: %y)", $1.desc, allowed_values);
-        if (multiselect) {
-            if (*AbstractDataProviderType et = type.getElementType()) {
-                # check that the value can be assigned to the type
-                map self.allowed_values[$#].value = et.acceptsValue($1.value), self.allowed_values.iterator();
-            }
-        } else {
-            # check that the value can be assigned to the type
-            map self.allowed_values[$#].value = type.acceptsValue($1.value), self.allowed_values.iterator();
-        }
+        # check that the value can be assigned to the type
+        map self.allowed_values[$#].value = type.acceptsValue($1.value), self.allowed_values.iterator();
         if (allowed_values_creatable) {
             self.allowed_values_creatable = True;
         } else {
             # NOTE: requires that values can be converted to a string hash key to simulate a set
             allowed_values_map = map {$1.value: True}, self.allowed_values;
+        }
+        return self;
+    }
+
+    #! Sets allowed values for enum types
+    AbstractDataField setElementAllowedValues(list<auto> element_allowed_values,
+            *bool element_allowed_values_creatable) {
+        AbstractDataProviderType type = getType();
+        if (element_allowed_values[0] instanceof hash<AllowedValueInfo>) {
+            self.element_allowed_values = element_allowed_values;
+        } else if (element_allowed_values[0].typeCode() == NT_HASH && element_allowed_values[0].hasKey("value")
+            && type.getBaseTypeCode() != NT_HASH) {
+            self.element_allowed_values = map cast<hash<AllowedValueInfo>>($1), element_allowed_values;
+        } else {
+            self.element_allowed_values = map <AllowedValueInfo>{
+                "display_name": $1.toString(),
+                "value": $1,
+            }, element_allowed_values;
+        }
+        on_error rethrow $1.err, sprintf("%s (element_allowed_values: %y)", $1.desc, element_allowed_values);
+        if (*AbstractDataProviderType et = type.getElementType()) {
+            # check that the value can be assigned to the type
+            map self.element_allowed_values[$#].value = et.acceptsValue($1.value),
+                self.element_allowed_values.iterator();
+        }
+        if (element_allowed_values_creatable) {
+            self.element_allowed_values_creatable = True;
+        } else {
+            # NOTE: requires that values can be converted to a string hash key to simulate a set
+            element_allowed_values_map = map {$1.value: True}, self.element_allowed_values;
         }
         return self;
     }
@@ -214,6 +254,20 @@ public class AbstractDataField inherits Qore::Serializable {
         return allowed_values_creatable ?? False;
     }
 
+    #! Get element allowed values
+    *list<hash<AllowedValueInfo>> getElementAllowedValues() {
+        return element_allowed_values;
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getElementAllowedValueMap() {
+        return element_allowed_values_map;
+    }
+
+    bool getElementAllowedValuesCreatable() {
+        return element_allowed_values_creatable ?? False;
+    }
+
     #! returns True if the field's type is not a wildcard type
     bool hasType() {
         return getType().hasType();
@@ -230,25 +284,23 @@ public class AbstractDataField inherits Qore::Serializable {
             return dv;
         }
         try {
+            # first do any value / type filtering / conversions
+            value = getType().acceptsValue(value);
             if (allowed_values && !allowed_values_creatable) {
-                # first do any value / type filtering / conversions
-                value = getType().acceptsValue(value);
-                if (multiselect) {
-                    foreach auto v in (value) {
-                        if (!allowed_values_map{v}) {
-                            throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed "
-                                "values: %y", getName(), v, (map $1.value, allowed_values));
-                        }
-                    }
-                } else {
-                    if (!allowed_values_map{value}) {
-                        throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y",
-                            getName(), value, (map $1.value, allowed_values));
+                if (!allowed_values_map{value}) {
+                    throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y",
+                        getName(), value, (map $1.value, allowed_values));
+                }
+            }
+            if (element_allowed_values) {
+                foreach auto v in (value) {
+                    if (!element_allowed_values_map{v}) {
+                        throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed "
+                            "values for elements: %y", getName(), v, (map $1.value, element_allowed_values));
                     }
                 }
-                return value;
             }
-            return getType().acceptsValue(value);
+            return value;
         } catch (hash<ExceptionInfo> ex) {
             rethrow ex.err, sprintf("%s (while setting field %y)", ex.desc, getName()), ex.arg;
         }
@@ -284,6 +336,8 @@ public class AbstractDataField inherits Qore::Serializable {
             "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
+            "element_allowed_values": element_allowed_values,
+            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
             "type": getType().getInfo(),
             "unique_key": self.uniqueHash(),
             "attr": attr,
@@ -302,6 +356,8 @@ public class AbstractDataField inherits Qore::Serializable {
             "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
+            "element_allowed_values": element_allowed_values,
+            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},
             "unique_key": self.uniqueHash(),

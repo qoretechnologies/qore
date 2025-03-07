@@ -224,6 +224,12 @@ public hashdecl ActionOptionInfo {
     #! Does the option accept values not defined in allowed_values too?
     bool allowed_values_creatable;
 
+    #! List of allowed values for elements of list types (enum)
+    *softlist<hash<AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values not defined in element_allowed_values too?
+    bool element_allowed_values_creatable;
+
     #! An optional example value for the option
     auto example_value;
 
@@ -240,6 +246,13 @@ public hashdecl ActionOptionInfo {
         in the available DataProvider when resolving application actions if this attribute is set
     */
     *string ref_data;
+
+    #! A tag allowing element allowed values to be returned dynamically as element reference data
+    /** The value is the name of the element reference data; if allowed_values are not present, calls will be made to
+        @ref DataProvider::AbstractDataProvider::getElementReferenceData() "AbstractDataProvider::getElementReferenceData()"
+        in the available DataProvider when resolving application actions if this attribute is set
+    */
+    *string element_ref_data;
 
     #! A tag allowing the default value to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -1117,13 +1130,17 @@ public class DataProviderActionCatalog {
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "multiselect", "allowed_values", "allowed_values_creatable"} + {
+                    "multiselect", "allowed_values", "allowed_values_creatable", "element_allowed_values",
+                    "element_allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
                 # remove missing attributes
                 map remove i.value{$1.key}, i.value.pairIterator(), !exists $1.value;
                 if (info.attr.ref_data.val()) {
                     i.value.ref_data = info.attr.ref_data;
+                }
+                if (info.attr.element_ref_data.val()) {
+                    i.value.element_ref_data = info.attr.element_ref_data;
                 }
                 if (info.attr.required) {
                     i.value.required = True;
@@ -1185,12 +1202,12 @@ public class DataProviderActionCatalog {
                     throw "OPTION-ERROR", sprintf("Cannot set option type from \"type\" option with type %y", type);
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                    "required_groups", "multiselect"}
+                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                    "element_ref_data", "preselected", "required_groups", "multiselect"}
                     + additional_fields;
             } else {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data", "preselected",
-                    "required_groups", "multiselect", "depends_on", "on_change"}
+                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                    "element_ref_data", "preselected", "required_groups", "multiselect", "depends_on", "on_change"}
                     + additional_fields;
             }
             if (i.value.allowed_values) {
@@ -1206,6 +1223,20 @@ public class DataProviderActionCatalog {
             }
             if (i.value.allowed_values_creatable) {
                 info.allowed_values_creatable = True;
+            }
+            if (i.value.element_allowed_values) {
+                if (i.value.element_allowed_values instanceof list<hash<AllowedValueInfo>>
+                    || i.value.element_allowed_values instanceof hash<AllowedValueInfo>) {
+                    info.element_allowed_values = i.value.element_allowed_values;
+                } else {
+                    info.element_allowed_values = map <AllowedValueInfo>{
+                        "value": $1,
+                        "desc": DefaultDescription,
+                    }, i.value.element_allowed_values;
+                }
+            }
+            if (i.value.element_allowed_values_creatable) {
+                info.element_allowed_values_creatable = True;
             }
             rv{i.key} = info;
         }

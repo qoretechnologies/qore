@@ -81,12 +81,18 @@ public hashdecl DataProviderOptionInfo {
     bool multiselect;
 
     #! List of allowed values (enum)
-    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
-    */
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
 
     #! Does the option accept values not defined in allowed_values too?
     bool allowed_values_creatable;
+
+    #! List of allowed values for elements of list types (enum)
+    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
+    */
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable;
 
     #! Any optional example value for the option
     /** This value must be in the one of the types in the \c type list
@@ -100,6 +106,14 @@ public hashdecl DataProviderOptionInfo {
     */
     *string ref_data;
 
+    #! A tag allowing element allowed values to be returned dynamically as reference data
+    /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
+        @ref DataProvider::AbstractDataProvider::getElementReferenceData() "AbstractDataProvider::getElementReferenceData()"
+        in the available DataProvider when resolving application actions if this attribute is set
+    */
+    *string element_ref_data;
+
+    #! A tag allowing the default value for the option to be returned dynamically
     *string default_ref_data;
 
     #! Should this option be preselected?
@@ -493,6 +507,14 @@ public hashdecl DataProviderArgInfo {
 
     #! Does the option accept values not defined in allowed_values too?
     *bool allowed_values_creatable;
+
+    #! List of allowed values for elements of list types (enum)
+    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
+    */
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable;
 
     #! Any optional example value for the argument
     /** The value must be acceptable by the argument's type
@@ -2494,6 +2516,96 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
     }
 
+    #! Returns information on supported element reference data
+    /** @return a hash of supported element reference data; keys in the hash returned are supported in calls to
+        @ref getElementReferenceData()
+
+        @since DataProvider 3.0
+    */
+    *hash<string, bool> getSupportedElementReferenceData() {
+        # intentionally empty
+    }
+
+    #! Returns element reference data of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the element
+        reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getElementReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the element
+        reference data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-ELEMENT-REFERENCE-DATA thrown if \a type is not supported as element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getElementReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedElementReferenceData()){type}) {
+            throw "UNSUPPORTED-ELEMENT-REFERENCE-DATA", sprintf("Element reference data type %y is unsupported; "
+                "supported element reference data types: %y", type, rd);
+        }
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data
+
+        @throw ELEMENT-REFERENCE-DATA-ERROR thrown if there is an error retrieving the element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceData(string type, *hash<auto> action_opts) {
+        on_error rethrow "ELEMENT-REFERENCE-DATA-ERROR", sprintf("Failed to retrieve element reference data of "
+            "type %y: %s: %s", type, $1.err, $1.desc);
+        return getElementReferenceDataImpl(type, action_opts);
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data
+
+        @throw ELEMENT-REFERENCE-DATA-ERROR thrown if there is an error retrieving the element reference data
+        @throw UNSUPPORTED-ELEMENT-REFERENCE-DATA thrown if \a type is not supported as element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataEx(string type, *hash<auto> action_opts) {
+        if (*list<hash<AllowedValueInfo>> rv = getElementReferenceData(type, action_opts)) {
+            return rv;
+        }
+        if (!(*hash<string, bool> rd = getSupportedElementReferenceData()){type}) {
+            throw "UNSUPPORTED-ELEMENT-REFERENCE-DATA", sprintf("Element reference data type %y is unsupported; "
+                "supported element reference data types: %y", type, rd);
+        }
+    }
+
     #! Returns information on supported reference data values
     /** @return a hash of supported reference data values; keys in the hash returned are supported in calls to
         @ref getReferenceDataValue()
@@ -2989,23 +3101,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {
                 bool ok = False;
                 foreach auto v in (i.value.allowed_values) {
-                    if (i.value.multiselect) {
-                        foreach auto v0 in (v.value) {
-                            if (options{i.key} === v0) {
-                                ok = True;
-                                break;
-                            }
-                        }
-                    } else {
-                        if (options{i.key} === v.value) {
-                            ok = True;
-                            break;
-                        }
+                    if (options{i.key} === v.value) {
+                        ok = True;
+                        break;
                     }
                 }
                 if (!ok) {
                     error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
                         i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
+                }
+            }
+            if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
+                foreach auto opt in (options{i.key}) {
+                    bool ok = False;
+                    foreach auto v in (i.value.element_allowed_values) {
+                        if (opt === v.value) {
+                            ok = True;
+                            break;
+                        }
+                    }
+                    if (!ok) {
+                        error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
+                            "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
+                    }
                 }
             }
         }
@@ -3956,6 +4074,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        # intentionally empty
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed element values for list types for this data
+
+        @since DataProvider 3.0
+    */
+    private *list<hash<AllowedValueInfo>> getElementReferenceDataImpl(string type, *hash<auto> action_opts) {
         # intentionally empty
     }
 
