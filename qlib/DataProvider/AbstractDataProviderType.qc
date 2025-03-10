@@ -208,6 +208,9 @@ public hashdecl DataTypeInfo {
     #! Any fields supported by the type; will be NOTHING when \a recursive is @ref True
     *hash<string, hash<DataFieldInfo>> fields;
 
+    #! A type description of any element type
+    *hash<DataTypeInfo> element_type;
+
     #! The default value for the type
     auto default_value;
 
@@ -381,6 +384,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "unique_key": uh,
             "tags": tags,
         };
+        if (*AbstractDataProviderType etype = getElementType()) {
+            rv.element_type = etype.getInfo(simple);
+        }
         if (exists (auto v = getDefaultValue())) {
             rv.default_value = v;
         }
