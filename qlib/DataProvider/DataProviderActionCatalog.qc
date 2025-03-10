@@ -1250,7 +1250,7 @@ public class DataProviderActionCatalog {
     static hash<DataProviderActionInfo> checkAppActionOptions(string app, string action) {
         hash<DataProviderActionInfo> info = getAppActionEx(app, action);
         if (*code c = remove action.get_dynamic_options) {
-            info.options = c();
+            c(\info);
             app_actionmap{app}{action} = info;
         }
         return info;
