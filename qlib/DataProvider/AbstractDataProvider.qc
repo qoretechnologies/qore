@@ -1998,7 +1998,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleRequestData() {
         checkRequest();
-        return getExampleRequestDataImpl();
+        return getExampleRequestDataImpl() ?? getRequestTypeImpl().getExampleValue();
     }
 
     #! Returns example data for a successful request message
@@ -2010,7 +2010,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleResponseData() {
         checkRequest();
-        return getExampleResponseDataImpl();
+        return getExampleResponseDataImpl() ?? getResponseTypeImpl().getExampleValue();
     }
 
     #! Returns example data for the error message with the given error code
@@ -2025,7 +2025,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleErrorResponseData(string error_code) {
         checkRequest();
-        return getExampleErrorResponseDataImpl(error_code);
+        return getExampleErrorResponseDataImpl(error_code) ?? getErrorResponseTypeImpl(error_code).getExampleValue();
     }
 
     #! Returns example data for the given observable event
@@ -2040,7 +2040,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleEventData(string event_id) {
         checkObservable();
-        return getExampleEventDataImpl(event_id);
+        return getExampleEventDataImpl(event_id) ?? getEventInfoImpl(event_id).type.getExampleValue();
     }
 
     #! Returns example data for the record type
@@ -2050,7 +2050,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     hash<auto> getExampleRecordData() {
         checkRead();
-        return getExampleRecordDataImpl();
+        return getExampleRecordDataImpl() ?? generateExampleData(getRecordTypeImpl());
     }
 
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING

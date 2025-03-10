@@ -719,7 +719,6 @@ static int qore_check_load_module_intern(QoreAbstractModule* mi, mod_op_e op, ve
 
     if (pgm) {
         mi->addToProgram(pgm, xsink);
-    } else {
     }
     return 0;
 }
@@ -1245,6 +1244,8 @@ void QoreModuleManager::registerUserModuleFromSource(const char* name, const cha
     AutoLocker al(mutex); // make sure checking and loading are atomic
     loadModuleIntern(xsink, xsink, name, pgm, false, MOD_OP_NONE, 0, src);
 }
+
+static void breakit() {}
 
 // const char* path, const char* feature, ReferenceHolder<QoreProgram>& pgm
 QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
