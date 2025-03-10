@@ -361,7 +361,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         on_exit if (!recursive) {
             remove rimap{uh};
         }
-        on_error rethrow $1.err, sprintf("%s (while reading type %s %s recursive: %y rimap: %y)", $1.desc, getName(), uh, recursive, rimap.size());
+        on_error rethrow $1.err, sprintf("%s (while reading type %s %s recursive: %y rimap: %y)", $1.desc, getName(),
+            uh, recursive, rimap.size());
         hash<DataTypeInfo> rv = <DataTypeInfo>{
             "name": getName(),
             "display_name": getDisplayName(),

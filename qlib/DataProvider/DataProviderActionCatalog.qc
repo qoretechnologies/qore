@@ -375,6 +375,9 @@ public hashdecl DataProviderActionInfo {
 
     #! In case the output type is expensive to acquire or requires I/O, this closure can be used to set it
     *code get_output_type;
+
+    #! For the case when options should be generated dynamically
+    *code get_dynamic_options;
 }
 
 #! DataProvider action and application catalog class
@@ -1241,6 +1244,16 @@ public class DataProviderActionCatalog {
             rv{i.key} = info;
         }
         return rv;
+    }
+
+    #! Check that the action has had its options initialized if necessary and return the possibly updated action info
+    static hash<DataProviderActionInfo> checkAppActionOptions(string app, string action) {
+        hash<DataProviderActionInfo> info = getAppActionEx(app, action);
+        if (*code c = remove action.get_dynamic_options) {
+            info.options = c();
+            app_actionmap{app}{action} = info;
+        }
+        return info;
     }
 
     #! Returns a normalized path to ensure that comparisons always work

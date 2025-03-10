@@ -926,6 +926,7 @@ class QdpCmd {
         hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, QdpCmd::action);
         printf("@%s/%s (%s%s): %s\n", app, QdpCmd::action, ActionNameMap{action.action_code},
             (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
+        action = DataProviderActionCatalog::checkActionOptions(action.app, action.action);
         if (action.options) {
             printf("Options:\n");
             foreach hash<auto> i in (action.options.pairIterator()) {
