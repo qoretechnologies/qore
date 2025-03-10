@@ -39,7 +39,7 @@
 
 module FileDataProvider {
     version = "2.0";
-    desc = "user module providing a data provider API for local filesystems";
+    desc = "User module providing a data provider API for the server filesystem";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
@@ -50,9 +50,9 @@ module FileDataProvider {
         # NOTE: this application is also registed in the FilePoller module
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FileDataProvider::AppName,
-            "display_name": "Local Filesystem",
-            "short_desc": "Access to the local filesystem",
-            "desc": "Access to the local filesystem",
+            "display_name": "Server Filesystem",
+            "short_desc": "Access to the server filesystem",
+            "desc": "Access to the server filesystem",
             "scheme": "file",
             "logo": FileWhiteLogo,
             "logo_file_name": "generic-filesystem-logo.svg",
@@ -65,8 +65,8 @@ module FileDataProvider {
             "path": "/copy",
             "action": "copy",
             "display_name": "Copy File",
-            "short_desc": "Copy a file on the local filesystem",
-            "desc": "Copy a file on the local filesystem",
+            "short_desc": "Copy a file on the server filesystem",
+            "desc": "Copy a file on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FileTargetResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -84,8 +84,8 @@ module FileDataProvider {
             "path": "/create",
             "action": "create",
             "display_name": "Create File",
-            "short_desc": "Create a file on the local filesystem",
-            "desc": "Create a file on the local filesystem",
+            "short_desc": "Create a file on the server filesystem",
+            "desc": "Create a file on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FilePathDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -103,8 +103,8 @@ module FileDataProvider {
             "path": "/delete",
             "action": "delete",
             "display_name": "Delete File",
-            "short_desc": "Delete a file on the local filesystem",
-            "desc": "Delete a file on the local filesystem",
+            "short_desc": "Delete a file on the server filesystem",
+            "desc": "Delete a file on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FilePathDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -120,8 +120,8 @@ module FileDataProvider {
             "path": "/get",
             "action": "get",
             "display_name": "Get File",
-            "short_desc": "Get a file on the local filesystem",
-            "desc": "Get a file on the local filesystem",
+            "short_desc": "Get a file on the server filesystem",
+            "desc": "Get a file on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FileGetResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -139,8 +139,8 @@ module FileDataProvider {
             "path": "/list",
             "action": "list",
             "display_name": "List Files",
-            "short_desc": "List files and subdirectories in a folder on the local filesystem",
-            "desc": "List files and subdirectories in a folder on the local filesystem",
+            "short_desc": "List files and subdirectories in a folder on the server filesystem",
+            "desc": "List files and subdirectories in a folder on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FileListResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -156,8 +156,8 @@ module FileDataProvider {
             "path": "/mkdir",
             "action": "mkdir",
             "display_name": "Create Directory",
-            "short_desc": "Create a directory on the local filesystem",
-            "desc": "Create a directory on the local filesystem",
+            "short_desc": "Create a directory on the server filesystem",
+            "desc": "Create a directory on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FilePathDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -173,8 +173,8 @@ module FileDataProvider {
             "path": "/move",
             "action": "move",
             "display_name": "Move File",
-            "short_desc": "Move a file or directory on the local filesystem",
-            "desc": "Move a file or directory on the local filesystem",
+            "short_desc": "Move a file or directory on the server filesystem",
+            "desc": "Move a file or directory on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FileTargetResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -192,8 +192,8 @@ module FileDataProvider {
             "path": "/stat",
             "action": "stat",
             "display_name": "Get Info",
-            "short_desc": "Get details about a file or directory on the local filesystem",
-            "desc": "Get details about a file or directory on the local filesystem",
+            "short_desc": "Get details about a file or directory on the server filesystem",
+            "desc": "Get details about a file or directory on the server filesystem",
             "action_code": DPAT_API,
             "output_type": FileStatResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -214,7 +214,7 @@ module FileDataProvider {
 
     @section filedataproviderintro Introduction to the FileDataProvider Module
 
-    The %FileDataProvider module provides a data provider API for the local filesystem through the
+    The %FileDataProvider module provides a data provider API for the server filesystem through the
     @ref dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
