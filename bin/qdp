@@ -799,7 +799,16 @@ class QdpCmd {
                 } else if (!offset.val() && prov.getSupportedReferenceData(){i.key}
                     && (l = prov.getReferenceDataSafeEx(i.key, ImpliedArgumentHelper::get()))) {
                     QdpCmd::getAllowedValues(\info, l);
+                } else if (l = i.value.getElementAllowedValues()) {
+                    QdpCmd::getAllowedValues(\info, l);
+                } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
+                    l = prov.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    QdpCmd::getAllowedValues(\info, l);
+                } else if (!offset.val() && prov.getSupportedElementReferenceData(){i.key}
+                    && (l = prov.getElementReferenceDataSafeEx(i.key, ImpliedArgumentHelper::get()))) {
+                    QdpCmd::getAllowedValues(\info, l);
                 }
+
                 if (info) {
                     txt += " (" + info + ")";
                 }
@@ -811,6 +820,11 @@ class QdpCmd {
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
                     l = prov.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+                } else if (l = i.value.getElementAllowedValues()) {
+                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+                } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
+                    l = prov.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
                 }
                 printf("%s%s %s%s", offset, type.getName(), i.key, info);
             }
