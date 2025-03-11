@@ -421,15 +421,19 @@ class QdpCmd {
 
     static event(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
+        hash<DataProviderMessageInfo> event_info;
         if (!exists event) {
-            *list<string> l = keys provider.getEventTypes();
-            if (l.size() == 1) {
-                event = l[0];
+            hash<string, hash<DataProviderMessageInfo>> event_types = provider.getEventTypes();
+            if (event_types.size() == 1) {
+                event = event_types.firstKey();
+                event_info = event_types.firstValue();
             } else {
-                QdpCmd::error("Missing required event argument; valid events: %y", l);
+                QdpCmd::error("Missing required event argument; valid events: %y", keys event_types);
             }
+        } else {
+            event_info = provider.getEventInfo(event);
         }
-        QdpCmd::showType(provider, event, provider.getEventInfo(event));
+        QdpCmd::showType(provider, event, event_info);
     }
 
     static exampleEvent(AbstractDataProvider provider) {
