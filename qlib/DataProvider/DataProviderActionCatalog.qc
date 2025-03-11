@@ -1249,7 +1249,7 @@ public class DataProviderActionCatalog {
     #! Check that the action has had its options initialized if necessary and return the possibly updated action info
     static hash<DataProviderActionInfo> checkAppActionOptions(string app, string action) {
         hash<DataProviderActionInfo> info = getAppActionEx(app, action);
-        if (*code c = remove action.get_dynamic_options) {
+        if (*code c = remove info.get_dynamic_options) {
             c(\info);
             app_actionmap{app}{action} = info;
         }
