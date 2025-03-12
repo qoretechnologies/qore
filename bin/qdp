@@ -819,12 +819,16 @@ class QdpCmd {
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
                     l = prov.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
-                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+                    if (l) {
+                        info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+                    }
                 } else if (l = i.value.getElementAllowedValues()) {
                     info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
                 } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
                     l = prov.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
-                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+                    if (l) {
+                        info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+                    }
                 }
                 printf("%s%s %s%s", offset, type.getName(), i.key, info);
             }
@@ -949,7 +953,24 @@ class QdpCmd {
             printf("Options:\n");
             foreach hash<auto> i in (action.options.pairIterator()) {
                 string tn = i.value.type.getName();
-                printf(" - %s (%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn,
+                # get allowed values or element allowed values
+                string info;
+                if (*list<auto> l = i.value.allowed_values) {
+                    info += sprintf(", one of: %y", (map $1.value ?? $1, l));
+                } else if ((*string ref_data = i.value.ref_data).val()) {
+                    l = provider.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    if (l) {
+                        info += sprintf(", one of: %y", (map $1.value ?? $1, l));
+                    }
+                } else if (l = i.value.element_allowed_values) {
+                    info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
+                } else if ((ref_data = i.value.element_ref_data).val()) {
+                    l = provider.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    if (l) {
+                        info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
+                    }
+                }
+                printf(" - %s (%s%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn, info,
                     i.value.short_desc);
             }
         } else {
