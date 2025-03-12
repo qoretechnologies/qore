@@ -1035,6 +1035,7 @@ class QdpCmd {
 
     static request(AbstractDataProvider provider) {
         if (*hash<auto> req = QdpCmd::getHash("request")) {
+            DataProviderDataContextHelper dch(req);
             QdpCmd::showType(provider, provider.getRequestTypeWithData(req));
         } else {
             QdpCmd::showType(provider, provider.getRequestType());

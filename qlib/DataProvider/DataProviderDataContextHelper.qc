@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore DataProviderContextHelper class definition
+#! Qore DataProviderDataContextHelper class definition
 
-/** DataProviderContextHelper.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderDataContextHelper.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,28 +24,28 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
-#! Current data provider context
-thread_local *AbstractDataProvider _thread_prov_ctx;
+#! Current data provider data context
+thread_local auto _thread_data_ctx;
 
 #! Data provider context helper
-public class DataProviderContextHelper {
+public class DataProviderDataContextHelper {
     public {}
 
     private {
-        *AbstractDataProvider old;
+        auto old;
     }
 
-    constructor(*AbstractDataProvider prov) {
-        old = _thread_prov_ctx;
-        _thread_prov_ctx = prov;
+    constructor(auto dat) {
+        old = dat;
+        _thread_data_ctx = dat;
     }
 
     destructor() {
-        _thread_prov_ctx = old;
+        _thread_data_ctx = old;
     }
 
-    static *AbstractDataProvider get() {
-        return _thread_prov_ctx;
+    static auto get() {
+        return _thread_data_ctx;
     }
 }
 }
