@@ -1131,7 +1131,7 @@ public class DataProviderActionCatalog {
         foreach hash<auto> i in (fields.pairIterator()) {
             on_error rethrow $1.err, sprintf("%s (while processing field %y)", $1.desc, i.key);
             if (i.value instanceof AbstractDataField) {
-                hash<DataFieldInfo> info = i.value.getInfo();
+                hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
                     "multiselect", "allowed_values", "allowed_values_creatable", "element_allowed_values",
                     "element_allowed_values_creatable"} + {

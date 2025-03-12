@@ -326,6 +326,14 @@ public class AbstractDataField inherits Qore::Serializable {
     #! returns information about the field
     hash<DataFieldInfo> getInfo() {
         on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
+        return getLocalInfo() + <DataFieldInfo>{
+            "type": getType().getInfo(),
+        };
+    }
+
+    #! Returns information about the field without calling AbstractDataProviderType::getInfo() on the type
+    hash<DataFieldInfo> getLocalInfo() {
+        on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
         return <DataFieldInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -338,7 +346,6 @@ public class AbstractDataField inherits Qore::Serializable {
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
             "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
-            "type": getType().getInfo(),
             "unique_key": self.uniqueHash(),
             "attr": attr,
         };
@@ -347,21 +354,9 @@ public class AbstractDataField inherits Qore::Serializable {
     #! returns information about the field
     hash<DataFieldInfo> getConfigInfo() {
         on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
-        return <DataFieldInfo>{
-            "name": getName(),
-            "display_name": getDisplayName(),
-            "short_desc": getShortDescription(),
-            "desc": getDescription(),
-            "default_value": getDefaultValue(),
-            "multiselect": multiselect ?? False,
-            "allowed_values": allowed_values,
-            "allowed_values_creatable": allowed_values_creatable ?? False,
-            "element_allowed_values": element_allowed_values,
-            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
+        return getLocalInfo() + <DataFieldInfo>{
             "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
                 "default_field_type_info"},
-            "unique_key": self.uniqueHash(),
-            "attr": attr,
         };
     }
 
