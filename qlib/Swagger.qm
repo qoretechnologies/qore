@@ -1739,7 +1739,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values, auto default_value) {
         return new QoreDataField({
             "name": name,
-            "desc": desc,
+            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
             "type": getType(path, type, format, arrayItems, required),
             "allowed_values": allowed_values,
             "default_value": default_value,
@@ -4762,7 +4762,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (type == "object") {
             return new QoreDataField({
                 "name": name,
-                "desc": desc,
+                "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
                 "type": getDataType(required, rest),
                 "allowed_values": keys enum,
                 "default_value": default_value,
