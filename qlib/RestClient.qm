@@ -3349,6 +3349,12 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         }
     }
 
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
     private checkOtherStates() {
         throw "INVALID-STATE", sprintf("invalid state %y; aborting", state);
     }

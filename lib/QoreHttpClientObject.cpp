@@ -98,6 +98,8 @@ public:
 
     DLLLOCAL virtual QoreValue getOutput() const;
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink);
+
 private:
     std::unique_ptr<AbstractPollState> poll_state;
     QoreHttpClientObject* client;
@@ -1962,6 +1964,16 @@ QoreValue HttpClientConnectSendRecvPollOperation::getOutput() const {
     return rv.release();
 }
 
+void HttpClientConnectSendRecvPollOperation::abort(ExceptionSink* xsink) {
+    if (set_non_block) {
+        set_non_block = false;
+        AutoLocker al(client->priv->m);
+        client->priv->clearNonBlock();
+        client->http_priv->disconnect_unlocked();
+        state = SPS_NONE;
+    }
+}
+
 // states: none [-> connecting [-> connecting-ssl]] -> sending -> receiving-header [-> receiving-body] [-> connecting-proxy-ssl] -> [received | connected]
 /**
     state transitions:
@@ -2096,6 +2108,9 @@ QoreHashNode* HttpClientConnectSendRecvPollOperation::continuePoll(ExceptionSink
             if (close_connection) {
                 client->http_priv->disconnect_unlocked();
             }
+            break;
+        } else if (state == SPS_NONE) {
+            // operation canceled
             break;
         } else {
             assert(false);

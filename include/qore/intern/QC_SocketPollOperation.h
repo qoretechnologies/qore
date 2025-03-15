@@ -49,13 +49,47 @@ constexpr int SPS_CONNECTING = 1;
 constexpr int SPS_CONNECTING_SSL = 2;
 constexpr int SPS_CONNECTED = 3;
 
-class SocketConnectPollOperation : public SocketPollOperationBase {
+class SocketConnectPollSocketOperationBase : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketConnectPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
+    }
+
+    DLLLOCAL SocketConnectPollSocketOperationBase(QoreSocketObject* sock) : sock(sock) {
+    }
+
+    DLLLOCAL ~SocketConnectPollSocketOperationBase() {
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) {
+        if (set_non_block) {
+            set_non_block = false;
+            AutoLocker al(sock->priv->m);
+            sock->clearNonBlock();
+            if (needsClose()) {
+                sock->close();
+            }
+            state = SPS_NONE;
+        }
+    }
+
+protected:
+    QoreSocketObject* sock = nullptr;
+    int state = SPS_NONE;
+    bool set_non_block = false;
+
+    DLLLOCAL virtual bool needsClose() const {
+        return true;
+    }
+};
+
+class SocketConnectPollOperation : public SocketConnectPollSocketOperationBase {
 public:
     DLLLOCAL SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target, QoreSocketObject* sock);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
+                AutoLocker al(sock->priv->m);
                 sock->clearNonBlock();
             }
             sock->deref(xsink);
@@ -70,8 +104,6 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
 protected:
-    QoreSocketObject* sock;
-
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
         return 0;
@@ -88,9 +120,6 @@ private:
     std::string target;
 
     int sgoal = 0;
-    int state = SPS_NONE;
-
-    bool set_non_block = false;
 
     DLLLOCAL virtual const char* getStateImpl() const {
         switch (state) {
@@ -111,7 +140,7 @@ private:
     DLLLOCAL int checkContinuePoll(ExceptionSink* xsink);
 };
 
-class SocketSendPollOperation : public SocketPollOperationBase {
+class SocketSendPollOperation : public SocketConnectPollSocketOperationBase {
 public:
     // "data" must be passed already referenced
     DLLLOCAL SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock);
@@ -142,17 +171,17 @@ public:
 private:
     std::unique_ptr<AbstractPollState> poll_state;
     SimpleRefHolder<SimpleValueQoreNode> data;
-    QoreSocketObject* sock;
     const char* buf;
     size_t size;
-    bool set_non_block = false;
     bool sent = false;
+
+    DLLLOCAL virtual bool needsClose() const;
 };
 
-class SocketRecvPollOperationBase : public SocketPollOperationBase {
+class SocketRecvPollOperationBase : public SocketConnectPollSocketOperationBase {
 public:
-    DLLLOCAL SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string) : sock(sock),
-            to_string(to_string) {
+    DLLLOCAL SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string)
+            : SocketConnectPollSocketOperationBase(sock), to_string(to_string) {
     }
 
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -182,12 +211,12 @@ public:
 protected:
     std::unique_ptr<AbstractPollState> poll_state;
     SimpleRefHolder<SimpleValueQoreNode> data;
-    QoreSocketObject* sock;
     bool to_string;
-    bool set_non_block = false;
     bool received = false;
 
     DLLLOCAL int initIntern(ExceptionSink* xsink);
+
+    DLLLOCAL virtual bool needsClose() const = 0;
 };
 
 class SocketRecvPollOperation : public SocketRecvPollOperationBase {
@@ -197,12 +226,16 @@ public:
 
 private:
     size_t size;
+
+    DLLLOCAL virtual bool needsClose() const;
 };
 
 class SocketRecvDataPollOperation : public SocketRecvPollOperationBase {
 public:
     // "data" must be passed already referenced
     DLLLOCAL SocketRecvDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool to_string);
+
+    DLLLOCAL virtual bool needsClose() const;
 };
 
 class SocketRecvUntilBytesPollOperation : public SocketRecvPollOperationBase {
@@ -213,9 +246,11 @@ public:
 
 private:
     SimpleRefHolder<QoreStringNode> pattern;
+
+    DLLLOCAL virtual bool needsClose() const;
 };
 
-class SocketUpgradeClientSslPollOperation : public SocketPollOperationBase {
+class SocketUpgradeClientSslPollOperation : public SocketConnectPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
 
@@ -240,9 +275,7 @@ public:
     }
 
 private:
-    QoreSocketObject* sock;
     std::unique_ptr<AbstractPollState> poll_state;
-    bool set_non_block = false;
     bool done = false;
 };
 

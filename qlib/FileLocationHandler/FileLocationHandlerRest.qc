@@ -345,5 +345,10 @@ public class HttpPollWrapper inherits AbstractPollOperation {
     auto getOutput() {
         return op.getOutput()."response-body";
     }
+
+    #! Aborts the current operation
+    abort() {
+        op.abort();
+    }
 }
 }

@@ -3903,7 +3903,7 @@ void QoreSocketThroughputHelper::finalize(int64 bytes) {
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock) : sock(sock) {
+        QoreSocketObject* sock) : SocketConnectPollSocketOperationBase(sock) {
     sgoal = ssl ? SPG_CONNECT_SSL : SPG_CONNECT;
 
     AutoLocker al(sock->priv->m);
@@ -3994,6 +3994,11 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
             break;
         }
 
+        case SPS_NONE: {
+            // aborted
+            break;
+        }
+
         default:
             assert(false);
     }
@@ -4054,7 +4059,7 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 }
 
 SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : sock(sock) {
+        : SocketConnectPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
@@ -4109,7 +4114,7 @@ QoreHashNode* SocketUpgradeClientSslPollOperation::continuePoll(ExceptionSink* x
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)
-        : data(data), sock(sock), buf(data->c_str()), size(data->size()) {
+        : SocketConnectPollSocketOperationBase(sock), data(data), buf(data->c_str()), size(data->size()) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -4129,7 +4134,7 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStrin
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock)
-        : data(data), sock(sock), buf(reinterpret_cast<const char*>(data->getPtr())),
+        : SocketConnectPollSocketOperationBase(sock), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
         size(data->size()) {
     AutoLocker al(sock->priv->m);
 
@@ -4145,6 +4150,13 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNod
         } else {
             set_non_block = true;
         }
+    }
+}
+
+bool SocketSendPollOperation::needsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketSendPollState*>(poll_state.get())->getBytesSent() ? true : false;
     }
 }
 
@@ -4246,6 +4258,13 @@ SocketRecvDataPollOperation::SocketRecvDataPollOperation(ExceptionSink* xsink, Q
     }
 }
 
+bool SocketRecvDataPollOperation::needsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvPacketPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPacketPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+}
+
 SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string)
         : SocketRecvPollOperationBase(sock, to_string), size(size) {
     AutoLocker al(sock->priv->m);
@@ -4258,6 +4277,13 @@ SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t s
     if (*xsink) {
         sock->priv->clearNonBlock();
         set_non_block = false;
+    }
+}
+
+bool SocketRecvPollOperation::needsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
 }
 
@@ -4274,5 +4300,12 @@ SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSi
     if (*xsink) {
         sock->priv->clearNonBlock();
         set_non_block = false;
+    }
+}
+
+bool SocketRecvUntilBytesPollOperation::needsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
 }

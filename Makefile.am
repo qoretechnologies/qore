@@ -95,6 +95,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
     qlib/AwsRestClient.qm
 
 DOX_SPLIT_MODULES = \
+    qlib/AsyncSocketIo \
     qlib/AwsRestClientDataProvider \
     qlib/BulkSqlUtil \
 	qlib/CsvUtil \
@@ -113,6 +114,7 @@ DOX_SPLIT_MODULES = \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider
 
+AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 ConnectionProvider_modverdir = $(modverdir)/ConnectionProvider
 DataProvider_modverdir = $(modverdir)/DataProvider
@@ -140,6 +142,7 @@ MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 
+dist_AsyncSocketIo_modver_DATA = $(wildcard qlib/AsyncSocketIo/*.q[cm])
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_ConnectionProvider_modver_DATA = $(wildcard qlib/ConnectionProvider/*.q[cm])
 dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])

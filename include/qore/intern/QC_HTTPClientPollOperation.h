@@ -90,8 +90,13 @@ public:
                 assert(sgoal == SPG_CONNECT_SSL);
                 state = SPS_CONNECTING_SSL;
 
-                poll_state.reset(client->startSslConnect(xsink, client->priv->cert ? client->priv->cert->getData() : nullptr,
-                    client->priv->pk ? client->priv->pk->getData() : nullptr));
+                poll_state.reset(
+                    client->startSslConnect(
+                        xsink,
+                        client->priv->cert ? client->priv->cert->getData() : nullptr,
+                        client->priv->pk ? client->priv->pk->getData() : nullptr
+                    )
+                );
                 if (*xsink) {
                     poll_state.reset();
                     state = SPS_NONE;

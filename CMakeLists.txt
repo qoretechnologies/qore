@@ -908,6 +908,7 @@ qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 
 # base 4 modules
+qore_user_module("qlib/AsyncSocketIo" "HttpServerUtil;Logger")
 qore_user_module("qlib/FilePoller.qm" "Util;DataProvider")
 qore_user_module("qlib/FileDataProvider" "FsUtil;DataProvider")
 qore_user_module("qlib/FtpClientDataProvider" "DataProvider")

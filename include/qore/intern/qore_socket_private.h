@@ -370,6 +370,11 @@ public:
     */
     DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
 
+    //! Returnd the number of bytes sent so far
+    DLLLOCAL size_t getBytesSent() const {
+        return sent;
+    }
+
 private:
     qore_socket_private* sock;
     const char* data;
@@ -394,6 +399,11 @@ public:
         QoreValue rv = bin.release();
         bin = nullptr;
         return rv;
+    }
+
+    //! Returnd the number of bytes received so far
+    DLLLOCAL size_t getBytesReceived() const {
+        return received;
     }
 
 private:
@@ -422,6 +432,11 @@ public:
         return rv;
     }
 
+    //! Returnd the number of bytes received so far
+    DLLLOCAL size_t getBytesReceived() const {
+        return bin ? bin->size() : 0;
+    }
+
 private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
@@ -447,6 +462,11 @@ public:
         BinaryNode* rv = new BinaryNode(bin->giveBuffer(), len);
         bin = nullptr;
         return rv;
+    }
+
+    //! Returnd the number of bytes received so far
+    DLLLOCAL size_t getBytesReceived() const {
+        return bin ? bin->size() : 0;
     }
 
 private:

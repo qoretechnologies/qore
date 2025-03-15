@@ -47,6 +47,7 @@ class my_socket_priv;
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
+    friend class SocketConnectPollSocketOperationBase;
     friend class SocketConnectPollOperation;
     friend class SocketSendPollOperation;
     friend class SocketRecvPollOperationBase;
