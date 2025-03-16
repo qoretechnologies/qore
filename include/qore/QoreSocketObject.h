@@ -49,6 +49,8 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend struct qore_httpclient_priv;
     friend class SocketConnectPollSocketOperationBase;
     friend class SocketConnectPollOperation;
+    friend class SocketAcceptPollSocketOperationBase;
+    friend class SocketAcceptPollOperation;
     friend class SocketSendPollOperation;
     friend class SocketRecvPollOperationBase;
     friend class SocketRecvPollOperation;
@@ -80,7 +82,7 @@ public:
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);
 
-    //! Atarts a non-blocking client SSL upgrade on a connected socket
+    //! Starts a non-blocking client SSL upgrade on a connected socket
     /** @param xsink %Qore-language exceptions will be raised here
 
         @return a socket poll state object or nullptr in case of an exception or an immediate SSL connection
@@ -100,6 +102,26 @@ public:
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startSend(ExceptionSink* xsink, const char* data, size_t size);
+
+    //! Starts a non-blocking accept operation to a socket and returns a poll state object
+    /** The socket must be already bound and listening
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate accept
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT AbstractPollState* startAccept(ExceptionSink* xsink);
+
+    //! Starts a non-blocking server SSL upgrade on a connected socket
+    /** @param xsink %Qore-language exceptions will be raised here
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate SSL connection
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT AbstractPollState* startSslAccept(ExceptionSink* xsink);
 
     //! Starts a non-blocking receive operation on a connected socket
     /**

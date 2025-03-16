@@ -80,8 +80,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! I/O thread TID
         int tid;
 
-        #! Autostart monitoring thread with first connection
-        bool autostart = True;
+        #! Stop monitoring thread when the last operation is complete
+        bool autostop = True;
 
         #! I/O thread command: add
         const IO_ADD = "add";
@@ -117,8 +117,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     #! Creates the object
-    constructor(bool autostart, *LoggerInterface logger) : LoggerWrapper(logger) {
-        self.autostart = autostart;
+    constructor(bool autostop, *LoggerInterface logger) : LoggerWrapper(logger) {
+        self.autostop = autostop;
         constructorInit();
     }
 
@@ -135,7 +135,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Returns information about the object
     hash<auto> getInfo() {
         return {
-            "autostart": autostart,
+            "autostop": autostop,
             "sockets": (map {
                 $1.key: ($1.value.spop ? "I/O" : $1.value.timeout_date),
             }, cache.pairIterator()),
@@ -144,14 +144,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
     }
 
-    #! Set autostart flag
-    setAutostart(bool autostart = True) {
-        self.autostart = autostart;
+    #! Set autostop flag
+    setAutostop(bool autostop = True) {
+        self.autostop = autostop;
     }
 
-    #! Get autostart flag
-    bool getAutostart() {
-        return autostart;
+    #! Get autostop flag
+    bool getAutostop() {
+        return autostop;
     }
 
     #! Starts monitoring
@@ -234,7 +234,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "to": info.to,
                 "other": info.other,
             };
-            if (autostart && !tid) {
+            if (!tid) {
                 startIntern();
             }
             sendCmd(IO_ADD);
@@ -260,7 +260,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @return @ref True if an operation for the socket was canceled, @ref False if not
 
-        @note Stops the I/O thread if the last operation is canceled and the \a autostart flag is enabled
+        @note Stops the I/O thread if the last operation is canceled and the \a autostop flag is enabled
 
         @see cancelEx()
     */
@@ -275,7 +275,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             if (cache{uh}) {
                 rv = True;
                 cancelIntern(uh);
-                if (autostart && !cache) {
+                if (autostop && !cache) {
                     stopIntern();
                     stopped = True;
                 }
@@ -294,7 +294,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @return @ref True if an operation for the socket was canceled, @ref False if not
 
-        @note Stops the I/O thread if the last operation is canceled and the \a autostart flag is enabled
+        @note Stops the I/O thread if the last operation is canceled and the \a autostop flag is enabled
 
         @throw CONTROLLER-CANCEL-ERROR thrown if the Socket has no operation in progress
 
@@ -419,7 +419,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
                     }, poll_list));
 
-                    if (!cache && autostart) {
+                    if (!cache && autostop) {
                         log(LoggerLevel::DEBUG, "All operations have completed; exiting the I/O thread");
                         remove tid;
                         break;

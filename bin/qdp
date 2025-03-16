@@ -1049,7 +1049,12 @@ class QdpCmd {
     }
 
     static response(AbstractDataProvider provider) {
-        QdpCmd::showType(provider, provider.getResponseType());
+        if (*hash<auto> req = QdpCmd::getHash("request")) {
+            DataProviderDataContextHelper dch(req);
+            QdpCmd::showType(provider, provider.getResponseTypeWithData(req));
+        } else {
+            QdpCmd::showType(provider, provider.getResponseType());
+        }
     }
 
     static showOptionHash(AbstractDataProvider prov, *hash<auto> req, string offset = "") {

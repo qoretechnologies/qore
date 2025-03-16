@@ -331,32 +331,38 @@ private:
     DLLLOCAL int checkConnection(ExceptionSink* xsink);
 };
 
-#if 0
 class SocketAcceptPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+   DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
 private:
     qore_socket_private* sock;
 };
 
 class SocketAcceptSslPollState : public AbstractPollState {
+public:
     DLLLOCAL SocketAcceptSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
-            QoreSSLCertificate* cert = nullptr,QoreSSLPrivateKey* pkey = nullptr) : sock(sock) {
-        assert(!sock->ssl);
-        SSLSocketHelperHelper sshh(sock, true);
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
 
-        sock->do_start_ssl_event();
-        int rc;
-        if (rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey)) {
-            sshh.error();
-            assert(*xsink);
-            return;
-        }
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+   DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
 
-        ssl->startAccept(xsink);
-    }
+private:
+    qore_socket_private* sock;
 };
-#endif
 
 class SocketSendPollState : public AbstractPollState {
 public:
@@ -801,7 +807,7 @@ struct qore_socket_private {
     }
 
     // returns a new socket
-    DLLLOCAL int accept_internal(ExceptionSink* xsink, SocketSource *source, int timeout_ms = -1) {
+    DLLLOCAL int accept_internal(ExceptionSink* xsink, SocketSource* source, int timeout_ms = -1) {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {
             xsink->raiseException("SOCKET-NOT-OPEN", "socket must be opened, bound, and in a listening state before "

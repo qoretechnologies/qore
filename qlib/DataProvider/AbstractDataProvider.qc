@@ -1912,6 +1912,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getResponseTypeImpl();
     }
 
+    #! Returns the description of a successful response message with call data, if any
+    /** @param req sample request data that can be used to determine the final type
+
+        @return the response type for this provider according to any call data passed
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    *AbstractDataProviderType getResponseTypeWithData(auto req) {
+        checkRequest();
+        return getResponseTypeWithDataImpl(req);
+    }
+
     #! Returns a hash of error responses, if any
     /** @return a hash of error responses, if any, keyed by response code or string
 
@@ -3902,6 +3918,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
         throwUnimplementedException();
+    }
+
+    #! Returns the description of a successful response message with call data, if any
+    /** @param req sample request data that can be used to determine the final type
+
+        @return the response type for this provider according to any call data passed
+
+        @note
+        - Only called if the provider supports the request / response API
+        - This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    private *AbstractDataProviderType getResponseTypeWithDataImpl(auto req) {
+        # the default is to return the standard response data and verify the request data against it
+        return getResponseTypeImpl();
     }
 
     #! Returns a hash of error responses, if any

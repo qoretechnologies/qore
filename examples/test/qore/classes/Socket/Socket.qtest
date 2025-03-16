@@ -209,7 +209,7 @@ class SocketTest inherits QUnit::Test {
 
                 Socket s2 = s0.acceptSSL(1ms);
                 assertTrue(s2.isDataAvailable(2s));
-                binary b0 = s2.recvBinary(-1, 0);
+                binary b0 = s2.recvBinary(-1, 1s);
                 q.push(b0);
 
                 b0 = get_random_bytes(128 * 1024);
@@ -226,7 +226,7 @@ class SocketTest inherits QUnit::Test {
             assertEq(b, q.get(2s));
 
             assertTrue(s1.isDataAvailable(2s));
-            b = s1.recvBinary(-1, 0);
+            b = s1.recvBinary(-1, 1s);
             q.push(b);
         }
     }

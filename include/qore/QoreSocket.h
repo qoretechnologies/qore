@@ -144,7 +144,7 @@ public:
     //! disconnects if necessary, frees all data, and destroys the socket
     DLLEXPORT ~QoreSocket();
 
-    //! Starts a non-blocking connection to a socket and returns a status code
+    //! Starts a non-blocking connection to a socket and returns a poll state object
     /** If "name" has a ':' in it; it's assumed to be a hostname:port specification and QoreSocket::startConnectINET() is called.
         Otherwise "name" is assumed to be a file name for a UNIX domain socket and QoreSocket::startConnectUNIX() is called.
 
@@ -181,6 +181,30 @@ public:
         @since %Qore 1.12
      */
     DLLEXPORT AbstractPollState* startSend(ExceptionSink* xsink, const char* data, size_t size);
+
+    //! Starts a non-blocking accept operation to a socket and returns a poll state object
+    /** The socket must be already bound and listening
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate accept
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT AbstractPollState* startAccept(ExceptionSink* xsink);
+
+    //! Starts a non-blocking upgrade to an SSL connection on a connected server connection
+    /**
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param cert the server certificate to use
+        @param pkey the private key to use
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT AbstractPollState* startSslAccept(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr,
+        QoreSSLPrivateKey* pkey = nullptr);
 
     //! Starts a non-blocking receive operation on a connected socket
     /**

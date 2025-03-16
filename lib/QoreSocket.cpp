@@ -1292,6 +1292,46 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
+SocketAcceptPollState::SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock) {
+}
+
+/** returns:
+- SOCK_POLLIN = wait for read and call this again
+- SOCK_POLLOUT = wait for write and call this again
+- 0 = done
+- < 1 = error (exception raised)
+*/
+int SocketAcceptPollState::continuePoll(ExceptionSink* xsink) {
+    // try an accept with no timeout
+    int rc = sock->accept_internal(xsink, nullptr, 0);
+    if (*xsink) {
+        return -1;
+    }
+    if (rc < 0) {
+        return SOCK_POLLIN;
+    }
+    return 0;
+}
+
+SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
+    assert(sock->sock);
+    assert(!sock->ssl);
+    SSLSocketHelperHelper sshh(sock, true);
+
+    sock->do_start_ssl_event();
+    int rc;
+    if ((rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey))) {
+        sshh.error();
+        assert(*xsink);
+        return;
+    }
+}
+
+int SocketAcceptSslPollState::continuePoll(ExceptionSink* xsink) {
+    return sock->ssl->startAccept(xsink);
+}
+
 SocketRecvPacketPollState::SocketRecvPacketPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock),
         bin(new BinaryNode) {
     // first take any data in the socket buffer
@@ -2583,7 +2623,6 @@ AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, QoreSSLCert
         se_ssl_already_established("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-
     return new SocketConnectSslPollState(xsink, priv, cert, pkey);
 }
 
@@ -2623,7 +2662,6 @@ AbstractPollState* QoreSocket::startRecvPacket(ExceptionSink* xsink) {
     return new SocketRecvPacketPollState(xsink, priv);
 }
 
-#if 0
 AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startAccept", xsink);
@@ -2644,7 +2682,6 @@ AbstractPollState* QoreSocket::startSslAccept(ExceptionSink* xsink, QoreSSLCerti
     }
     return new SocketAcceptSslPollState(xsink, priv, cert, pkey);
 }
-#endif
 
 // currently hardcoded to SOCK_STREAM (tcp-only)
 // opens and connects to a remote socket
@@ -4058,6 +4095,162 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
+SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketAcceptPollSocketOperationBase(sock) {
+    sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
+
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer valid
+    if (sock->priv->checkValid(xsink)) {
+        return;
+    }
+
+    if (preVerify(xsink)) {
+        return;
+    }
+    if (!sock->priv->setNonBlock(xsink)) {
+        set_non_block = true;
+        poll_state.reset(sock->priv->socket->startAccept(xsink));
+        if (!*xsink) {
+            if (poll_state) {
+                state = SPS_ACCEPTING;
+            } else {
+                if (sgoal == SPG_ACCEPT) {
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    accepted();
+                } else {
+                    assert(sgoal == SPG_ACCEPT_SSL);
+                    startSslAccept(xsink);
+                }
+            }
+        }
+        if (*xsink) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+}
+
+QoreHashNode* SocketAcceptPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = nullptr;
+
+    AutoLocker al(sock->priv->m);
+
+    if (state == SPS_ACCEPTED) {
+        // throw an exception and exit if the object is no longer valid
+        if (sock->priv->checkValid(xsink)) {
+            return nullptr;
+        }
+    } else {
+        // throw an exception and exit if the object is no longer open or valid
+        if (sock->priv->checkOpen(xsink)) {
+            return nullptr;
+        }
+    }
+
+    switch (state) {
+        case SPS_ACCEPTING: {
+            int rc = checkContinuePoll(xsink);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+
+            // if we are just accepting, we are done
+            if (sgoal == SPG_ACCEPT) {
+                // SPS_ACCEPTED set below
+                break;
+            }
+
+            assert(sgoal == SPG_ACCEPT_SSL);
+
+            if (startSslAccept(xsink)) {
+                break;
+            }
+        }
+        // fall down to next case
+
+        case SPS_ACCEPTING_SSL: {
+            int rc = checkContinuePoll(xsink);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+
+            // SPS_ACCEPTED set below
+            break;
+        }
+
+        case SPS_ACCEPTED: {
+            break;
+        }
+
+        case SPS_NONE: {
+            // aborted
+            break;
+        }
+
+        default:
+            assert(false);
+    }
+
+    if (!rv) {
+        if (*xsink) {
+            state = SPS_NONE;
+        } else {
+            accepted();
+        }
+        sock->priv->clearNonBlock();
+    } else {
+        assert(!*xsink);
+    }
+    return rv;
+}
+
+void SocketAcceptPollOperation::accepted() {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+    state = SPS_ACCEPTED;
+}
+
+int SocketAcceptPollOperation::startSslAccept(ExceptionSink* xsink) {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+
+    state = SPS_ACCEPTING_SSL;
+
+    poll_state.reset(sock->priv->socket->startSslAccept(xsink, sock->priv->cert, sock->priv->pk));
+    if (*xsink) {
+        poll_state.reset();
+        state = SPS_NONE;
+        return -1;
+    }
+    return 0;
+}
+
+int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+    assert(poll_state.get());
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    //printd(5, "SocketAcceptPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(), rc,
+    //    (int)*xsink);
+    if (*xsink) {
+        assert(rc < 0);
+        state = SPS_NONE;
+        return -1;
+    }
+    if (!rc) {
+        // release the AbstractPollState value
+        poll_state.reset();
+    }
+    return rc;
+}
+
 SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketConnectPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
@@ -4153,11 +4346,12 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNod
     }
 }
 
-bool SocketSendPollOperation::needsClose() const {
+bool SocketSendPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
         return reinterpret_cast<SocketSendPollState*>(poll_state.get())->getBytesSent() ? true : false;
     }
+    return true;
 }
 
 QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -4258,11 +4452,12 @@ SocketRecvDataPollOperation::SocketRecvDataPollOperation(ExceptionSink* xsink, Q
     }
 }
 
-bool SocketRecvDataPollOperation::needsClose() const {
+bool SocketRecvDataPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvPacketPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvPacketPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
+    return true;
 }
 
 SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string)
@@ -4280,11 +4475,12 @@ SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t s
     }
 }
 
-bool SocketRecvPollOperation::needsClose() const {
+bool SocketRecvPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
+    return true;
 }
 
 SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
@@ -4303,9 +4499,10 @@ SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSi
     }
 }
 
-bool SocketRecvUntilBytesPollOperation::needsClose() const {
+bool SocketRecvUntilBytesPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
+    return true;
 }
