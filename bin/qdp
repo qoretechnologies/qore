@@ -421,8 +421,16 @@ class QdpCmd {
 
     static event(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
+        *hash<auto> req;
         hash<DataProviderMessageInfo> event_info;
-        if (!exists event) {
+        if (event.val()) {
+            if (event =~ /=/) {
+                req = getHashIntern(remove event, "request");
+            } else {
+                req = QdpCmd::getHash("request");
+            }
+            event_info = provider.getEventInfoWithData(event, req);
+        } else {
             hash<string, hash<DataProviderMessageInfo>> event_types = provider.getEventTypes();
             if (event_types.size() == 1) {
                 event = event_types.firstKey();
@@ -430,9 +438,8 @@ class QdpCmd {
             } else {
                 QdpCmd::error("Missing required event argument; valid events: %y", keys event_types);
             }
-        } else {
-            event_info = provider.getEventInfo(event);
         }
+        DataProviderDataContextHelper dch(req);
         QdpCmd::showType(provider, event, event_info);
     }
 
@@ -1135,15 +1142,19 @@ class QdpCmd {
 
     static *hash<auto> getHash(string action, *bool required) {
         auto arg = shift ARGV;
+        return getHashIntern(arg, action, required);
+    }
+
+    static *hash<auto> getHashIntern(auto arg, string action, *bool required) {
         if (exists arg) {
             arg = parse_to_qore_value(arg);
             if (exists arg && arg.typeCode() != NT_HASH) {
-                QdpCmd::error("invalid %s argument %y; expecting type \"hash\"; got type %y instead", action, arg,
+                QdpCmd::error("Invalid %s argument %y; expecting type \"hash\"; got type %y instead", action, arg,
                     arg.type());
             }
         }
         if (required && !exists arg) {
-            QdpCmd::error("missing required %s argument; expecting type \"hash\"", action);
+            QdpCmd::error("Missing required %s argument; expecting type \"hash\"", action);
         }
         return arg;
     }
@@ -1154,7 +1165,7 @@ class QdpCmd {
             return arg;
         }
         if (required && !arg) {
-            QdpCmd::error("missing required %s argument; expecting type \"string\"", action);
+            QdpCmd::error("Missing required %s argument; expecting type \"string\"", action);
         }
     }
 

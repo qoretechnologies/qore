@@ -1966,6 +1966,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getEventInfoImpl(event_id);
     }
 
+    #! Returns the description of an observable event, if any with option data, if any
+    /** @param event_id the event ID of the event
+        @param req example option data that can be used to determine the final type
+
+        @return the event type for this provider according to any call data passed
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @note This API is meant to provide information about event data types that can depend on option data
+
+        @since DataProvider 3.0
+    */
+    hash<DataProviderMessageInfo> getEventInfoWithData(string event_id, auto req) {
+        checkObservable();
+        return getEventInfoWithDataImpl(event_id, req);
+    }
+
     #! Returns a hash of all supported event types
     /** @return a hash of all supported event types
 
@@ -3982,6 +4000,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 getName(), self.className(), event_id, keys h);
         };
         return h{event_id};
+    }
+
+    #! Returns the description of an observable event, if any with option data, if any
+    /** @param event_id the event ID of the event
+        @param req example option data that can be used to determine the final type
+
+        @return the event type for this provider according to any call data passed
+
+        @throw INVALID-EVENT the event_id is not valid
+
+        @note This API is meant to provide information about event data types that can depend on option data
+
+        @since DataProvider 3.0
+    */
+    private hash<DataProviderMessageInfo> getEventInfoWithDataImpl(string event_id, auto req) {
+        return getEventInfoImpl(event_id);
     }
 
     #! Returns a hash of all supported event types
