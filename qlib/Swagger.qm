@@ -1384,6 +1384,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes);
         foreach string mt in (keys consumes) {
             if (mt =~ /;/) {
+                remove consumes{mt};
                 mt =~ s/;.*$//;
                 consumes{mt} = True;
             }
@@ -1392,6 +1393,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces);
         foreach string mt in (keys produces) {
             if (mt =~ /;/) {
+                remove produces{mt};
                 mt =~ s/;.*$//;
                 produces{mt} = True;
             }
@@ -3056,6 +3058,7 @@ public class OperationObject inherits ParameterGroup {
         } else {
             foreach string mt in (keys consumes) {
                 if (mt =~ /;/) {
+                    remove consumes{mt};
                     mt =~ s/;.*$//;
                     consumes{mt} = True;
                 }
@@ -3068,6 +3071,7 @@ public class OperationObject inherits ParameterGroup {
         } else {
             foreach string mt in (keys produces) {
                 if (mt =~ /;/) {
+                    remove produces{mt};
                     mt =~ s/;.*$//;
                     produces{mt} = True;
                 }
@@ -3208,9 +3212,8 @@ public class OperationObject inherits ParameterGroup {
             throw "SERIALIZATION-ERROR", sprintf("%s %s: API supports no serialization types but a \"body\" "
                 "parameter is present", method.upr(), path);
         }
-        string ct = consumes.firstKey();
 
-        if (ct == MimeTypeMultipartFormData) {
+        if (consumes{MimeTypeMultipartFormData}) {
             hash<string, hash<FormDataMessageInfo>> parts =
                 cast<hash<string, hash<FormDataMessageInfo>>>(map {$1.key: cast<hash<FormDataMessageInfo>>({
                     "name": $1.key,
@@ -3224,9 +3227,11 @@ public class OperationObject inherits ParameterGroup {
             return mh.body;
         }
 
-        if (MimeDataTypes{ct}) {
-            headers."Content-Type" = ct;
-            return MimeDataTypes{ct}.serialize(body);
+        foreach string ct in (keys consumes) {
+            if (MimeDataTypes{ct}) {
+                headers."Content-Type" = ct;
+                return MimeDataTypes{ct}.serialize(body);
+            }
         }
 
         throw "SERIALIZATION-ERROR", sprintf("%s %s: message body cannot be serialized; available MIME type(s): %y; "
