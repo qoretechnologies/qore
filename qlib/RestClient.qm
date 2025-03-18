@@ -149,7 +149,7 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_2_0 RestClient v2.2.0
-    - implemented PKCE options for OAuth2 flows
+    - major updates and improvements to OAuth2 handling
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - allow the username to be set without a password; assume an empty password
 
@@ -496,6 +496,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         #! Minimum time between OAuth2 token requests
         const MinimumTokenRefresh = 1m;
+
+        #! Refresh a new token 10 minutes before it expires
+        const Oauth2TokenRefreshWindow = 10m;
     }
 
     private {
@@ -553,6 +556,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         bool oauth2_token_auth_secret_only = False;
         #! If HTTP basic authentication should be used with the client_id and client_secret when making token requests
         bool oauth2_token_use_basic_auth = False;
+        #! The token expiry date
+        date oauth2_token_expiry;
         #! If PKCE should be used with the OAuth2 authorization_code flow
         /** To be used by external programs handling OAuth2 calls for this client
         */
@@ -633,6 +638,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c oauth2_token_args: Extra arguments for OAuth2 token requests to \c oauth2_token_url; if this option is
           set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as well
           when the request is made to the \c oauth2_alt_token_url
+        - \c oauth2_token_expiry: The expiry date of the token, if known
         - \c oauth2_token_url: The token URL OAuth2 flows; ignored if the \c token option is set
         - \c oauth2_token_auth_secret_only: Use HTTP basic authentication with the client_secret only when making
           OAuth2 taken requests
@@ -753,6 +759,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_token_auth_secret_only.val()) {
             oauth2_token_auth_secret_only = parse_boolean(opts.oauth2_token_auth_secret_only);
         }
+        if (opts.oauth2_token_expiry) {
+            oauth2_token_expiry = opts.oauth2_token_expiry;
+        }
         if (opts.oauth2_token_use_basic_auth.val()) {
             oauth2_token_use_basic_auth = parse_boolean(opts.oauth2_token_use_basic_auth);
         }
@@ -831,6 +840,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "oauth2_scope_separator_char": oauth2_scope_separator_char,
             "oauth2_token_args": oauth2_token_args,
             "oauth2_token_auth_secret_only": oauth2_token_auth_secret_only,
+            "oauth2_token_expiry": oauth2_token_expiry,
             "oauth2_token_url": oauth2_token_url,
             "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
         };
@@ -1272,10 +1282,18 @@ hash<auto> ans = rest.del("/orders/1");
         return oauth2_grant_type && oauth2_grant_type != "none" && !exists token;
     }
 
+    #! Returns True if the client requires a tokenm refresh
+    /** @since %RestClient 2.2
+    */
+    bool requiresRefresh() {
+        return token.val() && refresh_token.val() && oauth2_token_expiry
+            && ((now_us() - Oauth2TokenRefreshWindow) > oauth2_token_expiry);
+    }
+
     #! Sets a token for authentication
     /** @since %RestClient 2.0
     */
-    setToken(string token_type, string token, *string refresh_token) {
+    setToken(string token_type, string token, *string refresh_token, *date token_expiry) {
         if (token_type == "bearer") {
             token_type = "Bearer";
         }
@@ -1284,6 +1302,9 @@ hash<auto> ans = rest.del("/orders/1");
         addDefaultHeaders({"Authorization": sprintf("%s %s", token_type, token)});
         if (refresh_token) {
             self.refresh_token = refresh_token;
+        }
+        if (token_expiry) {
+            oauth2_token_expiry = token_expiry;
         }
     }
 
@@ -1467,6 +1488,9 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             if (refresh_token) {
                 new_opts.oauth2_refresh_token = refresh_token;
             }
+            if (oauth2_token_expiry) {
+                new_opts.oauth2_token_expiry = oauth2_token_expiry;
+            }
             doUpdateOptions(self, new_opts);
         }
         return rv;
@@ -1612,9 +1636,10 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     /** @since %RestClient 2.0
     */
     private setOAuth2LoginInfo(hash<auto> h) {
-        setToken(h.token_type, h.access_token, h.refresh_token);
-        debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s", h.token_type, h.access_token,
-            h.refresh_token ?? "n/a");
+        setToken(h.token_type, h.access_token, h.refresh_token,
+            h.expires_in ? (now_us() + minutes(h.expires_in)) : NOTHING);
+        debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type, h.access_token,
+            h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
     }
 
     #! Returns options to update after an OAuth2 login
@@ -1632,6 +1657,9 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (h.refresh_token && h.refresh_token != refresh_token) {
             new_opts.oauth2_refresh_token = h.refresh_token;
         }
+        if (h.expires_in) {
+            new_opts.oauth2_token_expiry = now_us() + minutes(h.expires_in);
+        }
         if (h.url && h.url != getURL()) {
             new_opts.url = h.url;
         }
@@ -1644,7 +1672,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     private setupAuth(hash<auto> opts, *bool no_exceptions) {
         # set any token
         if (opts.token) {
-            setToken(opts.token_type ?? "Bearer", opts.token, opts.oauth2_refresh_token);
+            setToken(opts.token_type ?? "Bearer", opts.token, opts.oauth2_refresh_token, opts.oauth2_token_expiry);
         } else {
             if (!exists getUsername() && !exists getPassword() && exists opts.username) {
                 setUserPassword(opts.username, opts.password ?? "");
@@ -1987,6 +2015,16 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         bool retry = True;
         hash<auto> rv;
         while (True) {
+            # if we are in the token expiry window; get a new token first
+            if (retry && requiresRefresh()) {
+                debug("RestClient in the token expiry window; acquiring a new token");
+                getNewTokenIntern();
+                # only retry once
+                retry = False;
+                debug("RestClient got a new token");
+                hdr.Authorization = headers.Authorization;
+                continue;
+            }
             try {
                 debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
                 h = send(body, m, path, hdr, False, \info);
@@ -2130,6 +2168,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     - \c "oauth2_token_args": Extra arguments for OAuth2 authentication requests to \c oauth2_token_url; if this
       option is set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as
       well when the request is made to the \c oauth2_alt_token_url
+    - \c "oauth2_token_expiry": The expiry date of the token, if known
     - \c "oauth2_token_url": The token URL for OAuth2 flows; ignored if the \c token option is set
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
@@ -2390,6 +2429,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "type": "bool",
                     "desc": "Use basic authorization with the client secret only when making token requests",
                 },
+                "oauth2_token_expiry": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Token Expiry Date",
+                    "short_desc": "The expiry date for the token",
+                    "type": "date",
+                    "desc": "The expiry date for the token",
+                },
                 "oauth2_token_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token URL",
                     "short_desc": "The token URL for OAuth2 flows",
@@ -2561,6 +2606,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "oauth2_refresh_token",
             "oauth2_scopes",
             "oauth2_token_args",
+            "oauth2_token_expiry",
             "oauth2_token_url",
             "oauth2_token_auth_secret_only",
             "oauth2_token_use_basic_auth",
@@ -3219,6 +3265,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             poller = FileLocationHandler::getIoPollerForLocation(real_opts.swagger);
         } else if (rc.requiresOAuth2Token()) {
             doStartGetToken();
+        } else if (rc.requiresRefresh()) {
+            doStartRefresh();
         } else {
             doStartPing();
         }
@@ -3270,6 +3318,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 rc.debug("RestConnection ping: set Swagger schema for %y", rc.getValidator().getTargetUrl());
                 if (rc.requiresOAuth2Token()) {
                     doStartGetToken();
+                } else if (rc.requiresRefresh()) {
+                    doStartRefresh();
                 } else {
                     doStartPing();
                 }

@@ -492,6 +492,10 @@ public class ConnectionSchemeCache {
                         options{i.key} = parse_boolean(i.value);
                         continue;
                     }
+                    if (type == "date" && vtype == "string") {
+                        options{i.key} = date(i.value);
+                        continue;
+                    }
                     throw "CONNECTION-OPTION-ERROR",
                         sprintf("Connection %y (type %y) option %y was passed with type %s (%y); expecting %y",
                             conn_name, scheme_info.display_name, i.key, i.value.fullType(), i.value, type);
