@@ -41,6 +41,21 @@ public hashdecl SocketPollOperationInfo {
     *hash<auto> other;
 }
 
+#! Socket listener polling operation info hash
+public hashdecl SocketPollOperationInfo {
+    #! Socket object
+    Socket sock;
+
+    #! Poll operation
+    AbstractPollOperation spop;
+
+    #! I/O timeout
+    date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+
+    #! Free-form data to be returned when the operation completes
+    *hash<auto> other;
+}
+
 #! Socket poll result
 public hashdecl SocketPollResultInfo {
     #! The poll operation that completed

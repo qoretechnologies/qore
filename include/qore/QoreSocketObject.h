@@ -62,6 +62,8 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
 public:
     DLLEXPORT QoreSocketObject();
 
+    DLLEXPORT QoreSocketObject(QoreSocketObject& orig, int descriptor);
+
     DLLEXPORT virtual void deref(ExceptionSink* xsink);
     DLLEXPORT virtual void deref();
 

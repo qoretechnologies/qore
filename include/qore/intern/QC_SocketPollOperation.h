@@ -337,7 +337,11 @@ public:
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
+    DLLLOCAL virtual QoreValue getOutput() const;
+
 protected:
+    mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
+
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
         return 0;

@@ -135,6 +135,7 @@ class QoreSocket {
     friend class HttpClientRecvChunkedPollState;
     friend class HttpClientRecvUntilClosePollState;
     friend class HttpClientConnectSendRecvPollOperation;
+    friend class SocketAcceptPollOperation;
     friend class my_socket_priv;
 
 public:

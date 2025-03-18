@@ -341,10 +341,16 @@ public:
         - 0 = done
         - < 0 = error (exception raised)
     */
-   DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the socket descriptor after a successful call to accept()
+    DLLLOCAL int getDescriptor() const {
+        return descriptor;
+    }
 
 private:
     qore_socket_private* sock;
+    int descriptor = -1;
 };
 
 class SocketAcceptSslPollState : public AbstractPollState {

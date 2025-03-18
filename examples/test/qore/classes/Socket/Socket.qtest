@@ -144,6 +144,7 @@ class SocketTest inherits QUnit::Test {
     constructor() : QUnit::Test("Socket test", "1.0", \ARGV, MyOpts) {
         process_command_line();
 
+        addTestCase("Accept poll test", \acceptPollTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -166,6 +167,64 @@ class SocketTest inherits QUnit::Test {
         s0.setCertificate(TestCert);
         s0.setPrivateKey(TestCert);
         s0.acceptSSL();
+    }
+
+    acceptPollTest() {
+        Socket s();
+        s.bind("localhost:0");
+        s.listen();
+        int port = s.getSocketInfo().port;
+
+        SocketPollOperation spop = s.startPollAccept();
+        assertEq("accept", spop.getGoal());
+        assertEq("accepting", spop.getState());
+
+        string str = get_random_string(50);
+
+        background sub () {
+            Socket s0();
+            s0.connect("localhost:" + port);
+            s0.send(str);
+        }();
+
+        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+            Socket::poll((info,), 100ms);
+        }
+        assertEq("accepted", spop.getState());
+        assertTrue(spop.goalReached());
+
+        Socket s1 = spop.getOutput();
+        string str0 = s1.recv(str.size());
+        assertEq(str, str0);
+
+        s.setCertificate(TestCert);
+        s.setPrivateKey(TestCert);
+        s.bind("localhost:0");
+        s.listen();
+        port = s.getSocketInfo().port;
+
+        spop = s.startPollAccept();
+        assertEq("accept", spop.getGoal());
+        assertEq("accepting", spop.getState());
+
+        str = get_random_string(50);
+
+        background sub () {
+            Socket s0();
+            s0.connectSSL("localhost:" + port);
+            s0.send(str);
+        }();
+
+        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+            #printf("info: %y -> %y\n", info, spop.getState());
+            Socket::poll((info,), 100ms);
+        }
+        assertEq("accepted", spop.getState());
+        assertTrue(spop.goalReached());
+
+        s1 = spop.getOutput();
+        str0 = s1.recv(str.size());
+        assertEq(str, str0);
     }
 
     sendBinaryTest() {

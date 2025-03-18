@@ -41,6 +41,14 @@ QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, Qore
         : priv(new my_socket_priv(s, cert, pk)) {
 }
 
+QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
+        : priv(new my_socket_priv(new QoreSocket(descriptor, orig.priv->socket->priv->sfamily,
+            orig.priv->socket->priv->stype,
+            orig.priv->socket->priv->sprot, orig.priv->socket->priv->enc),
+            orig.priv->cert ? orig.priv->cert->certRefSelf() : nullptr,
+            orig.priv->pk ? orig.priv->pk->pkRefSelf() : nullptr)) {
+}
+
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
 }
 
@@ -82,6 +90,11 @@ AbstractPollState* QoreSocketObject::startSslConnect(ExceptionSink* xsink) {
 AbstractPollState* QoreSocketObject::startSend(ExceptionSink* xsink, const char* data, size_t size) {
     AutoLocker al(priv->m);
     return priv->socket->startSend(xsink, data, size);
+}
+
+AbstractPollState* QoreSocketObject::startSslAccept(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->startSslAccept(xsink, priv->cert, priv->pk);
 }
 
 AbstractPollState* QoreSocketObject::startRecv(ExceptionSink* xsink, size_t size) {

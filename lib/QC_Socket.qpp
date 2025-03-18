@@ -627,6 +627,33 @@ AbstractPollOperation Socket::startPollSend(binary data) {
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
+/** @param target the URL target
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
+    connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
+    the new Socket after a successful poll operation
+
+    An SSL connection is automatically negotiated with the new connection if the Socket has a certificate and private
+    key configured.
+
+    @since %Qore 2.0
+*/
+AbstractPollOperation Socket::startPollAccept() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketAcceptPollOperation(xsink, s),
+        xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("accept"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read data in non-blocking mode
 /** @param size the size of the string to receive
 

@@ -559,6 +559,9 @@ int SSLSocketHelper::startConnect(ExceptionSink* xsink) {
             case SSL_ERROR_SYSCALL: {
                 return sysCallError(xsink, rc, "startConnect", "SSL_connect");
             }
+            default:
+                printd(0, "SSLSocketHelper::startConnect() err: %d\n", err);
+                break;
         }
 
         if (sslError(xsink, "startConnect", "SSL_connect", true)) {
@@ -591,6 +594,9 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
             case SSL_ERROR_SYSCALL: {
                 return sysCallError(xsink, rc, "startAccept", "SSL_accept");
             }
+            default:
+                printd(0, "SSLSocketHelper::startAccept() err: %d\n", err);
+                break;
         }
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {
             return QSE_SSL_ERR;
@@ -1310,6 +1316,7 @@ int SocketAcceptPollState::continuePoll(ExceptionSink* xsink) {
     if (rc < 0) {
         return SOCK_POLLIN;
     }
+    descriptor = rc;
     return 0;
 }
 
@@ -1324,7 +1331,6 @@ SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_so
     if ((rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey))) {
         sshh.error();
         assert(*xsink);
-        return;
     }
 }
 
@@ -4113,18 +4119,8 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
         set_non_block = true;
         poll_state.reset(sock->priv->socket->startAccept(xsink));
         if (!*xsink) {
-            if (poll_state) {
-                state = SPS_ACCEPTING;
-            } else {
-                if (sgoal == SPG_ACCEPT) {
-                    sock->priv->clearNonBlock();
-                    set_non_block = false;
-                    accepted();
-                } else {
-                    assert(sgoal == SPG_ACCEPT_SSL);
-                    startSslAccept(xsink);
-                }
-            }
+            assert(poll_state);
+            state = SPS_ACCEPTING;
         }
         if (*xsink) {
             sock->priv->clearNonBlock();
@@ -4221,7 +4217,11 @@ int SocketAcceptPollOperation::startSslAccept(ExceptionSink* xsink) {
 
     state = SPS_ACCEPTING_SSL;
 
-    poll_state.reset(sock->priv->socket->startSslAccept(xsink, sock->priv->cert, sock->priv->pk));
+    assert(accepted_socket);
+    // we have the original socket locked, but do the SSL accept operation on the new socket without any locks,
+    // however, since no one else can access it yet, this is safe
+    poll_state.reset(accepted_socket->priv->socket->startSslAccept(xsink, accepted_socket->priv->cert,
+            accepted_socket->priv->pk));
     if (*xsink) {
         poll_state.reset();
         state = SPS_NONE;
@@ -4245,10 +4245,23 @@ int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
         return -1;
     }
     if (!rc) {
+        if (state == SPS_ACCEPTING) {
+            // save socket info for getOutput() value
+            assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
+            int descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+            accepted_socket = new QoreSocketObject(*sock, descriptor);
+        }
         // release the AbstractPollState value
         poll_state.reset();
     }
     return rc;
+}
+
+QoreValue SocketAcceptPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    if (accepted_socket) {
+        return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
+    }
 }
 
 SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
