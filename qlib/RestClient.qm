@@ -556,6 +556,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         bool oauth2_token_auth_secret_only = False;
         #! If HTTP basic authentication should be used with the client_id and client_secret when making token requests
         bool oauth2_token_use_basic_auth = False;
+        #! An expiry date hint as a value in minutes
+        int oauth2_token_expiry_hint;
         #! The token expiry date
         date oauth2_token_expiry;
         #! If PKCE should be used with the OAuth2 authorization_code flow
@@ -639,6 +641,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as well
           when the request is made to the \c oauth2_alt_token_url
         - \c oauth2_token_expiry: The expiry date of the token, if known
+        - \c oauth2_token_expiry_hint: A token expiry hint as a value in minutes
         - \c oauth2_token_url: The token URL OAuth2 flows; ignored if the \c token option is set
         - \c oauth2_token_auth_secret_only: Use HTTP basic authentication with the client_secret only when making
           OAuth2 taken requests
@@ -762,6 +765,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_token_expiry) {
             oauth2_token_expiry = opts.oauth2_token_expiry;
         }
+        if (opts.oauth2_token_expiry_hint) {
+            oauth2_token_expiry_hint = opts.oauth2_token_expiry_hint;
+        }
         if (opts.oauth2_token_use_basic_auth.val()) {
             oauth2_token_use_basic_auth = parse_boolean(opts.oauth2_token_use_basic_auth);
         }
@@ -841,6 +847,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "oauth2_token_args": oauth2_token_args,
             "oauth2_token_auth_secret_only": oauth2_token_auth_secret_only,
             "oauth2_token_expiry": oauth2_token_expiry,
+            "oauth2_token_expiry_hint": oauth2_token_expiry_hint,
             "oauth2_token_url": oauth2_token_url,
             "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
         };
@@ -1305,6 +1312,8 @@ hash<auto> ans = rest.del("/orders/1");
         }
         if (token_expiry) {
             oauth2_token_expiry = token_expiry;
+        } else if (oauth2_token_expiry_hint) {
+            oauth2_token_expiry = now_us() + minutes(oauth2_token_expiry_hint);
         }
     }
 
@@ -1490,6 +1499,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             }
             if (oauth2_token_expiry) {
                 new_opts.oauth2_token_expiry = oauth2_token_expiry;
+            } else if (oauth2_token_expiry_hint) {
+                new_opts.oauth2_token_expiry = now_us() + minutes(oauth2_token_expiry_hint);
             }
             doUpdateOptions(self, new_opts);
         }
@@ -1657,8 +1668,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (h.refresh_token && h.refresh_token != refresh_token) {
             new_opts.oauth2_refresh_token = h.refresh_token;
         }
-        if (h.expires_in) {
-            new_opts.oauth2_token_expiry = now_us() + minutes(h.expires_in);
+        if (*int expires_in = h.expires_in ?? oauth2_token_expiry_hint) {
+            new_opts.oauth2_token_expiry = now_us() + minutes(expires_in);
         }
         if (h.url && h.url != getURL()) {
             new_opts.url = h.url;
@@ -2169,6 +2180,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
       option is set as well as \c oauth2_alt_token_url, then the \c oauth2_token_url value will be added to this as
       well when the request is made to the \c oauth2_alt_token_url
     - \c "oauth2_token_expiry": The expiry date of the token, if known
+    - \c "oauth2_token_expiry_hint": A integer value in minutes giving the expected lifetime of the token
     - \c "oauth2_token_url": The token URL for OAuth2 flows; ignored if the \c token option is set
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
@@ -2435,6 +2447,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "type": "date",
                     "desc": "The expiry date for the token",
                 },
+                "oauth2_token_expiry_hint": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Token Lifetime Hint in Minutes",
+                    "short_desc": "The expected number of minutes that a token will remain valid before it must be "
+                        "refreshed",
+                    "type": "int",
+                    "desc": "The expected number of minutes that a token will remain valid before it must be "
+                        "refreshed. This option is only used when the connection has a refresh token and the server "
+                        "does not indicate the lifetime of the token in token responses",
+                },
                 "oauth2_token_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Token URL",
                     "short_desc": "The token URL for OAuth2 flows",
@@ -2607,6 +2628,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "oauth2_scopes",
             "oauth2_token_args",
             "oauth2_token_expiry",
+            "oauth2_token_expiry_hint",
             "oauth2_token_url",
             "oauth2_token_auth_secret_only",
             "oauth2_token_use_basic_auth",
