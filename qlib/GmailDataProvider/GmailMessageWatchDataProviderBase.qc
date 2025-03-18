@@ -260,31 +260,19 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
                 hash<auto> msg = rest.get(msguri, NOTHING, \info).body;
 
+                # save original message
+                hash<auto> msg0 = msg;
+
                 # try to decode body as base64 if there is a Content-Transfer-Encoding header
                 # do not allow message bodies to be re-encoded as base64
-                hash<auto> bh;
-                processHeaders(\msg.payload, GmailMessageEventDataType::Fields);
-                bh.main = remove msg.payload.body."data";
-                for (int i = 0; i < msg.payload.parts.size(); ++i) {
-                    bh.part[i] = remove msg.payload.parts[i].body."data";
-                    processHeaders(\msg.payload.parts[i], GmailMessageEventDataType::PartFields);
-                }
+                processHeaders(\msg.payload, GmailMessageEventDataType::Fields, GmailMessageEventDataType::PartFields);
 
                 # check message structure and convert types where necessary
                 msg = setup.msgtype.acceptsValue(msg);
 
                 # try to decode body as base64 if there is a Content-Transfer-Encoding header
                 # reapply bodies to message
-                if (bh.main.val()) {
-                    msg.payload.body."data" = bh.main;
-                }
-                processBody(\msg.payload);
-                for (int i = 0; i < msg.payload.parts.size(); ++i) {
-                    if (bh.part[i].val()) {
-                        msg.payload.parts[i].body."data" = bh.part[i];
-                    }
-                    processBody(\msg.payload.parts[i]);
-                }
+                processBody(\msg.payload, msg0.payload);
 
                 # internalDate is given as a ms offset from the epoch
                 int msg_epoch = msg.internalDate / 1000;
@@ -344,34 +332,45 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     }
 
     #! Process headers and body
-    private processHeaders(*reference<hash<auto>> msg, hash<auto> fields) {
+    private processHeaders(*reference<hash<auto>> msg, hash<auto> fields, *hash<auto> pfields) {
         # reformat message to make it more user-friendly
         msg.headers = map {
             $1.name: getHeaderValue($1.value, fields{$1.name}),
         }, msg.headers, $1.value.val();
+
+        # remove body so it will not be re-encoded
+        remove msg.body."data";
+
+        for (int i = 0; i < msg.parts.size(); ++i) {
+            processHeaders(\msg.parts[i], pfields ?? fields);
+        }
     }
 
     #! Process body
-    private processBody(*reference<hash<auto>> msg) {
+    private processBody(*reference<hash<auto>> msg, hash<auto> msg0) {
         # headers / body
         if (msg.headers."Content-Type".val() && msg.body.size) {
             bool text = is_mime_text(msg.headers."Content-Type");
-            if (msg.body."data".typeCode() == NT_BINARY) {
+            if (msg0.body."data".typeCode() == NT_BINARY) {
                 if (text) {
-                    msg.body."data" = msg.body."data".toString();
+                    msg.body."data" = msg0.body."data".toString();
                 }
             } else {
-                if (msg.headers."Content-Transfer-Encoding".val() && msg.body."data".val()) {
+                if (msg.headers."Content-Transfer-Encoding".val() && msg0.body."data".val()) {
                     try {
                         msg.body."data" = text
-                            ? parse_base64_url_string_to_string(msg.body."data")
-                            : parse_base64_url_string(msg.body."data");
+                            ? parse_base64_url_string_to_string(msg0.body."data")
+                            : parse_base64_url_string(msg0.body."data");
                     } catch (hash<ExceptionInfo> ex) {
                         LoggerWrapper::error("Failed to parse message body with Content-Type: %y as base64, "
                             "leaving as is: %s: %s", msg.headers."Content-Type", ex.err, ex.desc);
                     }
                 }
             }
+        }
+
+        for (int i = 0; i < msg.parts.size(); ++i) {
+            processBody(\msg.parts[i], msg0.parts[i]);
         }
     }
 
