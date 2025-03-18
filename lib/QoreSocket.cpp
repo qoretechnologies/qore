@@ -3946,7 +3946,7 @@ void QoreSocketThroughputHelper::finalize(int64 bytes) {
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock) : SocketConnectPollSocketOperationBase(sock) {
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
     sgoal = ssl ? SPG_CONNECT_SSL : SPG_CONNECT;
 
     AutoLocker al(sock->priv->m);
@@ -4262,10 +4262,11 @@ QoreValue SocketAcceptPollOperation::getOutput() const {
     if (accepted_socket) {
         return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
     }
+    return QoreValue();
 }
 
 SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketConnectPollSocketOperationBase(sock) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
@@ -4319,8 +4320,63 @@ QoreHashNode* SocketUpgradeClientSslPollOperation::continuePoll(ExceptionSink* x
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketUpgradeServerSslPollOperation::SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
+    // been established
+    if (sock->priv->checkOpenAndNotSsl(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        set_non_block = true;
+
+        poll_state.reset(sock->priv->socket->startSslAccept(xsink, sock->priv->cert, sock->priv->pk));
+        if (*xsink) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+}
+
+QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (done) {
+        return nullptr;
+    }
+
+    // throw an exception and exit if the object is no longer open and valid
+    if (sock->priv->checkOpen(xsink)) {
+        return nullptr;
+    }
+
+    assert(poll_state);
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    //printd(5, "SocketUpgradeServerSslPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(),
+    //    rc, (int)*xsink);
+    if (*xsink) {
+        assert(rc < 0);
+        return nullptr;
+    }
+    if (!rc) {
+        // release the AbstractPollState value
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        done = true;
+        return nullptr;
+    }
+
+    return getSocketPollInfoHash(xsink, rc);
+}
+
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)
-        : SocketConnectPollSocketOperationBase(sock), data(data), buf(data->c_str()), size(data->size()) {
+        : SocketPollSocketOperationBase(sock), data(data), buf(data->c_str()), size(data->size()) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -4340,7 +4396,7 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStrin
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock)
-        : SocketConnectPollSocketOperationBase(sock), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
+        : SocketPollSocketOperationBase(sock), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
         size(data->size()) {
     AutoLocker al(sock->priv->m);
 
@@ -4513,6 +4569,52 @@ SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSi
 }
 
 bool SocketRecvUntilBytesPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
+}
+
+SocketReadHttpHeaderPollOperation::SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketRecvPollOperationBase(sock, true), out(xsink) {
+    AutoLocker al(sock->priv->m);
+    if (initIntern(xsink)) {
+        return;
+    }
+
+    poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+    if (*xsink) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+    }
+}
+
+QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = SocketRecvPollOperationBase::continuePoll(xsink);
+    if (rv || !data) {
+        return rv;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    assert(data->getType() == NT_STRING);
+    SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
+    ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
+        QORE_SOURCE_SOCKET), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    out = new QoreHashNode(autoTypeInfo);
+    out->setKeyValue("hdr", hdr.release(), xsink);
+    out->setKeyValue("info", info.release(), xsink);
+}
+
+QoreValue SocketReadHttpHeaderPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    return out.release();
+}
+
+bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;

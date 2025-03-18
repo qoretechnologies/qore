@@ -49,15 +49,15 @@ constexpr int SPS_CONNECTING = 1;
 constexpr int SPS_CONNECTING_SSL = 2;
 constexpr int SPS_CONNECTED = 3;
 
-class SocketConnectPollSocketOperationBase : public SocketPollOperationBase {
+class SocketPollSocketOperationBase : public SocketPollOperationBase {
 public:
-    DLLLOCAL SocketConnectPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
+    DLLLOCAL SocketPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
     }
 
-    DLLLOCAL SocketConnectPollSocketOperationBase(QoreSocketObject* sock) : sock(sock) {
+    DLLLOCAL SocketPollSocketOperationBase(QoreSocketObject* sock) : sock(sock) {
     }
 
-    DLLLOCAL ~SocketConnectPollSocketOperationBase() {
+    DLLLOCAL ~SocketPollSocketOperationBase() {
     }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) {
@@ -73,6 +73,7 @@ public:
     }
 
 protected:
+    std::unique_ptr<AbstractPollState> poll_state;
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;
     bool set_non_block = false;
@@ -82,7 +83,7 @@ protected:
     }
 };
 
-class SocketConnectPollOperation : public SocketConnectPollSocketOperationBase {
+class SocketConnectPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target, QoreSocketObject* sock);
 
@@ -115,7 +116,6 @@ protected:
     DLLLOCAL int startSslConnect(ExceptionSink* xsink);
 
 private:
-    std::unique_ptr<AbstractPollState> poll_state;
     std::string target;
 
     int sgoal = 0;
@@ -139,7 +139,7 @@ private:
     DLLLOCAL int checkContinuePoll(ExceptionSink* xsink);
 };
 
-class SocketSendPollOperation : public SocketConnectPollSocketOperationBase {
+class SocketSendPollOperation : public SocketPollSocketOperationBase {
 public:
     // "data" must be passed already referenced
     DLLLOCAL SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock);
@@ -168,7 +168,6 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
 private:
-    std::unique_ptr<AbstractPollState> poll_state;
     SimpleRefHolder<SimpleValueQoreNode> data;
     const char* buf;
     size_t size;
@@ -177,10 +176,10 @@ private:
     DLLLOCAL virtual bool abortNeedsClose() const;
 };
 
-class SocketRecvPollOperationBase : public SocketConnectPollSocketOperationBase {
+class SocketRecvPollOperationBase : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string)
-            : SocketConnectPollSocketOperationBase(sock), to_string(to_string) {
+            : SocketPollSocketOperationBase(sock), to_string(to_string) {
     }
 
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -208,7 +207,6 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
 protected:
-    std::unique_ptr<AbstractPollState> poll_state;
     SimpleRefHolder<SimpleValueQoreNode> data;
     bool to_string;
     bool received = false;
@@ -249,7 +247,22 @@ private:
     DLLLOCAL virtual bool abortNeedsClose() const;
 };
 
-class SocketUpgradeClientSslPollOperation : public SocketConnectPollSocketOperationBase {
+class SocketReadHttpHeaderPollOperation : public SocketRecvPollOperationBase {
+public:
+    // "data" must be passed already referenced
+    DLLLOCAL SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual QoreValue getOutput() const;
+
+private:
+    mutable ReferenceHolder<QoreHashNode> out;
+
+    DLLLOCAL virtual bool abortNeedsClose() const;
+};
+
+class SocketUpgradeClientSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
 
@@ -274,7 +287,34 @@ public:
     }
 
 private:
-    std::unique_ptr<AbstractPollState> poll_state;
+    bool done = false;
+};
+
+class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        return "accepting-ssl";
+    }
+
+private:
     bool done = false;
 };
 

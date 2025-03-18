@@ -47,7 +47,7 @@ class my_socket_priv;
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
-    friend class SocketConnectPollSocketOperationBase;
+    friend class SocketPollSocketOperationBase;
     friend class SocketConnectPollOperation;
     friend class SocketAcceptPollSocketOperationBase;
     friend class SocketAcceptPollOperation;
@@ -55,8 +55,10 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketRecvPollOperationBase;
     friend class SocketRecvPollOperation;
     friend class SocketRecvDataPollOperation;
+    friend class SocketReadHttpHeaderPollOperation;
     friend class SocketRecvUntilBytesPollOperation;
     friend class SocketUpgradeClientSslPollOperation;
+    friend class SocketUpgradeServerSslPollOperation;
     friend class HttpClientConnectPollOperation;
 
 public:

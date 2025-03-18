@@ -136,6 +136,7 @@ class QoreSocket {
     friend class HttpClientRecvUntilClosePollState;
     friend class HttpClientConnectSendRecvPollOperation;
     friend class SocketAcceptPollOperation;
+    friend class SocketReadHttpHeaderPollOperation;
     friend class my_socket_priv;
 
 public:

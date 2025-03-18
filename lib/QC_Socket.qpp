@@ -773,6 +773,50 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP header without blocking
+/**
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP header without blocking
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful poll for inbound socket data:
+    - hdr: a hash of header info like that returned from @ref readHTTPHeader():
+      - \c http_version: a string giving the HTTP version set in the header
+      - \c status_code: (HTTP responses only) an integer giving the status code
+      - \c status_message: (HTTP responses only) if present in an HTTP response, this key will be set to the message
+        after the status code
+      - \c method: (HTTP requests only) a string giving the HTTP method (i.e. \c "GET", \c "POST", etc)
+      - \c path: (HTTP requests only) a string giving the path in a request without any decoding; use decode_url() to
+        decode if necessary
+    - info: a hash of other information:
+      - \c headers-raw: the raw headers read without any case conversions or other processing
+      - \c request-uri: (only set when parsing a request header) gives the request URI in an HTTP request
+      - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
+      - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
+      - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this
+        key
+      - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed
+        after responding, @ref False "False" if not; see notes below about how this value is calculated
+      - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+        \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
+        the first requested character encoding in the list
+      - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
+
+    @since %Qore 1.12
+*/
+AbstractPollOperation Socket::startPollReadHttpHeader() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketReadHttpHeaderPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected client socket to SSL
 /** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected client socket to
     SSL
@@ -792,6 +836,29 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("upgrade-client-ssl"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected server socket to SSL
+/** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected server socket to
+    SSL
+
+    The poll operation returned will upgrade a server connection to an SSL/TLS connection using the certificate and
+    private key set on the socket.
+
+    @since %Qore 1.12
+*/
+AbstractPollOperation Socket::startPollUpgradeServerToSSL() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeServerSslPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("upgrade-server-ssl"), xsink);
     }
     return rv.release();
 }
