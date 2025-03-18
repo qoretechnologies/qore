@@ -109,9 +109,141 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
 
 #! Event data type for new gmail events
 public class GmailMessageEventDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "Subject": {
+                "display_name": "Subject",
+                "short_desc": "Email subject",
+                "desc": "Email subject",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "From": {
+                "display_name": "From Address",
+                "short_desc": "From address",
+                "desc": "From address",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "To": {
+                "display_name": "To Addresses",
+                "short_desc": "To addreses",
+                "desc": "To addresses",
+                "type": new ListDataType("StringList", AbstractDataProviderTypeMap."string"),
+            },
+            "Cc": {
+                "display_name": "CC Addresses",
+                "short_desc": "CC addresses",
+                "desc": "CC - Carbon Copy addresses",
+                "type": new ListDataType("StringList", AbstractDataProviderTypeMap."string", True),
+            },
+            "Bcc": {
+                "display_name": "BCC Addresses",
+                "short_desc": "BCC addresses",
+                "desc": "BCC - Blind Carbon Copy addresses",
+                "type": new ListDataType("StringList", AbstractDataProviderTypeMap."string", True),
+            },
+            "Return-Path": {
+                "display_name": "Email Return / Bounce Path",
+                "short_desc": "This is the address where email servers should send non-delivery notifications",
+                "desc": "This is the address where email servers should send non-delivery notifications",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Date": {
+                "display_name": "Client Send Date",
+                "short_desc": "The date the client sets in the email that should indicate when the email was sent",
+                "desc": "The date the client sets in the email that should indicate when the email was sent",
+                "type": AbstractDataProviderTypeMap."date",
+            },
+            "Delivered-To": {
+                "display_name": "Delivered To",
+                "short_desc": "The email address the email server delivered the email to",
+                "desc": "The email address the email server delivered the email to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Message-ID": {
+                "display_name": "unique Email ID",
+                "short_desc": "A unique ID for this email",
+                "desc": "A unique ID for this email",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "References": {
+                "display_name": "Email Reference ID",
+                "short_desc": "A unique ID for any email this email is in reply to",
+                "desc": "A unique ID for any email this email is in reply to",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Content-Type": {
+                "display_name": "Content Type",
+                "short_desc": "The MIME content type set on the content transfer encoding",
+                "desc": "The MIME content type set on the content transfer encoding",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "Content-Transfer-Encoding": {
+                "display_name": "Content Transfer Encoding",
+                "short_desc": "The content transfer encoding set on the message or attachment",
+                "desc": "The content transfer encoding set on the message or attachment",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "User-Agent": {
+                "display_name": "Client Email User Agent",
+                "short_desc": "Information about the client application used to send the email",
+                "desc": "Information about the client application used to send the email",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+
+        const PartFields = Fields{PartHeaders};
+
+        const PartHeaders = (
+            "Content-Type",
+            "Content-Transfer-Encoding",
+        );
+    }
+
     constructor() : HashDataType("GmailWatchMessage") {
-        AbstractDataProviderType t = GoogleDataProviderBase::getTypeForSchema(GoogleDiscoveryGmailApiName, "Message");
-        map addField($1), t.getFields().iterator();
+        HashDataType t = GoogleDataProviderBase::getTypeForSchema(GoogleDiscoveryGmailApiName, "Message");
+        *hash<string, AbstractDataField> fields = t.getFields();
+
+        if (*QoreDataField payload = fields.payload) {
+            HashDataType pt = payload.getType();
+            *hash<string, AbstractDataField> pfields = pt.getFields();
+
+            # update type for "parts" fields
+            if (*QoreDataField parts = pfields.parts) {
+                ListDataType part_type = parts.getType();
+                HashDataType part_element_type = part_type.getElementType().copy();
+                *hash<string, AbstractDataField> pefields = part_element_type.getFields();
+
+                if (*QoreDataField headers = pefields.headers) {
+                    headers = headers.copy();
+                    part_element_type.replaceField(headers);
+                    HashDataType header_type();
+                    header_type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."string");
+                    headers.updateFieldType(header_type);
+
+                    # add direct fields for important values
+                    map header_type.addField(new QoreDataField({
+                        "name": $1.key,
+                    } + $1.value)), PartFields.pairIterator();
+                }
+
+                part_type = part_type.copyWithElementType(part_element_type);
+                parts.updateFieldType(part_type);
+            }
+
+            # update type for "headers" field
+            if (*QoreDataField headers = pfields.headers) {
+                HashDataType header_type();
+                header_type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."string");
+                headers.updateFieldType(header_type);
+
+                # add direct fields for important values
+                map header_type.addField(new QoreDataField({
+                    "name": $1.key,
+                } + $1.value)), Fields.pairIterator();
+            }
+        }
+
+        map addField($1), fields.iterator();
         addField(new QoreDataField({
             "name": "attachments",
             "display_name": "Attachments",
