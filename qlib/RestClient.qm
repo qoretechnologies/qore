@@ -1647,10 +1647,15 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     /** @since %RestClient 2.0
     */
     private setOAuth2LoginInfo(hash<auto> h) {
+        if (h.hasKey("expires_in") && !h.expires_in.intp()) {
+            warn("Ignoring invalid 'expires_in' value with type %y; value: %y", h.expires_in.fullType(),
+                h.expires_in);
+            remove h.expires_in;
+        }
         setToken(h.token_type, h.access_token, h.refresh_token,
             h.expires_in ? (now_us() + minutes(h.expires_in)) : NOTHING);
-        debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type, h.access_token,
-            h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
+        debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type,
+            h.access_token, h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
     }
 
     #! Returns options to update after an OAuth2 login
@@ -1668,7 +1673,12 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         if (h.refresh_token && h.refresh_token != refresh_token) {
             new_opts.oauth2_refresh_token = h.refresh_token;
         }
-        if (*int expires_in = h.expires_in ?? oauth2_token_expiry_hint) {
+        if (h.hasKey("expires_in") && !h.expires_in.intp()) {
+            warn("Ignoring invalid 'expires_in' value with type %y; value: %y", h.expires_in.fullType(),
+                h.expires_in);
+            remove h.expires_in;
+        }
+        if (*softint expires_in = h.expires_in ?? oauth2_token_expiry_hint) {
             new_opts.oauth2_token_expiry = now_us() + minutes(expires_in);
         }
         if (h.url && h.url != getURL()) {
