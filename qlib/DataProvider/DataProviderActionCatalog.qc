@@ -373,6 +373,9 @@ public hashdecl DataProviderActionInfo {
     #! Output type for the action
     *AbstractDataProviderType output_type;
 
+    #! Does the action support dynamic options?
+    bool has_dynamic_options;
+
     #! In case the output type is expensive to acquire or requires I/O, this closure can be used to set it
     *code get_output_type;
 
@@ -573,6 +576,10 @@ public class DataProviderActionCatalog {
         if (action.output_type && action.get_output_type) {
             throw "ACTION-ERROR", sprintf("action has both \"output_type\" and \"get_output_type\"; path: %y",
                 action.path);
+        }
+
+        if (action.get_dynamic_options && !action.has_dynamic_options) {
+            action.has_dynamic_options = True;
         }
 
         string key = sprintf("%s/%s", action.app, action.action);

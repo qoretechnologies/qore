@@ -1490,7 +1490,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         # get a new token with the refresh token
         hash<auto> rv = oauth2Auth(getOAuth2RefreshInfo(), \info, True);
         if (token && update_options) {
-            hash<auto> new_opts = {
+            hash<auto> new_opts += {
                 "token": token,
                 "token_type": token_type,
             };
