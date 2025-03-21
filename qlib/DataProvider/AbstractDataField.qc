@@ -250,6 +250,7 @@ public class AbstractDataField inherits Qore::Serializable {
         return allowed_values_map;
     }
 
+    #! Get the "allowed values creatable" flag
     bool getAllowedValuesCreatable() {
         return allowed_values_creatable ?? False;
     }
@@ -264,6 +265,7 @@ public class AbstractDataField inherits Qore::Serializable {
         return element_allowed_values_map;
     }
 
+    #! Get the "element allowed values creatable" flag
     bool getElementAllowedValuesCreatable() {
         return element_allowed_values_creatable ?? False;
     }

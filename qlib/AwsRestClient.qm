@@ -271,7 +271,7 @@ AwsRestClient rest({
     }
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
-            *softbool decode_errors) {
+            *softbool decode_errors, *string assume_content_type, *string shdr, *code signer) {
         # get request time
         date gmtime = Qore::gmtime();
         # get credential scope
@@ -290,7 +290,8 @@ AwsRestClient rest({
         hdr.Authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
             AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
 
-        return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors);
+        return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr,
+            signer);
     }
 
     string getSignature(string http_method, string path, reference<hash<auto>> hdr, *data body, date gmtime,

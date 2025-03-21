@@ -276,9 +276,11 @@ CdsRestClient rest({
 
     #! sends the outgoing HTTP message and recodes the response to data
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
-            *reference<hash<auto>> info, *softbool decode_errors) {
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+            *code signer) {
         try {
-            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors);
+            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type,
+                shdr, signer);
         } catch (hash<ExceptionInfo> ex) {
             # throw an exception for the CDS error
             if (info."response-body".error && info."response-body".size() == 1

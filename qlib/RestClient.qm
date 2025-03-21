@@ -1407,6 +1407,66 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         return doRequestIntern(m, path, body, \info, decode_errors, hdr);
     }
 
+    #! sends a signed HTTP request to the REST server and returns the response
+    /** @par Example:
+        @code{.py}
+hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/1");
+        @endcode
+
+        @param shdr the name of the header that will have the signature
+        @param signer the code that will return a signature string to put in the header identified by \a shdr, the
+        argument to this closure will be a hash with the following keys:
+        - \c path: the URI path that will be used for the request
+        - \c body: the serialized message body string
+        - \c hdr: the headers used for the request (without the header identified by \a shdr)
+        @param m the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR
+        exception is raised)
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to
+        the method, then the body will be serialized according to the serialization rules set in
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
+        @param info an optional reference to a hash that will be used as an output variable giving a hash of request
+        headers and other information about the HTTP request; see @ref rest-info-format for information about the
+        structure of the hash written to the reference supplied here
+        @param decode_errors decode the message body with HTTP error responses and throw an exception based on the
+        message body
+        @param hdr any headers to be sent with the request; headers here will override default headers for the
+        object as well
+
+        @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any
+        message body is included in the response, it will be deserialized to %Qore data and assigned to the value
+        of the \c "body" key
+
+        @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or
+        invalid serialization)
+        @throw HTTP-CLIENT-METHOD-ERROR invalid HTTP method argument passed
+        @throw REST-RESPONSE-ERROR if this exception is thrown by the @ref Qore::HTTPClient::send() call in case
+        of an HTTP response code < 100 or >= 300, the message body is still deserialized if possible and the
+        response information can be retrieved in the \a info hash output keys as follows:
+        - \c "response-body": the decoded response body
+        - \c "response-body-raw": the raw message body in the response (after any content decoding)
+        - \c "response-code": the HTTP response code given
+        - \c "response-headers": a hash of processed response headers
+        - \c "response-headers-raw": a hash of raw unprocessed response headers
+        .
+        Note that this exception is not raised for HTTP status codes indicating an error if the \c error_passthru
+        option is set to @ref True "True"
+        @throw REST-ACCEPT-ERROR if the message has a validator that indicates that the response message only
+        supports types not supported by the current options or environment
+
+        Other exceptions can be thrown by the @ref Qore::HTTPClient::send() call used to make the HTTP request.
+
+        @see
+        - @ref RestClient::RestClient::getSerialization() "RestClient::getSerialization()"
+        - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
+        - @ref httpclient_get_with_body
+    */
+    hash<auto> doSignedRequest(string shdr, code signer, string m, string path, auto body,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        checkLogin(\info);
+        return doRequestIntern(m, path, body, \info, decode_errors, hdr, NOTHING, shdr, signer);
+    }
+
     #! Returns True if the request error indicates that a refresh operation should be performed
     private bool needsRefresh(*hash<ExceptionInfo> ex, *hash<auto> info, *bool body_deserialized, auto body) {
         if (!oauth2_grant_type || oauth2_grant_type == "none") {
@@ -1515,7 +1575,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
 
     #! Makes a REST request and returns the result
     private hash<auto> doRequestIntern(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type) {
+            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr, *code signer) {
         prepareMsg(m, path, \body, \hdr);
         on_exit if (exists body) {
             info += {
@@ -1544,7 +1604,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
             rethrow $1.err, sprintf("%s (REST URL %y)", $1.desc, url);
         }
 
-        return sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type);
+        return sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr, signer);
     }
 
     #! Prepares and processes message parameters for sending without sending the message
@@ -2040,7 +2100,8 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
 
     #! sends the outgoing HTTP message and recodes the response to data
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
-            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type) {
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+            *code signer) {
         hash<auto> h;
 
         bool retry = True;
@@ -2057,7 +2118,16 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
                 continue;
             }
             try {
-                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                if (signer && shdr.val()) {
+                    hdr{shdr} = signer({
+                        "path": path,
+                        "body": body,
+                        "hdr": hdr - shdr,
+                    });
+                    debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                } else {
+                    debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                }
                 h = send(body, m, path, hdr, False, \info);
                 info."response-code" = h.status_code;
                 debug("RestClient sent: %y received: %y (%s bytes%s)", info."request-uri", info."response-uri",
