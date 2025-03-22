@@ -4607,6 +4607,7 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     out = new QoreHashNode(autoTypeInfo);
     out->setKeyValue("hdr", hdr.release(), xsink);
     out->setKeyValue("info", info.release(), xsink);
+    return out;
 }
 
 QoreValue SocketReadHttpHeaderPollOperation::getOutput() const {
