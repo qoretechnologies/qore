@@ -369,7 +369,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
-            error("SWAGGER-REQUEST-ERROR", "%s info: %y", get_exception_string(ex), info);
+            LoggerWrapper::error("%s info: %y", get_exception_string(ex), info);
             rethrow ex.err, ex.desc, info;
         }
     }
