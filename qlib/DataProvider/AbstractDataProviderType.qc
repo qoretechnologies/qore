@@ -171,6 +171,9 @@ public hashdecl DataProviderTypeOptionInfo {
 
     #! the description of the option
     string desc;
+
+    #! Flag to publish the option as a `type_option`
+    bool publish;
 }
 
 #! describes a data type
@@ -532,6 +535,13 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns options set on the type
     *hash<auto> getOptions() {
         return options;
+    }
+
+    #! Returns options with the publish flag set on the type
+    /** @since DataProvider 3.0
+    */
+    *hash<auto> getPublicOptions() {
+        return map {$1.key: $1.value}, options.pairIterator(), $1.value.publish;
     }
 
     #! sets the given option on the type

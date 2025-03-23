@@ -34,106 +34,131 @@ public class FileDataType inherits AbstractDataProviderType {
             "accept": <DataProviderTypeOptionInfo>{
                 "type": "list<string>",
                 "desc": "Set accepted file MIME types",
+                "publish": True,
             },
             "autofocus": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "Set to true to focus the root element on render",
+                "publish": True,
             },
             #"children": <DataProviderTypeOptionInfo>{
             #    "type": "code"",
             #    "desc": "Render function that exposes the dropzone state and prop getter fns",
+            #    "publish": True,
             #},
             "disabled": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "Enable/disable the dropzone",
+                "publish": True,
             },
             #"getFilesFromEvent": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Use this to provide a custom file aggregator",
+            #    "publish": True,
             #},
             "maxFiles": <DataProviderTypeOptionInfo>{
                 "type": "int",
                 "desc": "Maximum accepted number of files The default value is 0 which means there is no limitation "
                     "to how many files are accepted",
+                "publish": True,
             },
             "maxSize": <DataProviderTypeOptionInfo>{
                 "type": "int",
                 "desc": "Maximum file size (in bytes)",
+                "publish": True,
             },
             "minSize": <DataProviderTypeOptionInfo>{
                 "type": "int",
                 "desc": "Minimum file size (in bytes)",
+                "publish": True,
             },
             "multiple": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "Allow drag 'n' drop (or selection from the file dialog) of multiple files",
+                "publish": True,
             },
             "noClick": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "If true, disables click to open the native file selection dialog",
+                "publish": True,
             },
             "noDrag": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "If true, disables drag 'n' drop",
+                "publish": True,
             },
             "noDragEventsBubbling": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "If true, stops drag event propagation to parents",
+                "publish": True,
             },
             "noKeyboard": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "If true, disables SPACE/ENTER to open the native file selection dialog. Note that it also "
                     "stops tracking the focus state",
+                "publish": True,
             },
             #"onDragEnter": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the dragenter event occurs",
+            #    "publish": True,
             #},
             #"onDragLeave": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the dragleave event occurs",
+            #    "publish": True,
             #},
             #"onDragOver": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the dragover event occurs",
+            #    "publish": True,
             #},
             #"onDrop": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the drop event occurs",
+            #    "publish": True,
             #},
             #"onDropAccepted": Code<DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the drop event occurs",
+            #    "publish": True,
             #}Type,
             #"onDropRejected": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when the drop event occurs",
+            #    "publish": True,
             #},
             #"onError": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when there's some error from any of the promises",
+            #    "publish": True,
             #},
             #"onFileDialogCancel": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when closing the file dialog with no selection",
+            #    "publish": True,
             #},
             #"onFileDialogOpen": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Cb for when opening the file dialog",
+            #    "publish": True,
             #},
             "preventDropOnDocument": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "If false, allow dropped items to take over the current browser window",
+                "publish": True,
             },
             "useFsAccessApi": <DataProviderTypeOptionInfo>{
                 "type": "bool",
                 "desc": "Set to true to use the "
                     "https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API to open the file picker "
                     "instead of using an <input type=\"file\"> click event",
+                "publish": True,
             },
             #"validator": <DataProviderTypeOptionInfo>{
             #    "type": "code",
             #    "desc": "Custom validation function",
+            #    "publish": True,
             #},
         };
     }
