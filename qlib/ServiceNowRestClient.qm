@@ -251,7 +251,7 @@ ServiceNowRestClient rest({
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
             *code signer) {
         try {
-            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors. assume_conten_type,
+            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type,
                 shdr, signer);
         } catch (hash<ExceptionInfo> ex) {
             # throw an exception for the error
