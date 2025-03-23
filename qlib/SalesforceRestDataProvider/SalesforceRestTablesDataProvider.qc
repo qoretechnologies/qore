@@ -29,6 +29,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
+            "name": "tables",
             "type": "SalesforceResTablestDataProvider",
             "supports_children": True,
             "constructor_options": ConstructorOptions,
@@ -39,7 +40,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        static hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }
