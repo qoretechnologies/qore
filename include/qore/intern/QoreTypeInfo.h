@@ -1392,7 +1392,12 @@ protected:
             str.sprintf("type '%s'", n.getFullTypeName());
             return;
         }
-        str.sprintf("an object of class '%s'", n.get<const QoreObject>()->getClassName());
+        const QoreObject* obj = n.get<const QoreObject>();
+        if (!obj->isValid()) {
+            str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+            return;
+        }
+        str.sprintf("an object of class '%s'", obj->getClassName());
     }
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
