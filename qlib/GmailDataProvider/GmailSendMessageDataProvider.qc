@@ -110,6 +110,48 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
     }
 }
 
+const BodyEncodingList = (
+    <AllowedValueInfo>{
+        "display_name": "Default",
+        "short_desc": "quoted-printable for string data, base64 for binary data",
+        "desc": "`quoted-printable` for string data, `base64` for binary data",
+        "value": "default",
+    },
+    <AllowedValueInfo>{
+        "display_name": "None",
+        "short_desc": "No content encoding (not recommended)",
+        "desc": "No content encoding (not recommended)",
+        "value": "none",
+    },
+    <AllowedValueInfo>{
+        "display_name": "Quoted Printable",
+        "short_desc": "Ideal for string data",
+        "desc": "Ideal for string data",
+        "value": "quoted-printable",
+    },
+    <AllowedValueInfo>{
+        "display_name": "Base64",
+        "short_desc": "Ideal for binary data",
+        "desc": "Ideal for binary data",
+        "value": "base64",
+    },
+);
+
+const BodyMimeTypeList = (
+    <AllowedValueInfo>{
+        "display_name": "text/plain",
+        "short_desc": "Plain text",
+        "desc": "Plain text",
+        "value": "text/plain",
+    },
+    <AllowedValueInfo>{
+        "display_name": "text/html",
+        "short_desc": "HTML text",
+        "desc": "HTML text",
+        "value": "text/html",
+    },
+);
+
 #! Gmail attachment type
 public class GmailSendMessageAttachmentDataType inherits HashDataType {
     public {
@@ -132,6 +174,7 @@ public class GmailSendMessageAttachmentDataType inherits HashDataType {
                     "- `quoted-printable`: quoted printable encoding \n"
                     "- `base64`: base64 encoding",
                 "default_value": "default",
+                "allowed_values": BodyEncodingList,
             },
             "hdr": {
                 "display_name": "Headers",
@@ -139,18 +182,21 @@ public class GmailSendMessageAttachmentDataType inherits HashDataType {
                 "short_desc": "Optional headers to send with the attachment",
                 "desc": "Optional headers to send with the attachment",
             },
-            "mime-type": {
-                "display_name": "Mime Type",
-                "type": StringType,
-                "short_desc": "The MIME type of the attachment",
-                "desc": "The MIME type of the attachment",
-                "required": True,
-            },
             "name": {
                 "display_name": "Name",
                 "type": StringType,
                 "short_desc": "The name or filename of the attachment",
                 "desc": "The name or filename of the attachment",
+                "required": True,
+            },
+            "mime-type": {
+                "display_name": "Mime Type",
+                "type": StringType,
+                "short_desc": "The MIME type of the attachment",
+                "desc": "The MIME type of the attachment",
+                "allowed_values": BodyMimeTypeList,
+                "allowed_values_creatable": True,
+                "default_value": "text/plain",
                 "required": True,
             },
         };
@@ -170,11 +216,18 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
     public {
         #! Field descriptions
         const Fields = {
-            "attachments": {
-                "display_name": "Attachments",
-                "type": new SoftListDataType(GmailSendMessageAttachmentDataType, True),
-                "short_desc": "Message attachments",
-                "desc": "Any attachments for the message",
+            "to": {
+                "display_name": "To",
+                "type": new SoftListDataType(StringType, True),
+                "short_desc": "Message recipient addresses",
+                "desc": "One or more `To:` addresses for the email",
+                "required": True,
+            },
+            "cc": {
+                "display_name": "CC",
+                "type": new SoftListDataType(StringType, True),
+                "short_desc": "Carbon copy addresses",
+                "desc": "One or more `Cc:` addresses for the email",
             },
             "bcc": {
                 "display_name": "BCC",
@@ -182,11 +235,25 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "short_desc": "Blind carbon copy addresses",
                 "desc": "One or more `Bcc:` addresses for the email",
             },
+            "subject": {
+                "display_name": "Subject",
+                "type": StringType,
+                "short_desc": "The subject for the email",
+                "desc": "The subject for the email",
+                "required": True,
+            },
             "body": {
                 "display_name": "Message Body",
                 "type": StringType,
                 "short_desc": "The message body",
                 "desc": "The message body",
+                "required": True,
+            },
+            "attachments": {
+                "display_name": "Attachments",
+                "type": new SoftListDataType(GmailSendMessageAttachmentDataType, True),
+                "short_desc": "Message attachments",
+                "desc": "Any attachments for the message",
             },
             "body-encoding": {
                 "display_name": "Body Encoding",
@@ -198,36 +265,21 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                     "- `quoted-printable`: quoted printable encoding \n"
                     "- `base64`: base64 encoding",
                 "default_value": "default",
+                "allowed_values": BodyEncodingList,
             },
             "body-mime-type": {
                 "display_name": "Body Mime Type",
                 "type": StringOrNothingType,
                 "short_desc": "The MIME type of the message body",
                 "desc": "The MIME type of the message body",
-            },
-            "cc": {
-                "display_name": "CC",
-                "type": new SoftListDataType(StringType, True),
-                "short_desc": "Carbon copy addresses",
-                "desc": "One or more `Cc:` addresses for the email",
+                "allowed_values": BodyMimeTypeList,
+                "allowed_values_creatable": True,
             },
             "sender": {
                 "display_name": "Sender",
                 "type": StringOrNothingType,
                 "short_desc": "The sender's address for the email",
                 "desc": "The sender's address for the email",
-            },
-            "subject": {
-                "display_name": "Subject",
-                "type": StringType,
-                "short_desc": "The subject for the email",
-                "desc": "The subject for the email",
-            },
-            "to": {
-                "display_name": "To",
-                "type": new SoftListDataType(StringType, True),
-                "short_desc": "Message recipient addresses",
-                "desc": "One or more `To:` addresses for the email",
             },
         };
     }
