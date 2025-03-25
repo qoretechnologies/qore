@@ -98,10 +98,6 @@ public class QoreDataType inherits AbstractDataProviderType {
                 "type": Type::Boolean,
                 "desc": "if True then NULL is not supported on input if NOTHING is also not accepted",
             },
-            "qore.external_name": <DataProviderTypeOptionInfo>{
-                "type": Type::String,
-                "desc": "A note giving the external name for the type",
-            },
         };
 
         #! map from normal types to soft types

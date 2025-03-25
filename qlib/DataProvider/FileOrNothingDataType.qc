@@ -30,12 +30,14 @@ public const FileOrNothingDataType = new FileOrNothingDataType();
 public class FileOrNothingDataType inherits AbstractDataProviderType {
     #! creates the field from the argument
     constructor(*hash<auto> options, *hash<auto> tags, *string path)
-            : AbstractDataProviderType(options, tags, path) {
+            : AbstractDataProviderType(options, {
+                "qore.external_name": "*file"
+            } + tags, path) {
     }
 
     #! Returns the type name
     string getName() {
-        return "file";
+        return "*file";
     }
 
     #! Returns the type's display name

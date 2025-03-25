@@ -32,7 +32,7 @@ public class FileDataType inherits AbstractDataProviderType {
         #! File option types
         const SupportedOptions = {
             "accept": <DataProviderTypeOptionInfo>{
-                "type": "list<string>",
+                "type": "softlist<string>",
                 "desc": "Set accepted file MIME types",
                 "publish": True,
             },
@@ -165,7 +165,9 @@ public class FileDataType inherits AbstractDataProviderType {
 
     #! creates the field from the argument
     constructor(*hash<auto> options, *hash<auto> tags, *string path)
-            : AbstractDataProviderType(options, tags, path) {
+            : AbstractDataProviderType(options, {
+                "qore.external_name": "file"
+            } + tags, path) {
     }
 
     #! Returns the type name

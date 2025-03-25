@@ -117,7 +117,7 @@ public class GmailSendMessageAttachmentDataType inherits HashDataType {
         const Fields = {
             "data": {
                 "display_name": "Attachment Data",
-                "type": DataType,
+                "type": FileDataType,
                 "short_desc": "The data for the attachment",
                 "desc": "The data for the attachment",
                 "required": True,
