@@ -308,6 +308,16 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             api, keys api_schemas);
     }
 
+    #! Returns an input / inbound data type for the given Google schema
+    static DataProvider::AbstractDataProviderType getInputTypeForSchema(string api, string schema) {
+        hash<string, AbstractDataProviderType> input_schemas = GoogleDataProviderBase::getInputSchemasForApi(api);
+        if (*AbstractDataProviderType rv = input_schemas{schema}) {
+            return rv;
+        }
+        throw "SCHEMA-ERROR", sprintf("Unknown schema %y requested from Google API %y; known schemas: %y", schema,
+            api, keys input_schemas);
+    }
+
     #! Returns all request types for the given API
     static hash<auto> getRequestInfo(string api) {
         *hash<auto> rv;
@@ -376,7 +386,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         };
     }
 
-    #! Returns all schemas for the given API
+    #! Returns all output schemas for the given API
     static hash<string, AbstractDataProviderType> getApi(string api) {
         *hash<string, AbstractDataProviderType> rv;
         if (rv = output_schema_map{api}) {
@@ -391,6 +401,23 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
         hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         return GoogleDataProviderBase::getOutputSchemaMap(api, api_info);
+    }
+
+    #! Returns all input schemas for the given API
+    static hash<string, AbstractDataProviderType> getInputSchemasForApi(string api) {
+        *hash<string, AbstractDataProviderType> rv;
+        if (rv = input_schema_map{api}) {
+            return rv;
+        }
+
+        AutoLock al(m);
+        # check again in the lock
+        if (rv = input_schema_map{api}) {
+            return rv;
+        }
+
+        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
+        return GoogleDataProviderBase::getInputSchemaMap(api, api_info);
     }
 
     #! Creates the input schema map for the given API
@@ -453,7 +480,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         if (*string ref = info."$ref") {
             return unresolved.addReference(type, ref, info.required);
         }
-        return GoogleDataProviderBase::makeTypeFromSchemaInfo("Additional Properties", info, unresolved);
+        return GoogleDataProviderBase::makeTypeFromSchemaInfo("Additional Properties", info, unresolved, for_input);
     }
 
     #! Returns a type from a Google schema description
@@ -569,7 +596,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     static HashDataType makeHashFromSchemaInfo(string key, hash<auto> info, TypeResolverHelper unresolved,
             *bool for_input) {
         HashDataType rv(!info.required ? AutoHashOrNothingType : AutoHashType, key);
-        map rv.addField(GoogleDataProviderBase::makeFieldFromProperty(rv, $1.key, $1.value, unresolved)),
+        map rv.addField(GoogleDataProviderBase::makeFieldFromProperty(rv, $1.key, $1.value, unresolved, for_input)),
             info.properties.pairIterator(), !$1.value."deprecated";
         if (info.additionalProperties) {
             rv.setDefaultOtherFieldType(GoogleDataProviderBase::makeTypeFromSchemaInfo(rv, info.additionalProperties,

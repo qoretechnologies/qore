@@ -74,7 +74,7 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
-        map msg.attach($1.name, $1."mime-type", $1."data", $1.encoding, $1.hdr), req.attachments;
+        map msg.attach($1."data".name, $1."data".mime_type, $1."data"."data", $1.encoding, $1.hdr), req.attachments;
 
         # throws a MESSAGE-ERROR exception if the message cannot be sent
         string mstr = make_base64_url_string(msg.serialize());
@@ -112,7 +112,7 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
 
 const BodyEncodingList = (
     <AllowedValueInfo>{
-        "display_name": "Default",
+        "display_name": "Auto",
         "short_desc": "quoted-printable for string data, base64 for binary data",
         "desc": "`quoted-printable` for string data, `base64` for binary data",
         "value": "default",
@@ -160,8 +160,8 @@ public class GmailSendMessageAttachmentDataType inherits HashDataType {
             "data": {
                 "display_name": "Attachment Data",
                 "type": FileDataType,
-                "short_desc": "The data for the attachment",
-                "desc": "The data for the attachment",
+                "short_desc": "The data, file name, and MIME type for the attachment",
+                "desc": "The data, file name, and MIME type for the attachment",
                 "required": True,
             },
             "encoding": {
@@ -181,23 +181,6 @@ public class GmailSendMessageAttachmentDataType inherits HashDataType {
                 "type": HashOrNothingType,
                 "short_desc": "Optional headers to send with the attachment",
                 "desc": "Optional headers to send with the attachment",
-            },
-            "name": {
-                "display_name": "Name",
-                "type": StringType,
-                "short_desc": "The name or filename of the attachment",
-                "desc": "The name or filename of the attachment",
-                "required": True,
-            },
-            "mime-type": {
-                "display_name": "Mime Type",
-                "type": StringType,
-                "short_desc": "The MIME type of the attachment",
-                "desc": "The MIME type of the attachment",
-                "allowed_values": BodyMimeTypeList,
-                "allowed_values_creatable": True,
-                "default_value": "text/plain",
-                "required": True,
             },
         };
     }

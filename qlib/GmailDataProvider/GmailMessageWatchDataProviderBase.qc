@@ -226,13 +226,10 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             epoch = mktime(start_date);
         }
 
-        AbstractDataProviderType msgtype = GoogleDataProviderBase::getTypeForSchema(GoogleDiscoveryGmailApiName,
-            "Message");
-
         return {
             "uri": uri,
             "epoch": epoch,
-            "msgtype": msgtype,
+            "msgtype": GmailMessageWatchDataProvider::getMessageEventType(),
         };
     }
 
@@ -260,19 +257,16 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
                 hash<auto> msg = rest.get(msguri, NOTHING, \info).body;
 
-                # save original message
-                hash<auto> msg0 = msg;
-
                 # try to decode body as base64 if there is a Content-Transfer-Encoding header
                 # do not allow message bodies to be re-encoded as base64
-                processHeaders(\msg.payload, GmailMessageEventDataType::Fields, GmailMessageEventDataType::PartFields);
+                processHeaders(\msg.payload, GmailMessageEventDataType::Fields,
+                    GmailMessageEventDataType::PartFields);
 
                 # check message structure and convert types where necessary
                 msg = setup.msgtype.acceptsValue(msg);
 
-                # try to decode body as base64 if there is a Content-Transfer-Encoding header
-                # reapply bodies to message
-                processBody(\msg.payload, msg0.payload);
+                # convert base64-decoded message bodies to strings if they have text MIME types
+                processBody(\msg.payload);
 
                 # internalDate is given as a ms offset from the epoch
                 int msg_epoch = msg.internalDate / 1000;
@@ -338,39 +332,23 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             $1.name: getHeaderValue($1.value, fields{$1.name}),
         }, msg.headers, $1.value.val();
 
-        # remove body so it will not be re-encoded
-        remove msg.body."data";
-
         for (int i = 0; i < msg.parts.size(); ++i) {
             processHeaders(\msg.parts[i], pfields ?? fields);
         }
     }
 
     #! Process body
-    private processBody(*reference<hash<auto>> msg, hash<auto> msg0) {
+    private processBody(*reference<hash<auto>> msg) {
         # headers / body
         if (msg.headers."Content-Type".val() && msg.body.size) {
             bool text = is_mime_text(msg.headers."Content-Type");
-            if (msg0.body."data".typeCode() == NT_BINARY) {
-                if (text) {
-                    msg.body."data" = msg0.body."data".toString();
-                }
-            } else {
-                if (msg.headers."Content-Transfer-Encoding".val() && msg0.body."data".val()) {
-                    try {
-                        msg.body."data" = text
-                            ? parse_base64_url_string_to_string(msg0.body."data")
-                            : parse_base64_url_string(msg0.body."data");
-                    } catch (hash<ExceptionInfo> ex) {
-                        LoggerWrapper::error("Failed to parse message body with Content-Type: %y as base64, "
-                            "leaving as is: %s: %s", msg.headers."Content-Type", ex.err, ex.desc);
-                    }
-                }
+            if (text && (msg.body."data".typeCode() == NT_BINARY)) {
+                msg.body."data" = msg.body."data".toString();
             }
         }
 
         for (int i = 0; i < msg.parts.size(); ++i) {
-            processBody(\msg.parts[i], msg0.parts[i]);
+            processBody(\msg.parts[i]);
         }
     }
 
@@ -407,13 +385,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         # try to determine the content type
         *string content_type = hdr."Content-Type";
         *string encoding;
-        data body;
         if (content_type.val()) {
             encoding = (content_type =~ x/charset="([^"]+)"/)[0];
             content_type =~ s/;.*//;
         } else if (filename.val()) {
             content_type = get_mime_type_from_ext(filename);
         }
+        # get filename from content type, if necessary
+        if (!filename.val() && content_type.val() && (*string fn = (content_type =~ x/name=([^;]+)/)[0]).val()) {
+            filename = fn;
+        }
+        data body;
         if (content_type.val() && is_mime_text(content_type)) {
             body = parse_base64_url_string_to_string(att."data", encoding);
         } else {

@@ -29,6 +29,80 @@ public const FileDataType = new FileDataType();
 #! A type that indicates a file
 public class FileDataType inherits AbstractDataProviderType {
     public {
+        #! File fields
+        const Fields = {
+            "data": new QoreDataField({
+                "name": "data",
+                "display_name": "File Data",
+                "short_desc": "The file data",
+                "desc": "The file data",
+                "type": AbstractDataProviderTypeMap."data",
+            }),
+            "name": new QoreDataField({
+                "name": "name",
+                "display_name": "Filename",
+                "short_desc": "The filename",
+                "desc": "The filename",
+                "type": AbstractDataProviderTypeMap."string",
+            }),
+            "mime_type": new QoreDataField({
+                "name": "mime_type",
+                "display_name": "MIME Type",
+                "short_desc": "The MIME type string for the file",
+                "desc": "The MIME type string for the file",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": ExampleMimeTypeList,
+                "allowed_values_creatable": True,
+                "default_value": "auto",
+            }),
+        };
+
+        #! Example MIME type list
+        const ExampleMimeTypeList = (
+            <AllowedValueInfo>{
+                "display_name": "Autodetect",
+                "short_desc": "Autodetect from the file name; valid only on input",
+                "desc": "Autodetect from the file name; valid only on input",
+                "value": "auto",
+            },
+            <AllowedValueInfo>{
+                "display_name": "text/plain",
+                "short_desc": "Plain text",
+                "desc": "Plain text",
+                "value": "text/plain",
+            },
+            <AllowedValueInfo>{
+                "display_name": "text/html",
+                "short_desc": "HTML text",
+                "desc": "HTML text",
+                "value": "text/html",
+            },
+            <AllowedValueInfo>{
+                "display_name": "application/pdf",
+                "short_desc": "PDF file",
+                "desc": "PDF file",
+                "value": "application/pdf",
+            },
+            <AllowedValueInfo>{
+                "display_name": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "short_desc": "MS Word docx document",
+                "desc": "MS Word `docx` document",
+                "value": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            },
+            <AllowedValueInfo>{
+                "display_name": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "short_desc": "MS PowerPoint pptx document",
+                "desc": "MS PowerPoint `pptx` document",
+                "value": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            },
+            <AllowedValueInfo>{
+                "display_name": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "short_desc": "MS Excel xlsx document",
+                "desc": "MS Excel `xlsx` document",
+                "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            },
+        );
+
         #! File option types
         const SupportedOptions = {
             "accept": <DataProviderTypeOptionInfo>{
@@ -200,7 +274,7 @@ public class FileDataType inherits AbstractDataProviderType {
 
     #! Returns the base type for the type, if any
     *Type getValueType() {
-        return DataType;
+        return AutoHashType;
     }
 
     #! Returns the subtype (for lists or hashes) if there is only one
@@ -210,22 +284,20 @@ public class FileDataType inherits AbstractDataProviderType {
 
     #! Returns the fields of the data structure; if any
     *hash<string, AbstractDataField> getFields() {
-        # intentionally empty
+        return Fields;
     }
 
     #! Returns a hash of types accepted by this type; keys are type names
     hash<string, bool> getAcceptTypeHash(*bool simple) {
         return {
-            Type::String: True,
-            Type::Binary: True,
+            Type::Hash: True,
         };
     }
 
     #! Returns a hash of types returned by this type; keys are type names
     hash<string, bool> getReturnTypeHash(*bool simple) {
         return {
-            Type::String: True,
-            Type::Binary: True,
+            Type::Hash: True,
         };
     }
 
@@ -237,7 +309,81 @@ public class FileDataType inherits AbstractDataProviderType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
-        return DataType.acceptsValue(value);
+        return staticAcceptsValue(self, value);
+    }
+
+    #! returns the value if the value can be assigned to the type
+    /** @param value the value to assign to the type
+
+        @return the value to be assigned; can be converted by the type
+
+        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+    */
+    static auto staticAcceptsValue(AbstractDataProviderType type, auto value) {
+        if (value.typeCode() != NT_HASH) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y expects a hash on input; got type %y instead",
+                type.getName(), value.fullType());
+        }
+        # process raw data on input
+        if (value.hasKey("content")) {
+            if (value.content.typeCode() != NT_STRING) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"content\" field has type %y; "
+                    "expecting \"string\"", type.getName(), value.content.fullType());
+            }
+            (*string mime_type, *string base64) = (remove value.content =~ x/^data:([^;]+);base64,(.*)$/);
+            bool text;
+            if (mime_type.val()) {
+                value.mime_type = mime_type;
+                text = is_mime_text(mime_type);
+            }
+            if (base64.val()) {
+                value."data" = text ? parse_base64_string_to_string(base64) : parse_base64_string(base64);
+            } else {
+                value."data" = text ? "" : binary();
+            }
+            int size = value."data".size();
+            if (value.hasKey("size")) {
+                if (value.size.typeCode() != NT_INT) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field has type %y; "
+                        "expecting \"int\"", type.getName(), value.size.fullType());
+                }
+                if (size != value.size) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field indicates "
+                        "%d byte%s of file data; the actual data decodes to %d byte%s", type.getName(), value.size,
+                            value.size == 1 ? "" : "s", value."data".size(), value."data".size() == 1 ? "" : "s");
+                }
+                remove value.size;
+            }
+        }
+        *hash<auto> value_copy = value;
+        # check fields if any are defined
+        foreach AbstractDataField field in (Fields.iterator()) {
+            string key = field.getName();
+            auto val = remove value_copy{key};
+            if (!exists val) {
+                if (exists (auto dv = field.getDefaultValue())) {
+                    value{key} = dv;
+                    continue;
+                }
+                if (!field.isMandatory()) {
+                    continue;
+                }
+            }
+            try {
+                value{key} = field.acceptsValue(val);
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow "RUNTIME-TYPE-ERROR", sprintf("Error in type %y field %y: %s: %s", type.getName(), key,
+                    ex.err, ex.desc);
+            }
+        }
+        if (value_copy) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %s input has unknown fields: %y", type.getName(),
+                keys value_copy);
+        }
+        if (value.mime_type == "auto" && value.name.val()) {
+            value.mime_type = get_mime_type_from_ext(value.name);
+        }
+        return value;
     }
 
     #! Returns an "or nothing" type equivalent to the current type

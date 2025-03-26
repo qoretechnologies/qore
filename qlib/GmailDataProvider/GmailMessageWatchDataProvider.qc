@@ -64,6 +64,11 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
         return sprintf("Google data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
     }
 
+    #! Returns the message event data type
+    static AbstractDataProviderType getMessageEventType() {
+        return gmailMessageEventDataType ?? (gmailMessageEventDataType = new GmailMessageEventDataType());
+    }
+
     #! Returns a hash of all supported event types
     /** @return a hash of all supported event types
 
@@ -73,7 +78,7 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
         return {
             EVENT_EMAIL_MATCHED: <DataProviderMessageInfo>{
                 "desc": "An email has been matched",
-                "type": gmailMessageEventDataType ?? (gmailMessageEventDataType = new GmailMessageEventDataType()),
+                "type": getMessageEventType(),
             },
         };
     }
@@ -200,20 +205,20 @@ public class GmailMessageEventDataType inherits HashDataType {
     }
 
     constructor() : HashDataType("GmailWatchMessage") {
-        HashDataType t = GoogleDataProviderBase::getTypeForSchema(GoogleDiscoveryGmailApiName, "Message");
+        HashDataType t = GoogleDataProviderBase::getInputTypeForSchema(GoogleDiscoveryGmailApiName, "Message");
         *hash<string, AbstractDataField> fields = t.getFields();
 
-        if (*QoreDataField payload = fields.payload) {
+        if (QoreDataField payload = fields.payload) {
             HashDataType pt = payload.getType();
             *hash<string, AbstractDataField> pfields = pt.getFields();
 
             # update type for "parts" fields
-            if (*QoreDataField parts = pfields.parts) {
+            if (QoreDataField parts = pfields.parts) {
                 ListDataType part_type = parts.getType();
                 HashDataType part_element_type = part_type.getElementType().copy();
                 *hash<string, AbstractDataField> pefields = part_element_type.getFields();
 
-                if (*QoreDataField headers = pefields.headers) {
+                if (QoreDataField headers = pefields.headers) {
                     headers = headers.copy();
                     part_element_type.replaceField(headers);
                     HashDataType header_type();
@@ -231,7 +236,7 @@ public class GmailMessageEventDataType inherits HashDataType {
             }
 
             # update type for "headers" field
-            if (*QoreDataField headers = pfields.headers) {
+            if (QoreDataField headers = pfields.headers) {
                 HashDataType header_type();
                 header_type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."string");
                 headers.updateFieldType(header_type);

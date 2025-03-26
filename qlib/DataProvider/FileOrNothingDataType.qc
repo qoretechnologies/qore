@@ -65,7 +65,7 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
 
     #! Returns the base type for the type, if any
     *Type getValueType() {
-        return DataType;
+        return AutoHashType;
     }
 
     #! Returns the subtype (for lists or hashes) if there is only one
@@ -81,8 +81,7 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
     #! Returns a hash of types accepted by this type; keys are type names
     hash<string, bool> getAcceptTypeHash(*bool simple) {
         return {
-            Type::String: True,
-            Type::Binary: True,
+            Type::Hash: True,
             Type::NothingType: True,
             Type::NullType: True,
         };
@@ -91,8 +90,8 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
     #! Returns a hash of types returned by this type; keys are type names
     hash<string, bool> getReturnTypeHash(*bool simple) {
         return {
-            Type::String: True,
-            Type::Binary: True,
+            Type::Hash: True,
+            Type::NothingType: True,
         };
     }
 
@@ -104,7 +103,10 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
-        return DataType.acceptsValue(value);
+        if (!exists value || (value.typeCode() == NT_NULL)) {
+            return;
+        }
+        return FileDataType::staticAcceptsValue(self, value);
     }
 
     #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
