@@ -1667,9 +1667,14 @@ auto v = c.name;
             return ds.selectRow("select %s.nextval from dual", name).nextval;
         }
 
-        #! returns the last value issued for the given sequence in the current session
+        #! returns the last value issued for the given sequence
         private softint getCurrentSequenceValueImpl(string name) {
-            return ds.selectRow("select %s.currval from dual", name).nextval;
+            *softint rv = ds.selectRow("select last_number from all_sequences where sequence_name = %v", name.upr())
+                .last_number;
+            if (!exists rv) {
+                throw "INVALID-SEQUENCE", sprintf("Could not find any value for sequence %y", name.upr());
+            }
+            return rv;
         }
 
         #! returns @ref True "True" if the database supports sequences
