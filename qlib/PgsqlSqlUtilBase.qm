@@ -1475,7 +1475,7 @@ auto v = c.name;
 
         #! returns the last value issued for the given sequence in the current session
         private softint getCurrentSequenceValueImpl(string name) {
-            return ds.selectRow("select currval(%v)", name).nextval;
+            return ds.selectRow("select last_value from %s", name).last_value;
         }
 
         #! returns @ref True "True" if the database supports sequences
