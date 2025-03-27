@@ -34,9 +34,9 @@ public class FileDataType inherits AbstractDataProviderType {
             "data": new QoreDataField({
                 "name": "data",
                 "display_name": "File Data",
-                "short_desc": "The file data",
-                "desc": "The file data",
-                "type": AbstractDataProviderTypeMap."data",
+                "short_desc": "Base64-encoded file data",
+                "desc": "Base64-encoded file data",
+                "type": AbstractDataProviderTypeMap."string",
             }),
             "name": new QoreDataField({
                 "name": "name",
@@ -336,12 +336,10 @@ public class FileDataType inherits AbstractDataProviderType {
                 value.mime_type = mime_type;
                 text = is_mime_text(mime_type);
             }
-            if (base64.val()) {
-                value."data" = text ? parse_base64_string_to_string(base64) : parse_base64_string(base64);
-            } else {
-                value."data" = text ? "" : binary();
-            }
-            int size = value."data".size();
+            # parse base64 data and check data size
+            data file_data = text ? parse_base64_string_to_string(base64) : parse_base64_string(base64);
+            value."data" = base64 ?? "";
+            int size = file_data.size();
             if (value.hasKey("size")) {
                 if (value.size.typeCode() != NT_INT) {
                     throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field has type %y; "
@@ -350,7 +348,7 @@ public class FileDataType inherits AbstractDataProviderType {
                 if (size != value.size) {
                     throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field indicates "
                         "%d byte%s of file data; the actual data decodes to %d byte%s", type.getName(), value.size,
-                            value.size == 1 ? "" : "s", value."data".size(), value."data".size() == 1 ? "" : "s");
+                            value.size == 1 ? "" : "s", size, size == 1 ? "" : "s");
                 }
                 remove value.size;
             }

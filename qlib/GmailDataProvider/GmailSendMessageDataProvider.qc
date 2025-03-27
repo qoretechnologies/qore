@@ -74,7 +74,8 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
-        map msg.attach($1."data".name, $1."data".mime_type, $1."data"."data", $1.encoding, $1.hdr), req.attachments;
+        map msg.attach($1."data".name, $1."data".mime_type, parse_base64_string($1."data"."data"), $1.encoding,
+            $1.hdr), req.attachments;
 
         # throws a MESSAGE-ERROR exception if the message cannot be sent
         string mstr = make_base64_url_string(msg.serialize());
