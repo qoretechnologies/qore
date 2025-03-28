@@ -1245,8 +1245,6 @@ void QoreModuleManager::registerUserModuleFromSource(const char* name, const cha
     loadModuleIntern(xsink, xsink, name, pgm, false, MOD_OP_NONE, 0, src);
 }
 
-static void breakit() {}
-
 // const char* path, const char* feature, ReferenceHolder<QoreProgram>& pgm
 QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
         QoreUserModuleDefContextHelper& qmd, unsigned load_opt, int warning_mask) {

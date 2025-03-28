@@ -544,13 +544,14 @@ const QoreEncoding* QoreEncodingManager::findUnlocked(const char* name) {
 }
 
 const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
-   const QoreEncoding* rv;
-   mutex.lock();
-   rv = findUnlocked(name);
-   if (!rv)
-      rv = addUnlocked(name, 0);
-   mutex.unlock();
-   return rv;
+    const QoreEncoding* rv;
+    mutex.lock();
+    rv = findUnlocked(name);
+    if (!rv) {
+        rv = addUnlocked(name, 0);
+    }
+    mutex.unlock();
+    return rv;
 }
 
 const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {

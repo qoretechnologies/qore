@@ -391,6 +391,12 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // run the reference in the Program where it was originally created
+    // NOTE: check this for race conditions
+    if (obj && !obj->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
     return qore_method_private::eval(*method, xsink, obj, args, qc, pgm);
 }
 
