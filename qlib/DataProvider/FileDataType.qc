@@ -45,13 +45,6 @@ public class FileDataType inherits AbstractDataProviderType {
                 "desc": "Base64-encoded file data",
                 "type": AbstractDataProviderTypeMap."string",
             }),
-            "size": new QoreDataField({
-                "name": "size",
-                "display_name": "File Size",
-                "short_desc": "The size of the file in bytes",
-                "desc": "The size of the file in bytes",
-                "type": AbstractDataProviderTypeMap."*int",
-            }),
             "mime_type": new QoreDataField({
                 "name": "mime_type",
                 "display_name": "MIME Type",
@@ -344,18 +337,15 @@ public class FileDataType inherits AbstractDataProviderType {
                     value.mime_type = mime_type;
                     text = is_mime_text(mime_type);
                 }
-                # parse base64 data and check data size
-                data file_data = text ? parse_base64_string_to_string(base64) : parse_base64_string(base64);
-                value.content = base64 ?? "";
-                int size = file_data.size();
-                if (value.hasKey("size")) {
-                    checkSize(type, value.size, file_data.size());
-                }
-            } else if (!value.hasKey("size")) {
-                value.size = value.content.size();
-            } else {
-                checkSize(type, value.size, value.content.size());
+                value.content = base64;
+            } else if (value.content !~ /^[A-Z0-9+\/]+(=*)?$/i) {
+                # encode value with base-64 encoding if necessary
+                value.content = make_base64_string(value.content);
             }
+        }
+        # ignore any "size" key set by the front end
+        if (value.hasKey("size")) {
+            remove value.size;
         }
         *hash<auto> value_copy = value;
         # check fields if any are defined
@@ -382,7 +372,7 @@ public class FileDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %s input has unknown fields: %y", type.getName(),
                 keys value_copy);
         }
-        if (value.mime_type == "auto" && value.name.val()) {
+        if ((!value.mime_type.val() || value.mime_type == "auto") && value.name.val()) {
             value.mime_type = get_mime_type_from_ext(value.name);
         }
         return value;
@@ -401,19 +391,6 @@ public class FileDataType inherits AbstractDataProviderType {
     #! returns supported options
     *hash<string, hash<DataProviderTypeOptionInfo>> getSupportedOptions() {
         return SupportedOptions;
-    }
-
-    #! Verify that the declared size matches the actual data size
-    static private checkSize(AbstractDataProviderType type, auto vsize, int dsize) {
-        if (vsize.typeCode() != NT_INT) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field has type %y; "
-                "expecting \"int\"", type.getName(), vsize.fullType());
-        }
-        if (dsize != vsize) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"size\" field indicates "
-                "%d byte%s of file data; the actual file data is %d byte%s", type.getName(), vsize,
-                    vsize == 1 ? "" : "s", dsize, dsize == 1 ? "" : "s");
-        }
     }
 }
 }
