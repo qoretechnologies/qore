@@ -1911,7 +1911,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.user_state += rv.user_state;
         }
 
-        if (rv."code" == 101) {
+        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
             if (rv.close)
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);

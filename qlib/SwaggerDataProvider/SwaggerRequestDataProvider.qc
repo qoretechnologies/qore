@@ -364,7 +364,12 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
             if (resp.body.val()) {
                 rv.body = resp.body;
             }
-            if (response_headers) {
+            if (options.include_response_headers) {
+                rv += {
+                    "headers": info."response-headers",
+                    "headers-raw": info."response-headers-raw",
+                };
+            } else if (response_headers) {
                 rv.headers = map {$1: info."response-headers"{$1.lwr()}}, response_headers;
             }
             return rv;
@@ -444,6 +449,13 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     "type": AbstractDataProviderTypeMap."hash",
                     "required": False,
                     "desc": "URI path variables for generic paths",
+                },
+                "include_response_headers": hash<DataProviderOptionInfo>{
+                    "display_name": "Always Include Response Headers",
+                    "short_desc": "Always returns all response headers",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "required": False,
+                    "desc": "Always returns all response headers",
                 },
             },
             "search_options": {

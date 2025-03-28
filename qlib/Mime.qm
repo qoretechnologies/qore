@@ -299,6 +299,9 @@ public namespace Mime {
     #! Mime type for PHP sources
     public const MimeTypePhp = "application/x-httpd-php";
 
+    #! Mime type for server-sent events
+    public const MimeTypeSse = "text/event-stream";
+
     #! A map of default mime types per file extension; the hash keys are file extensions in lower-case without the dot (ex: \c "txt")
     /** @showinitializer
      */
