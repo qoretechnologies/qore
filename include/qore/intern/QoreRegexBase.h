@@ -50,7 +50,7 @@ public:
     DLLLOCAL QoreRegexBase(int options) : options(options) {
     }
 
-    DLLLOCAL QoreRegexBase(QoreString* str, int options = PCRE2_UTF | PCRE2_UCP) : str(str), options(options) {
+    DLLLOCAL QoreRegexBase(QoreString* str, int options = PCRE2_UTF) : str(str), options(options) {
     }
 
     DLLLOCAL ~QoreRegexBase() {
@@ -69,7 +69,7 @@ public:
 protected:
     pcre2_code* p = nullptr;
     QoreString* str = nullptr;
-    int options = PCRE2_UTF | PCRE2_UCP;
+    int options = PCRE2_UTF;
 };
 
 #endif

@@ -45,7 +45,7 @@
 #define QRE_UTF                0x00080000u  /* C J M D */
 #define QRE_UCP                0x00020000u  /* C J M D */
 
-#define QRE_UTF8 (QRE_UTF | QRE_UCP)
+#define QRE_UTF8 QRE_UTF
 
 
 // note that the following constant is > 32 bits

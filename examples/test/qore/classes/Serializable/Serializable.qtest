@@ -279,7 +279,7 @@ class SerializableTest inherits QUnit::Test {
     weakRefTest() {
         TimeZone tz0("Europe/Prague");
         Issue3515 obj(tz0);
-        assertEq(tz0.region(), Serializable::deserialize(Serializable::serialize(obj)).tz.region());
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { (Serializable::deserialize(Serializable::serialize(obj))).tz.region(); });
 
         S1 s();
         binary b = s.serialize(QSF_INCLUDE_STATIC_CLASS_VARS);

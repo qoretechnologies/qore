@@ -228,7 +228,7 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
         // FIXME: rc = 0 means that not enough space was available in ovector!
         if (rc < 1) {
 #ifdef DEBUG
-            if (rc != PCRE2_ERROR_NOMATCH) {
+            if (rc != PCRE2_ERROR_NOMATCH && rc != PCRE2_ERROR_UTF8_ERR21) {
                 printd(0, "QoreRegexSubst::exec() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
                     t->c_str(), rc);
                 assert(false);
