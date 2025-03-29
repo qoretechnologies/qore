@@ -45,7 +45,7 @@ QoreRegexSubst::QoreRegexSubst() : QoreRegexBase(new QoreString), newstr(new Qor
 
 // constructor when used at run-time
 QoreRegexSubst::QoreRegexSubst(const QoreString* pstr, int opts, ExceptionSink *xsink)
-        : QoreRegexBase(PCRE_UTF8 | (int)opts) {
+        : QoreRegexBase(PCRE2_UTF | (int)opts) {
     if (check_re_options(opts)) {
         xsink->raiseException("REGEX-OPTION-ERROR", "%d contains invalid option bits", opts);
     } else {
@@ -56,7 +56,7 @@ QoreRegexSubst::QoreRegexSubst(const QoreString* pstr, int opts, ExceptionSink *
 }
 
 QoreRegexSubst::QoreRegexSubst(const char* pstr, int opts, ExceptionSink *xsink)
-        : QoreRegexBase(PCRE_UTF8 | (int)opts) {
+        : QoreRegexBase(PCRE2_UTF | (int)opts) {
     if (check_re_options(opts)) {
         xsink->raiseException("REGEX-OPTION-ERROR", "%d contains invalid option bits", opts);
     } else {
@@ -91,11 +91,18 @@ int QoreRegexSubst::parseRT(const QoreString* pstr, ExceptionSink* xsink) {
 
 // returns 0 for OK, -1 if parse error raised
 int QoreRegexSubst::parseRT(const char* pstr, ExceptionSink* xsink) {
-    const char *err;
-    int eo;
-    p = pcre_compile(pstr, options, &err, &eo, 0);
-    if (err) {
-        xsink->raiseException("REGEX-COMPILATION-ERROR", (char*)err);
+    int errorcode;
+    PCRE2_SIZE eo;
+
+    //printd(5, "QoreRegexSubst::parseRT(%s) this: %p\n", t->c_str(), this);
+
+    p = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pstr), PCRE2_ZERO_TERMINATED, options, &errorcode, &eo, nullptr);
+    if (!p) {
+        PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
+        pcre2_get_error_message(errorcode, buffer, sizeof(buffer));
+        //printd(5, "QoreRegex::parse() error parsing '%s': %s", pattern, (char* )err);
+        xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
+            eo, pstr, buffer);
         return -1;
     }
     return 0;
@@ -118,7 +125,7 @@ int QoreRegexSubst::parse() {
 }
 
 // static function
-int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, int* ovector, int olen, const char* ptr,
+int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* ovector, int olen, const char* ptr,
         const char* target, int rc) {
     while (*ptr) {
         if (*ptr == '\\') {
@@ -201,28 +208,41 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
 
     SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode);
 
-    const char *ptr = t->c_str();
+    const char* ptr = t->c_str();
     // detect infinite recursion (empty pattern matches)
     int last_match = -1;
 
+    pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
+    ON_BLOCK_EXIT(pcre2_match_data_free, md);
+
     //printd(5, "QoreRegexSubst::exec(%s) this=%p: global=%s\n", ptr, this, global ? "true" : "false");
     while (true) {
-        int ovector[SUBST_OVECSIZE];
-        int offset = ptr - t->c_str();
+        PCRE2_SIZE offset = ptr - t->c_str();
         if ((unsigned)offset >= t->size()) {
             break;
         }
-        int rc = pcre_exec(p, 0, t->c_str(), t->strlen(), offset, 0, ovector, SUBST_OVECSIZE);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        //int rc = pcre_exec(p, 0, t->c_str(), t->strlen(), offset, 0, ovector, SUBST_OVECSIZE);
 
         //printd(5, "QoreRegexSubst::exec() prec_exec() rc: %d ovector[0]: %d\n", rc, ovector[0]);
         // FIXME: rc = 0 means that not enough space was available in ovector!
         if (rc < 1) {
+#ifdef DEBUG
+            if (rc != PCRE2_ERROR_NOMATCH) {
+                printd(0, "QoreRegexSubst::exec() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
+                    t->c_str(), rc);
+                assert(false);
+            }
+#endif
             break;
         }
 
+        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
+
         // detect infinite recursion
         if (ovector[0] == last_match) {
-            xsink->raiseException("REGEX-SUBST-ERROR", "infinite recursion detected in regex substitution string; this normally happens with an empty pattern with use with the global option (RE_GLOBAL)");
+            xsink->raiseException("REGEX-SUBST-ERROR", "Infinite recursion detected in regex substitution string; "
+                "this normally happens with an empty pattern with use with the global option (RE_GLOBAL)");
             return nullptr;
         } else {
             last_match = ovector[0];

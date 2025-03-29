@@ -80,7 +80,7 @@ private:
     bool global = false;
     QoreString* newstr = nullptr;
 
-    DLLLOCAL static int concat(ExceptionSink& xsink, QoreString* str, int* ovector, int olen, const char* ptr,
+    DLLLOCAL static int concat(ExceptionSink& xsink, QoreString* str, PCRE2_SIZE* ovector, int olen, const char* ptr,
             const char* target, int rc);
 };
 

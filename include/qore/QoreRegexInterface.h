@@ -32,19 +32,21 @@
 
 #include <memory>
 
-#define QRE_CASELESS           0x00000001  /* C1       */
-#define QRE_MULTILINE          0x00000002  /* C1       */
-#define QRE_DOTALL             0x00000004  /* C1       */
-#define QRE_EXTENDED           0x00000008  /* C1       */
-#define QRE_ANCHORED           0x00000010  /* C4 E D   */
-#define QRE_DOLLAR_ENDONLY     0x00000020  /* C2       */
-#define QRE_EXTRA              0x00000040  /* C1       */
-#define QRE_NOTBOL             0x00000080  /*    E D J */
-#define QRE_NOTEOL             0x00000100  /*    E D J */
-#define QRE_UNGREEDY           0x00000200  /* C1       */
-#define QRE_NOTEMPTY           0x00000400  /*    E D J */
-#define QRE_UTF8               0x00000800  /* C4        )          */
-#define QRE_UCP                0x20000000  /* C3       */
+#define QRE_CASELESS           0x00000008u  /* C       */
+#define QRE_MULTILINE          0x00000400u  /* C       */
+#define QRE_DOTALL             0x00000020u  /* C       */
+#define QRE_EXTENDED           0x00000080u  /* C       */
+#define QRE_ANCHORED           0x80000000u
+#define QRE_DOLLAR_ENDONLY     0x00000010u  /*   J M D */
+#define QRE_NOTBOL             0x00000001u
+#define QRE_NOTEOL             0x00000002u
+#define QRE_UNGREEDY           0x00040000u  /* C       */
+#define QRE_NOTEMPTY           0x00000004u  /* ) These two must be kept */
+#define QRE_UTF                0x00080000u  /* C J M D */
+#define QRE_UCP                0x00020000u  /* C J M D */
+
+#define QRE_UTF8 (QRE_UTF | QRE_UCP)
+
 
 // note that the following constant is > 32 bits
 #define QRE_GLOBAL            0x100000000LL

@@ -472,16 +472,16 @@ QoreStringNode* format_float_intern(int prec, const QoreString& dsep, const Qore
  */
 ///@{
 //! Ignores case when matching regular expressions, equivalent to <tt>/i</tt>
-const RE_Caseless = PCRE_CASELESS;
+const RE_Caseless = PCRE2_CASELESS;
 
 //! makes a dot (.) match a newline character, equivalent to /s
-const RE_DotAll = PCRE_DOTALL;
+const RE_DotAll = PCRE2_DOTALL;
 
 //! ignores whitespace characters and enables comments prefixed by #, equivalent to <tt>/x</tt>
-const RE_Extended = PCRE_EXTENDED;
+const RE_Extended = PCRE2_EXTENDED;
 
 //! makes start-of-line (^) or end-of-line ($) match after or before any newline in the subject string, equivalent to <tt>/m</tt>
-const RE_MultiLine = PCRE_MULTILINE;
+const RE_MultiLine = PCRE2_MULTILINE;
 
 //! replace all matches globally in the string or extract all occurrences of the pattern(s) in the string, equivalent to <tt>/g</tt>
 const RE_Global = QRE_GLOBAL;
@@ -489,7 +489,7 @@ const RE_Global = QRE_GLOBAL;
 //! extends Posix matches to the full Unicode character set
 /** @since %Qore 0.9.4
 */
-const RE_Unicode = PCRE_UCP;
+const RE_Unicode = PCRE2_UCP;
 ///@}
 
 /** @defgroup string_functions String Functions

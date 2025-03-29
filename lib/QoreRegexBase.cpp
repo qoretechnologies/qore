@@ -34,22 +34,22 @@
 #include "qore/intern/QoreRegexBase.h"
 
 void QoreRegexBase::setCaseInsensitive() {
-    options |= PCRE_CASELESS;
+    options |= PCRE2_CASELESS;
 }
 
 void QoreRegexBase::setDotAll() {
-    options |= PCRE_DOTALL;
+    options |= PCRE2_DOTALL;
 }
 
 void QoreRegexBase::setExtended() {
-    options |= PCRE_EXTENDED;
+    options |= PCRE2_EXTENDED;
 }
 
 void QoreRegexBase::setMultiline() {
-    options |= PCRE_MULTILINE;
+    options |= PCRE2_MULTILINE;
 }
 
 void QoreRegexBase::setUnicode() {
-    options |= PCRE_UCP;
+    options |= PCRE2_UCP;
 }
 

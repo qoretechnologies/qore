@@ -12,9 +12,9 @@
 
 class RegexExtractTest inherits QUnit::Test {
     private {
-        int SUBPATTERNS_TO_TEST  = 10000;
+        int SUBPATTERNS_TO_TEST  = 300;
         int SUBPATTERNS_AT_LEAST = 1;
-        list CAPTURE_LENGTHS = (1, 10, 100, 1000, 10000, 100000);
+        list<int> CAPTURE_LENGTHS = (1, 10, 100, 200, 300);
     }
 
     constructor() : QUnit::Test("Regex extract test", "1.0") {

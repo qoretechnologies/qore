@@ -17,7 +17,7 @@ BuildRequires: cmake >= 3.5
 BuildRequires: gcc-c++
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
-BuildRequires: pcre-devel
+BuildRequires: pcre2-devel
 BuildRequires: gmp-devel
 BuildRequires: pkgconfig
 BuildRequires: pkgconfig(openssl)

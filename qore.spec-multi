@@ -46,7 +46,7 @@ Requires: /usr/bin/env
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
 BuildRequires: openssl-devel
-BuildRequires: pcre-devel
+BuildRequires: pcre2-devel
 BuildRequires: zlib-devel
 BuildRequires: gmp-devel
 BuildRequires: mpfr-devel

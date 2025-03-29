@@ -39,7 +39,7 @@ BuildRequires:  libbz2-devel
 BuildRequires:  libtool
 BuildRequires:  mpfr-devel
 BuildRequires:  openssl-devel
-BuildRequires:  pcre-devel
+BuildRequires:  pcre2-devel
 BuildRequires:  pkg-config
 BuildRequires:  zlib-devel
 Requires:       %{_bindir}/env
