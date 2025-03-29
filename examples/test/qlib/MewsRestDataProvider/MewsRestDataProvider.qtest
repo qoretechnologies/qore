@@ -74,7 +74,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_GE,
             "args": (
                 <DataProviderFieldReference>{"field": "ClosedUtc"},
-                2021-11-01,
+                now() - 7D,
             ),
         };
         *hash<auto> rec;
@@ -88,7 +88,8 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             assertEq(1, q.firstValue().lsize());
             assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
-            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
@@ -107,26 +108,27 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             AbstractDataProvider prov = mews.getChildProviderPath(action.path[1..]);
             assertEq("orderitems", prov.getName());
 
-            *hash<auto> rec = prov.searchSingleRecord({"ClosedUtcStart": 2021-11-01}, {"limit": 1});
+            *hash<auto> rec = prov.searchSingleRecord({"ClosedUtcStart": now() - 7D}, {"limit": 1});
             assertEq(Type::Hash, rec.type());
 
             action = DataProviderActionCatalog::getAppAction("Mews", "get-payments");
             prov = mews.getChildProviderPath(action.path[1..]);
             assertEq("payments", prov.getName());
 
-            rec = prov.searchSingleRecord({"ClosedUtcStart": 2021-11-01}, {"limit": 1});
+            rec = prov.searchSingleRecord({"ClosedUtcStart": now() - 7D}, {"limit": 1});
             assertEq(Type::Hash, rec.type());
 
             action = DataProviderActionCatalog::getAppAction("Mews", "get-customers");
             prov = mews.getChildProviderPath(action.path[1..]);
             assertEq("customers", prov.getName());
 
-            *list<auto> recs = map $1, prov.searchRecords({"CreatedUtcStart": 2021-11-01}, {
+            *list<auto> recs = map $1, prov.searchRecords({"CreatedUtcStart": now() - 7D}, {
                 "limit": 2,
             });
             assertEq(2, recs.size());
         } catch (hash<ExceptionInfo> ex) {
-            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
@@ -167,7 +169,8 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
             mews = new MewsRestDataProvider(mrc.get());
         } catch (hash<ExceptionInfo> ex) {
-            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
             }
