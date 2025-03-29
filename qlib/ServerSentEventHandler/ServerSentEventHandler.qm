@@ -77,7 +77,7 @@ module ServerSentEventHandler {
 #! the ServerSentEventHandler namespace contains all the objects in the ServerSentEventHandler module
 public namespace ServerSentEventHandler {
 #! SSE message info hash
-hashdecl SseMessageInfo {
+public hashdecl SseMessageInfo {
     #! Event type
     string event;
 

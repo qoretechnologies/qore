@@ -1838,7 +1838,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         on_exit if (s.pendingHttpChunkedBody())
             s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
-        if (!HttpCodes.(rv.code)) { # if the handler returns an invalid hash
+        if (!HttpCodes{rv."code"}) { # if the handler returns an invalid hash
             string str = sprintf("%s handler returned an invalid response rv: %y", cx.handler_name, rv);
             cx.close = True;
             remove cx.persistent;

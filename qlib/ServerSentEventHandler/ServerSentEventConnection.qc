@@ -76,7 +76,7 @@ public class ServerSentEventConnection {
     #! This method is called to poll for messages from the client to send from the server
     /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
     */
-    *hash<SseMessageInfo> pollData() {
+    *string pollData() {
         try {
             return queue.get(DefaultQueuePollingInterval);
         } catch (hash<ExceptionInfo> ex) {
@@ -88,7 +88,7 @@ public class ServerSentEventConnection {
     #! This method is called to poll for messages from the client to send from the server
     /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
     */
-    *hash<SseMessageInfo> pollDataImmediate() {
+    *string pollDataImmediate() {
         try {
             # negative timeout values mean timeout immediately
             return queue.get(-1);
@@ -146,7 +146,7 @@ public class ServerSentEventConnection {
         stop_flag = True;
         # to get a dummy data in polling thread immediately (unless stop called from the
         # ServerSentEventHandler::startImpl() thread)
-        queue.push(binary());
+        queue.push();
     }
 }
 }

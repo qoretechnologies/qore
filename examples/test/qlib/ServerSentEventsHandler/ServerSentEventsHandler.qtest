@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/MapperUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class Main
+
+class MySseHandler inherits ServerSentEventHandler {
+    constructor(*HttpServer::AbstractAuthenticator auth, *hash<auto> opts) : ServerSentEventHandler(auth, opts) {
+    }
+}
+
+public class Main inherits QUnit::Test {
+    public {
+        HttpServer http;
+        ServerSentEventHandler sse;
+        Logger logger;
+        int port;
+    }
+
+    constructor() : Test("ServerSentEventsHandlerTest", "1.0") {
+        addTestCase("main test", \mainTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        sse = new ServerSentEventHandler({
+            "logger": logger,
+        });
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        on_exit http.stop();
+        http.setHandler("sse-handler", "", NOTHING, sse);
+        http.setDefaultHandler("sse-handler", sse);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    mainTest() {
+        checkModule();
+
+        /*
+        for (int i = 0; i < 30; ++i) {
+            sleep(1s);
+            sse.sendAll(<SseMessageInfo>{
+                "event": "test",
+                "data": "hello",
+                "id": i,
+            });
+        }
+        */
+    }
+}

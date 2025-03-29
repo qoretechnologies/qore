@@ -748,8 +748,15 @@ struct qore_socket_private {
             while (hi.next()) {
                 const QoreValue v = hi.get();
                 const char* key = hi.getKey();
-                if (addsize && !strcasecmp(key, "transfer-encoding"))
-                    addsize = false;
+                if (!size && addsize) {
+                    if (!strcasecmp(key, "transfer-encoding")) {
+                        addsize = false;
+                    } else if (!strcasecmp(key, "content-type")
+                        && (v.getType() == NT_STRING)
+                        && (*v.get<const QoreStringNode>() == "text/event-stream")) {
+                        addsize = false;
+                    }
+                }
                 if ((addsize || size) && !strcasecmp(key, "content-length")) {
                     // ignore Content-Length given manually
                     continue;
@@ -3211,7 +3218,9 @@ struct qore_socket_private {
         return 0;
     }
 
-    DLLLOCAL QoreHashNode* readHttpChunkedBodyBinary(int timeout, ExceptionSink* xsink, const char* cname, int source, const ResolvedCallReferenceNode* recv_callback = nullptr, QoreThreadLock* l = nullptr, QoreObject* obj = nullptr, OutputStream* os = nullptr) {
+    DLLLOCAL QoreHashNode* readHttpChunkedBodyBinary(int timeout, ExceptionSink* xsink, const char* cname, int source,
+            const ResolvedCallReferenceNode* recv_callback = nullptr, QoreThreadLock* l = nullptr,
+            QoreObject* obj = nullptr, OutputStream* os = nullptr) {
         assert(xsink);
 
         if (sock == QORE_INVALID_SOCKET) {
