@@ -3548,6 +3548,13 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             return nullptr;
         }
 
+        // get content type, if any
+        const char* ct = get_string_header(xsink, **ans, "content-type");
+        if (*xsink) {
+            disconnect_unlocked();
+            return nullptr;
+        }
+
         // get response body, if any
         const char* cl = get_string_header(xsink, **ans, "content-length");
         if (*xsink) {
@@ -3567,10 +3574,12 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
         }
 
-        if (cl && event_queue)
+        if (cl && event_queue) {
             do_content_length_event(event_queue, msock->socket->priv, len);
+        }
 
-        if (te && !strcasecmp(te, "chunked")) { // check for chunked response body
+        // do *not* read a chunked body if the content-type is "text/event-stream", indicating an SSE stream
+        if (te && !strcasecmp(te, "chunked") && (!ct || strcmp(ct, "text/event-stream"))) { // check for chunked response body
             do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
             ReferenceHolder<QoreHashNode> nah(xsink);
             if (os) {

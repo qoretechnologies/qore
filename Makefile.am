@@ -111,6 +111,7 @@ DOX_SPLIT_MODULES = \
     qlib/OpenAiDataProvider \
     qlib/Pop3ClientDataProvider \
     qlib/SalesforceRestDataProvider \
+    qlib/ServerSentEventClient \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider
@@ -139,6 +140,7 @@ OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
+ServerSentEventClient_modverdir = $(modverdir)/ServerSentEventClient
 ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
 ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
@@ -168,6 +170,7 @@ dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestDataProvider/*.q[cm])
+dist_ServerSentEventClient_modver_DATA = $(wildcard qlib/ServerSentEventClient/*.q[cm])
 dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler/*.q[cm])
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
@@ -1085,6 +1088,8 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	doxygen/modules/Doxyfile.in \
     doxygen/modules/Doxyfile.cmake.in \
 	doxygen/lib/Doxyfile.in \
+    qlib/MewsRestDataProvider/mews-M-white.svg \
+    qlib/ServerSentEventClient/sse-generic-logo.svg \
 	$(LIB_DOXYFILES_SRC) \
 	$(LANG_DOXYFILES_SRC) \
 	$(LANG_QPP_SRC) \

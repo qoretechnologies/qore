@@ -195,6 +195,9 @@ public class ConnectionSchemeCache {
             "esmtps": "SmtpClient",
             "esmtptls": "SmtpClient",
 
+            "sse": "ServerSentEventClient",
+            "sses": "ServerSentEventClient",
+
             "telnet": "TelnetClient",
 
             "ws": "WebSocketClient",

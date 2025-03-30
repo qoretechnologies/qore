@@ -550,7 +550,7 @@ int QoreSocketObject::sendHTTPResponseWithCallback(ExceptionSink* xsink, QoreHas
 }
 
 // send data in HTTP chunked format
-void QoreSocketObject::sendHTTPChunkedBodyFromInputStream(InputStream *is, size_t max_chunked_size,
+void QoreSocketObject::sendHTTPChunkedBodyFromInputStream(InputStream* is, size_t max_chunked_size,
         const int timeout_ms, const ResolvedCallReferenceNode* trailer_callback, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
@@ -560,12 +560,20 @@ void QoreSocketObject::sendHTTPChunkedBodyFromInputStream(InputStream *is, size_
         trailer_callback);
 }
 
-void QoreSocketObject::sendHTTPChunkedBodyTrailer(const QoreHashNode *headers, int timeout_ms, ExceptionSink* xsink) {
+void QoreSocketObject::sendHTTPChunkedBodyTrailer(const QoreHashNode* headers, int timeout_ms, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return;
     }
     return priv->socket->priv->sendHttpChunkedBodyTrailer(headers, timeout_ms, xsink);
+}
+
+QoreHashNode* QoreSocketObject::readHttpChunk(int timeout_ms, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->checkNonBlock(xsink)) {
+        return nullptr;
+    }
+    return priv->socket->readHttpChunk(timeout_ms, xsink);
 }
 
 // receive a binary message in HTTP chunked format
@@ -578,7 +586,7 @@ QoreHashNode* QoreSocketObject::readHTTPChunkedBodyBinary(int timeout_ms, Except
 }
 
 // receive a binary message in HTTP chunked format
-QoreHashNode* QoreSocketObject::readHTTPChunkedBodyToOutputStream(OutputStream *os, int timeout_ms, ExceptionSink* xsink) {
+QoreHashNode* QoreSocketObject::readHTTPChunkedBodyToOutputStream(OutputStream* os, int timeout_ms, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {
         return nullptr;
@@ -631,6 +639,15 @@ QoreStringNode* QoreSocketObject::readHTTPHeaderString(ExceptionSink* xsink, int
         return nullptr;
     }
     return priv->socket->readHTTPHeaderString(xsink, timeout_ms);
+}
+
+QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms) {
+    AutoLocker al(priv->m);
+    if (priv->checkNonBlock(xsink)) {
+        return nullptr;
+    }
+    return priv->socket->readServerSentEvent(xsink, content_encoding, timeout_ms);
 }
 
 int QoreSocketObject::setSendTimeout(int ms) {

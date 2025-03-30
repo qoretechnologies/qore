@@ -1681,6 +1681,45 @@ public:
     */
     DLLEXPORT QoreHashNode* readHTTPChunkedBody(int timeout_ms, ExceptionSink* xsink, int source = QORE_SOURCE_SOCKET);
 
+    //! receive a single HTTP chunk
+    /** The socket must be connected before this call is made.
+        The message body is returned as a QoreStringNode in the "body" key, any footers read after the body
+        are returned as the other hash keys in the hash.
+
+        @param timeout_ms timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
+        data waiting
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return the message body as the value of the "body" key and any footers read after the body as other keys
+        (nullptr if an error occurs)
+
+        @since %Qore 2.0
+    */
+   DLLEXPORT QoreHashNode* readHttpChunk(int timeout, ExceptionSink* xsink);
+
+    //! Read and return a Server Sent Event message
+    /** The socket must be connected before this call is made.
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param content_encoding any content encoding to use when decoding the stream; may be nullptr
+        @param timeout_ms timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
+        data waiting
+
+        @return a server sent event hash (caller owns the reference) or nullptr (error occurred)
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+            int timeout_ms);
+
+    //! Parse a string as a Server Sent Event (SSE) string
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param buf the string to parse as a Server Sent Event (SSE) string
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT static QoreHashNode* parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf);
+
     //! set send timeout in milliseconds
     DLLEXPORT int setSendTimeout(int ms);
 

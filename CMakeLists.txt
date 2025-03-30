@@ -934,6 +934,7 @@ qore_user_module("qlib/WebSocketHandler.qm" "HttpServerUtil;WebSocketUtil")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
+qore_user_module("qlib/ServerSentEventClient" "DataProvider;ConnectionProvider;Logger;Mime;Util")
 qore_user_module("qlib/MssqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/MysqlSqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/OracleSqlUtilBase.qm" "SqlUtil;Util;DataProvider")

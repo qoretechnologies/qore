@@ -279,6 +279,9 @@ public:
     // receive a string message in HTTP chunked format
     DLLEXPORT QoreHashNode* readHTTPChunkedBody(int timeout, ExceptionSink* xsink);
 
+    // receive a single HTTP chunk
+    DLLEXPORT QoreHashNode* readHttpChunk(int timeout, ExceptionSink* xsink);
+
     // receive a binary message in HTTP chunked format
     DLLEXPORT void readHTTPChunkedBodyBinaryWithCallback(const ResolvedCallReferenceNode& recv_callback,
             QoreObject* obj, int timeout_ms, ExceptionSink* xsink);
@@ -287,6 +290,9 @@ public:
             int timeout_ms, ExceptionSink* xsink);
 
     DLLEXPORT QoreStringNode* readHTTPHeaderString(ExceptionSink* xsink, int timeout_ms);
+
+    DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+            int timeout_ms);
 
     //! Returns the underlying file descriptor; -1 if not open
     /** @return the underlying file descriptor; -1 if not open

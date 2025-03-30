@@ -37,11 +37,13 @@
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreSSLCertificate.h>
+#include <qore/Transform.h>
 
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/CompressionTransforms.h"
 
 // maximum number of non-blocking network operations before returning
 constexpr unsigned max_nonblock_ops = 10;
@@ -1981,6 +1983,208 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 #endif
 }
 
+static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
+        SimpleRefHolder<QoreStringNode>& value) {
+    assert(value && !value->empty());
+    if (!v) {
+        rv->setKeyValue(f, value.release(), xsink);
+    } else {
+        v.get<QoreStringNode>()->concat('\n');
+        v.get<QoreStringNode>()->concat(*value, xsink);
+        value->clear();
+    }
+}
+
+static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
+        SimpleRefHolder<QoreStringNode>& value) {
+    write_sse_key_value(xsink, rv, f, rv->getKeyValue(f), value);
+}
+
+static void write_sse_key(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
+        SimpleRefHolder<QoreStringNode>& value) {
+    QoreValue v = rv->getKeyValue(f);
+    if (!value || value->empty()) {
+        // if the field does not exist, set it to an empty string
+        if (!v) {
+            rv->setKeyValue(f, new QoreStringNode(QCS_UTF8), xsink);
+        }
+    } else {
+        write_sse_key_value(xsink, rv, f, v, value);
+    }
+}
+
+static bool sse_is_digits(const char* str) {
+    if (!str[0]) {
+        return false;
+    }
+    for (const char* p = str; *p; ++p) {
+        if (!isdigit(*p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+QoreHashNode* qore_socket_private::readServerSentEvent(ExceptionSink* xsink, Transform* transform, int timeout_ms) {
+    assert(xsink);
+
+    if (sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "readServerSentEvent", xsink);
+        return nullptr;
+    }
+    if (in_op >= 0) {
+        if (in_op == q_gettid()) {
+            se_in_op("Socket", "readServerSentEvent", xsink);
+            return nullptr;
+        }
+        se_in_op_thread("Socket", "readServerSentEvent", xsink);
+        return nullptr;
+    }
+
+    qore_socket_op_helper oh(this);
+
+    // event stream data is always UTF-8
+    QoreString str(QCS_UTF8);
+
+    int eol_count = 0;
+
+    size_t tbufsize = transform ? transform->outputBufferSize() : 0;
+    char* tbuf = tbufsize ? (char*)malloc(tbufsize * sizeof(char)) : nullptr;
+    ON_BLOCK_EXIT(free, tbuf);
+    size_t tlen = 0;
+    size_t tpos = 0;
+    // input buffer for transforms
+    QoreString cibuf;
+
+    while (true) {
+        char* cbuf;
+        ssize_t rc;
+        rc = brecv(xsink, "readServerSentEvent", cbuf, transform ? DEFAULT_SOCKET_BUFSIZE : 1, 0, timeout_ms, false);
+        if (rc <= 0) {
+            if (!*xsink) {
+                assert(!rc);
+                se_closed("Socket", "readServerSentEvent", xsink);
+            }
+            return 0;
+        }
+
+        char c;
+        // decompress data
+        if (transform) {
+            cibuf.concat(cbuf, rc);
+            if (tpos < tlen) {
+                c = tbuf[tpos++];
+            } else {
+                tpos = 0;
+                std::pair<int64, int64> i = transform->apply(cibuf.c_str(), cibuf.size(), tbuf, tbufsize, xsink);
+printd(0, "qore_socket_private::readServerSentEvent() cib: %p (%lld) (%s) tbuf: %p (%lld) read: %lld written: %lld\n", cibuf.c_str(), cibuf.size(), cibuf.c_str(), tbuf, tbufsize, i.first, i.second);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (i.first) {
+                    cibuf.removeBytes(i.first);
+                }
+                if (!i.second) {
+                    continue;
+                }
+                tlen = i.second;
+                c = tbuf[tpos++];
+            }
+        } else {
+            c = cbuf[0];
+        }
+
+        if (sse_got_cr) {
+            sse_got_cr = false;
+            if (c == '\n') {
+                continue;
+            }
+        }
+
+        if (c == '\r') {
+            str.concat('\n');
+            sse_got_cr = true;
+            if (++eol_count == 2) {
+                break;
+            }
+        } else if (c == '\n') {
+            str.concat('\n');
+            if (++eol_count == 2) {
+                break;
+            }
+        } else {
+            if (eol_count) {
+                eol_count = 0;
+            }
+            str.concat(c);
+        }
+    }
+    //printd(5, "readServerSentEvent: raw SSE message (" QSD " bytes): %s", str.strlen(), str.c_str());
+    return parseServerSentEvent(xsink, str);
+}
+
+QoreHashNode* qore_socket_private::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclSseMessageInfo, xsink), xsink);
+    assert(!*xsink);
+    SimpleRefHolder<QoreStringNode> field;
+    SimpleRefHolder<QoreStringNode> value;
+    int do_value = 0;
+    for (size_t i = 0, e = buf.size() - 1; i < e; ++i) {
+        char c = buf[i];
+        if (c == '\n') {
+            if (field && !field->empty()) {
+                if ((**field == "event") || (**field == "data")) {
+                    write_sse_key(xsink, rv, field->c_str(), value);
+                } else if (**field == "id") {
+                    if (value && !value->empty()) {
+                        write_sse_key_value(xsink, rv, "id", value);
+                    }
+                } else if (**field == "retry") {
+                    if (value && !value->empty() && sse_is_digits(value->c_str()) && !rv->getKeyValue("retry")) {
+                        rv->setKeyValue("retry", strtoll(value->c_str(), 0, 10), xsink);
+                    }
+                }
+                // ignore field data
+                field->clear();
+            }
+            if (value && !value->empty()) {
+                write_sse_key_value(xsink, rv, "comment", value);
+            }
+            if (do_value) {
+                do_value = 0;
+            }
+            continue;
+        }
+        if (!do_value && (c == ':')) {
+            do_value = 1;
+            continue;
+        }
+        if (do_value) {
+            if (!value) {
+                value = new QoreStringNode(QCS_UTF8);
+            }
+            // skip the first space after the colon
+            if (do_value == 1) {
+                do_value = 2;
+                if (c == ' ') {
+                    continue;
+                }
+            }
+            value->concat(c);
+            continue;
+        }
+        if (!field) {
+            field = new QoreStringNode(QCS_UTF8);
+        }
+        field->concat(c);
+    }
+
+    //QoreNodeAsStringHelper str(*rv, FMT_NORMAL, xsink);
+    //printd(0, "qore_socket_private::parseServerSentEvent() %s\n", str->c_str());
+
+    return rv.release();
+}
+
 void QoreSocket::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
     assert(xsink);
     switch (rc) {
@@ -3413,6 +3617,27 @@ QoreHashNode* QoreSocket::readHTTPChunkedBodyBinary(int timeout, ExceptionSink* 
 // receive a message in HTTP chunked format
 QoreHashNode* QoreSocket::readHTTPChunkedBody(int timeout, ExceptionSink* xsink, int source) {
     return priv->readHttpChunkedBody(timeout, xsink, "Socket", source);
+}
+
+QoreHashNode* QoreSocket::readHttpChunk(int timeout, ExceptionSink* xsink) {
+    return priv->readHttpChunkedBodyBinary(timeout, xsink, "Socket", QORE_SOURCE_SOCKET, nullptr, nullptr, nullptr,
+        nullptr, true);
+}
+
+QoreHashNode* QoreSocket::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
+    return qore_socket_private::parseServerSentEvent(xsink, buf);
+}
+
+QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms) {
+    if (content_encoding && (*content_encoding != "identity")) {
+        SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(content_encoding, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        return priv->readServerSentEvent(xsink, *t, timeout_ms);
+    }
+    return priv->readServerSentEvent(xsink, nullptr, timeout_ms);
 }
 
 bool QoreSocket::isDataAvailable(int timeout) const {

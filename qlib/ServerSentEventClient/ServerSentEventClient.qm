@@ -1,0 +1,126 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ServerSentEventClient.qm SSE connection client
+
+/*  ServerSentEventClient.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+%strict-args
+%new-style
+
+%requires Util >= 1.0
+%requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) DataProvider
+%requires(reexport) Logger
+%requires Mime
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+module ServerSentEventClient {
+    version = "1.0";
+    desc = "User module for handling SSE events on the client side";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connections
+        ConnectionSchemeCache::registerScheme("sse", ServerSentEventConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("sses", ServerSentEventConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new ServerSentEventClientDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ServerSentEventClient::AppName,
+            "display_name": "ServerSentEvent Messaging",
+            "short_desc": "Receive Server Sent Events",
+            "desc": "Receive Server Sent Events",
+            "scheme": "wss",
+            "logo": ServerSentEventsLogo,
+            "logo_file_name": "sse-generic-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ServerSentEventClient::AppName,
+            "path": "/",
+            "action": "msg-received",
+            "display_name": "Server Sent Event Message",
+            "short_desc": "A Server Sent Event is received",
+            "desc": "Receive a Server Sent Event (SSE) message",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SSE_DATA,
+            "output_type": ServerSentEventClientEventDataType,
+        });
+    };
+}
+
+/** @mainpage ServerSentEventClient Module
+
+    @tableofcontents
+
+    @section serversenteventclientintro Introduction to the ServerSentEventClient Module
+
+    The %ServerSentEventClient module provides a client to be used with the
+    <a href="../../HttpServer/html/index.html">HttpServer module</a> to provide
+    <a href="ç">Server-Sent Event</a> connections.
+
+    To use this module, use \c "%requires ServerSentEventClient" in your code.
+
+    All the public symbols in the module are defined in the ServerSentEventClient namespace.
+
+    @section serversenteventclient_relnotes ServerSentEventClient Release History
+
+    @subsection serversenteventclient_v1_0 Version 1.0
+    - the initial version of the ServerSentEventClient module
+*/
+
+#! the ServerSentEventClient namespace contains all the objects in the ServerSentEventClient module
+public namespace ServerSentEventClient {
+#! SSE connection schemes
+public const SseSchemes = {
+    "sse": {
+        "ssl": False,
+    },
+    "sses": {
+        "ssl": True,
+    },
+};
+
+/** @defgroup WSClientRawCallbackReturnCodes ServerSentEventClient Raw Callback Return Codes
+*/
+#! Application name
+public const AppName = "ServerSentEvents";
+
+#! Logo for the ServerSentEvents app
+public const ServerSentEventsLogo = File::readTextFile(get_script_dir() + "/sse-generic-logo.svg");
+}

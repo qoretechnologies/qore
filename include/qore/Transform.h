@@ -48,8 +48,8 @@ public:
     * @param xsink the exception sink
     * @return a pair (rc, wc) where rc is the number of bytes read from src and wc is the number of bytes written to dst
     */
-   virtual std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen,
-         ExceptionSink *xsink) = 0;
+   virtual std::pair<int64, int64> apply(const void* src, int64 srcLen, void* dst, int64 dstLen,
+         ExceptionSink* xsink) = 0;
 
    //! returns the default output buffer size for the object
    DLLLOCAL virtual size_t outputBufferSize();

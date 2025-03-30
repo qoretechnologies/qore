@@ -1082,6 +1082,13 @@ public:
     */
     DLLEXPORT qore_offset_t getByteOffset(size_t i, ExceptionSink* xsink) const;
 
+    // Removes the given number of bytes from the beginning of the string
+    /** @param len the number of bytes to remove
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT size_t removeBytes(size_t len);
+
     // concatenates a qorestring without converting encodings - internal only
     DLLLOCAL void concat(const QoreString* str);
 

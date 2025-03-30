@@ -109,6 +109,8 @@ public class DataProvider {
             # provided by the xml module
             "soap": "SoapDataProvider",
 
+            "sseclient": "ServerSentEventClient",
+
             "swagger": "SwaggerDataProvider",
 
             # provided by the ts-toolkit repo

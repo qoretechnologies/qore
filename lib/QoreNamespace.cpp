@@ -193,7 +193,8 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclUrlInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclSocketPollInfo,
-    * hashdeclPipeInfo;
+    * hashdeclPipeInfo,
+    * hashdeclSseMessageInfo;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
@@ -1078,6 +1079,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     preinitReadOnlyFileClass();
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);
+    hashdeclSseMessageInfo = init_hashdecl_SseMessageInfo(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 

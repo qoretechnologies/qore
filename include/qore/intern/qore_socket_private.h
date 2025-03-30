@@ -96,6 +96,8 @@ DLLLOCAL void se_timeout(const char* cname, const char* meth, int timeout_ms, Ex
     const char* extra = nullptr);
 DLLLOCAL void se_closed(const char* cname, const char* mname, ExceptionSink* xsink);
 
+class Transform;
+
 #ifdef _Q_WINDOWS
 #define GETSOCKOPT_ARG_4 char*
 #define SETSOCKOPT_ARG_4 const char*
@@ -542,7 +544,8 @@ struct qore_socket_private {
         http_exp_chunked_body = false,
         ssl_accept_all_certs = false,
         ssl_capture_remote_cert = false,
-        event_data = false;
+        event_data = false,
+        sse_got_cr = false;
     int in_op = -1,
         ssl_verify_mode = SSL_VERIFY_NONE;
 
@@ -570,16 +573,7 @@ struct qore_socket_private {
     }
 
     DLLLOCAL int close() {
-        int rc = close_internal();
-        if (in_op >= 0)
-            in_op = -1;
-        if (http_exp_chunked_body)
-            http_exp_chunked_body = false;
-        sfamily = AF_UNSPEC;
-        stype = SOCK_STREAM;
-        sprot = 0;
-
-        return rc;
+        return close_internal();
     }
 
     DLLLOCAL int close_and_reset() {
@@ -597,14 +591,30 @@ struct qore_socket_private {
         }
         //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
         sock = QORE_INVALID_SOCKET;
-        if (buflen)
+        if (buflen) {
             buflen = 0;
-        if (bufoffset)
+        }
+        if (bufoffset) {
             bufoffset = 0;
-        if (del)
+        }
+        if (del) {
             del = false;
-        if (port != -1)
+        }
+        if (port != -1) {
             port = -1;
+        }
+        if (in_op >= 0) {
+            in_op = -1;
+        }
+        if (http_exp_chunked_body) {
+            http_exp_chunked_body = false;
+        }
+        if (sse_got_cr) {
+            sse_got_cr = false;
+        }
+        sfamily = AF_UNSPEC;
+        stype = SOCK_STREAM;
+        sprot = 0;
         // issue #3053: clear hostname for SNI
         client_target.clear();
         return rc;
@@ -1051,7 +1061,7 @@ struct qore_socket_private {
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_HTTP_SEND_MESSAGE, source);
             h->setKeyValue("message", new QoreStringNode(str), nullptr);
-            //printd(5, "do_send_http_message_event() str='%s' headers: %p (%d %s)\n", str.getBuffer(), headers, headers->getType(), headers->getTypeName());
+            //printd(5, "do_send_http_message_event() str='%s' headers: %p (%d %s)\n", str.c_str(), headers, headers->getType(), headers->getTypeName());
             h->setKeyValue("headers", headers->copy(), nullptr);
             event_queue->pushAndTakeRef(h);
         }
@@ -1805,7 +1815,7 @@ struct qore_socket_private {
                 if (!getnameinfo((struct sockaddr*)&addr, qore_get_in_len((struct sockaddr*)&addr), host, sizeof(host), 0, 0, 0)) {
                     QoreStringNode* hoststr = new QoreStringNode(host);
                     h->setKeyValue("hostname", hoststr, 0);
-                    h->setKeyValue("hostname_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, hoststr->getBuffer()), 0);
+                    h->setKeyValue("hostname_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, hoststr->c_str()), 0);
                 }
             }
 
@@ -1814,7 +1824,7 @@ struct qore_socket_private {
             if (inet_ntop(addr.ss_family, qore_get_in_addr((struct sockaddr*)&addr), ifname, sizeof(ifname))) {
                 QoreStringNode* addrstr = new QoreStringNode(ifname);
                 h->setKeyValue("address", addrstr, 0);
-                h->setKeyValue("address_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, addrstr->getBuffer()), 0);
+                h->setKeyValue("address_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, addrstr->c_str()), 0);
             }
 
             int tport;
@@ -1833,7 +1843,7 @@ struct qore_socket_private {
             assert(!socketname.empty());
             QoreStringNode* addrstr = new QoreStringNode(socketname);
             h->setKeyValue("address", addrstr, 0);
-            h->setKeyValue("address_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, addrstr->getBuffer()), 0);
+            h->setKeyValue("address_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, addrstr->c_str()), 0);
         }
 #endif
 
@@ -2030,7 +2040,7 @@ struct qore_socket_private {
             //    "(old state: %d)\n", this, meth, rc, rc > 0 && buf[0] > 31 ? buf[0] : '?', rc > 0 ? buf[0] : 0, state);
             if (rc <= 0) {
                 //printd(5, "qore_socket_private::readHTTPData(timeout: %d) hdr='%s' (len: %d), rc=" QSD ", "
-                //    "errno: %d: '%s'\n", timeout, hdr->getBuffer(), hdr->strlen(), rc, errno, strerror(errno));
+                //    "errno: %d: '%s'\n", timeout, hdr->c_str(), hdr->strlen(), rc, errno, strerror(errno));
 
                 if (!*xsink) {
                     if (!count) {
@@ -2089,7 +2099,7 @@ struct qore_socket_private {
             hdr->concat(c);
         }
         hdr->concat('\n');
-        //printd(5, "qore_socket_private::readHTTPData(timeout: %d) hdr='%s' (%d)\n", timeout, hdr->getBuffer(),
+        //printd(5, "qore_socket_private::readHTTPData(timeout: %d) hdr='%s' (%d)\n", timeout, hdr->c_str(),
         //    hdr->size());
         th.finalize(hdr->size());
         return hdr.release();
@@ -2148,7 +2158,7 @@ struct qore_socket_private {
         }
 
         printd(5, "qore_socket_private::recv() received " QSD " byte(s), bufsize=" QSD ", strlen=" QSD " str='%s'\n",
-            str->size(), bufsize, (str ? str->strlen() : 0), str ? str->getBuffer() : "n/a");
+            str->size(), bufsize, (str ? str->strlen() : 0), str ? str->c_str() : "n/a");
 
         // "fix" return code value if no error occurred
         if (rc >= 0)
@@ -2790,7 +2800,7 @@ struct qore_socket_private {
                 //printd(5, "qore_socket_private::sendHttpChunkedWithCallback() this: %p rc: %d sock: %d xsink: %d\n", this, rc, sock, xsink->isException());
             }
 
-            //printd(5, "qore_socket_private::sendHttpChunkedWithCallback() this: %p sent: %s\n", this, buf.getBuffer());
+            //printd(5, "qore_socket_private::sendHttpChunkedWithCallback() this: %p sent: %s\n", this, buf.c_str());
 
             if (rc < 0 || sock == QORE_INVALID_SOCKET)
                 break;
@@ -3098,7 +3108,7 @@ struct qore_socket_private {
         }
         buf.concat("\r\n");
         int64 total;
-        sendIntern(xsink, "Socket", "sendHttpChunkedBodyTrailer", buf.getBuffer(), buf.size(), timeout, total, true);
+        sendIntern(xsink, "Socket", "sendHttpChunkedBodyTrailer", buf.c_str(), buf.size(), timeout, total, true);
         if (!*xsink) {
             do_header_event(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *headers);
         }
@@ -3220,7 +3230,7 @@ struct qore_socket_private {
 
     DLLLOCAL QoreHashNode* readHttpChunkedBodyBinary(int timeout, ExceptionSink* xsink, const char* cname, int source,
             const ResolvedCallReferenceNode* recv_callback = nullptr, QoreThreadLock* l = nullptr,
-            QoreObject* obj = nullptr, OutputStream* os = nullptr) {
+            QoreObject* obj = nullptr, OutputStream* os = nullptr, bool read_once = false) {
         assert(xsink);
 
         if (sock == QORE_INVALID_SOCKET) {
@@ -3277,17 +3287,19 @@ struct qore_socket_private {
                 }
             }
             // DEBUG
-            //printd(5, "QoreSocket::readHTTPChunkedBodyBinary(): got chunk size (" QSD " bytes) string: %s\n", str.strlen(), str.getBuffer());
+            //printd(5, "QoreSocket::readHTTPChunkedBodyBinary(): got chunk size (" QSD " bytes) string: %s\n",
+            //    str.strlen(), str.c_str());
 
             // terminate string at ';' char if present
-            char* p = (char*)strchr(str.getBuffer(), ';');
+            char* p = (char*)strchr(str.c_str(), ';');
             if (p)
                 *p = '\0';
             long size = strtol(str.c_str(), 0, 16);
             do_chunked_read(QORE_EVENT_HTTP_CHUNK_SIZE, size, str.size(), source);
 
-            if (!size)
+            if (!size) {
                 break;
+            }
 
             if (size < 0) {
                 xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", size);
@@ -3302,7 +3314,8 @@ struct qore_socket_private {
             while (true) {
                 char* buf;
                 rc = brecv(xsink, "readHTTPChunkedBodyBinary", buf, bs, 0, timeout, false);
-                //printd(5, "qore_socket_private::readHTTPChunkedBodyBinary() str: '%s' bs: %lld rc: %lld b: %p (%lld) recv_callback: %p\n", str.c_str(), bs, rc, *b, b->size(), recv_callback);
+                //printd(5, "qore_socket_private::readHTTPChunkedBodyBinary() str: '%s' bs: %lld rc: %lld b: %p "
+                //    "(%lld) recv_callback: %p\n", str.c_str(), bs, rc, *b, b->size(), recv_callback);
                 if (rc <= 0) {
                     if (!*xsink) {
                         assert(!rc);
@@ -3323,10 +3336,12 @@ struct qore_socket_private {
                 }
                 br += rc;
 
-                if (br >= size)
+                if (br >= size) {
                     break;
-                if (size - br < bs)
+                }
+                if (size - br < bs) {
                     bs = size - br;
+                }
             }
 
             // DEBUG
@@ -3355,6 +3370,14 @@ struct qore_socket_private {
                     return nullptr;
                 if (b)
                     b->clear();
+            }
+
+            if (read_once) {
+                assert(!recv_callback);
+                assert(!os);
+                ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+                h->setKeyValue("body", b.release(), xsink);
+                return h.release();
             }
 
             // ensure string is blanked for next read
@@ -3394,7 +3417,8 @@ struct qore_socket_private {
     }
 
     // receive a message in HTTP chunked format
-    DLLLOCAL QoreHashNode* readHttpChunkedBody(int timeout, ExceptionSink* xsink, const char* cname, int source, const ResolvedCallReferenceNode* recv_callback = 0, QoreThreadLock* l = 0, QoreObject* obj = 0) {
+    DLLLOCAL QoreHashNode* readHttpChunkedBody(int timeout, ExceptionSink* xsink, const char* cname, int source,
+                const ResolvedCallReferenceNode* recv_callback = 0, QoreThreadLock* l = 0, QoreObject* obj = 0) {
         assert(xsink);
 
         if (sock == QORE_INVALID_SOCKET) {
@@ -3451,13 +3475,13 @@ struct qore_socket_private {
                 }
             }
             // DEBUG
-            //printd(5, "got chunk size (" QSD " bytes) string: %s\n", str.strlen(), str.getBuffer());
+            //printd(5, "got chunk size (" QSD " bytes) string: %s\n", str.strlen(), str.c_str());
 
             // terminate string at ';' char if present
-            char* p = (char*)strchr(str.getBuffer(), ';');
+            char* p = (char*)strchr(str.c_str(), ';');
             if (p)
                 *p = '\0';
-            ssize_t size = strtol(str.getBuffer(), 0, 16);
+            ssize_t size = strtol(str.c_str(), 0, 16);
             do_chunked_read(QORE_EVENT_HTTP_CHUNK_SIZE, size, str.strlen(), source);
 
             if (!size)
@@ -3500,7 +3524,7 @@ struct qore_socket_private {
             }
 
             // DEBUG
-            //printd(5, "got chunk (" QSD " bytes): %s\n", br, buf->getBuffer() + buf->strlen() -  size);
+            //printd(5, "got chunk (" QSD " bytes): %s\n", br, buf->c_str() + buf->strlen() -  size);
 
             // read crlf after chunk
             // FIXME: bytes read are not checked if they equal CRLF
@@ -3559,6 +3583,10 @@ struct qore_socket_private {
 
         return h.release();
     }
+
+    DLLLOCAL QoreHashNode* readServerSentEvent(ExceptionSink* xsink, Transform* transform, int timeout_ms);
+
+    DLLLOCAL static QoreHashNode* parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf);
 
     DLLLOCAL static void do_accept_encoding(char* t, QoreHashNode& info) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), 0);
@@ -3715,7 +3743,7 @@ struct qore_socket_private {
                         else
                             cs.concat(a + 8);
                         cs.trim();
-                        senc = cs.getBuffer();
+                        senc = cs.c_str();
                         //printd(5, "got encoding '%s' from request\n", senc);
                         enc = QEM.findCreate(senc);
 

@@ -2517,7 +2517,7 @@ public class WebSocketClientWaitForMessageDataProvider inherits AbstractDataProv
     }
 }
 
-#! Data type for delete order calls
+#! Data type for wait for message requests
 public class WebSocketClientWaitForMessageRequestDataType inherits HashDataType {
     public {
         #! Field descriptions

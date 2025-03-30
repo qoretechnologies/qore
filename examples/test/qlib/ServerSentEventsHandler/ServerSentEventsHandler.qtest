@@ -15,6 +15,7 @@
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventClient
 %requires ../../../../qlib/ServerSentEventHandler
 
 %try-module json >= 1.5
@@ -69,15 +70,78 @@ public class Main inherits QUnit::Test {
     mainTest() {
         checkModule();
 
-        /*
-        for (int i = 0; i < 30; ++i) {
-            sleep(1s);
-            sse.sendAll(<SseMessageInfo>{
-                "event": "test",
-                "data": "hello",
-                "id": i,
-            });
+        ServerSentEventClient client({
+            "url": "sse://localhost:" + port,
+        });
+
+        MyObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+
+        string str = get_random_string(50);
+        hash<SseMessageInfo> event = <SseMessageInfo>{
+            "event": "event",
+            "data": str,
+            "id": 1,
+        };
+        sse.sendAll(event);
+
+        hash<SseMessageInfo> event0 = observer.wait();
+        assertEq(event, event0);
+    }
+}
+
+class MyObserver inherits Observer {
+    public {
+        list<hash<auto>> l();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+        int waiting;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        l += {
+            "id": event_id,
+            "data": data_,
+        };
+
+        if (waiting) {
+            cond.broadcast();
         }
-        */
+    }
+
+    hash<SseMessageInfo> wait() {
+        date start = now_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
+            date d = now_us() - start;
+            if (d > 5s) {
+                throw "ERROR", sprintf("no matching data received in timeout; l: %y", l);
+            }
+            foreach hash<auto> h in (l) {
+                if (h.id == EVENT_SSE_DATA) {
+                    return h."data";
+                }
+            }
+        }
+    }
+
+    clear() {
+        m.lock();
+        on_exit m.unlock();
+
+        remove l;
     }
 }

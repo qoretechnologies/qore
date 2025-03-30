@@ -489,6 +489,22 @@ public:
         return rc > len ? -1 : (qore_offset_t)rc;
     }
 
+    DLLLOCAL size_t removeBytes(size_t num) {
+        if (num >= len) {
+            clear();
+        } else {
+            memmove(buf, buf + num, len - num);
+            len -= num;
+        }
+    }
+
+    DLLLOCAL void clear() {
+        if (allocated) {
+            len = 0;
+            buf[0] = '\0';
+        }
+    }
+
     DLLLOCAL void concat(char c) {
         if (allocated) {
             buf[len] = c;

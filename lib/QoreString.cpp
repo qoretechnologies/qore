@@ -1977,10 +1977,7 @@ char* QoreString::giveBuffer() {
 }
 
 void QoreString::clear() {
-    if (priv->allocated) {
-        priv->len = 0;
-        priv->buf[0] = '\0';
-    }
+    priv->clear();
 }
 
 void QoreString::reset() {
@@ -3297,6 +3294,10 @@ int64 QoreString::toBigInt() const {
 
 qore_offset_t QoreString::getByteOffset(size_t i, ExceptionSink* xsink) const {
    return priv->getByteOffset(i, xsink);
+}
+
+size_t QoreString::removeBytes(size_t len) {
+    return priv->removeBytes(len);
 }
 
 size_t QoreString::getCharWidth(ExceptionSink* xsink) const {

@@ -40,6 +40,7 @@ DLLEXPORT extern qore_classid_t CID_SOCKET;
 DLLEXPORT extern QoreClass* QC_SOCKET;
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SocketPollInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SseMessageInfo(QoreNamespace& ns);
 
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>

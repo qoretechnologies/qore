@@ -1536,10 +1536,10 @@ class MyObserver inherits Observer {
         if (!data_) {
             msg += " no data";
         }
-        log("<", msg);
         if (data_) {
-            log("<", "data: %N", data_);
+            msg += sprintf("\n  %N", data_);
         }
+        log("<", msg);
         if (info.connection_event == event_id) {
             log("<", "connected to server");
         } else if (info.disconnection_event == event_id) {

@@ -286,7 +286,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 int now = clock_getmillis() / 1000;
                 if (!update) {
                     if ((now - timestamp) >= heartbeat) {
-logInfo("now: %d - ts: %d = %d <=> hb: %d", now, timestamp, now - timestamp, heartbeat);
                         sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
                         timestamp = now;
                     }
@@ -317,7 +316,11 @@ logInfo("now: %d - ts: %d = %d <=> hb: %d", now, timestamp, now - timestamp, hea
 
     #! Encode a message for sending
     string encodeMessage(hash<SseMessageInfo> msg) {
-        string str = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, serializer($1.value)), msg.pairIterator());
+        string str = foldl $1 + $2, (
+            map sprintf("%s: %s\n", $1.key == "comment" ? "" : $1.key,
+                $1.key == "data" ? serializer($1.value) : $1.value),
+                msg.pairIterator()
+        );
         return (str ?? ":\n") + "\n";
     }
 

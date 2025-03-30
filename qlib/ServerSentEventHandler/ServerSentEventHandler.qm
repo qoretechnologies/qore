@@ -76,18 +76,4 @@ module ServerSentEventHandler {
 
 #! the ServerSentEventHandler namespace contains all the objects in the ServerSentEventHandler module
 public namespace ServerSentEventHandler {
-#! SSE message info hash
-public hashdecl SseMessageInfo {
-    #! Event type
-    string event;
-
-    #! Message data
-    string data;
-
-    #! Message ID
-    auto id;
-
-    #! Client should set the reconnection time to this value in milliseconds
-    int retry;
-}
 }
