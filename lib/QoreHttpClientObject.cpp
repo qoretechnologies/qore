@@ -3549,7 +3549,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         }
 
         // get content type, if any
-        const char* ct = get_string_header(xsink, **ans, "content-type");
+        const char* ct = get_string_header(xsink, **ans, "content-type", true);
         if (*xsink) {
             disconnect_unlocked();
             return nullptr;
