@@ -60,7 +60,7 @@ module ServerSentEventClient {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ServerSentEventClient::AppName,
-            "display_name": "ServerSentEvent Messaging",
+            "display_name": "Server Sent Events (SSE)",
             "short_desc": "Receive Server Sent Events",
             "desc": "Receive Server Sent Events",
             "scheme": "sse",
@@ -74,8 +74,8 @@ module ServerSentEventClient {
             "app": ServerSentEventClient::AppName,
             "path": "/",
             "action": "msg-received",
-            "display_name": "Server Sent Event Message",
-            "short_desc": "A Server Sent Event is received",
+            "display_name": "Server Sent Event (SSE) Message",
+            "short_desc": "A Server Sent Event (SSE) is received",
             "desc": "Receive a Server Sent Event (SSE) message",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_SSE_DATA,
