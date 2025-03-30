@@ -63,7 +63,7 @@ module ServerSentEventClient {
             "display_name": "ServerSentEvent Messaging",
             "short_desc": "Receive Server Sent Events",
             "desc": "Receive Server Sent Events",
-            "scheme": "wss",
+            "scheme": "sse",
             "logo": ServerSentEventsLogo,
             "logo_file_name": "sse-generic-logo.svg",
             "logo_mime_type": MimeTypeSvg,
