@@ -113,12 +113,12 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     */
     constructor(*HttpServer::AbstractAuthenticator auth, *hash<auto> opts)
             : HttpServer::AbstractHttpSocketHandler(auth) {
-        init(auth, opts);
+        constructorInit(opts);
     }
 
     #! Create the object optionally with the given optiond
     constructor(hash<auto> opts) : HttpServer::AbstractHttpSocketHandler(auth) {
-        init(NOTHING, opts);
+        constructorInit(opts);
     }
 
     #! returns the connection heartbeat interval as a number of seconds
@@ -448,7 +448,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! Common constructor initialization
-    private init(*HttpServer::AbstractAuthenticator auth, *hash<auto> opts) {
+    private constructorInit(*hash<auto> opts) {
         foreach hash<auto> h in (opts.pairIterator()) {
             switch (h.key) {
                 case "heartbeat": {
