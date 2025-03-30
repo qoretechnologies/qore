@@ -492,10 +492,11 @@ public:
     DLLLOCAL size_t removeBytes(size_t num) {
         if (num >= len) {
             clear();
-        } else {
-            memmove(buf, buf + num, len - num);
-            len -= num;
+            return len;
         }
+        memmove(buf, buf + num, len - num);
+        len -= num;
+        return num;
     }
 
     DLLLOCAL void clear() {
