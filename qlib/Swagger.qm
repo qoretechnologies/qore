@@ -1383,18 +1383,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
         optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes);
         foreach string mt in (keys consumes) {
-            if (mt =~ /;/) {
+            if (mt =~ /[;,]/) {
                 remove consumes{mt};
-                mt =~ s/;.*$//;
+                mt =~ s/[;,].*$//;
                 consumes{mt} = True;
             }
         }
 
         optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces);
         foreach string mt in (keys produces) {
-            if (mt =~ /;/) {
+            if (mt =~ /[;,]/) {
                 remove produces{mt};
-                mt =~ s/;.*$//;
+                mt =~ s/[;,].*$//;
                 produces{mt} = True;
             }
         }
@@ -1846,14 +1846,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type"))
+            if (!headers.hasKey("content-type")) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
-            if (headers."content-type" =~ /^multipart\/form-data/) {
+            }
+            string ct = headers."content-type";
+            if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(headers."content-type", http_body.toString());
+                    MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
                 body = map {$1.key: $1.value.body}, h.pairIterator();
             } else {
-                *hash<auto> conf = MimeDataTypes{headers."content-type"};
+                # remove any qualifiers from the content type
+                ct =~ s/[;,].*$//;
+                *hash<auto> conf = MimeDataTypes{ct};
                 if (!conf) {
                     body = http_body;
                 } else {
@@ -1951,7 +1955,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             content = content[0];
         }
         # remove any qualifiers from the content type
-        content =~ s/;.*$//;
+        content =~ s/[;,].*$//;
 
         # deserialize body according to Content-Type
         if (exists response_body && content) {
@@ -2455,10 +2459,16 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         *list<string> ct = map $1, keys headers, $1 =~ /content-type/i;
 
         # if found and it's not one of the default ones, use it
-        if (ct && ct.size() == 1 && !MimeDataTypes{headers{ct[0]}}) {
-            req.body = body;
-            req.content = headers{ct[0]};
-            return True;
+        if (ct && ct.size() == 1) {
+            string content = ct[0];
+            # remove any qualifiers from the content type
+            content =~ s/[;,].*$//;
+
+            if (!MimeDataTypes{headers{content}}) {
+                req.body = body;
+                req.content = headers{content};
+                return True;
+            }
         }
         return False;
     }
@@ -3057,9 +3067,9 @@ public class OperationObject inherits ParameterGroup {
             consumes = swagger.consumes;
         } else {
             foreach string mt in (keys consumes) {
-                if (mt =~ /;/) {
+                if (mt =~ /[;,]/) {
                     remove consumes{mt};
-                    mt =~ s/;.*$//;
+                    mt =~ s/[;,].*$//;
                     consumes{mt} = True;
                 }
             }
@@ -3070,9 +3080,9 @@ public class OperationObject inherits ParameterGroup {
             produces = swagger.produces;
         } else {
             foreach string mt in (keys produces) {
-                if (mt =~ /;/) {
+                if (mt =~ /[;,]/) {
                     remove produces{mt};
-                    mt =~ s/;.*$//;
+                    mt =~ s/[;,].*$//;
                     produces{mt} = True;
                 }
             }

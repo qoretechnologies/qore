@@ -785,7 +785,8 @@ public namespace RestSchemaValidator {
             @throw SCHEMA-VALIDATION-ERROR this exception should be thrown if there is a validation error in the request so that a <tt>400 Bad Request</tt> response can be returned to the caller
             @throw INVALID-METHOD invalid HTTP method for the request; the \c arg argument should have a list of acceptable HTTP methods for this request
         */
-        private hash<RestRequestServerInfo> parseRequestImpl(string method, string path, *data http_body, reference<hash> headers) {
+        private hash<RestRequestServerInfo> parseRequestImpl(string method, string path, *data http_body,
+                reference<hash> headers) {
             hash<UriQueryInfo> h = parse_uri_query(path);
 
             hash<RestRequestServerInfo> rv({
@@ -793,12 +794,15 @@ public namespace RestSchemaValidator {
                 "query": h.params,
             });
 
+            *string ct = headers."content-type";
+            # remove modifiers
+            ct =~ s/[;,].*$//;
+
             if (exists http_body) {
-                *hash<auto> dh = DataDeserializationSupport.(headers."content-type");
+                *hash<auto> dh = DataDeserializationSupport{ct};
                 if (!dh)
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; "
-                        "types supported: %y; response body: %y", headers."content-type",
-                        keys DataDeserializationSupport, http_body);
+                        "types supported: %y; response body: %y", ct, keys DataDeserializationSupport, http_body);
 
                 string ds_code = dh.code;
                 try {
@@ -933,6 +937,8 @@ public namespace RestSchemaValidator {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body without a content-type; "
                         "response body: %y; headers: %y", response_body, hdr);
                 }
+                # remove modifiers
+                ct =~ s/[;,].*$//;
                 *hash<auto> dh = DataDeserializationSupport{ct};
                 if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; "
