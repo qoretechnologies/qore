@@ -100,14 +100,14 @@ module OpenAiDataProvider {
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
-            "path": "/upload-file-from-location",
+            "path": "/upload-file",
             "action": "upload-file",
             "display_name": "Upload File",
             "short_desc": "Upload a file for an assistant, for fine tuning, or for batch processing",
             "desc": "Upload a file for an assistant, for fine tuning, or for batch processing",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                OpenAiFileUploadFromLocationRequestType.getFields(){"purpose", "location"}, {
+                OpenAiFileUploadRequestType.getFields(){"purpose", "file"}, {
                     "preselected": True,
                     "required": True,
                 }

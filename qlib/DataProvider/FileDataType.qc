@@ -41,9 +41,9 @@ public class FileDataType inherits AbstractDataProviderType {
             "content": new QoreDataField({
                 "name": "content",
                 "display_name": "File Data",
-                "short_desc": "Base64-encoded file data",
-                "desc": "Base64-encoded file data",
-                "type": AbstractDataProviderTypeMap."string",
+                "short_desc": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+                "desc": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+                "type": AbstractDataProviderTypeMap."data",
             }),
             "mime_type": new QoreDataField({
                 "name": "mime_type",
@@ -326,21 +326,26 @@ public class FileDataType inherits AbstractDataProviderType {
         }
         # process raw data on input
         if (value.hasKey("content")) {
-            if (value.content.typeCode() != NT_STRING) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"content\" field has type %y; "
-                    "expecting \"string\"", type.getName(), value.content.fullType());
-            }
-            (*string mime_type, *string base64) = (remove value.content =~ x/^data:([^;]+);base64,(.*)$/);
-            if (mime_type.val() && base64.val()) {
-                bool text;
-                if (mime_type.val()) {
-                    value.mime_type = mime_type;
-                    text = is_mime_text(mime_type);
-                }
-                value.content = base64;
-            } else if (value.content !~ /^[A-Z0-9+\/]+(=*)?$/i) {
-                # encode value with base-64 encoding if necessary
+            int t = value.content.typeCode();
+            if (t == NT_BINARY) {
                 value.content = make_base64_string(value.content);
+            } else {
+                if (t != NT_STRING) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"content\" field has type %y; "
+                        "expecting \"string\"", type.getName(), value.content.fullType());
+                }
+                (*string mime_type, *string base64) = (value.content =~ x/^data:([^;]+);base64,(.*)$/);
+                if (mime_type.val() && base64.val()) {
+                    bool text;
+                    if (mime_type.val()) {
+                        value.mime_type = mime_type;
+                        text = is_mime_text(mime_type);
+                    }
+                    value.content = base64;
+                } else if (value.content.val() && value.content !~ /^[A-Z0-9+\/]+(=*)?$/i) {
+                    # encode value with base-64 encoding if necessary
+                    value.content = make_base64_string(value.content);
+                }
             }
         }
         # ignore any "size" key set by the front end

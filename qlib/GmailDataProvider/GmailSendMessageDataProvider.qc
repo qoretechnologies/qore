@@ -114,7 +114,7 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
 const BodyEncodingList = (
     <AllowedValueInfo>{
         "display_name": "Auto",
-        "short_desc": "quoted-printable for string data, base64 for binary data",
+        "short_desc": "'quoted-printable' for string data, 'base64' for binary data",
         "desc": "`quoted-printable` for string data, `base64` for binary data",
         "value": "default",
     },

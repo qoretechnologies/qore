@@ -923,6 +923,8 @@ auto sub get_file_ref(string type, string path) {
         case "json": return parse_json(get_string_file_data(path));
 %endif
         case "bin": return get_binary_file_data(path);
+        case "base64": return make_base64_string(get_binary_file_data(path));
+        case "base64url": return make_base64_url_string(get_binary_file_data(path));
         case "string": return get_string_file_data(path);
         default:
             throw "PARSE-ERROR", sprintf("Do not know how to handle files of type %y", type);
@@ -941,9 +943,15 @@ auto sub get_file_ref(string type, string path) {
     |<tt><i>key_string</i> = <i>value</i>[, ...]</tt>|a @ref hash "hash"
     |<tt><i>value</i>, [...]</tt>|a @ref list "list"
     |<tt>$&lt;</tt><i>location</i><tt>&gt;</tt>|a string file reference; <i>location</i> can be a URL
+    |<tt>$base64&lt;</tt><i>location</i><tt>&gt;</tt>|a file reference returning base64-encoded string; \
+        <i>location</i> can be a URL
+    |<tt>$base64url&lt;</tt><i>location</i><tt>&gt;</tt>|a file reference returning base64-URL-encoded string; \
+        <i>location</i> can be a URL
     |<tt>$bin&lt;</tt><i>location</i><tt>&gt;</tt>|a binary file reference; <i>location</i> can be a URL
-    |<tt>$yaml&lt;</tt><i>location</i><tt>&gt;</tt>|a YAML file reference; the result of parsing the YAML data at the given location will be used as the value; <i>location</i> can be a URL
-    |<tt>$json&lt;</tt><i>location</i><tt>&gt;</tt>|a JSON file reference; the result of parsing the JSON data at the given location will be used as the value; <i>location</i> can be a URL
+    |<tt>$yaml&lt;</tt><i>location</i><tt>&gt;</tt>|a YAML file reference; the result of parsing the YAML data at \
+        the given location will be used as the value; <i>location</i> can be a URL
+    |<tt>$json&lt;</tt><i>location</i><tt>&gt;</tt>|a JSON file reference; the result of parsing the JSON data at \
+        the given location will be used as the value; <i>location</i> can be a URL
     |integers|an @ref integer "integer"
     |floats|a @ref float "float"
     |arbitrary-numeric value|a @ref number "number"
