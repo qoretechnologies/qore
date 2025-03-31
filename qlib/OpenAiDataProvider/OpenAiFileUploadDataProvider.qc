@@ -85,14 +85,6 @@ public class OpenAiFileUploadDataProvider inherits OpenAiDataProviderCommon {
         #on_error printf("INFO: %N\n", info);
         hash<auto> h = rest.send(msg, "POST", "/v1/files", hdr, False, \info);
         return parse_json(h.body);
-
-        /*
-        MultiPartMixedMessage mpm(mpboundary);
-        Attachment att(req.file.name, req.file.mime_type, parse_base64_string(req.file.content));
-        att.add(mpm);
-
-        binary b = mpm.serialize();
-        */
     }
 
     #! Returns the description of a successful request message, if any
