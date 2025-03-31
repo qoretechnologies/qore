@@ -102,6 +102,13 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
                     },
                 ),
             },
+            "last_event_id": <DataProviderOptionInfo>{
+                "display_name": "Last Event ID",
+                "short_desc": "Request the server restart sending events from this ID",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Request the server restart sending events from this ID. This will be send in the "
+                    "`Last-Event-ID` header in the connection request to the SSE server",
+            },
             "logger": <DataProviderOptionInfo>{
                 "display_name": "Logger",
                 "short_desc": "The logger to use",

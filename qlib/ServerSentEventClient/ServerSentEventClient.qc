@@ -91,6 +91,9 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         HTTPClient hc;
         bool stop;
 
+        #! Request Last-Event-Id when connecting
+        string last_event_id;
+
         #! Flag indicating chunked transfer encoding
         bool chunked;
 
@@ -166,6 +169,7 @@ ServerSentEventClient sse(\event(), {
 
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
+        - \c last_event_id: Request to the server to resend messages starting after this ID
         - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
@@ -554,36 +558,48 @@ sse.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
-        if (opts.reconnect) {
+        if (parse_boolean(opts.reconnect)) {
             reconnect = True;
         }
         # set logger, if any
-        logger = remove opts.logger;
+        logger = opts.logger;
+
+        if (exists opts.last_event_id) {
+            if (!opts.last_event_id.strp()) {
+                raiseError("ServerSentEventClient::constructor() options have an invalid 'last_event_id' key with type "
+                    "%y; must be a type convertible to a string for the header value in the connection request to the "
+                    "SSE server", opts.last_event_id.fullType());
+            }
+            last_event_id = opts.last_event_id.toString();
+        }
 
         # += to keep "http_opts" "hash<auto>"
         hash<auto> http_opts += opts;
         url = getString(opts, "url", True);
 
-        if (http_opts.hasKey("yield")) {
-            if (!http_opts.yield.callp()) {
-                raiseError("option hash to ServerSentEventClient::constructor() has an invalid 'yield' key with type "
+        # remove SSE-only options
+        remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread"};
+
+        if (opts.hasKey("yield")) {
+            if (!opts.yield.callp()) {
+                raiseError("ServerSentEventClient::constructor() options have an invalid 'yield' key with type "
                     "%y; must be a callable value", opts.yield.fullType());
             }
-            yield = remove http_opts.yield;
+            yield = opts.yield;
         }
 %ifdef PO_NO_PROCESS_CONTROL
         else {
-            raiseError("option hash to ServerSentEventClient::constructor() missing 'yield' key giving the thread "
+            raiseError("ServerSentEventClient::constructor() options are missing the 'yield' key giving the thread "
                 "yield closure/call reference which is required when PO_NO_PROCESS_CONTROL is in effect");
         }
 %endif
 
-        if (http_opts.hasKey("start_thread")) {
-            if (!http_opts.start_thread.callp()) {
+        if (opts.hasKey("start_thread")) {
+            if (!opts.start_thread.callp()) {
                 raiseError("option hash to ServerSentEventClient::constructor() has an invalid 'start_thread' key "
                     "with type %y; must be a callable value", opts.start_thread.fullType());
             }
-            start_thread = remove http_opts.start_thread;
+            start_thread = remove opts.start_thread;
         }
 %ifdef PO_NO_THREAD_CONTROL
         else {
@@ -931,6 +947,9 @@ sse.setEventQueue();
         hash<auto> hdr = {
             "User-Agent": DefaultUserAgent,
         } + hdr0;
+        if (last_event_id) {
+            hdr."Last-Event-ID" = last_event_id;
+        }
 
         hash<auto> rh;
         {

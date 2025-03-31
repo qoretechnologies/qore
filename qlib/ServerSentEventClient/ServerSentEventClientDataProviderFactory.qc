@@ -28,7 +28,7 @@ public namespace ServerSentEventClient {
 public class ServerSentEventClientDataProviderFactory inherits AbstractDataProviderFactory {
     private {
         #! Data provider type info
-        static Class cls = new Class("ServerSentEventClientDelayedDataProvider");
+        static Class cls = new Class("ServerSentEventClientDataProvider");
 
         #! Factory info
         const FactoryInfo = <DataProviderFactoryInfo>{

@@ -66,6 +66,13 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                     ),
                     "default_value": "none",
                 },
+                "last_event_id": <ConnectionOptionInfo>{
+                    "display_name": "Last Event ID",
+                    "short_desc": "Request the server restart sending events from this ID",
+                    "type": "softstring",
+                    "desc": "Request the server restart sending events from this ID. This will be send in the "
+                        "`Last-Event-ID` header in the connection request to the SSE server",
+                },
                 "reconnect": <ConnectionOptionInfo>{
                     "display_name": "Reconnect?",
                     "short_desc": "Try to reconnect when the connection is closed or lost",
@@ -213,7 +220,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         return new ServerSentEventClientDataProvider({
             "url": url,
-     } + opts{"token", "token_type", "username", "password"});
+        } + opts{"token", "token_type", "username", "password"});
     }
 
     #! returns @ref True, as the connection returns a data provider with the @ref getDataProvider() method

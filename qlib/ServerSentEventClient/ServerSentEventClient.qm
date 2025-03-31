@@ -79,6 +79,9 @@ module ServerSentEventClient {
             "desc": "Receive a Server Sent Event (SSE) message",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_SSE_DATA,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ServerSentEventClientDataProviderBase::ConstructorOptions
+            ),
             "output_type": ServerSentEventClientEventDataType,
         });
     };

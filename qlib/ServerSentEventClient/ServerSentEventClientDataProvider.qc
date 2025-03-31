@@ -29,17 +29,19 @@ public namespace ServerSentEventClient {
     The event ID raised for ServerSentEvent data events is \c "sse-data-event" (see @ref EVENT_SSE_DATA), and, when the
     connection is closed, a \c "sse-closed-event" (see @ref EVENT_SSE_CLOSED) is raised.
 */
-public class ServerSentEventClientDataProvider inherits ServerSentEventClientDataProviderBase, DataProvider::Observable {
+public class ServerSentEventClientDataProvider inherits ServerSentEventClientDataProviderBase, DataProvider::DelayedObservable {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "type": "ServerSentEventClientDataProvider",
         } + ServerSentEventClientDataProviderBase::ProviderInfo;
+
+        #! Max time to wait for example data
+        const ExampleTimeout = 10s;
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : ServerSentEventClientDataProviderBase(options) {
-        client.observersReady();
     }
 
     #! Creates the object from constructor + template options
@@ -47,7 +49,6 @@ public class ServerSentEventClientDataProvider inherits ServerSentEventClientDat
             : ServerSentEventClientDataProviderBase(
                 ServerSentEventClientDataProviderBase::getOptionsFromTemplate(template_options, options)
             ) {
-        client.observersReady();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {
@@ -57,6 +58,48 @@ public class ServerSentEventClientDataProvider inherits ServerSentEventClientDat
         rv.desc = sprintf("ServerSentEvent client to URL %y", safe_url);
         rv.supports_auto_reconnect = client.getReconnect();
         return rv;
+    }
+
+    #! Returns example data for the given observable event
+    /** @param event_id the event ID of the event
+
+        @return example data for the given observable event
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @since DataProvider 3.0
+    */
+    private auto getExampleEventDataImpl(string event_id) {
+        ExampleObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+        return observer.waitMessage(ExampleTimeout) ?? AbstractDataProvider::getExampleEventDataImpl(event_id);
+    }
+}
+}
+
+namespace Priv {
+class ExampleObserver inherits Observer {
+    private {
+        Queue q();
+    }
+
+    *hash<SseMessageInfo> waitMessage(*timeout to) {
+        try {
+            return q.get(to);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == EVENT_SSE_DATA) {
+            q.push(data_);
+        }
     }
 }
 }
