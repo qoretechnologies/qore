@@ -110,6 +110,12 @@ public hashdecl DataProviderAppInfo {
     /** This attribute is filled automatically when actions are registered
     */
     bool supports_delete = False;
+
+    #! Was the application added dynamically?
+    bool dynamic = False;
+
+    #! User-defined info about the app
+    *hash<auto> info;
 }
 
 /** @defgroup dp_action_type DataProvider Action Type Codes
@@ -528,6 +534,45 @@ public class DataProviderActionCatalog {
 
         # deregister the app automatically if module initialization fails
         ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+    }
+
+    #! Removes a dynamic data provider application
+    /** @param name the name of the dynamic application to remove
+
+        @return True if the app was deregistered, False if the app was not registered
+
+        The caller must not be restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+
+        @throw APP-ERROR app not dynamic
+        @throw PERMISSION-DENIED Caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static bool deregisterDynamicApp(string name) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", sprintf("Cannot remove app %y from a context with restricted process control",
+                name);
+        }
+
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (remove initmap{name}) {
+            return True;
+
+        }
+        *hash<DataProviderAppInfo> app = appcache{name};
+        if (!app) {
+            return False;
+        }
+        if (!app.dynamic) {
+            throw "PERMISSION-DENIED", sprintf("Cannot remove non-dynamic app %y", name);
+        }
+        deregisterAppIntern(name);
+        return True;
     }
 
     #! Registers a data provider action
@@ -1296,10 +1341,15 @@ public class DataProviderActionCatalog {
     }
 
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
-    private static deregisterApp(string name) {
+    private:internal static *bool deregisterApp(string name) {
         AutoLock al(lck);
 
-        *hash<DataProviderAppInfo> app = appcache{name};
+        return deregisterAppIntern(name);
+    }
+
+    #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
+    private:internal static *bool deregisterAppIntern(string name) {
+        *hash<DataProviderAppInfo> app = remove appcache{name};
         if (!app) {
             return;
         }
@@ -1309,6 +1359,8 @@ public class DataProviderActionCatalog {
         }
         map remove top_actionmap{name + "/" + $1.action}, app_actionmap{name}.values();
         remove app_actionmap{name};
+
+        return True;
     }
 
     #! Runs initialization and catches exceptions

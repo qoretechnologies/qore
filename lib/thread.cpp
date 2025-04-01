@@ -2313,6 +2313,23 @@ int64 runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
 }
 
+int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
+    assert(n);
+    ThreadData* td = thread_data.get();
+    const QoreStackLocation* w = td->current_stack_location;
+    size_t i = 0;
+    //printd(5, "runtime_get_parse_options_stack() n: %d w: %p\n", (int)n, w);
+    while (w) {
+        if (i == n) {
+            return w->getProgram()->getParseOptions64();
+        }
+        ++i;
+        w = w->getNext();
+    }
+    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", n);
+    return 0;
+}
+
 bool parse_check_parse_option(int64 o) {
     return (parse_get_parse_options() & o) == o;
 }

@@ -370,9 +370,16 @@ public class DataProviderTest inherits QUnit::Test {
             "logo": "data",
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "test.svg",
+            "dynamic": True,
         };
         DataProviderActionCatalog::registerApp(my_app);
         assertEq(my_app, DataProviderActionCatalog::getApp(app));
+
+        {
+            Program p(PO_NO_PROCESS_CONTROL);
+            p.parse("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test");
+            assertThrows("PERMISSION-DENIED", \p.callFunction(), ("test", app));
+        }
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getAppEx(), get_random_string());
 
@@ -556,6 +563,9 @@ public class DataProviderTest inherits QUnit::Test {
         actions = DataProviderActionCatalog::getActionsForScheme(scheme);
         assertEq(1, actions.size());
         assertEq(action, actions[0]);
+
+        assertTrue(DataProviderActionCatalog::deregisterDynamicApp(app));
+        assertNothing(DataProviderActionCatalog::getApp(app));
     }
 
     stringTest() {

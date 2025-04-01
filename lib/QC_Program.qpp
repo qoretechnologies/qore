@@ -346,7 +346,8 @@ const PO_NO_DATABASE = PO_NO_DATABASE;
 const PO_NO_EMBEDDED_LOGIC = PO_NO_EMBEDDED_LOGIC;
 
 //! Prohibits any external access
-/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM | @ref PO_NO_DATABASE | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM | @ref PO_NO_DATABASE
+    | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS | @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-external-access "%no-external-access"
  */
@@ -383,7 +384,8 @@ const PO_NO_GLOBAL_VARS = PO_NO_GLOBAL_VARS;
 const PO_NO_GUI = PO_NO_GUI;
 
 //! Prohibits all terminal and file I/O and GUI operations
-/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK | @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK
+    | @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-io "%no-io"
  */
@@ -438,7 +440,8 @@ const PO_NO_INHERIT_SYSTEM_CLASSES = PO_NO_INHERIT_SYSTEM_CLASSES;
 
 //! Prohibits system classes from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES "PO_NO_INHERIT_SYSTEM_CLASSES" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES "PO_NO_INHERIT_SYSTEM_CLASSES" was added in %Qore 0.8.12 with the
+    same value of this constant to provide a consistent naming convention for inheritance permissions
  */
 const PO_NO_SYSTEM_CLASSES = PO_NO_INHERIT_SYSTEM_CLASSES;
 
@@ -451,7 +454,8 @@ const PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 
 //! Prohibits builtin/system function variants from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS "PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS "PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS" was added in %Qore 0.8.12
+    with the same value of this constant to provide a consistent naming convention for inheritance permissions
 */
 const PO_NO_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 
@@ -461,8 +465,10 @@ const PO_NO_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 */
 const PO_NO_TERMINAL_IO = PO_NO_TERMINAL_IO;
 
-//! Disallows access to any thread-control functions and thread-relevant statements and operators (for example the @ref background "background operator" and the @ref thread_exit "thread_exit statement")
-/**
+//! Disallows access to any thread-control functions and thread-relevant statements and operators
+/** Examples of unavailable functionality: the @ref background "background operator" and the
+    @ref thread_exit "thread_exit statement"
+
     @see @ref no-thread-control "%no-thread-control"
 */
 const PO_NO_THREAD_CONTROL = PO_NO_THREAD_CONTROL;
@@ -494,7 +500,8 @@ const PO_NO_INHERIT_USER_CLASSES = PO_NO_INHERIT_USER_CLASSES;
 
 //! Prohibits user classes from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_USER_CLASSES "PO_NO_INHERIT_USER_CLASSES" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_USER_CLASSES "PO_NO_INHERIT_USER_CLASSES" was added in %Qore 0.8.12 with the same
+    value of this constant to provide a consistent naming convention for inheritance permissions
  */
 const PO_NO_USER_CLASSES = PO_NO_INHERIT_USER_CLASSES;
 
@@ -2499,6 +2506,33 @@ list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
     return p->getFeatureList();
 }
 
+//! Returns the capability mask of the program
+/** @return the capability mask of the program
+
+    @since %Qore 2.0
+*/
+int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
+    return p->getParseOptions64();
+}
+
+//! Returns the capability mask of the program n calls above this call
+/** @param n the number of stack frames above this call; must be a non-negative number
+
+    @return the capability mask of the program n calls above this call
+
+    @since %Qore 2.0
+*/
+static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY] {
+    if (n < 0) {
+        xsink->raiseException("INVALID-STACK-FRAME", "The stack frame argument must be a non-negative number; got "
+            QLLD, n);
+        return -1;
+    }
+    return !n
+        ? runtime_get_parse_options()
+        : runtime_get_parse_options_stack(xsink, (size_t)n);
+}
+
 //! Issues a module command for the given module in the current Program object
 /** The module is loaded into the current %Program object if it is not already present
 
@@ -2531,3 +2565,11 @@ static nothing Program::issueModuleCmd(string module, string cmd) {
     QMM.issueRuntimeCmd(tmp_module->c_str(), getProgram(), **tmp_cmd, xsink);
 }
 
+//! Returns the capability mask of the current program
+/** @return the capability mask of the current program
+
+    @since %Qore 2.0
+*/
+static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
+    return runtime_get_parse_options();
+}
