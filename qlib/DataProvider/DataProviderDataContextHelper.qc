@@ -47,5 +47,9 @@ public class DataProviderDataContextHelper {
     static auto get() {
         return _thread_data_ctx;
     }
+
+    static *hash<auto> getHash() {
+        return _thread_data_ctx.typeCode() == NT_HASH ? _thread_data_ctx : NOTHING;
+    }
 }
 }

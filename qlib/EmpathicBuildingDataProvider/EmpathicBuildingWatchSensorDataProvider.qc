@@ -94,7 +94,7 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
         self.loc = loc;
         self.sensor = sensor;
 
-        poll_interval_ms = ImpliedArgumentHelper::get().poll_interval_ms ?? PollInterval;
+        poll_interval_ms = DataProviderDataContextHelper::getHash().poll_interval_ms ?? PollInterval;
         if (poll_interval_ms < 0) {
             throw "POLL-INTERVAL-ARG-ERROR", sprintf("poll_interval_ms %d is negative", poll_interval_ms);
         }

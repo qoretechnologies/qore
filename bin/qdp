@@ -208,13 +208,13 @@ class QdpCmd {
             DataProvider::shutdown();
         }
 
-        ImpliedArgumentHelper iah;
+        DataProviderDataContextHelper dch;
         if (opts.options.val()) {
             auto v = parse_to_qore_value(opts.options);
             if (v.typeCode() != NT_HASH) {
                 error("options have type %y; expecting \"hash\"", v.fullType());
             }
-            iah = new ImpliedArgumentHelper(v);
+            dch = new DataProviderDataContextHelper(v);
         }
 
         logger = getLogger();
@@ -776,9 +776,9 @@ class QdpCmd {
             auto dv = i.value.getDefaultValue();
             if (!dv) {
                 if ((*string default_ref_data = i.value.getAttributes().default_ref_data).val()) {
-                    dv = prov.getReferenceDataValueSafe(default_ref_data, ImpliedArgumentHelper::get());
+                    dv = prov.getReferenceDataValueSafe(default_ref_data, DataProviderDataContextHelper::getHash());
                 } else if (!offset.val() && prov.getSupportedReferenceDataValues(){i.key}) {
-                    dv = prov.getReferenceDataValueSafeEx(i.key, ImpliedArgumentHelper::get());
+                    dv = prov.getReferenceDataValueSafeEx(i.key, DataProviderDataContextHelper::getHash());
                 }
             }
             if (opts.required && (!i.value.isMandatory() || exists dv)) {
@@ -801,18 +801,18 @@ class QdpCmd {
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     QdpCmd::getAllowedValues(\info, l);
                 } else if (!offset.val() && prov.getSupportedReferenceData(){i.key}
-                    && (l = prov.getReferenceDataSafeEx(i.key, ImpliedArgumentHelper::get()))) {
+                    && (l = prov.getReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if (l = i.value.getElementAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
-                    l = prov.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     QdpCmd::getAllowedValues(\info, l);
                 } else if (!offset.val() && prov.getSupportedElementReferenceData(){i.key}
-                    && (l = prov.getElementReferenceDataSafeEx(i.key, ImpliedArgumentHelper::get()))) {
+                    && (l = prov.getElementReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
                     QdpCmd::getAllowedValues(\info, l);
                 }
 
@@ -825,14 +825,14 @@ class QdpCmd {
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                 } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                     }
                 } else if (l = i.value.getElementAllowedValues()) {
                     info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
                 } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
-                    l = prov.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
                     }
@@ -965,14 +965,14 @@ class QdpCmd {
                 if (*list<auto> l = i.value.allowed_values) {
                     info += sprintf(", one of: %y", (map $1.value ?? $1, l));
                 } else if ((*string ref_data = i.value.ref_data).val()) {
-                    l = provider.getReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = provider.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(", one of: %y", (map $1.value ?? $1, l));
                     }
                 } else if (l = i.value.element_allowed_values) {
                     info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
                 } else if ((ref_data = i.value.element_ref_data).val()) {
-                    l = provider.getElementReferenceDataSafe(ref_data, ImpliedArgumentHelper::get());
+                    l = provider.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
                     }
@@ -1259,7 +1259,7 @@ class QdpCmd {
             # set logger on data provider
             prov.setLogger(logger);
 
-            ImpliedArgumentHelper iah(options);
+            DataProviderDataContextHelper dch(options);
             foreach string seg in (action.path[1..].split("/")) {
                 if (*string var = (seg =~ x/^\{([^\}]+)\}$/)[0]) {
                     seg = remove options{var};
