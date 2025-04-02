@@ -31,7 +31,8 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
     #! creates the field from the argument
     constructor(*hash<auto> options, *hash<auto> tags, *string path)
             : AbstractDataProviderType(options, {
-                "qore.external_name": "*file"
+                # this is the name without the leading asterisk - equivalent to the base type name
+                "qore.external_name": "file"
             } + tags, path) {
     }
 
