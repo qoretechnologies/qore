@@ -539,14 +539,14 @@ public class DataProviderActionCatalog {
     #! Removes a dynamic data provider application
     /** @param name the name of the dynamic application to remove
 
-        @return True if the app was deregistered, False if the app was not registered
+        @return the app, if it was deregistered
 
         The caller must not be restricted with @ref Qore::PO_NO_PROCESS_CONTROL
 
         @throw APP-ERROR app not dynamic
         @throw PERMISSION-DENIED Caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
-    static bool deregisterDynamicApp(string name) {
+    static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) {
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove app %y from a context with restricted process control",
                 name);
@@ -560,19 +560,18 @@ public class DataProviderActionCatalog {
             lck.unlock();
         }
 
-        if (remove initmap{name}) {
-            return True;
-
-        }
+        remove initmap{name};
+        remove app_actionmap{name};
+        remove initactionmap{name};
         *hash<DataProviderAppInfo> app = appcache{name};
         if (!app) {
-            return False;
+            return;
         }
         if (!app.dynamic) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove non-dynamic app %y", name);
         }
         deregisterAppIntern(name);
-        return True;
+        return app;
     }
 
     #! Registers a data provider action
@@ -1350,6 +1349,8 @@ public class DataProviderActionCatalog {
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
     private:internal static *bool deregisterAppIntern(string name) {
         *hash<DataProviderAppInfo> app = remove appcache{name};
+        remove app_actionmap{name};
+        remove initactionmap{name};
         if (!app) {
             return;
         }

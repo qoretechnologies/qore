@@ -291,9 +291,37 @@ public class ConnectionSchemeCache {
         cache{scheme}.options = cache{scheme}.options{sort(keys cache{scheme}.options)};
 
         # deregister the scheme automatically if module initialization fails
-        ImplicitModuleTransaction::add(sub () { ConnectionSchemeCache::deregisterScheme(scheme); });
+        ImplicitModuleTransaction::add(sub () { ConnectionSchemeCache::deregisterSchemeIntern(scheme); });
 
         return True;
+    }
+
+    #! Removes a scheme
+    /** @param scheme the scheme name
+
+        @return the scheme definition, if it was deregistered
+
+        The caller must not be restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+
+        @throw PERMISSION-DENIED Caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static *hash<ConnectionSchemeInfo> deregisterScheme(string scheme) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", sprintf("Cannot remove scheme %y from a context with restricted process control",
+                scheme);
+        }
+
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        remove initmap{scheme};
+
+        return remove cache{scheme};
     }
 
     #! Loads all possible schemes and returns the entire cache
@@ -589,7 +617,7 @@ public class ConnectionSchemeCache {
     #! Deregisters a scheme in case module intiialization fails for the module that registered it
     /** @param scheme the scheme for the connection provider
     */
-    private static deregisterScheme(string scheme) {
+    private:internal static deregisterSchemeIntern(string scheme) {
         lck.lock();
         on_exit lck.unlock();
 
