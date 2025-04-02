@@ -66,7 +66,7 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
 
     #! Returns the base type for the type, if any
     *Type getValueType() {
-        return AutoHashType;
+        return AutoHashOrNothingType;
     }
 
     #! Returns the subtype (for lists or hashes) if there is only one
