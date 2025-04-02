@@ -75,7 +75,7 @@ public class FileOrNothingDataType inherits AbstractDataProviderType {
 
     #! Returns the fields of the data structure; if any
     *hash<string, AbstractDataField> getFields() {
-        # intentionally empty
+        return Fields;
     }
 
     #! Returns a hash of types accepted by this type; keys are type names
