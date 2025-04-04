@@ -36,7 +36,7 @@ public class DataProviderDataContextHelper {
     }
 
     constructor(auto dat) {
-        old = dat;
+        old = _thread_data_ctx;
         _thread_data_ctx = dat;
     }
 
