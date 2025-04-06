@@ -453,7 +453,6 @@ void qore_program_private_base::newProgram() {
     thread_local_storage = new qpgm_thread_local_storage_t;
 
     // save thread local storage hash
-    assert(!thread_local_storage->get());
     thread_local_storage->set(new QoreHashNode(autoTypeInfo));
 
     //printd(5, "qore_program_private_base::newProgram() this: %p\n", this);

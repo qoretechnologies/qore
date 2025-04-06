@@ -1319,13 +1319,12 @@ public string sub get_random_string(softint len = 15, int level = 3) {
 /** @param ex the exception hash to process
 
     @return a multi-line string from the exception hash argument suitable for logging or output on the console
-    */
+*/
 public string sub get_exception_string(hash<auto> ex) {
     string str;
 
     while (True) {
-        str += sprintf("%s exception: %s: %s: %s",
-                        ex.type, get_ex_pos(ex), ex.err, ex.desc);
+        str += sprintf("%s exception: %s: %s: %s", ex.type, get_ex_pos(ex), ex.err, ex.desc);
         if (exists ex.arg) {
             try {
                 # issue #3304: do not access any potential key of "ex.arg" directly, as it might be an object of a
