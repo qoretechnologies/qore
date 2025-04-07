@@ -67,7 +67,7 @@ public:
 
     //! sets the key's value
     DLLLOCAL void set(T* ptr) {
-        setIntern(ptr);
+        setIntern(const_cast<void*>((const void*)ptr));
     }
 
 private:
