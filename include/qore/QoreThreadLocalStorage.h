@@ -36,6 +36,10 @@
 #include <cassert>
 #include <pthread.h>
 
+DLLEXPORT void qore_thread_local_storage_destroy(void* qtls);
+DLLEXPORT void qore_thread_local_storage_set(void* qtls, void* p);
+DLLEXPORT void* qore_thread_local_storage_get(void* qtls);
+
 //! provides access to thread-local storage
 /** This classes uses a single static pthread_key_t and a map to the actual
     data. It does not provide any special logic for checking for correct
@@ -46,7 +50,7 @@ class QoreThreadLocalStorage {
 public:
     //! creates the key
     DLLLOCAL QoreThreadLocalStorage() {
-        create();
+        // intentionally empty
     }
 
     //! destroys the key
@@ -55,26 +59,26 @@ public:
     }
 
     //! creates the key
-    DLLEXPORT void create();
+    DLLLOCAL void create() {
+        // intentionally empty
+    }
 
     //! destroys the key
-    DLLEXPORT void destroy();
+    DLLLOCAL void destroy() {
+        qore_thread_local_storage_destroy(this);
+    }
 
     //! retrieves the key's value
     DLLLOCAL T* get() {
-        return (T*)getIntern();
+        return (T*)qore_thread_local_storage_get(this);
     }
 
     //! sets the key's value
     DLLLOCAL void set(T* ptr) {
-        setIntern(const_cast<void*>((const void*)ptr));
+        qore_thread_local_storage_set(this, const_cast<void*>((const void*)ptr));
     }
 
 private:
-    DLLEXPORT void* getIntern();
-
-    DLLEXPORT void setIntern(void* ptr);
-
     DLLLOCAL QoreThreadLocalStorage(const QoreThreadLocalStorage&) = delete;
     DLLLOCAL QoreThreadLocalStorage& operator=(const QoreThreadLocalStorage&) = delete;
 };

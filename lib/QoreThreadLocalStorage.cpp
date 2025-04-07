@@ -61,47 +61,35 @@ void qore_thread_local_storage_destroy() {
     pthread_key_delete(qore_storage_key);
 }
 
-//! creates the key
-template<typename T>
-void QoreThreadLocalStorage<T>::create() {
-    // intentionally empty
-}
-
-//! destroys the key
-template<typename T>
-void QoreThreadLocalStorage<T>::destroy() {
+void qore_thread_local_storage_destroy(void* qtls) {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
-        storage_map_t::iterator i = sm->find(this);
+        storage_map_t::iterator i = sm->find(qtls);
         if (i != sm->end()) {
             sm->erase(i);
         }
     }
 }
 
-//! retrieves the key's value
-template<typename T>
-void* QoreThreadLocalStorage<T>::getIntern() {
-    storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
-    if (!sm) {
-        return nullptr;
-    }
-    storage_map_t::iterator i = sm->find(this);
-    return i != sm->end() ? i->second : nullptr;
-}
-
-//! sets the key's value
-template<typename T>
-void QoreThreadLocalStorage<T>::setIntern(void* ptr) {
+void qore_thread_local_storage_set(void* qtls, void* p) {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (!sm) {
         sm = new storage_map_t;
         pthread_setspecific(qore_storage_key, (void*)sm);
     }
-    storage_map_t::iterator i = sm->lower_bound(this);
-    if (i == sm->end() || i->first != this) {
-        sm->insert(i, storage_map_t::value_type(this, ptr));
+    storage_map_t::iterator i = sm->lower_bound(qtls);
+    if (i == sm->end() || i->first != qtls) {
+        sm->insert(i, storage_map_t::value_type(qtls, p));
     } else {
-        i->second = ptr;
+        i->second = p;
     }
+}
+
+void* qore_thread_local_storage_get(void* qtls) {
+    storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
+    if (!sm) {
+        return nullptr;
+    }
+    storage_map_t::iterator i = sm->find(qtls);
+    return i != sm->end() ? i->second : nullptr;
 }
