@@ -37,8 +37,9 @@
 #include <pthread.h>
 
 //! provides access to thread-local storage
-/** This class is just a simple wrapper for pthread_key_t.  It does not provide
-    any special logic for checking for correct usage, etc.
+/** This classes uses a single static pthread_key_t and a map to the actual
+    data. It does not provide any special logic for checking for correct
+    usage, etc
  */
 template<typename T>
 class QoreThreadLocalStorage {
@@ -54,39 +55,25 @@ public:
     }
 
     //! creates the key
-    DLLLOCAL void create() {
-#ifdef DEBUG
-        assert(!pthread_key_create(&key, nullptr));
-#else
-        pthread_key_create(&key, nullptr);
-#endif
-    }
+    DLLLOCAL void create();
 
     //! destroys the key
-    DLLLOCAL void destroy() {
-        pthread_key_delete(key);
-    }
+    DLLLOCAL void destroy();
 
     //! retrieves the key's value
     DLLLOCAL T* get() {
-        return (T*)pthread_getspecific(key);
+        return (T*)getIntern();
     }
 
     //! sets the key's value
     DLLLOCAL void set(T* ptr) {
-#ifndef DEBUG
-        pthread_setspecific(key, (void *)ptr);
-#else
-        // make sure we are not overwriting data
-        assert(!ptr || !pthread_getspecific(key));
-        int rc = pthread_setspecific(key, (void*)ptr);
-        assert(!rc);
-#endif
+        setIntern(ptr);
     }
 
-    protected:
-    //! the actual thread local storage key wrapped in this class
-    pthread_key_t key;
+private:
+    DLLLOCAL void* getIntern();
+
+    DLLLOCAL void setIntern(void* ptr);
 
     DLLLOCAL QoreThreadLocalStorage(const QoreThreadLocalStorage&) = delete;
     DLLLOCAL QoreThreadLocalStorage& operator=(const QoreThreadLocalStorage&) = delete;

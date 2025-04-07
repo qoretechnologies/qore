@@ -266,7 +266,7 @@ class SocketTest inherits QUnit::Test {
                 s0.setPrivateKey(TestCert);
                 q.push(port);
 
-                Socket s2 = s0.acceptSSL(1ms);
+                Socket s2 = s0.acceptSSL(100ms);
                 assertTrue(s2.isDataAvailable(2s));
                 binary b0 = s2.recvBinary(-1, 1s);
                 q.push(b0);

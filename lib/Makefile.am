@@ -346,7 +346,8 @@ libqore_la_SOURCES = \
 	QoreSerializable.cpp \
     UnicodeCharacterIterator.cpp \
     QoreEllipsesNode.cpp \
-    QoreRegexInterface.cpp
+    QoreRegexInterface.cpp \
+    QoreThreadLocalStorage.cpp
 
 if COND_SIGNAL_HANDLING
 libqore_la_SOURCES += QoreSignal.cpp

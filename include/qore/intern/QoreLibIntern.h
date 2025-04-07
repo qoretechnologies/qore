@@ -1141,4 +1141,10 @@ DLLLOCAL const QoreTypeInfo* qore_get_type_from_string_intern(const char* str);
 
 DLLLOCAL QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink);
 
+// initialize thread-local storage
+DLLLOCAL void qore_thread_local_storage_init();
+
+// destroy thread-local storage
+DLLLOCAL void qore_thread_local_storage_destroy();
+
 #endif
