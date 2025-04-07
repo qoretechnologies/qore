@@ -561,8 +561,11 @@ int SSLSocketHelper::startConnect(ExceptionSink* xsink) {
             case SSL_ERROR_SYSCALL: {
                 return sysCallError(xsink, rc, "startConnect", "SSL_connect");
             }
+            case SSL_ERROR_ZERO_RETURN:
+                // remote closed the connection
+                break;
             default:
-                printd(0, "SSLSocketHelper::startConnect() err: %d\n", err);
+                printd(0, "SSLSocketHelper::startConnect() SSL_get_error() reports error %d\n", err);
                 break;
         }
 

@@ -49,11 +49,15 @@ void qore_thread_local_storage_init() {
 #ifdef DEBUG
     assert(!pthread_key_create(&qore_storage_key, qore_thread_local_storage_destructor));
 #else
-    pthread_key_create(&qore_storage_key, nullptr);
+    pthread_key_create(&qore_storage_key, qore_thread_local_storage_destructor);
 #endif
 }
 
 void qore_thread_local_storage_destroy() {
+    storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
+    if (sm) {
+        delete sm;
+    }
     pthread_key_delete(qore_storage_key);
 }
 

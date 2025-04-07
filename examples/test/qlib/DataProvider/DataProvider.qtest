@@ -564,7 +564,7 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, actions.size());
         assertEq(action, actions[0]);
 
-        assertTrue(DataProviderActionCatalog::deregisterDynamicApp(app));
+        assertTrue(exists DataProviderActionCatalog::deregisterDynamicApp(app));
         assertNothing(DataProviderActionCatalog::getApp(app));
     }
 
