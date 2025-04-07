@@ -55,10 +55,10 @@ public:
     }
 
     //! creates the key
-    DLLLOCAL void create();
+    DLLEXPORT void create();
 
     //! destroys the key
-    DLLLOCAL void destroy();
+    DLLEXPORT void destroy();
 
     //! retrieves the key's value
     DLLLOCAL T* get() {
@@ -71,9 +71,9 @@ public:
     }
 
 private:
-    DLLLOCAL void* getIntern();
+    DLLEXPORT void* getIntern();
 
-    DLLLOCAL void setIntern(void* ptr);
+    DLLEXPORT void setIntern(void* ptr);
 
     DLLLOCAL QoreThreadLocalStorage(const QoreThreadLocalStorage&) = delete;
     DLLLOCAL QoreThreadLocalStorage& operator=(const QoreThreadLocalStorage&) = delete;

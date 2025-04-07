@@ -63,13 +63,13 @@ void qore_thread_local_storage_destroy() {
 
 //! creates the key
 template<typename T>
-DLLLOCAL void QoreThreadLocalStorage<T>::create() {
+void QoreThreadLocalStorage<T>::create() {
     // intentionally empty
 }
 
 //! destroys the key
 template<typename T>
-DLLLOCAL void QoreThreadLocalStorage<T>::destroy() {
+void QoreThreadLocalStorage<T>::destroy() {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
         storage_map_t::iterator i = sm->find(this);
@@ -81,7 +81,7 @@ DLLLOCAL void QoreThreadLocalStorage<T>::destroy() {
 
 //! retrieves the key's value
 template<typename T>
-DLLLOCAL void* QoreThreadLocalStorage<T>::getIntern() {
+void* QoreThreadLocalStorage<T>::getIntern() {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (!sm) {
         return nullptr;
@@ -92,7 +92,7 @@ DLLLOCAL void* QoreThreadLocalStorage<T>::getIntern() {
 
 //! sets the key's value
 template<typename T>
-DLLLOCAL void QoreThreadLocalStorage<T>::setIntern(void* ptr) {
+void QoreThreadLocalStorage<T>::setIntern(void* ptr) {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (!sm) {
         sm = new storage_map_t;
