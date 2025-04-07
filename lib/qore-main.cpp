@@ -166,6 +166,9 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 #endif
     }
 
+    // initialize thread-local storage
+    qore_thread_local_storage_init();
+
     // init random salt
     qore_init_random_salt();
 
@@ -265,6 +268,9 @@ void qore_cleanup() {
 
     // delete threading infrastructure
     delete_qore_threads();
+
+    // destroy thread-local storage
+    qore_thread_local_storage_destroy();
 
     // only perform openssl cleanup if not performed externally
     if (!qore_check_option(QLO_DISABLE_OPENSSL_CLEANUP)) {
