@@ -244,7 +244,7 @@ public hashdecl ActionOptionInfo {
        - a string: giving a single option that the element depends on
        - a list of strings: giving a group of options, one of which must be set before this option can be chosen
     */
-    *list<auto> depends_on;
+    *softlist<softstring> depends_on;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -292,7 +292,7 @@ public hashdecl ActionOptionInfo {
     bool structural_determinate;
 
     #! Any information about how to react to changes
-    auto on_change;
+    *softlist<softstring> on_change;
 }
 
 #! DataProvider path var info
