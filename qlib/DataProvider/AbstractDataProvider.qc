@@ -67,7 +67,8 @@ public hashdecl DataProviderOptionInfo {
     bool required = False;
 
     #! Is the option part of a required group?
-    /** A required group is a group of options of which at least one must be set
+    /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
+        string that is used to mark membership in the group by different options
     */
     *list<string> required_groups;
 

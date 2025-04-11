@@ -85,17 +85,27 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                     "call",
             },
             "schema": <DataProviderOptionInfo>{
-                "display_name": "Schema Location",
-                "short_desc": "The Swagger schema object or source URL",
+                "display_name": "Schema",
+                "short_desc": "The Swagger schema file or object",
                 "type": (
                     AbstractDataProviderType::get(StringType, NOTHING, {
                         DTT_FromFile: True,
-                        DTT_FromLocation: True,
                     }),
                     AbstractDataProviderType::get(new Type("SwaggerSchema")),
                 ),
-                "desc": "The Swagger schema object or source URL",
-                "required": True,
+                "desc": "The Swagger schema file or object",
+                "required_groups": ("schema",),
+            },
+            "schema_location": <DataProviderOptionInfo>{
+                "display_name": "Schema Location",
+                "short_desc": "The Swagger schema source URL",
+                "type": (
+                    AbstractDataProviderType::get(StringType, NOTHING, {
+                        DTT_FromLocation: True,
+                    }),
+                ),
+                "desc": "The Swagger schema source URL",
+                "required_groups": ("schema",),
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "URL",
@@ -145,21 +155,28 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
         if (copts.lax_parsing) {
             copts.lax_parsing = LM_ALL;
         }
-        switch (copts.schema.typeCode()) {
-            case NT_STRING:
-                # determine if the string is a file or a location
-                if (copts.schema.size() > 1024 || copts.schema =~ /^swagger:/ || copts.schema =~ /^{/
-                    || copts.schema =~ /^swagger":/) {
-                    setSchema(SwaggerLoader::fromString(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
-                } else {
-                    setSchema(SwaggerLoader::fromUrl(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
-                }
-                break;
-            case NT_OBJECT:
-                setSchema(copts.schema);
-                break;
-            default:
-                throw "SWAGGER-ERROR", sprintf("unsupported schema type: %y", copts.schema.type());
+        if (!copts.schema.val() && !copts.schema_location.val()) {
+            throw "CONSTRUCTOR-ERROR", "No 'schema' or 'schema_location' option given";
+        }
+        if (exists copts.schema) {
+            switch (copts.schema.typeCode()) {
+                case NT_STRING:
+                    # determine if the string is a file or a location
+                    if (copts.schema.size() > 1024 || copts.schema =~ /^swagger:/ || copts.schema =~ /^{/
+                        || copts.schema =~ /^swagger":/) {
+                        setSchema(SwaggerLoader::fromString(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
+                    } else {
+                        setSchema(SwaggerLoader::fromUrl(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
+                    }
+                    break;
+                case NT_OBJECT:
+                    setSchema(copts.schema);
+                    break;
+                default:
+                    throw "CONSTRUCTOR-ERROR", sprintf("Unsupported schema type: %y", copts.schema.type());
+            }
+        } else {
+            setSchema(SwaggerLoader::fromUrl(copts.schema_location, NOTHING, {"parse_flags": copts.lax_parsing}));
         }
 
         if (copts.restclient) {
