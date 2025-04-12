@@ -649,7 +649,7 @@ public:
 
         @since %Qore 1.12
     */
-    DLLEXPORT int getPollableDescriptor() const {
+    DLLLOCAL int getPollableDescriptor() const {
         return QoreFile::getPollableDescriptor();
     }
 
