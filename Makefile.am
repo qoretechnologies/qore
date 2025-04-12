@@ -968,6 +968,7 @@ noinst_HEADERS = \
 	include/qore/intern/QC_FilePollOperation.h \
 	include/qore/intern/QoreEllipsesNode.h \
 	include/qore/intern/getopt_long.h \
+	include/qore/intern/qore_type_safe_ref_helper_priv.h \
 	command-line.h
 
 LIB_DOXYFILES_FIXED = \
