@@ -345,6 +345,23 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
     return meth ? 0 : -1;
 }
 
+StaticMethodReferenceNode::StaticMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* meth)
+        : AbstractParseObjectMethodReferenceNode(loc), meth(meth) {
+}
+
+StaticMethodReferenceNode::~StaticMethodReferenceNode() {
+}
+
+// returns a RunTimeObjectMethodReference or nullptr if there's an exception
+QoreValue StaticMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return new LocalStaticMethodCallReferenceNode(loc, meth);
+}
+
+int StaticMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    return 0;
+}
+
 ParseScopedSelfMethodReferenceNode::ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc,
         NamedScope* n_nscope) : AbstractParseObjectMethodReferenceNode(loc), nscope(n_nscope), method(0) {
 }
@@ -353,7 +370,7 @@ ParseScopedSelfMethodReferenceNode::~ParseScopedSelfMethodReferenceNode() {
     delete nscope;
 }
 
-// returns a RunTimeObjectMethodReference or NULL if there's an exception
+// returns a RunTimeObjectMethodReference or nullptr if there's an exception
 QoreValue ParseScopedSelfMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     return new RunTimeResolvedMethodReferenceNode(loc, runtime_get_stack_object(), method);
@@ -464,10 +481,19 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
     // try to resolve a method call if bare references are allowed
     // and we are parsing in an object context
     if (parse_check_parse_option(PO_ALLOW_BARE_REFS) && parse_context.oflag) {
-        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo());
+        const QoreClass* qc = parse_context.class_ctx;
         const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), str);
         if (m) {
             val = new ParseSelfMethodReferenceNode(loc, m);
+            delete this;
+            return 0;
+        }
+    } else if (parse_context.class_ctx) {
+        qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(parse_context.class_ctx));
+        const QoreMethod* m = priv->parseFindStaticMethod(str, priv);
+        if (m) {
+            assert(m->isStatic());
+            val = new StaticMethodReferenceNode(loc, m);
             delete this;
             return 0;
         }

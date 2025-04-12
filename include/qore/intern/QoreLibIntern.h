@@ -162,6 +162,7 @@ enum q_setpub_t : unsigned char {
 struct QoreParseContext {
     QoreProgram* pgm;
     LocalVar* oflag = nullptr;
+    const QoreClass* class_ctx = nullptr;
     int pflag = 0;
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
@@ -169,7 +170,10 @@ struct QoreParseContext {
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
 
-    DLLLOCAL QoreParseContext(LocalVar* oflag, QoreProgram* pgm = getProgram()) : pgm(pgm), oflag(oflag) {
+    DLLLOCAL QoreParseContext(LocalVar* oflag, QoreProgram* pgm = getProgram());
+
+    DLLLOCAL QoreParseContext(const QoreClass* class_ctx, QoreProgram* pgm = getProgram()) : pgm(pgm),
+            class_ctx(class_ctx) {
     }
 
     DLLLOCAL int unsetFlags(int flags) {

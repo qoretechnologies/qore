@@ -844,6 +844,36 @@ public class ClassesTest inherits QUnit::Test {
         StaticResolutionTest t();
         assertEq(1, t.a0());
         assertEq(1, t.a1());
+
+        Program p(PO_NEW_STYLE);
+        p.parse("
+class C {
+    static int a() {
+        return 1;
+    }
+
+    code get0() {
+        return \\a();
+    }
+
+    static code get() {
+        return \\a();
+    }
+}
+
+code sub test0() {
+    C c();
+    return c.get();
+}
+
+code sub test() {
+    return C::get();
+}
+", "test");
+        code c = p.callFunction("test");
+        assertEq(1, c());
+        c = p.callFunction("test0");
+        assertEq(1, c());
     }
 
     issue4605() {

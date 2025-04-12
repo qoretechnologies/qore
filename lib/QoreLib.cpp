@@ -41,6 +41,8 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 #include <atomic>
 #include <cctype>
@@ -526,6 +528,10 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
 
     parse_context.typeInfo = val.getFullTypeInfo();
     return 0;
+}
+
+QoreParseContext::QoreParseContext(LocalVar* oflag, QoreProgram* pgm) : pgm(pgm), oflag(oflag),
+        class_ctx(oflag ? QoreTypeInfo::getUniqueReturnClass(oflag->getTypeInfo()) : nullptr) {
 }
 
 QoreAbstractIteratorBase::QoreAbstractIteratorBase() : tid(q_gettid()) {

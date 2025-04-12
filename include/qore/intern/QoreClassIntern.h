@@ -377,7 +377,7 @@ public:
                 err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
             }
         } else {
-            err = statements->parseInit(this);
+            err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
         }
 
         // recheck types against committed types if necessary

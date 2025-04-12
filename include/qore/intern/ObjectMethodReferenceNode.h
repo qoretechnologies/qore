@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -142,6 +142,26 @@ protected:
 
 public:
     DLLLOCAL ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc, NamedScope *n_nscope);
+};
+
+class StaticMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {
+public:
+    DLLLOCAL StaticMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* meth);
+
+protected:
+    // returns a RunTimeObjectMethodReference or nullptr if there's an exception
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return callReferenceTypeInfo;
+    }
+
+private:
+    const QoreMethod* meth;
+
+    DLLLOCAL virtual ~StaticMethodReferenceNode();
 };
 
 #endif
