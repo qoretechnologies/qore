@@ -819,31 +819,31 @@ find_pcre2() {
     fi
     # if we only want the static pcre2 libraries
     if test -n "$pcre2_static"; then
-    	if test -f "$lib/libpcre2.a"; then
-            PCRE2_LDFLAGS="$lib/libpcre2.a"
+    	if test -f "$lib/libpcre2-8.a"; then
+            PCRE2_LDFLAGS="$lib/libpcre2-8.a"
             with_pcre2_libs="$lib"
             pcre2_static=1
     	fi
     else
-        if test -f "$lib/libpcre2.${SHLIB_SUFFIX}"; then
+        if test -f "$lib/libpcre2-8.${SHLIB_SUFFIX}"; then
             if test "$lib" != "/lib" -a "$lib" != "/usr/lib"; then
                 PCRE2_LDFLAGS="-L$lib"
             fi
-            PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2"
+            PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2-8"
             with_pcre2_libs="$lib"
-        elif test -f "$lib/libpcre2.a"; then
+        elif test -f "$lib/libpcre2-8.a"; then
             if test "$mingw" = yes -a "$make_dll" = yes; then
-                PCRE2_LDFLAGS="-Wl,$lib/libpcre2.a"
+                PCRE2_LDFLAGS="-Wl,$lib/libpcre2-8.a"
             else
                 if test "$lib" != "/lib" -a "$lib" != "/usr/lib"; then
                     PCRE2_LDFLAGS="-L$lib"
                 fi
-                PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2"
+                PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2-8"
             fi
             with_pcre2_libs="$lib"
             pcre2_static=1
-        elif test "$windows" = yes -a -f "$dir/bin/libpcre2.${SHLIB_SUFFIX}"; then
-            PCRE2_LDFLAGS="-L$dir/bin -lpcre2"
+        elif test "$windows" = yes -a -f "$dir/bin/libpcre2-8.${SHLIB_SUFFIX}"; then
+            PCRE2_LDFLAGS="-L$dir/bin -lpcre2-8"
             with_pre_libs="$dir"
         fi
     fi
