@@ -1435,7 +1435,7 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketRecvPacketPollState::continuePoll() calling recv\n");
             rc = ::recv(sock->sock,
 #ifdef _Q_WINDOWS
-                const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received),
+                const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize),
 #else
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize)),
 #endif
