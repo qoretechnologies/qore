@@ -574,6 +574,11 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         *hash<auto> rest_body_auth_error_check;
         #! Last timestamp for token acquisition
         date token_timestamp;
+
+        #! To use to sign requests to the any alt token URL
+        *code alt_token_signer;
+        #! The header for the alt token signer
+        *string alt_token_signer_header;
     }
 
     #! calls the base class HTTPClient constructor and optionally connects to the REST server
@@ -1410,7 +1415,7 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
     #! sends a signed HTTP request to the REST server and returns the response
     /** @par Example:
         @code{.py}
-hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/1");
+hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/1");
         @endcode
 
         @param shdr the name of the header that will have the signature
@@ -1709,6 +1714,21 @@ hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/
         return scopes ? (foldl $1 + separator + $2, scopes) : NOTHING;
     }
 
+    #! Sets alt token signer code and the header for it
+    /** @since %RestClient 2.2
+    */
+    setAltTokenSigner(code signer, string signer_header) {
+        alt_token_signer = signer;
+        alt_token_signer_header = signer_header;
+    }
+
+    #! Clears alt token signer code and the header for it
+    /** @since %RestClient 2.2
+    */
+    clearAltTokenSigner() {
+        remove self{"alt_token_signer", "alt_token_signer_header"};
+    }
+
     #! Sets options from the OAuth2 login response on the local object
     /** @since %RestClient 2.0
     */
@@ -1847,6 +1867,7 @@ hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/
         # do not send a basic auth header with the username and password in the request
         clearUserPassword();
         bool set_token_auth;
+        *hash<auto> as;
         if (!oauth2_alt_token_url) {
             if (oauth2_token_use_basic_auth && oauth2_client_id.val() && oauth2_client_secret.val()) {
                 setUserPassword(oauth2_client_id, oauth2_client_secret);
@@ -1857,6 +1878,8 @@ hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/
                 set_token_auth = True;
                 login -= ("client_id", "client_secret");
             }
+        } else {
+            as = self{"alt_token_signer", "alt_token_signer_header"};
         }
         # restore the username and password on exit
         on_exit if (username) {
@@ -1871,10 +1894,20 @@ hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/
             setURL(path);
             path = "";
         }
-        return startPollSendRecv("POST", path, request_body, {
+        hash<auto> auth_hdr = {
             "Content-Type": MimeTypeFormUrlEncoded,
             "Accept": MimeTypeJson + "," + MimeTypeFormUrlEncoded,
-        });
+        };
+
+        # include signed request header if necessary
+        if (as.alt_token_signer) {
+            auth_hdr{as.alt_token_signer_header} = as.alt_token_signer({
+                "path": path,
+                "body": request_body,
+                "hdr": auth_hdr,
+            });
+        }
+        return startPollSendRecv("POST", path, request_body, auth_hdr);
     }
 
     #! Perform OAuth2 authentication
@@ -1948,7 +1981,17 @@ hash<auto> ans = rest.doSignerRequest("X-Signature", signer, "DELETE", "/orders/
         on_error debug("OAuth2: POST to %y failed: %s: %s request: %y headers: %y body: %y response: %y headers: %y "
             "body: %y", url, $1.err, $1.desc, info."request-uri", info.headers, info."request-body",
             info."response-uri", info."response-headers-raw", info."response-body");
-        return RestClient::doRequestIntern("POST", url, login, \info, NOTHING, getOAuth2AuthHeaders()).body;
+
+        # include signed request header if necessary
+        *hash<auto> as;
+        if (oauth2_alt_token_url) {
+            as = self{"alt_token_signer", "alt_token_signer_header"};
+            if (!as.alt_token_signer) {
+                remove as;
+            }
+        }
+        return RestClient::doRequestIntern("POST", url, login, \info, NOTHING, getOAuth2AuthHeaders(), NOTHING,
+            as.alt_token_signer_header, as.alt_token_signer).body;
     }
 
     #! Returns headers to use with OAuth2 authorization / token requests
@@ -2742,6 +2785,11 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     }
 
     private {
+        #! To use to sign requests to the any alt token URL
+        *code alt_token_signer;
+        #! The header for the alt token signer
+        *string alt_token_signer_header;
+
         #! Hash of supported features
         hash<string, bool> features = {
             CF_LOGGER: True,
@@ -2854,7 +2902,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         } else {
             new_opts.validator = new NullRestSchemaValidator(logger);
         }
-        return getImpl(False, new_opts);
+        return setupRestClientConfig(getImpl(False, new_opts));
     }
 
     #! gets options
@@ -3073,6 +3121,29 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         });
     }
 
+    #! Sets alt token signer code and the header for it
+    /** @since %RestClient 2.2
+    */
+    setAltTokenSigner(code signer, string signer_header) {
+        alt_token_signer = signer;
+        alt_token_signer_header = signer_header;
+    }
+
+    #! Clears alt token signer code and the header for it
+    /** @since %RestClient 2.2
+    */
+    clearAltTokenSigner() {
+        remove self{"alt_token_signer", "alt_token_signer_header"};
+    }
+
+    #! returns the underlying connection object
+    /** calls @ref getImpl() to actually acquire the connection object
+    */
+    RestClient get(bool connect = True, *hash<auto> rtopts) {
+        RestClient rest = HttpBasedConnection::get(connect, rtopts);
+        return setupRestClientConfig(rest);
+    }
+
     #! Common REST client initialization
     /** @since RestClient 2.2.0
     */
@@ -3236,6 +3307,17 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return RestClient rest(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Sets the alt token signer code and header on a RestClient object if applicable
+    /** @param rest the RestClient object to set the alt token signer on
+        @since %RestClient 2.2
+    */
+    private RestClient setupRestClientConfig(RestClient rest) {
+        if (alt_token_signer) {
+            rest.setAltTokenSigner(alt_token_signer, alt_token_signer_header);
+        }
+        return rest;
     }
 
     #! performs the internal ping
