@@ -576,9 +576,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         date token_timestamp;
 
         #! To use to sign requests to the any alt token URL
-        *code alt_token_signer;
+        transient *code alt_token_signer;
         #! The header for the alt token signer
-        *string alt_token_signer_header;
+        transient *string alt_token_signer_header;
     }
 
     #! calls the base class HTTPClient constructor and optionally connects to the REST server
@@ -2786,9 +2786,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
     private {
         #! To use to sign requests to the any alt token URL
-        *code alt_token_signer;
+        transient *code alt_token_signer;
         #! The header for the alt token signer
-        *string alt_token_signer_header;
+        transient *string alt_token_signer_header;
 
         #! Hash of supported features
         hash<string, bool> features = {
