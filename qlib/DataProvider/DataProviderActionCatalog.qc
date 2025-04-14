@@ -114,6 +114,9 @@ public hashdecl DataProviderAppInfo {
     #! Was the application added dynamically?
     bool dynamic = False;
 
+    #! Should this app be hidden in the front end?
+    bool hidden = False;
+
     #! User-defined info about the app
     *hash<auto> info;
 }
