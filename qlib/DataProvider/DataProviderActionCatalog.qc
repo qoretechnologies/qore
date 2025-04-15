@@ -45,6 +45,9 @@ public hashdecl DataProviderAppInfo {
     #! Description of the application with markdown formatting
     string desc;
 
+    #! Any legal text, links, copyright notice(s), or disclaimer(s) related to the use of the app; markdown supported
+    string legal;
+
     #! Connection scheme for the application
     /** This is the connection scheme for the \c ConnectionProvider module and indicates that the given connection
         type produces a data provider which will be the base data provider for application actions
