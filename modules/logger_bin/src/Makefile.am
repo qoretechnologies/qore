@@ -43,12 +43,12 @@ LOGGER_SOURCES = logger-module.cpp \
     QoreLoggerAppenderWithLayout.cpp \
     QoreLoggerAppenderFile.cpp \
     QoreLogger.cpp
-nodist_logger_la_SOURCES = $(GENERATED_SOURCES)
+nodist_logger_bin_la_SOURCES = $(GENERATED_SOURCES)
 endif
 
-modexeclib_LTLIBRARIES = logger.la
-logger_la_SOURCES = $(LOGGER_SOURCES)
-logger_la_LDFLAGS = -module -avoid-version ${LOGGER_LIBS} ${MODULE_LDFLAGS}
+modexeclib_LTLIBRARIES = logger_bin.la
+logger_bin_la_SOURCES = $(LOGGER_SOURCES)
+logger_bin_la_LDFLAGS = -module -avoid-version ${LOGGER_LIBS} ${MODULE_LDFLAGS}
 
 LOGGER_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/modules/logger_bin/src $(QORE_LIB_CPPFLAGS)
 
