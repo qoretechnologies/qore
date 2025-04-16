@@ -51,7 +51,7 @@ refer to the following files/locations for specific information:
    2.5.37 recommended) in order to compile the multithreaded parser; you can
    get this version at:
       http://sourceforge.net/projects/flex
- * requires pcre headers and libraries for perl5-compatible regex support;
+ * requires pcre2 headers and libraries for perl5-compatible regex support;
    POSIX regex support is no longer used
  * requires openssl headers and libraries
  * requires zlib & bzlib headers and libraries
