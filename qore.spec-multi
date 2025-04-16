@@ -248,7 +248,7 @@ mkdir -p $RPM_BUILD_ROOT/%{module_dir}
 %endif
 
 %check
-export QORE_MODULE_DIR=qlib
+export QORE_MODULE_DIR=qlib:modules/reflection
 ./qore examples/test/qore/threads/background.qtest
 ./qore examples/test/qore/threads/deadlock.qtest
 ./qore examples/test/qore/threads/max-threads-count.qtest
