@@ -183,7 +183,7 @@ rm %{buildroot}/%{_libdir}/libqore.la
 cp addon/freedesktop/qore.xml %{buildroot}/%{_datadir}/mime/packages
 
 %check
-export QORE_MODULE_DIR=qlib:modules/reflection
+export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
 ./qore examples/test/qore/threads/background.qtest
 ./qore examples/test/qore/threads/deadlock.qtest
 ./qore examples/test/qore/threads/max-threads-count.qtest
