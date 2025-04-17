@@ -158,8 +158,7 @@ This package contains tool for working with:
 %{_bindir}/schema-reverse
 
 %prep
-%setup -q
-%patch -p1
+%autosetup -p1
 # silence the executable warning for examples
 find examples -type f|xargs chmod 644
 
@@ -171,6 +170,8 @@ c64=--enable-64bit
 %endif
 %configure --disable-debug --disable-static $c64
 make %{?_smp_mflags}
+sed -i '1s,#!/usr/bin/env qore,#!/usr/bin/qore,' bin/* doxygen/qdx doxygen/qjar
+
 
 %install
 mkdir -p %{buildroot}%{_prefix}/bin
@@ -205,7 +206,6 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{module_dir}
 %dir %{_datadir}/qore-modules
 %{_datadir}/qore-modules/%{version}
-%{_datadir}/mime/packages/qore.xml
 %{_mandir}/man1/qore.1.*
 
 %changelog
