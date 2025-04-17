@@ -170,6 +170,8 @@ c64=--enable-64bit
 %endif
 %configure --disable-debug --disable-static $c64
 make %{?_smp_mflags}
+sed -i '1s,#!/usr/bin/env qore,#!/usr/bin/qore,' bin/* doxygen/qdx doxygen/qjar
+
 
 %install
 mkdir -p %{buildroot}%{_prefix}/bin
