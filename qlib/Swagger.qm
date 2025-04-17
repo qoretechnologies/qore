@@ -53,7 +53,7 @@
 %allow-weak-references
 
 module Swagger {
-    version = "2.2.2";
+    version = "2.2.3";
     desc = "Swagger module providing functionality for Swagger 2.0 schema definitions";
     author = "Ondrej Musil <ondrej.musil@qoretechnologies.com>, David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -152,6 +152,9 @@ RestHandler handler(NOTHING, swagger);
     @endcode
 
     @section swagger_relnotes Swagger Module Release Notes
+
+    @subsection swagger_2_2_3 Swagger v2.2.3
+    - improved parsing Swagger schemas with type errors
 
     @subsection swagger_2_2_2 Swagger v2.2.2
     - fixed handling type declarations with unknown format values
@@ -1671,7 +1674,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             case "boolean":
                 return required
                     ? new QoreSoftBoolDataType(type_options)
-                    : new QoreBoolOrNothingDataType(type_options);
+                    : new QoreSoftBoolOrNothingDataType(type_options);
 
             case "file":
                 return required
@@ -2671,8 +2674,9 @@ public class PathComponent inherits Qore::Serializable {
         name = "/";
         *int parse_flags = swagger.getParseFlags();
         foreach hash<auto> h in (oh.pairIterator()) {
-            if (!pfx.val() && h.key !~ /^\//)
+            if (!pfx.val() && h.key !~ /^\//) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Paths Object: root path %y does not begin with a slash", h.key);
+            }
             list<string> l = h.key.split("/");
             shift l;
             try {
@@ -4540,6 +4544,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             }
 
             if (oh.hasKey("default")) {
+                defaultVal = oh."default";
+                if (opt_flags & LM_IGNORE_INVALID_PATHS) {
+                    # Automatically correct badly-defined boolean parameter types
+                    if (defaultVal.typeCode() == NT_BOOLEAN && type != "boolean") {
+                        type = "boolean";
+                    }
+                }
                 defaultVal = oh."default";
                 SchemaObject::checkValueType(\defaultVal, type, items);
             }
