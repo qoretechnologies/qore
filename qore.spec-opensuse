@@ -158,8 +158,7 @@ This package contains tool for working with:
 %{_bindir}/schema-reverse
 
 %prep
-%setup -q
-%patch -p1
+%autosetup -p1
 # silence the executable warning for examples
 find examples -type f|xargs chmod 644
 
