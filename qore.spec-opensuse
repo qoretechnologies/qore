@@ -205,7 +205,6 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{module_dir}
 %dir %{_datadir}/qore-modules
 %{_datadir}/qore-modules/%{version}
-%{_datadir}/mime/packages/qore.xml
 %{_mandir}/man1/qore.1.*
 
 %changelog
