@@ -118,7 +118,7 @@ class CdsTest inherits QUnit::Test {
     CdsDataProviderTests() {
         if (!rc) testSkip("no CDS connection");
 
-        CdsRestDataProvider dp(rc);
+        CdsRestTablesDataProvider dp(rc);
 
         assertFalse(dp.requiresTransactionManagement());
         {
