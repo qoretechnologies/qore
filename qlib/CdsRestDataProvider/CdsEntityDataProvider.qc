@@ -61,7 +61,6 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
     constructor(CdsRestClient rest, string name, hash<auto> meta) : CdsRestDataProviderBase(rest) {
         self.name = name;
         self.meta = meta;
-        getRecordInfoIntern();
     }
 
     #! Returns the data provider name
@@ -70,7 +69,14 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
     }
 
     private *hash<string, DataProvider::AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        checkRecord();
         return record_info.record_type;
+    }
+
+    private checkRecord() {
+        if (!record_info.record_type) {
+            getRecordInfoIntern();
+        }
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -81,7 +87,8 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
     */
     private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-       return new CdsRestRecordIterator(rest, name, record_info, where_cond, search_options);
+        checkRecord();
+        return new CdsRestRecordIterator(rest, name, record_info, where_cond, search_options);
     }
 
     #! Returns data provider static info
@@ -115,7 +122,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
                 },
             },
         };
-        if (record_info.record_type) {
+        if (meta.Key.PropertyRef."^attributes^".Name) {
             rv += {
                 "has_record": True,
                 "supports_read": True,
@@ -139,6 +146,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        checkRecord();
         string url = record_info.entity_set_name;
         hash<auto> info;
         # the id is returned in the "id" field in the response
@@ -171,6 +179,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return see @ref db_provider_upsert_results for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        checkRecord();
         *softstring id_value = remove rec{record_info.key};
         if (!id_value.val()) {
             throw "UPSERT-ERROR", sprintf("upsert request requires a value for the %y key field, but none was given",
@@ -203,6 +212,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return the number of records updated
     */
     private int updateRecordsImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
+        checkRecord();
         if (where_cond{record_info.key} && where_cond.size() == 1) {
             updateSingleRecord(where_cond{record_info.key}, set);
             return 1;
@@ -221,6 +231,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return the number of records deleted
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        checkRecord();
         if (where_cond{record_info.key} && where_cond.size() == 1) {
             deleteSingleRecord(where_cond{record_info.key});
             return 1;
@@ -233,6 +244,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
     #! updates a single record
     private updateSingleRecord(string id, hash<auto> set) {
+        checkRecord();
         string url = sprintf("%s(%s)", record_info.entity_set_name, id);
         hash<auto> info;
         hash<auto> resp;
@@ -247,6 +259,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
     #! deletes a single record
     private deleteSingleRecord(string id) {
+        checkRecord();
         string url = sprintf("%s(%s)", record_info.entity_set_name, id);
         hash<auto> info;
         hash<auto> resp;
