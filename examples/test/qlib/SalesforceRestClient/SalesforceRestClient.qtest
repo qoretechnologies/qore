@@ -200,7 +200,7 @@ class SalesforceTest inherits QUnit::Test {
             assertEq(id, recs[0].Id);
 
             # update the record
-            assertEq(1, account.updateRecords({"Type": "delete"}, {"Id": id}));
+            assertEq(1, account.updateRecords({"Type": "Prospect"}, {"Id": id}));
         }
     }
 
@@ -228,6 +228,7 @@ class SalesforceTest inherits QUnit::Test {
     connectionTest() {
         string url = sprintf("http://%s:%s@localhost:8080", sfopts.username, sfopts.password);
         remove sfopts{"username", "password"};
+
         SalesforceRestConnection swsc("test", "test", url, {}, sfopts);
         assertEq(True, swsc instanceof SalesforceRestConnection);
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -837,5 +837,15 @@ DLLEXPORT void q_enforce_thread_size_on_primary_thread();
 /** @since %Qore 2.0
 */
 DLLEXPORT bool q_active_exception();
+
+//! Add the given module to the module blacklist
+/** @param name the name of the module
+    @param msg the message that will be included in any exception when the module is attempted to be loaded
+
+    @ereturn 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+
+    @since %Qore 2.0.1
+*/
+DLLEXPORT int q_add_module_to_blacklist(const char* name, const char* msg);
 
 #endif // _QORE_QORELIB_H

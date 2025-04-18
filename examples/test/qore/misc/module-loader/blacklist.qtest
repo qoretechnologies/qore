@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class BlacklistTest
+
+class BlacklistTest inherits QUnit::Test {
+    constructor() : Test("BlacklistTest", "1.0") {
+        addTestCase("Blacklist Test", \test());
+
+        set_return_value(main());
+    }
+
+    test() {
+        testModule("astparser");
+        testModule("RestClient");
+
+        assertThrows("BLACKLIST-ERROR", \qore_add_module_to_blacklist_ex(), "QUnit");
+    }
+
+    private testModule(string mod) {
+        qore_add_module_to_blacklist(mod, "by an API call");
+        assertThrows("LOAD-MODULE-ERROR", "by an API call", \load_module(), mod);
+    }
+}
