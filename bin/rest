@@ -100,6 +100,7 @@ class RestCmd {
             "DELETE": True,
             "PATCH": True,
             "OPTIONS": True,
+            "HEAD": True,
         };
     }
 

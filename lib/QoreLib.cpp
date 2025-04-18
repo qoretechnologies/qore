@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -478,6 +478,10 @@ const qore_option_s* qore_option_list = qore_option_list_l;
 #define QORE_OPTION_LIST_SIZE (sizeof(qore_option_list_l) / sizeof(qore_option_s))
 
 size_t qore_option_list_size = QORE_OPTION_LIST_SIZE;
+
+int q_add_module_to_blacklist(const char* name, const char* msg) {
+    return QMM.addModuleToBlacklist(name, msg);
+}
 
 bool q_get_option_value(const char* opt) {
     for (unsigned i = 0; i < QORE_OPTION_LIST_SIZE; ++i) {

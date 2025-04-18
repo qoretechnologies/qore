@@ -1369,6 +1369,35 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     return omi;
 }
 
+int QoreModuleManager::addModuleToBlacklist(const char* name, const char* msg) {
+    AutoLocker al(mutex); // make sure checking and loading are atomic
+    // see if a module with this name is already registered
+    QoreAbstractModule* mi = findModuleUnlocked(name);
+    if (mi) {
+        return -1;
+    }
+
+    // check if it's been blacklisted
+    bl_map_t::iterator i = mod_blacklist.lower_bound(name);
+    if ((i != mod_blacklist.end()) && !strcmp(i->first, name)) {
+        return -2;
+    }
+
+    mod_blacklist.insert(i, bl_map_t::value_type(name, msg));
+    return 0;
+}
+
+int QoreModuleManager::checkBlacklist(ExceptionSink& xsink, const char* name) {
+    // check if it's been blacklisted
+    bl_map_t::const_iterator i = mod_blacklist.find(name);
+    if (i != mod_blacklist.end()) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s' was blacklisted %s",
+            name, i->second);
+        return -1;
+    }
+    return 0;
+}
+
 QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* tpgm, bool reexport, QoreProgram* pgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
@@ -1376,6 +1405,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     printd(5, "QoreModuleManager::loadUserModuleFromPath() path: '%s' feature: '%s' tpgm: %p ('%s') path_pgm: %p " \
         "('%s')\n", path, feature, tpgm, tpgm && tpgm->parseGetScriptDir() ? tpgm->parseGetScriptDir() : "n/a",
         path_pgm, path_pgm && path_pgm->parseGetScriptDir() ? path_pgm->parseGetScriptDir() : "n/a");
+
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
 
     QoreParseCountContextHelper pcch;
 
@@ -1454,6 +1487,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     assert(feature);
     //printd(5, "QoreModuleManager::loadUserModuleFromSource() path: %s feature: %s tpgm: %p\n", path, feature, tpgm);
 
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
     QoreParseCountContextHelper pcch;
 
     // parse options for the module
@@ -1507,6 +1544,11 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         feature_str = feature;
         feature = get_feature_from_path(feature_str);
     }
+
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
     QoreModuleNameContextHelper mnch(feature);
 
     void* ptr = dlopen(path, QORE_DLOPEN_FLAGS);
@@ -1722,11 +1764,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         return nullptr;
     }
 
-    // check if it's been blacklisted
-    bl_map_t::const_iterator i = mod_blacklist.find(name);
-    if (i != mod_blacklist.end()) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': '%s' is blacklisted %s",
-            path, name, i->second);
+    if (checkBlacklist(xsink, name)) {
         return nullptr;
     }
 

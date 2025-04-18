@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/** CdsRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** CdsRestDataProviderTables.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,33 +25,35 @@
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
 #! The CdsRest data provider class
-public class CdsRestDataProvider inherits CdsRestDataProviderBase {
+public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "CdsRestDataProvider",
+            "name": "tables",
+            "type": "CdsRestDataProviderTables",
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
             "children_can_support_observers": False,
         };
+
+        #! Provider summary info
+        static hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
     }
 
     private {
-        static hash<string, code> dynamic_children;
+        #! Metadata keyed by entity type
+        *hash<auto> meta;
 
-        const ChildMap = {
-            "tables": Class::forName("CdsRestDataProvider::CdsRestTablesDataProvider"),
-        };
+        #! Metadata mutex
+        Qore::Thread::Mutex lck();
     }
 
     #! Creates the object from the arguments
     constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
-    }
-
-    #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestConnection conn) : CdsRestDataProviderBase(conn) {
     }
 
     #! Creates the object from constructor options
@@ -62,57 +64,25 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        if (copts.cdsrestclient) {
-            copts.cdsrestclient.checkClientOptions(copts);
-            rest = copts.cdsrestclient;
-        }
-
-        if (!rest) {
-            rest = new CdsRestClient(getClientOptions(copts));
-        }
+        rest = new CdsRestClient(getClientOptions(copts));
     }
 
     #! Returns the data provider name
     string getName() {
-        return "/";
+        return "tables";
     }
 
-    #! Registers a child data provider
-    /** @param name the child's name
-        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
-    */
-    static registerChild(string name, code generator) {
-        dynamic_children{name} = generator;
-    }
-
-    #! Return data provider summary info
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        *list<hash<DataProvider::DataProviderSummaryInfo>> rv;
-        foreach Class cls in (ChildMap.iterator()) {
-            try {
-                rv += cls.getConstant("ProviderSummaryInfo").getValue();
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "UNKNOWN-CONSTANT") {
-                    rethrow;
-                }
-            }
-            rv += cls.getStaticMember("ProviderSummaryInfo").getValue();
-        }
-        if (conn) {
-            map rv += $1.value($1.key, conn).getSummaryInfo(), dynamic_children.pairIterator();
-        }
-        return rv;
+    #! Accepts a LoggerInterface object for logging (or clears it)
+    setLogger(*LoggerInterface logger) {
+        rest.setLogger(logger);
+        LoggerWrapper::setLogger(logger);
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        list<string> rv = keys ChildMap;
-        if (conn && dynamic_children) {
-            rv += keys dynamic_children;
-        }
-        return rv;
+        return keys getMetadata();
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -121,19 +91,50 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
-        if (!cls && conn) {
-            if (*code gen = dynamic_children{name}) {
-                return gen(name, conn);
-            }
-            return;
+        *hash<auto> obj_meta = getMetadata(){name};
+        if (obj_meta) {
+            return new CdsEntityDataProvider(rest, name, obj_meta);
         }
-        return cls.newObject(rest);
+    }
+
+    #! Returns metadata
+    private *hash<auto> getMetadata() {
+        if (meta) {
+            return meta;
+        }
+
+        lck.lock();
+        on_exit lck.unlock();
+
+        # check again in the lock
+        if (meta) {
+            return meta;
+        }
+
+        hash<auto> resp;
+        hash<auto> info;
+        try {
+            resp = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"."edmx:DataServices".Schema;
+        } catch (hash<ExceptionInfo> ex) {
+            # ensure that any error response body is included in the exception
+            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
+            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+        }
+        #printf("%N\n", resp.EntityType);
+
+        meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
+        return meta;
     }
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns options for the CdsRestClient
+    static private *hash<auto> getClientOptions(*hash<auto> copts) {
+        return copts - ("cdsrestclient_options", "cdsrestclient")
+            + copts.cdsrestclient_options;
     }
 }
 }

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -550,6 +550,8 @@ public:
         }
     }
 
+    DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
+
 private:
     // not implemented
     DLLLOCAL QoreModuleManager(const QoreModuleManager&);
@@ -637,6 +639,8 @@ protected:
     DLLLOCAL void reinjectModule(QoreAbstractModule* mi);
     DLLLOCAL void delOrig(QoreAbstractModule* mi);
     DLLLOCAL void getUniqueName(QoreString& nname, const char* name, const char* prefix);
+
+    DLLLOCAL int checkBlacklist(ExceptionSink& xsink, const char* name);
 };
 
 DLLLOCAL extern QoreModuleManager QMM;
