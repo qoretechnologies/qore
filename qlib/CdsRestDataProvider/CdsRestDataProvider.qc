@@ -122,13 +122,12 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = ChildMap{name};
-        if (!cls && conn) {
-            if (*code gen = dynamic_children{name}) {
-                return gen(name, conn);
-            }
-            return;
+        if (cls) {
+            return cls.newObject(rest);
         }
-        return cls.newObject(rest);
+        if (conn && (*code gen = dynamic_children{name})) {
+            return gen(name, conn);
+        }
     }
 
     #! Returns data provider static info
