@@ -1970,16 +1970,17 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         setSerialization("url");
 
         # make the authorization call
-        return gotOAuth2LoginInfo(doOAuth2LoginRequest(set_url ? "/" : oauth2_token_url, login, \info), refresh);
+        return gotOAuth2LoginInfo(doOAuth2LoginRequest(set_url ? "/" : oauth2_token_url, login, \info,
+            set_url ? oauth2_token_url : NOTHING), refresh);
     }
 
     #! Returns the deserialized response body of an OAuth2 authorization / token request
     /** @since %RestClient 2.0
     */
-    private hash<auto> doOAuth2LoginRequest(string url, hash<auto> login, *reference<hash<auto>> info) {
-        on_success debug("OAuth2: POST to %y successful", url);
+    private hash<auto> doOAuth2LoginRequest(string url, hash<auto> login, *reference<hash<auto>> info, *string real_url) {
+        on_success debug("OAuth2: POST to %y successful", real_url ?? url);
         on_error debug("OAuth2: POST to %y failed: %s: %s request: %y headers: %y body: %y response: %y headers: %y "
-            "body: %y", url, $1.err, $1.desc, info."request-uri", info.headers, info."request-body",
+            "body: %y", real_url ?? url, $1.err, $1.desc, info."request-uri", info.headers, info."request-body",
             info."response-uri", info."response-headers-raw", info."response-body");
 
         # include signed request header if necessary
