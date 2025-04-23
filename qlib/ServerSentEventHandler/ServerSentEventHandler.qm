@@ -32,6 +32,7 @@
 %enable-all-warnings
 %strict-args
 %new-style
+%allow-weak-references
 
 %requires HttpServerUtil
 %requires Util
@@ -43,7 +44,7 @@
 %endtry
 
 module ServerSentEventHandler {
-    version = "1.0";
+    version = "1.0.1";
     desc = "User module for handling SSE connections";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -69,6 +70,9 @@ module ServerSentEventHandler {
     - @ref ServerSentEventHandler::ServerSentEventHandler
 
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
+
+    @subsection serversenteventhandler_v1_0_1 Version 1.0.1
+    - More flexible SSE handler support
 
     @subsection serversenteventhandler_v1_0 Version 1.0
     - the initial version of the ServerSentEventHandler module

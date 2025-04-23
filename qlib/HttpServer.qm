@@ -1957,7 +1957,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             && !rv.hdr."Transfer-Encoding"
             && !(rv.body instanceof InputStream)) {
 
-            s.sendHTTPResponse(rv.code, HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
+            s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
         } else {
             if (exists rv.chunked_body) {
                 rv.body = rv.chunked_body;
