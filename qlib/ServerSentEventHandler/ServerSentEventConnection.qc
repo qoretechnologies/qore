@@ -27,10 +27,10 @@ public namespace ServerSentEventHandler {
 #! this class represents a connection to an HTTP client
 /** @par Sending ServerSentEvent Message to Clients
     To send a message to an HTTP client, call one of the following methods:
-    - @ref ServerSentEventHandler::ServerSentEventConnection::send() "ServerSentEventConnection::send()": to send an unencoded message
-      to the client
-    - @ref ServerSentEventHandler::ServerSentEventConnection::sendEncoded() "ServerSentEventConnection::sendEncoded()": to send an
-      already-encoded message to the client
+    - @ref ServerSentEventHandler::ServerSentEventConnection::send() "ServerSentEventConnection::send()": to send an
+      unencoded message to the client
+    - @ref ServerSentEventHandler::ServerSentEventConnection::sendEncoded() "ServerSentEventConnection::sendEncoded()":
+      to send an already-encoded message to the client
 
     @note Reference: https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream
 */
@@ -38,6 +38,12 @@ public class ServerSentEventConnection {
     public {
         #! The parent handler object
         ServerSentEventHandler handler;
+
+        #! Original request context
+        hash<auto> cx;
+
+        #! Original request header info
+        hash<auto> hdr;
 
         #! The connection ID
         string cid;
@@ -67,8 +73,10 @@ public class ServerSentEventConnection {
         @ref ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl() "ServerSentEventHandler::getConnectionImpl()", which
         can be overridden in subclasses to allow a subclass of this class to be used as the connection object
     */
-    constructor(ServerSentEventHandler handler, Socket sock, string cid) {
-        self.handler = handler;
+    constructor(ServerSentEventHandler handler, Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+        self.handler := handler;
+        self.cx = cx;
+        self.hdr = hdr;
         self.cid = cid;
         self.sock = sock;
     }
@@ -85,7 +93,7 @@ public class ServerSentEventConnection {
         }
     }
 
-    #! This method is called to poll for messages from the client to send from the server
+    #! This method is called to poll for messages to send to the client from the server
     /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
     */
     *string pollDataImmediate() {
@@ -121,15 +129,12 @@ public class ServerSentEventConnection {
 
     #! Called when the connection has been registered in handler and accept sending messages
     /** Can be used to send initial welcome message, for example; the default implementation does nothing
-
-        @since %ServerSentEventHandler 1.4
     */
     registered() {
     }
 
     #! Flush all output data
     /**
-        @since %ServerSentEventHandler 1.5.2
     */
     flush() {
         if (gettid() != tid) {
@@ -144,7 +149,7 @@ public class ServerSentEventConnection {
     #! force closing socket related to connection
     stop() {
         stop_flag = True;
-        # to get a dummy data in polling thread immediately (unless stop called from the
+        # to get dummy data in polling thread immediately (unless stop called from the
         # ServerSentEventHandler::startImpl() thread)
         queue.push();
     }

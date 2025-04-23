@@ -123,8 +123,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! returns the connection heartbeat interval as a number of seconds
     /** @return the connection heartbeat interval as a number of seconds
-
-        @since ServerSentEventHandler 1.4.2
     */
     int getHeartbeat() {
         return heartbeat;
@@ -132,8 +130,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! sets the heartbeat interval as a number of seconds
     /** @param seconds the heartbeat interval as a number of seconds
-
-        @since ServerSentEventHandler 1.4.2
     */
     setHeartbeat(softint seconds) {
         if (seconds <= 0) {
@@ -146,8 +142,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! sets the heartbeat interval as a number of seconds
     /** @param seconds the heartbeat interval as a number of seconds
-
-        @since ServerSentEventHandler 1.4.2
     */
     setHeartbeat(date seconds) {
         int secs = seconds.durationSeconds();
@@ -191,10 +185,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         ServerSentEvent connections are identified by their HTTP connection ID as passed in \c "cx.id"
     */
-    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
         #logDebug("SSE request: cx: %N", cx);
         #logDebug("SSE request: hdr: %N", hdr);
-        return {
+        return <HttpResponseInfo>{
             "code": 200,
             "hdr": SseResponseHeader,
         };
@@ -286,7 +280,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 int now = clock_getmillis() / 1000;
                 if (!update) {
                     if ((now - timestamp) >= heartbeat) {
-                        sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
+                        sendHeartbeatMsg(sock);
                         timestamp = now;
                     }
                 } else {
@@ -348,7 +342,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! Called when a connection is established; the default implementation creates a ServerSentEventConnection object
     ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
-        return new ServerSentEventConnection(self, sock, cid);
+        return new ServerSentEventConnection(self, sock, cx, hdr, cid);
     }
 
     #! Called when a connection is established; registers the new connection internally
@@ -359,7 +353,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         {
             rwl.writeLock();
             on_exit rwl.writeUnlock();
-            ch{cid} = rv;
+            registerNewConnectionIntern(cid, rv);
         }
 
         if (hdr."last-event-id".val()) {
@@ -440,6 +434,16 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     #! Log to the logger
     logDebug(string fmt, ...) {
         logArgs(LoggerLevel::DEBUG, fmt, argv);
+    }
+
+    #! Called while holding the write lock to register the new connection
+    private registerNewConnectionIntern(string cid, ServerSentEventConnection rv) {
+        ch{cid} = rv;
+    }
+
+    #! Send the default heartbeat message
+    private sendHeartbeatMsg(Socket sock) {
+        sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
     }
 
     #! Resend all events since the given event
