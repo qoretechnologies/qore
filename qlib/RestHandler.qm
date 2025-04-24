@@ -1311,6 +1311,7 @@ public namespace RestHandler {
             - \c id: the unique HTTP connection ID
             - \c listener-id: the HTTP server listener ID (see
               @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
+            - \c orig-requst-body: the original request body (if any)
             - \c peer-info: a hash of socket information for the remote socket (as returned by
               @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
             - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed
@@ -1467,7 +1468,12 @@ public namespace RestHandler {
             #logDebug("REST DBG: aih: %y", aih);
 
             # set up context hash
-            cx += {"hdr": hdr, "body": body, "aih": aih};
+            cx += {
+                "hdr": hdr,
+                "body": body,
+                "aih": aih,
+                "orig-request-body": b,
+            };
 
             # handle call with class
             hash<HttpHandlerResponseInfo> rv;
