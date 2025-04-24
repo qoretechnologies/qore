@@ -149,7 +149,7 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_3_0 RestClient v2.3.0
-    - implemented support for custom token refresh operations
+    - implemented support for custom token operations
 
     @subsection restclientv2_2_0 RestClient v2.2.0
     - major updates and improvements to OAuth2 handling
@@ -505,10 +505,10 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         #! Custom token options; if at least one is set, they all must be set
         const CustomTokenOptions = {
-            "custom_token_refresh_auth": True,
-            "custom_token_refresh_method": True,
-            "custom_token_refresh_path": True,
-            "custom_token_refresh_location": True,
+            "custom_token_auth": True,
+            "custom_token_method": True,
+            "custom_token_path": True,
+            "custom_token_location": True,
         };
     }
 
@@ -586,20 +586,21 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         #! Last timestamp for token acquisition
         date token_timestamp;
 
-        #! REST token refresh auth method
+        #! REST custom token auth method
         /** allowed values:
             - "body-user-pass": use the username and password in the body
         */
-        string custom_token_refresh_auth;
-        #! REST token refresh token location
+        string custom_token_auth;
+        #! REST custom token location
         /** allowed values:
             - "body-plain": take the token from the response body without any deserialization
+            - "body-direct": take the token from the response body
         */
-        string custom_token_refresh_location;
-        #! REST token refresh HTTP method
-        string custom_token_refresh_method;
-        #! REST token refresh URI path
-        string custom_token_refresh_path;
+        string custom_token_location;
+        #! REST custom refresh HTTP method
+        string custom_token_method;
+        #! REST custom refresh URI path
+        string custom_token_path;
 
         #! To use to sign requests to the any alt token URL
         transient *code alt_token_signer;
@@ -726,8 +727,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         # set logger, if any
         self.logger = remove opts.logger;
         # set update token code, if any
-        self.update_options = remove opts.update_options;
-
+        update_options = remove opts.update_options;
         # apply default option values
         opts = DefaultOptions + opts;
 
@@ -836,8 +836,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
                     keys custom_token_opts);
             }
 
-            if (custom_token_opts.custom_token_refresh_auth == "body-user-pass") {
-                if (!username.val() || !password.val()) {
+            if (custom_token_opts.custom_token_auth == "body-user-pass") {
+                if (!opts.username.val() || !opts.password.val()) {
                     throw "RESTCLIENT-ERROR", "Custom token refresh auth method 'body-user-pass' requires a "
                         "username and password to be set";
                 }
@@ -1348,7 +1348,7 @@ hash<auto> ans = rest.del("/orders/1");
     /** @since %RestClient 2.2
     */
     bool requiresRefresh() {
-        return token.val() && refresh_token.val() && oauth2_token_expiry
+        return token.val() && (refresh_token.val() || custom_token_auth) && oauth2_token_expiry
             && ((now_us() - Oauth2TokenRefreshWindow) > oauth2_token_expiry);
     }
 
@@ -1396,11 +1396,11 @@ hash<auto> ans = rest.del("/orders/1");
     #! Starts a custom token refresh request in a non-blocking I/O operation
     /** @since %RestClient 2.3
     */
-    AbstractPollOperation startPollCustomRefreshToken() {
+    AbstractPollOperation startPollCustomGetToken() {
         *hash<auto> auth_hdr;
-        auto body = setupCustomTokenRefresh(\auth_hdr);
-        prepareMsg(custom_token_refresh_method, custom_token_refresh_path, \body, \auth_hdr);
-        return startPollSendRecv(custom_token_refresh_method, custom_token_refresh_path, body, auth_hdr);
+        auto body = setupCustomGetToken(\auth_hdr);
+        prepareMsg(custom_token_method, custom_token_path, \body, \auth_hdr);
+        return startPollSendRecv(custom_token_method, custom_token_path, body, auth_hdr);
     }
 
     #! Starts an OAuth2 refresh token request in a non-blocking I/O operation
@@ -1528,7 +1528,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
     #! Returns True if the request error indicates that a refresh operation should be performed
     private bool needsRefresh(*hash<ExceptionInfo> ex, *hash<auto> info, *bool body_deserialized, auto body) {
-        if (!custom_token_refresh_method && (!oauth2_grant_type || oauth2_grant_type == "none")) {
+        if (!custom_token_method && (!oauth2_grant_type || oauth2_grant_type == "none")) {
             debug("RestClient: not retrying; oauth2_grant_type: %y", oauth2_grant_type);
             return False;
         }
@@ -1583,7 +1583,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         @since RestClient 2.2
     */
     hash<auto> getNewToken() {
-        if (!oauth2_grant_type && !custom_token_refresh_auth) {
+        if (!oauth2_grant_type && !custom_token_auth) {
             throw "AUTH-CONFIG-ERROR", "Not all of 'oauth2_grant_type', 'oauth2_token_url', 'oauth2_client_id' are "
                 "set; also custom token refresh options are not set; cannot request a new token";
         }
@@ -1593,12 +1593,12 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     #! Sets up a custom token refresh request
     /** @since %RestClient 2.3
     */
-    private *hash<auto> setupCustomTokenRefresh(reference<hash<auto>> auth_hdr) {
+    private *hash<auto> setupCustomGetToken(reference<hash<auto>> auth_hdr) {
         hash<auto> body;
-        if (!custom_token_refresh_method) {
+        if (!custom_token_method) {
             throw "REST-LOGIN-ERROR", "Custom token refresh method is not set";
         }
-        switch (custom_token_refresh_auth) {
+        switch (custom_token_auth) {
             case "body-user-pass":
                 body = {
                     "username": username,
@@ -1607,8 +1607,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 break;
 
             default:
-                throw "REST-REFRESH-ERROR", sprintf("Invalid custom token refresh auth method: %y",
-                    custom_token_refresh_auth);
+                throw "REST-CUSTOM-TOKEN-ERROR", sprintf("Invalid custom token auth method: %y",
+                    custom_token_auth);
         }
         return body;
     }
@@ -1620,9 +1620,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private hash<auto> getNewTokenIntern(*reference<hash<auto>> info) {
         if (refresh_token) {
             return refreshTokenIntern(\info);
-        }
-        if (custom_token_refresh_auth) {
-            return customRefreshTokenIntern(\info);
         }
         if (oauth2_grant_type == "authorization_code") {
             throw "REST-TOKEN-ERROR", sprintf("The current token is invalid; no refresh token is in place, and the "
@@ -1637,32 +1634,40 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
         @since RestClient 2.3
     */
-    private hash<auto> customRefreshTokenIntern(*reference<hash<auto>> info) {
+    private hash<auto> customGetTokenIntern(*reference<hash<auto>> info, *bool refresh) {
         hash<auto> auth_hdr;
-        *hash<auto> body = setupCustomTokenRefresh(\auth_hdr);
-        hash<auto> rv;
-        if (custom_token_refresh_location == "body-plain") {
+        *hash<auto> body = setupCustomGetToken(\auth_hdr);
+        hash<auto> resp;
+        if (custom_token_location == "body-plain") {
             # restore the old serialization option on exit
             string old_ds = getSerialization();
             on_exit setSerialization(old_ds);
             # clear serialization for the request
             setSerialization("text");
 
-            hash<auto> resp = doRequestIntern(custom_token_refresh_method, custom_token_refresh_path, body, \info,
-                True, auth_hdr);
+            resp = doRequestIntern(custom_token_method, custom_token_path, body, \info, True, auth_hdr);
             trim resp.body;
             if (!resp.body) {
-                throw "REST-TOKEN-ERROR", "No body returned from custom token refresh operation";
+                throw "REST-TOKEN-ERROR", "No body returned from custom get token operation";
             }
-            rv = {
-                "token": resp.body,
+        } else if (custom_token_location == "body-direct") {
+            auth_hdr = {
+                "Accept": MimeTypeJson,
             };
-            doUpdateOptions(self, rv);
+            resp = doRequestIntern(custom_token_method, custom_token_path, body, \info, True, auth_hdr);
+            if (resp.body.typeCode() != NT_STRING) {
+                throw "REST-TOKEN-ERROR", sprintf("REST body type expected to be \"string\"; got %y instead",
+                    resp.body.fullType());
+            }
         } else {
-            throw "REST-TOKEN-ERROR", sprintf("Invalid / unknown custom token refresh location: %y",
-                custom_token_refresh_location);
+            throw "REST-TOKEN-ERROR", sprintf("Invalid / unknown custom token location: %y",
+                custom_token_location);
         }
-        return rv;
+        hash<auto> rv = {
+            "token_type": "Bearer",
+            "access_token": resp.body,
+        };
+        return gotOAuth2LoginInfo(rv, refresh);
     }
 
     #! Gets a new token using the refresh token
@@ -1863,7 +1868,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
         hash<auto> new_opts;
         # do not update "Bearer" -> "bearer"; it can break oauth2 refresh for apps like HubSpot
-        if (h.token_type && h.token_type.lwr() != token_type.lwr()) {
+        if (h.token_type && (!token_type || (h.token_type.lwr() != token_type.lwr()))) {
             new_opts.token_type = h.token_type;
         }
         if (h.access_token && h.access_token != token) {
@@ -1966,10 +1971,13 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
     }
 
-    #! Authenticates with OAuth2 if configured
+    #! Authenticates with OAuth2 or a custom token method if configured
     /** @since %RestClient 2.0
     */
     private hash<auto> loginIntern(*reference<hash<auto>> info) {
+        if (custom_token_auth) {
+            return customGetTokenIntern(\info);
+        }
         return oauth2Auth(getOAuth2LoginInfo(oauth2_grant_type), \info);
     }
 
@@ -2250,7 +2258,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
     #! Checks if a login is necessary; if so, then the login is performed
     private checkLogin(*reference<hash<auto>> info) {
-        if (oauth2_grant_type && oauth2_grant_type != "none" && !token) {
+        if (!token && ((oauth2_grant_type && oauth2_grant_type != "none") || custom_token_auth)) {
             loginIntern(\info);
         }
     }
@@ -2507,7 +2515,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         },
                     ),
                 },
-                "custom_token_refresh_auth": <ConnectionOptionInfo>{
+                "custom_token_auth": <ConnectionOptionInfo>{
                     "display_name": "Custom Token Refresh Auth Method",
                     "short_desc": "Sets the auth method for custom token refresh actions",
                     "desc": "Sets the auth method for custom token refresh actions",
@@ -2516,23 +2524,27 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         <AllowedValueInfo>{
                             "value": "body-user-pass",
                             "desc": "Include the username and password in the message body; cannot be used with "
-                                "`custom_token_refresh_method` = `GET`",
+                                "`custom_token_method` = `GET`",
                         },
                     ),
                 },
-                "custom_token_refresh_location": <ConnectionOptionInfo>{
+                "custom_token_location": <ConnectionOptionInfo>{
                     "display_name": "Custom Token Refresh Location",
                     "short_desc": "Provides the location of the new token in the response",
                     "desc": "Provides the location of the new token in the response",
                     "type": "string",
                     "allowed_values": (
                         <AllowedValueInfo>{
+                            "value": "body-direct",
+                            "desc": "Take the token from the response body directly",
+                        },
+                        <AllowedValueInfo>{
                             "value": "body-plain",
                             "desc": "Take the token from the response body without any deserialization",
                         },
                     ),
                 },
-                "custom_token_refresh_method": <ConnectionOptionInfo>{
+                "custom_token_method": <ConnectionOptionInfo>{
                     "display_name": "Custom Token Refresh Method",
                     "short_desc": "Sets the HTTP method for custom token refresh actions",
                     "desc": "Sets the HTTP method for custom token refresh actions",
@@ -2564,7 +2576,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         },
                     ),
                 },
-                "custom_token_refresh_path": <ConnectionOptionInfo>{
+                "custom_token_path": <ConnectionOptionInfo>{
                     "display_name": "Custom Token Refresh URI Path",
                     "short_desc": "Sets the URI path for the request for custom token refresh actions",
                     "desc": "Sets the URI path for the request for custom token refresh actions",
@@ -3345,7 +3357,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     /** @since RestClient 2.2.0
     */
     private setFeatures() {
-        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+        if ((opts.oauth2_grant_type && opts.oauth2_grant_type != "none") || (opts.custom_token_auth)) {
             features{CF_UPDATE_OPTIONS} = True;
         }
         if (opts.oauth2_grant_type == "authorization_code") {
@@ -3575,7 +3587,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         const SPS_OAUTH2_REFRESH_TOKEN = "oauth2-refresh-token";
 
         #! Custom refresh token state
-        const SPS_CUSTOM_REFRESH = "custom-refresh";
+        const SPS_CUSTOM_GET_TOKEN = "custom-refresh";
 
         #! Execute ping request
         const SPS_REST_PING = "rest-ping";
@@ -3709,18 +3721,40 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 continue;
             }
 
-            if (state == SPS_CUSTOM_REFRESH) {
+            if (state == SPS_CUSTOM_GET_TOKEN) {
                 hash<auto> resp = poller.getOutput();
                 string body = resp."response-body"
                     ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
                     : "";
                 if ((resp."code" / 100) == 2) {
-                    if (real_opts.custom_token_refresh_location == "body-plain") {
+                    if (real_opts.custom_token_location == "body-direct") {
+                        if (!body) {
+                            throw "REST-PING-ERROR", "No body returned from custom token refresh operation";
+                        }
+%ifndef NoJson
+                        auto b = parse_json(body);
+                        if (b.typeCode() != NT_STRING) {
+                            throw "REST-PING-ERROR", "Expecting \"string\" as the body type of the custom token "
+                                "refresh operation; got type %y instead", b.fullType();
+                        }
+                        gotOAuth2LoginInfo({
+                            "token_type": "Bearer",
+                            "access_token": b,
+                        });
+                        continue;
+%else
+                        throw "REST-PING-ERROR", sprintf("Cannot decode REST body; missing 'json' module: %y", body);
+%endif
+                    }
+                    if (real_opts.custom_token_location == "body-plain") {
                         trim body;
                         if (!body) {
                             throw "REST-PING-ERROR", "No body returned from custom token refresh operation";
                         }
-                        gotOAuth2LoginInfo({"token": body});
+                        gotOAuth2LoginInfo({
+                            "token_type": "Bearer",
+                            "access_token": body,
+                        });
                         continue;
                     }
                 }
@@ -3752,7 +3786,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                     : "";
                 bool oauth2_token = rc.getToken() && rc.usingOAuth2();
                 bool check_auth = oauth2_token && real_opts.oauth2_auto_refresh
-                    && (real_opts.oauth2_refresh_token || real_opts.custom_token_refresh_auth) && !in_refresh;
+                    && (real_opts.oauth2_refresh_token || real_opts.custom_token_auth) && !in_refresh;
                 if (check_auth && rc.isAuthTokenError(resp."code",
                         resp.info."response-headers", False, resp.info."body-content-type", body)) {
                     rc.debug("Found auth error in response with code: %d Content-Type: %y body: %y", resp."code",
@@ -3822,8 +3856,13 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         throw "REST-PING-ERROR", "cannot retrieve an OAuth2 token without the json module";
 %else
         rc.debug("RestConnection ping: get auth token");
-        state = SPS_OAUTH2_GET_TOKEN;
-        poller = rc.startOAuth2PollSendRecv();
+        if (real_opts.custom_token_auth) {
+            state = SPS_CUSTOM_GET_TOKEN;
+            poller = rc.startPollCustomGetToken();
+        } else {
+            state = SPS_OAUTH2_GET_TOKEN;
+            poller = rc.startOAuth2PollSendRecv();
+        }
 %endif
     }
 
@@ -3834,9 +3873,9 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         # remove the Authorization header, so it can be set from the new token
         headers -= "Authorization";
         rc.debug("RestConnecton ping: refresh auth token");
-        if (real_opts.custom_token_refresh_auth) {
-            state = SPS_CUSTOM_REFRESH;
-            poller = rc.startPollCustomRefreshToken();
+        if (real_opts.custom_token_auth) {
+            state = SPS_CUSTOM_GET_TOKEN;
+            poller = rc.startPollCustomGetToken();
         } else {
             state = SPS_OAUTH2_REFRESH_TOKEN;
             poller = rc.startOAuth2PollRefreshToken();
