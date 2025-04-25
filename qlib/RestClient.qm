@@ -837,7 +837,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             }
 
             if (custom_token_opts.custom_token_auth == "body-user-pass") {
-                if (!opts.username.val() || !opts.password.val()) {
+                if (!username.val() || !password.val()) {
                     throw "RESTCLIENT-ERROR", "Custom token refresh auth method 'body-user-pass' requires a "
                         "username and password to be set";
                 }
@@ -1905,23 +1905,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             } else {
                 setToken(opts.token_type ?? "Bearer", opts.token, opts.oauth2_refresh_token, opts.oauth2_token_expiry);
             }
-        } else {
-            if (!exists getUsername() && !exists getPassword() && exists opts.username) {
-                setUserPassword(opts.username, opts.password ?? "");
-                username = opts.username;
-                if (exists opts.password) {
-                    password = opts.password;
-                } else {
-                    remove opts.password;
-                }
-            } else {
-                if (*string u = getUsername()) {
-                    username = u;
-                }
-                if (*string p = getPassword()) {
-                    password = p;
-                }
+            if (opts.custom_token_auth) {
+                setupUserPassword(opts);
             }
+        } else {
+            setupUserPassword(opts);
         }
 
         # check any OAuth2 options
@@ -1933,6 +1921,26 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 return;
             }
             rethrow;
+        }
+    }
+
+    #! Setup username and password consistently
+    setupUserPassword(hash<auto> opts) {
+        if (!exists getUsername() && !exists getPassword() && exists opts.username) {
+            setUserPassword(opts.username, opts.password ?? "");
+            username = opts.username;
+            if (exists opts.password) {
+                password = opts.password;
+            } else {
+                remove opts.password;
+            }
+        } else {
+            if (*string u = getUsername()) {
+                username = u;
+            }
+            if (*string p = getPassword()) {
+                password = p;
+            }
         }
     }
 
