@@ -2702,18 +2702,24 @@ public class PathComponent inherits Qore::Serializable {
     private add(string full_path, list<auto> l, int offset, hash<auto> oh, SwaggerSchema swagger) {
         #printf("PathComponent::add(): pfx: %y name: %y: %y l: %y offset: %y\n", pfx, name, full_path, l, offset);
         if (offset == l.size()) {
-            if (pio)
-                throw "INVALID-PATH-COMPONENT", sprintf("cannot terminate path %y twice", full_path);
-            pio = new PathItemObject(full_path, oh, swagger);
+            if (!pio) {
+                pio = new PathItemObject(full_path, oh, swagger);
+            } else if (!(swagger.getParseFlags() & LM_IGNORE_INVALID_PATHS)) {
+                throw "INVALID-PATH-COMPONENT", sprintf("Cannot terminate path %y twice", full_path);
+            } else {
+                pio.merge(full_path, oh, swagger);
+            }
+            # otherwise we merge new methods in the existing PathItemObject
             return;
         }
 
         PathComponent next;
         string key = l[offset];
-        if (key =~ /^{/)
+        if (key =~ /^{/) {
             next = wildcard ?? (wildcard = new PathComponent(full_path, l, offset + 1, oh));
-        else
+        } else {
             next = paths{key} ?? (paths{key} = new PathComponent(full_path, l, offset + 1, oh));
+        }
 
         next.add(full_path, l, offset + 1, oh, swagger);
     }
@@ -2846,6 +2852,9 @@ public class PathItemObject inherits ParameterGroup {
             - \c "patch"
          */
         hash<string, OperationObject> operations;
+
+        #! This objet type
+        const ObjType = "Path Item";
     }
 
     #! Constructor.
@@ -2859,39 +2868,17 @@ public class PathItemObject inherits ParameterGroup {
         @throws REQUIRED-FIELD-MISSING required field is missing
      */
     public constructor(string path, hash<auto> oh, SwaggerSchema swagger) : ParameterGroup(oh) {
-        string objType = "Path Item";
-        optional_field(objType, oh, "$ref", NT_STRING, \ref);
+        optional_field(ObjType, oh, "$ref", NT_STRING, \ref);
 
-        *hash opObj;
-        if (optional_field(objType, oh, "get", NT_HASH, \opObj))
-            operations.get = new OperationObject(path, "get", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "put", NT_HASH, \opObj))
-            operations.put = new OperationObject(path, "put", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "post", NT_HASH, \opObj))
-            operations.post = new OperationObject(path, "post", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "delete", NT_HASH, \opObj))
-            operations."delete" = new OperationObject(path, "delete", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "options", NT_HASH, \opObj))
-            operations.options = new OperationObject(path, "options", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "head", NT_HASH, \opObj))
-            operations.head = new OperationObject(path, "head", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "patch", NT_HASH, \opObj))
-            operations.patch = new OperationObject(path, "patch", opObj, swagger);
+        foreach string m in ("get", "put", "post", "delete", "options", "head", "patch") {
+            *hash<auto> opObj;
+            if (optional_field(ObjType, oh, m, NT_HASH, \opObj)) {
+                operations{m} = new OperationObject(path, m, opObj, swagger);
+            }
+        }
 
         *list params;
-        if (optional_field(objType, oh, "parameters", NT_LIST, \params)) {
+        if (optional_field(ObjType, oh, "parameters", NT_LIST, \params)) {
             foreach auto param in (params) {
                 if (param.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE",
@@ -2907,6 +2894,19 @@ public class PathItemObject inherits ParameterGroup {
                     body = p;
                 } else {
                     addParameter(p);
+                }
+            }
+        }
+    }
+
+    #! Try to merge another PathItemObject description for the same path into this one
+    merge(string path, hash<auto> oh, SwaggerSchema swagger) {
+        foreach string m in ("get", "put", "post", "delete", "options", "head", "patch") {
+            *OperationObject op = operations{m};
+            if (!op) {
+                *hash<auto> opObj;
+                if (optional_field(ObjType, oh, m, NT_HASH, \opObj)) {
+                    operations{m} = new OperationObject(path, m, opObj, swagger);
                 }
             }
         }
