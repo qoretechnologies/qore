@@ -345,7 +345,7 @@ void QoreSignalManager::signal_handler_thread() {
                         assert(sa_int.sa_handler);
                         (*sa_int.sa_handler)(SIGINT);
                     }
-                } else if (sig == SIGTERM /*|| sig == SIGHUP*/) {
+                } else if (sig == SIGTERM || sig == SIGHUP) {
                     qore_exit_process(128 + sig);
                 }
                 continue;
