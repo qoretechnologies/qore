@@ -1621,6 +1621,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         if (refresh_token) {
             return refreshTokenIntern(\info);
         }
+        if (custom_token_auth) {
+            return customGetTokenIntern(\info);
+        }
         if (oauth2_grant_type == "authorization_code") {
             throw "REST-TOKEN-ERROR", sprintf("The current token is invalid; no refresh token is in place, and the "
                 "grant type is %y", oauth2_grant_type);
