@@ -31,7 +31,7 @@
 %new-style
 
 module Mime {
-    version = "1.6";
+    version = "1.6.1";
     desc = "Mime module providing MIME-related definitions";
     author = "David Nichols";
     url = "http://qore.org";
@@ -97,6 +97,13 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     @endverbatim
 
     @section mimereleasenotes Release Notes
+
+    @subsection mime_1_6_1 v1.6.1
+    - fixed a bug in encoding URL values with non-ASCII characters in
+      @ref Mime::mime_get_urlencoded_string() "mime_get_urlencoded_string()"
+      (<a href="https://github.com/qorelanguage/qore/issues/4935">issue 4935</a>)
+    - @ref Mime::mime_decode_urlencoded_string() "mime_decode_urlencoded_string()" is now a wrapper for builtin
+      function @ref Qore::decode_url() "decode_url()"
 
     @subsection mime_1_6 v1.6
     - added the @ref Mime::is_mime_text() "is_mime_text()" and @ref Mime::is_filename_text() "is_filename_text()" functions
@@ -795,7 +802,7 @@ public namespace Mime {
         @see <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>
     */
     public const UrlEncodedChars = {
-        "\$": True,
+        "$": True,
         "-": True,
         "_": True,
         ".": True,
@@ -1136,41 +1143,43 @@ public namespace Mime {
         return (ext && (ext = MimeTypes{ext.lwr()})) ? ext : def_type;
     }
 
-    #! returns a single string in MIME URL encoded format
-    /** reserved characters are replaced with percent encoding, characters outside the ASCII character set cause an exception to be thrown
+    #! Returns a single string in MIME URL encoded format
+    /** The string is converted to UTF-8, if necessary, and then the encoded version is returned; reserved characters
+        are replaced with percent encoding, characters outside the ASCII character are encoded with their UTF-8 bytes
+        with binary encoding (ex: "%C3%B6" for "ö")
 
         @param val the input value
 
         @return the output string in MIME URL encoded format
 
         @throw INVALID-VALUE the value given cannot be converted to a string
-        @throw INVALID-CHARACTER an invalid character has been found
 
         @see <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>
 
-        @note spaces are not replaced with \c '+' signs but rather encoded as \c %20 because \c '+' signs are often encoded and decoded improperly in URLs, and \c %20 is unambiguous
+        @note spaces are not replaced with \c '+' signs but rather encoded as \c %20 because \c '+' signs are often
+        encoded and decoded improperly in URLs, and \c %20 is unambiguous
 
         @since %Mime 1.3.4.1
      */
     public string sub mime_get_urlencoded_string(auto val) {
-        if (!val.strp())
+        if (!val.strp()) {
             throw "INVALID-VALUE", sprintf("type %y cannot be converted to a string (value: %y)", val.type(), val);
+        }
         string str = val.toString();
-
+        if (str.encoding() != "UTF-8") {
+            str = convert_encoding(str, "UTF-8");
+        }
+        binary b = str.toBinary();
         string rv = "";
-
-        for (int i = 0; i < str.size(); ++i) {
-            string c = str[i];
-            int code = c.getUnicode();
-            if (code > 127)
-                throw "INVALID-CHARACTER", sprintf("cannot generate a URL encoded string with non-ASCII character %y (unicode point %d)", c, code);
-            if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || UrlEncodedChars{c}) {
-                rv += c;
+        for (int i = 0; i < b.size(); ++i) {
+            int c = b[i];
+            string ch = chr(c);
+            if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || UrlEncodedChars{ch}) {
+                rv += ch;
                 continue;
             }
-            rv += sprintf("%%%02X", code);
+            rv += sprintf("%%%02X", c);
         }
-
         return rv;
     }
 
@@ -1209,32 +1218,12 @@ public namespace Mime {
 
         @see <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>
 
-        @since %Mime 1.3.4.1
+        @since
+        - %Mime 1.3.4.1
+        - %Mime 1.4.1 this function is a wrapper for builtin function @ref Qore::decode_url() "decode_url()"
      */
     public string sub mime_decode_urlencoded_string(string str) {
-        while (True) {
-            int i = str.find("%");
-            if (i == -1)
-                break;
-
-            string source = str.substr(i, 3);
-
-            # gets the value of a hex digit in decimal
-            code get_digit = int sub (string d) {
-                int c = ord(d.upr());
-                if (c >= 48 && c <= 57)
-                    return c - 48;
-                return c - 55;
-            };
-
-            # get hex code
-            string code = source.substr(1);
-            int v = get_digit(code[0]) * 16 + get_digit(code[1]);
-            code = chr(v);
-            str = replace(str, source, code);
-        }
-
-        return str;
+        return decode_url(str);
     }
 
     #! returns a hash corresponding to the string in MIME multipart form URL encoded format (for use with \c "Content-Type: application/x-www-form-urlencoded" data)
@@ -1255,8 +1244,8 @@ public namespace Mime {
             (*string key, *string value) = (ustr =~ x/([^=]+)=(.*)$/);
             if (!exists key)
                 throw "URLENCODED-PARSE-ERROR", sprintf("urlencoded parameter element not in key=value format: %y", ustr);
-            key = mime_decode_urlencoded_string(key);
-            value = value === "" ? NOTHING : mime_decode_urlencoded_string(value);
+            key = decode_url(key);
+            value = value === "" ? NOTHING : decode_url(value);
             if (!exists rv{key}) {
                 rv{key} = value;
             } else if (rv{key}.typeCode() != NT_LIST) {

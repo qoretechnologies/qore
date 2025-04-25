@@ -51,6 +51,11 @@ Content-Type: application/octet-stream\r
 aωb\r
 -----------------------------735323031399963166993862150--\r
 ";
+
+        const MimeEncodingTestValues = (
+            "testing-!@#$%^&*()+={}|[]:\"';,./<>?",
+            "hi - hellö",
+        );
     }
 
     constructor() : Test("MimeTest", "1.0") {
@@ -147,8 +152,11 @@ aωb\r
 
     urlEncodingTest() {
         assertEq(UrlEncodingTarget, mime_get_urlencoded_string(UrlEncodingSource));
-        assertEq("a=b&a%20x=c", mime_get_form_urlencoded_string(("a": "b", "a x": "c")));
+        assertEq("a=b&a%20x=c", mime_get_form_urlencoded_string({"a": "b", "a x": "c"}));
         assertEq(UrlEncodingSource, mime_decode_urlencoded_string(UrlEncodingTarget));
+        assertEq("a=b&a%20x=hi%20-%20hell%C3%B6", mime_get_form_urlencoded_string({"a": "b", "a x": "hi - hellö"}));
+        assertThrows("INVALID-VALUE", \mime_get_urlencoded_string(), <abcd>);
+        map assertEq($1, mime_decode_urlencoded_string(mime_get_urlencoded_string($1)), $1), MimeEncodingTestValues;
     }
 
     formDataTest() {
@@ -157,14 +165,16 @@ aωb\r
         assertEq(5, mh.part.size());
         #printf("mh: %N\n", mh);
 
-        hash<string, hash<FormDataMessageInfo>> h = MultiPartFormDataMessage::parseMessage("multipart/form-data; boundary=---------------------------735323031399963166993862150", FormDataBody);
+        hash<string, hash<FormDataMessageInfo>> h = MultiPartFormDataMessage::parseMessage("multipart/form-data; "
+            "boundary=---------------------------735323031399963166993862150", FormDataBody);
         assertEq(5, h.size());
         assertEq("hash<FormDataMessageInfo>", h.firstValue().fullType());
 
         MultiPartFormDataMessage msg = MultiPartFormDataMessage::makeMessage(h);
         assertEq(5, msg.size());
         #printf("str: %s\n%s <- boundary\n", msg.serializeBody().toString(), msg.getBoundary());
-        h = MultiPartFormDataMessage::parseMessage(MimeTypeMultipartFormData + ";boundary=" + msg.getBoundary(), msg.serializeBody().toString());
+        h = MultiPartFormDataMessage::parseMessage(MimeTypeMultipartFormData + ";boundary=" + msg.getBoundary(),
+            msg.serializeBody().toString());
         assertEq(5, h.size());
     }
 
