@@ -39,7 +39,7 @@
 %requires(reexport) Mime
 
 module DataProvider {
-    version = "3.0";
+    version = "3.1";
     desc = "user module for data access and introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -159,6 +159,9 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     processing large volumes of data.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_1 DataProvider v3.1
+    - added an API to retrieve event data in the context of specific option values
 
     @subsection dataprovider_v3_0 DataProvider v3.0
     - added support for a data provider action catalog
