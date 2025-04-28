@@ -1873,7 +1873,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
 
     std::vector<pollfd> fds;
-    fds.reserve(poll_list->size());
 
     ConstListIterator li(poll_list);
     while (li.next()) {
@@ -1933,12 +1932,16 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return nullptr;
         }
 
-        fds[li.index()] = {fd, arg, 0};
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = arg;
+        pfd.revents = 0;
+        fds.push_back(pfd);
     }
 
     int rc;
     while (true) {
-        rc = ::poll(&fds[0], poll_list->size(), timeout_ms);
+        rc = ::poll(&fds[0], fds.size(), timeout_ms);
         // poll() returns 0 when there is a timeout
         if (!rc) {
             break;

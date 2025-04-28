@@ -33,6 +33,15 @@
 
 #define _QORE_QORELIBINTERN_H
 
+//#define _QORE_CYCLE_CHECK 1
+#ifdef _QORE_CYCLE_CHECK
+#define QORE_DEBUG_OBJ_REFS 0
+#define QRO_LVL 0
+#else
+#define QORE_DEBUG_OBJ_REFS 5
+#define QRO_LVL 1
+#endif
+
 #include "qore/intern/config.h"
 
 #include <atomic>

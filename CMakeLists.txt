@@ -395,13 +395,13 @@ qore_assembler_files()
 
 # issue #2897 make build reproducible by omitting the hostname if possible
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-execute_process(COMMAND uname -smpo OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -smpo OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-execute_process(COMMAND uname -spirv OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -spirv OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-execute_process(COMMAND uname -smr OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -smr OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
-execute_process(COMMAND uname -a OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -a OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
 if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
@@ -730,6 +730,11 @@ else (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 12.6.0)
     set_target_properties(libqore PROPERTIES SOVERSION 12)
 endif (APPLE)
+
+if (ADDRESS_SANITIZER)
+    target_compile_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
 
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})

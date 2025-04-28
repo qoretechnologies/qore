@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,13 +35,17 @@
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_program_private.h"
 
-lvalue_ref::lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject* self, const void* lvid, const qore_class_private* cls) : vexp(lvexp), typeInfo(QoreTypeInfo::hasType(typeInfo) ? qore_get_complex_reference_type(typeInfo) : nullptr), self(self), pgm(getProgram()), lvalue_id(lvid), cls(cls) {
+lvalue_ref::lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject* self, const void* lvid,
+        const qore_class_private* cls) : vexp(lvexp),
+        typeInfo(QoreTypeInfo::hasType(typeInfo) ? qore_get_complex_reference_type(typeInfo) : nullptr), self(self),
+        pgm(getProgram()), lvalue_id(lvid), cls(cls) {
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
 }
 
-lvalue_ref::lvalue_ref(const lvalue_ref& old) : vexp(old.vexp.refSelf()), typeInfo(old.typeInfo), self(old.self), pgm(old.pgm), lvalue_id(old.lvalue_id), cls(old.cls) {
+lvalue_ref::lvalue_ref(const lvalue_ref& old) : vexp(old.vexp.refSelf()), typeInfo(old.typeInfo), self(old.self),
+        pgm(old.pgm), lvalue_id(old.lvalue_id), cls(old.cls) {
     //printd(5, "lvalue_ref::lvalue_ref() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
     if (self)
         self->tRef();
@@ -56,27 +60,23 @@ bool lvalue_ref::scanNode(RSetHelper& rsh, QoreValue vexp) {
     qore_type_t ntype = vexp.getType();
     if (ntype == NT_VARREF) {
         return vexp.get<VarRefNode>()->scanMembers(rsh);
-    }
-    else if (ntype == NT_OPERATOR) {
+    } else if (ntype == NT_OPERATOR) {
         QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(vexp.getInternalNode());
         if (op) {
             assert(op->getRight().getType() == NT_INT);
             // we scan the whole list here because we have a reference to the list
             return scanNode(rsh, op->getLeft());
-        }
-        else {
+        } else {
             assert(vexp.get<QoreHashObjectDereferenceOperatorNode>());
             return scanNode(rsh, vexp.get<QoreHashObjectDereferenceOperatorNode>()->getLeft());
         }
-    }
-    else if (ntype == NT_REFERENCE) {
+    } else if (ntype == NT_REFERENCE) {
         return scanNode(rsh, vexp.get<ReferenceNode>()->priv->vexp);
     }
     /* other possibilities:
         - NT_CLASS_VARREF: does not need a scan - values are deleted when the Program is deleted
         - NT_SELF_VARREF: no strong reference is made to the object
     */
-
     return false;
 }
 

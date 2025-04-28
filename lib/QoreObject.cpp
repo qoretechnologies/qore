@@ -68,10 +68,22 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         n_data->priv->is_obj = true;
     }
 #endif
+
+// XXX DEBUG DELETEME
+if (theclass->priv->name == "ThreadPool") {
+    printd(0, "qore_object_private::qore_object_private() this: %p obj: %p '%s' rml: %p\n", this, obj,
+        theclass->getName(), &rml);
+}
+
     qore_class_private::get(*oc)->ref();
 }
 
 qore_object_private::~qore_object_private() {
+// XXX DEBUG DELETEME
+if (theclass->priv->name == "ThreadPool") {
+    printd(0, "qore_object_private::~qore_object_private() this: %p obj: %p '%s'\n", this, obj, theclass->getName());
+}
+
     //printd(5, "qore_object_private::~qore_object_private() this: %p obj: %p '%s' pgm: %p\n", this, obj, theclass ? theclass->getName() : "<n/a>", pgm);
     assert(!cdmap);
     assert(!data);
@@ -256,11 +268,13 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
     return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
 }
 
-// returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is held when this function is called
+// returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
+// held when this function is called
 bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata) {
     assert(rml.checkRSectionExclusive());
 
-    // we should never perform a scan while the object has "real references", such scans must be deferred until the last "real reference" has been removed
+    // we should never perform a scan while the object has "real references", such scans must be deferred until the
+    // last "real reference" has been removed
     if (rrefs) {
         bool invalidate = false;
         {
@@ -282,22 +296,21 @@ bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata
     while (hi.next()) {
         QoreValue v = hi.get();
 #ifdef DEBUG
-        if (v.getType() == NT_OBJECT || v.getType() == NT_RUNTIME_CLOSURE) {
-            printd(QRO_LVL, "RSetHelper::checkIntern() search %p '%s' key '%s' %p (%s)\n", obj, theclass->getName(),
-                hi.getKey(), v.getInternalNode(), v.getTypeName());
+        if (v.hasNode() && needs_scan(v.getInternalNode())) {
+            printd(QRO_LVL, "qore_object_private::scanMembersIntern() search %p '%s' key '%s' %p (%s)\n", this,
+                theclass->getName(), hi.getKey(), v.getInternalNode(), v.getTypeName());
         }
 #endif
         if (v.hasNode() && scanCheck(rsh, v.getInternalNode())) {
             return true;
         }
-        printd(QRO_LVL, "RSetHelper::checkIntern() result %p '%s' key '%s' type %s\n", obj, theclass->getName(),
-            hi.getKey(), v.getTypeName());
     }
 
     return false;
 }
 
-// returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is held when this function is called
+// returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
+// held when this function is called
 bool qore_object_private::scanMembers(RSetHelper& rsh) {
     if (getScanCount()) {
         if (scanMembersIntern(rsh, data)) {
@@ -315,7 +328,8 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
 
     if (scan_private_data) {
         ExceptionSink xsink;
-        printd(5, "qore_object_private::checkIntern() scanning internals of object of class '%s'\n", theclass->getName());
+        printd(5, "qore_object_private::checkIntern() scanning internals of object of class '%s'\n",
+            theclass->getName());
         {
             // issue #3101: check Queue entries for cycles
             ReferenceHolder<Queue> q(reinterpret_cast<Queue*>(getReferencedPrivateData(CID_QUEUE, &xsink)), &xsink);
@@ -742,7 +756,8 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
     const qore_class_private* class_ctx = runtime_get_class();
-    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem, class_ctx);
+    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
+        class_ctx);
 
     QoreSafeVarRWReadLocker sl(rml);
 
@@ -757,7 +772,10 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
     if (odata) {
         rv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(mem);
     }
-    //printd(5, "qore_object_private::getReferencedMemberNoMethod() this: %p mem: %s.%s xsink: %p class_ctx: %p (%s) member_class_ctx: %p (%s) data->size(): %d rv: %s\n", this, theclass->getName(), mem, xsink, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a", member_class_ctx, member_class_ctx ? member_class_ctx->name.c_str() : "n/a", odata ? odata->size() : -1, rv.getTypeName());
+    //printd(5, "qore_object_private::getReferencedMemberNoMethod() this: %p mem: %s.%s xsink: %p class_ctx: %p (%s) "
+    //    "member_class_ctx: %p (%s) data->size(): %d rv: %s\n", this, theclass->getName(), mem, xsink, class_ctx,
+    //    class_ctx ? class_ctx->name.c_str() : "n/a", member_class_ctx,
+    //    member_class_ctx ? member_class_ctx->name.c_str() : "n/a", odata ? odata->size() : -1, rv.getTypeName());
     return rv;
 }
 
@@ -772,8 +790,10 @@ void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink
     setValueIntern(class_ctx, key, val, xsink);
 }
 
-// here if class_ctx is set it means that the member is an internal member and also that class_ctx is the current runtime class context
-void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val, ExceptionSink* xsink) {
+// here if class_ctx is set it means that the member is an internal member and also that class_ctx is the current
+// runtime class context
+void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val,
+        ExceptionSink* xsink) {
     QoreValue old_value;
 
     // initial count (true = possible recursive cycle, false = no cycle possible)
@@ -937,6 +957,15 @@ void qore_object_private::unsetRealReference() {
 }
 
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
+    assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
+
+    // XXX DEBUG DELETEME
+    if (theclass->priv->name == "ThreadPool") {
+       printd(0, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
+            "rrefs %d->%d rlm.write_tid: %d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
+            references.load() - 1, rrefs, rrefs - (real ? 1 : 0), qore_var_rwlock_priv::get(rml)->write_tid);
+    }
+
     {
         //printd(5, "qore_object_private::customDeref() this: %p '%s' references: %d->%d (trefs: %d) status: %d\n",
         //    this, getClassName(), references, references - 1, tRefs.reference_count(), status);
@@ -1054,7 +1083,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
     AutoLocker al(rlck);
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call method '%s()' on an object that has already been deleted", mname);
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call method '%s()' on an object that has already "
+                "been deleted", mname);
         return -1;
     }
 
@@ -1063,7 +1093,8 @@ int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
 }
 
 void qore_object_private::endCall(ExceptionSink* xsink) {
-    //printd(5, "qore_object_private::endCall() this: %p obj: %p '%s' calling customDeref()\n", this, obj, theclass->getName());
+    //printd(5, "qore_object_private::endCall() this: %p obj: %p '%s' calling customDeref()\n", this, obj,
+    //    theclass->getName());
     customDeref(xsink, true);
 }
 
