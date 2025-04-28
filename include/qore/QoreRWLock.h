@@ -45,13 +45,6 @@ extern int q_gettid() noexcept;
     not provide any special logic for checking for correct usage, etc.
  */
 class QoreRWLock {
-protected:
-    //! the actual locking primitive wrapped in this class
-    pthread_rwlock_t m;
-
-        //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreRWLock& operator=(const QoreRWLock&);
-
 public:
     //! creates and initializes the lock
     DLLLOCAL QoreRWLock() {
@@ -95,6 +88,12 @@ public:
     DLLLOCAL int tryrdlock() {
         return pthread_rwlock_tryrdlock(&m);
     }
+
+protected:
+    //! the actual locking primitive wrapped in this class
+    pthread_rwlock_t m;
+
+    QoreRWLock& operator=(const QoreRWLock&) = delete;
 };
 
 //! provides a safe and exception-safe way to hold read locks in Qore, only to be used on the stack, cannot be dynamically allocated
@@ -363,17 +362,7 @@ public:
 class qore_var_rwlock_priv;
 
 class QoreVarRWLock {
-private:
-    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreVarRWLock(const QoreVarRWLock&);
-    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreVarRWLock& operator=(const QoreVarRWLock&);
-
-protected:
-    qore_var_rwlock_priv* priv;
-
-    DLLLOCAL QoreVarRWLock(qore_var_rwlock_priv* p);
-
+    friend class qore_var_rwlock_priv;
 public:
     DLLLOCAL QoreVarRWLock();
 
@@ -394,6 +383,15 @@ public:
 
     //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
     DLLLOCAL int tryrdlock();
+
+protected:
+    qore_var_rwlock_priv* priv;
+
+    DLLLOCAL QoreVarRWLock(qore_var_rwlock_priv* p);
+
+private:
+    QoreVarRWLock(const QoreVarRWLock&) = delete;
+    QoreVarRWLock& operator=(const QoreVarRWLock&) = delete;
 };
 
 #endif

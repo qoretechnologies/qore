@@ -4682,17 +4682,21 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (required) {
             if (!dataType) {
                 if (orNothingDataType) {
-                    return dataType = orNothingDataType.getMandatoryType();
+                    dataType = orNothingDataType.getMandatoryType();
+                } else {
+                    # "dataType" is assigned in the call below
+                    getDataTypeIntern("/", True, rest);
                 }
-                return getDataTypeIntern("/", True, rest);
             }
             return dataType;
         }
         if (!orNothingDataType) {
             if (dataType) {
-                return orNothingDataType = dataType.getOrNothingType();
+                orNothingDataType = dataType.getOrNothingType();
+            } else {
+                # "orNothingDataType" is assigned in the call below
+                getDataTypeIntern("/", False, rest);
             }
-            return getDataTypeIntern("/", False, rest);
         }
         return orNothingDataType;
     }
@@ -4700,7 +4704,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     #! Returns the data type for the given schema
     private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
         if (type == "string") {
-            return AbstractDataProviderType::get((required ? "" : "*") + "string");
+            AbstractDataProviderType type = AbstractDataProviderType::get((required ? "" : "*") + "string");
+            if (required) {
+                dataType = type;
+            } else {
+                orNothingDataType = type;
+            }
+            return type;
         }
 
         auto def_body;
@@ -4741,22 +4751,33 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     }
 
     #! Returns a field definition from the Swagger parameter
-    AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest) {
+    AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
         string rstr = required ? "Y" : "N";
         if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
             return rv;
         }
-        return fieldmap{name}{rstr} = getFieldIntern(name, name, desc, required, rest);
+        return getFieldIntern(name, name, desc, required, rest, default_value, rstr);
+    }
+
+    #! Returns a field definition from the Swagger parameter
+    AbstractDataField getField(string path, string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
+        string rstr = required ? "Y" : "N";
+        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            return rv;
+        }
+        return getFieldIntern(path, name, desc, required, rest, default_value, rstr);
     }
 
     #! Returns a field object from the given cache
     private static *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
         if (h) {
             if ((key == "N") && !h.N) {
-                return h.N = h.Y.getOrNothingType();
+                return h.N := h.Y.getOrNothingType();
             }
             if ((key == "Y") && !h.Y) {
-                return h.Y = h.N.getMandatoryType();
+                return h.Y := h.N.getMandatoryType();
             }
             return h{key};
         }
@@ -4767,14 +4788,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (allOf) {
             map $1.getSchemaObjectFields(type, path, def_body), allOf;
         } else {
-            map type.addField($1.value.getFieldIntern(path + "/" + $1.key, $1.key, NOTHING,
+            map type.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
                 required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
         }
     }
 
     #! Returns a field definition from the Swagger parameter
     private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
-            *HTTPClient rest, auto default_value) {
+            *HTTPClient rest, auto default_value, *string rstr) {
+        if (!rstr) {
+            rstr = required ? "Y" : "N";
+        }
         if (self.desc.val()) {
             if (desc.val()) {
                 desc += ": " + self.desc;
@@ -4786,10 +4810,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             desc = "";
         }
         if (type == "object") {
-            return new QoreDataField({
+            # create the field with a placeholder type
+            QoreDataField field({
                 "name": name,
                 "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
-                "type": getDataType(required, rest),
+                "type": AutoType,
                 "allowed_values": keys enum,
                 "default_value": default_value,
             } + (required ? {
@@ -4798,9 +4823,22 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     "required": True,
                 },
             } : NOTHING));
+            fieldmap{name}{rstr} := field;
+            field.updateFieldType(getDataType(required, rest));
+            return field;
         }
-        return swagger.getFieldFromParameter(path, name, type, format, items, desc, required,
-            keys enum, default_value);
+
+        # create the field with a placeholder type
+        QoreDataField field({
+            "name": name,
+            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+            "type": AutoType,
+            "allowed_values": keys enum,
+            "default_value": default_value,
+        });
+        fieldmap{name}{rstr} := field;
+        field.updateFieldType(swagger.getType(path, type, format, items, required));
+        return field;
     }
 
     #! returns example Qore code for the object

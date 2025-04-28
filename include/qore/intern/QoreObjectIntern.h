@@ -42,14 +42,7 @@
 #include <set>
 #include <vector>
 
-//#define _QORE_CYCLE_CHECK 1
-#ifdef _QORE_CYCLE_CHECK
-#define QORE_DEBUG_OBJ_REFS 0
-#define QRO_LVL 0
-#else
-#define QORE_DEBUG_OBJ_REFS 5
-#define QRO_LVL 1
-#endif
+// Qore DCG / cycle check defines are in QoreLibIntern.h
 
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/RSection.h"
@@ -417,7 +410,7 @@ public:
             obj->references.load(), obj->references.load() - 1);
 
 #ifdef QORE_DEBUG_OBJ_REFS
-        printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::obliterate() obj: %p class: %s: references %d->%d\n", obj,
+        printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::obliterate() this: %p class: %s: references %d->%d\n", this,
             theclass->getName(), obj->references.load(), obj->references.load() - 1);
 #endif
 
