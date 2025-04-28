@@ -423,18 +423,22 @@ class QdpCmd {
         *string event = QdpCmd::getString("event");
         *hash<auto> req;
         hash<DataProviderMessageInfo> event_info;
+        if (event.val() && event =~ /=/) {
+            req = getHashIntern(remove event, "request");
+        }
         if (event.val()) {
-            if (event =~ /=/) {
-                req = getHashIntern(remove event, "request");
-            } else {
-                req = QdpCmd::getHash("request");
-            }
+            req = QdpCmd::getHash("request");
             event_info = provider.getEventInfoWithData(event, req);
-        } else {
+        }
+        if (!event.val()) {
             hash<string, hash<DataProviderMessageInfo>> event_types = provider.getEventTypes();
             if (event_types.size() == 1) {
                 event = event_types.firstKey();
-                event_info = event_types.firstValue();
+                if (req) {
+                    event_info = provider.getEventInfoWithData(event, req);
+                } else {
+                    event_info = event_types.firstValue();
+                }
             } else {
                 QdpCmd::error("Missing required event argument; valid events: %y", keys event_types);
             }
@@ -1085,7 +1089,7 @@ class QdpCmd {
     }
 
     static showType(AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
-        printf("%s: %s\n", msg, QdpCmd::getDesc(0, info));
+        printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
         QdpCmd::showType(prov, info.type);
     }
 

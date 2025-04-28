@@ -1997,6 +1997,33 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getEventTypesImpl();
     }
 
+    #! Returns action options corresponding to the given event type with the given option data, if possible
+    /** @param event_id the event to get action options for
+        @param req sample option data that can be used to determine the final type
+
+        @return action options corresponding to the given event type
+
+        @throw INVALID-OPERATION the data provider does not support the event API
+
+        @note This API is meant to provide information about event data types that can depend on the option data
+
+        @since DataProvider 3.1
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsFromEventTypeWithData(string event_id, auto req) {
+        checkObservable();
+        *AbstractDataProviderType rt;
+        try {
+            rt = getEventInfoWithData(event_id, req).type;
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to retrieve event type with data, options: %y, ignoring options: %s",
+                req, get_exception_string(ex));
+            rt = getEventInfo(event_id).type;
+        }
+        if (rt && (*hash<auto> fields = rt.getFields())) {
+            return DataProviderActionCatalog::getActionOptionFromFields(fields);
+        }
+    }
+
     #! Returns the description of an outbound message, if any
     /** @param message_id the ID of the message
 
