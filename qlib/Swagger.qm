@@ -4774,10 +4774,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     private static *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
         if (h) {
             if ((key == "N") && !h.N) {
-                return h.N := h.Y.getOrNothingType();
+                return h.N = h.Y.getOrNothingType();
             }
             if ((key == "Y") && !h.Y) {
-                return h.Y := h.N.getMandatoryType();
+                return h.Y = h.N.getMandatoryType();
             }
             return h{key};
         }
