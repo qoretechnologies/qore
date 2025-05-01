@@ -4823,7 +4823,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     "required": True,
                 },
             } : NOTHING));
-            fieldmap{name}{rstr} := field;
+            fieldmap{name}{rstr} = field;
             field.updateFieldType(getDataType(required, rest));
             return field;
         }
@@ -4836,7 +4836,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             "allowed_values": keys enum,
             "default_value": default_value,
         });
-        fieldmap{name}{rstr} := field;
+        fieldmap{name}{rstr} = field;
         field.updateFieldType(swagger.getType(path, type, format, items, required));
         return field;
     }
