@@ -960,9 +960,11 @@ class QdpCmd {
         printf("@%s/%s (%s%s): %s\n", app, QdpCmd::action, ActionNameMap{action.action_code},
             (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
         action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
-        if (action.options) {
+        *hash<auto> req = getHashIntern(shift ARGV, "options");
+        *hash<string, hash<ActionOptionInfo>> opts = provider.tryGetActionOptionsWithData(action, req);
+        if (opts) {
             printf("Options:\n");
-            foreach hash<auto> i in (action.options.pairIterator()) {
+            foreach hash<auto> i in (opts.pairIterator()) {
                 string tn = i.value.type.getName();
                 # get allowed values or element allowed values
                 string info;
