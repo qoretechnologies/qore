@@ -232,12 +232,13 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             # issue #3225: handle exceptions in ServerSentEventHandler and remove the connection
             conn.registered();
         } catch (hash<ExceptionInfo> ex) {
-            logError("exception registering ServerSentEvent connection: %s", get_exception_string(ex));
+            logError("Exception registering ServerSentEvent connection: %s", get_exception_string(ex));
             rwl.writeLock();
             on_exit rwl.writeUnlock();
-            remove ch{cid};
+            removeConnectionLocked(cid);
             rethrow;
         }
+        connectionRegisteredImpl(conn);
 
         on_exit {
             #logDebug("ServerSentEventHandler::startImpl(): close connection: cid: %y from %s:%d", cx.id,
@@ -246,11 +247,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 deregisterConnectionImpl(conn);
                 conn.connectionClosed();
             } catch (hash<ExceptionInfo> ex) {
-                logError("exception deregistering ServerSentEvent connection: %s", get_exception_string(ex));
+                logError("Exception deregistering ServerSentEvent connection: %s", get_exception_string(ex));
             }
             rwl.writeLock();
             on_exit rwl.writeUnlock();
-            remove ch{cid};
+            removeConnectionLocked(cid);
         }
 
         # issue #2887 timestamp of last traffic
@@ -363,8 +364,14 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return rv;
     }
 
-    #! called when the connection terminates; the default implementation does nothing
+    #! Called when the connection is registered; the default implementation does nothing
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        # override in child classes
+    }
+
+    #! Called when the connection terminates; the default implementation does nothing
     deregisterConnectionImpl(ServerSentEventConnection conn) {
+        # override in child classes
     }
 
     #! sends a message to all connected clients
@@ -439,6 +446,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     #! Called while holding the write lock to register the new connection
     private registerNewConnectionIntern(string cid, ServerSentEventConnection rv) {
         ch{cid} = rv;
+    }
+
+    #! Called when a connection is removed from the connection map
+    private removeConnectionLocked(string cid) {
+        remove ch{cid};
     }
 
     #! Send the default heartbeat message
