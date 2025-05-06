@@ -2,7 +2,7 @@
 %global user_module_dir %{_datadir}/qore-modules/
 
 Name: qore
-Version: 2.1.0
+Version: 2.1.1
 Release: 1%{?dist}
 Summary: Multithreaded Programming Language
 
@@ -183,6 +183,9 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{_mandir}/man1/qore.1.*
 
 %changelog
+* Tue May 6 2023 David Nichols <david@qore.org> 2.1.1-1
+- updated version to 2.1.1-1
+
 * Wed Sep 20 2023 David Nichols <david@qore.org> 2.1.0-1
 - updated version to 2.1.0-1
 - updated libqore version to 12.6.0
