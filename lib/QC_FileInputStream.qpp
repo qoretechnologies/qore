@@ -100,7 +100,7 @@ FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool non
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
 
-    @see FileInputStream::readString()
+    @see StreamReader::readString()
  */
 *binary FileInputStream::read(int limit) {
    return is->readHelper(limit, xsink);

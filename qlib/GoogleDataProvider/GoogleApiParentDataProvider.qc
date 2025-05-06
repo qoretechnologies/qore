@@ -96,7 +96,7 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
     }
 
     #! Creates the object
-    constructor(GoogleRestClient::GoogleRestClient rest, string api, string resource, *hash<auto> path_args,
+    constructor(RestClient::RestClient rest, string api, string resource, *hash<auto> path_args,
             *string path_prefix, ...)
             : GoogleDataProviderBase(rest) {
         self.api = api;
@@ -138,7 +138,8 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
 
         *list<hash<DataProvider::DataProviderSummaryInfo>> rv = map <DataProviderSummaryInfo>{
             "name": $1,
-            "desc": sprintf("Google %s events/%s provider for `%s`", self.api, $1, rest.getSafeURL()),
+            "desc": sprintf("Google %s events/%s provider%s", self.api, $1,
+                rest ? sprintf(" for `%s`", rest.getSafeURL()) : ""),
             "type": sprintf("Google%s%s%sDataProvider", api, resource_path.last(), cap($1)),
             "supports_request": True,
         }, keys methods;
@@ -215,6 +216,10 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
         @see getChildProviderEx()
     */
     private *GoogleDataProvider::GoogleDataProviderBase getChildProviderImpl(string name) {
+        if (!rest) {
+            throw "GOOGLE-API-ERROR", sprintf("Google API %y resource %y has no REST client set", api,
+                resource_path.join("/"));
+        }
         if (methods{name}) {
             return new GoogleApiDataProvider(rest, api, resource_path.join("/") + "/" + name, path_args);
         }
