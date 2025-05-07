@@ -47,6 +47,9 @@ public class HashDataType inherits QoreDataType {
 
         #! if the type requires validation
         bool has_default_other_field_type = False;
+
+        #! if the default value should be validated
+        bool default_value_needs_check;
     }
 
     #! creates the object and assigns the name as the type
@@ -130,6 +133,26 @@ public class HashDataType inherits QoreDataType {
         }
         # convert to *hash<auto>
         type = type.getOrNothingType();
+    }
+
+    #//! Returns the default value for the type or @ref nothing if the type has no default value
+    /** @par Example:
+        @code{.py}
+auto v = t.getDefaultValue();
+        @endcode
+
+        @return the default value for the type or @ref nothing if the type has no default value
+    */
+    *hash<auto> getDefaultValue() {
+        if (default_value && default_value_needs_check) {
+            try {
+                acceptsValue(default_value);
+                remove default_value_needs_check;
+            } catch (hash<ExceptionInfo> ex) {
+                remove default_value;
+            }
+        }
+        return default_value;
     }
 
     #! Returns the value if the value can be assigned to the type
@@ -264,6 +287,9 @@ public class HashDataType inherits QoreDataType {
 
             if (exists (auto fv = field.getDefaultValue())) {
                 default_value{i.key} = fv;
+                if (!default_value_needs_check) {
+                    default_value_needs_check = True;
+                }
             }
             if (field.getType().getTags().dynamic) {
                 setDynamicTag();
@@ -365,6 +391,9 @@ public class HashDataType inherits QoreDataType {
                 type = AutoHashOrNothingType;
             }
             default_value{field.getName()} = val;
+            if (!default_value_needs_check) {
+                default_value_needs_check = True;
+            }
         }
         if (!tags.dynamic && dyn) {
             tags.dynamic = True;
