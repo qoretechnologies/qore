@@ -69,21 +69,10 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     }
 #endif
 
-// XXX DEBUG DELETEME
-if (theclass->priv->name == "ThreadPool") {
-    printd(0, "qore_object_private::qore_object_private() this: %p obj: %p '%s' rml: %p\n", this, obj,
-        theclass->getName(), &rml);
-}
-
     qore_class_private::get(*oc)->ref();
 }
 
 qore_object_private::~qore_object_private() {
-// XXX DEBUG DELETEME
-if (theclass->priv->name == "ThreadPool") {
-    printd(0, "qore_object_private::~qore_object_private() this: %p obj: %p '%s'\n", this, obj, theclass->getName());
-}
-
     //printd(5, "qore_object_private::~qore_object_private() this: %p obj: %p '%s' pgm: %p\n", this, obj, theclass ? theclass->getName() : "<n/a>", pgm);
     assert(!cdmap);
     assert(!data);
@@ -958,13 +947,6 @@ void qore_object_private::unsetRealReference() {
 
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
-
-    // XXX DEBUG DELETEME
-    if (theclass->priv->name == "ThreadPool") {
-       printd(0, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
-            "rrefs %d->%d rlm.write_tid: %d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
-            references.load() - 1, rrefs, rrefs - (real ? 1 : 0), qore_var_rwlock_priv::get(rml)->write_tid);
-    }
 
     {
         //printd(5, "qore_object_private::customDeref() this: %p '%s' references: %d->%d (trefs: %d) status: %d\n",

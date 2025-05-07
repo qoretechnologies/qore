@@ -819,16 +819,6 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             return -1;
         }
 
-// XXX DEBUG DELETEME
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> pl(parse_option_bitfield_to_string_list(parse_context.pgm->getParseOptions64(),
-        &xsink), &xsink);
-
-    ReferenceHolder<QoreListNode> cl(parse_option_bitfield_to_string_list(qc->getDomain(), &xsink), &xsink);
-
-    QoreNodeAsStringHelper pstr(*pl, FMT_NORMAL, &xsink);
-    QoreNodeAsStringHelper cstr(*cl, FMT_NORMAL, &xsink);
-
         // check class capabilities against parse options
         if (qore_program_private::parseAddDomain(parse_context.pgm, qc->getDomain())) {
             parseException(*loc, "INVALID-METHOD", "class '%s' implements capabilities that are not allowed by " \
@@ -846,12 +836,6 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         delete scope;
         scope = nullptr;
-
-        /*
-        // need to get the current contextual class when parsing in case we're in a static method for example
-        if (!pc)
-            pc = parse_get_class();
-        */
     } else {
         assert(!scope);
         // check class capabilities against parse options
