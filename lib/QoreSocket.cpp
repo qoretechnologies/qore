@@ -1249,7 +1249,7 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
                 assert(!real_io);
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 sent += real_io;
                 if (sent == size) {
                     break;
@@ -1402,7 +1402,7 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
                 }
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 if (real_io) {
                     realsize += real_io;
                 }
@@ -1422,8 +1422,6 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
                 }
                 // otherwise continue reading
                 continue;
-            } else {
-                assert(!real_io);
             }
             bin->setSize(realsize);
             if (realsize) {
@@ -1550,7 +1548,7 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
             if (*xsink) {
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 received += real_io;
                 if (received == size) {
                     bin->setSize(size);
@@ -2323,7 +2321,6 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             // close the local socket unconditionally
             qs.close();
-
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2341,8 +2338,8 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             // close the local socket unconditionally
             qs.close();
-            assert(*xsink);
-            rc = QSE_SSL_ERR;
+            // in case there is no exception when reading, the remote end closed the connection
+            rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
             qs.close();
