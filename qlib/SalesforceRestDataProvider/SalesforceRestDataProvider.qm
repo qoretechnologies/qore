@@ -37,7 +37,7 @@
 %requires(reexport) SalesforceRestClient
 
 module SalesforceRestDataProvider {
-    version = "2.0";
+    version = "2.0.1";
     desc = "user module providing a data provider API for Salesforce instances through the REST API";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -209,6 +209,10 @@ module SalesforceRestDataProvider {
     - @ref soql_op_funcs
 
     @section salesforcerestdataprovider_relnotes Release Notes
+
+    @subsection salesforcerestdataprovider_v2_0_1 SalesforceRestDataProvider v2.0.1
+    - cannot execute a search with a descending sort order
+      (<a href="https://github.com/qorelanguage/qore/issues/4942">issue 4942</a>)
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API
