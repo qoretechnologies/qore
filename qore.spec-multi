@@ -284,7 +284,7 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %changelog
-* Tue May 6 2023 David Nichols <david@qore.org> 2.1.1
+* Tue May 6 2025 David Nichols <david@qore.org> 2.1.1
 - updated version to 2.1.1
 
 * Wed Sep 20 2023 David Nichols <david@qore.org> 2.1.0
