@@ -160,6 +160,12 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     "type": new QoreListDataType(new Type("softlist<string>")),
                     "desc": "Sets the order by argument for the SOQL select expression",
                 },
+                "orderby_desc": <DataProviderOptionInfo>{
+                    "display_name": "Order By Descending",
+                    "short_desc": "Sort in descending order",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "desc": "Sort in descending order",
+                },
                 "forview": <DataProviderOptionInfo>{
                     "display_name": "Use For View",
                     "short_desc": "Uses FOR VIEW with the query",

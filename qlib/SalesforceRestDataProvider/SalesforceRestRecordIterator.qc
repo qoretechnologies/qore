@@ -140,6 +140,9 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         }
         if (search_options.orderby) {
             soql += " order by " + getOrderBy(search_options.orderby);
+            if (search_options.orderby_desc) {
+                soql += " desc";
+            }
         }
         if (search_options.limit) {
             soql += sprintf(" limit %d", search_options.limit);
