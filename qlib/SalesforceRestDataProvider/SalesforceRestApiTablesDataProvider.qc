@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore SalesforceRestTablesDataProvider module definition
+#! Qore SalesforceRestDataProvider module definition
 
-/** SalesforceRestTablesDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** SalesforceRestApiTablesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,17 +25,15 @@
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
 #! The SalesforceRest data provider class
-public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProviderBase {
+public class SalesforceRestApiTablesDataProvider inherits SalesforceRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "tables",
-            "type": "SalesforceRestTablestDataProvider",
+            "type": "SalesforceRestApiTablestDataProvider",
             "supports_children": True,
             "constructor_options": ConstructorOptions,
-            "children_can_support_apis": False,
-            "children_can_support_records": True,
-            "children_can_support_observers": False,
+            "children_can_support_apis": True,
             "children_identical": True,
         };
 
@@ -90,20 +88,12 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
 
         return map <DataProviderSummaryInfo>{
             "name": $1.name,
-            "desc": sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-                "interface", rest.getURL(), $1.name),
-            "type": "SalesforceRestObjectDataProvider",
-            "supports_read": $1.queryable,
-            "supports_create": $1.createable,
-            "supports_update": $1.updateable,
-            "supports_upsert": $1.mergeable,
-            "supports_delete": $1.deletable,
-            "supports_native_search": $1.queryable,
-            "supports_request": False,
-            "supports_children": False,
-            "has_record": $1.queryable || $1.mergeable || $1.deletable || $1.createable,
-            "children_can_support_records": False,
-        }, v;
+            "desc": sprintf("Salesforce API table data provider parent for URL `%s` and sobject `%s`", rest.getURL(),
+                $1.name),
+            "type": "SalesforceRestApiTableDataProvider",
+            "supports_children": True,
+            "children_can_support_apis": True,
+        }, v, $1.queryable || $1.mergeable || $1.deletable || $1.createable;
     }
 
     #! Returns a list of child data provider names, if any
@@ -127,7 +117,7 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
             if (!v.queryable) {
                 return;
             }
-            return new SalesforceRestObjectDataProvider(rest, name, v);
+            return new SalesforceRestApiTableDataProvider(rest, name, v);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && info."response-headers".status_code == 404) {
                 return;
@@ -139,12 +129,6 @@ public class SalesforceRestTablesDataProvider inherits SalesforceRestDataProvide
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
-    }
-
-    #! Returns options for the SalesforceRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("salesforcerestclient_options", "salesforcerestclient")
-            + copts.salesforcerestclient_options;
     }
 }
 }

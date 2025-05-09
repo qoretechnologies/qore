@@ -92,7 +92,9 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     }
 
     private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
-        return record_info.record_type - keys record_info.no_update;
+        return cast<*hash<string, AbstractDataField>>(map {
+            $1.key: $1.value.getOrNothingType(),
+        }, (record_info.record_type - keys record_info.no_update).pairIterator());
     }
 
     private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
@@ -318,7 +320,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
             return 1;
         }
         where_cond = fixSalesforceRecord(where_cond);
-        AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
+        AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (updateSingleRecord(i.getValue().Id, set), ++count), i;
         return count;
@@ -337,7 +339,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
             return 1;
         }
         where_cond = fixSalesforceRecord(where_cond);
-        AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
+        AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (deleteSingleRecord(i.getValue().Id), ++count), i;
         return count;
