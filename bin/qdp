@@ -148,6 +148,13 @@ class QdpCmd {
             "upsert": \QdpCmd::upsert(),
         };
 
+        #! Commands that don't need a data provider
+        const NoProviderCmds = (
+            "action-info": True,
+            "ai": True,
+            "ainfo": True,
+        );
+
         #! Disambiguation for common commands with the same initial letters
         const DisambiguationMap = {
             "search": "supports_read",
@@ -230,7 +237,8 @@ class QdpCmd {
                 : NOTHING);
 
         AbstractDataProvider provider;
-        {
+        DataProviderContextHelper pctx;
+        try {
             # first extract any data provider options
             string name = shift ARGV;
             # get expression in curly brackets, if any, respecting balanced brackets
@@ -257,10 +265,13 @@ class QdpCmd {
                 provider = getDataProvider((shift path) + opts);
                 map provider = provider.getChildProviderEx($1), path;
             }
+            provider.setLogger(logger);
+            pctx = new DataProviderContextHelper(provider);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!NoProviderCmds{ARGV[0]}) {
+                rethrow;
+            }
         }
-        provider.setLogger(logger);
-
-        DataProviderContextHelper pctx(provider);
 
         # Set up fake webhook interface for the TypeScriptActionInterface module if possible
         if (get_module_hash().TypeScriptActionInterface) {
@@ -283,7 +294,7 @@ class QdpCmd {
             # see if an abbreviation matches
             hash<string, bool> match = map {$1: True}, keys Cmds, $1.equalPartial(cmd);
             # try to disambiguate
-            if (match.size() > 1) {
+            if (provider && (match.size() > 1)) {
                 # only consider commands that are applicable for this data provider
                 # AbstractDataProvider::getSummaryInfo() is generally faster than getInfo()
                 hash<DataProviderSummaryInfo> info = provider.getSummaryInfo();
@@ -755,7 +766,7 @@ class QdpCmd {
         }
     }
 
-    static showRecord(AbstractDataProvider prov, *hash<string, AbstractDataField> rec, string offset = "") {
+    static showRecord(*AbstractDataProvider prov, *hash<string, AbstractDataField> rec, string offset = "") {
         QdpCmd::showRecord(prov, {}, rec, offset);
     }
 
@@ -774,11 +785,11 @@ class QdpCmd {
         }
     }
 
-    static showRecord(AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
+    static showRecord(*AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
             string offset = "") {
         foreach hash<auto> i in (rec.pairIterator()) {
             auto dv = i.value.getDefaultValue();
-            if (!dv) {
+            if (prov && !dv) {
                 if ((*string default_ref_data = i.value.getAttributes().default_ref_data).val()) {
                     dv = prov.getReferenceDataValueSafe(default_ref_data, DataProviderDataContextHelper::getHash());
                 } else if (!offset.val() && prov.getSupportedReferenceDataValues(){i.key}) {
@@ -804,18 +815,18 @@ class QdpCmd {
 
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
-                } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
+                } else if (prov && (*string ref_data = i.value.getAttributes().ref_data).val()) {
                     l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     QdpCmd::getAllowedValues(\info, l);
-                } else if (!offset.val() && prov.getSupportedReferenceData(){i.key}
+                } else if (prov && !offset.val() && prov.getSupportedReferenceData(){i.key}
                     && (l = prov.getReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
                     QdpCmd::getAllowedValues(\info, l);
                 } else if (l = i.value.getElementAllowedValues()) {
                     QdpCmd::getAllowedValues(\info, l);
-                } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
+                } else if (prov && (ref_data = i.value.getAttributes().element_ref_data).val()) {
                     l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     QdpCmd::getAllowedValues(\info, l);
-                } else if (!offset.val() && prov.getSupportedElementReferenceData(){i.key}
+                } else if (prov && !offset.val() && prov.getSupportedElementReferenceData(){i.key}
                     && (l = prov.getElementReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
                     QdpCmd::getAllowedValues(\info, l);
                 }
@@ -828,14 +839,14 @@ class QdpCmd {
                 string info;
                 if (*list<auto> l = i.value.getAllowedValues()) {
                     info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
-                } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
+                } else if (prov && (*string ref_data = i.value.getAttributes().ref_data).val()) {
                     l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
                     }
                 } else if (l = i.value.getElementAllowedValues()) {
                     info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
-                } else if ((ref_data = i.value.getAttributes().element_ref_data).val()) {
+                } else if (prov && (ref_data = i.value.getAttributes().element_ref_data).val()) {
                     l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
@@ -951,7 +962,7 @@ class QdpCmd {
         return rv;
     }
 
-    static actionInfo(AbstractDataProvider provider) {
+    static actionInfo(*AbstractDataProvider provider) {
         if (!exists app) {
             QdpCmd::error("Missing app and action for action info; use:\n    %s @<app>/<action> %s",
                 get_script_name(), cmd);
@@ -961,7 +972,9 @@ class QdpCmd {
             (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
         action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
         *hash<auto> req = getHashIntern(shift ARGV, "options");
-        *hash<string, hash<ActionOptionInfo>> opts = provider.tryGetActionOptionsWithData(action, req);
+        *hash<string, hash<ActionOptionInfo>> opts = provider
+            ? provider.tryGetActionOptionsWithData(action, req)
+            : action.options;
         if (opts) {
             printf("Options:\n");
             foreach hash<auto> i in (opts.pairIterator()) {
@@ -1086,20 +1099,20 @@ class QdpCmd {
         }
     }
 
-    static showType(AbstractDataProvider prov) {
+    static showType(*AbstractDataProvider prov) {
         # intentionally empty
     }
 
-    static showType(AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
+    static showType(*AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
         printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
         QdpCmd::showType(prov, info.type);
     }
 
-    static showType(AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
+    static showType(*AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
         QdpCmd::showType(prov, {}, type, offset);
     }
 
-    static showType(AbstractDataProvider prov, hash<auto> rmap, AbstractDataProviderType type, *string offset) {
+    static showType(*AbstractDataProvider prov, hash<auto> rmap, AbstractDataProviderType type, *string offset) {
         *hash<string, AbstractDataField> fields = type.getFields();
         if (fields) {
             QdpCmd::showRecord(prov, rmap, fields, offset);
