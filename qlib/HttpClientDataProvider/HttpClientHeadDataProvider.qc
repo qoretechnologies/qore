@@ -77,7 +77,6 @@ public class HttpClientHeadDataProvider inherits AbstractDataProvider {
         return HttpClientDataProvider::makeRequest(http, "HEAD", NOTHING, req.path, req.hdr);
     }
 
-    #! Makes a request and returnscallwithoutbody
     #! Returns the description of a successful request message, if any
     /** @return the request type for this provider
     */

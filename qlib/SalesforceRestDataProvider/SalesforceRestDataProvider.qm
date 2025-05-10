@@ -63,114 +63,6 @@ module SalesforceRestDataProvider {
             "app": SalesforceRestDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "create",
-            "display_name": "(Record-Based) Create Record",
-            "short_desc": "Create a record in Salesforce",
-            "desc": "Create a record in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_CREATE,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/tables/{table}",
-            "action": "find_single",
-            "display_name": "(Record-Based) Find Single Record",
-            "short_desc": "Find a single record in Salesforce",
-            "desc": "Find a single record in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_FIND_SINGLE,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/tables/{table}",
-            "action": "find",
-            "display_name": "(Record-Based) Find Matching Records",
-            "short_desc": "Find records in Salesforce",
-            "desc": "Find records in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_FIND,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/tables/{table}",
-            "action": "update",
-            "display_name": "(Record-Based) Update Records",
-            "short_desc": "Update records in Salesforce",
-            "desc": "Update records in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_UPDATE,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/tables/{table}",
-            "action": "upsert",
-            "display_name": "(Record-Based) Upsert Records",
-            "short_desc": "Upsert records in Salesforce",
-            "desc": "Upsert records in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_UPSERT,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/tables/{table}",
-            "action": "delete",
-            "display_name": "(Record-Based) Delete Records",
-            "short_desc": "Delete records in Salesforce",
-            "desc": "Delete records in Salesforce using Salesforce's REST API",
-            "path_vars": {
-                "table": <DataProviderPathVarInfo>{
-                    "display_name": "Table",
-                    "short_desc": "The name of the Salesforce table",
-                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
-                    "example_value": "Account",
-                },
-            },
-            "action_code": DPAT_DELETE,
-        });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": SalesforceRestDataProvider::AppName,
-            "path": "/apitables/{table}/create",
-            "action": "api-create",
             "display_name": "Create Record",
             "short_desc": "Create a record in Salesforce",
             "desc": "Create a record in Salesforce using Salesforce's REST API",
@@ -182,23 +74,33 @@ module SalesforceRestDataProvider {
                     "example_value": "Account",
                 },
             },
-            "action_code": DPAT_API,
-            # the actual record type depends on the table
-            "options": {
-                "record": <ActionOptionInfo>{
-                    "display_name": "Record Data",
-                    "short_desc": "Record data",
-                    "desc": "Record data",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-            },
+            "action_code": DPAT_CREATE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/apitables/{table}/search",
-            "action": "api-find",
+            "path": "/tables/{table}",
+            "action": "find_single",
+            "display_name": "Find Single Record",
+            "short_desc": "Find a single record in Salesforce",
+            "desc": "Find a single record in Salesforce using Salesforce's REST API",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Salesforce table",
+                    "desc": "The name of the Salesforce table (also called an \"sobject\"), ex: `Account`",
+                    "example_value": "Account",
+                },
+            },
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SalesforceRestDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "find",
             "display_name": "Find Matching Records",
             "short_desc": "Find records in Salesforce",
             "desc": "Find records in Salesforce using Salesforce's REST API",
@@ -210,23 +112,14 @@ module SalesforceRestDataProvider {
                     "example_value": "Account",
                 },
             },
-            "action_code": DPAT_API,
-            # the actual record type depends on the table
-            "options": DataProviderActionCatalog::getActionOptionFromFields(SearchRequestTypeBase::Fields) + {
-                "where": <ActionOptionInfo>{
-                    "display_name": "Where Clause",
-                    "short_desc": "Fields to match exactly",
-                    "desc": "Fields to match exactly",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-            },
+            "action_code": DPAT_FIND,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/apitables/{table}/update",
-            "action": "api-update",
+            "path": "/tables/{table}",
+            "action": "update",
             "display_name": "Update Records",
             "short_desc": "Update records in Salesforce",
             "desc": "Update records in Salesforce using Salesforce's REST API",
@@ -238,30 +131,14 @@ module SalesforceRestDataProvider {
                     "example_value": "Account",
                 },
             },
-            "action_code": DPAT_API,
-            # the actual record type depends on the table
-            "options": {
-                "set": <ActionOptionInfo>{
-                    "display_name": "Record Data",
-                    "short_desc": "Record data to set in matched records",
-                    "desc": "Record data to set in matched records",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-                "where": <ActionOptionInfo>{
-                    "display_name": "Where Clause",
-                    "short_desc": "Fields to match exactly",
-                    "desc": "Fields to match exactly",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-            },
+            "action_code": DPAT_UPDATE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/apitables/{table}/upsert",
-            "action": "api-upsert",
+            "path": "/tables/{table}",
+            "action": "upsert",
             "display_name": "Upsert Records",
             "short_desc": "Upsert records in Salesforce",
             "desc": "Upsert records in Salesforce using Salesforce's REST API",
@@ -273,23 +150,14 @@ module SalesforceRestDataProvider {
                     "example_value": "Account",
                 },
             },
-            "action_code": DPAT_API,
-            # the actual record type depends on the table
-            "options": {
-                "record": <ActionOptionInfo>{
-                    "display_name": "Record Data",
-                    "short_desc": "Record data",
-                    "desc": "Record data",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-            },
+            "action_code": DPAT_UPSERT,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/apitables/{table}/delete",
-            "action": "api-delete",
+            "path": "/tables/{table}",
+            "action": "delete",
             "display_name": "Delete Records",
             "short_desc": "Delete records in Salesforce",
             "desc": "Delete records in Salesforce using Salesforce's REST API",
@@ -301,17 +169,8 @@ module SalesforceRestDataProvider {
                     "example_value": "Account",
                 },
             },
-            "action_code": DPAT_API,
-            # the actual record type depends on the table
-            "options": {
-                "where": <ActionOptionInfo>{
-                    "display_name": "Where clause",
-                    "short_desc": "Fields to match exactly",
-                    "desc": "Fields to match exactly",
-                    "type": AbstractDataProviderTypeMap."hash",
-                    "required": True,
-                },
-            },
+            "action_code": DPAT_DELETE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
     };
 }

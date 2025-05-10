@@ -50,6 +50,43 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
         #! metadata description
         hash<auto> meta;
+
+        #! Static provider info
+        const ProviderInfo = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
+            "search_options": {
+                "columns": <DataProviderOptionInfo>{
+                    "display_name": "Columns",
+                    "short_desc": "Columns to include in the output of the query",
+                    "type": AbstractDataProviderTypeMap."auto",
+                    "desc": "Columns to include in the output of the query; `select` argument for the query expression",
+                },
+                "limit": <DataProviderOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "The maximum number of records to return",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "desc": "The maximum number of records to return; `top` argument for the query expression",
+                },
+                "groupby": <DataProviderOptionInfo>{
+                    "display_name": "Group By",
+                    "short_desc": "Field(s) to group results by",
+                    "type": new QoreListDataType(new Type("softlist<auto>")),
+                    "desc": "Field(s) to group results by in case there are aggregate expressions in the query; "
+                        "`groupby` argument for the query expression",
+                },
+                "orderby": <DataProviderOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Fields to order the query result by",
+                    "type": new QoreListDataType(new Type("softlist<string>")),
+                    "desc": "Fields to order the query result by; `orderby` argument for the query expression",
+                },
+                "orderby_desc": <DataProviderOptionInfo>{
+                    "display_name": "Order By Descending",
+                    "short_desc": "Set this flag to use descending sort order for the 'orderby' option",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "desc": "Set this flag to use descending sort order for the `orderby` option",
+                },
+            },
+        };
     }
 
     private {
@@ -93,35 +130,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
-        hash<DataProviderInfo> rv = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
-            "search_options": {
-                "columns": <DataProviderOptionInfo>{
-                    "display_name": "Columns",
-                    "short_desc": "Columns to include in the output of the query",
-                    "type": AbstractDataProviderType::get(AbstractDataProviderType::anyType),
-                    "desc": "Columns to include in the output of the query; `select` argument for the query expression",
-                },
-                "limit": <DataProviderOptionInfo>{
-                    "display_name": "Limit",
-                    "short_desc": "The maximum number of records to return",
-                    "type": AbstractDataProviderType::get(IntType),
-                    "desc": "The maximum number of records to return; `top` argument for the query expression",
-                },
-                "groupby": <DataProviderOptionInfo>{
-                    "display_name": "Group By",
-                    "short_desc": "Field(s) to group results by",
-                    "type": new QoreListDataType(new Type("softlist<auto>")),
-                    "desc": "Field(s) to group results by in case there are aggregate expressions in the query; "
-                        "`groupby` argument for the query expression",
-                },
-                "orderby": <DataProviderOptionInfo>{
-                    "display_name": "Order By",
-                    "short_desc": "Fields to order the query result by",
-                    "type": new QoreListDataType(new Type("softlist<string>")),
-                    "desc": "Fields to order the query result by; `orderby` argument for the query expression",
-                },
-            },
-        };
+        hash<DataProviderInfo> rv = ProviderInfo;
         if (meta.Key.PropertyRef."^attributes^".Name) {
             rv += {
                 "has_record": True,

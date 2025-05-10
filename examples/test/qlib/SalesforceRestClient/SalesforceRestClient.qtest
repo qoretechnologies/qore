@@ -69,8 +69,10 @@ class SalesforceTest inherits QUnit::Test {
         try {
             setupConnection();
         } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose) {
+            if (m_options.verbose > 2) {
                 printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
             }
         }
 
@@ -113,6 +115,7 @@ class SalesforceTest inherits QUnit::Test {
                 error("missing --password option or SALESFORCE_PASS environment variable");
             if (sfopts."timeout")
                 sfopts.connect_timeout = sfopts.timeout;
+            sfopts.oauth2_grant_type = "password";
 
             rc = new SalesforceRestClient(sfopts + {"logger": logger});
         }

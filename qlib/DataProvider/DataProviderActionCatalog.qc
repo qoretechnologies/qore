@@ -393,6 +393,9 @@ public hashdecl DataProviderActionInfo {
 
     #! For the case when options should be generated dynamically
     *code get_dynamic_options;
+
+    #! Data provider static info, useful for record-based data providers
+    *hash<DataProviderInfo> data_provider_info;
 }
 
 #! DataProvider action and application catalog class

@@ -442,6 +442,16 @@ public class CdsRestConnection inherits RestClient::RestConnection {
         return True;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        switch (opts.api_profile) {
+            case "dynamics":
+                return "Dynamics";
+        };
+    }
+
     #! returns a data provider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 
