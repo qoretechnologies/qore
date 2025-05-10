@@ -1082,15 +1082,16 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	modules/logger_bin/docs/mainpage.dox.tmpl \
 	modules/logger_bin/CMakeLists.txt \
 	modules/logger_bin/cmake/cmake_uninstall.cmake.in \
-    doxygen/lang/mainpage.dox.tmpl \
+	doxygen/lang/mainpage.dox.tmpl \
 	doxygen/lang/Doxyfile.in \
 	doxygen/qlib/Doxyfile.in \
-    doxygen/qlib/Doxyfile.cmake.tmpl \
+	doxygen/qlib/Doxyfile.cmake.tmpl \
 	doxygen/modules/Doxyfile.in \
-    doxygen/modules/Doxyfile.cmake.in \
+	doxygen/modules/Doxyfile.cmake.in \
 	doxygen/lib/Doxyfile.in \
-    qlib/MewsRestDataProvider/mews-M-white.svg \
-    qlib/ServerSentEventClient/sse-generic-logo.svg \
+	qlib/DbDataProvider/db-logo.svg \
+	qlib/MewsRestDataProvider/mews-M-white.svg \
+	qlib/ServerSentEventClient/sse-generic-logo.svg \
 	$(LIB_DOXYFILES_SRC) \
 	$(LANG_DOXYFILES_SRC) \
 	$(LANG_QPP_SRC) \

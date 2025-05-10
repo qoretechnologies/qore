@@ -25,7 +25,7 @@
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
 #! Defines a data provider based on a single SQL table
-public class DbTableDataProvider inherits AbstractDataProvider {
+public class DbTableDataProvider inherits DbDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -269,15 +269,12 @@ public class DbTableDataProvider inherits AbstractDataProvider {
         #! the table
         AbstractTable table;
 
-        #! the database object, if required
-        AbstractDatabase db;
-
         #! lock for "db"
         Mutex db_lock();
     }
 
     #! Creates the object
-    constructor(AbstractTable table, *LoggerInterface logger) : AbstractDataProvider(logger) {
+    constructor(AbstractTable table, *LoggerInterface logger) : DbDataProviderBase(logger) {
         self.table = table;
     }
 
@@ -322,18 +319,6 @@ public class DbTableDataProvider inherits AbstractDataProvider {
             rv.expressions = expression_info;
         }
         return rv;
-    }
-
-    #! Returns child providers; return @ref nothing if there are no child providers
-    *AbstractDataProvider getChildProviders() {
-    }
-
-    #! Returns @ref True if the data provider supports transaction management
-    /** @return @ref True if the data provider supports transaction management, in which case commit() or rollback()
-        must be called to flush or discard data written to the data provider
-    */
-    bool requiresTransactionManagement() {
-        return True;
     }
 
     #! Begins a transaction in the datasource underlying the table
@@ -395,22 +380,7 @@ public class DbTableDataProvider inherits AbstractDataProvider {
                 db = AbstractDatabase::getDatabase(table.getDatasource());
             }
         }
-        hash<string, hash<MapperRuntimeKeyInfo>> rv(MapperKeyInfo);
-        rv.sequence.handler = \doSequenceKey();
-        rv.sequence_currval.handler = \doSequenceCurrvalKey();
-        return rv;
-    }
-
-    #! Processes the \c sequence runtime key in mappers as a mapper key handler
-    int doSequenceKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getNextSequenceValue(sequence_name);
-    }
-
-    #! Processes the \c sequence_currval runtime key in mappers as a mapper key handler
-    int doSequenceCurrvalKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence_currval' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getCurrentSequenceValue(sequence_name);
+        return DbDataProviderBase::getMapperRuntimeKeys();
     }
 
     #! Returns the description of the record type, if any

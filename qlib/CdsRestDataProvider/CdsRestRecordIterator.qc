@@ -149,6 +149,9 @@ public class CdsRestRecordIterator inherits AbstractDataProviderRecordIterator {
                 filter += "&";
             }
             filter += "$orderby=" + getOrderBy(search_options.orderby);
+            if (search_options.orderby_desc) {
+                filter += " desc";
+            }
         }
         if (search_options.limit) {
             if (filter) {

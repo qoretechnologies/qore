@@ -59,65 +59,9 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
 
         #! sobject description
         hash<auto> sobject;
-    }
 
-    private {
-        #! The description of this object type
-        hash<auto> desc;
-
-        #! Record info for this object
-        hash<SalesforceRestRecordInfo> record_info();
-    }
-
-    #! Creates the object from the arguments
-    constructor(SalesforceRestClient rest, string name, hash<auto> sobject) : SalesforceRestDataProviderBase(rest) {
-        self.name = name;
-        self.sobject = sobject;
-        getRecordInfoIntern();
-    }
-
-    #! Returns the data provider name
-    string getName() {
-        return name;
-    }
-
-    #! Returns the data provider description
-    *string getDesc() {
-        return sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-            "interface", rest.getURL(), name);
-    }
-
-    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return record_info.record_type;
-    }
-
-    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
-        return cast<*hash<string, AbstractDataField>>(map {
-            $1.key: $1.value.getOrNothingType(),
-        }, (record_info.record_type - keys record_info.no_update).pairIterator());
-    }
-
-    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
-        *hash<string, QoreDataField> rv = record_info.record_type - keys record_info.no_create;
-        map rv{$1}.updateFieldType(rv{$1}.getType().getOrNothingType()), keys record_info.defaulted_on_create,
-            rv{$1} && rv{$1}.getType().isMandatory();
-        return rv;
-    }
-
-    #! Returns an iterator for zero or more records matching the search options
-    /** @param where_cond the search criteria
-        @param search_options the search options after processing by validateSearchOptions()
-
-        @see requestSearchRecordsImpl()
-    */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        where_cond = fixSalesforceRecord(where_cond);
-        return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
-    }
-
-    #! Returns data provider static info
-    private hash<DataProviderInfo> getStaticInfoImpl() {
-        hash<DataProviderInfo> rv = SalesforceRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
+        #! Static info for the data provider
+        const ProviderInfo = SalesforceRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
             "search_options": {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
@@ -210,6 +154,65 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                 },
             },
         };
+    }
+
+    private {
+        #! The description of this object type
+        hash<auto> desc;
+
+        #! Record info for this object
+        hash<SalesforceRestRecordInfo> record_info();
+    }
+
+    #! Creates the object from the arguments
+    constructor(SalesforceRestClient rest, string name, hash<auto> sobject) : SalesforceRestDataProviderBase(rest) {
+        self.name = name;
+        self.sobject = sobject;
+        getRecordInfoIntern();
+    }
+
+    #! Returns the data provider name
+    string getName() {
+        return name;
+    }
+
+    #! Returns the data provider description
+    *string getDesc() {
+        return sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
+            "interface", rest.getURL(), name);
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return record_info.record_type;
+    }
+
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return cast<*hash<string, AbstractDataField>>(map {
+            $1.key: $1.value.getOrNothingType(),
+        }, (record_info.record_type - keys record_info.no_update).pairIterator());
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+        *hash<string, QoreDataField> rv = record_info.record_type - keys record_info.no_create;
+        map rv{$1}.updateFieldType(rv{$1}.getType().getOrNothingType()), keys record_info.defaulted_on_create,
+            rv{$1} && rv{$1}.getType().isMandatory();
+        return rv;
+    }
+
+    #! Returns an iterator for zero or more records matching the search options
+    /** @param where_cond the search criteria
+        @param search_options the search options after processing by validateSearchOptions()
+
+        @see requestSearchRecordsImpl()
+    */
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        where_cond = fixSalesforceRecord(where_cond);
+        return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
+    }
+
+    #! Returns data provider static info
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        hash<DataProviderInfo> rv = ProviderInfo;
         if (record_info.record_type) {
             if (sobject.queryable) {
                 rv.supports_read = True;
@@ -246,6 +249,8 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        # ignore fields that are not createable
+        rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s", name);
         hash<auto> info;
@@ -266,7 +271,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
             rethrow ex.err, ex.desc, ex_arg;
         }
         if (!resp.body.success) {
-            throw "UPSERT-ERROR", sprintf("error creating record: %y", resp.errors);
+            throw "CREATE-ERROR", sprintf("error creating record: %y", resp.errors);
         }
         return rec + {"id": resp.body.id};
     }
@@ -282,9 +287,11 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         # the external ID info must be removed from the request body
         *softstring extid_value = remove rec{extid};
         if (!extid_value.val()) {
-            throw "UPSERT-ERROR", sprintf("upsert request requires a value for the %y field, but none was given",
+            throw "UPSERT-ERROR", sprintf("Upsert request requires a value for the %y field, but none was given",
             extid);
         }
+        # ignore fields that are not createable
+        rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s/%s/%s", name, extid, extid_value);
         hash<auto> info;
@@ -315,6 +322,8 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         @return the number of records updated
     */
     private int updateRecordsImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
+        # ignore fields that are not updateable
+        set -= keys record_info.no_update;
         if (where_cond.Id) {
             updateSingleRecord(where_cond.Id, set);
             return 1;

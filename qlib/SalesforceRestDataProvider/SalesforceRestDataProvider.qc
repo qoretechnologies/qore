@@ -42,7 +42,6 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
         static hash<string, code> dynamic_children;
 
         const ChildMap = {
-            "apitables": Class::forName("SalesforceRestDataProvider::SalesforceRestApiTablesDataProvider"),
             "tables": Class::forName("SalesforceRestDataProvider::SalesforceRestTablesDataProvider"),
         };
     }

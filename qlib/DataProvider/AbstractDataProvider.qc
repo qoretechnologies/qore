@@ -1413,7 +1413,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw INVALID-OPERATION the data provider does not support reading
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
-    *hash<auto> searchSingleRecord(hash<auto> where_cond, *hash<auto> search_options) {
+    *hash<auto> searchSingleRecord(*hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
         return searchSingleRecordImpl(getSearchExpression(where_cond, search_options), search_options);
