@@ -303,6 +303,9 @@ public namespace Mime {
     #! Mime type for Python compiled code
     public const MimeTypePythonCode = "application/x-python-code";
 
+    #! Mime type for PDF documents
+    public const MimeTypePdf = "application/pdf";
+
     #! Mime type for PHP sources
     public const MimeTypePhp = "application/x-httpd-php";
 
@@ -627,7 +630,7 @@ public namespace Mime {
         "pbm": "image/x-portable-bitmap",
         "pct": "image/pict",
         "pdb": "chemical/x-pdb",
-        "pdf": "application/pdf",
+        "pdf": MimeTypePdf,
         "pgm": "image/x-portable-graymap",
         "pgn": "application/x-chess-pgn",
         "php": MimeTypePhp,

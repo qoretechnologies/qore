@@ -70,7 +70,10 @@ public hashdecl DataProviderOptionInfo {
     /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
         string that is used to mark membership in the group by different options
     */
-    *list<string> required_groups;
+    *softlist<string> required_groups;
+
+    #! Is the option exclusive with other options?
+    *softlist<string> exclusive_with;
 
     #! Any default value
     auto default_value;
