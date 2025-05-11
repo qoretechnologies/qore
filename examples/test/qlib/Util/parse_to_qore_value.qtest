@@ -32,6 +32,9 @@ public class ParseToQoreValueTest inherits QUnit::Test {
         assertThrows("PARSE-ERROR", "Unterminated file reference", \parse_to_qore_value(), "$yaml<path");
 
         assertGt(100, parse_to_qore_value("$<" + get_script_path() + ">").size());
+        assertGt(100, parse_base64_string_to_string(parse_to_qore_value("$base64<" + get_script_path() + ">")).size());
+        assertGt(100, parse_base64_url_string_to_string(parse_to_qore_value("$base64url<" + get_script_path() + ">"))
+            .size());
         assertGt(100, parse_to_qore_value("a=$<" + get_script_path() + ">").a.size());
         assertGt(100, parse_to_qore_value("a={b=$<" + get_script_path() + ">}").a.b.size());
     }

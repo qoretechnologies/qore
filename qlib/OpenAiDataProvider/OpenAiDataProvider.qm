@@ -44,6 +44,12 @@ module OpenAiDataProvider {
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        # fix OpenAiModelFileSearchToolCompoundFilterDataType
+        OpenAiModelFileSearchToolCompoundFilterDataType.replaceField(new QoreDataField({
+            "name": "filters",
+            "type": new ListDataType("FilterList", OpenAiModelFileSearchToolFilterDataType),
+        }));
+
         # register the data provider factory
         DataProvider::registerFactory(new OpenAiDataProviderFactory());
 
@@ -240,6 +246,32 @@ module OpenAiDataProvider {
                 }
             ),
             "output_type": OpenAiDeleteResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/models/{model}/create-response",
+            "action": "create-response",
+            "display_name": "Process Request With a Model",
+            "short_desc": "Process a request with a model",
+            "desc": "Process a request with a model",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "model": <DataProviderPathVarInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The OpenAI model to use",
+                    "desc": "The OpenAI model to use",
+                    "example_value": "gpt-4o",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields - "input"
+            ),
+            "output_type": OpenAiModelCreateResponseResponseDataType,
         });
     };
 }

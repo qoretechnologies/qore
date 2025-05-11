@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataModelProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiDataModelProvider.qc Copyright 2024 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,9 @@ public class OpenAiModelDataProvider inherits OpenAiDataProviderCommon {
 
         #! Child data providers
         const ChildMap = {
+            "create-response": Class::forName("OpenAiDataProvider::OpenAiModelCreateResponseDataProvider"),
+            "delete-response": Class::forName("OpenAiDataProvider::OpenAiModelDeleteResponseDataProvider"),
+            "get-response": Class::forName("OpenAiDataProvider::OpenAiModelGetResponseDataProvider"),
             "delete": Class::forName("OpenAiDataProvider::OpenAiModelDeleteDataProvider"),
         };
     }

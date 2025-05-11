@@ -109,6 +109,7 @@ public const DataTypeMap = {
     "softfloat": SoftFloatType,
     "softnumber": SoftNumberType,
     "softdate": SoftDateType,
+    "softlist": SoftListType,
 
     "*softint": SoftIntOrNothingType,
     "*softstring": SoftStringOrNothingType,
@@ -157,6 +158,9 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
 
     "unixtsms": UnixTimestampMsType,
     "*unixtsms": UnixTimestampMsOrNothingType,
+
+    "epoch": EpochIntToDateType,
+    "*epoch": EpochIntToDateOrNothingType,
 
     "ubyte": new QoreUnsignedByteDataType(),
     "*ubyte": new QoreUnsignedByteOrNothingDataType(),
@@ -599,7 +603,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 if (value_type == "object") {
                     value_type = value.fullType();
                 }
-                if (i.value.type != value_type) {
+                if (i.value.type == "list" && value_type != "list") {
+                    value = (value,);
+                } else if (i.value.type != value_type) {
                     throw "TYPE-OPTION-ERROR", sprintf("type %y expects type %y for option %y; got type %y instead "
                         "(value: %y)", getName(), i.value.type, i.key, value.type());
                 }

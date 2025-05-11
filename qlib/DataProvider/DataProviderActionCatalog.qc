@@ -219,7 +219,10 @@ public hashdecl ActionOptionInfo {
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set
     */
-    *list<string> required_groups;
+    *softlist<string> required_groups;
+
+    #! Is the option exclusive with other options?
+    *softlist<string> exclusive_with;
 
     #! Any default value for the option
     auto default_value;
@@ -1223,6 +1226,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.required_groups) {
                     i.value.required_groups = info.attr.required_groups;
                 }
+                if (info.attr.exclusive_with) {
+                    i.value.exclusive_with = info.attr.exclusive_with;
+                }
                 if (info.attr.depends_on) {
                     i.value.depends_on = info.attr.depends_on;
                 }
@@ -1266,12 +1272,12 @@ public class DataProviderActionCatalog {
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "multiselect"}
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "multiselect", "depends_on", "on_change"}
-                    + additional_fields;
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
+                    "depends_on", "on_change"} + additional_fields;
             }
             if (i.value.allowed_values) {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>

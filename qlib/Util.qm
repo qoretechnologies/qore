@@ -45,7 +45,7 @@
 %requires reflection
 
 module Util {
-    version = "2.0";
+    version = "2.0.1";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -99,6 +99,10 @@ module Util {
     - @ref Util::zip()
 
     @section utilrelnotes Release Notes
+
+    @subsection util_2_0_1 Util 2.0.1
+    - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
+      (<a href="https://github.com/qorelanguage/qore/issues/4948">issue 4948</a>)
 
     @subsection util_2_0 Util 2.0
     - added @ref Util::get_bit_string() "get_bit_string()"
@@ -781,7 +785,7 @@ list<hash> sub scan_exp(string arg) {
                         continue;
                     }
                 } else if (!bracket_stack && (c == "$")
-                    && exists (*string ft = (arg[(i + 1)..] =~ x/^([a-z]*<)/i)[0])) {
+                    && exists (*string ft = (arg[(i + 1)..] =~ x/^([a-z0-9]*<)/i)[0])) {
                     if (str.val()) {
                         l += {"type": ET_RawString, "val": str};
                         str = "";

@@ -106,7 +106,7 @@ public class FileDataType inherits AbstractDataProviderType {
         #! File option types
         const SupportedOptions = {
             "accept": <DataProviderTypeOptionInfo>{
-                "type": "softlist<string>",
+                "type": "list",
                 "desc": "Set accepted file MIME types",
                 "publish": True,
             },

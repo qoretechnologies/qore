@@ -58,8 +58,8 @@ public class OpenAiModelsDataProvider inherits OpenAiDataProviderCommon {
     #! Return data provider summary info
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
         return map <DataProviderSummaryInfo>{
-            "name": $1.key,
-        } + OpenAiModelDataProvider::ProviderSummaryInfo, getModels().pairIterator();
+            "name": $1.id,
+        } + OpenAiModelDataProvider::ProviderSummaryInfo, getModels();
     }
 
     #! Returns a list of child data provider names, if any
