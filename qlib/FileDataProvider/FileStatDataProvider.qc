@@ -77,7 +77,7 @@ public class FileStatDataProvider inherits FileDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path = normalize_dir(req.path, root);
         if (root.val() && lock) {
-            checkPath(path);
+            checkPath(\path);
         }
         # += to ensure that "rv" stays "hash<auto>"
         hash<auto> rv += (req.symlink ? hlstat(path) : hstat(path));

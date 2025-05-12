@@ -136,10 +136,10 @@ public const DataTypeMap = {
     "*hash": AutoHashOrNothingType,
     "*object": ObjectOrNothingType,
     "*date": DateOrNothingType,
-    "*data": DataOrNothingType,
     "*base64binary": Base64BinaryOrNothingType,
     "*base64urlbinary": Base64UrlBinaryOrNothingType,
     "*hexbinary": HexBinaryOrNothingType,
+    "*data": DataOrNothingType,
 };
 
 #! Maps Qore type name constant values to AbstractDataProviderType values
@@ -162,10 +162,13 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "epoch": EpochIntToDateType,
     "*epoch": EpochIntToDateOrNothingType,
 
-    "ubyte": new QoreUnsignedByteDataType(),
+    "ubyte": QoreUnsignedByteDataType,
     "*ubyte": new QoreUnsignedByteOrNothingDataType(),
     "softubyte": new QoreSoftUnsignedByteDataType(),
     "*softubyte": new QoreSoftUnsignedByteOrNothingDataType(),
+
+    "rbgcolor": RgbColorDataType,
+    "*rbgcolor": RgbColorOrNothingDataType,
 };
 
 #! describes type options

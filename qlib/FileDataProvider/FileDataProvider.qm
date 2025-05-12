@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/*  FileDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  FileDataProvider.qm Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,7 +38,7 @@
 %requires Util
 
 module FileDataProvider {
-    version = "2.0";
+    version = "2.1.2";
     desc = "User module providing a data provider API for the server filesystem";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -241,6 +241,12 @@ module FileDataProvider {
     - @ref FileDataProvider::FileTargetResponseDataType "FileTargetResponseDataType"
 
     @section filedataprovider_relnotes Release Notes
+
+    @subsection filedataprovider_v2_1_2 FileDataProvider v2.1.2
+    - now respects the root directory provided by a connection
+      (<a href="https://github.com/qorelanguage/qore/issues/4949">issue 4949</a>)
+    - respects environment variables in the path
+      (<a href="https://github.com/qorelanguage/qore/issues/4950">issue 4950</a>)
 
     @subsection filedataprovider_v2_0 FileDataProvider v2.0
     - added support for the data provider action catalog API

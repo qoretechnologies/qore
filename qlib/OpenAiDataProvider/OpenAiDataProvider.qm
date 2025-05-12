@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/*  OpenAiDataProvider.qm Copyright 2024 Qore Technologies, s.r.o.
+/*  OpenAiDataProvider.qm Copyright 2024 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,7 +38,7 @@
 %requires FileLocationHandler
 
 module OpenAiDataProvider {
-    version = "1.3";
+    version = "1.4";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -273,6 +273,24 @@ module OpenAiDataProvider {
             ),
             "output_type": OpenAiModelCreateResponseResponseDataType,
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/create-image",
+            "action": "create-image",
+            "display_name": "Generate an Image",
+            "short_desc": "Generate an image from a prompt",
+            "desc": "Generate an image from a prompt",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiImageCreateRequestType::Fields{"prompt",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiImageCreateRequestType::Fields - "prompt"
+            ),
+            "output_type": OpenAiCreateImageResponseType,
+        });
     };
 }
 
@@ -285,6 +303,11 @@ module OpenAiDataProvider {
     The %OpenAiDataProvider module provides a @ref dataproviderintro "data provider" API for OpenAI services.
 
     @section openaidataprovider_relnotes Release Notes
+
+    @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
+    - missing APIs and actions to handle image analysis
+      (<a href="https://github.com/qorelanguage/qore/issues/4947">issue 4947</a>)
+    - added APIs to handle image generation
 
     @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0
     - initial release of the module

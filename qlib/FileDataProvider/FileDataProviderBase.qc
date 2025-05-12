@@ -34,6 +34,7 @@ public class FileDataProviderBase inherits DataProvider::AbstractDataProvider {
                 "short_desc": "Do not allot access to files outside the root directory",
                 "type": AbstractDataProviderTypeMap."bool",
                 "desc": "If `True` and `root` is set, then no files may be accessed outside of `root`",
+                "default_value": True,
             },
             "readonly": <DataProviderOptionInfo>{
                 "display_name": "Enforce Read-Only",
@@ -63,9 +64,9 @@ public class FileDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
-        checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        options = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (options.root.val()) {
-            root = normalize_dir(options.root);
+            root = normalize_dir(substitute_env_vars(options.root));
         }
         if (options.lock) {
             lock = True;
@@ -89,7 +90,7 @@ public class FileDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Check the given path when "lock" and "root" are set
-    private checkPath(string path) {
+    private checkPath(reference<string> path) {
         path = normalize_dir(path, root);
         if (!path.equalPartialPath(root)) {
             throw "SANDBOX-ERROR", sprintf("%y: attempt to access path outside of sandbox %y", path, root);
