@@ -53,4 +53,8 @@ public class QoreUnsignedByteDataType inherits QoreIntDataTypeBase {
         return new QoreSoftUnsignedByteDataType();
     }
 }
+
+#! Unsigned byte data type for ints with values from 0 - 255
+public const QoreUnsignedByteDataType = new QoreUnsignedByteDataType();
 }
+

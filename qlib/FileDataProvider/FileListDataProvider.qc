@@ -71,7 +71,7 @@ public class FileListDataProvider inherits FileDataProviderBase {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (root.val() && lock) {
-            checkPath(req.path);
+            checkPath(\req.path);
         }
         Dir dir();
         dir.chdir(req.path);

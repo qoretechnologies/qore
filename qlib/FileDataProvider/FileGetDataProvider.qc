@@ -69,7 +69,7 @@ public class FileGetDataProvider inherits FileDataProviderBase {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (root.val() && lock) {
-            checkPath(req.path);
+            checkPath(\req.path);
         }
         return {
             "path": req.path,
