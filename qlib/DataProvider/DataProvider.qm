@@ -162,6 +162,8 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
 
     @subsection dataprovider_v3_1 DataProvider v3.1
     - added an API to retrieve event data in the context of specific option values
+    - fixed handling element allowed values in fields
+      (<a href="https://github.com/qorelanguage/qore/issues/4951">issue 4951</a>)
     - fixed handling implicit default values in @ref HashDataType "HashDataType"
       (<a href="https://github.com/qorelanguage/qore/issues/4941">issue 4941</a>)
 

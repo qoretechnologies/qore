@@ -1730,6 +1730,45 @@ public class DataProviderTest inherits QUnit::Test {
 
     dataProviderTest() {
         {
+            # test for issue #4951
+            QoreDataField f({
+                "name": "key1",
+                "desc": "desc1",
+                "type": SoftAutoListType,
+                "element_allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "one",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "two",
+                    },
+                ),
+            });
+            assertEq(("one",), f.acceptsValue("one"));
+            assertEq(("one",), f.acceptsValue(("one",)));
+            assertThrows("FIELD-VALUE-ERROR", \f.acceptsValue(), ("three",));
+        }
+        {
+            # test for issue #4951
+            QoreDataField f({
+                "name": "key1",
+                "desc": "desc1",
+                "type": AutoListType,
+                "element_allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "one",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "two",
+                    },
+                ),
+            });
+            assertEq(("one",), f.acceptsValue(("one",)));
+            assertThrows("RUNTIME-TYPE-ERROR", \f.acceptsValue(), ("three",));
+            assertThrows("FIELD-VALUE-ERROR", \f.acceptsValue(), (("three",),));
+        }
+
+        {
             AbstractDataProviderType t = AbstractDataProviderTypeMap.unixts;
             assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
             assertEq(1737461067, t.acceptsValue(1737461067));
