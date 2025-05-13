@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataField class definition
 
-/** AbstractDataField.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataField.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -221,7 +221,7 @@ public class AbstractDataField inherits Qore::Serializable {
         }
         if (element_allowed_values_creatable) {
             self.element_allowed_values_creatable = True;
-        } else {
+        } else if (element_allowed_values[0].value.strp()) {
             # NOTE: requires that values can be converted to a string hash key to simulate a set
             element_allowed_values_map = map {$1.value: True}, self.element_allowed_values;
         }
@@ -294,9 +294,16 @@ public class AbstractDataField inherits Qore::Serializable {
                         getName(), value, (map $1.value, allowed_values));
                 }
             }
-            if (element_allowed_values) {
+            if (element_allowed_values_map) {
                 foreach auto v in (value) {
                     if (!element_allowed_values_map{v}) {
+                        throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed "
+                            "values for elements: %y", getName(), v, (map $1.value, element_allowed_values));
+                    }
+                }
+            } else if (element_allowed_values && !element_allowed_values_creatable) {
+                foreach auto v in (value) {
+                    if (!inlist(v, element_allowed_values)) {
                         throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed "
                             "values for elements: %y", getName(), v, (map $1.value, element_allowed_values));
                     }
