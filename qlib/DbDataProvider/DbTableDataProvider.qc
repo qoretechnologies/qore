@@ -430,7 +430,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
-    private *hash<auto> searchSingleRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         try {
             return table.selectRow(search_options + {"where": where_cond});
         } catch (hash<ExceptionInfo> ex) {

@@ -3680,7 +3680,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @note This default methods searches the entire data set for a matching record
     */
-    private *hash<auto> searchSingleRecordImpl(hash<auto> where_cond,
+    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # scans the whole data set to find a single record
         *list<*hash<auto>> records = map $1, searchRecordsImpl(where_cond, search_options);
