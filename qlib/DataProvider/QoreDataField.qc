@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreDataField class definition
 
-/** QoreDataField.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** QoreDataField.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),

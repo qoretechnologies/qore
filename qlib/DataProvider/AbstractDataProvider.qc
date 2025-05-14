@@ -2503,7 +2503,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getReferenceData(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
     }
 
@@ -2524,7 +2524,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getReferenceData(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
 
         if (!(*hash<string, bool> rd = getSupportedReferenceData()){type}) {
@@ -2593,7 +2593,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getElementReferenceData(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
     }
 
@@ -2614,7 +2614,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getElementReferenceData(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
 
         if (!(*hash<string, bool> rd = getSupportedElementReferenceData()){type}) {
@@ -2682,7 +2682,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getReferenceDataValue(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
     }
 
@@ -2703,7 +2703,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return getReferenceDataValue(type, action_opts);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s", get_exception_string(ex));
+            LoggerWrapper::debug("%s", get_exception_string(ex));
         }
 
         if (!(*hash<string, bool> rd = getSupportedReferenceDataValues()){type}) {
