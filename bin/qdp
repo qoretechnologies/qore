@@ -766,10 +766,6 @@ class QdpCmd {
         }
     }
 
-    static showRecord(*AbstractDataProvider prov, *hash<string, AbstractDataField> rec, string offset = "") {
-        QdpCmd::showRecord(prov, {}, rec, offset);
-    }
-
     static getAllowedValues(reference<string> info, *list<auto> l) {
         if (info) {
             info += " ";
@@ -785,11 +781,18 @@ class QdpCmd {
         }
     }
 
-    static showRecord(*AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
-            string offset = "") {
+    static showRecord(*AbstractDataProvider prov, *hash<string, AbstractDataField> rec,
+            string offset = "", auto dctxt) {
+        hash<string, bool> rmap;
+        showRecord(prov, \rmap, rec, offset, dctxt);
+    }
+
+    static showRecord(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, *hash<string, AbstractDataField> rec,
+            string offset = "", auto dctxt, *bool unsatisfied_deps) {
         foreach hash<auto> i in (rec.pairIterator()) {
+            *bool local_unsatisfied_deps = unsatisfied_deps;
             auto dv = i.value.getDefaultValue();
-            if (prov && !dv) {
+            if (prov && !exists dv && !unsatisfied_deps) {
                 if ((*string default_ref_data = i.value.getAttributes().default_ref_data).val()) {
                     dv = prov.getReferenceDataValueSafe(default_ref_data, DataProviderDataContextHelper::getHash());
                 } else if (!offset.val() && prov.getSupportedReferenceDataValues(){i.key}) {
@@ -800,81 +803,91 @@ class QdpCmd {
                 continue;
             }
             AbstractDataProviderType type = i.value.getType();
-            if (opts.verbose) {
-                string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
-                string info;
-                if (*string desc = i.value.getShortDescription()) {
-                    info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
-                }
-                if (exists dv) {
-                    if (info) {
-                        info += " ";
-                    }
-                    info += sprintf("default_value: %y", dv);
-                }
-
-                if (*list<auto> l = i.value.getAllowedValues()) {
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (prov && (*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (prov && !offset.val() && prov.getSupportedReferenceData(){i.key}
-                    && (l = prov.getReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (l = i.value.getElementAllowedValues()) {
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (prov && (ref_data = i.value.getAttributes().element_ref_data).val()) {
-                    l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (prov && !offset.val() && prov.getSupportedElementReferenceData(){i.key}
-                    && (l = prov.getElementReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
-                    QdpCmd::getAllowedValues(\info, l);
-                }
-
-                if (info) {
-                    txt += " (" + info + ")";
-                }
-                print(txt);
-            } else {
-                string info;
-                if (*list<auto> l = i.value.getAllowedValues()) {
-                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
-                } else if (prov && (*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
-                    if (l) {
-                        info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
-                    }
-                } else if (l = i.value.getElementAllowedValues()) {
-                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
-                } else if (prov && (ref_data = i.value.getAttributes().element_ref_data).val()) {
-                    l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
-                    if (l) {
-                        info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
-                    }
-                }
-                printf("%s%s %s%s", offset, type.getName(), i.key, info);
+            *hash<auto> attr = i.value.getAttributes();
+            # do not request dependent values if dependencies are not satisfied
+            if (!local_unsatisfied_deps && attr.depends_on && (dctxt{attr.depends_on}.size() != attr.depends_on.size())) {
+                local_unsatisfied_deps = True;
             }
-            if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
-                && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
-                string u = type.uniqueHash();
-                if (!rmap{u}) {
-                    rmap{u} = True;
-                    print(": elements ->\n");
-                    QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
-                } else {
-                    print(": (type already described)\n");
-                }
-            } else {
-                print("\n");
-            }
+            showField(prov, \rmap, i, dv, type, offset, dctxt, local_unsatisfied_deps);
             *hash<string, AbstractDataField> fields = type.getFields();
             if (fields) {
                 string u = type.uniqueHash();
                 if (!rmap{u}) {
                     rmap{u} = True;
-                    QdpCmd::showRecord(prov, rmap, fields, offset + "  ");
+                    QdpCmd::showRecord(prov, \rmap, fields, offset + "  ", dctxt{i.key}, local_unsatisfied_deps);
                 }
             }
+        }
+    }
+
+    static showField(AbstractDataProvider prov, reference<hash<string, bool>> rmap, hash<auto> i, auto dv,
+            AbstractDataProviderType type, string offset, auto dctxt, *bool unsatisfied_deps) {
+        if (opts.verbose) {
+            string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
+            string info;
+            if (*string desc = i.value.getShortDescription()) {
+                info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
+            }
+            if (exists dv) {
+                if (info) {
+                    info += " ";
+                }
+                info += sprintf("default_value: %y", dv);
+            }
+
+            if (*list<auto> l = i.value.getAllowedValues()) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && (*string ref_data = i.value.getAttributes().ref_data).val()) {
+                l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && !offset.val() && prov.getSupportedReferenceData(){i.key}
+                && (l = prov.getReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (l = i.value.getElementAllowedValues()) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && (ref_data = i.value.getAttributes().element_ref_data).val()) {
+                l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && !offset.val() && prov.getSupportedElementReferenceData(){i.key}
+                && (l = prov.getElementReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
+                QdpCmd::getAllowedValues(\info, l);
+            }
+
+            if (info) {
+                txt += " (" + info + ")";
+            }
+            print(txt);
+        } else {
+            string info;
+            if (*list<auto> l = i.value.getAllowedValues()) {
+                info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+            } else if (prov && !unsatisfied_deps && (*string ref_data = i.value.getAttributes().ref_data).val()) {
+                l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                if (l) {
+                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+                }
+            } else if (l = i.value.getElementAllowedValues()) {
+                info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+            } else if (prov && !unsatisfied_deps && (ref_data = i.value.getAttributes().element_ref_data).val()) {
+                l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                if (l) {
+                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+                }
+            }
+            printf("%s%s %s%s", offset, type.getName(), i.key, info);
+        }
+        if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
+            && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
+            string u = type.uniqueHash();
+            if (!rmap{u}) {
+                rmap{u} = True;
+                print(": elements ->\n");
+                QdpCmd::showRecord(prov, \rmap, element_rec, offset + "  ", dctxt{i.key}, unsatisfied_deps);
+            } else {
+                print(": (type already described)\n");
+            }
+        } else {
+            print("\n");
         }
     }
 
@@ -1105,22 +1118,27 @@ class QdpCmd {
 
     static showType(*AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
         printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
-        QdpCmd::showType(prov, info.type);
+        hash<string, bool> rmap;
+        QdpCmd::showType(prov, \rmap, info.type);
     }
 
     static showType(*AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
-        QdpCmd::showType(prov, {}, type, offset);
+        hash<string, bool> rmap;
+        QdpCmd::showType(prov, \rmap, type, offset);
     }
 
-    static showType(*AbstractDataProvider prov, hash<auto> rmap, AbstractDataProviderType type, *string offset) {
+    static showType(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, AbstractDataProviderType type,
+            *string offset) {
         *hash<string, AbstractDataField> fields = type.getFields();
+        # get data context
+        auto dctxt = DataProviderDataContextHelper::get();
         if (fields) {
-            QdpCmd::showRecord(prov, rmap, fields, offset);
+            QdpCmd::showRecord(prov, \rmap, fields, offset, dctxt);
         } else {
             if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
                 && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
                 printf("%s%s elements ->\n", type.getName(), offset);
-                QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
+                QdpCmd::showRecord(prov, \rmap, element_rec, offset + "  ", dctxt[0]);
             } else {
                 printf("%s%s%s (%s)\n", offset, type.getName());
             }
