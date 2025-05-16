@@ -373,6 +373,9 @@ public hashdecl ConnectionInfo {
     #! Data provider subtype information
     *hash<string, *hash<string, hash<DataProviderOptionInfo>>> dataprovider_subtypes;
 
+    #! Any application name associated with the connection
+    *string app;
+
     #! @ref True if the connection requires OAuth2 authorization before it can be used
     /** @ref False if already authorized, or the connection does not support authorization
     */
@@ -481,6 +484,9 @@ public hashdecl ConnectionDataInfo {
 
     #! Data provider subtype information
     *hash<string, *hash<string, hash<auto>>> dataprovider_subtypes;
+
+    #! Any application name associated with the connection
+    *string app;
 
     #! @ref True if the connection requires OAuth2 authorization before it can be used
     /** @ref False if already authorized, or the connection does not support authorization
