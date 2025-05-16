@@ -523,6 +523,20 @@ struct qore_socket_private {
     // socket buffer for buffered reads
     char rbuf[DEFAULT_SOCKET_BUFSIZE];
 
+    // content types that imply UTF-8 character encoding
+    typedef std::set<std::string> strset_t;
+    strset_t utf8_content_type_set = {
+        "application/ecmascript",
+        "application/json",
+        "application/x-javascript",
+        "application/javascript",
+        "text/javascript", // <- this is the correct MIME type for JavaScript
+        "application/ld+json",
+        "application/yaml", // <- this is the correct MIME type for YAML
+        "application/x-yaml",
+        "text/yaml",
+    };
+
     // current buffer size
     size_t buflen = 0,
         bufoffset = 0;
@@ -3738,10 +3752,11 @@ struct qore_socket_private {
                         char* e = strchr(a + 8, ';');
 
                         QoreString cs;
-                        if (e)
+                        if (e) {
                             cs.concat(a + 8, e - a - 8);
-                        else
+                        } else {
                             cs.concat(a + 8);
+                        }
                         cs.trim();
                         senc = cs.c_str();
                         //printd(5, "got encoding '%s' from request\n", senc);
@@ -3749,7 +3764,8 @@ struct qore_socket_private {
 
                         if (info) {
                             size_t len = cs.size();
-                            info->setKeyValue("charset", new QoreStringNode(cs.giveBuffer(), len, len + 1, QCS_DEFAULT), nullptr);
+                            info->setKeyValue("charset", new QoreStringNode(cs.giveBuffer(), len, len + 1,
+                                QCS_DEFAULT), nullptr);
                         }
 
                         if (info) {
@@ -3762,31 +3778,44 @@ struct qore_socket_private {
                             }
 
                             if (a == t) {
-                                if (e)
+                                if (e) {
                                     ct->concat(e + 1);
+                                }
                             } else {
                                 ct->concat(t, a - t + 1);
-                                if (e)
+                                if (e) {
                                     ct->concat(e);
+                                }
                             }
                             ct->trim();
-                            if (!ct->empty())
+                            if (!ct->empty()) {
                                 info->setKeyValue("body-content-type", ct.release(), nullptr);
+                            }
                         }
                     } else {
-                        enc = QEM.findCreate(assume_http_encoding.c_str());
+                        // check for content types that imply UTF-8 encoding
+                        std::string ct = t;
+                        ct = ct.substr(0, ct.find(';'));
+                        if (utf8_content_type_set.find(ct) != utf8_content_type_set.end()) {
+                            senc = "UTF-8";
+                            enc = QCS_UTF8;
+                        } else {
+                            senc = assume_http_encoding.c_str();
+                            enc = QEM.findCreate(assume_http_encoding.c_str());
+                        }
                         if (info) {
-                            info->setKeyValue("charset", new QoreStringNode(assume_http_encoding), nullptr);
+                            info->setKeyValue("charset", new QoreStringNode(senc), nullptr);
                             info->setKeyValue("body-content-type", val->refSelf(), nullptr);
                         }
                     }
                 } else if (chunked && !strcmp(buf, "transfer-encoding") && !strcasecmp(t, "chunked")) {
                     *chunked = true;
                 } else if (info) {
-                    if (!strcmp(buf, "accept-charset"))
+                    if (!strcmp(buf, "accept-charset")) {
                         acceptcharset = do_accept_charset(t, *info);
-                    else if ((flags & CHF_REQUEST) && !strcmp(buf, "accept-encoding"))
+                    } else if ((flags & CHF_REQUEST) && !strcmp(buf, "accept-encoding")) {
                         do_accept_encoding(t, *info);
+                    }
                 }
             }
 
@@ -3827,11 +3856,14 @@ struct qore_socket_private {
         }
 
         if ((flags & CHF_PROCESS)) {
-            if (!senc)
+            if (!senc) {
                 enc = QEM.findCreate(assume_http_encoding.c_str());
-            // according to RFC-2616 section 14.2, "If no Accept-Charset header is present, the default is that any character set is acceptable" so we will use utf-8
-            if (info && !acceptcharset)
+            }
+            // according to RFC-2616 section 14.2, "If no Accept-Charset header is present, the default is that any
+            // character set is acceptable" so we will use utf-8
+            if (info && !acceptcharset) {
                 info->setKeyValue("accept-charset", new QoreStringNode("utf8"), nullptr);
+            }
         }
 
         return close;
