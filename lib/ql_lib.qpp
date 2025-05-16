@@ -1213,7 +1213,7 @@ int qore_get_library_options() [dom=PROCESS] {
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded
 
-    @ereturn 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.0.1
 */

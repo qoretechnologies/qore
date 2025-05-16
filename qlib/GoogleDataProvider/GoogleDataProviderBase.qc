@@ -36,7 +36,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        *GoogleRestClient::GoogleRestClient rest;
+        *RestClient::RestClient rest;
 
         #! API -> URL map
         static hash<string, string> api_map;
@@ -63,7 +63,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object
-    constructor(GoogleRestClient::GoogleRestClient rest) {
+    constructor(RestClient::RestClient rest) {
         self.rest = rest;
     }
 
@@ -93,13 +93,22 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
     updateConnectionObjects(object conn, object connobj) {
-        if (!(connobj instanceof GoogleRestClient)) {
-            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"GoogleRestClient\" object; got "
+        if (!(connobj instanceof RestClient)) {
+            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClient\" object; got "
                 "%y instead", self.className(), connobj.className());
         }
-        rest = cast<GoogleRestClient>(connobj);
+        rest = cast<RestClient>(connobj);
         rest.setConnectionPath("/");
         rest.setLogger(logger);
+    }
+
+    #! Override REST client
+    setRestClient(RestClient rest) {
+        self.rest = rest;
+    }
+
+    RestClient getRestClient() {
+        return rest;
     }
 
     #! If the request body should be populated with missing values
@@ -185,7 +194,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns a GoogleRestClient connection from the options
-    static GoogleRestClient::GoogleRestClient getRestConnection(*hash<auto> options) {
+    static RestClient::RestClient getRestConnection(*hash<auto> options) {
         GoogleRestClient rest;
         if (options.restclient) {
             rest = options.restclient;
@@ -273,7 +282,8 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         }
         return map {$1.key: True}, h{resource_path.last()}.methods.pairIterator(),
             ($1.value.response."$ref" != "Channel") && (!path_args
-                || ($1.value.parameterOrder && ((keys path_args) == $1.value.parameterOrder[0..path_args.size() - 1])));
+                || ($1.value.parameterOrder && ((keys path_args) ==
+                    $1.value.parameterOrder[0..path_args.size() - 1])));
     }
 
     #! Returns a data type for the given request
