@@ -474,6 +474,9 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             "dataprovider_subtypes": getDataProviderSubtypes(),
             "needs_auth": needsAuth(),
         });
+        if ((*string app = getAppName()).val()) {
+            h.app = app;
+        }
         h.opts = orig_opts;
         if (!opts.with_passwords) {
             h.url = safe_url;
