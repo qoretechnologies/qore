@@ -407,6 +407,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
     }
 
+    #! Called after a new connection object is created from an existing connection
+    /** @param old the old connection object
+    */
+    persistInfo(AbstractConnection old) {
+        # intentionally empty
+    }
+
     #! Starts customization for the object
     /** @bool restart Restart any customization in progress
 
