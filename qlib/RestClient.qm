@@ -3059,8 +3059,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @since RestClient 2.2
     */
     bool needsAuth() {
-        return needs_auth || (opts.oauth2_grant_type == "authorization_code" && !opts.token
-            && (!opts.oauth2_refresh_token || !opts.oauth2_auto_refresh));
+        return needs_auth || (opts.oauth2_grant_type == "authorization_code"
+            && (!opts.token.val() || (opts.oauth2_token_expiry > now_us()))
+            && (!opts.oauth2_refresh_token.val() || !opts.oauth2_auto_refresh));
     }
 
     #! Flags an authorization failure
@@ -3204,6 +3205,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "ping_path": ping_path,
             "ping_body": ping_body,
         });
+    }
+
+    #! Called after a new connection object is created from an existing connection
+    /** @param old the old connection object
+    */
+    persistInfo(RestConnection old) {
+        if (old.needs_auth) {
+            needs_auth = True;
+        }
     }
 
     #! processes options for the constructor
