@@ -167,8 +167,8 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "softubyte": new QoreSoftUnsignedByteDataType(),
     "*softubyte": new QoreSoftUnsignedByteOrNothingDataType(),
 
-    "rbgcolor": RgbColorDataType,
-    "*rbgcolor": RgbColorOrNothingDataType,
+    "rgbcolor": RgbColorDataType,
+    "*rgbcolor": RgbColorOrNothingDataType,
 };
 
 #! describes type options
