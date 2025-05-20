@@ -3064,6 +3064,39 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             && (!opts.oauth2_refresh_token.val() || !opts.oauth2_auto_refresh));
     }
 
+    #! Returns connection info plus any extended information returned by the connection
+    /** The default implementation in the base class returns the same value as getInfo(*hash<auto>)
+
+        @param opts connection information options; options are connection-specific; the only universal option is
+        \c with_passwords: if @ref True, then passwords are returned in the info hash
+
+        @return Connection info plus any extended information returned by the connection
+
+        @note Some of the information in this hash may be non-serializable objects, for a method that returns only
+        serializable information about the connection, see @ref getExtendedInfoAsData()
+    */
+    hash<auto> getExtendedInfo(*hash<auto> opts) {
+        return AbstractConnection::getExtendedInfo(opts) + {
+            "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+        };
+    }
+
+    #! Returns connection info plus any extended information returned by the connection
+    /** The default implementation in the base class returns the same value as getInfoAsData(*hash<auto>)
+
+        @param opts connection information options; options are connection-specific; the only universal option is
+        \c with_passwords: if @ref True, then passwords are returned in the info hash
+
+        @return Connection info plus any extended information returned by the connection
+
+        @note All the information in this hash is data; some info in the output of @ref getExtendedInfo() may be objects
+    */
+    hash<auto> getExtendedInfoAsData(*hash<auto> opts) {
+        return AbstractConnection::getExtendedInfoAsData(opts) + {
+            "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+        };
+    }
+
     #! Flags an authorization failure
     /**
         @since RestClient 2.2
