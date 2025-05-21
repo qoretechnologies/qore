@@ -162,6 +162,9 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "epoch": EpochIntToDateType,
     "*epoch": EpochIntToDateOrNothingType,
 
+    "supersoftstring": SuperSoftStringType,
+    "*supersoftstring": SuperSoftStringOrNothingType,
+
     "ubyte": QoreUnsignedByteDataType,
     "*ubyte": new QoreUnsignedByteOrNothingDataType(),
     "softubyte": new QoreSoftUnsignedByteDataType(),

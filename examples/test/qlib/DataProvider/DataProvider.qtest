@@ -15,6 +15,10 @@
 
 %requires reflection
 
+%try-module yaml
+%define NoYaml
+%endtry
+
 %exec-class DataProviderTest
 
 class TestRecordProvider inherits AbstractDataProviderRecordIterator {
@@ -1729,6 +1733,55 @@ public class DataProviderTest inherits QUnit::Test {
     }
 
     dataProviderTest() {
+        {
+            AbstractDataProviderType t = EpochIntToDateType;
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            t = AbstractDataProviderTypeMap."epoch";
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            t = AbstractDataProviderTypeMap."*epoch";
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+        }
+
+        {
+            AbstractDataProviderType t = SuperSoftStringType;
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            t = AbstractDataProviderTypeMap."supersoftstring";
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+        }
+
+        {
+            AbstractDataProviderType t = SuperSoftStringOrNothingType;
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            t = AbstractDataProviderTypeMap."*supersoftstring";
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+        }
+
         {
             # test for issue #4951
             QoreDataField f({
