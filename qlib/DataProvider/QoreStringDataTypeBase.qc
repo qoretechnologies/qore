@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreStringDataTypeBase class definition
 
-/** QoreStringDataTypeBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** QoreStringDataTypeBase.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -21,15 +21,6 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 */
-
-# assume local scope for variables, do not use "$" signs
-%new-style
-# require type definitions everywhere
-%require-types
-#! strict argument handling
-%strict-args
-# enable all warnings
-%enable-all-warnings
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
@@ -86,6 +77,9 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
+        if (_flexible_type_handling && exists value && value.typeCode() != NT_STRING) {
+            return SuperSoftStringDataType::getStringValue(value);
+        }
         if (exists value && value !== NULL) {
             if (value.typeCode() != NT_STRING) {
                 if (!accept_type_hash_simple{value.type()}) {
@@ -117,7 +111,8 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         if (soft_type) {
             return self;
         }
-        return new QoreStringDataTypeBase(base_type_hash{NT_NOTHING} ? SoftStringOrNothingType : SoftStringType, getOptions());
+        return new QoreStringDataTypeBase(base_type_hash{NT_NOTHING} ? SoftStringOrNothingType : SoftStringType,
+            getOptions());
     }
 
     #! sets the given option without any validation of the option

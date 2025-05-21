@@ -1745,7 +1745,7 @@ public class DataProviderTest inherits QUnit::Test {
         }
 
         {
-            AbstractDataProviderType t = SuperSoftStringType;
+            AbstractDataProviderType t = SuperSoftStringDataType;
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
 %ifndef NoYaml
@@ -1759,10 +1759,19 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
 %endif
+
+            t = AbstractDataProviderTypeMap."string";
+            FlexibleTypeHandlingHelper fthh();
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
         }
 
         {
-            AbstractDataProviderType t = SuperSoftStringOrNothingType;
+            AbstractDataProviderType t = SuperSoftStringOrNothingDataType;
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
 %ifndef NoYaml
