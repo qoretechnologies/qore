@@ -1,6 +1,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  SuperSoftStringOrNothingType.qc Copyright (C) 2025 Qore Technologies s.r.o.
+/*  SuperSoftStringOrNothingDataType.qc Copyright (C) 2025 Qore Technologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,12 +24,12 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts almost any type to a string
-public const SuperSoftStringOrNothingType = new SuperSoftStringOrNothingType();
+public const SuperSoftStringOrNothingDataType = new SuperSoftStringOrNothingDataType();
 
 #! A type that converts almost any type to a string
-public class SuperSoftStringOrNothingType inherits SuperSoftStringType {
+public class SuperSoftStringOrNothingDataType inherits SuperSoftStringDataType {
     #! creates the field from the argument
-    constructor(*hash<auto> options, *hash<auto> tags) : SuperSoftStringType(options, tags) {
+    constructor(*hash<auto> options, *hash<auto> tags) : SuperSoftStringDataType(options, tags) {
     }
 
     #! Returns the type name
@@ -101,7 +101,7 @@ public class SuperSoftStringOrNothingType inherits SuperSoftStringType {
         if (!exists value || value === NULL) {
             return;
         }
-        return SuperSoftStringType::acceptsValue(value);
+        return SuperSoftStringDataType::acceptsValue(value);
     }
 
     #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
@@ -111,7 +111,7 @@ public class SuperSoftStringOrNothingType inherits SuperSoftStringType {
         @return a mandatory (i.e. not "or nothing") type equivalent to the current type
     */
     AbstractDataProviderType getMandatoryType() {
-        return SuperSoftStringType;
+        return SuperSoftStringDataType;
     }
 }
 }

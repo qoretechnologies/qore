@@ -1,6 +1,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  SuperSoftStringType.qc Copyright (C) 2025 Qore Technologies s.r.o.
+/*  SuperSoftStringDataType.qc Copyright (C) 2025 Qore Technologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,10 +24,10 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts almost any type to a string
-public const SuperSoftStringType = new SuperSoftStringType();
+public const SuperSoftStringDataType = new SuperSoftStringDataType();
 
 #! A type that converts to UNIX timestamps in seconds to dates
-public class SuperSoftStringType inherits AbstractDataProviderType {
+public class SuperSoftStringDataType inherits AbstractDataProviderType {
     #! creates the field from the argument
     constructor(*hash<auto> options, *hash<auto> tags) : AbstractDataProviderType(options, tags) {
     }
@@ -105,6 +105,17 @@ public class SuperSoftStringType inherits AbstractDataProviderType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
+        return getStringValue(value);
+    }
+
+    #! Returns the value if the value can be assigned to the type
+    /** @param value the value to assign to the type
+
+        @return the value to be assigned; can be converted by the type
+
+        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+    */
+    static string getStringValue(auto value) {
         switch (value.typeCode()) {
             case NT_STRING:
                 return value;
@@ -127,7 +138,7 @@ public class SuperSoftStringType inherits AbstractDataProviderType {
 %endif
 
             default:
-                throw "RUNTIME-TYPE-ERROR", sprintf("Type %s does not accept values of type %y (%y)", getName(),
+                throw "RUNTIME-TYPE-ERROR", sprintf("This data type does not accept values of type %y (%y)",
                     value.fullType(), value);
         }
     }
@@ -139,7 +150,7 @@ public class SuperSoftStringType inherits AbstractDataProviderType {
         @return an "or nothing" type equivalent to the current type
     */
     AbstractDataProviderType getOrNothingType() {
-        return SuperSoftStringOrNothingType;
+        return SuperSoftStringOrNothingDataType;
     }
 }
 }

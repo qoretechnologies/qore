@@ -165,7 +165,7 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_2 DataProvider v3.2
-    - added the SuperSoftStringType and SuperSoftStringOrNothingType types to support
+    - added the SuperSoftStringDataType and SuperSoftStringOrNothingDataType types to support
       "soft" string types that accept almost any type and convert it to a string
 
     @subsection dataprovider_v3_1 DataProvider v3.1
