@@ -92,8 +92,8 @@ void qore_number_private::getAsString(QoreString& str, bool round, int base) con
     //printd(5, "qore_number_private::getAsString() this: %p returning '%s'\n", this, str.getBuffer());
 }
 
-void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, size_t last,
-        int round_threshold_1, int round_threshold_2) {
+void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, size_t last, int round_threshold_1,
+        int round_threshold_2) {
     // the position of the last significant digit
     qore_offset_t pos = (qore_offset_t)dp;
     size_t i = dp;
@@ -101,7 +101,7 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
     char lc = 0;
     // 0 or 9 count
     unsigned cnt = 0;
-    bool has_e = (str[last] == 'e');
+    ssize_t has_e = str.find('e');
     // don't check the last character
     --last;
     // check all except the last digit
@@ -132,7 +132,8 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
 
         // mark position of the last significant digit
         pos = i - 2;
-        //printd(5, "qore_number_private::applyRoundingHeuristic('%s') set pos: %lld ('%c') dp: %lld\n", str.getBuffer(), pos, str[pos], dp);
+        //printd(5, "qore_number_private::applyRoundingHeuristic('%s') set pos: %lld ('%c') dp: %lld\n", str.c_str(),
+        //    pos, str[pos], dp);
 
         // reset count
         cnt = 0;
@@ -140,40 +141,48 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
 
     // round the number for display
     if (cnt > (unsigned)round_threshold_1) {
-        //printd(5, "ROUND BEFORE: (pos: %d dp: %d cnt: %d has_e: %d e: %c) %s\n", pos, dp, cnt, has_e, has_e ? str[pos + cnt + 4] : 'x', str.getBuffer());
+        //printd(5, "ROUND BEFORE: (pos: %d dp: %d cnt: %d has_e: %d lc: '%c') '%s'\n", pos, dp, cnt, (int)has_e, lc,
+        //    str.c_str());
         // if rounding right after the decimal point, then remove the decimal point
-        if (pos == (qore_offset_t)dp)
+        if (pos == (qore_offset_t)dp) {
             --pos;
-        if (has_e && str[pos + cnt + 3] == 'e')
-            --cnt;
+        }
         // remove the excess digits
-        if (!has_e)
+        if (has_e == -1) {
             str.terminate(pos + 1);
-        else
-            str.replace(pos + 1, cnt + 3, (const char*)0);
+        } else {
+            str.replace(pos + 1, has_e - pos - 1, nullptr);
+            //printd(5, "qore_number_private::applyRoundingHeuristic() after replace str: '%s'\n", str.c_str());
+        }
 
         // rounding down is easy; the truncation is enough
-        if (lc == '9') // round up
+        if (lc == '9') {
+            // round up
             roundUp(str, pos);
-        //printd(5, "ROUND AFTER: %s\n", str.getBuffer());
+        }
+        //printd(5, "ROUND AFTER: %s\n", str.c_str());
     }
 }
 
 int qore_number_private::roundUp(QoreString& str, qore_offset_t pos) {
     for (; pos >= 0; --pos) {
         char c = str[pos];
-        if (c == '.')
+        if (c == '.') {
             continue;
-        if (!pos && c == '-')
+        }
+        if (!pos && c == '-') {
             break;
+        }
         if (c < '9') {
             str.replaceChar(pos, c + 1);
             break;
         }
         str.replaceChar(pos, '0');
     }
+    //printd(5, "qore_number_private::roundUp() str: '%s' pos: %lld\n", str.c_str(), pos);
     if (pos == -1 || (!pos && str[0] == '-')) {
         str.insertch('1', pos + 1, 1);
+        //printd(5, "qore_number_private::roundUp() after insertch(): str: '%s'\n", str.c_str());
         return 1;
     }
     return 0;

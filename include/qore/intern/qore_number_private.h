@@ -255,8 +255,9 @@ struct qore_number_private : public qore_number_private_intern {
             qore_offset_t i = str.find('.');
             if (i != -1) {
                 qore_offset_t e = str.rfind('e');
-                if (e != -1)
+                if (e != -1) {
                     applyRoundingHeuristic(str, i, e);
+                }
             }
         }
     }
@@ -551,7 +552,8 @@ public:
     // try to remove noise from the binary -> decimal conversion process in insignificant digits
     /** finds the decimal point and attempts to remove noise and round the number if found
     */
-    DLLLOCAL static void applyRoundingHeuristicToString(QoreString& str, int round_threshold_1 = QORE_MPFR_ROUND_THRESHOLD,
+    DLLLOCAL static void applyRoundingHeuristicToString(QoreString& str,
+                int round_threshold_1 = QORE_MPFR_ROUND_THRESHOLD,
         int round_threshold_2 = QORE_MPFR_ROUND_THRESHOLD_2) {
         qore_offset_t i = str.find('.');
         if (i != -1) {
