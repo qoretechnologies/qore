@@ -27,6 +27,8 @@
     - <a href="../../modules/Util/html/index.html">Util</a> module
       - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
         (<a href="https://github.com/qorelanguage/qore/issues/4948">issue 4948</a>)
+    - fixed a bug resolving static class variables that could cause spurious errors
+      (<a href="https://github.com/qorelanguage/qore/issues/4954">issue 4954</a>)
     - fixed setting the @ref Qore::Socket "Socket" character encoding to \c UTF-8 with content types that implicitly
       UTF-8 encoding and no explicit character encoding in the \c Content-Type header
       (<a href="https://github.com/qorelanguage/qore/issues/4952">issue 4952</a>)
