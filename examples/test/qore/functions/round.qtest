@@ -39,6 +39,8 @@ public class RoundTest inherits QUnit::Test {
         assertNumberEq( 2345.344548n,   round( 2345.3445475543n, 6), 10e-36);
         assertNumberEq(-2345.3445476n,  round(-2345.3445475543n, 7), 10e-36);
         assertNumberEq( 2345.34454755n, round( 2345.3445475543n, 8), 10e-36);
+        assertNumberEq(-0.000001n, round(-0.000001n, 6));
+        assertEq(-0.000001, round(-0.000001, 6));
     }
 
     testNegativePrecision() {
