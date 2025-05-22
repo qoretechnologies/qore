@@ -820,7 +820,7 @@ class QdpCmd {
         }
     }
 
-    static showField(AbstractDataProvider prov, reference<hash<string, bool>> rmap, hash<auto> i, auto dv,
+    static showField(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, hash<auto> i, auto dv,
             AbstractDataProviderType type, string offset, auto dctxt, *bool unsatisfied_deps) {
         if (opts.verbose) {
             string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
@@ -996,14 +996,14 @@ class QdpCmd {
                 string info;
                 if (*list<auto> l = i.value.allowed_values) {
                     info += sprintf(", one of: %y", (map $1.value ?? $1, l));
-                } else if ((*string ref_data = i.value.ref_data).val()) {
+                } else if (provider && (*string ref_data = i.value.ref_data).val()) {
                     l = provider.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(", one of: %y", (map $1.value ?? $1, l));
                     }
                 } else if (l = i.value.element_allowed_values) {
                     info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
-                } else if ((ref_data = i.value.element_ref_data).val()) {
+                } else if (provider && (ref_data = i.value.element_ref_data).val()) {
                     l = provider.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
                     if (l) {
                         info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
