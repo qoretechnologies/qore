@@ -56,7 +56,7 @@
 %endtry
 
 module RestClient {
-    version = "2.3.0";
+    version = "2.3.1";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -147,6 +147,10 @@ printf("%N\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_3_1 RestClient v2.3.1
+    - fixed passing the correct path to the signature method
+      (<a href="https://github.com/qorelanguage/qore/issues/4953">issue 4953</a>)
 
     @subsection restclientv2_3_0 RestClient v2.3.0
     - implemented support for custom token operations
@@ -2297,7 +2301,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             try {
                 if (signer && shdr.val()) {
                     hdr{shdr} = signer({
-                        "path": path,
+                        "path": path ?* getConnectionPath() ?* getDefaultPath() ?* "/",
                         "body": body,
                         "hdr": hdr - shdr,
                     });
