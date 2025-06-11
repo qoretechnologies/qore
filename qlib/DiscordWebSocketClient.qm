@@ -604,11 +604,15 @@ hash<auto> h = ws.getInfo();
             if (hb_stop) {
                 break;
             }
-            # send a heartbeat message
-            sendData({
-                "op": DOP_HEARTBEAT,
-                "d": last_sequence,
-            });
+            try {
+                # send a heartbeat message
+                sendData({
+                    "op": DOP_HEARTBEAT,
+                    "d": last_sequence,
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                logError("Heartbeat failed: %y", get_exception_string(ex));
+            }
         }
     }
 

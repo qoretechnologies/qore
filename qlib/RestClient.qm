@@ -56,7 +56,7 @@
 %endtry
 
 module RestClient {
-    version = "2.3.1";
+    version = "2.3.2";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -147,6 +147,9 @@ printf("%N\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_3_2 RestClient v2.3.2
+    - added a get() method without any body (which shouldn't be sent in GET requests in any case)
 
     @subsection restclientv2_3_1 RestClient v2.3.1
     - fixed passing the correct path to the signature method
@@ -1140,6 +1143,47 @@ hash<auto> ans = rest.get("/orders/1?info=verbose");
     */
     hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
         return doRequest("GET", path, body, \info, NOTHING, hdr);
+    }
+
+    #! sends an HTTP \c GET request to the REST server and returns the response
+    /** @par Example:
+        @code{.py}
+hash<auto> ans = rest.get("/orders/1?info=verbose");
+        @endcode
+
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param info an optional reference to a hash that will be used as an output variable giving a hash of request
+        headers and other information about the HTTP request; see @ref rest-info-format for information about the
+        structure of the hash written to the reference supplied here
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object
+        as well
+
+        @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any
+        message body is included in the response, it will be deserialized to %Qore data and assigned to the value of
+        the \c "body" key
+
+        @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or invalid
+        serialization)
+        @throw REST-RESPONSE-ERROR if this exception is thrown by the @ref Qore::HTTPClient::send() call in case of an
+        HTTP response code < 100 or >= 300, the message body is still deserialized if possible and the response
+        information can be retrieved in the \a info hash output keys as follows:
+        - \c "response-body": the decoded response body
+        - \c "response-body-raw": the raw message body in the response (after any content decoding)
+        - \c "response-code": the HTTP response code given
+        - \c "response-headers": a hash of processed response headers
+        - \c "response-headers-raw": a hash of raw unprocessed response headers
+        .
+        Note that this exception is not raised for HTTP status codes indicating an error if the \c error_passthru
+        option is set to @ref True "True"
+
+        Other exceptions can be thrown by the @ref Qore::HTTPClient::send() call used to make the HTTP request.
+
+        @see
+        - @ref RestClient::RestClient::getSerialization() "RestClient::getSerialization()"
+        - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
+    */
+    hash<auto> get(string path, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return doRequest("GET", path, NOTHING, \info, NOTHING, hdr);
     }
 
     #! sends an HTTP \c PUT request to the REST server and returns the response

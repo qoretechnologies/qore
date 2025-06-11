@@ -2715,8 +2715,17 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                         break;
                     }
                     string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
-                    #if (ex.arg)
-                    #    etxt += printf(" (%s)", ex.arg);
+                    if (ex.arg) {
+                        etxt += printf(" (%y)", ex.arg);
+                        binary b = ex.arg.toBinary();
+                        for (int i = 0; i < b.size(); ++i) {
+                            if (b[i] < 32 || b[i] > 126) {
+                                etxt += sprintf(" 0x%02x", b[i]);
+                            } else {
+                                etxt += sprintf(" '%s'", chr(b[i]));
+                            }
+                        }
+                    }
                     string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                         socket_info.address_desc);
                     logError("%s", str);
