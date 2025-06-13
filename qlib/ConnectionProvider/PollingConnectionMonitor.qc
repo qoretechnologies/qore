@@ -342,20 +342,12 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                         AbstractConnection c = value.conn;
                         if (trigger <= now) {
                             c.last_check = value.start;
-                            c.up = False;
                             handlePingTimeout(key, delta);
                             remove dmap{key};
                             continue;
                         } else if (value.spop) {
                             try {
-                                *hash<SocketPollInfo> info;
-                                {
-                                    # to avoid deadlocks with external code, such as with option update code,
-                                    # we run with this unlocked
-                                    #m.unlock();
-                                    #on_exit m.lock();
-                                    info = value.spop.continuePoll();
-                                }
+                                *hash<SocketPollInfo> info = value.spop.continuePoll();
                                 if (value != cache{key}) {
                                     # removed / redefined in cache, reprocess
                                     remove dmap{key};
@@ -368,9 +360,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                                             info.socket.uniqueHash()[0..8]),
                                     } : NOTHING);
                                 if (!info) {
-                                    *bool oldok = c.last_check ? c.up : NOTHING;
                                     c.last_check = value.start;
-                                    handlePingSuccess(key, now_us() - value.start, oldok);
+                                    handlePingSuccess(key, now_us() - value.start, c.up);
                                     remove dmap{key};
                                 } else {
                                     poll_list += info;
@@ -413,17 +404,18 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Handles a successful ping
     private handlePingSuccess(string name, date delta, *bool oldok) {
-        log(LoggerLevel::INFO, "%y (poll state %y): successful ping (duration: %y)", name,
-            cache{name}.spop.getState(), delta);
+        log(LoggerLevel::INFO, "%y (poll state %y was up: %y): successful ping (duration: %y)", name,
+            cache{name}.spop.getState(), oldok ?? False, delta);
         cache{name}.conn.handlePingSuccess(delta);
         restartPing(name);
     }
 
     #! Handles a failed ping
     private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
-        log(LoggerLevel::ERROR, "%y (poll state %y): error in ping (duration: %y): %s", name,
-            cache{name}.spop.getState(), delta, get_exception_string(ex));
-        cache{name}.conn.handlePingFailed(delta, ex);
+        AbstractConnection c = cache{name}.conn;
+        log(LoggerLevel::ERROR, "%y (poll state %y was up: %y): error in ping (duration: %y): %s", name,
+            cache{name}.spop.getState(), c.up, delta, get_exception_string(ex));
+        c.handlePingFailed(delta, ex);
         restartPing(name);
     }
 
@@ -441,9 +433,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Handles a ping timeout
     private handlePingTimeoutIntern(string name, date delta) {
+        AbstractConnection c = cache{name}.conn;
         string err = sprintf("(poll state %s): %s connection ping timed out after: %y", cache{name}.spop.getState(),
-            cache{name}.conn.getType(), delta);
-        cache{name}.conn.handlePingFailed(delta, err);
+            c.getType(), delta);
+        c.handlePingFailed(delta, err);
         log(LoggerLevel::ERROR, "%y %s; restarting poll", name, err);
     }
 
