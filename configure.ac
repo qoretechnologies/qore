@@ -2,7 +2,7 @@
 
 # AC_PREREQ(2.59)
 # NOTE: Qore should always use semantic versioning: https://semver.org/
-AC_INIT([qore], [2.1.2],
+AC_INIT([qore], [2.1.3],
         [David Nichols <david@qore.org>],
         [qore])
 AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 tar-pax subdir-objects])

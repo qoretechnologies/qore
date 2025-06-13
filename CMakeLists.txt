@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 # NOTE: Qore should always use semantic versioning: https://semver.org/
 set(VERSION_MAJOR 2)
 set(VERSION_MINOR 1)
-set(VERSION_SUB 2)
+set(VERSION_SUB 3)
 #set(VERSION_PATCH 0)
 
 # set policy for interperting unquoted variables
