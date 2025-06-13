@@ -90,7 +90,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         #! heartbeat interval in seconds
         int heartbeat = DefaultHeartbeatInterval;
 
-        #! heartbeat message
+        #! heartbeat message returned by getHeartbeatMessage()
         string heartbeat_msg = DefaultHeartbeatMsg;
     }
 
@@ -443,6 +443,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         logArgs(LoggerLevel::DEBUG, fmt, argv);
     }
 
+    #! Returns the heartbeat message to send
+    private string getHeartbeatMessage() {
+        return heartbeat_msg;
+    }
+
     #! Called while holding the write lock to register the new connection
     private registerNewConnectionIntern(string cid, ServerSentEventConnection rv) {
         ch{cid} = rv;
@@ -455,7 +460,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! Send the default heartbeat message
     private sendHeartbeatMsg(Socket sock) {
-        sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
+        sock.send2(getHeartbeatMessage(), DefaultSocketSendTimeout);
     }
 
     #! Resend all events since the given event
