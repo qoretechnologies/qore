@@ -124,7 +124,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     #! returns the connection heartbeat interval as a number of seconds
     /** @return the connection heartbeat interval as a number of seconds
     */
-    int getHeartbeat() {
+    int getHeartbeat(ServerSentEventConnection conn) {
         return heartbeat;
     }
 
@@ -281,7 +281,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 int now = clock_getmillis() / 1000;
                 if (!update) {
                     if ((now - timestamp) >= heartbeat) {
-                        sendHeartbeatMsg(sock);
+                        sendHeartbeatMsg(conn, sock);
                         timestamp = now;
                     }
                 } else {
@@ -289,11 +289,12 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                 }
 
                 if (!sock.isOpen()) {
+                    logInfo("SSE cid: %y remote end closed the connection", cx.id);
                     break;
                 }
             } catch (hash<ExceptionInfo> ex) {
                 # error in serversentevent handler server, log and close the connection
-                string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
+                string err = sprintf("%s: %s: %s; terminating connection thread", get_ex_pos(ex), ex.err, ex.desc);
                 logError(err);
                 break;
             }
@@ -444,13 +445,13 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! Returns the heartbeat message to send
-    private string getHeartbeatMessage() {
+    private string getHeartbeatMessage(ServerSentEventConnection conn) {
         return heartbeat_msg;
     }
 
     #! Called while holding the write lock to register the new connection
-    private registerNewConnectionIntern(string cid, ServerSentEventConnection rv) {
-        ch{cid} = rv;
+    private registerNewConnectionIntern(string cid, ServerSentEventConnection conn) {
+        ch{cid} = conn;
     }
 
     #! Called when a connection is removed from the connection map
@@ -459,8 +460,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! Send the default heartbeat message
-    private sendHeartbeatMsg(Socket sock) {
-        sock.send2(getHeartbeatMessage(), DefaultSocketSendTimeout);
+    private sendHeartbeatMsg(ServerSentEventConnection conn, Socket sock) {
+        sock.send2(getHeartbeatMessage(conn), DefaultSocketSendTimeout);
     }
 
     #! Resend all events since the given event
