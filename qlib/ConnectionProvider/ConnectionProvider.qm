@@ -36,7 +36,7 @@
 %requires reflection
 
 module ConnectionProvider {
-    version = "2.0";
+    version = "2.0.1";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -113,6 +113,10 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_2_0_1 ConnectionProvider 2.0.1
+    - make the original connection status available when pings are made so that status changes can be detected
+      (<a href="https://github.com/qorelanguage/qore/issues/4957">issue 4957</a>)
 
     @subsection connectionprovider_2_0 ConnectionProvider 2.0
     - allow connection default values to be set to no value when creating new connections
