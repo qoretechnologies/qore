@@ -5352,7 +5352,9 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
 int ucnt = table.updateCommit(("id": id), ("name": name));
         @endcode
 
-        @param set the hash of values to set, key values are column names, hash values are the values to assign to those columns or update operators (see @ref sql_uop_funcs)
+        @param set the hash of values to set, key values are column names, hash values are the values to assign to
+        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
@@ -5404,7 +5406,9 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
 int ucnt = table.update(("id": id), ("name": name));
         @endcode
 
-        @param set the hash of values to set, key values are column names, hash values are the values to assign to those columns or update operators (see @ref sql_uop_funcs)
+        @param set the hash of values to set, key values are column names, hash values are the values to assign to
+        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
@@ -5447,7 +5451,8 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns or update operators (see @ref sql_uop_funcs)
+        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
         more info
@@ -5466,7 +5471,10 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
     }
 
     #! Returns the SQL for the given update parameters
-    /** @param set the column names and values to set in the update
+    /** @param set the hash of values to set, key values are column names, hash values are the values to assign to
+        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
+
         @param cond the update condition
 
         @return a hash with the following keys:
@@ -5486,18 +5494,34 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         # make query
         string sql = sprintf("update %s set ", getSqlName());
 
-        list<auto> args;
+        hash<QueryInfo> qinfo = <QueryInfo>{
+            "table": self,
+            "args": (),
+
+            "query_hash": {},
+            "pseudo_column_map": {} + getPseudoColumnHash(),
+            "expression_map": getExpressionMap(),
+
+            # backwards-compatibility
+            "where_operator_map": getWhereOperatorMap(),
+            "column_operator_map": getColumnOperatorMap(),
+        };
+
         list<string> sl = ();
         HashIterator i(set);
         while (i.next()) {
             string key = i.getKey();
             auto value = i.getValue();
             string exp = sprintf("%s = ", getColumnSqlName(key));
-            if (value.uop) {
+            if (value instanceof hash<DataProviderFieldReference>) {
+                exp += getColumnNameIntern(qinfo, value.field);
+            } else if (value instanceof hash<DataProviderExpression>) {
+                exp += getExpressionIntern(\qinfo, ER_Field, value, getColumnDataType(key));
+            } else if (value.uop) {
                 exp += getUpdateExpression(key, cast<hash<UpdateOperatorInfo>>(value));
             } else {
                 exp += "%v";
-                args += value;
+                qinfo.args += value;
             }
             sl += exp;
         }
@@ -5505,12 +5529,12 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         sql += foldl $1 + ", " + $2, sl;
 
         if (cond) {
-            sql += getWhereClause(cond, \args);
+            sql += getWhereClauseIntern(\qinfo, cond);
         }
 
         return <SqlCommandInfo>{
             "sql": sql,
-            "args": args,
+            "args": qinfo.args,
         };
     }
 
