@@ -41,7 +41,7 @@
 %enable-all-warnings
 
 module SqlUtil {
-    version = "1.9.2";
+    version = "1.9.3";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -115,6 +115,10 @@ module SqlUtil {
       - @ref dba_space_management
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv1_9_3 SqlUtil v1.9.3
+    - added support for complex expressions and field reference in update operations
+      (<a href="https://github.com/qorelanguage/qore/issues/4959">issue 4959</a>)
 
     @subsection sqlutilv1_9_2 SqlUtil v1.9.2
     - fixed a bug where @ref SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()
