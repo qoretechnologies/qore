@@ -667,7 +667,7 @@ public namespace Schema {
         #! outputs a log message without any newline
         /** the terminal I/O is flushed as well
         */
-        logProgress(string str) {
+        logProgress(string str, ...) {
             printf(str, argv);
             flush();
         }
@@ -1314,7 +1314,7 @@ public namespace Schema {
         }
 
         #! combines option hashes into a single target option hash
-        static hash combineOptions(*hash h) {
+        static hash combineOptions(*hash h, ...) {
             foreach *hash h1 in (argv) {
                 # h1 can be NOTHING which will fail with RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash', but got type 'int' instead
                 if (!h1)

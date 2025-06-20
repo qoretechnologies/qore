@@ -248,6 +248,9 @@ public hashdecl ActionOptionInfo {
     #! An optional example value for the option
     auto example_value;
 
+    #! An optional regex pattern for validating string values
+    *string validation_regex;
+
     #! A list of other options that must be set before this option can be chosen
     /** Each element in the list is either
        - a string: giving a single option that the element depends on
@@ -1229,6 +1232,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.exclusive_with) {
                     i.value.exclusive_with = info.attr.exclusive_with;
                 }
+                if (info.attr.validation_regex.val()) {
+                    i.value.validation_regex = info.attr.validation_regex;
+                }
                 if (info.attr.depends_on) {
                     i.value.depends_on = info.attr.depends_on;
                 }
@@ -1277,7 +1283,7 @@ public class DataProviderActionCatalog {
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
-                    "depends_on", "on_change"} + additional_fields;
+                    "validation_regex", "depends_on", "on_change"} + additional_fields;
             }
             if (i.value.allowed_values) {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>

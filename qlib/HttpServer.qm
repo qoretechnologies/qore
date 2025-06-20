@@ -1625,7 +1625,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         HttpServer::AbstractHttpRequestHandler handler;
-        # the dynamic handler helper maintains the request count for dynamic handlers so any call to remove the handler will only return after all in-progress requests are completed; the object is only allocated if needed
+        # the dynamic handler helper maintains the request count for dynamic handlers so any call to remove the
+        # handler will only return after all in-progress requests are completed; the object is only allocated if
+        # needed
         DynamicHandlerHelper dhh;
 
         if (phi.handler) {
