@@ -1164,7 +1164,8 @@ public class DataProviderActionCatalog {
 
         @return All actions that match the regular expression pattern in the \c short_desc or \c desc fields
     */
-    static *list<hash<DataProviderActionInfo>> searchActionRegex(string regex_pattern, int regex_options = RE_Caseless) {
+    static *list<hash<DataProviderActionInfo>> searchActionRegex(string regex_pattern,
+            int regex_options = RE_Caseless) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -1326,6 +1327,75 @@ public class DataProviderActionCatalog {
             app_actionmap{app}{action} = info;
         }
         return info;
+    }
+
+    #! Returns a data type for the action options
+    static *AbstractDataProviderType getTypeForActionOptions(hash<auto> action) {
+        return getTypeForActionOptions(cast<hash<DataProviderActionInfo>>(action{
+            map $1.getName(), TypedHash::forName("DataProviderActionInfo").getMembers()
+        }));
+    }
+
+    #! Returns a data type for the action options
+    static *AbstractDataProviderType getTypeForActionOptions(hash<DataProviderActionInfo> action) {
+        if (!action.options) {
+            return;
+        }
+        hash<string, AbstractDataField> fields;
+        bool mand;
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            if (!mand && i.value.type.isMandatory()) {
+                mand = True;
+            }
+            hash<auto> fh = i.value{"display_name", "short_desc", "desc", "multiselect", "allowed_values",
+                "allowed_values_createable", "element_allowed_values", "element_allowed_values_createable",
+                "default_value", "example_value"} + {
+                "name": i.key,
+                "type": i.value.required ? i.value.type.getMandatoryType() : i.value.type.getOrNothingType(),
+            };
+            # set option attributes not directly supported in fields as free-form field attributes
+            if (i.value.preselected) {
+                fh.attr.preselected = True;
+            }
+            if (i.value.sensitive) {
+                fh.attr.sensitive = True;
+            }
+            if (i.value.readonly) {
+                fh.attr.readonly = True;
+            }
+            if (i.value.disabled) {
+                fh.attr.disabled = True;
+            }
+            if ((*string str = i.value.ref_data).val()) {
+                fh.attr.ref_data = str;
+            }
+            if ((*string str = i.value.element_ref_data).val()) {
+                fh.attr.element_ref_data = str;
+            }
+            if ((*string str = i.value.default_ref_data).val()) {
+                fh.attr.default_ref_data = str;
+            }
+            if ((*string str = i.value.dynamic_type).val()) {
+                fh.attr.dynamic_type = str;
+            }
+            if (*list<string> l = i.value.required_groups) {
+                fh.attr.required_groups = l;
+            }
+            if (*list<string> l = i.value.exclusive_with) {
+                fh.attr.exclusive_with = l;
+            }
+            if (*list<string> l = i.value.depends_on) {
+                fh.attr.depends_on = l;
+            }
+            if ((*string str = i.value.validation_regex).val()) {
+                fh.attr.validation_regex = str;
+            }
+            if (*list<string> l = i.value.on_change) {
+                fh.attr.on_change = l;
+            }
+            fields{i.key} = new QoreDataField(fh);
+        }
+        return new HashDataType(mand ? AutoHashType : AutoHashOrNothingType, action.action);
     }
 
     #! Returns a normalized path to ensure that comparisons always work
