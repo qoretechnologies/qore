@@ -149,6 +149,8 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_3_2 RestClient v2.3.2
+    - implemented support for PKCE
+      (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
 
     @subsection restclientv2_3_1 RestClient v2.3.1
@@ -327,6 +329,9 @@ public hashdecl AuthCodeInfo {
 
     #! The state value to use in the request
     *string state;
+
+    #! The code verifier for PKCE (https://datatracker.ietf.org/doc/html/rfc7636)
+    *string code_verifier;
 }
 
 #! this class provides the REST client API
@@ -517,6 +522,13 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             "custom_token_path": True,
             "custom_token_location": True,
         };
+
+        #! Valid PKCE option values
+        const PkceValueSet = {
+            "plain": True,
+            "S256": True,
+            "none": True,
+        };
     }
 
     private {
@@ -580,10 +592,10 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         int oauth2_token_expiry_hint;
         #! The token expiry date
         date oauth2_token_expiry;
-        #! If PKCE should be used with the OAuth2 authorization_code flow
+        #! If PKCE should be used with the OAuth2 authorization_code flow; this will be the code challenge method
         /** To be used by external programs handling OAuth2 calls for this client
         */
-        bool oauth2_pkce = False;
+        string oauth2_pkce;
         #! OAuth2 app name
         /** To be used by external programs handling OAuth2 calls for this client
         */
@@ -821,11 +833,22 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.token_api_key_header) {
             token_api_key_header = opts.token_api_key_header;
         }
-        if (opts.oauth2_pkce) {
-            oauth2_pkce = True;
-        }
         if (opts.rest_body_auth_error_check) {
             rest_body_auth_error_check = opts.rest_body_auth_error_check;
+        }
+        if (opts.oauth2_pkce) {
+            # for backwards compatibility
+            if ((opts.oauth2_pkce === True) || (opts.oauth2_pkce == "1")) {
+                oauth2_pkce = "S256";
+            } else if (opts.oauth2_pkce === False || (opts.oauth2_pkce == "0")) {
+                oauth2_pkce = "none";
+            } else {
+                if (!PkceValueSet{opts.oauth2_pkce}) {
+                    throw "RESTCLIENT-ERROR", sprintf("Invalid 'oauth2_pkce' option value %y; valid values: %y",
+                        opts.oauth2_pkce, keys PkceValueSet);
+                }
+                oauth2_pkce = opts.oauth2_pkce;
+            }
         }
 
         # setup headers before setupAuth()
@@ -2482,8 +2505,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
       - \c "password": requires a username, password, \c oauth2_client_id, \c oauth2_client_secret, as well as
         \c oauth2_token_url
       - \c "none": same as if this option is not set; it means that no OAuth2 grant flow will be used
-    - \c "oauth2_pkce": Use PKCE (Proof Key Code Exchange) when using the OAuth2 \c authorization_code flow.  Note
-      that this is a hint for external applications processing the flow.
+    - \c "oauth2_pkce": Use PKCE (Proof Key Code Exchange) when using the OAuth2 \c authorization_code flow; this
+      value specifies the code challenge method
     - \c "oauth2_redirect_url": The OAuth2 redirect URL for the \c authorization_code grant type; ignored if the
       \c token option is set.  Note that the \c authorization_code grant type requires external user authorization to
       acquire an access token; the special value \c "auto" (the default) is meant to be interpreted by servers
@@ -2776,10 +2799,23 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "display_name": "OAuth2 PKCE",
                     "short_desc": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with "
                         "the authorization code flow",
-                    "type": "bool",
-                    "desc": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with "
-                        "the `authorization_code` flow",
-                    "default_value": False,
+                    "type": "string",
+                    "desc": "The code challenge method for PKCE (Proof Key Code Exchange) with the "
+                        "`authorization_code` flow",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "none",
+                            "desc": "PKCE will not be used",
+                        }, <AllowedValueInfo>{
+                            "value": "plain",
+                            "desc": "No encoding will be made with the code challenge when PKCE is used",
+                        }, <AllowedValueInfo>{
+                            "value": "S256",
+                            "desc": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is "
+                                "used",
+                        },
+                    ),
+                    "default_value": "none",
                 },
                 "oauth2_redirect_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Redirect URL",
@@ -3336,7 +3372,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     /** The \c oauth2_grant_type must be \c authorization_code, and \c oauth2_client_id, \c oauth2_auth_url,
         \c oauth2_redirect_url must set if the \c redirect_uri option is not used
 
-        @param info context information for the authorization code request
+        @param info context information for the authorization code request; the PKCE verifier must be set by the
+        caller if the \c oauth2_pkce option is set to a value other than \c none; the @ref generatePkceChallenge()
+        method can be used to generate a valid verifier value
 
         @since %RestClient 2.0
     */
@@ -3373,7 +3411,21 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         if (info.state) {
             uri += sprintf("&state=%s", info.state);
         }
+        if (info.code_verifier.val() && opts.oauth2_pkce && (opts.oauth2_pkce != "none")) {
+            string code_challenge;
+            if (opts.oauth2_pkce == "S256") {
+                code_challenge = make_base64_url_string(digest("sha256", info.code_verifier));
+            } else {
+                code_challenge = info.code_verifier;
+            }
+            uri += sprintf("&code_challenge=%s&code_challenge_method=%s", code_challenge, opts.oauth2_pkce);
+        }
         return uri;
+    }
+
+    #! Generates a random 64-byte PKCE verifier string
+    static string generatePkceChallenge() {
+        return make_base64_url_string(get_random_bytes(48));
     }
 
     #! Returns the OAuth2 authorization URL or throws an exception if not set
