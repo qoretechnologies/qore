@@ -47,6 +47,7 @@ public class Main inherits QUnit::Test {
             } else if (m_options.verbose) {
                 printf("%s: %s\n", ex.err, ex.desc);
             }
+            remove ebrc;
         }
 
         # Return for compatibility with test harness that checks return value.
@@ -146,6 +147,10 @@ public class Main inherits QUnit::Test {
                 },
             });
         }
+        # ensure that the data provider can be created
+        ebrc.getDataProvider();
+        # ensure that pings work
+        ebrc.ping();
     }
 }
 
