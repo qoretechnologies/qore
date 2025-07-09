@@ -48,10 +48,16 @@ public const DPO_EnableServers                  = (1 << 0);
 */
 public const DPO_DisableOnDemandInitialization  = (1 << 1);
 
+#! Enable on-demand initialization of actions
+/** This option ensures that data providers are initialized immediately but action initialization is deferred
+*/
+public const DPO_EnableOnDemandActions          = (1 << 2);
+
 #! The mask of all data provider options
 public const DPO_AllOptions = (
     DPO_EnableServers
     | DPO_DisableOnDemandInitialization
+    | DPO_EnableOnDemandActions
 );
 #/@}
 
@@ -284,7 +290,7 @@ public class DataProvider {
     #! Returns the given data provider factory or @ref nothing if not present
     static *AbstractDataProviderFactory getFactory(string name) {
         DataProvider::checkRequest();
-        if (!factory_cache{name}) {
+        if (!factory_cache{name} && !ProviderIndexUtil::checkFactoryModule(name)) {
             *string module_name = FactoryMap{name} ?? DataProvider::tryGetFactoryModuleName(name);
             if (!module_name) {
                 return;

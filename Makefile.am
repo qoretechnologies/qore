@@ -37,14 +37,15 @@ DOX_SRC_MODULES = qlib/Mime.qm \
 
 DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
-    qlib/SqlUtil \
     qlib/DataProvider \
     qlib/DbDataProvider \
-    qlib/FileLocationHandler \
-    qlib/RestClientDataProvider \
     qlib/ElasticSearchDataProvider \
     qlib/EmpathicBuildingDataProvider \
-    qlib/GoogleDataProvider
+    qlib/FileLocationHandler \
+    qlib/GoogleDataProvider \
+    qlib/ProviderIndexUtil \
+    qlib/RestClientDataProvider \
+    qlib/SqlUtil
 
 DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/DebugCmdLine.qm \
@@ -110,6 +111,7 @@ DOX_SPLIT_MODULES = \
     qlib/MewsRestDataProvider \
     qlib/OpenAiDataProvider \
     qlib/Pop3ClientDataProvider \
+    qlib/ProviderIndex \
     qlib/SalesforceRestDataProvider \
     qlib/ServerSentEventClient \
     qlib/ServerSentEventHandler \
@@ -138,6 +140,8 @@ HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
+ProviderIndex_modverdir = $(modverdir)/ProviderIndex
+ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
 ServerSentEventClient_modverdir = $(modverdir)/ServerSentEventClient
@@ -168,6 +172,8 @@ dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
 dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]) $(wildcard qlib/OpenAiDataProvider/*-swagger-2.0.yaml)
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])
+dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
+dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestDataProvider/*.q[cm])
 dist_ServerSentEventClient_modver_DATA = $(wildcard qlib/ServerSentEventClient/*.q[cm])
@@ -1207,6 +1213,9 @@ doxygen/qlib/Doxyfile.GoogleDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 
 doxygen/qlib/Doxyfile.Logger: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/Logger.qm:doxygen/qlib/Logger.qm $< $@
+
+doxygen/qlib/Doxyfile.ProviderIndexUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/ProviderIndexUtil:doxygen/qlib/ProviderIndexUtil.qm $< $@
 
 doxygen/qlib/Doxyfile.WebSocketUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/WebSocketUtil.qm:doxygen/qlib/WebSocketUtil.qm $< $@

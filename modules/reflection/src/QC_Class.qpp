@@ -50,6 +50,42 @@
 #include <QC_Type.h>
 #include <QC_Namespace.h>
 
+static QoreHashNode* QoreReflectionClass_serializer(const QoreObject& self, const QoreReflectionClass& cls,
+        QoreSerializationContext& context, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("cls", new QoreStringNode(cls.cls->getPath()), xsink);
+    return rv.release();
+}
+
+static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, ExceptionSink* xsink) {
+    if (sdata) {
+        QoreValue val = sdata->getKeyValue("cls");
+        if (val) {
+            if (val.getType() != NT_STRING) {
+                xsink->raiseException("DESERIALIZATION-ERROR", "Class serialization key 'cls' has type '%s'; "
+                    "expecting 'string'", val.getFullTypeName());
+                return;
+            }
+            ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink,
+                val.get<const QoreStringNode>()->c_str(), getProgram()), xsink);
+            if (*xsink) {
+                QoreValue exerr = xsink->getExceptionErr();
+                assert(exerr.getType() == NT_STRING);
+                QoreValue exdesc = xsink->getExceptionDesc();
+                assert(exdesc.getType() == NT_STRING);
+                QoreStringMaker desc("%s: %s", exerr.get<const QoreStringNode>()->c_str(),
+                    exdesc.get<const QoreStringNode>()->c_str());
+                xsink->renamePrependLastException("DESERIALIZATION-ERROR", desc.c_str());
+            } else {
+                self.setPrivate(CID_ABSTRACTCLASS, cls.release());
+            }
+            return;
+        }
+    }
+    xsink->raiseException("DESERIALIZATION-ERROR", "Missing serialization data for Class");
+}
+
 int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
     if (getProgram()->getParseOptions64() & cls->getDomain()) {
         xsink->raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to the " \
@@ -123,7 +159,14 @@ hashdecl MethodAccessInfo {
 //! This class provides information about %Qore classes
 /** @since %Qore 0.9
  */
-qclass Class [ns=Qore::Reflection; arg=QoreReflectionClass* c; dom=REFLECTION; vparent=AbstractClass];
+qclass Class [
+    ns=Qore::Reflection;
+    arg=QoreReflectionClass* c;
+    dom=REFLECTION;
+    vparent=AbstractClass,Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(QoreReflectionClass_serializer);
+    deserializer=QoreReflectionClass_deserializer
+];
 
 //! Creates the object from the class name or namespace-justified path as a string
 /** @par Example:

@@ -454,6 +454,9 @@ public class DataProviderActionCatalog {
         #! Pending application action init handler map: app -> action -> init handler
         static hash<string, hash<string, code>> initactionmap;
 
+        #! Maps apps to the modules that define them: app -> module path -> True
+        static hash<string, hash<string, bool>> appmodmap;
+
         #! Default description
         const DefaultDescription = "";
     }
@@ -527,6 +530,9 @@ public class DataProviderActionCatalog {
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
+        if (exists (*string path = get_module_context_path())) {
+            appmodmap{app.name}{path} = True;
+        }
 
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
@@ -549,6 +555,15 @@ public class DataProviderActionCatalog {
 
         # deregister the app automatically if module initialization fails
         ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterApp(app.name); });
+    }
+
+    #! Returns zero or more module paths for the given application
+    /** @param app the application name
+
+        @return zero or more module paths for the given application
+    */
+    static *list<string> getModulePathsForApp(string app) {
+        return keys appmodmap{app};
     }
 
     #! Removes a dynamic data provider application
@@ -578,6 +593,9 @@ public class DataProviderActionCatalog {
         remove initmap{name};
         remove app_actionmap{name};
         remove initactionmap{name};
+        if (exists (*string path = get_module_context_path())) {
+            remove appmodmap{name}{path};
+        }
         *hash<DataProviderAppInfo> app = appcache{name};
         if (!app) {
             return;
@@ -771,6 +789,9 @@ public class DataProviderActionCatalog {
         @see getAppEx()
     */
     static *hash<DataProviderAppInfo> getApp(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -792,6 +813,9 @@ public class DataProviderActionCatalog {
         @see getApp()
     */
     static hash<DataProviderAppInfo> getAppEx(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -865,6 +889,9 @@ public class DataProviderActionCatalog {
         @see getActionHashEx()
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHash(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -887,6 +914,9 @@ public class DataProviderActionCatalog {
         @see getActionHash()
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHashEx(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -910,6 +940,9 @@ public class DataProviderActionCatalog {
         @see getActionsEx()
     */
     static *list<hash<DataProviderActionInfo>> getActions(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -932,6 +965,9 @@ public class DataProviderActionCatalog {
         @see getActions()
     */
     static list<hash<DataProviderActionInfo>> getActionsEx(string app) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -970,6 +1006,9 @@ public class DataProviderActionCatalog {
         @see getAppActionEx()
     */
     static *hash<DataProviderActionInfo> getAppAction(string app, string action) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -1000,6 +1039,9 @@ public class DataProviderActionCatalog {
         @see getAppAction()
     */
     static hash<DataProviderActionInfo> getAppActionEx(string app, string action) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -1053,6 +1095,9 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -1077,6 +1122,9 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstr(string app, string substr,
             bool ignore_case = True) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -1107,6 +1155,9 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegexEx(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);
@@ -1137,6 +1188,9 @@ public class DataProviderActionCatalog {
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstrEx(string app, string substr,
             bool ignore_case = True) {
+        # load app on demand
+        ProviderIndexUtil::checkAppModule(app);
+
         # initialize any pending app
         if (*code init = remove initmap{app}) {
             DataProviderActionCatalog::doInit(init);

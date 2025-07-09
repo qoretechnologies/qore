@@ -57,6 +57,8 @@ int OnBlockExitStatement::parseInitImpl(QoreParseContext& parse_context) {
     if (type == OBE_Error) {
         fh.setFlags(PF_RETHROW_OK);
     }
+    // issue #4961: set implicit arg type
+    ParseImplicitArgTypeHelper pia(type == OBE_Error ? hashdeclExceptionInfo->getTypeInfo() : nothingTypeInfo);
 
     return code->parseInitImpl(parse_context);
 }

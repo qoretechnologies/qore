@@ -2816,6 +2816,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         },
                     ),
                     "default_value": "none",
+                    # set for backwards compatibility since the type changed from bool -> string
+                    "ignore_types": {
+                        Type::Boolean: True,
+                    },
                 },
                 "oauth2_redirect_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Redirect URL",

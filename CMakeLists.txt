@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 # NOTE: Qore should always use semantic versioning: https://semver.org/
 set(VERSION_MAJOR 2)
-set(VERSION_MINOR 1)
-set(VERSION_SUB 3)
+set(VERSION_MINOR 2)
+set(VERSION_SUB 0)
 #set(VERSION_PATCH 0)
 
 # set policy for interperting unquoted variables
@@ -898,6 +898,7 @@ qore_user_module("qlib/Qorize.qm" "")
 qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
+qore_user_module("qlib/ProviderIndexUtil" "")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")
@@ -940,6 +941,7 @@ qore_user_module("qlib/WebSocketHandler.qm" "HttpServerUtil;WebSocketUtil")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
+qore_user_module("qlib/ProviderIndex" "DataProvider;ConnectionProvider;ProviderIndexUtil")
 qore_user_module("qlib/ServerSentEventClient" "DataProvider;ConnectionProvider;Logger;Mime;Util")
 qore_user_module("qlib/MssqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/MysqlSqlUtil.qm" "SqlUtil;DataProvider")

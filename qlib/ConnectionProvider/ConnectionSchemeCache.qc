@@ -69,6 +69,9 @@ public hashdecl ConnectionOptionInfo {
 
     #! Optional example option value
     auto example_value;
+
+    #! Ignore types for backwards compatibility when an option changes type
+    *hash<string, bool> ignore_types;
 }
 
 #! Connection provider information
@@ -375,7 +378,7 @@ public class ConnectionSchemeCache {
         registered
     */
     static *hash<ConnectionSchemeInfo> getScheme(string scheme) {
-        return ConnectionSchemeCache::getSchemeImpl(scheme, False);
+        return getSchemeImpl(scheme, False);
     }
 
     #! Returns info for the given connection scheme or throws an exception if not present
@@ -386,7 +389,7 @@ public class ConnectionSchemeCache {
         @throw SCHEME-ERROR the scheme is unknown
     */
     static hash<ConnectionSchemeInfo> getSchemeEx(string scheme) {
-        return ConnectionSchemeCache::getSchemeImpl(scheme, True);
+        return getSchemeImpl(scheme, True);
     }
 
     #! Returns info for the given connection scheme; either throws an exception if not present or returns @ref NOTHING
@@ -415,21 +418,22 @@ public class ConnectionSchemeCache {
         }
 
         *hash<ConnectionSchemeInfo> rv = cache{scheme};
-        if (!rv) {
-            if (*string mod = SchemeMap{scheme}) {
-                if (ConnectionSchemeCache::tryLoadModule(mod, throw_exception)) {
-                    rv = cache{scheme};
-                }
-            }
-            if (!rv && scheme_loader) {
-                rv = cache{scheme} = scheme_loader(scheme);
-            }
+        if (rv) {
+            return rv;
         }
-
-        if (!rv && throw_exception) {
-            throw "SCHEME-ERROR", sprintf("connection provider scheme %y is not registered", scheme);
+        if (ProviderIndexUtil::checkSchemeModule(scheme) && (rv = cache{scheme})) {
+            return rv;
         }
-        return rv;
+        if ((*string mod = SchemeMap{scheme}) && ConnectionSchemeCache::tryLoadModule(mod, throw_exception)
+            && (rv = cache{scheme})) {
+            return rv;
+        }
+        if (scheme_loader && (rv = cache{scheme} = scheme_loader(scheme))) {
+            return rv;
+        }
+        if (throw_exception) {
+            throw "SCHEME-ERROR", sprintf("Connection provider scheme %y is not registered", scheme);
+        }
     }
 
     #! Returns default option values for the given connection scheme
@@ -442,7 +446,7 @@ public class ConnectionSchemeCache {
         @since ConnectionProvider 2.0
     */
     static *hash<auto> getDefaultOptionValues(string scheme) {
-        return ConnectionSchemeCache::getDefaultOptionValues(ConnectionSchemeCache::getSchemeEx(scheme));
+        return getDefaultOptionValues(ConnectionSchemeCache::getSchemeEx(scheme));
     }
 
     #! Returns default option values for the given connection scheme
@@ -525,6 +529,10 @@ public class ConnectionSchemeCache {
                     }
                     if (type == "date" && vtype == "string") {
                         options{i.key} = date(i.value);
+                        continue;
+                    }
+                    if (info.ignore_types{vtype}) {
+                        delete options{i.key};
                         continue;
                     }
                     throw "CONNECTION-OPTION-ERROR",
