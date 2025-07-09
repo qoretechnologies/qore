@@ -760,13 +760,15 @@ protected:
 
 class QoreUserModuleDefContextHelper : public QoreModuleDefContextHelper {
 public:
-    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, QoreProgram* p, ExceptionSink& xs);
+    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs);
 
     DLLLOCAL ~QoreUserModuleDefContextHelper() {
         const char* name = set_module_context_name(old_name);
+        set_module_context_path(old_path);
 
-        if (xsink && !dup)
+        if (xsink && !dup) {
             QMM.removeUserModuleDependency(name);
+        }
     }
 
     DLLLOCAL void setDuplicate() {
@@ -780,6 +782,7 @@ public:
 
 protected:
     const char* old_name;
+    const char* old_path;
 
     qore_program_private* pgm;
     int64 po;

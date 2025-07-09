@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# @file qdp example program for the DataProvider module
+# @file qdp command-line interface for the DataProvider module
 
-/*  Copyright 2019 - 2023 Qore Technologies, s.r.o.
+/*  Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,8 @@
 # for webhooks
 %requires HttpServer
 %requires RestHandler
+# to create the data provider index
+%requires ProviderIndex
 
 %try-module linenoise
 %define NoLinenoise
@@ -71,6 +73,7 @@ class QdpCmd {
         #! program options
         const Opts = {
             "bulk": "b,bulk",
+            "createindex": "I,create-index",
             "host": "H,host=s",
             "listapps": "a,list-apps",
             "listconnections": "c,list-connections",
@@ -194,6 +197,7 @@ class QdpCmd {
 
         logger = getLogger();
         DataProvider::setGlobalLogger(logger);
+        ProviderIndex::setGlobalLogger(logger);
 
         if (opts.listconnections) {
             listConnections();
@@ -206,6 +210,9 @@ class QdpCmd {
         }
         if (opts.listapps) {
             listApps();
+        }
+        if (opts.createindex) {
+            createIndex();
         }
         if (!ARGV[0]) {
             usage();
@@ -1215,7 +1222,9 @@ class QdpCmd {
     }
 
     private showActions(string app) {
-        DataProvider::registerKnownFactories();
+        if (!ENV.QORE_PROVIDER_INDEX_DIR) {
+            DataProvider::registerKnownFactories();
+        }
         *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash(app);
         if (!actions) {
             error("Application %y is unknown; known applications: %y", app, (map $1.name,
@@ -1240,7 +1249,9 @@ class QdpCmd {
     }
 
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
-        DataProvider::registerKnownFactories();
+        if (!ENV.QORE_PROVIDER_INDEX_DIR) {
+            DataProvider::registerKnownFactories();
+        }
         *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash(app_name);
         if (!actions) {
             error("Application %y is unknown", app_name);
@@ -1342,6 +1353,16 @@ class QdpCmd {
         }
 
         error("no connection or datasource connection %y exists in any known data provider", name);
+    }
+
+    static createIndex() {
+        try {
+            hash<auto> info = ProviderIndex::createDataProviderIndex();
+            printf("Created index %y: %d bytes in %y (%y)\n", info.path, info.size, info.delta, info.summary);
+            exit(0);
+        } catch (hash<ExceptionInfo> ex) {
+            error("%s: %s", ex.err, ex.desc);
+        }
     }
 
     static listApps() {
@@ -1485,6 +1506,7 @@ class QdpCmd {
  -c,--list-connections     list known connections and exit
  -f,--list-factories       list known data provider factories and exit
  -H,--host=ARG             set the hostname (+ optionally port) for webhooks
+ -I,--create-index         create data provider indices in QORE_PROVIDER_INDEX_DIR
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
  -R,--show-required        show only required attributes when showing types

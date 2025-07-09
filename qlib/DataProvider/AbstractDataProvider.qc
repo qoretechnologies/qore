@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires(reexport) Logger
-
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 /** @defgroup db_provider_upsert_results DB Provider Upsert Result Codes

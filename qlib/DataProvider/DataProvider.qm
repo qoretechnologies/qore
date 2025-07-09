@@ -37,6 +37,8 @@
 %requires(reexport) Util
 %requires(reexport) MapperUtil
 %requires(reexport) Mime
+%requires(reexport) Logger
+%requires(reexport) ProviderIndexUtil
 
 %try-module yaml
 %define NoYaml

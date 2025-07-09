@@ -397,8 +397,11 @@ public:
     // used to capture the module definition in user modules
     QoreModuleDefContext* qmd = nullptr;
 
-    // user to track the current module context
+    // used to track the current module context
     const char* module_context_name = nullptr;
+
+    // used to track the current module context path
+    const char* module_context_path = nullptr;
 
     // AbstractQoreModule* with boolean ptr in bit 0
     uintptr_t qmi = 0;
@@ -1732,6 +1735,17 @@ const char* set_module_context_name(const char* n) {
 
 const char* get_module_context_name() {
     return thread_data.get()->module_context_name;
+}
+
+const char* set_module_context_path(const char* p) {
+    ThreadData* td = thread_data.get();
+    const char* rv = td->module_context_path;
+    td->module_context_path = p;
+    return rv;
+}
+
+const char* get_module_context_path() {
+    return thread_data.get()->module_context_path;
 }
 
 void ModuleContextNamespaceList::clear() {

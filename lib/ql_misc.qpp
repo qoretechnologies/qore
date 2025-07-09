@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -3172,5 +3172,75 @@ nothing set_module_option(string module, string option, auto value) [dom=PROCESS
  */
 code get_call_reference(string identifier) [flags=RET_VALUE_ONLY] {
     return get_call_reference_intern(runtime_get_stack_object(), identifier, xsink);
+}
+
+//! Returns the name of the module currently being loaded, if any
+/** @return the name of the module currently being loaded, if any
+
+    @see
+    - @ref Qore::get_module_context_name_ex()
+
+    @since %Qore 2.2.0
+*/
+*string get_module_context_name() [flags=CONSTANT] {
+    const char* str = get_module_context_name();
+    if (!str) {
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the path of the module currently being loaded, if any
+/** @return the path of the module currently being loaded, if any
+
+    @see
+    - @ref Qore::get_module_context_path_ex()
+
+    @since %Qore 2.2.0
+*/
+*string get_module_context_path() [flags=CONSTANT] {
+    const char* str = get_module_context_path();
+    if (!str) {
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the name of the module currently being loaded
+/** @return the name of the module currently being loaded
+
+    @throw NO-MODULE-CONTEXT Thrown if there is no module context
+
+    @see
+    - @ref Qore::get_module_context_name()
+
+    @since %Qore 2.2.0
+*/
+string get_module_context_name_ex() [flags=CONSTANT] {
+    const char* str = get_module_context_name();
+    if (!str) {
+        xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the path of the module currently being loaded
+/** @return the path of the module currently being loaded
+
+    @throw NO-MODULE-CONTEXT Thrown if there is no module context
+
+    @see
+    - @ref Qore::get_module_context_path()
+
+    @since %Qore 2.2.0
+*/
+string get_module_context_path_ex() [flags=CONSTANT] {
+    const char* str = get_module_context_path();
+    if (!str) {
+        xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
 }
 ///@}

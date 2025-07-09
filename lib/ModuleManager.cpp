@@ -288,8 +288,10 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
     set_module_context(parent);
 }
 
-QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, QoreProgram* p, ExceptionSink& xs)
-        : old_name(set_module_context_name(name)), pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
+QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
+        ExceptionSink& xs)
+        : old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
+        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
 }
 
 void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
@@ -1113,7 +1115,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         load_opt, warning_mask));
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
 
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
@@ -1465,7 +1467,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     ON_BLOCK_EXIT(module_load_clear, td);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, pgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, pgm, xsink);
 
     {
         ModuleLoadMapHelper mlmh(feature);
@@ -1516,7 +1518,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     ModuleReExportHelper mrh(mi.get(), reexport);
 
-    QoreUserModuleDefContextHelper qmd(feature, pgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, pgm, xsink);
 
     {
         // run initialization unlocked

@@ -34,6 +34,7 @@
 %requires Logger
 %requires(reexport) DataProvider
 %requires reflection
+%requires ProviderIndexUtil
 
 module ConnectionProvider {
     version = "2.0.1";
@@ -602,8 +603,8 @@ string connstr = get_connection(str);
 public AbstractConnection sub get_connection(string conn) {
     # process connection provider modules in declaration order
     if (ENV.QORE_CONNECTION_PROVIDERS) {
-        list el = ();
-        list pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
+        list<string> el = ();
+        list<string> pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
         foreach string mod in (pl) {
             try {
                 return priv_try_get_connection(mod, conn);

@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -312,6 +312,8 @@ DLLLOCAL QoreModuleDefContext* get_module_def_context();
 DLLLOCAL void parse_set_module_def_context_name(const char* name);
 DLLLOCAL const char* set_module_context_name(const char* n);
 DLLLOCAL const char* get_module_context_name();
+DLLLOCAL const char* set_module_context_path(const char* p);
+DLLLOCAL const char* get_module_context_path();
 
 DLLLOCAL void parse_set_try_reexport(bool tr);
 DLLLOCAL bool parse_get_try_reexport();
