@@ -255,7 +255,7 @@ public class ProviderIndexUtil {
     }
 
     #! Returns the index path for the given type
-    static private string getIndexPath(string type) {
+    static string getIndexPath(string type) {
         return sprintf("%s%sqore-%s-index.yaml", tryGetIndexDir(True), DirSep, type);
     }
 
