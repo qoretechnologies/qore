@@ -29,11 +29,16 @@ public class ProviderIndex inherits ProviderIndexUtil {
     public {}
 
     #! Create the data provider index
-    public static hash<auto> createDataProviderIndex() {
+    public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
+            *string dir) {
         date start = now_us();
 
         # setup logger
         setupLogger();
+
+        if (dir.val()) {
+            setEnvironmentVariable(dir);
+        }
 
         # check if environment variable is set
         tryGetIndexDir(True);
@@ -44,9 +49,8 @@ public class ProviderIndex inherits ProviderIndexUtil {
         # load all known data provider factories
         DataProvider::registerKnownFactories();
 
-        hash<DataProviderIndexInfo> index();
         # start with the default factory map
-        index.factorymap = DataProvider::FactoryMap;
+        index.factorymap += DataProvider::FactoryMap;
 
         if (ENV.QORE_DATA_PROVIDERS) {
             # load all data providers from the QORE_DATA_PROVIDERS environment variable
@@ -65,8 +69,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
                 log(LoggerLevel::LevelError, "Data provider app %y has no module path", app.name);
                 continue;
             }
-            map index.appmap{app.name} = $1, paths;
-            map log(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), paths;
+            if (!index.appmap{app.name}) {
+                map index.appmap{app.name}{$1} = True, paths;
+                map log(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), paths;
+            }
             if (app.scheme) {
                 *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(app.scheme);
                 if (!info) {
@@ -74,7 +80,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
                     continue;
                 }
                 foreach string path in (paths) {
-                    map index.schememap{$1} = path, keys info.schemes;
+                    map index.schememap{$1}{path} = True, keys info.schemes;
                     map log(LoggerLevel::LevelDebug, "Registered scheme %y -> %y", $1, path), keys info.schemes;
                 }
             }

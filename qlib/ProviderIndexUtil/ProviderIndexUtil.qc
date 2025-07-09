@@ -33,10 +33,10 @@ public hashdecl DataProviderIndexInfo {
     *hash<string, string> factorymap;
 
     #! App to module map
-    *hash<string, string> appmap;
+    *hash<string, hash<string, bool>> appmap;
 
     #! Scheme to module map
-    *hash<string, string> schememap;
+    *hash<string, hash<string, bool>> schememap;
 }
 
 #! Index info
@@ -70,6 +70,9 @@ public class ProviderIndexUtil {
 
         #! Initialized flag
         static bool initialized;
+
+        #! All apps loaded flag
+        static bool apps_loaded;
     }
 
     #! Try to ensure that any required module is loaded for the given factory
@@ -86,30 +89,42 @@ public class ProviderIndexUtil {
         return False;
     }
 
-    #! Try to ensure that any required module is loaded for the given data provider application
+    #! Try to ensure that any required modules are loaded for the given data provider application
     /** @param app the data provider application
 
-        @return @ref True if the module was loaded, @ref False if it was not
+        @return @ref True if at lease one required module was loaded, @ref False if was not
     */
     static bool checkAppModule(string app) {
         checkDataIndex();
 
-        if (exists (*string mod = index.appmap{app})) {
-            return tryLoadModule(mod);
+        if (*hash<string, bool> h = index.appmap{app}) {
+            bool loaded = False;
+            foreach string mod in (keys h) {
+                if (tryLoadModule(mod) && !loaded) {
+                    loaded = True;
+                }
+            }
+            return loaded;
         }
         return False;
     }
 
-    #! Try to ensure that any required module is loaded for the given connection scheme
+    #! Try to ensure that any required modules are loaded for the given connection scheme
     /** @param scheme the scheme
 
-        @return @ref True if the module was loaded, @ref False if it was not
+        @return @ref True if at lease one required module was loaded, @ref False if was not
     */
     static bool checkSchemeModule(string scheme) {
         checkDataIndex();
 
-        if (exists (*string mod = index.schememap{scheme})) {
-            return tryLoadModule(mod);
+        if (*hash<string, bool> h = index.schememap{scheme}) {
+            bool loaded = False;
+            foreach string mod in (keys h) {
+                if (tryLoadModule(mod) && !loaded) {
+                    loaded = True;
+                }
+            }
+            return loaded;
         }
         return False;
     }
@@ -119,7 +134,7 @@ public class ProviderIndexUtil {
 
         @return @ref True if the module was loaded, @ref False if it was not
     */
-    static bool tryLoadModule(*string mod) {
+    static bool tryLoadModule(string mod) {
         try {
             load_module(mod);
             return True;
@@ -127,6 +142,41 @@ public class ProviderIndexUtil {
             log(LoggerLevel::LevelError, "Error loading module %y: %s: %s", mod, ex.err, ex.desc);
             return False;
         }
+    }
+
+    #! Returns a list of all app modules that have not been returned by a call to this method yet and are not loaded
+    static *list<string> getAllAppModulesToLoad() {
+        if (apps_loaded) {
+            return;
+        }
+        m.lock();
+        on_exit m.unlock();
+
+        # check again in the lock
+        if (apps_loaded) {
+            return;
+        }
+
+        if (!initialized) {
+            index = readDataProviderIndex();
+            initialized = True;
+        }
+
+        # iterate all apps and calculate the set of unloaded modules
+        *hash<auto> mh = get_module_hash();
+        hash<string, bool> rv;
+        foreach hash<string, bool> h in (index.appmap.iterator()) {
+            foreach string path in (keys h) {
+                string mod = basename(path);
+                mod =~ s/\.qm$//i;
+                if (!mh{mod}) {
+                    rv{path} = True;
+                }
+            }
+        }
+        apps_loaded = True;
+
+        return keys rv;
     }
 
     #! Checks if the data provider index has been populated
@@ -207,6 +257,12 @@ public class ProviderIndexUtil {
     #! Returns the index path for the given type
     static private string getIndexPath(string type) {
         return sprintf("%s%sqore-%s-index.yaml", tryGetIndexDir(True), DirSep, type);
+    }
+
+    #! Sets the environment variable
+    static setEnvironmentVariable(string dir) {
+        setenv(ProviderIndexEnvVar, dir);
+        ENV{ProviderIndexEnvVar} = dir;
     }
 
     #! Try to get the index directory from the environment variable
