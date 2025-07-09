@@ -1356,8 +1356,11 @@ class QdpCmd {
     }
 
     static createIndex() {
+        *hash<auto> index = QdpCmd::getHash("index");
         try {
-            hash<auto> info = ProviderIndex::createDataProviderIndex();
+            hash<auto> info = ProviderIndex::createDataProviderIndex(
+                index ? cast<hash<DataProviderIndexInfo>>(index) : NOTHING
+            );
             printf("Created index %y: %d bytes in %y (%y)\n", info.path, info.size, info.delta, info.summary);
             exit(0);
         } catch (hash<ExceptionInfo> ex) {
