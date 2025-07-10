@@ -813,7 +813,8 @@ struct qore_httpclient_priv {
 
     // issue #2340: duplicate headers are overwritten; duplicate headers are checked with a case-insensitive search
     // the last header that matches is used for sending
-    DLLLOCAL static QoreStringNode* getHeaderString(strcase_set_t& hdrs, QoreHashNode& nh, const char* key, ExceptionSink* xsink) {
+    DLLLOCAL static QoreStringNode* getHeaderString(strcase_set_t& hdrs, QoreHashNode& nh, const char* key,
+            ExceptionSink* xsink) {
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode);
         strcase_set_t::iterator i = hdrs.find(key);
         if (i == hdrs.end()) {
@@ -823,7 +824,7 @@ struct qore_httpclient_priv {
             // remove the key
             QoreValue t = nh.takeKeyValue((*i).c_str());
             assert(!t.isNothing());
-            assert(t.getType() == NT_STRING);
+            assert(t.getType() == NT_STRING || t.getType() == NT_LIST);
             t.discard(xsink);
             assert(!*xsink);
             // replace key in set with new case if difference
@@ -838,18 +839,42 @@ struct qore_httpclient_priv {
         return str.release();
     }
 
+    // issue #2340: duplicate headers are overwritten; duplicate headers are checked with a case-insensitive search
+    // the last header that matches is used for sending
+    DLLLOCAL static QoreListNode* getHeaderList(strcase_set_t& hdrs, QoreHashNode& nh, const char* key,
+                ExceptionSink* xsink) {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+        strcase_set_t::iterator i = hdrs.find(key);
+        if (i == hdrs.end()) {
+            hdrs.insert(i, key);
+        } else {
+            //printd(5, "qore_httpclient_priv::getHeaderList() taking '%s' -> setting '%s'\n", (*i).c_str(), key);
+            // remove the key
+            QoreValue t = nh.takeKeyValue((*i).c_str());
+            assert(!t.isNothing());
+            assert(t.getType() == NT_STRING || t.getType() == NT_LIST);
+            t.discard(xsink);
+            assert(!*xsink);
+            // replace key in set with new case if difference
+            if (*i != key) {
+                hdrs.erase(i);
+                hdrs.insert(key);
+            }
+        }
+        nh.setKeyValue(key, *l, xsink);
+        assert(!*xsink);
+
+        return l.release();
+    }
+
     DLLLOCAL static void addAppendHeader(strcase_set_t& hdrs, QoreHashNode& nh, const char* key, const QoreValue v,
             ExceptionSink* xsink) {
         if (v.getType() == NT_LIST) {
-            QoreStringNode* str = getHeaderString(hdrs, nh, key, xsink);
+            QoreListNode* l = getHeaderList(hdrs, nh, key, xsink);
             ConstListIterator li(v.get<const QoreListNode>());
             while (li.next()) {
                 QoreStringNodeValueHelper vh(li.getValue());
-                if (!vh->empty()) {
-                    if (!str->empty())
-                        str->concat(',');
-                    str->concat(*vh);
-                }
+                l->push(*vh, xsink);
             }
             return;
         }
