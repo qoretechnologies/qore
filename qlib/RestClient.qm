@@ -852,7 +852,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         }
 
         # setup headers before setupAuth()
-        headers = DefaultHeaders + opts.headers;
+        headers += DefaultHeaders + opts.headers;
         noCharset = opts.no_charset;
 
         # setup authentication
@@ -1081,7 +1081,8 @@ hash<auto> h = rest.getDefaultHeaders();
         @since %RestClient 2.0
     */
     replaceDefaultHeaders(*hash<auto> hdr) {
-        headers = DefaultHeaders + hdr;
+        remove headers;
+        headers += DefaultHeaders + hdr;
     }
 
     #! returns the current data content encoding (compression) object or @ref nothing if no encoding option is set
@@ -3804,7 +3805,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         method = real_opts.ping_method ?? "GET";
         path = real_opts.ping_path ?? "/";
         body = method != "GET" ? real_opts.ping_body : NOTHING;
-        headers = real_opts.ping_headers;
+        headers += real_opts.ping_headers;
 
         rc.postponeUpdateOptions(rc.getLogger());
 

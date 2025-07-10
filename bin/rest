@@ -362,12 +362,19 @@ class RestCmd {
         }
 
         foreach string h in (opt.header) {
-            (*string k, *string v) = (h =~ x/([^:]+):(.+)$/); #/);
+            (*string k, auto v) = (h =~ x/([^:]+):(.+)$/); #/);
             trim k;
             trim v;
             if (!k || !v) {
                 stderr.printf("invalid header %y; expecting \"key: value\" format\n", h);
                 exit(1);
+            }
+            if (exists (auto v0 = rest.getDefaultHeaders(){k})) {
+                if (v0.typeCode() != NT_LIST) {
+                    v0 = (v0,);
+                }
+                v0 += v;
+                v = v0;
             }
             rest.addDefaultHeaders((k: v));
         }
