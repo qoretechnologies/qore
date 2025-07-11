@@ -67,12 +67,16 @@ public class ProviderIndex inherits ProviderIndexUtil {
         tryLoadTypeScriptActionInterface();
 
         # iterate all apps to initialize the app and scheme maps
-        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllAppsNoInit()) {
+        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
             *list<string> paths = DataProviderActionCatalog::getModulePathsForApp(app.name);
             if (!paths) {
                 log(LoggerLevel::LevelError, "Data provider app %y has no module path", app.name);
                 continue;
             }
+            # add to app info map
+            index.appinfomap{app.name} = app;
+            # add to app action info map
+            index.actioninfomap{app.name} = getSerializableAppActions(app.name);
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, paths;
                 map log(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), paths;
@@ -95,6 +99,25 @@ public class ProviderIndex inherits ProviderIndexUtil {
             "apps": index.appmap.size(),
             "schemes": index.schememap.size(),
         });
+    }
+
+    #! Get YAML-serializable hash of actions keyed by action name
+    private static *hash<string, hash<auto>> getSerializableAppActions(string app) {
+        hash<string, hash<auto>> rv;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app)) {
+            action -= ("data_provider_info", "get_dynamic_options", "get_output_type", "output_type");
+            rv{action.action} = action + {
+                "options": getSerializableActionOptions(action.options),
+            };
+        }
+        return rv;
+    }
+
+    #! Get YAML-serializable action options
+    private static *hash<auto> getSerializableActionOptions(*hash<auto> options) {
+        return map {$1.key: $1.value + {
+            "type": $1.value.type.getBaseTypeName(),
+        }}, options.pairIterator();
     }
 
     #! Setup logger

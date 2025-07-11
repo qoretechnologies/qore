@@ -39,6 +39,7 @@
 
 %requires(reexport) Logger
 %requires Util
+%requires reflection
 
 module ProviderIndexUtil {
     version = "1.0";
