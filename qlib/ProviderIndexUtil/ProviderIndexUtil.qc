@@ -37,6 +37,25 @@ public hashdecl DataProviderIndexInfo {
 
     #! Scheme to module map
     *hash<string, hash<string, bool>> schememap;
+
+    #! App to app info map
+    *hash<string, hash<auto>> appinfomap;
+
+    #! Maps apps to actions to action info hashes
+    /** @note Actions are missing the "data_provider_info", "get_dynamic_options" and "get_output_type" keys, which
+        cannot be serialized to YAML, so they are not included in the action info hashes
+
+        Additionally, action option types are approximated from the base type name of each option type
+    */
+    *hash<string, hash<string, hash<auto>>> actioninfomap;
+
+    #! Maps app actions to action info hashes
+    /** @note Actions are missing the "data_provider_info", "get_dynamic_options" and "get_output_type" keys, which
+        cannot be serialized to YAML, so they are not included in the action info hashes
+
+        Additionally, action option types are approximated from the base type name of each option type
+    */
+    *hash<string, hash<auto>> top_actioninfomap;
 }
 
 #! Index info
@@ -73,6 +92,166 @@ public class ProviderIndexUtil {
 
         #! All apps loaded flag
         static bool apps_loaded;
+    }
+
+    #! Returns a list of cached app info
+    static *list<hash<auto>> getCachedApps() {
+        checkDataIndex();
+        return index.appinfomap.values();
+    }
+
+    #! Searches the app info cache for applications whose names or descriptions match a regular expression pattern
+    /** @param regex_pattern A regular expression pattern to match in the \c name and \c desc fields
+        @param regex_options Regular expression options; a case-insensitive match is performed by default
+
+        @return All cached applications that match the regular expression pattern in the \c name or \c desc fields
+    */
+    static *list<hash<auto>> searchCachedAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
+        checkDataIndex();
+        return map $1, index.appinfomap.values(),
+            regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
+    }
+
+    #! Searches for cachde applications whose names or descriptions match a substring
+    /** @param substr A substring to match in the \c name and \c desc fields; pending apps only are matched with the
+        name
+        @param ignore_case Ignore case when searching
+
+        @return All cached applications that match the substring argument in the \c name or \c desc fields
+    */
+    static *list<hash<auto>> searchCachedAppSubstr(string substr, bool ignore_case = True) {
+        checkDataIndex();
+        if (ignore_case) {
+            substr = substr.upr();
+
+            return map $1, index.appinfomap.values(),
+                ($1.name.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
+        }
+        return map $1, index.appinfomap.values(), ($1.name.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+    }
+
+    #! Try to return any cached app info for the given app
+    static *hash<auto> tryGetAppInfo(string app) {
+        checkDataIndex();
+        return index.appinfomap{app};
+    }
+
+    #! Try to return any cached approximate app action list for the given app
+    static *list<hash<auto>> tryGetApproximateActionsForApp(string app) {
+        checkDataIndex();
+        return index.actioninfomap{app}.values();
+    }
+
+    #! Try to return any cached approximate app action for the given app and action
+    static *hash<auto> tryGetApproximateAppAction(string app, string action) {
+        checkDataIndex();
+        return index.actioninfomap{app}{action};
+    }
+
+    #! Searches for cached application actions whose descriptions match a regular expression pattern
+    /** @param app The application to search for actions in
+        @param regex_pattern A regular expression pattern to match in the \c short_desc and \c desc fields
+        @param regex_options Regular expression options; a case-insensitive match is performed by default
+
+        @return All cached actions that match the regular expression pattern in the \c short_desc or \c desc fields
+
+        @note If the application is not cached, no results are returned
+    */
+    static *list<hash<auto>> searchCachedAppActionRegex(string app, string regex_pattern,
+            int regex_options = RE_Caseless) {
+        checkDataIndex();
+        return map $1, index.actioninfomap{app}.values(),
+            regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
+    }
+
+    #! Searches for cached application actions whose descriptions match a substring
+    /** @param app The application to search for actions in
+        @param substr A substring to match in the \c short_desc and \c desc fields
+        @param ignore_case Ignore case when searching
+
+        @return All actions that match the substring argument in the \c short_desc or \c desc fields
+
+        @note If the application is not cached, no results are returned
+    */
+    static *list<hash<auto>> searchCachedAppActionSubstr(string app, string substr, bool ignore_case = True) {
+        checkDataIndex();
+        if (ignore_case) {
+            substr = substr.upr();
+            return map $1, index.actioninfomap{app}.values(),
+                ($1.short_desc.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
+        }
+        return map $1, index.actioninfomap{app}.values(),
+            ($1.short_desc.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+    }
+
+    #! Searches for cached actions whose descriptions match a regular expression pattern
+    /** @param regex_pattern A regular expression pattern to match in the \c short_desc and \c desc fields
+        @param regex_options Regular expression options; a case-insensitive match is performed by default
+
+        @return All cached actions that match the regular expression pattern in the \c short_desc or \c desc fields
+    */
+    static *list<hash<auto>> searchCachedActionRegex(string regex_pattern,
+            int regex_options = RE_Caseless) {
+        checkDataIndex();
+        return map $1, index.top_actioninfomap.values(),
+            regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
+    }
+
+    #! Searches for cached actions whose descriptions match a substring
+    /** @param substr A substring to match in the \c short_desc and \c desc fields
+        @param ignore_case Ignore case when searching
+
+        @return All cached actions that match the substring argument in the \c short_desc or \c desc fields
+    */
+    static *list<hash<auto>> searchCachedActionSubstr(string substr, bool ignore_case = True) {
+        checkDataIndex();
+        if (ignore_case) {
+            substr = substr.upr();
+            return map $1, index.top_actioninfomap.values(),
+                ($1.short_desc.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
+        }
+        return map $1, index.top_actioninfomap.values(),
+            ($1.short_desc.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+    }
+
+    #! Returns all cached actions
+    /** @return all cached actions
+    */
+    static *list<hash<auto>> getAllCachedActions() {
+        checkDataIndex();
+        return index.top_actioninfomap.values();
+    }
+
+    #! Adds the given app and actions to the cache
+    static addAppToCache(hash<auto> app) {
+        checkDataIndex();
+        if (!app.name) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
+        }
+        index.appinfomap{app.name} = app;
+    }
+
+    #! Adds the given app and actions to the cache
+    static addActionToCache(hash<auto> action) {
+        checkDataIndex();
+        if (!index.appinfomap{action.app}) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action for unknown app %y to cache", action.app);
+        }
+        if (!action.action) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action info to cache for app %y: action name is "
+                "missing", action.app);
+        }
+        index.actioninfomap{action.app}{action.action} = action;
+        index.top_actioninfomap{action.app + "/" + action.action} = action;
+    }
+
+    #! Removes the given app and all its actions from the cache
+    static bool removeCachedApp(string app) {
+        if (!remove index.appinfomap{app}) {
+            return False;
+        }
+        map remove index.top_actioninfomap{app + "/" + $1}, keys (index.actioninfomap{app});
+        return True;
     }
 
     #! Try to ensure that any required module is loaded for the given factory
@@ -218,7 +397,60 @@ public class ProviderIndexUtil {
 
     #! Reads the data provider index from the configured directory
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
-        return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+        # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
+        load_module("DataProvider");
+        # get app info typed hash object
+        TypedHash app_info_th = TypedHash::forName("DataProvider::DataProviderAppInfo");
+        # get action typed hash objects
+        TypedHash action_info_th = TypedHash::forName("DataProvider::DataProviderActionInfo");
+        TypedHash option_info_th = TypedHash::forName("DataProvider::ActionOptionInfo");
+        TypedHash path_vars_th = TypedHash::forName("DataProvider::DataProviderPathVarInfo");
+        # get the AbstractDataProviderTypeMap value
+        hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
+
+        *hash<DataProviderIndexInfo> rv;
+        try {
+            rv = cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+            if (rv.appinfomap) {
+                rv.appinfomap = map {
+                    $1.key: app_info_th.doCast($1.value),
+                }, rv.appinfomap.pairIterator();
+            }
+            if (rv.actioninfomap) {
+                rv.actioninfomap = deserializeActions(rv.actioninfomap, action_info_th, option_info_th, path_vars_th,
+                    type_map);
+                foreach hash<auto> i in (rv.actioninfomap.pairIterator()) {
+                    map rv.top_actioninfomap{i.key + "/" + $1.key} = $1.value, i.value.pairIterator();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Deserialize action options
+    static private hash<auto> deserializeActions(hash<string, hash<string, hash<auto>>> actioninfomap,
+            TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, hash<auto> type_map) {
+        hash<auto> rv;
+        foreach hash<auto> i in (actioninfomap.pairIterator()) {
+            foreach hash<auto> j in (i.value.pairIterator()) {
+                rv{i.key}{j.key} = action_info_th.doCast(j.value + {
+                    "path_vars": (j.value.path_vars
+                        ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
+                        : NOTHING),
+                    "options": map {
+                        $1.key: option_info_th.doCast($1.value + {
+                            "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
+                            "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
+                                $1.value.element_allowed_values),
+                            "type": type_map{$1.value.type} ?? type_map."auro",
+                        })
+                    }, j.value.options.pairIterator(),
+                });
+            }
+        }
+        return rv;
     }
 
     #! Writes the index to the configured directory
