@@ -106,6 +106,11 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
         delete ws;
     }
 
+    #! Disconnects from the gateway and stops all background threads
+    disconnect() {
+        ws.disconnect();
+    }
+
     #! Reconnects with the gateway immediately
     bool reconnect() {
         return ws.reconnect();
