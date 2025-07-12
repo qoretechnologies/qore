@@ -5395,9 +5395,11 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, const AbstractQ
     const char* mname = getName();
     CodeEvaluationHelper ceh(xsink, this, variant, mname, args, nullptr, qore_class_private::get(*qc), CT_UNUSED,
         false, cctx, pgm_ctx);
-    if (*xsink)
+    if (*xsink) {
         return QoreValue();
-
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 

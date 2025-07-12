@@ -566,8 +566,7 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    // set class ctx
-    ObjectSubstitutionHelper osh(0, class_ctx);
+    // issue #4964: do not set class context until arguments are evaluated
     // do not set pgm context here before evaluating args
     return qore_method_private::eval(*method, xsink, 0, args, nullptr, pgm);
 }

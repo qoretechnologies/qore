@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DiscordWebSocketClient.qm Qore user module for calling Discord WebSocket services
 
-/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -387,6 +387,16 @@ hash<auto> h = ws.getInfo();
             opts.url = DiscordWebSocketConnection::discoverUrl();
         }
         return opts + DefaultOptions;
+    }
+
+    #! Processes WebSocket events
+    private eventLoop() {
+        on_exit stopHeartbeatThread();
+        try {
+            WebSocketClient::eventLoop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("WebSocket event loop error: %y", get_exception_string(ex));
+        }
     }
 
     #! Handles WebSocket protocol messages
