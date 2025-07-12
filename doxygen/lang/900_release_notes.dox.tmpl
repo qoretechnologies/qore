@@ -19,6 +19,10 @@
         (<a href="https://github.com/qorelanguage/qore/issues/4901">issue 4901</a>)
       - fixed space management on Oracle
         (<a href="https://github.com/qorelanguage/qore/issues/4897">issue 4897</a>)
+    - fixed a deadlock in a complex condition in the logger_bin module related to logging in one thread while
+      dynamically loading a module using the same appender in another thread; note that that fix also improves
+      logging performance
+      (<a href="https://github.com/qorelanguage/qore/issues/4963">issue 4963</a>)
     - fixed a serious bug in a rounding heuristic function that caused errors serializing floating-point values with
       exponents
       (<a href="https://github.com/qorelanguage/qore/issues/4954">issue 4954</a>)

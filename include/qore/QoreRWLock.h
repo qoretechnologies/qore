@@ -45,13 +45,6 @@ extern int q_gettid() noexcept;
     not provide any special logic for checking for correct usage, etc.
  */
 class QoreRWLock {
-protected:
-    //! the actual locking primitive wrapped in this class
-    pthread_rwlock_t m;
-
-        //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreRWLock& operator=(const QoreRWLock&);
-
 public:
     //! creates and initializes the lock
     DLLLOCAL QoreRWLock() {
@@ -73,16 +66,37 @@ public:
 
     //! grabs the write lock
     DLLLOCAL int wrlock() {
+#ifndef NDEBUG
+        int rc = pthread_rwlock_wrlock(&m);
+        if (!rc) {
+            wr_tid = q_gettid();
+        }
+        return rc;
+#else
         return pthread_rwlock_wrlock(&m);
+#endif
     }
 
     //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
     DLLLOCAL int trywrlock() {
+#ifndef NDEBUG
+        int rc = pthread_rwlock_trywrlock(&m);
+        if (!rc) {
+            wr_tid = q_gettid();
+        }
+        return rc;
+#else
         return pthread_rwlock_trywrlock(&m);
+#endif
     }
 
     //! unlocks the lock (assumes the lock is locked)
     DLLLOCAL int unlock() {
+#ifndef NDEBUG
+        if (wr_tid != -1) {
+            wr_tid = -1;
+        }
+#endif
         return pthread_rwlock_unlock(&m);
     }
 
@@ -95,6 +109,15 @@ public:
     DLLLOCAL int tryrdlock() {
         return pthread_rwlock_tryrdlock(&m);
     }
+
+protected:
+    //! the actual locking primitive wrapped in this class
+    pthread_rwlock_t m;
+#ifndef NDEBUG
+    int wr_tid = -1;
+#endif
+
+    QoreRWLock& operator=(const QoreRWLock&) = delete;
 };
 
 //! provides a safe and exception-safe way to hold read locks in Qore, only to be used on the stack, cannot be dynamically allocated
