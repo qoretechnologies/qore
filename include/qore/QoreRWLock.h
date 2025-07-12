@@ -66,16 +66,37 @@ public:
 
     //! grabs the write lock
     DLLLOCAL int wrlock() {
+#ifndef NDEBUG
+        int rc = pthread_rwlock_wrlock(&m);
+        if (!rc) {
+            wr_tid = q_gettid();
+        }
+        return rc;
+#else
         return pthread_rwlock_wrlock(&m);
+#endif
     }
 
     //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
     DLLLOCAL int trywrlock() {
+#ifndef NDEBUG
+        int rc = pthread_rwlock_trywrlock(&m);
+        if (!rc) {
+            wr_tid = q_gettid();
+        }
+        return rc;
+#else
         return pthread_rwlock_trywrlock(&m);
+#endif
     }
 
     //! unlocks the lock (assumes the lock is locked)
     DLLLOCAL int unlock() {
+#ifndef NDEBUG
+        if (wr_tid != -1) {
+            wr_tid = -1;
+        }
+#endif
         return pthread_rwlock_unlock(&m);
     }
 
@@ -92,6 +113,9 @@ public:
 protected:
     //! the actual locking primitive wrapped in this class
     pthread_rwlock_t m;
+#ifndef NDEBUG
+    int wr_tid = -1;
+#endif
 
     QoreRWLock& operator=(const QoreRWLock&) = delete;
 };

@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -52,20 +52,20 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 return ev->getCategoryName();
             }
-            return event->evalMethod("getCategoryName", nullptr, xsink);
+            return event->evalMethod(*event->getClass()->findMethod("getCategoryName"), nullptr, xsink);
         }
         case 'C': {
             if (ev) {
                 return ev->getFullQualifiedClassname();
             }
-            return event->evalMethod("getFullQualifiedClassname", nullptr, xsink);
+            return event->evalMethod(*event->getClass()->findMethod("getFullQualifiedClassname"), nullptr, xsink);
         }
         case 'd': {
             ValueHolder v(xsink);
             if (ev) {
                 v = ev->getTimeStamp();
             } else {
-                v = event->evalMethod("getTimeStamp", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getTimeStamp"), nullptr, xsink);
             }
             assert(v->getType() == NT_DATE);
             const DateTimeNode* dt = v->get<const DateTimeNode>();
@@ -85,7 +85,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getLocationInfo();
             } else {
-                v = event->evalMethod("getLocationInfo", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getLocationInfo"), nullptr, xsink);
             }
             if (v->getType() == NT_HASH) {
                 return v->get<const QoreHashNode>()->getKeyValue("file", xsink).refSelf();
@@ -100,7 +100,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getLocationInfo();
             } else {
-                v = event->evalMethod("getLocationInfo", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getLocationInfo"), nullptr, xsink);
             }
             if (v->getType() != NT_HASH) {
                 return new QoreStringNode;
@@ -120,7 +120,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getLocationInfo();
             } else {
-                v = event->evalMethod("getLocationInfo", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getLocationInfo"), nullptr, xsink);
             }
             if (v->getType() != NT_HASH) {
                 return new QoreStringNode;
@@ -132,14 +132,14 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 return ev->getMessage(xsink);
             }
-            return event->evalMethod("getMessage", nullptr, xsink);
+            return event->evalMethod(*event->getClass()->findMethod("getMessage"), nullptr, xsink);
         }
         case 'M': {
             ValueHolder v(xsink);
             if (ev) {
                 v = ev->getLocationInfo();
             } else {
-                v = event->evalMethod("getLocationInfo", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getLocationInfo"), nullptr, xsink);
             }
             if (v->getType() != NT_HASH) {
                 return new QoreStringNode;
@@ -154,10 +154,11 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getLevel();
             } else {
-                v = event->evalMethod("getLevel", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getLevel"), nullptr, xsink);
             }
             assert(v->getType() == NT_OBJECT);
-            return v->get<QoreObject>()->evalMethod("getStr", nullptr, xsink);
+            QoreObject* obj = v->get<QoreObject>();
+            return obj->evalMethod(*obj->getClass()->findMethod("getStr"), nullptr, xsink);
         }
         case 'P': {
             return new QoreStringNodeMaker("%d", getpid());
@@ -167,7 +168,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getTimeStamp();
             } else {
-                v = event->evalMethod("getTimeStamp", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getTimeStamp"), nullptr, xsink);
             }
             assert(v->getType() == NT_DATE);
             ValueHolder st(QoreLoggerEvent::getStartTime(), xsink);
@@ -188,7 +189,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getThreadId();
             } else {
-                v = event->evalMethod("getThreadId", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getThreadId"), nullptr, xsink);
             }
             if (option) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -204,7 +205,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getUniqueId();
             } else {
-                v = event->evalMethod("getUniqueId", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getUniqueId"), nullptr, xsink);
             }
             if (option) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -220,14 +221,16 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             if (ev) {
                 v = ev->getThrowableInfo();
             } else {
-                v = event->evalMethod("getThrowableInfo", nullptr, xsink);
+                v = event->evalMethod(*event->getClass()->findMethod("getThrowableInfo"), nullptr, xsink);
             }
             if (v) {
                 assert(v->getType() == NT_HASH);
                 // call Util::get_exception_string() from the enclusing QoreProgram on the hash
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                 args->push(v->refSelf(), xsink);
-                return getProgram()->callFunction("get_exception_string", *args, xsink);
+                QoreProgram* pgm = getProgram();
+                const QoreExternalFunction* f = pgm->findFunction("get_exception_string");
+                return f->evalFunction(nullptr, *args, pgm, xsink);
             } else {
                 return new QoreStringNode;
             }

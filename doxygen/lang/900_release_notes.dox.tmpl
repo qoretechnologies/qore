@@ -36,6 +36,10 @@
     - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
       - added support for complex expressions and field reference in update operations
         (<a href="https://github.com/qorelanguage/qore/issues/4959">issue 4959</a>)
+    - fixed a deadlock in a complex condition in the logger_bin module related to logging in one thread while
+      dynamically loading a module using the same appender in another thread; note that that fix also improves
+      logging performance
+      (<a href="https://github.com/qorelanguage/qore/issues/4963">issue 4963</a>)
     - fixed sending headers assigned list values as multiple header lines in HTTP and REST clients
       (<a href="https://github.com/qorelanguage/qore/issues/4962">issue 4962</a>)
     - fixed a bug setting the implicit argument type when parsing @ref on_error
