@@ -566,9 +566,9 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    // issue #4964: do not set class context until arguments are evaluated
+    // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    return qore_method_private::eval(*method, xsink, 0, args, nullptr, pgm);
+    return qore_method_private::eval(*method, xsink, nullptr, args, class_ctx, pgm);
 }
 
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
