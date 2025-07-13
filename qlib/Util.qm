@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Util.qm Qore user module for generally useful routines
 
-/*  Util.qm Copyright 2014 - 2024 Qore Technologies, s.r.o.
+/*  Util.qm Copyright 2014 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,7 +45,7 @@
 %requires reflection
 
 module Util {
-    version = "2.0.1";
+    version = "2.1.0";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -76,7 +76,11 @@ module Util {
     - @ref Util::get_marketing_byte_size()
     - @ref Util::get_random_string()
     - @ref Util::glob_to_regex()
+    - @ref Util::ip_address_type() "ip_address_type()"
+    - @ref Util::ip_address_type_ex() "ip_address_type_ex()"
     - @ref Util::is_int()
+    - @ref Util::is_ip_private()
+    - @ref Util::is_ip_private_ex()
     - @ref Util::is_float()
     - @ref Util::is_number()
     - @ref Util::lpad()
@@ -100,6 +104,14 @@ module Util {
 
     @section utilrelnotes Release Notes
 
+    @subsection util_2_1_0 Util 2.1.0
+    - added
+      - @ref Util::is_ip_private() "is_ip_private()"
+      - @ref Util::is_ip_private_ex() "is_ip_private_ex()"
+      - @ref Util::ip_address_type() "ip_address_type()"
+      - @ref Util::ip_address_type_ex() "ip_address_type_ex()"
+      (<a href="https://github.com/qorelanguage/qore/issues/4966">issue 4966</a>)
+
     @subsection util_2_0_1 Util 2.0.1
     - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
       (<a href="https://github.com/qorelanguage/qore/issues/4948">issue 4948</a>)
@@ -112,7 +124,7 @@ module Util {
     - added @ref Util::AllowedValueInfo "AllowedValueInfo"
 
     @subsection util_1_10 Util 1.10
-    - added the Util::check_exception_serializable() "check_exception_serializable()" method
+    - added the @ref Util::check_exception_serializable() "check_exception_serializable()" method
       (<a href="https://github.com/qorelanguage/qore/issues/4708">issue 4708</a>)
 
     @subsection util_1_9 Util 1.9
@@ -286,14 +298,129 @@ public hashdecl UriQueryInfo {
     *hash<auto> params;
 
     #! Path params; only when matching a request with a REST schema
-    /** @Since Util 1.9
+    /** @since Util 1.9
     */
     *hash<auto> path_params;
 }
 
+#! Returns @ref True "True" if the IP address is a private IP address
+/** @param address the IP address to check; works on both IPv4 and IPv6 addresses
+
+    @return @ref True "True" if the IP address is a private IP address
+
+    @note
+    - This API does not check the validity of the IP address
+    - Private blocks:
+      - IPv4: \c 10.0.0.0/8
+      - IPv4: \c 172.16.0.0/12
+      - IPv4: \c 192.168.0.0/16
+      - IPv6 ULA: \c fd00::/8
+      - IPv6 LL: \c fe80::/10
+
+    @see
+    - @ref check_ip_address()
+    - @ref ip_address_type()
+    - @ref ip_address_type_ex()
+    - @ref is_ip_private_ex()
+
+    @since Util 2.1.0
+*/
+public bool sub is_ip_private(string address) {
+    if (!address) {
+        return False;
+    }
+    # check for IPv4 private addresses
+    if (address =~ /^(10|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\./) {
+        return True;
+    }
+    # check for IPv6 private (ULA: Unique Local and LL: Link Local) addresses
+    if (address =~ /^fd/ || address =~ /^fe80:/) {
+        return True;
+    }
+    return False;
+}
+
+#! Returns @ref True "True" if the IP address is a private IP address; throws an exception is the address is invalid
+/** @param address the IP address to check; works on both IPv4 and IPv6 addresses
+
+    @return @ref True "True" if the IP address is a private IP address
+
+    @throw INVALID-IP-ADDRESS Thrown if the address is not a valid IP address
+
+    @note
+    - This API does not check the validity of the IP address
+    - Private blocks:
+      - IPv4: \c 10.0.0.0/8
+      - IPv4: \c 172.16.0.0/12
+      - IPv4: \c 192.168.0.0/16
+      - IPv6 ULA: \c fd00::/8
+      - IPv6 LL: \c fe80::/10
+
+    @see
+    - @ref check_ip_address()
+    - @ref ip_address_type()
+    - @ref ip_address_type_ex()
+    - @ref is_ip_private()
+
+    @since Util 2.1.0
+*/
+public bool sub is_ip_private_ex(string address) {
+    ip_address_type_ex(address);
+    return is_ip_private(address);
+}
+
+#! Returns the type of the IP address
+/** @param address the IP address to check; works on both IPv4 and IPv6 addresses
+
+    @return "IPv4" if the address is a valid IPv4 address, "IPv6" if the address is a valid IPv6 address, or
+    "invalid" if the address is not a valid IP address
+
+    @see
+    - @ref check_ip_address()
+    - @ref ip_address_type()
+    - @ref ip_address_type_ex()
+    - @ref is_ip_private()
+
+    @since Util 2.1.0
+*/
+public string sub ip_address_type(string address) {
+    # check for IPv4 addresses (checks for 0 - 255 in each IPv4 component)
+    if (address =~ /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))$/) {
+        return "IPv4";
+    }
+    # check for IPv6 addresses
+    if (address =~ /^(([0-9a-f]{1,4}:){7,7}[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,7}:|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}|[0-9a-f]{1,4}:((:[0-9a-f]{1,4}){1,6})|:((:[0-9a-f]{1,4}){1,7}|:)|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/i) {
+        return "IPv6";
+    }
+    return "invalid";
+}
+
+#! Returns the type of the IP address; throws an exception if the address is invalid
+/** @param address the IP address to check; works on both IPv4 and IPv6 addresses
+    @return "IPv4" if the address is a valid IPv4 address, "IPv6" if the address is a valid IPv6 address, or
+    throws an exception if the address is not a valid IP address
+
+    @throw INVALID-IP-ADDRESS Thrown if the address is not a valid IP address
+
+    @see
+    - @ref check_ip_address()
+    - @ref check_ip_address_ex()
+    - @ref ip_address_type()
+    - @ref is_ip_private()
+
+    @since Util 2.1.0
+*/
+public string sub ip_address_type_ex(string address) {
+    string rv = ip_address_type(address);
+    if (rv == "invalid") {
+        throw "INVALID-IP-ADDRESS", sprintf("Invalid IP address: %y", address);
+    }
+    return rv;
+}
+
 #! Returns a string of the bits set in an integer
 /** @param i the integer to process
-    @oaram min_bits the minimum bits to return; values less then 0 or greater than 64 will cause an \c INVALID-BITS
+    @param min_bits the minimum bits to return; values less then 0 or greater than 64 will cause an \c INVALID-BITS
     exception to be thrown
 
     @return a string of the bits set in the integer
@@ -1904,17 +2031,25 @@ check_ip_address(str, True);
 
     @throw INVALID-IP-ADDRESS this exception is thrown if \c ip is not a valid IPv4 or IPv6 address and \c exception is @ref True
 
+    @see
+    - @ref ip_address_type()
+    - @ref ip_address_type_ex()
+    - @ref is_ip_private()
+
     @since Util 1.4
 */
 public bool sub check_ip_address(string ip, bool exception = False) {
     # check for IPv4 addresses (checks for 0 - 255 in each IPv4 component)
-    if (ip =~ /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))$/)
+    if (ip =~ /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))\.((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))$/) {
         return True;
+    }
     # check for IPv6 addresses
-    if (ip =~ /^(([0-9a-f]{1,4}:){7,7}[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,7}:|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}|[0-9a-f]{1,4}:((:[0-9a-f]{1,4}){1,6})|:((:[0-9a-f]{1,4}){1,7}|:)|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/i)
+    if (ip =~ /^(([0-9a-f]{1,4}:){7,7}[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,7}:|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}|[0-9a-f]{1,4}:((:[0-9a-f]{1,4}){1,6})|:((:[0-9a-f]{1,4}){1,7}|:)|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/i) {
         return True;
-    if (exception)
+    }
+    if (exception) {
         throw "INVALID-IP-ADDRESS", sprintf("%y: is not a valid IPv4 or IPv6 address", ip);
+    }
     return False;
 }
 

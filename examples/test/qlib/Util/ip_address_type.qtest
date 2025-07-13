@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%new-style
+%require-types
+%enable-all-warnings
+
+%exec-class IpAddressTypeTest
+
+public class IpAddressTypeTest inherits QUnit::Test {
+    constructor() : Test ("IpAddressTypeTest", "1.0") {
+        addTestCase ("main", \mainTest());
+        set_return_value(main());
+    }
+
+    mainTest() {
+        assertEq("IPv4", ip_address_type("192.168.0.1"));
+        assertEq("IPv4", ip_address_type("192.168.16.1"));
+        assertEq("IPv4", ip_address_type("192.168.254.254"));
+        assertEq("IPv4", ip_address_type("172.16.3.4"));
+        assertEq("IPv4", ip_address_type("172.31.255.254"));
+        assertEq("IPv4", ip_address_type("10.11.12.13"));
+        assertEq("IPv4", ip_address_type("172.25.100.200"));
+        assertEq("IPv4", ip_address_type("192.168.1.254"));
+
+        assertEq("IPv4", ip_address_type("192.167.0.1"));
+        assertEq("IPv4", ip_address_type("192.169.0.1"));
+        assertEq("IPv4", ip_address_type("172.15.255.254"));
+        assertEq("IPv4", ip_address_type("172.32.255.254"));
+
+        assertEq("IPv6", ip_address_type("2001:db8:abcd:1234:5678:9abc:def0:1111"));
+        assertEq("IPv6", ip_address_type("2001:db8:cafe:babe:dead:beef:1337:1000"));
+        assertEq("IPv6", ip_address_type("fd00::1"));
+        assertEq("IPv6", ip_address_type("fe80::1234:5678:9abc:def0"));
+
+        assertEq("invalid", ip_address_type("xxx"));
+        assertEq("invalid", ip_address_type("xxx"));
+        assertEq("invalid", ip_address_type("192.168.256.1"));
+        assertEq("invalid", ip_address_type("192.168.-1.1"));
+        assertEq("invalid", ip_address_type("fd00:1"));
+        assertEq("invalid", ip_address_type("fd00::ag"));
+
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "xxx");
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "xxx");
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "192.168.256.1");
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "192.168.-1.1");
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "fd00:1");
+        assertThrows("INVALID-IP-ADDRESS", \ip_address_type_ex(), "fd00::ag");
+    }
+}

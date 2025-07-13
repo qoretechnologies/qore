@@ -781,12 +781,14 @@ class qdx {
 
                 if (line =~ /\(.*\)/) {
                 #if (line !~ /"/) {
-                    while (exists (*list l = (line =~ x/(.*)(deprecated|synchronized|static|private(?::internal|:hierarchy)?)(?:\s?)([^A-Za-z0-9_].*)/))) {
+                    while (exists (*list<string> l =
+                        (line =~ x/(.*[^_])(deprecated|synchronized|static|private(?::internal|:hierarchy)?)(?:\s?)([^A-Za-z0-9_].*)/))) {
                         #l[1] =~ s/:.*//;
                         mods += l[1];
                         line = l[0] + l[2];
                     }
-                    while (exists (*list l = (line =~ x/(.*)(public|private(?::internal|:hierarchy)?)(?:\s?)([^-:A-Za-z0-9_].*)/))) {
+                    while (exists (*list<string> l =
+                        (line =~ x/(.*[^_])(public|private(?::internal|:hierarchy)?)(?:\s?)([^-:A-Za-z0-9_].*)/))) {
                         mods += l[1];
                         line = l[0] + l[2];
                     }
