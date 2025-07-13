@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%new-style
+%require-types
+%enable-all-warnings
+
+%exec-class IsPrivateIpTest
+
+public class IsPrivateIpTest inherits QUnit::Test {
+    constructor() : Test ("IsPrivateIpTest", "1.0") {
+        addTestCase ("main", \mainTest());
+        set_return_value(main());
+    }
+
+    mainTest() {
+        assertTrue(is_ip_private("192.168.0.1"));
+        assertTrue(is_ip_private("192.168.16.1"));
+        assertTrue(is_ip_private("192.168.254.254"));
+        assertTrue(is_ip_private("172.16.3.4"));
+        assertTrue(is_ip_private("172.31.255.254"));
+        assertTrue(is_ip_private("10.11.12.13"));
+        assertTrue(is_ip_private("172.25.100.200"));
+        assertTrue(is_ip_private("192.168.1.254"));
+
+        assertTrue(is_ip_private("fd00::1"));
+        assertTrue(is_ip_private("fe80::1234:5678:9abc:def0"));
+
+        assertFalse(is_ip_private("192.167.0.1"));
+        assertFalse(is_ip_private("192.169.0.1"));
+        assertFalse(is_ip_private("172.15.255.254"));
+        assertFalse(is_ip_private("172.32.255.254"));
+
+        assertFalse(is_ip_private("2001:db8:abcd:1234:5678:9abc:def0:1111"));
+        assertFalse(is_ip_private("2001:db8:cafe:babe:dead:beef:1337:1000"));
+
+        assertFalse(is_ip_private("xxx"));
+        assertThrows("INVALID-IP-ADDRESS", \is_ip_private_ex(), "xxx");
+        assertThrows("INVALID-IP-ADDRESS", \is_ip_private_ex(), "192.168.256.1");
+        assertThrows("INVALID-IP-ADDRESS", \is_ip_private_ex(), "192.168.-1.1");
+        assertThrows("INVALID-IP-ADDRESS", \is_ip_private_ex(), "abcd::efgh::1");
+    }
+}
