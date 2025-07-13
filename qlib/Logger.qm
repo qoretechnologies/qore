@@ -1444,6 +1444,20 @@ public class LoggerWrapper inherits LoggerInterface {
         }
     }
 
+    #! Logs a message object with the DETAIL level
+    /**
+        @see @ref log()
+        @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional
+        arguments are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+        @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information.
+    */
+    detail(string message, ...) {
+        *LoggerInterface logger = getLogger();
+        if (logger) {
+            logger.logArgs(Qore::Logger::LoggerLevel::LevelDetail, message, argv);
+        }
+    }
+
     #! Logs a message object with the INFO level
     /**
         @see @ref log()

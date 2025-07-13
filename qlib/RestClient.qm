@@ -2358,11 +2358,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         while (True) {
             # if we are in the token expiry window; get a new token first
             if (retry && requiresRefresh()) {
-                debug("RestClient in the token expiry window; acquiring a new token");
+                detail("RestClient in the token expiry window; acquiring a new token");
                 getNewTokenIntern();
                 # only retry once
                 retry = False;
-                debug("RestClient got a new token");
+                detail("RestClient got a new token");
                 hdr.Authorization = headers.Authorization;
                 continue;
             }
@@ -2392,11 +2392,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 info."response-code" = info."response-headers".status_code;
                 if (retry && needsRefresh(ex, info)) {
                     on_error rethrow;
-                    debug("RestClient: authorization error; trying to acquire a new token");
+                    detail("RestClient: authorization error; trying to acquire a new token");
                     getNewTokenIntern();
                     # only retry once
                     retry = False;
-                    debug("RestClient retrying with new token");
+                    detail("RestClient retrying with new token");
                     hdr.Authorization = headers.Authorization;
                     continue;
                 }
@@ -2418,11 +2418,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             rv = processRestResponse(h, m, path, \info);
             if (rest_body_auth_error_check && retry && needsRefresh(NOTHING, info, True, rv.body)) {
                 on_error rethrow;
-                debug("RestClient: authorization error; trying to acquire a new token");
+                detail("RestClient: authorization error; trying to acquire a new token");
                 getNewTokenIntern();
                 # only retry once
                 retry = False;
-                debug("RestClient retrying with new token");
+                detail("RestClient retrying with new token");
                 hdr.Authorization = headers.Authorization;
                 continue;
             }
@@ -3949,7 +3949,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                     && (real_opts.oauth2_refresh_token || real_opts.custom_token_auth) && !in_refresh;
                 if (check_auth && rc.isAuthTokenError(resp."code",
                         resp.info."response-headers", False, resp.info."body-content-type", body)) {
-                    rc.debug("Found auth error in response with code: %d Content-Type: %y body: %y", resp."code",
+                    rc.detail("Found auth error in response with code: %d Content-Type: %y body: %y", resp."code",
                         resp.info."body-content-type", body);
                     doStartRefresh();
                     continue;
@@ -3972,7 +3972,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                         resp.info."response-headers", True, resp.info."body-content-type", respinfo.body)) {
                         if (check_auth) {
                             doStartRefresh();
-                            rc.debug("Found auth error in response with code: %d Content-Type: %y body: %y",
+                            rc.detail("Found auth error in response with code: %d Content-Type: %y body: %y",
                                 resp."code", resp.info."body-content-type", respinfo.body);
                         }
                         err = True;
