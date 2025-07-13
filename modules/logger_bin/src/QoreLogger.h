@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -67,12 +67,11 @@ public:
     SimpleRefHolder<QoreStringNode> name;
 
     //! For the deserializer
-    DLLLOCAL QoreLogger(QoreObject* self, bool additivity, const QoreStringNode* name)
-            : additivity(additivity), name(name ? name->stringRefSelf() : nullptr),
-            self(self) {
+    DLLLOCAL QoreLogger(QoreObject* self, bool additivity, const QoreStringNode* name) : QoreLoggerInterface(self),
+            additivity(additivity), name(name ? name->stringRefSelf() : nullptr), self(self) {
     }
 
-    DLLLOCAL QoreLogger(QoreObject* self) : self(self) {
+    DLLLOCAL QoreLogger(QoreObject* self) : QoreLoggerInterface(self), self(self) {
     }
 
     using QoreLoggerInterface::deref;

@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -52,7 +52,7 @@ qclass LoggerInterface [ns=Qore::Logger; arg=QoreLoggerInterface* i; vparent=Ser
     @param level string log level value
 */
 LoggerInterface::constructor() {
-    self->setPrivate(CID_LOGGERINTERFACE, new QoreLoggerInterface);
+    self->setPrivate(CID_LOGGERINTERFACE, new QoreLoggerInterface(self));
 }
 
 //! Returns @ref True if the passed logger is the logger used to log, @ref False if not
@@ -66,36 +66,36 @@ bool LoggerInterface::isLogger(LoggerInterface[QoreLoggerInterface] logger) {
 //! Logs a message using the provided logging level
 /**
     @param level The logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 */
 abstract LoggerInterface::log(Qore::Logger::LoggerLevel level, string message, ...);
 
 //! Logs a message using the provided logging level
 /**
     @param level the logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 */
 abstract LoggerInterface::log(int level, string message, ...);
 
 //! Logs a message using the provided logging level
 /**
     @param level The logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 */
 abstract LoggerInterface::log(string level, string message, ...);
 
 //! Logs a message using the provided logging level and a single argument for any format string arguments
 /**
     @param level The logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
     @param args any format string arguments to the log message
 */
 abstract LoggerInterface::logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args);
@@ -103,9 +103,9 @@ abstract LoggerInterface::logArgs(Qore::Logger::LoggerLevel level, string messag
 //! Logs a message using the provided logging level and a single argument for any format string arguments
 /**
     @param level the logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
     @param args any format string arguments to the log message
 */
 abstract LoggerInterface::logArgs(int level, string message, *softlist<auto> args);
@@ -113,9 +113,9 @@ abstract LoggerInterface::logArgs(int level, string message, *softlist<auto> arg
 //! Logs a message using the provided logging level and a single argument for any format string arguments
 /**
     @param level The logging level
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
     @param args any format string arguments to the log message
 */
 abstract LoggerInterface::logArgs(string level, string message, *softlist<auto> args);
@@ -128,55 +128,79 @@ abstract LoggerInterface::logEvent(LoggerEvent event);
 
 //! Logs a message object with the TRACE level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::trace(string message, ...);
 
 //! Logs a message object with the DEBUG level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::debug(string message, ...);
 
+//! Logs a message object with the DETAIL level
+/**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
+    @note This method is not abstract in order to not break existing code; by default it logs the message with the
+    \c DEBUG level; reimplement in subclasses to implement proper \c DETAIL logging
+
+    @see @ref log()
+*/
+LoggerInterface::detail(string message, ...) {
+    ReferenceHolder<QoreListNode> new_args(new QoreListNode(autoTypeInfo), xsink);
+    new_args->push(QLL_DETAIL, xsink);
+    new_args->merge(args, xsink);
+    ValueHolder v(self->evalMethod(*i->logArgs, *new_args, xsink), xsink);
+}
+
 //! Logs a message object with the INFO level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::info(string message, ...);
 
 //! Logs a message object with the WARN level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::warn(string message, ...);
 
 //! Logs a message object with the ERROR level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::error(string message, ...);
 
 //! Logs a message object with the FATAL level
 /**
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
+
     @see @ref log()
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
 */
 abstract LoggerInterface::fatal(string message, ...);
 
@@ -188,9 +212,9 @@ abstract LoggerInterface::fatal(string message, ...);
     @see @ref log()
 
     @param assertion the boolean assertion value
-    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments are passed to
-    the @ref Qore::Logger::LoggerEvent object. If the last parameter is an @ref Qore::ExceptionInfo "ExceptionInfo" typed hash,
-    then it is considered "throwable" information.
+    @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional arguments
+    are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+    @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 */
 abstract LoggerInterface::assertLog(bool assertion, string message, ...);
 
