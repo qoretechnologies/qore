@@ -49,6 +49,8 @@
         (<a href="https://github.com/qorelanguage/qore/issues/4959">issue 4959</a>)
     - fixed a bug calling static method references with arguments that are normal method references
       (<a href="https://github.com/qorelanguage/qore/issues/4964">issue 4964</a>)
+    - fixed overly-aggressive constant initialization that resulted in spurious recursive constant definition errors
+      (<a href="https://github.com/qorelanguage/qore/issues/4967">issue 4967</a>)
     - fixed a deadlock in a complex condition in the logger_bin module related to logging in one thread while
       dynamically loading a module using the same appender in another thread; note that that fix also improves
       logging performance

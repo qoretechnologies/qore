@@ -3027,6 +3027,35 @@ const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QorePro
     return nullptr;
 }
 
+QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo,
+        bool& found, const qore_class_private* class_ctx) {
+    // issue #4967: initializing all class constants here would result in recursive constant definition exceptions
+    // being raised
+    // check constant list
+    ClassAccess access = Public;
+    // NOTE: the following function call will initialize any constant found
+    QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
+
+    // check for accessibility to private constants
+    if (found) {
+        if (access == Internal) {
+            if (class_ctx == this) {
+                return rv;
+            } else {
+                cTypeInfo = nullptr;
+                found = false;
+            }
+        } else if (access == Private && !parseCheckPrivateClassAccess(class_ctx)) {
+            cTypeInfo = nullptr;
+            found = false;
+        } else {
+            return rv;
+        }
+    }
+
+    return scl ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this) : QoreValue();
+}
+
 int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
         const QoreMemberInfo& l_mi) const {
     // if both classes are system classes, then ignore
