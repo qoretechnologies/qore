@@ -175,6 +175,19 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         return locked;
     }
 
+    #! Returns the locked status and optionally throws an exception if locked
+    /** @param throw_exception if @ref True then an exception is thrown if the entry is locked
+
+        @since DataProvider 3.2.1
+    */
+    bool checkLocked(*bool throw_exception) {
+        if (throw_exception && locked) {
+            throw "TYPE-LOCK-ERROR", sprintf("Type entry %y is locked and cannot be modified", path);
+        }
+        return locked;
+    }
+
+
     #! Locks the entry, so it can't be removed or changed
     /** @return the previous lock status
 
@@ -361,17 +374,38 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         return rv;
     }
 
-    #! Removes the given child, if it exists
-    /** @throw TYPE-LOCK-ERROR the given child cannot be removed because it is locked
+    #! Checks if the given child can be removed, if it exists
+    /** @return @ref True if the child exists and can be removed, @ref False if not
     */
-    removeChild(string child) {
+    bool checkRemoveChild(string child) {
+        return children{child} && !children{child}.locked;
+    }
+
+    #! Checks if the given child can be removed, if it exists
+    /** @return @ref True if the child exists and can be removed, @ref False if not
+
+        @throw TYPE-LOCK-ERROR the given child cannot be removed, because it is locked
+    */
+    bool checkRemoveChildEx(string child) {
+        if (children{child}.locked) {
+            throw "TYPE-LOCK-ERROR", sprintf("%s/%s is locked and cannot be removed", path, child);
+        }
+        return children{child} ? True : False;
+    }
+
+    #! Removes the given child, if it exists
+    /** @return the type entry removed
+
+        @throw TYPE-LOCK-ERROR the given child cannot be removed because it is locked
+    */
+    DataProviderTypeEntry removeChild(string child) {
         if (children{child}.locked) {
             throw "TYPE-LOCK-ERROR", sprintf("%s/%s is locked and cannot be removed", path, child);
         }
         if (!children{child} && type_children{child}) {
             throw "TYPE-LOCK-ERROR", sprintf("%s/%s is an attribute of the type and cannot be removed", path, child);
         }
-        remove children{child};
+        return remove children{child};
     }
 
     #! Locks all types

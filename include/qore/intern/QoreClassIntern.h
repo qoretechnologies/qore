@@ -2578,32 +2578,7 @@ public:
     }
 
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
-            const qore_class_private* class_ctx) {
-        parseInitConstants();
-
-        // check constant list
-        ClassAccess access = Public;
-        QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
-
-        // check for accessibility to private constants
-        if (found) {
-            if (access == Internal) {
-                if (class_ctx == this)
-                    return rv;
-                else {
-                    cTypeInfo = nullptr;
-                    found = false;
-                }
-            } else if (access == Private && !parseCheckPrivateClassAccess(class_ctx)) {
-                cTypeInfo = nullptr;
-                found = false;
-            } else {
-                return rv;
-            }
-        }
-
-        return scl ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this) : QoreValue();
-    }
+            const qore_class_private* class_ctx);
 
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);

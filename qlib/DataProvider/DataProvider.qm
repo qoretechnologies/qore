@@ -45,8 +45,8 @@
 %endtry
 
 module DataProvider {
-    version = "3.2";
-    desc = "user module for data access and introspection";
+    version = "3.2.1";
+    desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
@@ -165,6 +165,9 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     processing large volumes of data.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_2_1 DataProvider v3.2.1
+    - improved logic handling locked types in the type cache
 
     @subsection dataprovider_v3_2 DataProvider v3.2
     - added the SuperSoftStringDataType and SuperSoftStringOrNothingDataType types to support
