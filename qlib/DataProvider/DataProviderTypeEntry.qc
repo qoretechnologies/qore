@@ -65,6 +65,9 @@ public hashdecl DataProviderTypeEntryInfo {
 
     #! Epheremal ID for types
     *int epheremal_type_id;
+
+    #! Free-form information related to the type
+    *hash<auto> info;
 }
 
 #! the DataProviderTypeEntry class
@@ -98,6 +101,9 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
 
         #! Epheremal ID for the type
         *int epheremal_type_id;
+
+        #! Free-form information related to the type
+        *hash<auto> info;
 
         #! If epheremal IDs should be negative
         static bool neg;
@@ -166,6 +172,15 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     */
     *int getEpheremalTypeId() {
         return epheremal_type_id;
+    }
+
+    #! Returns free-form information related to the type, if any
+    /** @note Not to be confused with @ref getInfo()
+
+        @since DataProvider 3.2.1
+    */
+    *hash<auto> getFreeFormInfo() {
+        return info;
     }
 
     #! Returns the locked status
@@ -245,12 +260,13 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     #! Sets or replaces the type for the entry
     /** @param type the type to set for this entry
         @param id optional epheremal type ID
+        @param info optional additional free-form information related to the type
 
         @return True if a new type was added, False if not
 
         @throw TYPE-LOCK-ERROR type entry cannot be replaced, because it is locked
     */
-    *AbstractDataProviderType setOrReplaceType(AbstractDataProviderType type, *int id) {
+    *AbstractDataProviderType setOrReplaceType(AbstractDataProviderType type, *int id, *hash<auto> info) {
         if (locked && type != self.type) {
             throw "TYPE-LOCK-ERROR", sprintf("type entry %y cannot be replaced, because it is locked", path);
         }
@@ -260,6 +276,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
             epheremal_type_id = id ?? (neg ? -seq.next() : seq.next());
         }
         parent = True;
+        self.info = info;
         setTypeChildren();
         return rv;
     }
@@ -268,6 +285,8 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     /** @param rec_children_only if @ref True, then only children with fields are returned
 
         @return information about this entry
+
+        @note Not to be confused with @ref getFreeFormInfo()
     */
     hash<DataProviderTypeEntryInfo> getInfo(*bool rec_children_only) {
         hash<DataProviderTypeEntryInfo> rv = <DataProviderTypeEntryInfo>{
@@ -284,6 +303,10 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         };
         if (epheremal_type_id) {
             rv.epheremal_type_id = epheremal_type_id;
+        }
+        # add any free-form info to the return value
+        if (info) {
+            rv.info = info;
         }
         return rv;
     }

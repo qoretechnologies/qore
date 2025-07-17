@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderTypeCache.qc module for data access and introspection
 
-/** DataProviderTypeCache.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderTypeCache.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,6 +98,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
     /** @param path a \c "/" separated path for the type; this is the lookup index
         @param type the new data provider type
         @param id optional epheremal type ID
+        @param info optional additional free-form information related to the type
 
         @return True if the type was replaced or added
 
@@ -107,7 +108,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @note types are stored based on the path provided which may differ from their type names (which may be generic
         and therefore not suitable for indexing)
     */
-    bool registerOrReplaceType(string path, AbstractDataProviderType type, *int id) {
+    bool registerOrReplaceType(string path, AbstractDataProviderType type, *int id, *hash<auto> info) {
         list<string> type_path = DataProvider::getPathList(\path);
 
         if ((*string p = type.getPath()).val()) {
@@ -131,7 +132,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
 
         map type_entry = type_entry.getCreateChild($1), type_path;
 
-        *AbstractDataProviderType old_type = type_entry.setOrReplaceType(type, id);
+        *AbstractDataProviderType old_type = type_entry.setOrReplaceType(type, id, info);
         if (!old_type) {
             ++size;
         }
