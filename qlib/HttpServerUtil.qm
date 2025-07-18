@@ -34,7 +34,7 @@
 %enable-all-warnings
 
 module HttpServerUtil {
-    version = "1.2";
+    version = "1.3";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -93,6 +93,9 @@ module HttpServerUtil {
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+
+    @subsection httputil1_3 HttpServerUtil 1.3
+    - allow authentication methods to set the call context
 
     @subsection httputil1_2 HttpServerUtil 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
@@ -846,6 +849,9 @@ public class HttpListenerInterface inherits AbstractLogger {
     abstract auto removeUserThreadContext(*string k);
 }
 
+# for backwared compatibility, calls to deprecated methods are made below
+%disable-warning deprecated
+
 #! abstract base class for external authentication
 /** This class should be inherited by a class providing real authentication
 */
@@ -867,6 +873,7 @@ public class AbstractAuthenticator {
 
     #! called to authenticate a user for a connection
     /** This method will only be called if requiresAuthentication() returns @ref True "True"
+        @param cx a reference to the call context
         @param user the username to authenticate
         @param pass the password for the user
 
@@ -874,7 +881,36 @@ public class AbstractAuthenticator {
         be overridden in child classes; this parent method will never throw any exceptions; all connections are
         accepted by default)
     */
-    authenticate(string user, string pass = "") {
+    authenticate(reference<hash<auto>> cx, string user, string pass = "") {
+        authenticate(user, pass);
+    }
+
+    #! called when the connection requires authentication, but no authentication credentials were supplied, to try to authenticate the connection based on the source IP address
+    /** This method will only be called if requiresAuthentication() returns @ref True "True" and no authentication
+        credentials are supplied with the request
+        @param cx a reference to the call context; this hash will have the \c "user" key set to the user name if the
+        request can be authenticated based on the source IP address
+        @param ip the IP address of the source connection
+
+        @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated
+        (however this base class method as implemented here will never throw any exceptions
+    */
+    authenticateByIP(reference<hash<auto>> cx, string ip) {
+        authenticateByIP(ip, \cx.user);
+    }
+
+    #! called to authenticate a user for a connection
+    /** This method will only be called if requiresAuthentication() returns @ref True "True"
+        @param user the username to authenticate
+        @param pass the password for the user
+
+        @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated (must
+        be overridden in child classes; this parent method will never throw any exceptions; all connections are
+        accepted by default)
+
+        @note Do not use this method; use authenticate(reference<hash<auto>> cx, string user, string pass) instead
+    */
+    deprecated authenticate(string user, string pass = "") {
     }
 
     #! called when the connection requires authentication, but no authentication credentials were supplied, to try to authenticate the connection based on the source IP address
@@ -886,8 +922,10 @@ public class AbstractAuthenticator {
 
         @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated
         (however this base class method as implemented here will never throw any exceptions
+
+        @note Do not use this method; use authenticateByIP(reference<hash<auto>> cx, reference<string> ip) instead
     */
-    authenticateByIP(string ip, reference<string> user) {
+    deprecated authenticateByIP(string ip, reference<string> user) {
     }
 
     #! returns a hash with one item - \c WWW-Authenticate header set to correct realm
@@ -961,48 +999,54 @@ public class AbstractAuthenticator {
     *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx) {
         #printf("HTTP DEBUG %s::authenticateRequest() called\n", self.className());
-        if (!requiresAuthentication())
+        if (!requiresAuthentication()) {
             return;
+        }
 
         if (hdr.authorization) {
-            if (hdr.authorization !~ /basic /i)
+            if (hdr.authorization !~ /basic /i) {
                 return do401("Only basic authentication is supported", cx);
+            }
 
             *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
-            if (!bstr)
+            if (!bstr) {
                 return do401(NOTHING, cx);
+            }
 
             string str = parse_base64_string_to_string(bstr);
             int i = str.find(":");
-            if (i < 1 || i == (str.size() -1))
+            if (i < 1 || i == (str.size() -1)) {
                 return do401(NOTHING, cx);
+            }
 
             string user = str.substr(0, i);
             *string pass = str.substr(i + 1);
 
-            try
-                authenticate(user, pass);
-            catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "AUTHENTICATION-ERROR")
+            try {
+                authenticate(\cx, user, pass);
+                if (!cx.user.val()) {
+                    cx.user = user;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "AUTHENTICATION-ERROR") {
                     return do401(NOTHING, cx);
-                else
+                } else {
                     rethrow;
+                }
             }
 
-            cx.user = user;
             return;
         }
 
-        string user;
         # only try ip-based authentication if the connection is not already authenticated
         try {
-            authenticateByIP(cx."peer-info".address, \user);
-            cx.user = user;
+            authenticateByIP(\cx, cx."peer-info".address);
             return;
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string str = sprintf("%s: %s: %s: received from %s", get_ex_pos(ex), ex.err, ex.desc, cx."peer-info".address_desc);
-            listener.logError(str);
+            string str = sprintf("%s: %s: %s: received from %s", get_ex_pos(ex), ex.err, ex.desc,
+                cx."peer-info".address_desc);
+            listener.logError("%s", str);
         }
         return do401(NOTHING, cx);
     }
