@@ -42,7 +42,7 @@
 %requires reflection
 
 module RestHandler {
-    version = "1.6.2";
+    version = "1.6.3";
     desc = "user module for implementing REST services with the Qore HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -373,6 +373,10 @@ Content-Length: 16
     @ref Qore::ExceptionInfo "ExceptionInfo" hash.
 
     @section resthandler_relnotes RestHandler Release Notes
+
+    @subsection rh_1_6_3 RestHandler v1.6.3
+    - fixed handling multiple \c Accept headers in requests
+      (<a href="https://github.com/qorelanguage/qore/issues/4969">issue 4969</a>)
 
     @subsection rh_1_6_2 RestHandler v1.6.2
     - always set the \c socketobject request context property
@@ -1451,14 +1455,15 @@ public namespace RestHandler {
             }
 
             # make a hash of "accept" values
-            *string astr = hdr.accept;
             hash<auto> aih;
-            if (astr) {
-                do {
-                    astr =~ s/;[^,]*//;
-                } while (astr.rfind(";") != -1);
-                astr =~ s/ +//g;
-                map aih.$1 = True, astr.split(",");
+            if (hdr.accept) {
+                foreach string astr in (hdr.accept) {
+                    do {
+                        astr =~ s/;[^,]*//;
+                    } while (astr.rfind(";") != -1);
+                    astr =~ s/ +//g;
+                    map aih.$1 = True, astr.split(",");
+                }
             } else {
                 # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If no Accept header field is present, then
                 # it is assumed that the client accepts all media types
