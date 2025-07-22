@@ -16,10 +16,10 @@
         (<a href="https://github.com/qorelanguage/qore/issues/4960">issue 4960</a>)
     - <a href="../../modules/Util/html/index.html">Util</a> module
       - added
-        - @ref Util::is_ip_private() "is_ip_private()"
-        - @ref Util::is_ip_private_ex() "is_ip_private_ex()"
-        - @ref Util::ip_address_type() "ip_address_type()"
-        - @ref Util::ip_address_type_ex() "ip_address_type_ex()"
+        - \c Util::is_ip_private()
+        - \c Util::is_ip_private_ex()
+        - \c Util::ip_address_type()
+        - \c Util::ip_address_type_ex()
         .
         (<a href="https://github.com/qorelanguage/qore/issues/4966">issue 4966</a>)
     - \c Class objects from the <a href="../../modules/reflection/html/index.html">reflection</a> module are now
@@ -37,6 +37,14 @@
     - <a href="../../modules/DiscordWebSocketClient/html/index.html">DiscordWebSocketClient</a> module
       - allow for a clean shutdown of background threads when disconnecting
         (<a href="https://github.com/qorelanguage/qore/issues/4965">issue 4965</a>)
+    - <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
+      - mark the context as handling file data in the authentication method to enable authentication errors to be
+        redirected for handlers handling UI file data
+        (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+    - <a href="../../modules/HttpServerUtil/html/index.html">HttpServerUtil</a> module
+      - mark the context as handling file data in the authentication method to enable authentication errors to be
+        redirected for handlers handling UI file data
+        (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
       - fixed support for PKCE
         (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
@@ -50,6 +58,10 @@
     - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
       - added support for complex expressions and field reference in update operations
         (<a href="https://github.com/qorelanguage/qore/issues/4959">issue 4959</a>)
+    - <a href="../../modules/WebUtil/html/index.html">WebUtil</a> module
+      - mark the context as handling file data in the authentication method to enable authentication errors to be
+        redirected for handlers handling UI file data
+        (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
     - fixed a bug calling static method references with arguments that are normal method references
       (<a href="https://github.com/qorelanguage/qore/issues/4964">issue 4964</a>)
     - fixed overly-aggressive constant initialization that resulted in spurious recursive constant definition errors
@@ -86,7 +98,7 @@
       - cannot execute a search with a descending sort order
         (<a href="https://github.com/qorelanguage/qore/issues/4942">issue 4942</a>)
     - <a href="../../modules/Util/html/index.html">Util</a> module
-      - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
+      - fixed base64 and base64url file options in \c Util::parse_to_qore_value()
         (<a href="https://github.com/qorelanguage/qore/issues/4948">issue 4948</a>)
     - fixed a serious bug in a rounding heuristic function that caused errors serializing floating-point values with
       exponents
@@ -102,7 +114,7 @@
 
     @subsection qore_2_1_1_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
-      - fixed handling implicit default values in @ref HashDataType "HashDataType"
+      - fixed handling implicit default values in \c HashDataType
         (<a href="https://github.com/qorelanguage/qore/issues/4941">issue 4941</a>)
     - <a href="../../modules/GoogleDataProvider/html/index.html">GoogleDataProvider</a> module
       - updates to allow the module to be more easily and generically extensible for other apps
@@ -185,7 +197,6 @@
       - @ref Qore::Program::getCapabilityMask() "Program::getCapabilityMask()" normal and static methods
       - @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()" static method
       - @ref Qore::Socket::startPollRecvData() "Socket::startPollRecvData()"
-      - @ref Qore::SSLCertificate::setVerifyCACertificate() "SSLCertificate::setVerifyCACertificate()"
     - New Functions
       - @ref Qore::active_exception() "active_exception()"
       - @ref Qore::get_epoch_microseconds() "get_epoch_microseconds()"
@@ -249,8 +260,8 @@
     - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
       - eliminated locking from DML operations
         (<a href="https://github.com/qorelanguage/qore/issues/4886">issue 4886</a>)
-      - fixed a bug where @ref SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()
-        "AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()" did not work on foreign constraints
+      - fixed a bug where \c SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql() did not work on
+        foreign constraints
         (<a href="https://github.com/qorelanguage/qore/issues/4875">issue 4875</a>)
     - <a href="../../modules/Swagger/html/index.html">Swagger</a> module
       - fixed validating Swagger schemas with objects that declare no properties
@@ -418,8 +429,7 @@
     - <a href="../../modules/ConnectionProvider/html/index.html">ConnectionProvider</a> module
       - assume connections are up until they are proven to be down
         (<a href="https://github.com/qorelanguage/qore/issues/4789">issue 4789</a>)
-      - fixed a bug where the @ref ConnectionProvider::InvalidConnection "InvalidConnection" class would report an
-        invalid \c url hash
+      - fixed a bug where the \c ConnectionProvider::InvalidConnection class would report an invalid \c url hash
         (<a href="https://github.com/qorelanguage/qore/issues/4785">issue 4785</a>)
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
       - implemented consistent support for OAuth2 authorization flows including for OAuth2 with non-blocking I/O and
@@ -622,7 +632,7 @@
 
     @subsection qore_1_14_1_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/ConnectionProvider/html/index.html">ConnectionProvider</a> module
-      - added the \c headers option to HTTP connections (@ref ConnectionProvider::HttpConnection "HttpConnection")
+      - added the \c headers option to HTTP connections
         (<a href="https://github.com/qorelanguage/qore/issues/4695">issue 4695</a>)
     - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
       - enabled browsing the data provider hierarchy according to transactional support
@@ -672,7 +682,7 @@
     - <a href="../../modules/ConnectionProvider/html/index.html">ConnectionProvider</a> module
       - set connection status to \c OK after a successful manual ping operation
         (<a href="https://github.com/qorelanguage/qore/issues/4685">issue 4685</a>)
-    - fixed a bug in @ref Qore::parse_datasource() "parse_datasource()" parsing option values with special characters
+    - fixed a bug in @ref Qore::SQL::parse_datasource() "parse_datasource()" parsing option values with special characters
       (<a href="https://github.com/qorelanguage/qore/issues/4688">issue 4688</a>)
     - fixed a bug where @ref Qore::parse_url() "parse_url()" failed with colons (\c ':') in the path
       (<a href="https://github.com/qorelanguage/qore/issues/4673">issue 4673</a>)
@@ -2690,7 +2700,7 @@
       (<a href="https://github.com/qorelanguage/qore/issues/3509">issue 3509</a>)
     - fixed bugs importing user modules with an injected API in an existing @ref Qore::Program "Program" container
       (<a href="https://github.com/qorelanguage/qore/issues/3504">issue 3504</a>)
-    - fixed a memory leak in @ref Qore::Serializable::deserialize(string) "Serializable::deserialize(string)"
+    - fixed a memory leak in @ref Qore::Serializable::deserialize(string, __7_ int) "Serializable::deserialize(string)"
     - fixed a memory leak (crash in debug mode) related to @ref garbage_collection "deterministic garbage collection"
       (<a href="https://github.com/qorelanguage/qore/issues/3481">issue 3481</a>)
     - fixed a bug where HTTP redirect messages with a simple path and not a full URL were not processed correctly

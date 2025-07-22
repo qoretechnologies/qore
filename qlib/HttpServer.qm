@@ -33,8 +33,8 @@
 %allow-weak-references
 
 module HttpServer {
-    version = "1.3";
-    desc = "HttpServer class definition";
+    version = "1.4";
+    desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
@@ -132,6 +132,10 @@ log("started listener on %s", lh.desc);
     @endcode
 
     @section http_relnotes HttpServer Module Release Notes
+
+    @subsection http1_4 HttpServer 1.4
+    - allow authentication methods to set the call context
+      (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
 
     @subsection http1_3 HttpServer 1.3
     - fixed a bug where idle connections were never disconnected
@@ -1271,7 +1275,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     #! sends an HTTP error message on the socket
-    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int code, *data msg, *InputStream chunked_msg, *hash<auto> extra_hdrs, *string encoding, bool head) {
+    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int code, *data msg, *InputStream chunked_msg,
+            *hash<auto> extra_hdrs, *string encoding, bool head) {
         if (!s.isOpen()) {
             listener.log("cid %d: connection closed by peer", cx.id);
             return;
@@ -1572,10 +1577,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         });
     }
 
-    # handles an incoming request - do not call externally; this method is called by the listeners when a request is received
-    # don't reimplement this method; fix/enhance it in the module
-    final handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
-            HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated, reference<bool> dedicated_external) {
+    #! Handles incoming requests
+    /** this method is called by the listeners when a request is received
+    */
+    handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
+            HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated,
+            reference<bool> dedicated_external) {
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
@@ -1601,7 +1608,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # erase the encoding string on exit
         on_exit remove cx.encoding;
 
-        hash url = {
+        hash<auto> url += {
             "path": hdr.path,
         };
 
@@ -1736,40 +1743,36 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     handler.auth.endRequest();
                 }
 
-                if (handler.auth) {
-                    try {
-                        *hash<auto> ah = handler.auth.authenticateRequest(listener, hdr, \cx);
-                        # return an error if authentication failed
-                        if (ah) {
-                            if (!ah.code)
-                                ah.code = 401;
-                            if (!ah.body && !ah.hasKeyValue("chunked_body"))
-                                ah.body = "Authentication is required to access this server";
-                            cx.close = True;
-                            sendHttpError(listener, cx, s, ah.code, ah.body,
-                                ah.hasKey("chunked_body") ? ah.chunked_body : NOTHING, ah.hdr, cx."response-encoding",
-                                head);
-                            return;
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        # log the error
-                        string desc = !debug
-                            ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                            : get_exception_string(ex);
-                        desc += sprintf(": received from %s", cx."peer-info".address_desc);
-                        listener.logError("%s", desc);
-                        cx.close = True;
-                        sendHttpError(listener, cx, s, 501, "Server Authentication Error", NOTHING, NOTHING, NOTHING,
-                            head);
-                        return;
+                *hash<HttpResponseInfo> ah;
+                try {
+                    ah = handler.authenticateRequest(listener, hdr, \cx);
+                } catch (hash<ExceptionInfo> ex) {
+                    # log the error
+                    string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
+                        cx."peer-info".address_desc) + (
+                            !debug
+                                ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                : get_exception_string(ex)
+                        );
+                    listener.logError("%s", desc);
+                    ah = <HttpResponseInfo>{
+                        "code": 501,
+                        "body": "Server Authentication Error",
+                    };
+                }
+
+                # return an error if authentication failed
+                if (ah) {
+                    if (!ah."code") {
+                        ah."code" = 401;
                     }
-                    if (exists cx.user) {
-                        listener.log("authenticated with user %y", cx.user);
-                    } else {
-                        listener.log("authenticated without a user context");
+                    if (!ah.body && !ah.hasKeyValue("chunked_body")) {
+                        ah.body = "Authentication is required to access this server";
                     }
-                } else {
-                    listener.log("no authentication required");
+                    cx.close = True;
+                    sendHttpError(listener, cx, s, ah."code", ah.body,
+                        ah.hasKey("chunked_body") ? ah.chunked_body : NOTHING, ah.hdr, cx."response-encoding", head);
+                    return;
                 }
 
                 *hash<auto> tld_save = handler.saveThreadLocalData();

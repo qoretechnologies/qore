@@ -650,9 +650,7 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 }
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
-/** @param target the URL target
-
-    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
+/** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
     connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
     the new Socket after a successful poll operation
 

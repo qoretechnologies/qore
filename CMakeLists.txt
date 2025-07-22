@@ -911,7 +911,7 @@ qore_user_module("qlib/TextWrap.qm" "Util")
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
-qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler")
+qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 
 # base 4 modules
