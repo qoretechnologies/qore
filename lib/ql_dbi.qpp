@@ -122,7 +122,8 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
     |\c host|the hostname for the connection, if present in the string
     |\c port|the port number to use for the connection, if present in the string
     |\c options|A hash of options given in the string, if present. Special options are \c "min" and \c "max", which \
-        are respected by the @ref Qore::SQL::DatasourcePool::constructor(hash) "DatasourcePool::constructor(hash)" \
+        are respected by the \
+        @ref Qore::SQL::DatasourcePool::constructor(hash<auto>, __7_ Qore::Thread::Queue, auto) "DatasourcePool::constructor(hash<auto>, *Queue, auto)" \
         variant for setting the minimum and maximum connections in the pool, respectively; other options are passed \
         to the DBI driver
 */

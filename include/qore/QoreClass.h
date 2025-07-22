@@ -1152,7 +1152,7 @@ public:
     DLLEXPORT bool hasPublicMembersInHierarchy() const;
 
     //! Returns an expression that can be used to create a new object when executed
-    /** @oaram args the arguments to the call; may be nullptr; the call takes over ownership of the reference
+    /** @param args the arguments to the call; may be nullptr; the call takes over ownership of the reference
     */
     DLLEXPORT AbstractQoreNode* getNewObjectExpression(QoreListNode* args = nullptr) const;
 
