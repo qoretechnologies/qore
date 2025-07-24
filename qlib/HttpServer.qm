@@ -1736,19 +1736,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 rv = noHandlerError(cx, hdr, body);
             } else {
                 # check for authentication info
-                #printf("HTTP DEBUG: handler: %y (auth: %y) hdr: %y\n", cx.handler_name, exists handler.auth && handler.auth.requiresAuthentication(), hdr);
+                #printf("HTTP DEBUG: handler: %y (auth: %y) hdr: %y\n", cx.handler_name,
+                #    exists handler.auth && handler.auth.requiresAuthentication(), hdr);
 
                 # allow the handler to remove any authentication information in thread-local data, for example
                 on_exit if (handler.auth) {
                     handler.auth.endRequest();
                 }
 
+                # preform any pre-processing on the request that can aid in authentication and has to be performed to
+                # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.authenticateRequest(listener, hdr, \cx);
+                    ah = handler.preprocessRequest(listener, \hdr, \cx);
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
-                    string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
+                    string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
                         cx."peer-info".address_desc) + (
                             !debug
                                 ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
@@ -1757,8 +1760,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     listener.logError("%s", desc);
                     ah = <HttpResponseInfo>{
                         "code": 501,
-                        "body": "Server Authentication Error",
+                        "body": "Server Preprocessing Error",
                     };
+                }
+
+                if (!ah) {
+                    try {
+                        ah = handler.authenticateRequest(listener, hdr, \cx);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # log the error
+                        string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
+                            cx."peer-info".address_desc) + (
+                                !debug
+                                    ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                    : get_exception_string(ex)
+                            );
+                        listener.logError("%s", desc);
+                        ah = <HttpResponseInfo>{
+                            "code": 501,
+                            "body": "Server Authentication Error",
+                        };
+                    }
                 }
 
                 # return an error if authentication failed

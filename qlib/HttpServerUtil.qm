@@ -1379,6 +1379,19 @@ public class AbstractHttpRequestHandler {
         }
     }
 
+    #! Preproecsses a request before authentication
+    /** @param listener
+        @param hdr a reference to request headers
+        @param cx a reference to the call context hash
+
+        @return a return value indicates an authentication error and will be returned to the caller immediately, and
+        the connection will be closed; returning no value indicates that request processing should continue
+    */
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        # intentionally empty
+    }
+
     #! Authenticates the request if possible
     /** @param listener
         @param hdr a hash of request headers
@@ -1781,8 +1794,11 @@ public class AbstractUrlHandler inherits HttpServer::AbstractHttpRequestHandler 
         query arguments removed
     */
     string getRelativePath(string path) {
-        if (url_root && path.equalPartialPath(url_root))
+        if (url_root && path.equalPartialPath(url_root)) {
             path = path.substr(url_root.size() + 1);
+        }
+        # combine multiple forward slashes
+        path =~ s/\/+/\//g;
         # strip URI query args from path
         path =~ s/\?.*$//;
         return path;
