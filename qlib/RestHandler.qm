@@ -225,6 +225,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     |\c orig_method|*string|the original REST action name in the request, if any
     |\c orig-request-body|*string|the original unserialized message body in the request, if any (after content decoding)
     |\c rest_action_method|string|the name of the method that will be called on the @ref RestHandler::AbstractRestClass "AbstractRestClass" object
+    |\c rest_api_path|string|the URI path after any prefix is removed used to resolve the REST API method
     |\c rest_method|*string|any original REST action name in the request (if any) with the first letter capitalized
 
     @section resthierarchy Implementing Object Hierarchies
@@ -1368,6 +1369,7 @@ public namespace RestHandler {
                 "body": body,
                 "aih": aih,
                 "orig-request-body": b,
+                "rest_api_path": ah.method,
             };
 
             # handle call with class
