@@ -1385,9 +1385,7 @@ public class DataProviderActionCatalog {
 
     #! Returns a data type for the action options
     static *AbstractDataProviderType getTypeForActionOptions(hash<auto> action) {
-        return getTypeForActionOptions(cast<hash<DataProviderActionInfo>>(action{
-            map $1.getName(), TypedHash::forName("DataProviderActionInfo").getMembers()
-        }));
+        return getTypeForActionOptions(getAppActionEx(action.app, action.action));
     }
 
     #! Returns a data type for the action options
@@ -1402,7 +1400,7 @@ public class DataProviderActionCatalog {
                 mand = True;
             }
             hash<auto> fh = i.value{"display_name", "short_desc", "desc", "multiselect", "allowed_values",
-                "allowed_values_createable", "element_allowed_values", "element_allowed_values_createable",
+                "allowed_values_creatable", "element_allowed_values", "element_allowed_values_creatable",
                 "default_value", "example_value"} + {
                 "name": i.key,
                 "type": i.value.required ? i.value.type.getMandatoryType() : i.value.type.getOrNothingType(),
