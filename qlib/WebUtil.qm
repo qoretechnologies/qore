@@ -907,7 +907,41 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return Dirlisting;
     }
 
-    #! this method calls handleRequestImpl() to service the request, if handleRequestImpl() returns @ref nothing, then it tries to automatically serve a matching template or files from the filesystem or serve the default resource if no resource can be matched
+    #! Preproecsses a request before authentication
+    /** @param listener
+        @param hdr a reference to request headers
+        @param cx a reference to the call context hash
+
+        The following keys are added to the \a cx argument:
+        - \c resource_path: the relative path without any query arguments and with the URL root stripped off (if
+            the request was matched by the URL root, otherwise this will be the request path with any URI query
+            arguments removed)
+        - \c url_root: the root URL
+        - \c file_root: the root directory for serving files
+        - \c isregex: if the \a url_root string is a regular expression or not (this is always @ref False "False"
+            when this class is used)
+        - \c hdr: this is added to the \a cx argument directly from the \a hdr argument, however it also includes
+            the \c "params" key which holds the URI query parameters as returned in the \a params key from
+            @ref HttpServer::parse_uri_query()
+    */
+    *hash<HttpResponseInfo> preprocessRequest(HttpServer::HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        # get local request path and "localize" it and strip off any query args
+        string path = getRelativePath(hdr.path);
+
+        # add URI query parameters to hdr if possible
+        hdr.params = parse_uri_query(hdr.path).params;
+
+        cx += {
+            "resource_path": path,
+            "url_root": url_root,
+            "file_root": file_root,
+            "isregex": False,
+            "hdr": hdr,
+        };
+    }
+
+    #! Handles the request and serves a file from the file system or a rendered template if possible
     /** @param listener the listener handling the request
         @param s the socket object for the connection
         @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
@@ -925,7 +959,11 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             closed when the handler returns
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 
-        The following keys are added to the \a cx argument when calling handleRequestImpl():
+        This method calls handleRequestImpl() to service the request, if handleRequestImpl() returns @ref nothing,
+        then it tries to automatically serve a matching template or files from the filesystem or serve the default
+        resource if no resource can be matched
+
+        The following keys are added to the \a cx argument in preprocessRequest():
         - \c resource_path: the relative path without any query arguments and with the URL root stripped off (if
             the request was matched by the URL root, otherwise this will be the request path with any URI query
             arguments removed)
@@ -942,14 +980,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     */
     hash<HttpResponseInfo> handleRequest(HttpServer::HttpListenerInterface listener, Qore::Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
-        # get local request path and "localize" it and strip off any query args
-        string path = getRelativePath(hdr.path);
-
-        # add URI query parameters to hdr if possible
-        hdr.params = parse_uri_query(hdr.path).params;
-
-        cx += {"resource_path": path, "url_root": url_root, "file_root": file_root, "isregex": False, "hdr": hdr};
-
         try {
             *hash<HttpResponseInfo> h = handleRequestImpl(\cx, hdr, body);
             if (!h) {
