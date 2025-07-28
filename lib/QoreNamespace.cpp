@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -836,7 +836,8 @@ TypedHashDecl* qore_ns_private::runtimeImportHashDecl(ExceptionSink* xsink, cons
     return nhd;
 }
 
-QoreNamespace* qore_ns_private::findCreateNamespacePath(const NamedScope& nscope, bool pub, bool user, bool& is_new, int ignore_end) {
+QoreNamespace* qore_ns_private::findCreateNamespacePath(const NamedScope& nscope, bool pub, bool user, bool& is_new,
+        int ignore_end) {
     assert(!is_new);
 
     // get root ns to add to namespace map if attached
@@ -853,7 +854,8 @@ QoreNamespace* qore_ns_private::findCreateNamespacePath(const NamedScope& nscope
     return nns;
 }
 
-QoreNamespace* qore_ns_private::findCreateNamespace(const char* nsn, bool user, bool& is_new, qore_root_ns_private* rns) {
+QoreNamespace* qore_ns_private::findCreateNamespace(const char* nsn, bool user, bool& is_new,
+        qore_root_ns_private* rns) {
     QoreNamespace* ns = nsl.find(nsn);
     if (!ns) {
         std::string new_path;

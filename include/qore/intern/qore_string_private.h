@@ -127,31 +127,37 @@ public:
     DLLLOCAL qore_offset_t rfind(char c, qore_offset_t pos = -1) {
         if (pos < 0) {
             pos = len + pos;
-            if (pos < 0)
+            if (pos < 0) {
                 return -1;
-        } else if (pos > 0 && pos > (qore_offset_t)len)
+            }
+        } else if (pos > 0 && pos > (qore_offset_t)len) {
             pos = len - 1;
+        }
 
         const char* p = buf + pos;
         while (p >= buf) {
-            if (*p == c)
+            if (*p == c) {
                 return (qore_offset_t)(p - buf);
+            }
             --p;
         }
         return -1;
     }
 
-        // NOTE: this is purely byte oriented - no character semantics here
+    // NOTE: this is purely byte oriented - no character semantics here
     DLLLOCAL qore_offset_t findAny(const char* str, qore_offset_t pos = 0) {
         if (pos < 0) {
             pos = len + pos;
-            if (pos < 0)
+            if (pos < 0) {
                 pos = 0;
-        } else if (pos > 0 && pos > (qore_offset_t)len)
+            }
+        } else if (pos > 0 && pos > (qore_offset_t)len) {
             return -1;
+        }
         const char* p;
-        if (!(p = strstr(buf + pos, str)))
+        if (!(p = strstr(buf + pos, str))) {
             return -1;
+        }
         return (qore_offset_t)(p - buf);
     }
 
@@ -159,16 +165,19 @@ public:
     DLLLOCAL qore_offset_t rfindAny(const char* str, qore_offset_t pos = -1) {
         if (pos < 0) {
             pos = len + pos;
-            if (pos < 0)
+            if (pos < 0) {
                 return -1;
-        } else if (pos > 0 && pos > (qore_offset_t)len)
+            }
+        } else if (pos > 0 && pos > (qore_offset_t)len) {
             pos = len - 1;
+        }
 
         const char* p = buf + pos;
         while (p >= buf) {
             for (const char* t = str; *t; ++t) {
-                if (*p == *t)
-                return (qore_offset_t)(p - buf);
+                if (*p == *t) {
+                    return (qore_offset_t)(p - buf);
+                }
             }
             --p;
         }
@@ -223,21 +232,21 @@ public:
         return ind;
     }
 
-    DLLLOCAL qore_offset_t bindex(const QoreString &needle, qore_offset_t pos) const {
+    DLLLOCAL qore_offset_t bindex(const QoreString& needle, qore_offset_t pos) const {
         if (needle.strlen() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
     }
 
-    DLLLOCAL qore_offset_t bindex(const std::string &needle, qore_offset_t pos) const {
+    DLLLOCAL qore_offset_t bindex(const std::string& needle, qore_offset_t pos) const {
         if (needle.size() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
     }
 
-    DLLLOCAL qore_offset_t bindex(const char *needle, qore_offset_t pos, size_t nsize = 0) const {
+    DLLLOCAL qore_offset_t bindex(const char* needle, qore_offset_t pos, size_t nsize = 0) const {
         if (pos < 0) {
             pos = len + pos;
             if (pos < 0) {
@@ -329,17 +338,18 @@ public:
         return ind;
     }
 
-    DLLLOCAL qore_offset_t brindex(const QoreString &needle, qore_offset_t pos) const {
+    DLLLOCAL qore_offset_t brindex(const QoreString& needle, qore_offset_t pos) const {
         return brindex(needle.getBuffer(), needle.strlen(), pos);
     }
 
-    DLLLOCAL qore_offset_t brindex(const std::string &needle, qore_offset_t pos) const {
+    DLLLOCAL qore_offset_t brindex(const std::string& needle, qore_offset_t pos) const {
         return brindex(needle.c_str(), needle.size(), pos);
     }
 
-    DLLLOCAL qore_offset_t brindex(const char *needle, size_t needle_len, qore_offset_t pos) const {
-        if (pos < 0)
+    DLLLOCAL qore_offset_t brindex(const char* needle, size_t needle_len, qore_offset_t pos) const {
+        if (pos < 0) {
             pos = len + pos;
+        }
 
         if (pos >= (qore_offset_t)len) {
             pos = len - 1;
@@ -352,8 +362,9 @@ public:
             return -1;
         }
 
-        if (needle_len + (len - pos) > len)
+        if (needle_len + (len - pos) > len) {
             return -1;
+        }
 
         return rindex_simple(buf, len, needle, needle_len, pos);
     }

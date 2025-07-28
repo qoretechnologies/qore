@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1239,7 +1239,7 @@ auto Program::callFunction(string name, ...) {
     if (args->size() > 1)
         vargs = args->copyListFrom(1);
 
-    return p->callFunction(tmp->getBuffer(), *vargs, xsink);
+    return p->callFunction(tmp->c_str(), *vargs, xsink);
 }
 
 //! Calls a function in the program object giving the arguments to the function as a list and returns the return value
@@ -1265,7 +1265,7 @@ auto Program::callFunctionArgs(string name, *softlist<auto> vargs) {
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
-    return p->callFunction(tmp->getBuffer(), vargs, xsink);
+    return p->callFunction(tmp->c_str(), vargs, xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
@@ -1349,7 +1349,7 @@ bool Program::existsFunction(string name) [flags=RET_VALUE_ONLY] {
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp)
         return false;
-    return p->existsFunction(tmp->getBuffer());
+    return p->existsFunction(tmp->c_str());
 }
 
 //! Runs the program and optionally returns a value if the top-level code exits with a @ref return "return statement
@@ -1384,7 +1384,7 @@ nothing Program::importFunction(string func) {
     TempEncodingHelper tmp(func, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
-    qore_program_private::exportFunction(getProgram(), xsink, p, tmp->getBuffer());
+    qore_program_private::exportFunction(getProgram(), xsink, p, tmp->c_str());
 }
 
 //! Imports a function into the program object's space and gives it a new name; any calls to the imported function will run with the parent Program object's permissions
@@ -1425,28 +1425,64 @@ nothing Program::importFunction(string func, string new_name, *softbool inject) 
     if (tnew_name->empty())
         xsink->raiseException("FUNCTION-IMPORT-ERROR", "the new function name while importing function '%s' may not be empty", func);
 
-    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->getBuffer(), tnew_name->getBuffer(), inject);
+    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->c_str(), tnew_name->c_str(), inject);
 }
 
 //! Imports a global variable into the program object's space
 /** If the variable is an object, then any methods called from the subprogram will run in the parent's space
 
     @param varname The name of the global variable without the \c "$"
-    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed by the subprogram (note that if the imported
+    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
+    by the subprogram
 
     @par Example:
     @code{.py}
 pgm.importGlobalVariable("var");
     @endcode
 
-    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the target variable already exists
-    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the @ref default_encoding "default character encoding"
+    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the
+    target variable already exists
+    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
+    @ref default_encoding "default character encoding"
  */
 nothing Program::importGlobalVariable(string varname, bool readonly = False) {
     TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
-    if (!tmp)
+    if (!tmp) {
         return QoreValue();
-    qore_program_private::exportGlobalVariable(getProgram(), tmp->getBuffer(), readonly, p, xsink);
+    }
+    qore_program_private::get(*getProgram())->exportGlobalVariable(xsink, tmp->c_str(), readonly,
+        *qore_program_private::get(*p));
+}
+
+//! Imports a global variable into the program object's space
+/** If the variable is an object, then any methods called from the subprogram will run in the parent's space
+
+    @param varname The name of the global variable in the source container without any \c "$"
+    @param import_as The name of the variable as it will be imported
+    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
+    by the subprogram
+
+    @par Example:
+    @code{.py}
+pgm.importGlobalVariable("var", "another_var");
+    @endcode
+
+    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the
+    target variable already exists
+    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
+    @ref default_encoding "default character encoding"
+ */
+nothing Program::importGlobalVariable(string varname, string import_as, bool readonly = False) {
+    TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
+    if (!tmp) {
+        return QoreValue();
+    }
+    TempEncodingHelper target(import_as, QCS_DEFAULT, xsink);
+    if (!target) {
+        return QoreValue();
+    }
+    qore_program_private::get(*getProgram())->exportGlobalVariable(xsink, tmp->c_str(), readonly,
+        *qore_program_private::get(*p), target->c_str());
 }
 
 //! Imports a class into the program object's space; any calls to the imported class's code will run with the parent Program object's permissions
@@ -1751,9 +1787,10 @@ pgm.setTimeZoneRegion("Europe/Prague");
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
  */
 nothing Program::setTimeZoneRegion(string region) {
-   const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->getBuffer(), xsink);
-   if (!*xsink)
-      p->setTZ(zone);
+    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
+    if (!*xsink) {
+        p->setTZ(zone);
+    }
 }
 
 //! Sets the default time zone for the Program object based on the number of seconds east of UTC; for zones west of UTC, use negative numbers
@@ -1818,7 +1855,7 @@ pgm.define("PRODUCTION", True);
 nothing Program::define(string def, auto val) {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
    if (t)
-      qore_program_private::runTimeDefine(p, t->getBuffer(), val.refSelf(), xsink);
+      qore_program_private::runTimeDefine(p, t->c_str(), val.refSelf(), xsink);
 }
 
 //! Unsets a @ref conditional_parsing "parse define" for the current Program
@@ -1832,7 +1869,7 @@ pgm.undefine("PRODUCTION");
 nothing Program::undefine(string def) {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
    if (t)
-      qore_program_private::runTimeUnDefine(p, t->getBuffer(), xsink);
+      qore_program_private::runTimeUnDefine(p, t->c_str(), xsink);
 }
 
 //! Returns @ref True if the given @ref conditional_parsing "parse define" is defined in the current Program (does not have to have a value defined to return @ref True), @ref False if not
@@ -1849,7 +1886,7 @@ bool b = pgm.isDefined("PRODUCTION");
  */
 bool Program::isDefined(string def) [flags=RET_VALUE_ONLY] {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
-   return t ? qore_program_private::runTimeIsDefined(p, t->getBuffer()) : false;
+   return t ? qore_program_private::runTimeIsDefined(p, t->c_str()) : false;
 }
 
 //! Retrieves the value of the given @ref conditional_parsing "parse define" in the current Program

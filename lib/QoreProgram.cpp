@@ -1087,35 +1087,60 @@ void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u,
     qore_root_ns_private::runtimeImportFunction(*RootNS, xsink, *tns, u, new_name, inject);
 }
 
-void qore_program_private::exportGlobalVariable(const char* vname, bool readonly, qore_program_private& tpgm, ExceptionSink* xsink) {
+void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char* vname, bool readonly,
+            qore_program_private& tpgm, const char* import_as) {
+    const char* target_name = import_as ? import_as : vname;
     if (&tpgm == this) {
-        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "cannot import global variable \"%s\" with the same source and target Program objects", vname);
+        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "Cannot import global variable \"%s\" with "
+            "the same source and target Program objects", target_name);
         return;
     }
 
-    const qore_ns_private* vns = 0;
+    const qore_ns_private* vns = nullptr;
     Var* v;
     {
         ProgramRuntimeParseAccessHelper pah(xsink, pgm);
-        if (*xsink)
+        if (*xsink) {
             return;
+        }
         v = qore_root_ns_private::runtimeFindGlobalVar(*RootNS, vname, vns);
     }
 
     if (!v) {
-        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "there is no global variable \"%s\"", vname);
+        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "There is no global variable \"%s\"", vname);
         return;
     }
 
     // get exclusive access to program object for parsing
     ProgramRuntimeParseContextHelper pch(xsink, tpgm.pgm);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
 
     // find/create target namespace based on source namespace
-    QoreNamespace* tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS, *vns, !v->isBuiltin());
-    //printd(5, "qore_program_private::exportGlobalVariable() this: %p vname: '%s' ro: %d vns: %p '%s::' RootNS: %p '%s::'\n", this, vname, readonly, vns, vns->name.c_str(), RootNS, RootNS->getName());
-    qore_root_ns_private::runtimeImportGlobalVariable(*tpgm.RootNS, *tns, v, readonly, xsink);
+    QoreString tmp;
+    QoreNamespace* tns;
+    if (import_as) {
+        QoreString nspath(import_as);
+        ssize_t p = nspath.rfind("::");
+        if (p != -1) {
+            tmp = nspath.c_str() + p;
+            import_as = tmp.c_str();
+            nspath.terminate(p);
+            NamedScope ns(nspath.c_str());
+            tns = qore_root_ns_private::get(*tpgm.RootNS)->runtimeFindCreateNamespacePath(ns, false, !v->isBuiltin());
+        } else {
+            vns = nullptr;
+            tns = tpgm.RootNS;
+        }
+    } else {
+        tns = !vns || vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
+            *vns, !v->isBuiltin());
+    }
+    //printd(5, "qore_program_private::exportGlobalVariable() this: %p vname: '%s' ro: %d vns: %p '%s::' RootNS: %p "
+    //    "'%s::'\n", this, vname, readonly, vns, vns->name.c_str(), RootNS, RootNS->getName());
+    qore_root_ns_private::get(*tpgm.RootNS)->runtimeImportGlobalVariable(xsink, *qore_ns_private::get(*tns), v,
+        readonly, import_as);
 }
 
 void qore_program_private::del(ExceptionSink* xsink) {

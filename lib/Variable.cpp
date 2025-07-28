@@ -4,7 +4,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -67,13 +67,15 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
 
 int qore_gvar_ref_u::write(ExceptionSink* xsink) const {
     if (_refptr & 1) {
-        xsink->raiseException("ACCESS-ERROR", "attempt to write to read-only imported global variable '%s'", getPtr()->getName());
+        xsink->raiseException("ACCESS-ERROR", "attempt to write to read-only imported global variable '%s'",
+            getPtr()->getName());
         return -1;
     }
     return 0;
 }
 
-Var::Var(Var* ref, bool ro, bool is_thread_local) : loc(ref->loc), val(QV_Ref), name(ref->name),
+Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(ref->loc), val(QV_Ref),
+        name(import_as ? import_as : ref->name),
         typeInfo(ref->typeInfo), pub(false), finalized(false), is_thread_local(false) {
     ref->ROreference();
     // set local reference

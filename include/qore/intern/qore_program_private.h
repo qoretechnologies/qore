@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1792,7 +1792,8 @@ public:
         return rv;
     }
 
-    DLLLOCAL void exportGlobalVariable(const char* name, bool readonly, qore_program_private& tpgm, ExceptionSink* xsink);
+    DLLLOCAL void exportGlobalVariable(ExceptionSink* xsink, const char* name, bool readonly,
+            qore_program_private& tpgm, const char* import_as = nullptr);
 
     DLLLOCAL int setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink);
 
@@ -2236,11 +2237,6 @@ public:
 
         QoreException *ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
-    }
-
-    DLLLOCAL static void exportGlobalVariable(QoreProgram* pgm, const char* name, bool readonly, QoreProgram* tpgm,
-            ExceptionSink* xsink) {
-        pgm->priv->exportGlobalVariable(name, readonly, *(tpgm->priv), xsink);
     }
 
     DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {

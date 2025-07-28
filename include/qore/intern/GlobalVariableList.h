@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -80,7 +80,7 @@ public:
 
     // called at runtime
     // returns a non-0 Var* if a new variable was created, 0 if not (because it already existed - exception raised)
-    DLLLOCAL Var* import(Var* var, ExceptionSink* xsink, bool readonly = false);
+    DLLLOCAL Var* import(Var* var, ExceptionSink* xsink, bool readonly = false, const char* import_as = nullptr);
 
     DLLLOCAL Var* runtimeCreateVar(const char* name, const QoreTypeInfo* typeInfo, bool builtin = false);
 
