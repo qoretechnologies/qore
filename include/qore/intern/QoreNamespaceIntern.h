@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1560,20 +1560,12 @@ protected:
         return nullptr;
     }
 
-    DLLLOCAL void runtimeImportGlobalVariable(qore_ns_private& tns, Var* v, bool readonly, ExceptionSink* xsink) {
-        Var* var = tns.var_list.import(v, xsink, readonly);
-        if (!var)
-            return;
-
-        varmap.update(var->getName(), &tns, var);
-    }
-
     DLLLOCAL Var* runtimeCreateVar(qore_ns_private& vns, const char* vname, const QoreTypeInfo* typeInfo,
             bool builtin) {
         Var* v = vns.var_list.runtimeCreateVar(vname, typeInfo, builtin);
-
-        if (v)
+        if (v) {
             varmap.update(v->getName(), &vns, v);
+        }
         return v;
     }
 
@@ -1738,6 +1730,15 @@ public:
 
     DLLLOCAL void deferParseCheckAbstractNew(const qore_class_private* qc, const QoreProgramLocation* loc) {
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
+    }
+
+    DLLLOCAL void runtimeImportGlobalVariable(ExceptionSink* xsink, qore_ns_private& tns, Var* v, bool readonly,
+            const char* import_as) {
+        Var* var = tns.var_list.import(v, xsink, readonly, import_as);
+        if (!var) {
+            return;
+        }
+        varmap.update(var->getName(), &tns, var);
     }
 
     DLLLOCAL QoreNamespace* runtimeFindNamespace(const NamedScope& name) {
@@ -2143,10 +2144,6 @@ public:
 
     DLLLOCAL static Var* runtimeCreateVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname, const QoreTypeInfo* typeInfo, bool builtin = false) {
         return rns.rpriv->runtimeCreateVar(*vns.priv, vname, typeInfo, builtin);
-    }
-
-    DLLLOCAL static void runtimeImportGlobalVariable(RootQoreNamespace& rns, QoreNamespace& tns, Var* v, bool readonly, ExceptionSink* xsink) {
-        return rns.rpriv->runtimeImportGlobalVariable(*tns.priv, v, readonly, xsink);
     }
 
     /*

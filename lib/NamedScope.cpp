@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
   NamedScopes are children of a program object.  there is a parse
   lock per program object to ensure that objects are added (or backed out)

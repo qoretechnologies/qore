@@ -1299,6 +1299,7 @@ public:
             i->second->delVar(xsink);
             // the key is allocated normally in the scanner, and must be freed manually here
             free(i->first);
+            delete i->second;
         }
         member_list.clear();
     }
@@ -1312,6 +1313,7 @@ public:
             */
             // the key is allocated normally in the scanner, and must be freed manually here
             free(i->first);
+            delete i->second;
         }
         member_list.clear();
     }

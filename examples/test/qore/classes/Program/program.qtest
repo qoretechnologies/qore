@@ -407,7 +407,11 @@ class ProgramTest inherits QUnit::Test {
         our Test to();
         our Test ro();
 
-        string func = "namespace ITest { const val = 1.0; class X; } our int gv2 = 123; int sub t2(int a) { return a + 2; } int sub et(int a) { return t(a); } string sub tot() { return get_class_name(to); } Queue sub getObject() { return new Queue(); } X sub get_x() { return new X(); } sub deleteException() { ro.getData(0); delete ro; } bool sub check_ro() { return exists ro; }";
+        string func = "namespace ITest { const val = 1.0; class X; } our int gv2 = 123; "
+            "int sub t2(int a) { return a + 2; } int sub et(int a) { return t(a); } "
+            "string sub tot() { return get_class_name(to); } Queue sub getObject() { return new Queue(); } "
+            "X sub get_x() { return new X(); } sub deleteException() { ro.getData(0); delete ro; } "
+            "bool sub check_ro() { return exists ro; }";
 
         string pf = "newfunc();";
         string nf = "bool sub newfunc() { return True; }";
@@ -421,6 +425,8 @@ class ProgramTest inherits QUnit::Test {
         a.importFunction("t");
         a.importGlobalVariable("to");
         a.importGlobalVariable("ro", True);
+        a.importGlobalVariable("to", "to2");
+        a.importGlobalVariable("ro", "ro2", True);
         a.parse(func, "test");
 
         assertEq(True, a.callFunction("newfunc"));
@@ -451,8 +457,7 @@ class ProgramTest inherits QUnit::Test {
 
         try {
             a.callFunction("deleteException");
-        }
-        catch (hash<ExceptionInfo> ex) {
+        } catch (hash<ExceptionInfo> ex) {
             assertEq("ACCESS-ERROR", ex.err);
         }
 
@@ -473,8 +478,7 @@ class ProgramTest inherits QUnit::Test {
         try {
             a = new Program(PO_NEW_STYLE);
             a.parse("const A = B; const B = A;", "rec");
-        }
-        catch (hash<ExceptionInfo> ex) {
+        } catch (hash<ExceptionInfo> ex) {
             assertEq("PARSE-EXCEPTION", ex.err);
         }
 

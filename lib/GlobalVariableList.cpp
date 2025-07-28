@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,17 +61,19 @@ void GlobalVariableList::mergePublic(const GlobalVariableList& old) {
 }
 
 // adds directly to committed list
-Var* GlobalVariableList::import(Var* v, ExceptionSink* xsink, bool readonly) {
-    map_var_t::iterator i = vmap.find(v->getName());
+Var* GlobalVariableList::import(Var* v, ExceptionSink* xsink, bool readonly, const char* import_as) {
+    const char* name = import_as ? import_as : v->getName();
+    map_var_t::iterator i = vmap.find(name);
     if (i != vmap.end()) {
-        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "'%s' already exists in the target namespace", v->getName());
-        return 0;
+        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "'%s' already exists in the target namespace",
+            name);
+        return nullptr;
     }
 
-    Var* var = new Var(v, readonly);
-    vmap[var->getName()] = var;
+    Var* var = new Var(v, readonly, false, import_as);
+    vmap[name] = var;
 
-    printd(5, "GlobalVariableList::import(): reference to %s (%p) added\n", v->getName(), var);
+    printd(5, "GlobalVariableList::import(): reference to %s (%p) added\n", name, var);
     return var;
 }
 

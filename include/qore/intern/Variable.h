@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -164,7 +164,8 @@ public:
             typeInfo(n_typeInfo), pub(false), finalized(false), is_thread_local(is_thread_local), builtin(builtin) {
     }
 
-    DLLLOCAL Var(Var* ref, bool ro = false, bool is_thread_local = false);
+    //! Used when importing variables from another QoreProgram container
+    DLLLOCAL Var(Var* ref, bool ro = false, bool is_thread_local = false, const char* import_as = nullptr);
 
     DLLLOCAL const char* getName() const;
 
@@ -230,11 +231,13 @@ public:
     DLLLOCAL void doDoubleDeclarationError(const QoreProgramLocation* loc) {
         // make sure types are identical or throw an exception
         if (parseTypeInfo) {
-            parse_error(*loc, "global variable '%s' previously declared with type '%s'", name.c_str(), QoreParseTypeInfo::getName(parseTypeInfo));
+            parse_error(*loc, "global variable '%s' previously declared with type '%s'", name.c_str(),
+                QoreParseTypeInfo::getName(parseTypeInfo));
             assert(!typeInfo);
         }
         if (typeInfo) {
-            parse_error(*loc, "global variable '%s' previously declared with type '%s'", name.c_str(), QoreTypeInfo::getName(typeInfo));
+            parse_error(*loc, "global variable '%s' previously declared with type '%s'", name.c_str(),
+                QoreTypeInfo::getName(typeInfo));
             assert(!parseTypeInfo);
         }
     }

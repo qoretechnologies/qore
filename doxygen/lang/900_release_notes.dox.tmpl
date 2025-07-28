@@ -29,6 +29,8 @@
       - @ref Qore::get_module_context_name_ex() "get_module_context_name_ex()"
       - @ref Qore::get_module_context_path() "get_module_context_path()"
       - @ref Qore::get_module_context_path_ex() "get_module_context_path_ex()"
+    - new variants
+      - @ref Qore::Program::importGlobalVariable(string, string, bool) "Program::importGlobalVariable()"
 
     @subsection qore_2_2_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/ConnectionProvider/html/index.html">ConnectionProvider</a> module
@@ -65,6 +67,8 @@
       - mark the context as handling file data in the authentication method to enable authentication errors to be
         redirected for handlers handling UI file data
         (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+    - fixed a memory leak in static class variable declarations when the class is deleted
+      (<a href="https://github.com/qorelanguage/qore/issues/4973">issue 4973</a>)
     - fixed a bug calling static method references with arguments that are normal method references
       (<a href="https://github.com/qorelanguage/qore/issues/4964">issue 4964</a>)
     - fixed overly-aggressive constant initialization that resulted in spurious recursive constant definition errors
