@@ -1128,13 +1128,16 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
             import_as = tmp.c_str();
             nspath.terminate(p);
             NamedScope ns(nspath.c_str());
+            // import into the specified namespace
             tns = qore_root_ns_private::get(*tpgm.RootNS)->runtimeFindCreateNamespacePath(ns, false, !v->isBuiltin());
         } else {
-            vns = nullptr;
-            tns = tpgm.RootNS;
+            // import into the equivalent namespace as the source variable
+            tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
+                *vns, !v->isBuiltin());
         }
     } else {
-        tns = !vns || vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
+        // import into the equivalent namespace as the source variable
+        tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
             *vns, !v->isBuiltin());
     }
     //printd(5, "qore_program_private::exportGlobalVariable() this: %p vname: '%s' ro: %d vns: %p '%s::' RootNS: %p "
