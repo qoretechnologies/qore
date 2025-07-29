@@ -1839,3 +1839,8 @@ bool QoreObject::getAsBoolImpl() const {
     QoreSafeVarRWReadLocker sl(priv->rml);
     return priv->status != OS_DELETED;
 }
+
+int QoreObject::parseInit(QoreValue& val, QoreParseContext& parse_context) {
+    parse_context.typeInfo = priv->theclass->getTypeInfo();
+    return 0;
+}

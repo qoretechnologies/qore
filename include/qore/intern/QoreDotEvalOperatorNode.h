@@ -53,6 +53,7 @@ protected:
 public:
     DLLLOCAL QoreDotEvalOperatorNode(const QoreProgramLocation* loc, QoreValue n_left, MethodCallNode* n_m)
             : QoreOperatorNode(loc), left(n_left), m(n_m), returnTypeInfo(nullptr) {
+        //printd(5, "QoreDotEvalOperatorNode::QoreDotEvalOperatorNode() this: %p left: %p m: %p\n", this, &left, m);
     }
 
     DLLLOCAL ~QoreDotEvalOperatorNode() {
@@ -70,7 +71,7 @@ public:
         left = n_left;
     }
 
-    DLLLOCAL AbstractQoreNode *makeCallReference();
+    DLLLOCAL AbstractQoreNode* makeCallReference();
 
     // if del is true, then the returned QoreString * should be removed, if false, then it must not be
     DLLLOCAL virtual QoreString *getAsString(bool &del, int foff, ExceptionSink *xsink) const {

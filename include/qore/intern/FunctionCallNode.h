@@ -354,7 +354,7 @@ class MethodCallNode : public AbstractMethodCallNode {
 public:
     DLLLOCAL MethodCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* n_args)
             : AbstractMethodCallNode(loc, NT_METHOD_CALL, n_args), c_str(name) {
-        //printd(0, "MethodCallNode::MethodCallNode() this=%p name='%s' args=%p (len=%d)\n", this, c_str, args,
+        //printd(5, "MethodCallNode::MethodCallNode() this: %p name: '%s' args: %p (len: %d)\n", this, c_str, args,
         //    args ? args->size() : -1);
     }
 
