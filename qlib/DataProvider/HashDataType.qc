@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore HashDataType class definition
 
-/** HashDataType.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** HashDataType.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -177,6 +177,8 @@ auto v = t.getDefaultValue();
             } else {
                 value = {} + input_value;
             }
+        } else if (or_nothing_type) {
+            return;
         }
         *hash<auto> value_copy = value;
         # check fields if any are defined
@@ -385,8 +387,8 @@ auto v = t.getDefaultValue();
             remove default_other_field_type;
         }
         *bool dyn = field.getAttributes().dynamic;
-        # do not run getDefaultValue() for dynamic fields
-        if (!dyn && (exists (auto val = field.getDefaultValue()))) {
+        # do not run getDefaultValue() for dynamic fields; do not generate a default value for "or nothing" types
+        if (!dyn && !or_nothing_type && (exists (auto val = field.getDefaultValue()))) {
             if (type == AutoHashType) {
                 type = AutoHashOrNothingType;
             }
