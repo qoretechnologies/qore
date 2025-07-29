@@ -69,6 +69,11 @@
       - mark the context as handling file data in the authentication method to enable authentication errors to be
         redirected for handlers handling UI file data
         (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+    - check functional domains of method calls on constant objects in sandboxed containers at parse time to ensure
+      that errors related to accessing restricted functionality are raised immediately
+      (<a href="https://github.com/qorelanguage/qore/issues/4975">issue 4975</a>)
+    - ensure that methods of classes tagged with functional domains also reflect the restrictions of the class
+      (<a href="https://github.com/qorelanguage/qore/issues/4974">issue 4974</a>)
     - fixed a memory leak in static class variable declarations when the class is deleted
       (<a href="https://github.com/qorelanguage/qore/issues/4973">issue 4973</a>)
     - fixed a bug calling static method references with arguments that are normal method references

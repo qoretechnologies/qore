@@ -162,8 +162,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     }
     parse_context.typeInfo = nullptr;
 
-    printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
-        args ? get_full_type_name(args) : "n/a", func);
+    //printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
+    //    args ? get_full_type_name(args) : "n/a", func);
 
     // resolves pending signatures unconditionally
     if (func) {
@@ -230,8 +230,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 //printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s variant: %p dflags: " QLLD
                 //    " fdflags: " QLLD "\n", this, func->className() ? func->className() : "", func->getName(),
                 //    variant, dflags, func->parseGetUniqueFunctionality());
-                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags))
+                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
                     invalid_access(loc, func);
+                    if (!err) {
+                        err = -1;
+                    }
+                }
                 int64 flags = variant->getFlags();
                 check_flags(loc, func, flags, parse_context.pflag);
             }

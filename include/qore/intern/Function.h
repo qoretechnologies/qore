@@ -652,15 +652,16 @@ public:
 };
 
 // the following defines the pure virtual functions that are common to all user variants
-#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const { return QDOM_DEFAULT; } \
-   using AbstractQoreFunctionVariant::getUserVariantBase; \
-   DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
-   DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
-   DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
-   DLLLOCAL virtual void setRecheck() { recheck = true; } \
-   DLLLOCAL virtual void parseCommit() { UserVariantBase::parseCommit(); } \
-   DLLLOCAL virtual bool hasVarargs() const { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
-
+#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const {\
+        const QoreClass* cls = getClass(); return QDOM_DEFAULT | (cls ? cls->getDomain() : 0);\
+    }\
+    using AbstractQoreFunctionVariant::getUserVariantBase; \
+    DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
+    DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
+    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
+    DLLLOCAL virtual void setRecheck() { recheck = true; } \
+    DLLLOCAL virtual void parseCommit() { UserVariantBase::parseCommit(); } \
+    DLLLOCAL virtual bool hasVarargs() const { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
 
 // this class ensures that instantiated variables in user code are uninstantiated, even if an exception occurs
 class UserVariantExecHelper : ProgramThreadCountContextHelper, ThreadFrameBoundaryHelper {
@@ -1201,8 +1202,11 @@ protected:
     }
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariant(ExceptionSink* xsink, const type_vec_t& args,
-    const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-    bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const;
+        const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
+        bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const;
+
+    DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, int64 ppo,
+        const AbstractQoreFunctionVariant* variant) const;
 };
 
 class QoreFunctionIterator {

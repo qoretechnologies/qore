@@ -674,6 +674,9 @@ private:
     //! the private implementation of the class
     class qore_object_private* priv;
 
+    //! called at parse time
+    DLLLOCAL int parseInit(QoreValue& val, QoreParseContext& parse_context);
+
     QoreObject(const QoreObject& old) = delete;
     QoreObject& operator=(const QoreObject&) = delete;
 };

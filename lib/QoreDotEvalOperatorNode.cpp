@@ -103,6 +103,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     const char* mname = m->getName();
 
+    //printd(5, "QoreDotEvalOperatorNode::parseInitImpl() this: %p %s::%s() (ti: %s)\n", this,
+    //    qc ? qc->getName() : "n/a", mname, QoreTypeInfo::getName(typeInfo));
+
     if (!qc) {
         // if the left side has a type and it's not an object, then we try to match pseudo-methods
         if (QoreTypeInfo::hasType(typeInfo)
