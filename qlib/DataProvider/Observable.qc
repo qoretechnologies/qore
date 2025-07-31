@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Observable class definition
 
-/** Observable.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** Observable.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -214,6 +214,16 @@ public class Observable {
     */
     bool isActive() {
         return True;
+    }
+
+    #! Handover observers to another Observable object
+    /** @param other the Observable object to which observers are handed over
+    */
+    handoverObservers(Observable other) {
+        if (other == self) {
+            return;
+        }
+        other.observer_map = remove observer_map;
     }
 
     #! Registers observer events

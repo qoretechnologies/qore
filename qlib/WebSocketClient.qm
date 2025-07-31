@@ -2079,6 +2079,9 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
 
         #! Queued observer
         QueuedObserver queued_observer;
+
+        #! Observers ready flag
+        bool observers_ready;
     }
 
     #! Creates the object from constructor options
@@ -2088,11 +2091,13 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
             client = copts.wsclient;
             if (copts.logger) {
                 setLogger(copts.logger);
+                client.setLogger(copts.logger);
             }
         } else {
             client = new WebSocketClientWithSerialization(copts);
             if (copts.logger) {
-                LoggerWrapper::setLogger(logger);
+                LoggerWrapper::setLogger(copts.logger);
+                client.setLogger(copts.logger);
             }
         }
     }
@@ -2154,6 +2159,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
     */
     observersReady() {
         client.observersReady();
+        observers_ready = True;
     }
 
     #! Returns True if the object is currently connected
@@ -2164,6 +2170,36 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
     #! Initiate a reconnect action on the client
     reconnect() {
         client.reconnect();
+    }
+
+    #! Update any connection used by the data provider
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself
+
+        This is useful for event-driven providers that require a connection object to generate events
+    */
+    updateConnectionObjects(object conn, object connobj) {
+        if (!(connobj instanceof WebSocketClientWithSerialization)) {
+            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a "
+                "\"WebSocketClientWithSerialization\" object; got %y instead", self.className(), connobj.className());
+        }
+        WebSocketClientWithSerialization new_client = cast<WebSocketClientWithSerialization>(connobj);
+        if (logger) {
+            new_client.setLogger(logger);
+        }
+        info("WebSocketClientDataProvider: replacing WebSocket client object %y (%s) with %y (%s)",
+            client.uniqueHash(), client.getUrl(), new_client.uniqueHash(), new_client.getUrl());
+        client.handoverObservers(new_client);
+        delete client;
+        client = new_client;
+        if (!client.isOpen()) {
+            client.connect();
+        } else {
+            info("WebSocketClientDataProvider: new WebSocket client is already connected");
+        }
+        if (observers_ready) {
+            client.observersReady();
+        }
     }
 
     #! Returns connection info
