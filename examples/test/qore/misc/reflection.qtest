@@ -435,8 +435,8 @@ class ReflectionTest inherits QUnit::Test {
 
         assertEq(0, m.getCodeFlags());
         assertEq((), m.getCodeFlagList());
-        assertEq(0, m.getDomain());
-        assertEq((), m.getDomainStringList());
+        assertEq(8, m.getDomain());
+        assertEq(("THREAD_CLASS",), m.getDomainStringList());
 
         m = c.getNormalMethod("lock");
         assertEq("normal", m.getMethodTypeName());
@@ -1001,13 +1001,13 @@ class ReflectionTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().call();", "");
-            assertThrows("CREATE-OBJECT-ERROR", "restrictions.*access", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
         }
 
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().callArgs();", "");
-            assertThrows("CREATE-OBJECT-ERROR", "restrictions.*access", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
         }
 
         {
