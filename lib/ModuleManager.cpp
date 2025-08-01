@@ -407,9 +407,6 @@ QoreAbstractModule::~QoreAbstractModule() {
         assert(prev->next == this);
         prev->next = next;
     }
-
-    ExceptionSink xsink;
-    pgm->waitForTerminationAndDeref(&xsink);
 }
 
 QoreUserModule::~QoreUserModule() {
@@ -425,6 +422,7 @@ QoreUserModule::~QoreUserModule() {
             del->deref(&xsink);
         }
     }
+    pgm->waitForTerminationAndDeref(&xsink);
 }
 
 void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
@@ -988,12 +986,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
 
         if (is_bin) {
-            /*
             if (mpgm) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load a binary module with a Program container");
                 return nullptr;
             }
-            */
             if (load_opt & QMLO_REINJECT) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot reinject module '%s' because reinjection is not "
                     "currently supported for binary modules", name);
@@ -1035,12 +1031,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             //printd(5, "ModuleManager::loadModule(%s) trying binary module: %s\n", name, str.c_str());
             if (!stat(str.c_str(), &sb)) {
                 printd(5, "ModuleManager::loadModule(%s) found binary module: %s\n", name, str.c_str());
-                /*
                 if (mpgm) {
                     xsink.raiseException("LOAD-MODULE-ERROR", "cannot load a binary module with a Program container");
                     return nullptr;
                 }
-                */
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
                     load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
@@ -1814,7 +1808,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (mi->isPath(path)) {
             return mi;
         }
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s' already " \
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s' already "
             "registered by '%s'", path, name, mi->getFileName());
         return nullptr;
     }
@@ -1922,7 +1916,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     // commit all module changes to the current program, if any
     qmc.commit();
-    std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(pholder.release(), nullptr, path, name,
+    std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, name,
         mod_info.desc.c_str(), mod_info.version.c_str(), mod_info.author.c_str(), mod_info.url.c_str(),
         mod_info.license_str.c_str(), mod_info.api_major, mod_info.api_minor, *mod_info.init, *mod_info.ns_init,
         *mod_info.del, mod_info.parse_cmd, dlh ? dlh->release() : nullptr, info.release()));
