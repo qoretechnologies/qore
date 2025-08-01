@@ -951,7 +951,7 @@ qclass Program [arg=QoreProgram* p];
     object with fewer restrictions than the parent Program object (any attempt to do so will be silently ignored).
 
     However, if @ref PO_NO_CHILD_PO_RESTRICTIONS is set in the parent Program object, then the parse option argument
-    to the constructor will be applied literally to the child object.  Additionally in this case module-specific-
+    to the constructor will be applied literally to the child object. Additionally in this case module-specific-
     program data is not imported into the child Program object.
 
     @ref Qore::ProgramControl "ProgramControl" provides internal Program data for debugging purposes.
@@ -960,6 +960,7 @@ qclass Program [arg=QoreProgram* p];
     running program
 
     @param po A binary OR'ed product of @ref parse_options "parse options"
+    @param independent create an independent Program object with no connection or imports from the calling context
 
     @par Example:
     @code{.py}
@@ -968,13 +969,14 @@ Program pgm();
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
  */
-Program::constructor(softint po = PO_DEFAULT) [dom=EMBEDDED_LOGIC] {
+Program::constructor(softint po = PO_DEFAULT, *bool independent) [dom=EMBEDDED_LOGIC] {
     if (po & PO_SYSTEM_OPS) {
-        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that can only be set by the system", po);
+        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that "
+            "can only be set by the system", po);
         return;
     }
 
-    QoreProgram* pgm = new QoreProgram(getProgram(), po);
+    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), po);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
 
@@ -990,14 +992,12 @@ Program::copy() {
     xsink->raiseException("PROGRAM-COPY-ERROR", "copying Program objects is currently unsupported");
 }
 
-//! Waits for all threads to finish executing, then deletes all global variables, dereferences the internal Program object and deletes the %Qore object
-/**
+//! Deletes the Program
+/** Waits for all threads to finish executing, then deletes all global variables, dereferences the internal Program
+    object and deletes the %Qore object
  */
 Program::destructor() {
     printd(5, "Program::destructor() pgm: %p pgmid: %d self: %p\n", p, p->getProgramId(), self);
-    // inherited system object destructor is not executed
-    //p->unregisterQoreObject(self, xsink);
-
     p->waitForTerminationAndDeref(xsink);
 }
 
@@ -1727,18 +1727,18 @@ nothing Program::setScriptPath(*string path) {
     @endcode
  */
 *string Program::getScriptPath() [flags=CONSTANT] {
-   return p->getScriptPath();
+    return p->getScriptPath();
 }
 
 //! Locks parse options so that they cannot be changed
 /**
     @par Example:
     @code{.py}
- pgm.lockOptions();
+pgm.lockOptions();
    @endcode
  */
 nothing Program::lockOptions() {
-   p->lockOptions();
+    p->lockOptions();
 }
 
 //! Returns a the value of the global variable identified by the first string argument
@@ -2279,13 +2279,17 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
     return QoreValue();
 }
 
-//! imports system classes into a Program container at runtime; will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+//! imports system classes into a Program container at runtime
 /** @par Example:
     @code{.py}
 pgm.importSystemClasses();
     @endcode
 
-    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object; conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object will not contain the full system API and is most likely unusable
+    This method will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+
+    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object;
+    conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object
+    will not contain the full system API and is most likely unusable
 
     @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES from the parse option mask after a successful completion
 
@@ -2340,23 +2344,33 @@ pgm.importSystemFunctions();
     @since %Qore 0.8.12
 */
 Program::importSystemFunctions() {
-   qore_program_private::runtimeImportSystemFunctions(*p, xsink);
+    qore_program_private::runtimeImportSystemFunctions(*p, xsink);
 }
 
-//! imports system classes and functions into a Program container at runtime; will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS, @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+//! imports system classes and functions into a Program container at runtime
 /** @par Example:
     @code{.py}
 pgm.importSystemApi();
     @endcode
 
-    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object; conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object will not contain the full system API and is most likely unusable
+    This method will throw an exception if the Program was not created with
+    @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS,
+    @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
 
-    @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS, @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS from the parse option mask after a successful completion
+    This method also merges the builtin feature / module list from the source calling context as well
+
+    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object;
+    conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object
+    will not contain the full system API and is most likely unusable
+
+    @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS,
+    @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS from the parse option
+    mask after a successful completion
 
     @since %Qore 0.8.12
 */
 Program::importSystemApi() {
-   qore_program_private::runtimeImportSystemApi(*p, xsink);
+    qore_program_private::runtimeImportSystemApi(*p, xsink);
 }
 
 //! Sets a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started
@@ -2378,7 +2392,7 @@ pgm.setThreadInit(sub () { var = 123; });
     @since %Qore 0.8.13
 */
 bool Program::setThreadInit(*code init) [dom=THREAD_CONTROL] {
-   return qore_program_private::setThreadInit(*p, init, xsink);
+    return qore_program_private::setThreadInit(*p, init, xsink);
 }
 
 //! returns a hash of global variables

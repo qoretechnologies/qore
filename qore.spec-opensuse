@@ -19,7 +19,7 @@
 
 %define module_dir %{_libdir}/qore-modules
 Name:           qore
-Version:        2.2.0
+Version:        2.3.0
 Release:        0
 Summary:        Multithreaded Programming Language
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
@@ -69,7 +69,7 @@ functionality.
 
 %files -n libqore12
 %defattr(-,root,root,-)
-%{_libdir}/libqore.so.12.6.0
+%{_libdir}/libqore.so.12.7.0
 %{_libdir}/libqore.so.12
 %doc COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 

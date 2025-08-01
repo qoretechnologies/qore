@@ -818,21 +818,25 @@ public:
         for (vlist_t::const_iterator i = old.vlist.begin(), e = old.vlist.end(); i != e; ++i) {
             if (!copy_all) {
                 if ((*i)->isUser()) {
-                    if (no_user || !(*i)->isModulePublic())
+                    if (no_user || !(*i)->isModulePublic()) {
                         continue;
+                    }
+                } else {
+                    if (no_builtin) {
+                        continue;
+                    }
                 }
-                else
-                    if (no_builtin)
-                        continue;
             }
 
             vlist.push_back((*i)->ref());
         }
 
-        if (no_user && has_user)
+        if (no_user && has_user) {
             has_user = false;
-        if (no_builtin && has_builtin)
+        }
+        if (no_builtin && has_builtin) {
             has_builtin = false;
+        }
 
         // make sure the new variant list is not empty if the parent also wasn't
         assert(old.vlist.empty() || !vlist.empty());

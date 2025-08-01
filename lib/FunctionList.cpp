@@ -38,8 +38,9 @@ ResolvedCallReferenceNode* FunctionEntry::makeCallReference(const QoreProgramLoc
    return new LocalFunctionCallReferenceNode(loc, func);
 }
 
-ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns)
-        : FunctionEntry(old.getName(), new QoreFunction(*(old.getFunction()), PO_NO_SYSTEM_FUNC_VARIANTS), ns) {
+ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin)
+        : FunctionEntry(old.getName(), new QoreFunction(*(old.getFunction()),
+            builtin ? PO_NO_INHERIT_USER_FUNC_VARIANTS : PO_NO_SYSTEM_FUNC_VARIANTS), ns) {
 }
 
 FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, int64 po) {

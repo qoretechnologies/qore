@@ -128,62 +128,62 @@ public:
 
 class ClassListIterator {
 protected:
-   hm_qc_t& cl;
-   hm_qc_t::iterator i;
+    hm_qc_t& cl;
+    hm_qc_t::iterator i;
 
 public:
-   DLLLOCAL ClassListIterator(QoreClassList& n_cl) : cl(n_cl.hm), i(cl.end()) {
-   }
+    DLLLOCAL ClassListIterator(QoreClassList& n_cl) : cl(n_cl.hm), i(cl.end()) {
+    }
 
-   DLLLOCAL bool next() {
-      if (i == cl.end())
-         i = cl.begin();
-      else
-         ++i;
-      return i != cl.end();
-   }
+    DLLLOCAL bool next() {
+        if (i == cl.end())
+            i = cl.begin();
+        else
+            ++i;
+        return i != cl.end();
+    }
 
-   DLLLOCAL const char* getName() const {
-      return i->first;
-   }
+    DLLLOCAL const char* getName() const {
+        return i->first;
+    }
 
-   DLLLOCAL QoreClass* get() const {
-      return i->second.cls;
-   }
+    DLLLOCAL QoreClass* get() const {
+        return i->second.cls;
+    }
 
-   DLLLOCAL bool isPublic() const;
+    DLLLOCAL bool isPublic() const;
 
-   DLLLOCAL bool isUserPublic() const;
+    DLLLOCAL bool isUserPublic() const;
 };
 
 class ConstClassListIterator {
 protected:
-   const hm_qc_t& cl;
-   hm_qc_t::const_iterator i;
+    const hm_qc_t& cl;
+    hm_qc_t::const_iterator i;
 
 public:
-   DLLLOCAL ConstClassListIterator(const QoreClassList& n_cl) : cl(n_cl.hm), i(cl.end()) {
-   }
+    DLLLOCAL ConstClassListIterator(const QoreClassList& n_cl) : cl(n_cl.hm), i(cl.end()) {
+    }
 
-   DLLLOCAL bool next() {
-      if (i == cl.end())
-         i = cl.begin();
-      else
-         ++i;
-      return i != cl.end();
-   }
+    DLLLOCAL bool next() {
+        if (i == cl.end())
+            i = cl.begin();
+        else
+            ++i;
+        return i != cl.end();
+    }
 
-   DLLLOCAL const char* getName() const {
-      return i->first;
-   }
+    DLLLOCAL const char* getName() const {
+        return i->first;
+    }
 
-   DLLLOCAL const QoreClass* get() const {
-      return i->second.cls;
-   }
+    DLLLOCAL const QoreClass* get() const {
+        return i->second.cls;
+    }
 
-   DLLLOCAL bool isPublic() const;
+    DLLLOCAL bool isPublic() const;
 
-   DLLLOCAL bool isUserPublic() const;
+    DLLLOCAL bool isUserPublic() const;
 };
 
 #endif // _QORE_QORECLASSLIST_H

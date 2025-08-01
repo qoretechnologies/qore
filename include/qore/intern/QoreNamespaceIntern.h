@@ -47,6 +47,7 @@
 
 class qore_root_ns_private;
 class qore_ns_private;
+class QoreModuleContext;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -105,6 +106,8 @@ public:
         if (mod_name) {
             from_module = mod_name;
         }
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
     // called when assimilating
@@ -113,7 +116,10 @@ public:
             path(old.path),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
-            builtin(false), from_module(old.from_module) {
+            builtin(old.builtin), from_module(old.from_module) {
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::", 0) == 0);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
     // called when parsing
@@ -138,6 +144,9 @@ public:
         if (!old.from_module.empty()) {
             from_module = old.from_module;
         }
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::", 0) == 0);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
     DLLLOCAL ~qore_ns_private() {
@@ -163,7 +172,7 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
-   //! Sets a key value in the namespace's key-value store
+    //! Sets a key value in the namespace's key-value store
     /** @param key the key to store
         @param value the value to store
 
@@ -574,7 +583,8 @@ protected:
     std::string from_module;
 
     // called from the root namespace constructor only
-    DLLLOCAL qore_ns_private(QoreNamespace* n_ns) : ns(n_ns), constant(this), root(true), pub(true), builtin(true) {
+    DLLLOCAL qore_ns_private(QoreNamespace* n_ns) : ns(n_ns), constant(this), root(true), pub(true), builtin(true),
+            path("::") {
     }
 
     DLLLOCAL void setModuleName() {
@@ -1691,13 +1701,14 @@ public:
     DLLLOCAL qore_root_ns_private(const qore_root_ns_private& old, int64 po, QoreProgram* pgm, RootQoreNamespace* ns)
             : qore_ns_private(old, po, ns), pgm(pgm) {
         assert(pgm);
-        if ((po & PO_NO_API) == PO_NO_API) {
+        if ((po & PO_SYSTEM_INHERITANCE_OPTIONS) == PO_SYSTEM_INHERITANCE_OPTIONS) {
             // create empty Qore namespace
             qoreNS = new QoreNamespace("Qore");
             nsl.nsmap.insert(nsmap_t::value_type("Qore", qoreNS));
             qoreNS->priv->nsl.nsmap.insert(nsmap_t::value_type("Option", new QoreNamespace("Option")));
-        } else
+        } else {
             qoreNS = nsl.find("Qore");
+        }
         assert(qoreNS);
 
         // always set the module public flag to true in the root namespace
@@ -2127,7 +2138,8 @@ public:
         return getRootNS()->rpriv->parseFindGlobalVarIntern(nscope);
     }
 
-    DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns, QoreModuleContext& qmc) {
+    DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
+            QoreModuleContext& qmc) {
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 

@@ -439,7 +439,8 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : 0;
 
-        //printd(5, "qore_program_private::setThreadInit() this: %p thr_init: %p %d '%s'\n", this, thr_init, get_node_type(thr_init), get_type_name(thr_init));
+        //printd(5, "qore_program_private::setThreadInit() this: %p thr_init: %p %d '%s'\n", this, thr_init,
+        //    get_node_type(thr_init), get_type_name(thr_init));
     }
     return (bool)old;
 }
@@ -833,7 +834,8 @@ void qore_program_private::addStatement(AbstractStatement* s) {
 void qore_program_private::runtimeImportSystemClassesIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_CLASSES)) {
-        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container where system classes have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container "
+            "where system classes have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_CLASSES;
@@ -843,7 +845,8 @@ void qore_program_private::runtimeImportSystemClassesIntern(const qore_program_p
 void qore_program_private::runtimeImportSystemHashDeclsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_HASHDECLS)) {
-        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container where system classes have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container "
+            "where system classes have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_HASHDECLS;
@@ -853,7 +856,8 @@ void qore_program_private::runtimeImportSystemHashDeclsIntern(const qore_program
 void qore_program_private::runtimeImportSystemConstantsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_CONSTANTS)) {
-        xsink->raiseException("IMPORT-SYSTEM-CONSTANTS-ERROR", "cannot import system constants in a Program container where system constants have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CONSTANTS-ERROR", "cannot import system constants in a Program "
+            "container where system constants have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_CONSTANTS;
@@ -863,12 +867,13 @@ void qore_program_private::runtimeImportSystemConstantsIntern(const qore_program
 void qore_program_private::runtimeImportSystemFunctionsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS)) {
-        xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "cannot import system functions in a Program container where system functions have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "cannot import system functions in a Program container "
+            "where system functions have already been imported");
         return;
     }
-    if (po_locked)
+    if (po_locked) {
         xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "parse options have been locked on this program object");
-
+    }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
     qore_root_ns_private::runtimeImportSystemFunctions(*RootNS, *spgm.RootNS, xsink);
 }
@@ -922,15 +927,27 @@ void qore_program_private::runtimeImportSystemApi(ExceptionSink* xsink) {
     // acquire safe access to parse structures in the source program
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
     runtimeImportSystemClassesIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemFunctionsIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemConstantsIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemHashDeclsIntern(*spgm->priv, xsink);
+    if (*xsink) {
+        return;
+    }
+    // merge builtin module / feature list
+    for (const auto& i : spgm->priv->featureList) {
+        if (featureList.find(i) == featureList.end()) {
+            featureList.insert(i);
+        }
+    }
     // issue #3461: must rebuild all indexes here or symbols will appear missing
     qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
 }

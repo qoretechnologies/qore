@@ -339,10 +339,11 @@ public:
     }
 
     DLLLOCAL bool next() {
-        if (i == cl.end())
+        if (i == cl.end()) {
             i = cl.begin();
-        else
+        } else {
             ++i;
+        }
         return i != cl.end();
     }
 

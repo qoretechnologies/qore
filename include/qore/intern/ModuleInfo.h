@@ -93,29 +93,25 @@ public:
     name_vec_t rmod;
 
     // for binary modules
-    DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, const char* d, const char* v,
-        const char* a, const char* u, const QoreString& l) : filename(fn), name(n), desc(d), author(a), url(u),
-        license(l), priv(false), injected(false), reinjected(false), version_list(v) {
+    DLLLOCAL QoreAbstractModule(QoreProgram* p, const char* cwd, const char* fn, const char* n, const char* d,
+            const char* v, const char* a, const char* u, const QoreString& l, unsigned load_opt) :
+            pgm(p), filename(fn), name(n), desc(d), author(a), url(u), license(l),
+            priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT), reinjected(load_opt & QMLO_REINJECT),
+            version_list(v) {
         q_normalize_path(filename, cwd);
     }
 
     // for user modules
-    DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, unsigned load_opt) :
-        filename(fn), name(n), priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT),
-        reinjected(load_opt & QMLO_REINJECT) {
+    DLLLOCAL QoreAbstractModule(QoreProgram* p, const char* cwd, const char* fn, const char* n, unsigned load_opt) :
+            pgm(p), filename(fn), name(n), priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT),
+            reinjected(load_opt & QMLO_REINJECT) {
         q_normalize_path(filename, cwd);
     }
 
-    DLLLOCAL virtual ~QoreAbstractModule() {
-        //printd(5, "QoreAbstractModule::~QoreAbstractModule() this: %p name: %s\n", this, name.c_str());
-        if (next) {
-            assert(next->prev == this);
-            next->prev = prev;
-        }
-        if (prev) {
-            assert(prev->next == this);
-            prev->next = next;
-        }
+    DLLLOCAL virtual ~QoreAbstractModule();
+
+    DLLLOCAL QoreProgram* getProgram() const {
+        return pgm;
     }
 
     DLLLOCAL const char* getName() const {
@@ -219,6 +215,9 @@ public:
         = 0;
 
 protected:
+    //! Module logic / namespace container
+    QoreProgram* pgm;
+
     QoreString filename,
         name,
         desc,
@@ -237,7 +236,7 @@ protected:
 
     DLLLOCAL QoreHashNode* getHashIntern(bool with_filename = true) const;
 
-    DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const = 0;
+    DLLLOCAL virtual void addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const = 0;
 
     DLLLOCAL void set(const char* d, const char* v, const char* a, const char* u, const QoreString& l) {
         desc = d;
@@ -554,21 +553,9 @@ public:
 
 private:
     // not implemented
-    DLLLOCAL QoreModuleManager(const QoreModuleManager&);
+    DLLLOCAL QoreModuleManager(const QoreModuleManager&) = delete;
     // not implemented
-    DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&);
-    //! loads separated module. see #2966
-    DLLLOCAL QoreAbstractModule* loadSeparatedModule(
-        ExceptionSink& xsink,
-        ExceptionSink& wsink,
-        const char* path,
-        const char* feature,
-        QoreProgram* tpgm,
-        bool reexport = false,
-        QoreProgram* pgm = nullptr,
-        QoreProgram* path_pgm = nullptr,
-        unsigned load_opt = QMLO_NONE,
-        int warning_mask = QP_WARN_MODULES);
+    DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&) = delete;
 
     typedef std::map<std::string, int> module_load_map_t;
     QoreCondition module_load_cond;
@@ -617,21 +604,27 @@ protected:
             int warning_mask = QP_WARN_MODULES, qore_binary_module_desc_t mod_desc_func = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
-            const char* feature = nullptr, QoreProgram* pgm = nullptr, bool reexport = false,
+            const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
+            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             qore_binary_module_desc_t mod_desc = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
-            QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, QoreProgram* pgm = nullptr,
-            bool reexport = false);
+            QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
+            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,
-            QoreProgram* pgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
+            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             int warning_mask = QP_WARN_MODULES);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromSource(ExceptionSink& xsink, ExceptionSink& wsink,
             const char* path, const char* feature, QoreProgram* tpgm, const char* src, bool reexport,
-            QoreProgram* pgm = nullptr, int warning_mask = QP_WARN_MODULES);
+            QoreProgram* mpgm = nullptr, int warning_mask = QP_WARN_MODULES);
+
+    //! loads separated module. see #2966
+    DLLLOCAL QoreAbstractModule* loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
+            const char* feature, QoreProgram* tpgm, bool reexport = false, QoreProgram* mpgm = nullptr,
+            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);
 
     DLLLOCAL QoreAbstractModule* setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
             QoreUserModuleDefContextHelper& qmd, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);
@@ -646,24 +639,14 @@ protected:
 DLLLOCAL extern QoreModuleManager QMM;
 
 class QoreBuiltinModule : public QoreAbstractModule {
-protected:
-    unsigned api_major, api_minor;
-    qore_module_init_t module_init;
-    qore_module_ns_init_t module_ns_init;
-    qore_module_delete_t module_delete;
-    qore_module_parse_cmd_t module_parse_cmd;
-    QoreHashNode* info;
-    const void* dlptr;
-
-    DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
-
 public:
-    DLLLOCAL QoreBuiltinModule(const char* cwd, const char* fn, const char* n, const char* d, const char* v,
-            const char* a, const char* u, const QoreString& l, unsigned major, unsigned minor,
+    DLLLOCAL QoreBuiltinModule(QoreProgram* pgm, const char* cwd, const char* fn, const char* n, const char* d,
+            const char* v, const char* a, const char* u, const QoreString& l, unsigned major, unsigned minor,
             qore_module_init_t init, qore_module_ns_init_t ns_init, qore_module_delete_t del,
-            qore_module_parse_cmd_t pcmd, const void* p, QoreHashNode* info = nullptr)
-            : QoreAbstractModule(cwd, fn, n, d, v, a, u, l), api_major(major), api_minor(minor), module_init(init),
-                module_ns_init(ns_init), module_delete(del), module_parse_cmd(pcmd), info(info), dlptr(p) {
+            qore_module_parse_cmd_t pcmd, const void* p, QoreHashNode* info = nullptr, unsigned load_opt = QMLO_NONE)
+            : QoreAbstractModule(pgm, cwd, fn, n, d, v, a, u, l, load_opt), api_major(major), api_minor(minor),
+                module_init(init), module_ns_init(ns_init), module_delete(del), module_parse_cmd(pcmd), info(info),
+                dlptr(p) {
     }
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
@@ -698,31 +681,32 @@ public:
 
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink)
         override;
+
+protected:
+    unsigned api_major, api_minor;
+    qore_module_init_t module_init;
+    qore_module_ns_init_t module_ns_init;
+    qore_module_delete_t module_delete;
+    qore_module_parse_cmd_t module_parse_cmd;
+    QoreHashNode* info;
+    const void* dlptr;
+
+    DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };
 
 class QoreUserModule : public QoreAbstractModule {
-protected:
-    QoreProgram* pgm;
-    AbstractQoreNode* del = nullptr; // deletion closure / call reference
-
-    DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
-
 public:
-    DLLLOCAL QoreUserModule(const char* cwd, const char* fn, const char* n, QoreProgram* p, unsigned load_opt,
-            int warning_mask = QP_WARN_MODULES) : QoreAbstractModule(cwd, fn, n, load_opt), pgm(p) {
+    DLLLOCAL QoreUserModule(QoreProgram* p, const char* cwd, const char* fn, const char* n, unsigned load_opt,
+            int warning_mask = QP_WARN_MODULES) : QoreAbstractModule(p, cwd, fn, n, load_opt) {
     }
+
+    DLLLOCAL virtual ~QoreUserModule();
 
     DLLLOCAL void set(const char* d, const char* v, const char* a, const char* u, const QoreString& l,
             AbstractQoreNode* dl) {
         QoreAbstractModule::set(d, v, a, u, l);
         del = dl;
     }
-
-    DLLLOCAL QoreProgram* getProgram() const {
-        return pgm;
-    }
-
-    DLLLOCAL virtual ~QoreUserModule();
 
     DLLLOCAL virtual bool isBuiltin() const override {
         return false;
@@ -743,6 +727,11 @@ public:
                 "builtin modules can support parse commands", name.c_str(), filename.c_str());
         }
     }
+
+protected:
+    AbstractQoreNode* del = nullptr; // deletion closure / call reference
+
+    DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };
 
 class QoreModuleNameContextHelper {

@@ -977,7 +977,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     QoreProgram* pgm = getProgram();
                                                     ExceptionSink xsink;
-                                                    QMM.parseLoadModule(xsink, xsink, str.c_str(), pgm, parse_get_try_reexport());
+                                                    if (pgm->getParseOptions64() & PO_NO_MODULES) {
+                                                        // this exception will not be visible to the caller
+                                                        xsink.raiseException("NOPE", "nope");
+                                                    } else {
+                                                        QMM.parseLoadModule(xsink, xsink, str.c_str(), pgm,
+                                                            parse_get_try_reexport());
+                                                    }
                                                     //printd(5, "'%s': xsink: %d err: %d var: '%s'\n", str.c_str(), (bool)xsink, err, var.c_str());
                                                     if (!xsink) {
                                                        BEGIN(p_skip_to_endtry);
@@ -1029,13 +1035,16 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%requires                              BEGIN(requires);
 <requires>[^\n\r]+                      {
                                            char* cn = trim_inplace(yytext);
-                                           if (!cn)
+                                           QoreProgram* pgm = getProgram();
+                                           if (!cn) {
                                               parse_error(*get_loc(yylloc), "missing argument to %%requires");
-                                           else {
+                                           } else if (pgm->getParseOptions64() & PO_NO_MODULES) {
+                                              parse_error(*get_loc(yylloc), "cannot load modules when PO_NO_MODULES "
+                                                "is set");
+                                           } else {
                                               bool reexport = false;
                                               if (!check_reexport(yylloc, "requires", cn, reexport)) {
                                                  //printd(5, "scanner requesting feature: '%s'\n", cn);
-                                                 QoreProgram* pgm = getProgram();
                                                  ExceptionSink xsink;
                                                  QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
                                                  pgm->getParseExceptionSink()->assimilate(xsink);

@@ -302,7 +302,8 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
         return;
     }
 
-    //printd(5, "QoreNamespace::addSystemClass() adding '%s' %p to classmap %p in ns '%s'\n", oc->getName(), oc, &rns->clmap, priv->name.c_str());
+    //printd(5, "QoreNamespace::addSystemClass() adding '%s' %p to classmap %p in ns '%s'\n", oc->getName(), oc,
+    //    &rns->clmap, priv->name.c_str());
     rns->clmap.update(oc->getName(), priv, oc);
 }
 
@@ -314,10 +315,15 @@ void QoreNamespace::addInitialNamespace(QoreNamespace* ns) {
     priv->addNamespace(ns->priv);
 }
 
-qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), constant(this), pub(false), builtin(false) {
+qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), constant(this), pub(false),
+        builtin(false) {
     new QoreNamespace(this);
     name = parse_pop_ns_name(path);
     setModuleName();
+
+    assert(name.rfind("::") == std::string::npos);
+    assert(path.rfind("::", 0) == 0);
+    assert(path.rfind("::::", 0) == std::string::npos);
 }
 
 QoreProgram* qore_ns_private::getProgram() const {
@@ -326,8 +332,8 @@ QoreProgram* qore_ns_private::getProgram() const {
 }
 
 void qore_ns_private::setPublic() {
-   pub = true;
-   //printd(5, "qore_ns_private::setPublic() this: %p '%s::' pub:%d\n", this, name.c_str(), pub);
+    pub = true;
+    //printd(5, "qore_ns_private::setPublic() this: %p '%s::' pub:%d\n", this, name.c_str(), pub);
 }
 
 void qore_ns_private::setClassHandler(q_ns_class_handler_t n_class_handler) {
@@ -339,13 +345,16 @@ void qore_ns_private::setClassHandler(q_ns_class_handler_t n_class_handler) {
         rootns->nshlist.add(this);
 }
 
-void qore_ns_private::runtimeImportSystemClasses(const qore_ns_private& source, qore_root_ns_private& rns, ExceptionSink* xsink) {
+void qore_ns_private::runtimeImportSystemClasses(const qore_ns_private& source, qore_root_ns_private& rns,
+        ExceptionSink* xsink) {
     assert(xsink);
-    if (classList.importSystemClasses(source.classList, this, xsink))
+    if (classList.importSystemClasses(source.classList, this, xsink)) {
         rns.runtimeRebuildClassIndexes(this);
+    }
 
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
 
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
@@ -358,13 +367,15 @@ void qore_ns_private::runtimeImportSystemClasses(const qore_ns_private& source, 
         }
 
         nns->priv->runtimeImportSystemClasses(*i->second->priv, rns, xsink);
-        //printd(5, "qore_ns_private::runtimeImportSystemClasses() this: %p '%s::' imported %p '%s::'\n", this, name.c_str(), ns, ns->getName());
+        //printd(5, "qore_ns_private::runtimeImportSystemClasses() this: %p '%s::' imported %p '%s::'\n", this,
+        //    name.c_str(), ns, ns->getName());
         if (*xsink)
             break;
     }
 }
 
-void qore_ns_private::runtimeImportSystemHashDecls(const qore_ns_private& source, qore_root_ns_private& rns, ExceptionSink* xsink) {
+void qore_ns_private::runtimeImportSystemHashDecls(const qore_ns_private& source, qore_root_ns_private& rns,
+        ExceptionSink* xsink) {
     assert(xsink);
     if (hashDeclList.importSystemHashDecls(source.hashDeclList, this, xsink))
         rns.runtimeRebuildHashDeclIndexes(this);
@@ -383,13 +394,15 @@ void qore_ns_private::runtimeImportSystemHashDecls(const qore_ns_private& source
         }
 
         nns->priv->runtimeImportSystemHashDecls(*i->second->priv, rns, xsink);
-        //printd(5, "qore_ns_private::runtimeImportSystemHashDecls() this: %p '%s::' imported %p '%s::'\n", this, name.c_str(), ns, ns->getName());
+        //printd(5, "qore_ns_private::runtimeImportSystemHashDecls() this: %p '%s::' imported %p '%s::'\n", this,
+        //    name.c_str(), ns, ns->getName());
         if (*xsink)
             break;
     }
 }
 
-void qore_ns_private::runtimeImportSystemConstants(const qore_ns_private& source, qore_root_ns_private& rns, ExceptionSink* xsink) {
+void qore_ns_private::runtimeImportSystemConstants(const qore_ns_private& source, qore_root_ns_private& rns,
+        ExceptionSink* xsink) {
     assert(xsink);
     if (constant.importSystemConstants(source.constant, xsink))
         rns.runtimeRebuildConstantIndexes(this);
@@ -408,13 +421,15 @@ void qore_ns_private::runtimeImportSystemConstants(const qore_ns_private& source
         }
 
         nns->priv->runtimeImportSystemConstants(*i->second->priv, rns, xsink);
-        //printd(5, "qore_ns_private::runtimeImportSystemConstants() this: %p '%s::' imported %p '%s::'\n", this, name.c_str(), ns, ns->getName());
+        //printd(5, "qore_ns_private::runtimeImportSystemConstants() this: %p '%s::' imported %p '%s::'\n", this,
+        //   name.c_str(), ns, ns->getName());
         if (*xsink)
             break;
     }
 }
 
-void qore_ns_private::runtimeImportSystemFunctions(const qore_ns_private& source, qore_root_ns_private& rns, ExceptionSink* xsink) {
+void qore_ns_private::runtimeImportSystemFunctions(const qore_ns_private& source, qore_root_ns_private& rns,
+        ExceptionSink* xsink) {
     assert(xsink);
     if (func_list.importSystemFunctions(source.func_list, this, xsink))
         rns.runtimeRebuildFunctionIndexes(this);
@@ -433,17 +448,22 @@ void qore_ns_private::runtimeImportSystemFunctions(const qore_ns_private& source
         }
 
         nns->priv->runtimeImportSystemFunctions(*i->second->priv, rns, xsink);
-        //printd(5, "qore_ns_private::runtimeImportSystemFunctions() this: %p '%s::' imported %p '%s::'\n", this, name.c_str(), ns, ns->getName());
+        //printd(5, "qore_ns_private::runtimeImportSystemFunctions() this: %p '%s::' imported %p '%s::'\n", this,
+        //    name.c_str(), ns, ns->getName());
         if (*xsink)
             break;
     }
 }
 
-FunctionEntry* qore_ns_private::addPendingVariantIntern(const char* fname, AbstractQoreFunctionVariant* v, bool& new_func) {
+FunctionEntry* qore_ns_private::addPendingVariantIntern(const char* fname, AbstractQoreFunctionVariant* v,
+        bool& new_func) {
     SimpleRefHolder<AbstractQoreFunctionVariant> vh(v);
 
     if (!imported && !pub && v->isModulePublic() && parse_check_parse_option(PO_IN_MODULE))
-        qore_program_private::makeParseWarning(getProgram(), *v->getUserVariantBase()->getUserSignature()->getParseLocation(), QP_WARN_INVALID_OPERATION, "INVALID-OPERATION", "function variant '%s::%s(%s)' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), fname, v->getSignature()->getSignatureText(), name.c_str());
+        qore_program_private::makeParseWarning(getProgram(),
+            *v->getUserVariantBase()->getUserSignature()->getParseLocation(), QP_WARN_INVALID_OPERATION,
+            "INVALID-OPERATION", "function variant '%s::%s(%s)' is declared public but the enclosing namespace "
+            "'%s::' is not public", name.c_str(), fname, v->getSignature()->getSignatureText(), name.c_str());
 
     FunctionEntry* fe = func_list.findNode(fname);
 
@@ -462,14 +482,15 @@ void qore_ns_private::addModuleNamespace(qore_ns_private* nns, QoreModuleContext
     if (nsl.find(nns->name)) {
         std::string path;
         getPath(path, true);
-        qmc.error("namespace '%s' already exists in '%s'", nns->name.c_str(), path.c_str());
+        qmc.error("Namespace '%s' already exists in '%s'", nns->name.c_str(), path.c_str());
         return;
     }
 
     if (classList.find(nns->name.c_str())) {
         std::string path;
         getPath(path, true);
-        qmc.error("a class with the same name as the namespace ('%s') already exists in '%s'", nns->name.c_str(), path.c_str());
+        qmc.error("A class with the same name as the namespace ('%s') already exists in '%s'", nns->name.c_str(),
+            path.c_str());
         return;
     }
 
@@ -508,7 +529,8 @@ void qore_ns_private::addNamespace(qore_ns_private* nns) {
 }
 
 void qore_ns_private::updateDepthRecursive(unsigned ndepth) {
-    //printd(5, "qore_ns_private::updateDepthRecursive(ndepth: %d) this: %p '%s' curr depth: %d\n", ndepth, this, name.c_str(), depth);
+    //printd(5, "qore_ns_private::updateDepthRecursive(ndepth: %d) this: %p '%s' curr depth: %d\n", ndepth, this,
+    //    name.c_str(), depth);
     assert(depth <= ndepth);
     assert(!ndepth || !name.empty());
 
@@ -520,7 +542,8 @@ void qore_ns_private::updateDepthRecursive(unsigned ndepth) {
     }
 }
 
-void qore_ns_private::addBuiltinModuleVariant(const char* fname, AbstractQoreFunctionVariant* v, QoreModuleContext& qmc) {
+void qore_ns_private::addBuiltinModuleVariant(const char* fname, AbstractQoreFunctionVariant* v,
+        QoreModuleContext& qmc) {
     SimpleRefHolder<AbstractQoreFunctionVariant> vh(v);
 
     FunctionEntry* fe = func_list.findNode(fname);
@@ -618,7 +641,8 @@ qore_ns_private* QoreNamespaceList::parseAdd(QoreNamespace* ns, qore_ns_private*
     // if namespace is already registered, then assimilate
     QoreNamespace* ons;
     if ((ons = find(ns->priv->name.c_str()))) {
-        //printd(5, "QoreNamespaceList::add() this: %p ns: %p (%s) assimilating with ons: %p (%s)\n", this, ns, ns->getName(), ons, ons->getName());
+        //printd(5, "QoreNamespaceList::add() this: %p ns: %p (%s) assimilating with ons: %p (%s)\n", this, ns,
+        //    ns->getName(), ons, ons->getName());
         ons->priv->parseAssimilate(ns);
         return ons->priv;
     }
@@ -633,7 +657,8 @@ qore_ns_private* QoreNamespaceList::runtimeAdd(QoreNamespace* ns, qore_ns_privat
     // if namespace is already registered, then assimilate
     QoreNamespace* ons;
     if ((ons = find(ns->priv->name.c_str()))) {
-        //printd(5, "QoreNamespaceList::add() this: %p ns: %p (%s) assimilating with ons: %p (%s)\n", this, ns, ns->getName(), ons, ons->getName());
+        //printd(5, "QoreNamespaceList::add() this: %p ns: %p (%s) assimilating with ons: %p (%s)\n", this, ns,
+        //    ns->getName(), ons, ons->getName());
         ons->priv->runtimeAssimilate(ns);
         return ons->priv;
     }
@@ -664,7 +689,8 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, con
     bool skip_builtin = (po & PO_NO_SYSTEM_API) == PO_NO_SYSTEM_API;
     bool skip_user = (po & PO_NO_USER_API) == PO_NO_USER_API;
 
-    //printd(5, "QoreNamespaceList::QoreNamespaceList(old: %p) this: %p po: %lld size: %ld\n", &old, this, po, nsmap.size());
+    //printd(5, "QoreNamespaceList::QoreNamespaceList(old: %p) this: %p po: %lld size: %ld\n", &old, this, po,
+    //    nsmap.size());
     nsmap_t::iterator last = nsmap.begin();
     for (nsmap_t::const_iterator i = old.nsmap.begin(), e = old.nsmap.end(); i != e; ++i) {
         // issue #3504: do not copy namespaces if API should not be imported
@@ -679,7 +705,8 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, con
         // do not assert() ns->priv->depth > 0 here; we may be in an unattached namespace tree
         last = nsmap.insert(last, nsmap_t::value_type(i->first, ns));
 
-        //printd(5, "QoreNamespaceList::QoreNamespaceList(old: %p) this: %p po: %lld copied '%s'\n", &old, this, po, ns->getName());
+        //printd(5, "QoreNamespaceList::QoreNamespaceList(old: %p) this: %p po: %lld copied '%s'\n", &old, this, po,
+        //    ns->getName());
     }
 }
 
@@ -799,7 +826,8 @@ QoreNamespace* QoreNamespace::findCreateNamespacePathAll(const char* nspath) {
     return priv->findCreateNamespacePath(nscope, false, false, is_new, 0);
 }
 
-QoreClass* qore_ns_private::runtimeImportClass(ExceptionSink* xsink, const QoreClass* c, QoreProgram* spgm, q_setpub_t set_pub, const char* new_name, bool inject, const qore_class_private* injectedClass) {
+QoreClass* qore_ns_private::runtimeImportClass(ExceptionSink* xsink, const QoreClass* c, QoreProgram* spgm,
+        q_setpub_t set_pub, const char* new_name, bool inject, const qore_class_private* injectedClass) {
     if (checkImportClass(new_name ? new_name : c->getName(), xsink)) {
         return nullptr;
     }
@@ -2744,10 +2772,12 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
     {
         ConstConstantListIterator cli(mns.constant);
         while (cli.next()) {
-            if (!cli.isUserPublic())
+            if (!cli.isUserPublic()) {
                 continue;
-            if (constant.inList(cli.getName()))
+            }
+            if (constant.inList(cli.getName())) {
                 qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+            }
         }
     }
 
@@ -2755,8 +2785,9 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
     {
         ConstClassListIterator cli(mns.classList);
         while (cli.next()) {
-            if (!cli.isUserPublic())
+            if (!cli.isUserPublic()) {
                 continue;
+            }
 
             const QoreClass* c = classList.find(cli.getName());
             if (c) {
@@ -2776,22 +2807,27 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
     // check user functions
     for (fl_map_t::const_iterator i = mns.func_list.begin(), e = mns.func_list.end(); i != e; ++i) {
-        if (!i->second->isUserPublic())
+        if (!i->second->isUserPublic()) {
             continue;
+        }
 
         FunctionEntry* fe = func_list.findNode(i->first);
-        if (fe && !fe->getFunction()->injected())
+        if (fe && !fe->getFunction()->injected()) {
             qmc.error("duplicate function %s::%s()", name.c_str(), i->first);
+        }
         //printd(5, "qore_ns_private::scanMergeCommittedNamespace() this: %p '%s::' looking for function '%s' (%d)\n",
         //    this, name.c_str(), i->first, func_list.findNode(i->first));
     }
 
     // check user variables
+    // NOTE: importing builtin global variables is not supported
     for (map_var_t::const_iterator i = mns.var_list.vmap.begin(), e = mns.var_list.vmap.end(); i != e; ++i) {
-        if (!i->second->isPublic())
+        if (!i->second->isPublic()) {
             continue;
-        if (var_list.vmap.find(i->first) != var_list.vmap.end())
+        }
+        if (var_list.vmap.find(i->first) != var_list.vmap.end()) {
             qmc.error("duplicate global variable %s::%s", name.c_str(), i->first);
+        }
     }
 
     // check hashdecls

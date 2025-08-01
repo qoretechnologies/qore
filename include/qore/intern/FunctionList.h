@@ -137,7 +137,7 @@ public:
 
 class ModuleImportedFunctionEntry : public FunctionEntry {
 public:
-    DLLLOCAL ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns);
+    DLLLOCAL ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin = false);
 };
 
 #ifdef HAVE_QORE_HASH_MAP
