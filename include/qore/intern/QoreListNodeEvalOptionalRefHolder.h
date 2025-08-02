@@ -35,49 +35,6 @@
 
 //! For use on the stack only: manages result of the optional evaluation of a QoreListNode
 class QoreListNodeEvalOptionalRefHolder {
-private:
-    QoreListNode* val;
-    ExceptionSink* xsink;
-    bool needs_deref;
-
-    DLLLOCAL void discardIntern() {
-        if (needs_deref && val) {
-            val->deref(xsink);
-        }
-    }
-
-    DLLLOCAL void evalIntern(const QoreListNode* exp) {
-        if (exp) {
-            val = exp->evalList(needs_deref, xsink);
-            //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' "
-            //    "(%d)\n", this, exp, exp ? get_full_type_name(exp) : "n/a", exp->size(), val,
-            //    val ? get_full_type_name(val) : "n/a", val ? val->size() : 0);
-        } else {
-            val = nullptr;
-            needs_deref = false;
-        }
-    }
-
-    DLLLOCAL void evalIntern(QoreListNode* exp);
-
-    DLLLOCAL void editIntern() {
-        if (!val) {
-            val = new QoreListNode(autoTypeInfo);
-            needs_deref = true;
-        }
-        else if (!needs_deref || !val->is_unique()) {
-            val = val->copy();
-            needs_deref = true;
-        }
-    }
-
-    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreListNodeEvalOptionalRefHolder(const QoreListNodeEvalOptionalRefHolder&);
-    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL QoreListNodeEvalOptionalRefHolder& operator=(const QoreListNodeEvalOptionalRefHolder&);
-    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
-    DLLLOCAL void *operator new(size_t);
-
 public:
     //! initializes an empty object and saves the ExceptionSink object
     DLLLOCAL QoreListNodeEvalOptionalRefHolder(ExceptionSink* n_xsink) : val(nullptr), xsink(n_xsink), needs_deref(false) {
@@ -171,6 +128,46 @@ public:
 
     //! returns true if a QoreListNode object pointer is being managed, false if the pointer is 0
     DLLLOCAL operator bool() const { return val != 0; }
+
+private:
+    QoreListNode* val;
+    ExceptionSink* xsink;
+    bool needs_deref;
+
+    DLLLOCAL void discardIntern() {
+        if (needs_deref && val) {
+            val->deref(xsink);
+        }
+    }
+
+    DLLLOCAL void evalIntern(const QoreListNode* exp) {
+        if (exp) {
+            val = exp->evalList(needs_deref, xsink);
+            //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' "
+            //    "(%d)\n", this, exp, exp ? get_full_type_name(exp) : "n/a", exp->size(), val,
+            //    val ? get_full_type_name(val) : "n/a", val ? val->size() : 0);
+        } else {
+            val = nullptr;
+            needs_deref = false;
+        }
+    }
+
+    DLLLOCAL void evalIntern(QoreListNode* exp);
+
+    DLLLOCAL void editIntern() {
+        if (!val) {
+            val = new QoreListNode(autoTypeInfo);
+            needs_deref = true;
+        }
+        else if (!needs_deref || !val->is_unique()) {
+            val = val->copy();
+            needs_deref = true;
+        }
+    }
+
+    DLLLOCAL QoreListNodeEvalOptionalRefHolder(const QoreListNodeEvalOptionalRefHolder&) = delete;
+    DLLLOCAL QoreListNodeEvalOptionalRefHolder& operator=(const QoreListNodeEvalOptionalRefHolder&) = delete;
+    DLLLOCAL void *operator new(size_t) = delete;
 };
 
 #endif

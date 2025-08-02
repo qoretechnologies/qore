@@ -65,7 +65,7 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     assert(!exp || exp->reference_count() == 1);
 
     if (!exp || exp->empty()) {
-        val = 0;
+        val = nullptr;
         needs_deref = false;
         return;
     }
@@ -253,7 +253,8 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
     return newComplexListFromValue(typeInfo, val, xsink);
 }
 
-QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init, ExceptionSink* xsink) {
+QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
+        ExceptionSink* xsink) {
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
@@ -339,7 +340,7 @@ bool QoreListNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink
 }
 
 bool QoreListNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const QoreListNode* l = v && v->getType() == NT_LIST ? reinterpret_cast<const QoreListNode*>(v) : 0;
+    const QoreListNode* l = v && v->getType() == NT_LIST ? reinterpret_cast<const QoreListNode*>(v) : nullptr;
     if (!l || l->size() != size()) {
         return false;
     }

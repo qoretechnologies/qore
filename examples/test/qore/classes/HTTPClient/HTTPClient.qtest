@@ -969,7 +969,11 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             HttpTestServer serv(ChunkedReply1);
             on_exit serv.done();
             HTTPClient hc(("url": "http://localhost:" + serv.port));
-            *string str = hc.get("/something", ("Test-Header": "test1", "test-HEADER": "test2", "teST-HeAdEr": ("test3","test4")));
+            *string str = hc.get("/something", {
+                "Test-Header": "test1",
+                "test-HEADER": "test2",
+                "teST-HeAdEr": ("test3","test4"),
+            });
             assertEq(TestMessage, str);
             assertEq(("test3", "test4"), serv.getHeader()."test-header");
         }
