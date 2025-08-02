@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderActionCatalog.qc provides the DataProvider catalog API
 
-/** DataProviderActionCatalog.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderActionCatalog.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,9 @@ public hashdecl DataProviderAppInfo {
 
     #! Any legal text, links, copyright notice(s), or disclaimer(s) related to the use of the app; markdown supported
     string legal;
+
+    #! The application group, if any
+    *string group;
 
     #! Connection scheme for the application
     /** This is the connection scheme for the \c ConnectionProvider module and indicates that the given connection
@@ -213,6 +216,9 @@ public hashdecl ActionOptionInfo {
     #! Description of the option with markdown rendering
     string desc;
 
+    #! The group name for the option, if any
+    *string group;
+
     #! Is the option required or not?
     bool required;
 
@@ -329,6 +335,9 @@ public hashdecl DataProviderActionInfo {
 
     #! The unique name for the action; unique in the application
     string action;
+
+    #! The action group within the app, if any
+    *string group;
 
     #! Any data provider subtype
     /** This is the value that will be passed to \c AbstractConnection::getDataProvider(string subtype)
