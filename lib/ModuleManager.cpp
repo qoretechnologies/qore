@@ -1775,17 +1775,12 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         return nullptr;
     }
 
-    if (!mpgm) {
-        pholder = mpgm = new QoreProgram;
-        assert(mpgm->getRootNS());
-        mpgm->setScriptPath(path);
-    }
-    // issue #3592: must add feature first
-    if (qore_program_private::get(*mpgm)->addFeature(feature)) {
-        xsink.raiseException("LOAD-MODULE-ERROR", "Cannot load builtin module '%s'; feature '%s' is already loaded "
-            "in this Program container", path, feature);
-        return nullptr;
-    }
+    // NOTE: no module program is possible to support injections in builtin modules for the moment, since we use the
+    // module's "module_ns_init()" function to apply the module's namespace changes to each requesting QoreProgram
+    // container. To support injections in builtin modules, we would need to embed a QoreProgram container in the
+    // QoreBuiltinModule object, and import the module's changes into that program while supporting injections like
+    // we do for user modules
+    assert(!mpgm);
 
     // load dependencies
     if (!mod_info.dependencies.empty()) {
@@ -1872,9 +1867,6 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         return nullptr;
     }
 
-    // this is needed for backwards-compatibility for modules that add builtin functions in the module initialization
-    // code
-    QoreModuleContextHelper qmc(name, mpgm, xsink);
     try {
         assert(q_gettid());
 
@@ -1893,29 +1885,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         }
 
         if (str) {
-            // rollback all module changes
-            qmc.rollback();
-
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': " \
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': "
                 "initialization error: %s", path, name, str->c_str());
             str->deref();
             return nullptr;
         }
     } catch (AbstractException& e) {
-        // rollback all module changes
-        qmc.rollback();
         e.convert(&xsink);
         return nullptr;
     }
 
-    if (qmc.hasError()) {
-        // rollback all module changes
-        qmc.rollback();
-        return nullptr;
-    }
-
-    // commit all module changes to the current program, if any
-    qmc.commit();
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, name,
         mod_info.desc.c_str(), mod_info.version.c_str(), mod_info.author.c_str(), mod_info.url.c_str(),
         mod_info.license_str.c_str(), mod_info.api_major, mod_info.api_minor, *mod_info.init, *mod_info.ns_init,
