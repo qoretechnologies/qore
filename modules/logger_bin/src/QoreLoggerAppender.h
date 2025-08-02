@@ -101,9 +101,7 @@ protected:
     //! The owning object
     QoreObject* self;
     //! Method objects for faster calls
-    const QoreMethod* pushMeth = nullptr,
-        * evalMeth = nullptr,
-        * serializeImplMeth = nullptr,
+    const QoreMethod* serializeImplMeth = nullptr,
         * pushEventMeth = nullptr,
         * ensureAtomicOperationsMeth = nullptr,
         * processEventImplMeth = nullptr;
