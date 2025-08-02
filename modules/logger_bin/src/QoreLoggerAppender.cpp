@@ -247,7 +247,7 @@ bool QoreLoggerAppender::pushQueueLocked(ExceptionSink* xsink, int64 type, const
     args->push(type, xsink);
     args->push(params.refSelf(), xsink);
     QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
-    ValueHolder v(queue->evalMethod(*pushMeth, *args, xsink), xsink);
+    ValueHolder v(queue->evalMethod("push", *args, xsink), xsink);
     return v->getAsBool();
 }
 
@@ -299,7 +299,7 @@ bool QoreLoggerAppender::pushEventLocked(ExceptionSink* xsink, int64 type, QoreV
             QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
             while (i.next()) {
                 QoreObject* filter = const_cast<QoreObject*>(i.getValue().get<QoreObject>());
-                ValueHolder v(filter->evalMethod(*evalMeth, *args, xsink), xsink);
+                ValueHolder v(filter->evalMethod("eval", *args, xsink), xsink);
                 if (*xsink) {
                     return false;
                 }
@@ -384,10 +384,12 @@ void QoreLoggerAppender::derefIntern(ExceptionSink* xsink) {
 
 void QoreLoggerAppender::setupMethods() {
     const QoreClass* cls = self->getClass();
-    pushMeth = cls->findMethod("push");
-    evalMeth = cls->findMethod("eval");
     serializeImplMeth = cls->findMethod("serializeImpl");
+    assert(serializeImplMeth);
     pushEventMeth = cls->findMethod("pushEvent");
+    assert(pushEventMeth);
     ensureAtomicOperationsMeth = cls->findMethod("ensureAtomicOperations");
+    assert(ensureAtomicOperationsMeth);
     processEventImplMeth = cls->findMethod("processEventImpl");
+    assert(processEventImplMeth);
 }
