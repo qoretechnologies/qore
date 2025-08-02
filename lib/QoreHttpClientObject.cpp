@@ -827,7 +827,7 @@ struct qore_httpclient_priv {
             assert(t.getType() == NT_STRING || t.getType() == NT_LIST);
             t.discard(xsink);
             assert(!*xsink);
-            // replace key in set with new case if difference
+            // replace key in set with new case if different
             if (*i != key) {
                 hdrs.erase(i);
                 hdrs.insert(key);
@@ -842,7 +842,7 @@ struct qore_httpclient_priv {
     // issue #2340: duplicate headers are overwritten; duplicate headers are checked with a case-insensitive search
     // the last header that matches is used for sending
     DLLLOCAL static QoreListNode* getHeaderList(strcase_set_t& hdrs, QoreHashNode& nh, const char* key,
-                ExceptionSink* xsink) {
+            ExceptionSink* xsink) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
         strcase_set_t::iterator i = hdrs.find(key);
         if (i == hdrs.end()) {
@@ -850,12 +850,10 @@ struct qore_httpclient_priv {
         } else {
             //printd(5, "qore_httpclient_priv::getHeaderList() taking '%s' -> setting '%s'\n", (*i).c_str(), key);
             // remove the key
-            QoreValue t = nh.takeKeyValue((*i).c_str());
-            assert(!t.isNothing());
-            assert(t.getType() == NT_STRING || t.getType() == NT_LIST);
-            t.discard(xsink);
-            assert(!*xsink);
-            // replace key in set with new case if difference
+            ValueHolder t(nh.takeKeyValue((*i).c_str()), xsink);
+            assert(!t->isNothing());
+            assert(t->getType() == NT_STRING || t->getType() == NT_LIST);
+            // replace key in set with new case if different
             if (*i != key) {
                 hdrs.erase(i);
                 hdrs.insert(key);
@@ -874,7 +872,7 @@ struct qore_httpclient_priv {
             ConstListIterator li(v.get<const QoreListNode>());
             while (li.next()) {
                 QoreStringNodeValueHelper vh(li.getValue());
-                l->push(*vh, xsink);
+                l->push(vh.getReferencedValue(), xsink);
             }
             return;
         }
