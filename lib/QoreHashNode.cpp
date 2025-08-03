@@ -48,6 +48,28 @@
 
 static const char* qore_hash_type_name = "hash";
 
+// hashes should always be empty by the time they are deleted
+// because object destructors need to be run...
+qore_hash_private::~qore_hash_private() {
+    assert(member_list.empty());
+    if (hashdecl) {
+        typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hashdecl))->deref();
+    }
+}
+
+void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
+    if (complexTypeInfo) {
+        complexTypeInfo = nullptr;
+    }
+    if (hashdecl) {
+        typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hashdecl))->deref();
+    }
+    if (hd) {
+        typed_hash_decl_private::get(*hd)->ref();
+    }
+    hashdecl = hd;
+}
+
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
@@ -390,7 +412,7 @@ QoreHashNode::QoreHashNode() : AbstractQoreNode(NT_HASH, true, false), priv(new 
 }
 
 QoreHashNode::QoreHashNode(const TypedHashDecl* hd, ExceptionSink* xsink) : QoreHashNode() {
-    priv->hashdecl = hd;
+    priv->setHashDecl(hd);
     typed_hash_decl_private::get(*hd)->initHash(this, nullptr, xsink);
 }
 

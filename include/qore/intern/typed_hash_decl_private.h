@@ -74,11 +74,6 @@ public:
 
     DLLLOCAL typed_hash_decl_private(const typed_hash_decl_private& old, TypedHashDecl* thd);
 
-    DLLLOCAL ~typed_hash_decl_private() {
-        delete typeInfo;
-        delete orNothingTypeInfo;
-    }
-
     DLLLOCAL TypedHashDecl* newTypedHashDecl(const char* n) {
         assert(name.empty());
         assert(!thd);
