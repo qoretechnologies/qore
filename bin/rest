@@ -3,7 +3,7 @@
 
 # @file rest example program for the RestClient module
 
-/*  Copyright 2013 - 2023 Qore Technologies, s.r.o.
+/*  Copyright 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -83,6 +83,7 @@ class RestCmd {
             "to":            "T,timeout=i",
             "token":         "t,token=s",
             "token_url":     "token_url=s",
+            "userpass":      "u,userpass=s",
             "verbose":       "v,verbose:i+",
             "verify_cert":   "V,verify-cert",
             "lax":           "X,lax-parsing",
@@ -322,6 +323,9 @@ class RestCmd {
 
         if (opt.token) {
             rest.setToken(opt.tokentype ?? "Bearer", opt.token);
+        } else if (opt.userpass) {
+            (*string user, *string pass) = (opt.userpass =~ x/^([^:]+)(?::(.*))?$/);
+            rest.setUserPassword(user, pass ?? "");
         } else {
             hash<auto> auth_opts;
             if (opt.client_id) {
@@ -653,6 +657,7 @@ class RestCmd {
  -s, --swagger=ARG          use the given Swagger 2.0 schema for validation
  -T, --timeout=ARG          set HTTP timeout in seconds
  -t, --token=ARG            an authorization token to use
+ -u, --userpass=ARG         set the user and password for the connection in the format \"user:password\"
  -V, --verify-cert          require and verify X.509 certificates from the server
  -X, --lax-parsing          lax parsing of Swagger schemas
  -x, --example[=ARG]        generate an example message; ARG=
