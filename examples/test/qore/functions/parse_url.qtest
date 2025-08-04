@@ -12,6 +12,7 @@
 
 public class parseUrlTest inherits QUnit::Test {
     constructor() : Test("parse_url test", "1.0") {
+        addTestCase("password test", \passwordTest());
         addTestCase("case test", \caseTest());
         addTestCase("decode test", \decodeTest());
         addTestCase("slash test", \slashTest());
@@ -20,6 +21,24 @@ public class parseUrlTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    passwordTest() {
+        hash<UrlInfo> h = parse_url("https://user:pwd@localhost:1234/path/me@mail.com");
+        on_error printf("h: %N\n", h);
+        assertEq("https", h.protocol);
+        assertEq("user", h.username);
+        assertEq("pwd", h.password);
+        assertEq("localhost", h.host);
+        assertEq(1234, h.port);
+        assertEq("/path/me@mail.com", h.path);
+
+        h = parse_url("https://user:pwd@localhost/path/me@mail.com");
+        assertEq("https", h.protocol);
+        assertEq("user", h.username);
+        assertEq("pwd", h.password);
+        assertEq("localhost", h.host);
+        assertEq("/path/me@mail.com", h.path);
     }
 
     caseTest() {

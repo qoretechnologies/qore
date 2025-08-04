@@ -37,6 +37,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <regex>
+
+static std::regex check_port("[0-9]{1,5}(/|$)", std::regex::extended);
 
 struct qore_url_private {
 public:
@@ -194,14 +197,14 @@ private:
         }
 
         // find end of hostname; look for username and password separator characters first
-        size_t path_start = sbuf.rfind('@');
-        if (path_start != std::string::npos) {
-            size_t sep = sbuf.find(':');
-            // ignore if there is no ':' character before
-            if (sep == std::string::npos || sep > path_start) {
-                path_start = 0;
+        size_t path_start = sbuf.find(':');
+        if (path_start != std::string::npos && path_start) {
+            // ignore if this is the port separator
+            if (!std::regex_search(sbuf.c_str() + path_start + 1, check_port)) {
+                path_start = sbuf.find('@', path_start + 1);
             }
         }
+
         if (path_start == std::string::npos) {
             path_start = 0;
         }
