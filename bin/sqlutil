@@ -3,7 +3,7 @@
 
 # @file sqlutil example program for the SqlUtil module
 
-/*  Copyright 2013 - 2023 Qore Technologies, s.r.o.
+/*  Copyright 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -113,7 +113,7 @@ const DUMP_OBJECTS = {
 main();
 
 sub usage() {
-    printf("usage: %s [options] <datasource>
+    printf("usage: %s [options] <connection|datasource>
 <datasource> format: driver:user/pass@db[%host[:port]]
   -A,--align-all=ARG          ARG=table to align structure and data in a
                               target database; requires -T
@@ -402,13 +402,13 @@ sub main() {
     # backward compatibility
     foreach string name in (opt.dump_table) {
         if (opt.dump_object.typeCode() != NT_LIST)
-            opt.dump_object = list();
+            opt.dump_object = ();
         push opt.dump_object, sprintf("tables:%s", name);
     }
     # backward compatibility
     foreach string name in (opt.dump_sequence) {
         if (opt.dump_object.typeCode() != NT_LIST)
-            opt.dump_object = list();
+            opt.dump_object = ();
         push opt.dump_object, sprintf("sequences:%s", name);
     }
     # real dump of objects

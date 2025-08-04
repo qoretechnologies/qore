@@ -2430,8 +2430,9 @@ auto v = c.name;
             where
                 c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, name);
             hash rv;
-            foreach hash<auto> row in (qh.contextIterator())
+            foreach hash<auto> row in (qh.contextIterator()) {
                 rv.(row.constraint_name) = new PgsqlCheckConstraint(row.constraint_name, row.consrc);
+            }
 
             Constraints c = new Constraints(rv);
 
