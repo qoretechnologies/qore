@@ -117,6 +117,8 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
+    - fixed support for orderby with a matching unique index
+      (<a href="https://github.com/qorelanguage/qore/issues/4977">issue 4977</a>)
     - added support for complex expressions and field reference in update operations
       (<a href="https://github.com/qorelanguage/qore/issues/4959">issue 4959</a>)
 
@@ -6072,13 +6074,15 @@ bool b = c.partialMatchKeys(h);
 
             @return @ref True "True" if the hash argument has at least the same keys (in any order, can have more keys), @ref False "False" if not
         */
-        bool partialMatchKeys(hash h1) {
-            if (h.size() > h1.size())
+        bool partialMatchKeys(hash<auto> h1) {
+            if (h.size() > h1.size()) {
                 return False;
+            }
 
             foreach string k in (keys h) {
-                if (!h1.hasKey(k))
+                if (!h1.hasKey(k)) {
                     return False;
+                }
             }
 
             return True;

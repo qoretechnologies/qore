@@ -4444,13 +4444,30 @@ string sql = table.getSelectSql(sh, \args);
         return getSelectSqlStringIntern(sh, \args);
     }
 
+    bool testMatchAnyUnique(softlist<auto> cols) {
+        if (matchAnyUnique()) {
+            return True;
+        }
+        foreach AbstractIndex ix in (indexes.iterator()) {
+            if (ix.unique && ix.columns.partialMatchKeys(cols)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
     *AbstractUniqueConstraint matchAnyUnique(softlist<auto> cols) {
-        if (!manual)
+        if (!manual) {
             getPrimaryKeyUnlocked();
-        if (!primaryKey.empty() && primaryKey.partialMatchKeys(cols))
+        }
+
+        if (!primaryKey.empty() && primaryKey.partialMatchKeys(cols)) {
             return primaryKey;
-        if (!manual)
+        }
+        if (!manual) {
             getConstraintsUnlocked();
+        }
+
         foreach AbstractConstraint c in (constraints.iterator()) {
             if (c instanceof AbstractUniqueConstraint) {
                 AbstractUniqueConstraint uk = c;
@@ -4762,7 +4779,7 @@ string sql = table.getSelectSql(sh, \args);
                 }
             }
             if (info.query_hash.offset || info.query_hash.limit) {
-                if (!matchAnyUnique(info.query_hash.orderby)) {
+                if (!testMatchAnyUnique(info.query_hash.orderby)) {
                     throw "SELECT-ERROR", sprintf("%s: 'orderby': %y with 'offset' = %d, 'limit' = %d does not match "
                         "any unique constraint", getDesc(), info.query_hash.orderby, info.query_hash.offset,
                         info.query_hash.limit);
@@ -7707,8 +7724,9 @@ on_exit printf("SQL> %s\n", sql);
     }
 
     private getConstraintsUnlocked() {
-        if (constraints)
+        if (constraints) {
             return;
+        }
         if (manual) {
             constraints = new Constraints();
             return;
@@ -7716,12 +7734,14 @@ on_exit printf("SQL> %s\n", sql);
         getColumnsUnlocked();
         constraints = getConstraintsImpl();
         # get indexes
-        if (!manual && !indexes)
+        if (!manual && !indexes) {
             indexes = getIndexesImpl();
+        }
 
         foreach AbstractConstraint c in (constraints.iterator()) {
-            if (!(c instanceof AbstractUniqueConstraint))
+            if (!(c instanceof AbstractUniqueConstraint)) {
                 continue;
+            }
             AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(c);
             uk.findMatchingIndex(indexes);
         }
