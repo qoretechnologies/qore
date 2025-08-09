@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServer.qm HTTP multi-threaded server module definition
 
-/*  HttpServer.qm Copyright (C) 2012 - 2024 Qore Technologies, s.r.o.
+/*  HttpServer.qm Copyright (C) 2012 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1441,7 +1441,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! helper method to set HTTP response headers
     static nothing setReplyHeaders(Socket s, hash<auto> cx, reference<hash<auto>> rv) {
-        return HttpServer::http_set_reply_headers(s, cx, \rv);
+        HttpServer::http_set_reply_headers(s, cx, \rv);
     }
 
     #! @cond nodoc
@@ -1886,9 +1886,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")))
             && (head
-                || (rv.code < 200
-                    || (rv.code == 204
-                    || rv.code == 304)))) {
+                || (rv."code" < 200
+                    || (rv."code" == 204
+                    || rv."code" == 304)))) {
             remove rv.body;
             if (chunked_body) {
                 remove rv.chunked_body;
@@ -1897,18 +1897,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
-        if (rv.code >= 300 && rv.code < 400) {
+        if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv);
-        } else if (rv.code >= 400) {
+        } else if (rv."code" >= 400) {
             if (!rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
             }
-            sendHttpError(listener, cx, s, rv.code, rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
+            sendHttpError(listener, cx, s, rv."code", rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
                 rv.hdr, cx."response-encoding", head);
             remove cx.persistent;
         } else {
-            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv.code, rv.hdr."Content-Type",
+            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # compress body if eligible for compression
@@ -1983,7 +1983,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if ((rv.body || !rv.hasKeyValue("chunked_body"))
             && !rv.hdr."Transfer-Encoding"
             && !(rv.body instanceof InputStream)) {
-
             s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
         } else {
             if (exists rv.chunked_body) {
@@ -2000,7 +1999,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (rv.body instanceof InputStream) {
                 rv.hdr."Transfer-Encoding" = "chunked";
             }
-            s.sendHTTPResponse(rv.code, HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.body);
+            s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.body);
         }
         listener.logResponse(cx, rv);
     }
@@ -2547,9 +2546,9 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
     logResponse(hash<auto> cx, hash<auto> rv) {
         #  "rv" can be a "HttpHandlerResponseInfo", so we can't access "chunked_body" directly
         if (rv.body || !rv.hasKeyValue("chunked_body")) {
-            logResponse(cx, rv.code, rv.body, rv.hdr);
+            logResponse(cx, rv."code", rv.body, rv.hdr);
         } else {
-            logResponse(cx, rv.code, rv.chunked_body, rv.hdr);
+            logResponse(cx, rv."code", rv.chunked_body, rv.hdr);
         }
     }
 

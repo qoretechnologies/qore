@@ -982,7 +982,7 @@ public class AbstractAuthenticator {
         };
     }
 
-    #! returns a 401 repsonse with the given string argument as the message body
+    #! returns a 401 response with the given string argument as the message body
     /** @param msg message body to return
         @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
@@ -1181,11 +1181,12 @@ public class AbstractStreamRequest {
     */
     private hash<HttpHandlerResponseInfo> sendResponse() {
         hash<HttpHandlerResponseInfo> rv = getResponseHeaderMessage();
-        # issue #4109: do not start async I/O with a HEAD request
-        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD")
-            return rv;
-
         http_set_reply_headers(s, cx, \rv);
+
+        # issue #4109: do not start async I/O with a HEAD request
+        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD") {
+            return rv;
+        }
 
         # send chunked response
         s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
