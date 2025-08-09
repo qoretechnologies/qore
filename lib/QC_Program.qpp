@@ -1511,7 +1511,7 @@ pgm.importClass("MyNamespace::MyClass");
     @since
     - This method was first implemented in %Qore 0.8.7
     - %Qore 0.8.12 added the \a new_name and \a inject parameters
-    - %Qore 0.9,3 added the \a module_visibility parameter
+    - %Qore 0.9.3 added the \a module_visibility parameter
  */
 nothing Program::importClass(string cls, *string new_name, *softbool inject, int module_visibility = CSP_UNCHANGED) {
     TempEncodingHelper tmp(cls, QCS_DEFAULT, xsink);
