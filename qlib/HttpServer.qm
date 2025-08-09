@@ -566,7 +566,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
         http_server_string = name;
         debug = dbg;
-        hdr = {
+        self.hdr = {
             "Server": name,
         } + hdr;
 
@@ -1275,7 +1275,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     #! sends an HTTP error message on the socket
-    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int code, *data msg, *InputStream chunked_msg,
+    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
         if (!s.isOpen()) {
             listener.log("cid %d: connection closed by peer", cx.id);
@@ -1292,13 +1292,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 header fields, regardless of the entity-header fields present in
                 the message.
             */
-            if (!head && (code >= 200) && (code != 204) && (code != 304)) {
+            if (!head && (status_code >= 200) && (status_code != 204) && (status_code != 304)) {
                 if (msg.typeCode() == NT_STRING) {
                     response_msg = !extra_hdrs."Content-Type"
                         ? sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
                             "%s</address></body></html>",
-                                code, HttpServer::HttpCodes{code}, HttpServer::HttpCodes{code}, html_encode(msg),
-                                http_server_string, gethostname())
+                                status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
+                                html_encode(msg), http_server_string, gethostname())
                         : msg;
                 } else {
                     response_msg = msg;
@@ -1317,31 +1317,33 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         on_exit if (old_encoding != s.getEncoding())
             s.setEncoding(old_encoding);
 
-        if (!encoding)
+        if (!encoding) {
             encoding = s.getEncoding().lwr();
-        else if (encoding != s.getEncoding().lwr())
+        } else if (encoding != s.getEncoding().lwr()) {
             s.setEncoding(encoding);
+        }
 
-        hash<auto> v_hdr;
-        v_hdr += hdr;
+        hash<auto> hdr += self.hdr;
 
-        if (!extra_hdrs."Content-Type")
-            v_hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
-        else if (extra_hdrs."Content-Type" !~ /charset=/)
+        if (!extra_hdrs."Content-Type") {
+            hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
+        } else if (extra_hdrs."Content-Type" !~ /charset=/) {
             extra_hdrs."Content-Type" += ";charset=" + encoding;
+        }
 
-        if (cx.close)
-            v_hdr += ("Connection": "close");
-        else
-            v_hdr += ("Connection": "Keep-Alive");
+        hdr.Connection = cx.close ? "close" : "Keep-Alive";
 
-        if (extra_hdrs)
-            v_hdr += extra_hdrs;
+        if (extra_hdrs) {
+            hdr += extra_hdrs;
+        }
+
+        hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
-            s.sendHTTPResponse(code, HttpServer::HttpCodes{code}, "1.1", v_hdr, response_msg ?? chunked_msg);
-            listener.logResponse(cx, code, response_msg ?? chunked_msg, v_hdr);
+            s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
+                response_msg ?? chunked_msg);
+            listener.logResponse(cx, status_code, response_msg ?? chunked_msg, hdr);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-SEND-ERROR") {
                 string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
@@ -1744,6 +1746,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     handler.auth.endRequest();
                 }
 
+                *hash<auto> tld_save = handler.saveThreadLocalData();
+                on_exit handler.restoreThreadLocalData(tld_save);
+
                 # preform any pre-processing on the request that can aid in authentication and has to be performed to
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
@@ -1787,38 +1792,35 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 if (ah) {
                     if (!ah."code") {
                         ah."code" = 401;
+                        cx.close = True;
+                    } else if ((ah."code" / 100) >= 4) {
+                        cx.close = True;
                     }
-                    if (!ah.body && !ah.hasKeyValue("chunked_body")) {
+                    if (!ah.body.val() && !ah.hasKeyValue("chunked_body")) {
                         ah.body = "Authentication is required to access this server";
                     }
-                    cx.close = True;
-                    sendHttpError(listener, cx, s, ah."code", ah.body,
-                        ah.hasKey("chunked_body") ? ah.chunked_body : NOTHING, ah.hdr, cx."response-encoding", head);
-                    return;
-                }
+                    rv = ah;
+                } else {
+                    # decode body if applicable
+                    if (body && hdr."content-encoding" && handler.decompress)
+                        body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
+                            handler.decompress_to_string ? s.getEncoding() : NOTHING);
 
-                *hash<auto> tld_save = handler.saveThreadLocalData();
-                on_exit handler.restoreThreadLocalData(tld_save);
+                    rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
 
-                # decode body if applicable
-                if (body && hdr."content-encoding" && handler.decompress)
-                    body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
-                        handler.decompress_to_string ? s.getEncoding() : NOTHING);
-
-                rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
-
-                # manage persistent handler info, if applicable
-                if (!phi.handler) {
-                    if (handler.isPersistent()) {
-                        phi.assign(dhh, handler);
-                        if (!cx.persistent && !rv.close) {
-                            cx.persistent = True;
+                    # manage persistent handler info, if applicable
+                    if (!phi.handler) {
+                        if (handler.isPersistent()) {
+                            phi.assign(dhh, handler);
+                            if (!cx.persistent && !rv.close) {
+                                cx.persistent = True;
+                            }
                         }
+                    } else if (!handler.isPersistent()) {
+                        phi.clear();
+                    } else if (!cx.persistent && !rv.close) {
+                        cx.persistent = True;
                     }
-                } else if (!handler.isPersistent()) {
-                    phi.clear();
-                } else if (!cx.persistent && !rv.close) {
-                    cx.persistent = True;
                 }
 
                 if (rv.reply_sent) {
@@ -1894,6 +1896,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 remove rv.chunked_body;
             }
         }
+
+        rv.hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
 
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
@@ -1980,26 +1984,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     # rv is "hash" to strip types
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv) {
-        if ((rv.body || !rv.hasKeyValue("chunked_body"))
-            && !rv.hdr."Transfer-Encoding"
-            && !(rv.body instanceof InputStream)) {
+        if (!rv.chunked_body && (!rv.body || (!rv.hdr."Transfer-Encoding" && !(rv.body instanceof InputStream)))) {
+            # send a normal monolithic response
             s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
         } else {
-            if (exists rv.chunked_body) {
-                rv.body = rv.chunked_body;
-            }
-            if (rv.body instanceof StringInputStream) {
-                StringInputStream input_stream = cast<StringInputStream>(rv.body);
+            # send a chunked response stream
+            auto body = rv.chunked_body ?? rv.body;
+            if (body instanceof StringInputStream) {
+                StringInputStream input_stream = cast<StringInputStream>(body);
                 if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
-                    rv.body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
+                    body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
                 }
-            } else if ((rv.body instanceof string) || (rv.body instanceof binary)) {
-                rv.body = new BinaryInputStream(rv.body);
+            } else if ((body instanceof string) || (body instanceof binary)) {
+                body = new BinaryInputStream(body);
             }
-            if (rv.body instanceof InputStream) {
-                rv.hdr."Transfer-Encoding" = "chunked";
-            }
-            s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.body);
+            rv.hdr."Transfer-Encoding" = "chunked";
+            s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, body);
         }
         listener.logResponse(cx, rv);
     }
