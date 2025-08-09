@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file RestClient.qm Qore user module for calling REST services
 
-/*  RestClient.qm Copyright (C) 2013 - 2024 Qore Technologies, s.r.o.
+/*  RestClient.qm Copyright (C) 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -149,6 +149,7 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_3_2 RestClient v2.3.2
+    - added the \c allow_html_responses option to return HTML responses as strings
     - implemented support for PKCE
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
@@ -604,6 +605,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         *hash<auto> rest_body_auth_error_check;
         #! Last timestamp for token acquisition
         date token_timestamp;
+        #! Return HTML responses as a string
+        bool allow_html_responses;
 
         #! REST custom token auth method
         /** allowed values:
@@ -849,6 +852,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
                 }
                 oauth2_pkce = opts.oauth2_pkce;
             }
+        }
+        if (opts.allow_html_responses) {
+            allow_html_responses = parse_boolean(opts.allow_html_responses);
         }
 
         # setup headers before setupAuth()
@@ -1845,7 +1851,16 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         @return \a resp with additional or processed information
     */
     hash<auto> processRestResponse(hash<auto> resp, string method, string path, *reference<hash<auto>> info) {
-        hash<RestResponseClientInfo> sh = validator.parseResponse(method, path, resp.status_code, resp.body, resp);
+        hash<RestResponseClientInfo> sh;
+        try {
+            sh = validator.parseResponse(method, path, resp.status_code, resp.body, resp);
+        } catch (hash<ExceptionInfo> ex) {
+            if (allow_html_responses && (ex.err == "DESERIALIZATION-ERROR") && resp.body.val()
+                && (resp.body.typeCode() == NT_STRING) && regex(resp."content-type", MimeTypeHtml, RE_Caseless)) {
+                info."response-body" = resp.body;
+                return resp;
+            }
+        }
         if (exists resp.body) {
             resp.body = sh.body;
             info += {
@@ -2577,6 +2592,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 "http": "rest",
             },
             "options": HttpConnection::ConnectionScheme.options + {
+                "allow_html_responses": <ConnectionOptionInfo>{
+                    "display_name": "Allow HTML Responses?",
+                    "short_desc": "If set, HTML responses will be returned as strings",
+                    "type": "bool",
+                    "desc": "If set, HTML responses will be returned as strings",
+                },
                 "content_encoding": <ConnectionOptionInfo>{
                     "display_name": "Compression",
                     "short_desc": "Sets data compression / encoding",
