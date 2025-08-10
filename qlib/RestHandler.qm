@@ -816,8 +816,8 @@ public namespace RestHandler {
 
                 rh.logDebug("REST DBG: class %y: dispatching to subclass %y: method %y args: %y", name(), cname, mn,
                     args);
-                return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
-            }
+
+                return cls.handleRequest(listener, rh, s, cl, mn, cx, args);            }
 
             # try to mask passwords and sensitive data in args
             string astr = rh.maskData(sprintf("%y", args));
