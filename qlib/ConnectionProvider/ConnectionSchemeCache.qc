@@ -135,6 +135,9 @@ public class ConnectionSchemeCache {
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
 
+            "ds": "DataStreamClient",
+            "dss": "DataStreamClient",
+
             "ebrests": "EmpathicBuildingDataProvider",
 
             "esrest": "ElasticSearchDataProvider",
