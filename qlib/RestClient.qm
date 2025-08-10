@@ -149,7 +149,7 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_3_2 RestClient v2.3.2
-    - added the \c allow_html_responses option to return HTML responses as strings
+    - added the \c allow_any_response option to allow undeserializable responses to be returned as-is
     - implemented support for PKCE
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
@@ -605,8 +605,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         *hash<auto> rest_body_auth_error_check;
         #! Last timestamp for token acquisition
         date token_timestamp;
-        #! Return HTML responses as a string
-        bool allow_html_responses;
+        #! Return undeserializable responses as-is
+        bool allow_any_response;
 
         #! REST custom token auth method
         /** allowed values:
@@ -853,8 +853,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
                 oauth2_pkce = opts.oauth2_pkce;
             }
         }
-        if (opts.allow_html_responses) {
-            allow_html_responses = parse_boolean(opts.allow_html_responses);
+        if (opts.allow_any_response) {
+            allow_any_response = parse_boolean(opts.allow_any_response);
         }
 
         # setup headers before setupAuth()
@@ -1126,6 +1126,35 @@ string ser = rest.getSerialization();
     */
     string getSerialization() {
         return ds;
+    }
+
+    #! Allows the "allow any response" option to be set or cleared
+    /** If this option is set to @ref True "True", undeserializable responses will not throw an exception but rather
+        return the raw response body as-is; this is useful for REST-like requests that return HTML or file data, for
+        example
+
+        @par Example:
+        @code{.py}
+rest.setAllowAnyResponse(True);
+        @endcode
+
+        @since %RestClient 2.3.2
+    */
+    setAllowAnyResponse(bool val = True) {
+        allow_any_response = val;
+    }
+
+    #! Returns the value of the "allow any response" option
+    /** If this option is set to @ref True "True", undeserializable responses will not throw an exception but rather
+        return the raw response body as-is; this is useful for REST-like requests that return HTML or file data, for
+        example
+
+        @return the value of the "allow any response" option
+
+        @since %RestClient 2.3.2
+    */
+    bool getAllowAnyResponse() {
+        return allow_any_response ?? False;
     }
 
     #! sends an HTTP \c GET request to the REST server and returns the response
@@ -1855,8 +1884,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         try {
             sh = validator.parseResponse(method, path, resp.status_code, resp.body, resp);
         } catch (hash<ExceptionInfo> ex) {
-            if (allow_html_responses && (ex.err == "DESERIALIZATION-ERROR") && resp.body.val()
-                && (resp.body.typeCode() == NT_STRING) && regex(resp."content-type", MimeTypeHtml, RE_Caseless)) {
+            if (allow_any_response && (ex.err == "DESERIALIZATION-ERROR") && resp.body.val()) {
                 info."response-body" = resp.body;
                 return resp;
             }
@@ -2592,11 +2620,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 "http": "rest",
             },
             "options": HttpConnection::ConnectionScheme.options + {
-                "allow_html_responses": <ConnectionOptionInfo>{
-                    "display_name": "Allow HTML Responses?",
-                    "short_desc": "If set, HTML responses will be returned as strings",
+                "allow_any_response": <ConnectionOptionInfo>{
+                    "display_name": "Allow Any Response?",
+                    "short_desc": "If set, undeserializable responses will be returned as-is",
                     "type": "bool",
-                    "desc": "If set, HTML responses will be returned as strings",
+                    "desc": "If set, undeserializable responses will be returned as-is; this is useful when making "
+                        "REST-like requests that return HTML or file data",
                 },
                 "content_encoding": <ConnectionOptionInfo>{
                     "display_name": "Compression",
