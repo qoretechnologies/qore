@@ -1885,6 +1885,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             sh = validator.parseResponse(method, path, resp.status_code, resp.body, resp);
         } catch (hash<ExceptionInfo> ex) {
             if (allow_any_response && (ex.err == "DESERIALIZATION-ERROR") && resp.body.val()) {
+                if (!is_mime_text(resp."content-type")) {
+                    resp.body = binary(resp.body);
+                }
                 info."response-body" = resp.body;
                 return resp;
             }
