@@ -1822,10 +1822,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         cx.persistent = True;
                     }
                 }
+            }
 
-                if (rv.reply_sent) {
-                    return;
-                }
+            if (rv.reply_sent) {
+                return;
             }
 
             sendReply(listener, s, handler, rv, \cx, hdr, head, \dedicated, \dedicated_external);

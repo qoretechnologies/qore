@@ -587,35 +587,41 @@ public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
 #! helper function for setting HTTP response headers
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
     if (!rv.hdr.Connection) {
-        if (rv.close) # RFC 2616 section 14.10 is "close" in all lower-case
+        if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
             rv.hdr.Connection = "close";
-        else
+        } else {
             rv.hdr.Connection = "Keep-Alive";
+        }
     }
 
-    if (!rv.hdr.Date) # RFC 2616 sec 14.18 date format
+    if (!rv.hdr.Date) {
+        # RFC 2616 sec 14.18 date format
         rv.hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
 
-    if (!rv.hdr.Server)
+    if (!rv.hdr.Server) {
         rv.hdr.Server = server_string ?? HttpServerString;
-
-    string old_encoding = s.getEncoding();
-
-    on_exit if (s.getEncoding() != cx."response-encoding")
-        s.setEncoding(cx."response-encoding");
-
-    if (!cx."response-encoding")
-        cx."response-encoding" = old_encoding.lwr();
-    else if (cx."response-encoding".lwr() != old_encoding.lwr())
-        s.setEncoding(cx."response-encoding");
+    }
 
     # "rv" may be a HttpHandlerResponseInfo hashdecl, so we can't access "chunked_body" directly in that case
-    if (rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked") {
-        if (!rv.hdr."Content-Type") {
-            rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + cx."response-encoding";
-        } else if (rv.hdr."Content-Type" !~ /charset=/
-            && ((rv.body.typeCode() == NT_STRING)
-                || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream)))) {
+    # https://datatracker.ietf.org/doc/html/rfc2616#section-7.2.1: HTTP messages with a body SHOULD include A
+    # Content-Type (so it's optional); here we add a "charset=" parameter to the Content-Type header if it is not
+    # already included and the message body is a string not in ISO-8859-1 encoding (the default for HTTP)
+    if ((rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked")
+        && (rv.hdr."Content-Type" && (rv.hdr."Content-Type" !~ /charset=/i)
+        && ((rv.body.typeCode() == NT_STRING)
+            || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream))))) {
+        string old_encoding = s.getEncoding().lwr();
+        string re;
+        if (!cx."response-encoding") {
+            re = cx."response-encoding" = old_encoding;
+        } else {
+            re = cx."response-encoding".lwr();
+            if (re != old_encoding) {
+                s.setEncoding(re);
+            }
+        }
+        if (re != "iso-8859-1" && re != "latin1" && re != "latin-1") {
             rv.hdr."Content-Type" += ";charset=" + cx."response-encoding";
         }
     }
