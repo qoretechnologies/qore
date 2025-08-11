@@ -410,6 +410,7 @@ QoreAbstractModule::~QoreAbstractModule() {
 }
 
 QoreUserModule::~QoreUserModule() {
+    //printd(5, "QoreUserModule::~QoreUserModule() this: %p name: %s\n", this, name.c_str());
     assert(pgm);
     ExceptionSink xsink;
     if (del) {

@@ -326,6 +326,9 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
     assert(path.rfind("::::", 0) == std::string::npos);
 }
 
+qore_ns_private::~qore_ns_private() {
+}
+
 QoreProgram* qore_ns_private::getProgram() const {
     const qore_root_ns_private* rns = getRoot();
     return rns ? rns->pgm : nullptr;

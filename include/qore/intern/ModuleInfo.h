@@ -691,6 +691,7 @@ class QoreUserModule : public QoreAbstractModule {
 public:
     DLLLOCAL QoreUserModule(QoreProgram* p, const char* cwd, const char* fn, const char* n, unsigned load_opt,
             int warning_mask = QP_WARN_MODULES) : QoreAbstractModule(cwd, fn, n, load_opt), pgm(p) {
+        //printd(5, "QoreUserModule::QoreUserModule() this: %p name: %s\n", this, name.c_str());
     }
 
     DLLLOCAL virtual ~QoreUserModule();
