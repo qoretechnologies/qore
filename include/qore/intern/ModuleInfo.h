@@ -710,6 +710,7 @@ protected:
 public:
     DLLLOCAL QoreUserModule(const char* cwd, const char* fn, const char* n, QoreProgram* p, unsigned load_opt,
             int warning_mask = QP_WARN_MODULES) : QoreAbstractModule(cwd, fn, n, load_opt), pgm(p) {
+        //printd(5, "QoreUserModule::QoreUserModule() this: %p name: %s\n", this, name.c_str());
     }
 
     DLLLOCAL void set(const char* d, const char* v, const char* a, const char* u, const QoreString& l,

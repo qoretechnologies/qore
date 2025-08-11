@@ -320,6 +320,9 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
     setModuleName();
 }
 
+qore_ns_private::~qore_ns_private() {
+}
+
 QoreProgram* qore_ns_private::getProgram() const {
     const qore_root_ns_private* rns = getRoot();
     return rns ? rns->pgm : nullptr;

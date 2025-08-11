@@ -559,8 +559,9 @@ public:
     DLLLOCAL void setHashDecl(const TypedHashDecl* hd);
 
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
-        if (!h->priv->hashdecl && !h->priv->complexTypeInfo)
+        if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {
             return h;
+        }
         // no exception is possible
         ReferenceHolder<QoreHashNode> holder(h, nullptr);
         return h->priv->copy(true);

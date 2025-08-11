@@ -74,6 +74,12 @@ public:
 
     DLLLOCAL typed_hash_decl_private(const typed_hash_decl_private& old, TypedHashDecl* thd);
 
+    DLLLOCAL ~typed_hash_decl_private() {
+        assert(!refs.reference_count());
+        delete typeInfo;
+        delete orNothingTypeInfo;
+    }
+
     DLLLOCAL TypedHashDecl* newTypedHashDecl(const char* n) {
         assert(name.empty());
         assert(!thd);
@@ -140,6 +146,7 @@ public:
 
     DLLLOCAL bool deref() {
         if (refs.ROdereference()) {
+            assert(thd->priv == this);
             delete thd;
             return true;
         }

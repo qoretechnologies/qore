@@ -140,8 +140,7 @@ public:
         }
     }
 
-    DLLLOCAL ~qore_ns_private() {
-    }
+    DLLLOCAL ~qore_ns_private();
 
     // get the full namespace path with the leading "::"
     DLLLOCAL const char* getPath() const {
