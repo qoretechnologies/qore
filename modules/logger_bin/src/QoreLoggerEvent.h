@@ -43,7 +43,8 @@ public:
             const QoreHashNode* location_info, int tid,
             const DateTimeNode* now, const QoreHashNode* throwable)
             : fqcn(new QoreStringNode(logger->getClassName())), logger(logger),
-            categoryName(categoryName->stringRefSelf()), level(level ? level->objectRefSelf() : nullptr),
+            categoryName(categoryName ? categoryName->stringRefSelf() : nullptr),
+            level(level ? level->objectRefSelf() : nullptr),
             lvl(l ? l->refSelf() : nullptr),
             messageFmt(message->stringRefSelf()), messageArgs(msg_args ? msg_args->listRefSelf() : nullptr),
             offset(offset),
@@ -59,7 +60,7 @@ public:
             const QoreStringNode* message, const QoreListNode* msg_args, size_t offset,
             const QoreHashNode* location_info, int tid,
             const DateTimeNode* now, const QoreHashNode* throwable)
-            : fqcn(fqcn), categoryName(categoryName->stringRefSelf()),
+            : fqcn(fqcn), categoryName(categoryName ? categoryName->stringRefSelf() : nullptr),
             level(level ? level->objectRefSelf() : nullptr),
             lvl(l ? l->refSelf() : nullptr),
             messageFmt(message->stringRefSelf()), messageArgs(msg_args ? msg_args->listRefSelf() : nullptr),
