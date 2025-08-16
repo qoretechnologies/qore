@@ -423,8 +423,11 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 
         @throw PROVIDER-ERROR the given provider factory or child provider is unknown
     */
+
+
     static AbstractDataProvider getFactoryObjectFromStringUseEnv(string name) {
         hash<FactoryInfo> info = DataProvider::getFactoryInfoFromString(name);
+
         AbstractDataProviderFactory factory;
         if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
             factory = DataProvider::getFactoryEx(info.name);

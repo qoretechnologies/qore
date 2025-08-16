@@ -94,15 +94,17 @@ public:
 
     // for binary modules
     DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, const char* d, const char* v,
-        const char* a, const char* u, const QoreString& l) : filename(fn), name(n), desc(d), author(a), url(u),
-        license(l), priv(false), injected(false), reinjected(false), version_list(v) {
+            const char* a, const char* u, const QoreString& l) : filename(fn), name(n), desc(d), author(a), url(u),
+            license(l), path(fn), priv(false), injected(false), reinjected(false), version_list(v) {
         q_normalize_path(filename, cwd);
     }
 
     // for user modules
-    DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, unsigned load_opt) :
-        filename(fn), name(n), priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT),
-        reinjected(load_opt & QMLO_REINJECT) {
+    DLLLOCAL QoreAbstractModule(const char* cwd, const char* fn, const char* n, unsigned load_opt,
+            const char* path = nullptr) :
+            filename(fn), name(n), path(path ? path : fn), priv(load_opt & QMLO_PRIVATE),
+            injected(load_opt & QMLO_INJECT),
+            reinjected(load_opt & QMLO_REINJECT) {
         q_normalize_path(filename, cwd);
     }
 
@@ -225,6 +227,7 @@ protected:
         author,
         url,
         license,
+        path,
         orig_name;
 
     // link to associated modules (originals with reinjection, etc)
@@ -709,7 +712,8 @@ protected:
 
 public:
     DLLLOCAL QoreUserModule(const char* cwd, const char* fn, const char* n, QoreProgram* p, unsigned load_opt,
-            int warning_mask = QP_WARN_MODULES) : QoreAbstractModule(cwd, fn, n, load_opt), pgm(p) {
+            int warning_mask = QP_WARN_MODULES, const char* path = nullptr)
+            : QoreAbstractModule(cwd, fn, n, load_opt, path), pgm(p) {
         //printd(5, "QoreUserModule::QoreUserModule() this: %p name: %s\n", this, name.c_str());
     }
 

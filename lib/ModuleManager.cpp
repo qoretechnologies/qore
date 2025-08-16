@@ -112,8 +112,10 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
 
     qore_hash_private* ph = qore_hash_private::get(*h);
 
-    if (with_filename)
+    if (with_filename) {
         ph->setKeyValueIntern("filename", new QoreStringNode(filename));
+    }
+    ph->setKeyValueIntern("path", new QoreStringNode(path));
     ph->setKeyValueIntern("name", new QoreStringNode(name));
     ph->setKeyValueIntern("desc", new QoreStringNode(desc));
     ph->setKeyValueIntern("version", new QoreStringNode(*version_list));
@@ -459,7 +461,8 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
     if (!module_parse_cmd) {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' has not registered a parse command handler", name.getBuffer(), filename.getBuffer());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' has not registered a "
+                "parse command handler", name.c_str(), filename.c_str());
         }
         return;
     }
@@ -1113,7 +1116,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
 
     std::unique_ptr<QoreUserModule> userModule(new QoreUserModule(td, modulePath.c_str(), feature, mpgm,
-        load_opt, warning_mask));
+        load_opt, warning_mask, path));
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
     QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
