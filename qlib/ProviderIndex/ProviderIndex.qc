@@ -163,7 +163,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
             }
 
             # get the path to the module
-            *string path = get_module_hash(){mod}.filename;
+            *string path = get_module_hash(){mod}.path;
             if (!path.val()) {
                 log(LoggerLevel::LevelError, "Data provider factory %y module %y has no path", factory, mod);
                 continue;

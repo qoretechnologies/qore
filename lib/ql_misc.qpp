@@ -1574,7 +1574,8 @@ string parse_base64_url_string_to_string(string str, *string encoding) [flags=RE
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module
+    - \c filename: the path to the module's primary file
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1597,6 +1598,7 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1624,6 +1626,7 @@ list<hash<auto>> get_module_list() {
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1646,6 +1649,7 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
