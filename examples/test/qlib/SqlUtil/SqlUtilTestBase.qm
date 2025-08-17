@@ -1452,15 +1452,15 @@ public class SqlTestBase inherits QUnit::Test {
             ),
         };
 
-        foreach hash t in (test_set.pairIterator()) {
+        foreach hash<auto> t in (test_set.pairIterator()) {
             if (t.value.skip) {
                 assertSkip ("checking offset / limit " + t.key);
                 continue;
             }
-            *list rows = table.selectRows (t.value.in, \sql);
+            *list<hash<auto>> rows = table.selectRows(t.value."in", \sql);
             assertEq(t.value.out.count, rows.size(), "checking offset / limit " + t.key);
 
-            foreach hash row in (rows) {
+            foreach hash<auto> row in (rows) {
                 int rn = $#;
                 foreach hash d in (t.value.out.data[rn].pairIterator())
                     assertEq (d.value, row{d.key}, sprintf ("checking offset / limit %s row %s column %s", t.key, rn, d.key));
