@@ -1891,7 +1891,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 info."response-body" = resp.body;
                 return resp;
             }
+            rethrow;
         }
+
         if (exists resp.body) {
             resp.body = sh.body;
             info += {
