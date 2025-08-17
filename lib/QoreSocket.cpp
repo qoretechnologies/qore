@@ -1019,6 +1019,9 @@ int SocketConnectInetPollState::next(ExceptionSink* xsink) {
 int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
     sock->do_connect_event(p->ai_family, p->ai_addr, host.c_str(), service.c_str(), prt);
+    // make sure and close the socket if it is already open
+    sock->close_internal();
+    assert(sock->sock == QORE_INVALID_SOCKET);
     if ((sock->sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == QORE_INVALID_SOCKET) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "cannot establish a connection to %s:%s",
             host.c_str(), service.c_str());
@@ -1034,7 +1037,8 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     assert(xsink);
 
     // close socket if already open
-    sock->close();
+    sock->close_internal();
+    assert(sock->sock == QORE_INVALID_SOCKET);
 
     addr.sun_family = AF_UNIX;
     // copy path and terminate if necessary
@@ -3396,6 +3400,7 @@ int QoreSocket::acceptAndReplace(SocketSource* source) {
         return -1;
 
     priv->close_internal();
+    assert(priv->sock == QORE_INVALID_SOCKET);
     priv->sock = rc;
     return 0;
 }
@@ -3443,6 +3448,7 @@ int QoreSocket::acceptAndReplace(int timeout_ms, ExceptionSink* xsink) {
         return -1;
 
     priv->close_internal();
+    assert(priv->sock == QORE_INVALID_SOCKET);
     priv->sock = rc;
     return 0;
 }
