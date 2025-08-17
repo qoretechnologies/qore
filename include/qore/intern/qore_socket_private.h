@@ -600,8 +600,9 @@ struct qore_socket_private {
             rc = ::close(sock);
 #endif
             // try again if close was interrupted by a signal
-            if (!rc || sock_get_error() != EINTR)
+            if (!rc || sock_get_error() != EINTR) {
                 break;
+            }
         }
         //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
         sock = QORE_INVALID_SOCKET;
@@ -1164,6 +1165,7 @@ struct qore_socket_private {
         // copy path and terminate if necessary
         strncpy(addr.sun_path, p, sizeof(addr.sun_path) - 1);
         addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
+        assert(sock == QORE_INVALID_SOCKET);
         if ((sock = socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
             xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", p);
             return -1;
@@ -1542,6 +1544,7 @@ struct qore_socket_private {
         assert(xsink);
         printd(5, "qore_socket_private::connectINETIntern() host: %s service: %s family: %d timeout_ms: %d\n", host,
             service, ai_family, timeout_ms);
+        assert(sock == QORE_INVALID_SOCKET);
         if ((sock = socket(ai_family, ai_socktype, ai_protocol)) == QORE_INVALID_SOCKET) {
             xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "cannot establish a connection to %s:%s", host,
                 service);
@@ -1640,6 +1643,7 @@ struct qore_socket_private {
         if (sock != QORE_INVALID_SOCKET)
             close();
 
+        assert(sock == QORE_INVALID_SOCKET);
         if ((sock = socket(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
             return -1;
         }
@@ -1656,6 +1660,7 @@ struct qore_socket_private {
         if (sock != QORE_INVALID_SOCKET)
             close();
 
+        assert(sock == QORE_INVALID_SOCKET);
         if ((sock = socket(family, sock_type, protocol)) == QORE_INVALID_SOCKET)
             return -1;
 
