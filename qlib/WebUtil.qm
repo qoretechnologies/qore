@@ -1074,7 +1074,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         if (cx.resource_path =~ /\.\./) {
             path = normalize_dir(path);
             if (!path.equalPartialPath(file_root)) {
-                return makeResponse(400, "cannot service request to path %y; the path is illegal",
+                return makeResponse(400, "Cannot service request to path %y; the path is illegal",
                     cx.resource_path);
             }
         }
@@ -1126,9 +1126,9 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         }
 
         *hash<auto> respHdr = getResponseHeadersForFile(path, cx, hdr);
-        # add the content type if it's missing for backwards compatibilitye
-        if (!hdr."Content-Type") {
-            hdr."Content-Type" = get_mime_type_from_ext(path);
+        # add the content type if it's missing for backwards compatibility
+        if (!respHdr."Content-Type") {
+            respHdr."Content-Type" = get_mime_type_from_ext(path);
         }
         return stat_hash.size > chunked_threshold
             ? sendFileChunked(listener, s, cx, hdr, body, stream, respHdr)
