@@ -4445,7 +4445,7 @@ string sql = table.getSelectSql(sh, \args);
     }
 
     bool testMatchAnyUnique(softlist<auto> cols) {
-        if (matchAnyUnique()) {
+        if (matchAnyUnique(cols)) {
             return True;
         }
         foreach AbstractIndex ix in (indexes.iterator()) {
@@ -4464,6 +4464,7 @@ string sql = table.getSelectSql(sh, \args);
         if (!primaryKey.empty() && primaryKey.partialMatchKeys(cols)) {
             return primaryKey;
         }
+
         if (!manual) {
             getConstraintsUnlocked();
         }
@@ -4779,8 +4780,17 @@ string sql = table.getSelectSql(sh, \args);
                 }
             }
             if (info.query_hash.offset || info.query_hash.limit) {
-                if (!testMatchAnyUnique(info.query_hash.orderby)) {
-                    throw "SELECT-ERROR", sprintf("%s: 'orderby': %y with 'offset' = %d, 'limit' = %d does not match "
+                if (!info.query_hash.orderby) {
+                    # use primary key by default
+                    getPrimaryKeyUnlocked();
+                    if (!primaryKey.empty()) {
+                        info.query_hash.orderby = primaryKey.keys();
+                    } else {
+                        throw "SELECT-ERROR", sprintf("%s: select %y supplied but no 'orderby' and the "
+                            "table has no primary key", getDesc(), info.query_hash{"offset", "limit"});
+                    }
+                } else if (!testMatchAnyUnique(info.query_hash.orderby)) {
+                    throw "SELECT-ERROR", sprintf("%s: 'orderby %y' with 'offset %d', 'limit %d' does not match "
                         "any unique constraint", getDesc(), info.query_hash.orderby, info.query_hash.offset,
                         info.query_hash.limit);
                 }
