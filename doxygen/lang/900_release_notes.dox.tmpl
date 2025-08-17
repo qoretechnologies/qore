@@ -79,6 +79,8 @@
       - mark the context as handling file data in the authentication method to enable authentication errors to be
         redirected for handlers handling UI file data
         (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+    - fixed a descriptor leak in non-blocking Socket connect operations
+      (<a href="https://github.com/qorelanguage/qore/issues/4981">issue 4981</a>)
     - fixed a crash when creating a \c LoggerEvent with a missing \c categoryName in the logger_bin module
       (<a href="https://github.com/qorelanguage/qore/issues/4979">issue 4979</a>)
     - fixed @ref Qore::parse_url() "parse_url() logic for paths with \c @ chars
