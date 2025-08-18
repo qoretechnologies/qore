@@ -466,7 +466,7 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
     }
 
     #! Makes a REST request and returns the response
-    static hash<auto> makeRequest(RestClient rest, string meth, *data body, string path, *hash<auto> hdr) {
+    static hash<auto> makeRequest(RestClient rest, string meth, auto body, string path, *hash<auto> hdr) {
         hash<auto> info;
         hash<auto> resp = rest.doRequest(meth, path, body, \info, NOTHING, hdr);
         return {
