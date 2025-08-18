@@ -1791,7 +1791,7 @@ public class LoggerUtil {
         const MaxSummaryLogStringSize = 100;
 
         #! Maximum number of elements in a hash or list to log in a summary message
-        const MaxSummaryElements = 10;
+        const MaxSummaryElements = 20;
     }
 
     #! Returns a summary value for debug logging purposes to avoid logging very large amounts of data
@@ -1799,13 +1799,19 @@ public class LoggerUtil {
         switch (v.typeCode()) {
             case NT_HASH:
                 if (v.size() > MaxSummaryElements) {
-                    return sprintf("hash with %d keys (%y...)", v.size(), (keys v)[0..MaxSummaryElements]);
+                    list<string> kl = keys v;
+                    return (map {
+                        getArgSummary($1.key): getArgSummary($1.value)
+                    }, (v{kl[0..MaxSummaryElements]}).pairIterator()) + {
+                        "_info_": sprintf("hash keys omitted: %y", kl[MaxSummaryElements..]),
+                    };
                 }
                 return map {getArgSummary($1.key): getArgSummary($1.value)}, v.pairIterator();
 
             case NT_LIST:
                 if (v.size() > MaxSummaryElements) {
-                    return sprintf("list with %d entries (%y...)", v.size(), map getArgSummary($1), v[0..MaxSummaryElements]);
+                    return (map getArgSummary($1), v[0..MaxSummaryElements]) + sprintf("remaining %d elements "
+                        "omitted", v.size() - MaxSummaryElements);
                 }
                 return map getArgSummary($1), v;
 
