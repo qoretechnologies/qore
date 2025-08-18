@@ -1338,7 +1338,8 @@ public class DataProviderActionCatalog {
                     break;
 
                 default:
-                    throw "OPTION-ERROR", sprintf("Cannot set option type from \"type\" option with type %y", type);
+                    throw "OPTION-ERROR", sprintf("Cannot set option type for option %y from \"type\" option with "
+                        "type %y", i.key, type);
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",

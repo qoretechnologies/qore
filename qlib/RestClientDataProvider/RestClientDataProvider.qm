@@ -38,7 +38,7 @@
 %requires FileLocationHandler
 
 module RestClientDataProvider {
-    version = "2.0";
+    version = "2.0.1";
     desc = "user module providing a data provider API for REST servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -78,7 +78,9 @@ module RestClientDataProvider {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                RestClientCallWithMethodRequestDataType::Fields{"hdr",}
+                RestClientCallWithMethodRequestDataType::Fields - ("method", "path", "query_args", "body"), {
+                    "required": False,
+                },
             ),
             "output_type": RestClientCallResponseDataType,
         });
@@ -111,6 +113,10 @@ module RestClientDataProvider {
     - @ref RestClientDataProvider::RestClientPutDataProvider "RestClientPutDataProvider"
 
     @section restclientdataprovider_relnotes Release Notes
+
+    @subsection restclientdataprovider_v2_0_1 RestClientDataProvider v2.0.1
+    - fixed REST action \c body types
+      (<a href="https://github.com/qorelanguage/qore/issues/4982">issue 4982</a>)
 
     @subsection restclientdataprovider_v2_0 RestClientDataProvider v2.0
     - added support for the data provider action catalog API
