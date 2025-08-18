@@ -33,7 +33,7 @@ public class RestClientCallRequestDataType inherits HashDataType {
         const Fields = {
             "body": {
                 "display_name": "Body",
-                "type": DataOrNothingType,
+                "type": AutoType,
                 "desc": "The message body",
             },
             "path": {
@@ -53,7 +53,14 @@ public class RestClientCallRequestDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "desc": "Any headers to include in the request",
             },
-        };
+        } + (
+            map {
+                $1.key: ($1.value{"display_name", "short_desc", "desc", "allowed_values", "default_value"} + {
+                    "type": AbstractDataProviderTypeMap{$1.value.type == "auto" ? $1.value.type : "*" + $1.value.type},
+                }),
+            }, (RestConnection::ConnectionScheme.options - ("headers", "validator")).pairIterator(),
+                $1.key !~ /swagger/ && $1.key !~ /ssl/
+        );
     }
 
     #! Creates the object
