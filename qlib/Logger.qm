@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Logger.qm Logger library
 
-/*  Logger.qm Copyright 2018 - 2024 Qore Technologies, s.r.o.
+/*  Logger.qm Copyright 2018 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1780,6 +1780,52 @@ public class StdoutAppender inherits LoggerAppenderWithLayout {
             case EVENT_LOG:
                 print(params);
                 break;
+        }
+    }
+}
+
+#! Utility class
+public class LoggerUtil {
+    public {
+        #! Maximum length of string in characters for a summary log message
+        const MaxSummaryLogStringSize = 100;
+
+        #! Maximum number of elements in a hash or list to log in a summary message
+        const MaxSummaryElements = 10;
+    }
+
+    #! Returns a summary value for debug logging purposes to avoid logging very large amounts of data
+    static auto getArgSummary(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                if (v.size() > MaxSummaryElements) {
+                    return sprintf("hash with %d keys (%y...)", v.size(), (keys v)[0..MaxSummaryElements]);
+                }
+                return map {getArgSummary($1.key): getArgSummary($1.value)}, v.pairIterator();
+
+            case NT_LIST:
+                if (v.size() > MaxSummaryElements) {
+                    return sprintf("list with %d entries (%y...)", v.size(), map getArgSummary($1), v[0..MaxSummaryElements]);
+                }
+                return map getArgSummary($1), v;
+
+            case NT_OBJECT:
+                return sprintf("%s object", v.className());
+
+            case NT_BINARY:
+                if (v.size() > MaxSummaryLogStringSize) {
+                    return sprintf("binary data (%d bytes)", v.size());
+                }
+                return v;
+
+            case NT_STRING:
+                if (v.size() > MaxSummaryLogStringSize) {
+                    return v[0..MaxSummaryLogStringSize] + "...";
+                }
+                return v;
+
+            default:
+                return v;
         }
     }
 }
