@@ -197,7 +197,9 @@ auto v = t.getDefaultValue();
             try {
                 value{key} = field.acceptsValue(val);
             } catch (hash<ExceptionInfo> ex) {
-                rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y field %y: %s: %s", getName(), key, ex.err,
+                AbstractDataProviderType field_type = field.getType();
+                rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y %s %s field %y: %s: %s", getName(),
+                    field.isMandatory() ? "mandatory" : "optional", field_type.getBaseTypeName(), key, ex.err,
                     ex.desc);
             }
         }
