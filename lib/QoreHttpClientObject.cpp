@@ -3157,16 +3157,17 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
 
     if (!msock->socket->isOpen()) {
         if (persistent) {
-            xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as " \
+            xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
                 "persistent, but has been disconnected");
             return nullptr;
         }
 
         if (connect_unlocked(xsink, connection)) {
             // if we have an info hash then write the request-uri key for reporting/logging purposes
-            if (info)
+            if (info) {
                 info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", meth,
                     msgpath && msgpath[0] ? msgpath : "/", http11 ? "1.1" : "1.0"), 0);
+            }
             return nullptr;
         }
     }
@@ -3176,7 +3177,9 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
         http11 ? "1.1" : "1.0", &nh, body, data, size, send_callback, is, max_chunk_size, trailer_callback,
         QORE_SOURCE_HTTPCLIENT, timeout_ms, &msock->m, &aborted);
 
-    //printd(5, "qore_httpclient_priv::sendMessageAndGetResponse() '%s' path: '%s' data: %p size: %d send_callback: %p is: %p aborted: %d rc: %d\n", meth, msgpath, data, (int)size, send_callback, is, aborted, rc);
+    //printd(5, "qore_httpclient_priv::sendMessageAndGetResponse() '%s' path: '%s' data: %p size: %d "
+    //    "send_callback: %p is: %p aborted: %d rc: %d\n", meth, msgpath, data, (int)size, send_callback, is,
+    //    aborted, rc);
 
     // do not exit immediately if the transfer was aborted with a streaming send unless the socket was already closed
     if (rc && (!send_callback || !aborted || !msock->socket->isOpen())) {
