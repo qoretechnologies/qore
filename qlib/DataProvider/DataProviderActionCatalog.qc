@@ -458,7 +458,7 @@ public class DataProviderActionCatalog {
         static hash<string, hash<string, bool>> resolve_output_types;
 
         #! Pending application init handler map: app -> init handler
-        static hash<string, code> initmap;
+        static hash<string, hash<auto>> initmap;
 
         #! Pending application action init handler map: app -> action -> init handler
         static hash<string, hash<string, code>> initactionmap;
@@ -492,7 +492,10 @@ public class DataProviderActionCatalog {
             throw "APP-ERROR", sprintf("Application %y is already pending", app);
         }
 
-        initmap{app} = init;
+        initmap{app} = {
+            "init": init,
+            "module_context": get_module_context_path(),
+        };
     }
 
     #! Registers an app action for deferred initialization / initialization on demand
@@ -539,7 +542,7 @@ public class DataProviderActionCatalog {
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
-        if (exists (*string path = get_module_context_path())) {
+        if (exists (*string path = _mod_init_ctx ?? get_module_context_path())) {
             appmodmap{app.name}{path} = True;
         }
 
@@ -602,7 +605,7 @@ public class DataProviderActionCatalog {
         remove initmap{name};
         remove app_actionmap{name};
         remove initactionmap{name};
-        if (exists (*string path = get_module_context_path())) {
+        if (exists (*string path = _mod_init_ctx ?? get_module_context_path())) {
             remove appmodmap{name}{path};
         }
         *hash<DataProviderAppInfo> app = appcache{name};
@@ -672,17 +675,17 @@ public class DataProviderActionCatalog {
 
         AutoLock al(lck);
         # check that the application exists
-        if (*code init = remove initmap{action.app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{action.app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         remove initactionmap{action.app}{action.action};
 
         *hash<DataProviderAppInfo> app = appcache{action.app};
         if (!app) {
-            throw "ACTION-ERROR", sprintf("application %y not registered (action %y)", action.app, action);
+            throw "ACTION-ERROR", sprintf("Application %y not registered (action %y)", action.app, action);
         }
         if (app.scheme && exists action.cls) {
-            throw "ACTION-ERROR", sprintf("application %y has scheme %y and action has cls %y; it is not allowed to "
+            throw "ACTION-ERROR", sprintf("Application %y has scheme %y and action has cls %y; it is not allowed to "
                 "provide an action class when the application has a scheme", action.app, app.scheme, action.cls);
         }
         appcache{action.app}{ActionCodeFlagMap{action.action_code}} = True;
@@ -692,7 +695,7 @@ public class DataProviderActionCatalog {
                 return;
             }
             list<string> diff = map $1.key, act.pairIterator(), $1.value != action{$1.key};
-            throw "ACTION-ERROR", sprintf("action with application %y, action %y already registered; diff: %y",
+            throw "ACTION-ERROR", sprintf("Action with application %y, action %y already registered; diff: %y",
                 act.app, act.action, diff);
         }
         # add to caches
@@ -783,8 +786,8 @@ public class DataProviderActionCatalog {
             DataProviderActionCatalog::resolveOutputTypes();
         }
         foreach string app in (keys initmap) {
-            if (*code init = remove initmap{app}) {
-                DataProviderActionCatalog::doInit(init);
+            if (*hash<auto> h = remove initmap{app}) {
+                DataProviderActionCatalog::doInit(h);
             }
         }
         return appcache.values();
@@ -802,8 +805,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
@@ -826,8 +829,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
@@ -902,8 +905,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -927,8 +930,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -953,8 +956,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -978,8 +981,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -1019,8 +1022,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending action for the app
         if (*code init = remove initactionmap{app}{action}) {
@@ -1052,8 +1055,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending action for the app
         if (*code init = remove initactionmap{app}{action}) {
@@ -1108,8 +1111,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -1135,8 +1138,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -1168,8 +1171,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -1201,8 +1204,8 @@ public class DataProviderActionCatalog {
         ProviderIndexUtil::checkAppModule(app);
 
         # initialize any pending app
-        if (*code init = remove initmap{app}) {
-            DataProviderActionCatalog::doInit(init);
+        if (*hash<auto> h = remove initmap{app}) {
+            DataProviderActionCatalog::doInit(h);
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
@@ -1518,6 +1521,18 @@ public class DataProviderActionCatalog {
     }
 
     #! Runs initialization and catches exceptions
+    private static doInit(hash<auto> h) {
+        try {
+            *string save = _mod_init_ctx;
+            on_exit _mod_init_ctx = save;
+            _mod_init_ctx = h.module_context;
+            h.init();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s\n", get_exception_string(ex));
+        }
+    }
+
+    #! Runs initialization and catches exceptions
     private static doInit(code init) {
         try {
             init();
@@ -1526,4 +1541,8 @@ public class DataProviderActionCatalog {
         }
     }
 }
+}
+
+namespace Priv {
+thread_local *string _mod_init_ctx;
 }
