@@ -365,22 +365,27 @@ class RestCmd {
             }
         }
 
-        foreach string h in (opt.header) {
-            (*string k, auto v) = (h =~ x/([^:]+):(.+)$/); #/);
-            trim k;
-            trim v;
-            if (!k || !v) {
-                stderr.printf("invalid header %y; expecting \"key: value\" format\n", h);
-                exit(1);
-            }
-            if (exists (auto v0 = rest.getDefaultHeaders(){k})) {
-                if (v0.typeCode() != NT_LIST) {
-                    v0 = (v0,);
+        if (opt.header) {
+            hash<string, bool> nh;
+            foreach string h in (opt.header) {
+                (*string k, auto v) = (h =~ x/([^:]+):(.*)$/);
+                trim k;
+                trim v;
+                if (!k.val()) {
+                    stderr.printf("invalid header %y; expecting \"key: value\" format\n", h);
+                    exit(1);
                 }
-                v0 += v;
-                v = v0;
+                if (nh{k} && v.val() && (exists (auto v0 = rest.getDefaultHeaders(){k}))) {
+                    if (v0.typeCode() != NT_LIST) {
+                        v0 = (v0,);
+                    }
+                    v0 += v;
+                    v = v0;
+                } else {
+                    nh{k} = True;
+                }
+                rest.addDefaultHeaders((k: v));
             }
-            rest.addDefaultHeaders((k: v));
         }
 
         if (exists body) {

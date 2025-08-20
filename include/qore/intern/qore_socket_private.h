@@ -760,7 +760,7 @@ struct qore_socket_private {
         }
     }
 
-    // issue #3879: must add Content-Length if not present, even if there is no message body
+    // issue #3879: must add Content-Length in responses if not present, even if there is no message body
     /** see https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
     */
     DLLLOCAL static void do_headers(QoreString& hdr, const QoreHashNode* headers, size_t size, bool addsize = true) {
@@ -3001,7 +3001,8 @@ struct qore_socket_private {
         th.finalize(total);
     }
 
-    DLLLOCAL void sendHttpChunkedBodyFromInputStream(InputStream* is, size_t max_chunk_size, int timeout, ExceptionSink* xsink, QoreThreadLock* l, const ResolvedCallReferenceNode* trailer_callback) {
+    DLLLOCAL void sendHttpChunkedBodyFromInputStream(InputStream* is, size_t max_chunk_size, int timeout,
+            ExceptionSink* xsink, QoreThreadLock* l, const ResolvedCallReferenceNode* trailer_callback) {
         if (sock == QORE_INVALID_SOCKET) {
             se_not_open("Socket", "sendHttpChunkedBodyFromInputStream", xsink);
             return;
@@ -3042,7 +3043,8 @@ struct qore_socket_private {
             // send HTTP chunk prelude with chunk size
             QoreString str;
             str.sprintf("%x\r\n", (int)r);
-            int rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(), timeout, total, true);
+            int rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(),
+                timeout, total, true);
             if (rc < 0)
                 return;
 
@@ -3050,7 +3052,8 @@ struct qore_socket_private {
 
             // send chunk data, if any
             if (r) {
-                rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", (const char*)buf->getPtr(), r, timeout, total, true);
+                rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", (const char*)buf->getPtr(), r,
+                    timeout, total, true);
                 if (rc < 0)
                     return;
                 do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET, buf->getPtr(), r);
@@ -3058,13 +3061,16 @@ struct qore_socket_private {
                 // get and send chunk trailers, if any
                 ReferenceHolder<QoreHashNode> h(xsink);
 
-                if (runTrailerCallback(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", *trailer_callback, l, h))
+                if (runTrailerCallback(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", *trailer_callback, l,
+                    h)) {
                     return;
+                }
                 if (h) {
                     str.clear();
                     do_headers(str, *h, 0, false);
 
-                    rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(), timeout, total, true);
+                    rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(),
+                        timeout, total, true);
                     if (rc < 0)
                         return;
 
@@ -3076,7 +3082,8 @@ struct qore_socket_private {
             // close chunk if we sent no trailers
             if (!trailers) {
                 str.set("\r\n");
-                rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(), timeout, total, true);
+                rc = sendIntern(xsink, "Socket", "sendHttpChunkedBodyFromInputStream", str.c_str(), str.size(),
+                    timeout, total, true);
                 if (rc < 0)
                     return;
             }
@@ -3138,18 +3145,20 @@ struct qore_socket_private {
             info->setKeyValue("request-uri", new QoreStringNode(hdr), nullptr);
         }
 
-        getSendHttpMessageHeadersCommon(hdr, info, headers, size, source);
+        // issue #4983: do not sent a "Content-Length: 0" header with GET, HEAD, and TRACE requests
+        bool addsize = strcmp(method, "GET") && strcmp(method, "HEAD") && strcmp(method, "TRACE");
+        getSendHttpMessageHeadersCommon(hdr, info, headers, size, source, addsize);
     }
 
     DLLLOCAL void getSendHttpMessageHeadersCommon(QoreString& hdr, QoreHashNode* info, const QoreHashNode* headers,
-            size_t size, int source) {
+            size_t size, int source, bool addsize = true) {
         // send event
         do_send_http_message_event(hdr, headers, source);
 
         // add headers
         hdr.concat("\r\n");
         // insert headers
-        do_headers(hdr, headers, size);
+        do_headers(hdr, headers, size, addsize);
     }
 
     DLLLOCAL int sendHttpMessage(ExceptionSink* xsink, QoreHashNode* info, const char* cname, const char* mname,
@@ -3168,8 +3177,10 @@ struct qore_socket_private {
             info->setKeyValue("request-uri", new QoreStringNode(hdr), nullptr);
         }
 
+        // issue #4983: do not sent a "Content-Length: 0" header with GET, HEAD, and TRACE requests
+        bool addsize = strcmp(method, "GET") && strcmp(method, "HEAD") && strcmp(method, "TRACE");
         return sendHttpMessageCommon(xsink, hdr, info, cname, mname, headers, body, data, size, send_callback,
-            input_stream, max_chunk_size, trailer_callback, source, timeout_ms, l, aborted);
+            input_stream, max_chunk_size, trailer_callback, source, timeout_ms, l, aborted, addsize);
     }
 
     DLLLOCAL int sendHttpResponse(ExceptionSink* xsink, QoreHashNode* info, const char* cname, const char* mname,
@@ -3197,7 +3208,7 @@ struct qore_socket_private {
         const char* mname, const QoreHashNode* headers, const QoreStringNode* body, const void* data,
         size_t size, const ResolvedCallReferenceNode* send_callback, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
-        QoreThreadLock* l = nullptr, bool* aborted = nullptr) {
+        QoreThreadLock* l = nullptr, bool* aborted = nullptr, bool addsize = true) {
         assert(xsink);
         assert(!(data && send_callback));
         assert(!(data && input_stream));
@@ -3209,7 +3220,7 @@ struct qore_socket_private {
         // add headers
         hdr.concat("\r\n");
         // insert headers
-        do_headers(hdr, headers, size && data ? size : 0);
+        do_headers(hdr, headers, size && data ? size : 0, addsize);
 
         //printd(5, "qore_socket_private::sendHttpMessage() hdr: %s\n", hdr.c_str());
 
