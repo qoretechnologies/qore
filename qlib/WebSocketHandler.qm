@@ -543,6 +543,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
+        sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         try {
             # issue #3225: handle exceptions in WebSocketHandler and remove the connection

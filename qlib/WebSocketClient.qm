@@ -992,6 +992,7 @@ ws.setEventQueue();
         }
         # unconditionally remove any "token_type" option
         remove http_opts.token_type;
+        http_opts.encoding = "UTF-8";
 
         hc = new HTTPClient(http_opts);
     }
