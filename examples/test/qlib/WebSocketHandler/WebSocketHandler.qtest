@@ -57,6 +57,10 @@ class MyWsConnection inherits WebSocketConnection {
             case "PING":
                 send("test ping", WSOP_Ping, True);
                 break;
+            case =~ /^ECHO/:
+                # echo the message back
+                send(msg.substr(4), WSOP_Text, True);
+                break;
             default:
                 send("RESPONSE:" + msg);
                 break;
@@ -193,6 +197,8 @@ class WebSocketHandlerTest inherits QUnit::Test {
             }, c);
             wsc.connect();
             assertTrue(wsc.isOpen());
+            wsc.send("ECHO😀");
+            assertEq("😀", msgs.get(5s));
             wsc.send("FRAG", WSOP_Text, False);
             wsc.send("MENT", WSOP_Continuation, True);
             assertEq("PART1-PART2", msgs.get(5s));
@@ -202,9 +208,9 @@ class WebSocketHandlerTest inherits QUnit::Test {
             # wait for ping
             c.waitForZero();
             assertEq(WSOP_Text, raw_msgs[0].op);
-            assertEq(False, raw_msgs[0].fin);
-            assertEq(WSOP_Continuation, raw_msgs[1].op);
-            assertEq(True, raw_msgs[1].fin);
+            assertEq(False, raw_msgs[1].fin);
+            assertEq(WSOP_Continuation, raw_msgs[2].op);
+            assertEq(True, raw_msgs[2].fin);
         }
 
         wsHandler.errs.get(10s);
