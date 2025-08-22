@@ -3517,7 +3517,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         return nullptr;
     }
 
-    QoreValue body;
+    ValueHolder body(xsink);
     const char* content_encoding = nullptr;
 
     // do not read any message body for messages that cannot have one
@@ -3531,7 +3531,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     */
     //printd(5, "qore_httpclient_priv::send_internal() this: %p bodyp: %d code: %d\n", this, bodyp, code);
 
-    qore_uncompress_to_string_t dec = 0;
+    qore_uncompress_to_string_t dec = nullptr;
 
     const char* conn = get_string_header(xsink, **ans, "connection", true);
     if (*xsink) {
@@ -3605,7 +3605,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         }
 
         // do *not* read a chunked body if the content-type is "text/event-stream", indicating an SSE stream
-        if (te && !strcasecmp(te, "chunked") && (!ct || strcmp(ct, "text/event-stream"))) { // check for chunked response body
+        if (te && !strcasecmp(te, "chunked") && (!ct || strcmp(ct, "text/event-stream"))) {
+            // check for chunked response body
             do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
             ReferenceHolder<QoreHashNode> nah(xsink);
             if (os) {
@@ -3682,7 +3683,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             if (*xsink && !msock->socket->isOpen()) {
                 disconnect_unlocked();
             }
-            //printf("body: %p\n", body);
+            //printf("body: %p\n", body->getInternalNode());
         }
     }
 
@@ -3714,29 +3715,29 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                     ans = nullptr;
                 }
             } else {
-                BinaryNode* bobj = body.get<BinaryNode>();
-                QoreStringNode* str = dec(bobj, msock->socket->getEncoding(), xsink);
-                bobj->deref();
-                body = str;
+                ValueHolder bobj(body.release(), xsink);
+                body = dec(bobj->get<BinaryNode>(), msock->socket->getEncoding(), xsink);
+                if (*xsink) {
+                    ans = nullptr;
+                }
             }
         }
 
         if (body) {
             if (info) {
-                info->setKeyValue("response-body", body.refSelf(), xsink);
+                info->setKeyValue("response-body", body.getReferencedValue(), xsink);
             }
 
             // send data to recv_callback (already unlocked)
             if (recv_callback) {
-                ValueHolder bh(body, xsink);
                 // call body callbback and then header callback with no argument
                 if (msock->socket->priv->runDataCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
-                        body.getInternalNode(), false)
+                        body->getInternalNode(), false)
                     || msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
                         nullptr, nullptr, send_aborted, obj))
                     return nullptr;
             } else {
-                ans->setKeyValue("body", body, xsink);
+                ans->setKeyValue("body", body.release(), xsink);
             }
         }
     }

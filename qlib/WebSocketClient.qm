@@ -309,6 +309,13 @@ public const WsDefaultPort = 80;
 */
 public const EVENT_WS_DATA = "ws-data-event";
 
+#! WebSocket data error constant
+/** The event data has the following key:
+    - \c buf: the serialized message buffer
+    - \c ex: the exception information hash
+*/
+public const EVENT_WS_ERROR = "ws-data-error";
+
 #! WebSocket ping event constant
 /** The event data has the following key:
     - \c data: the message data
@@ -1573,6 +1580,10 @@ class MyObserver inherits Observer {
         try {
             return handleEventData(deserializeData(buf));
         } catch (hash<ExceptionInfo> ex) {
+            notifyObservers(EVENT_WS_ERROR, {
+                "buf": buf,
+                "data": ex,
+            });
             logError("Error handling WebSocket event data message: %s (message: %y)", get_exception_string(ex), buf);
             return WSEDC_CONTINUE;
         }
