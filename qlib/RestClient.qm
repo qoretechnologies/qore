@@ -2427,15 +2427,15 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 }
                 h = send(body, m, path, hdr, False, \info);
                 info."response-code" = h.status_code;
-                debug("RestClient sent: %y received: %y (%s bytes%s)", info."request-uri", info."response-uri",
-                    h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
+                debug("RestClient sent: %y received: %y (%y: %s bytes%s)", info."request-uri", info."response-uri",
+                    (h.body ? h.body.encoding() : "n/a"), h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
                 if (!h."content-type".val() && assume_content_type.val()) {
                     debug("missing content-type from response; assuming %y", assume_content_type);
                     h."content-type" = assume_content_type;
                 }
                 info."response-body-raw" = h.body;
             } catch (hash<ExceptionInfo> ex) {
-                debug("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
+                error("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
                     ex.desc);
                 info."response-code" = info."response-headers".status_code;
                 if (retry && needsRefresh(ex, info)) {
