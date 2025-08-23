@@ -999,12 +999,11 @@ public class AbstractAuthenticator {
         identified and authorized; see @ref httpserverutil_request_context for information about this value
         request can be authenticated based on the source IP address
         @param ip the IP address of the source connection
-
-        @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated
-        (however this base class method as implemented here will never throw any exceptions
+        @param authenticated set to True if the connection was authenticated based on the source IP address
     */
-    authenticateByIP(reference<hash<auto>> cx, string ip) {
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
         authenticateByIP(ip, \cx.user);
+        authenticated = True;
     }
 
     #! called to authenticate a user for a connection
@@ -1029,11 +1028,11 @@ public class AbstractAuthenticator {
         authenticated based on the source IP address (this method returns the string \c "admin")
 
         @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated
-        (however this base class method as implemented here will never throw any exceptions
 
         @note Do not use this method; use authenticateByIP(reference<hash<auto>> cx, reference<string> ip) instead
     */
     deprecated authenticateByIP(string ip, reference<string> user) {
+        throw "AUTHENTICATION-ERROR", "cannot authenticate by IP address";
     }
 
     #! returns a hash with one item - \c WWW-Authenticate header set to correct realm
@@ -1066,7 +1065,7 @@ public class AbstractAuthenticator {
         };
     }
 
-    #! primary method called to authenticate each request
+    #! Primary method called to authenticate each request
     /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
         @param hdr a hash of request headers
         @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
@@ -1085,52 +1084,123 @@ public class AbstractAuthenticator {
             return;
         }
 
+        bool authenticated;
+        if (*hash<HttpResponseInfo> rv = authenticateRequestIntern(listener, hdr, \cx, \authenticated)) {
+            return rv;
+        }
+
+        if (!authenticated) {
+            return do401(NOTHING, cx);
+        }
+    }
+
+    #! Primary method called to authenticate each request
+    /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
+        @param hdr a hash of request headers
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
+        @param authenticated set to True if the request was authenticated; this output value is ignored if the method
+        returns a response info hash
+
+        @return returns @ref nothing if there were no errors, otherwise a hash can be returned which will be sent to
+        the requester as the response
+    */
+    private *hash<HttpResponseInfo> authenticateRequestIntern(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
         if (hdr.authorization) {
-            if (hdr.authorization !~ /basic /i) {
-                return do401("Only basic authentication is supported", cx);
-            }
-
-            *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
-            if (!bstr) {
-                return do401(NOTHING, cx);
-            }
-
-            string str = parse_base64_string_to_string(bstr);
-            int i = str.find(":");
-            if (i < 1 || i == (str.size() -1)) {
-                return do401(NOTHING, cx);
-            }
-
-            string user = str.substr(0, i);
-            *string pass = str.substr(i + 1);
-
             try {
-                authenticate(\cx, user, pass);
-                if (!cx.user.val()) {
-                    cx.user = user;
+                if (hdr.authorization =~ /^Basic .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processBasicAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else if (hdr.authorization =~ /^Digest .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processDigestAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else if (hdr.authorization =~ /^Bearer .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processBearerAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else {
+                    listener.logError("Unsupported 'Authorization' header: %s (from %s)", hdr.authorization,
+                        cx."peer-info".address_desc);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "AUTHENTICATION-ERROR") {
-                    return do401(NOTHING, cx);
+                    listener.logError("Error processing 'Authorization' header: %s (from %s)",
+                        get_exception_string(ex), cx."peer-info".address_desc);
                 } else {
                     rethrow;
                 }
             }
+            if (authenticated) {
+                return;
+            }
+        }
 
-            return;
+        if (hdr.cookie) {
+            if (*hash<HttpResponseInfo> rv = processCookieHeader(listener, hdr, \cx, \authenticated)) {
+                return rv;
+            }
+            if (authenticated) {
+                return;
+            }
         }
 
         # only try ip-based authentication if the connection is not already authenticated
         try {
-            authenticateByIP(\cx, cx."peer-info".address);
-            return;
+            authenticateByIP(\cx, cx."peer-info".address, \authenticated);
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string str = sprintf("%s: %s: %s: received from %s", get_ex_pos(ex), ex.err, ex.desc,
+            string str = sprintf("Error in IP authentication: %s (from %s)", get_exception_string(ex),
                 cx."peer-info".address_desc);
             listener.logError("%s", str);
         }
-        return do401(NOTHING, cx);
+    }
+
+    private *hash<HttpResponseInfo> processBasicAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
+        if (!bstr) {
+            listener.logError("Invalid Basic Authorization header %y received from %s", bstr,
+                cx."peer-info".address_desc);
+            return;
+        }
+
+        string str = parse_base64_string_to_string(bstr);
+        int i = str.find(":");
+        if (i < 1 || i == (str.size() -1)) {
+            listener.logError("Invalid Basic Authorization header (decoded to %y) received from %s", str,
+                cx."peer-info".address_desc);
+            return;
+        }
+
+        string user = str.substr(0, i);
+        *string pass = str.substr(i + 1);
+
+        authenticate(\cx, user, pass);
+        if (!cx.user.val()) {
+            cx.user = user;
+        }
+        authenticated = True;
+    }
+
+    private *hash<HttpResponseInfo> processDigestAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
+    }
+
+    private *hash<HttpResponseInfo> processBearerAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
+    }
+
+    private *hash<HttpResponseInfo> processCookieHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
     }
 
     #! Called after a request has been handled to allow the authenticator to remove any thread-local auth information
