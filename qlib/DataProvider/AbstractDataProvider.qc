@@ -2008,10 +2008,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.1
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithData(hash<DataProviderActionInfo> action, auto req) {
-        if (!action.data_dependent_options || !req.val()) {
-            return action.options;
+        if (action.data_dependent_options) {
+            if (req.val()) {
+                return tryGetActionOptionsWithDataImpl(action, req);
+            }
+            if (supportsRequest() && (*AbstractDataProviderType rv = getRequestTypeImpl())
+                && (*hash<auto> fields = rv.getFields())) {
+                return DataProviderActionCatalog::getActionOptionFromFields(fields);
+            }
         }
-        return tryGetActionOptionsWithDataImpl(action, req);
+        return action.options;
     }
 
     #! Returns the description of an outbound message, if any
