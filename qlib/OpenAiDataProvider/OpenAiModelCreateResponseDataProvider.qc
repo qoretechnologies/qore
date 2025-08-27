@@ -53,6 +53,10 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
     }
 
     #! Creates the object from the arguments
+    constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
+    }
+
+    #! Creates the object from the arguments
     constructor(*RestClient rest, hash<auto> model) : OpenAiDataProviderCommon(rest) {
         self.model = model;
     }
@@ -79,17 +83,19 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
         if (req.tools) {
             req.tools = map getTool($1), req.tools;
         }
-        req.model = model.id;
-
-printf("R: %N\n", req);
-
+        if (model) {
+            req.model = model.id;
+        }
         hash<auto> rv = doRestCommand("POST", "responses", req).body;
+        if (rv.output) {
+            rv.output_text = getOutputText(rv.output);
+        }
         return rv;
     }
 
     #! Processes input in a request
-    private static hash<auto> getInput(hash<auto> input) {
-        hash<auto> rv = input.firstValue();
+    private static auto getInput(hash<auto> input) {
+        auto rv = input.firstValue();
         if (rv.content) {
             rv.content = map getContent($1), rv.content;
             if (rv.content.lsize() == 1 && (rv.content[0].typeCode() == NT_STRING)) {
@@ -145,6 +151,22 @@ printf("R: %N\n", req);
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns output text for the output
+    *string getOutputText(list<auto> output) {
+        string rv;
+        foreach hash<auto> h0 in (output) {
+            foreach hash<auto> h1 in (h0.content) {
+                if (h1.text) {
+                    if (rv.val()) {
+                        rv += "\n\n";
+                    }
+                    rv += h1.text;
+                }
+            }
+        }
+        return rv;
     }
 }
 
@@ -837,28 +859,410 @@ public class OpenAiModelToolDataType inherits HashDataType {
                 "short_desc": "A tool that searches for relevant content from uploaded files",
                 "desc": "A tool that searches for relevant content from uploaded files",
                 "type": OpenAiModelFileSearchToolDataType,
-                "exclusive_with": ("function", "web_search", "computer_use"),
+                "exclusive_with": ("function", "web_search", "computer_use", "mcp"),
             },
             "function": {
                 "display_name": "Function Tool",
                 "short_desc": "Defines a function in your own code the model can choose to call",
                 "desc": "Defines a function in your own code the model can choose to call",
                 "type": OpenAiModelFunctionToolDataType,
-                "exclusive_with": ("file_search", "web_search", "computer_use"),
+                "exclusive_with": ("file_search", "web_search", "computer_use", "mcp"),
             },
             "web_search": {
                 "display_name": "Web Search Tool",
                 "short_desc": "This tool searches the web for relevant results to use in a response",
                 "desc": "This tool searches the web for relevant results to use in a response",
                 "type": OpenAiModelWebSearchToolDataType,
-                "exclusive_with": ("file_search", "function", "computer_use"),
+                "exclusive_with": ("file_search", "function", "computer_use", "mcp"),
             },
             "computer_use": {
                 "display_name": "Computer Use Tool",
                 "short_desc": "A tool that controls a virtual computer",
                 "desc": "A tool that controls a virtual computer",
                 "type": OpenAiModelComputerUseToolDataType,
-                "exclusive_with": ("file_search", "function", "web_search"),
+                "exclusive_with": ("file_search", "function", "web_search", "mcp"),
+            },
+            "mcp": {
+                "display_name": "MCP Tool",
+                "short_desc": "Gives the model access to additional tools through the Model Context Protocol",
+                "desc": "Gives the model access to additional tools through the Model Context Protocol",
+                "type": new HashDataType(AutoHashOrNothingType, "McpTool", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "server_label": {
+                            "display_name": "Server Label",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "A label for this MCP server, used to identify it in tool calls",
+                        },
+                        "type": {
+                            "display_name": "Type",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The type of the MCP server",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "MCP",
+                                    "value": "mcp",
+                                },
+                            ),
+                            "default_value": "mcp",
+                        },
+                        "allowed_tools": {
+                            "display_name": "Allowed Tools",
+                            "type": AbstractDataProviderTypeMap."any",
+                            "desc": "List of allowed tool names or a filter object",
+                        },
+                        "authorization": {
+                            "display_name": "Authorization Token",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "The authorization token to use when connecting to the MCP server",
+                        },
+                        "connector_id": {
+                            "display_name": "Connector ID",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "Identifier for service connectors, like those available in ChatGPT. One of "
+                                "`server_url` or `connector_id` must be provided",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "value": "connector_dropbox",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_gmail",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_googlecalendar",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_googledrive",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_microsoftteams",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_outlookcalendar",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_outlookemail",
+                                },
+                                <AllowedValueInfo>{
+                                    "value": "connector_sharepoint",
+                                },
+                            ),
+                            # allow for future connector ID values
+                            "allowed_values_creatable": True,
+                            "exclusive_with": ("server_url",),
+                            "required_groups": ("server",),
+                        },
+                        "headers": {
+                            "display_name": "Headers",
+                            "type": AbstractDataProviderTypeMap."*hash",
+                            "desc": "Optional HTTP headers to send to the MCP server. Use for authentication or "
+                                "other purposes",
+                        },
+                        "require_approval": {
+                            "display_name": "Require Approval?",
+                            "type": AbstractDataProviderTypeMap."any",
+                            "desc": "Specify which of the MCP server's tools require approval",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Always",
+                                    "value": "always",
+                                    "desc": "All tool calls require approval",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Never",
+                                    "value": "never",
+                                    "desc": "No tool calls require approval",
+                                },
+                            ),
+                            "default_value": "always",
+                            "allowed_values_creatable": True,
+                        },
+                        "server_description": {
+                            "display_name": "Server Description",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "Optional description of the MCP server, used to provide more context",
+                        },
+                        "server_url": {
+                            "display_name": "Server URL",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "The URL of the MCP server. One of `server_url` or `connector_id` must be "
+                                "provided",
+                            "exclusive_with": ("connection_id",),
+                            "required_groups": ("server",),
+                        },
+                    }.pairIterator()
+                )),
+                "exclusive_with": ("file_search", "function", "web_search", "computer_use"),
+            },
+            "code_interpreter": {
+                "display_name": "Code Interpreter Tool",
+                "short_desc": "A tool that runs Python code to help generate a response to a prompt",
+                "desc": "A tool that runs Python code to help generate a response to a prompt",
+                "type": new HashDataType(AutoHashOrNothingType, "CodeInterpreterTool", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "container": {
+                            "display_name": "Server Label",
+                            "type": AbstractDataProviderTypeMap."any",
+                            "desc": "The code interpreter container. Can be a container ID or an object that "
+                                "specifies uploaded file IDs to make available to your code",
+                        },
+                        "type": {
+                            "display_name": "Type",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The type of the code interpreter tool",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Code Interpreter",
+                                    "value": "code_interpreter",
+                                },
+                            ),
+                            "default_value": "code_interpreter",
+                        },
+                    }.pairIterator()
+                )),
+                "exclusive_with": ("file_search", "function", "web_search", "computer_use"),
+            },
+            "image_generation": {
+                "display_name": "Image Generation Tool",
+                "short_desc": "A tool that generates images using a model like 'gpt-image-1'",
+                "desc": "A tool that generates images using a model like `gpt-image-1`",
+                "type": new HashDataType(AutoHashOrNothingType, "ImageGenerationTool", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "type": {
+                            "display_name": "Type",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The type of the image generation tool",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Image Generation",
+                                    "value": "image_generation",
+                                },
+                            ),
+                            "default_value": "image_generation",
+                        },
+                        "background": {
+                            "display_name": "Background",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "Background type for the generated image",
+                            "default_value": "auto",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Auto",
+                                    "value": "auto",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Opaque",
+                                    "value": "opaque",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Transparent",
+                                    "value": "transparent",
+                                },
+                            ),
+                        },
+                        "input_fidelity": {
+                            "display_name": "Input Fidelity",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "Control how much effort the model will exert to match the style and features, "
+                                "especially facial features, of input images. This parameter is only supported for "
+                                "`gpt-image-1`",
+                            "default_value": "low",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "High",
+                                    "value": "high",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Low",
+                                    "value": "low",
+                                },
+                            ),
+                        },
+                        "input_image_mask": {
+                            "display_name": "Input Image Mask",
+                            "type": new HashDataType(AutoHashOrNothingType, "ImageGenerationTool", (
+                                map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                                    "file_id": {
+                                        "display_name": "File ID",
+                                        "type": AbstractDataProviderTypeMap."*string",
+                                        "desc": "File ID for the mask image",
+                                    },
+                                    "image_url": {
+                                        "display_name": "Image URL",
+                                        "type": AbstractDataProviderTypeMap."*string",
+                                        "desc": "Base64-encoded mask image",
+                                    },
+                                }.pairIterator()
+                            )),
+                            "desc": "Optional mask for inpainting",
+                        },
+                        "model": {
+                            "display_name": "Model",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The image generation model to use",
+                            "default_value": "gpt-image-1",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "gpt-image-1",
+                                    "value": "gpt-image-1",
+                                },
+                            ),
+                            "allowed_values_creatable": True,
+                        },
+                        "moderation": {
+                            "display_name": "Moderation",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "Moderation level for the generated image",
+                            "default_value": "auto",
+                        },
+                        "output_compression": {
+                            "display_name": "Output Compression",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Compression level for the generated image",
+                            "default_value": 100,
+                        },
+                        "output_format": {
+                            "display_name": "Output Format",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The format of the generated image",
+                            "default_value": "png",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "PNG",
+                                    "value": "png",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "JPG",
+                                    "value": "jpg",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "WEBP",
+                                    "value": "webp",
+                                },
+                            ),
+                        },
+                        "partial_images": {
+                            "display_name": "Partial Images",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Number of partial images to generate in streaming mode, from `0` (default) to "
+                                "`3`",
+                            "default_value": 0,
+                        },
+                        "quality": {
+                            "display_name": "Quality",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "Quality level for the generated image",
+                            "default_value": "auto",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Auto",
+                                    "value": "auto",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Low",
+                                    "value": "low",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "Medium",
+                                    "value": "medium",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "High",
+                                    "value": "high",
+                                },
+                            ),
+                        },
+                        "size": {
+                            "display_name": "Image Size",
+                            "short_desc": "The size of the generated image(s)",
+                            "desc": "The size of the generated image(s)",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Auto",
+                                    "value": "auto",
+                                    "desc": "The default size for the model (`gpt-image-1` only)",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "1024x1024",
+                                    "value": "1024x1024",
+                                    "desc": "1024 x 1024 pixels",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "1024x1536",
+                                    "value": "1024x1536",
+                                    "desc": "1024 x 1536 pixels",
+                                },
+                                <AllowedValueInfo>{
+                                    "display_name": "1536x1024",
+                                    "value": "1536x1024",
+                                    "desc": "1536 x 1024 pixels",
+                                },
+                            ),
+                            "default_value": "auto",
+                        },
+                    }.pairIterator()
+                )),
+                "exclusive_with": ("file_search", "function", "web_search", "computer_use"),
+            },
+            "local_shell": {
+                "display_name": "Local Shell Tool",
+                "short_desc": "A tool that allows the model to execute shell commands in a local environment",
+                "desc": "A tool that allows the model to execute shell commands in a local environment",
+                "type": new HashDataType(AutoHashOrNothingType, "LocalShellTool", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "type": {
+                            "display_name": "Type",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The type of the local shell tool",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Local Shell",
+                                    "value": "local_shell",
+                                },
+                            ),
+                            "default_value": "local_shell",
+                        },
+                    }.pairIterator()
+                )),
+                "exclusive_with": ("file_search", "function", "web_search", "computer_use"),
+            },
+            "custom_tool": {
+                "display_name": "Custom Tool",
+                "short_desc": "A custom tool defined by the user",
+                "desc": "A custom tool defined by the user",
+                "type": new HashDataType(AutoHashOrNothingType, "CustomTool", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "name": {
+                            "display_name": "Tool Name",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The name of the custom tool",
+                        },
+                        "description": {
+                            "display_name": "Tool Description",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "A description of the custom tool used by the model to determine whether or not "
+                                "to call it",
+                        },
+                        "type": {
+                            "display_name": "Type",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The type of the custom tool",
+                            "allowed_values": (
+                                <AllowedValueInfo>{
+                                    "display_name": "Custom",
+                                    "value": "custom",
+                                },
+                            ),
+                            "default_value": "custom",
+                        },
+                        "format": {
+                            "display_name": "Tool Parameters",
+                            "type": AbstractDataProviderTypeMap."*hash",
+                            "desc": "The input format for the custom tool. Default is unconstrained text",
+                        },
+                    }.pairIterator()
+                )),
+                "exclusive_with": ("file_search", "function", "web_search", "computer_use"),
             },
         };
     }
@@ -911,11 +1315,52 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
                     "conversations",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "prompt": {
+                "display_name": "Prompt",
+                "short_desc": "Configuration options for the prompt sent to the model",
+                "desc": "Configuration options for the prompt sent to the model",
+                "type": new HashDataType(AutoHashOrNothingType, "Prompt", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "id": {
+                            "display_name": "Prompt ID",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "The unique identifier of the prompt template to use",
+                        },
+                        "variables": {
+                            "display_name": "Variables",
+                            "type": AbstractDataProviderTypeMap."*hash",
+                            "desc": "Optional map of values to substitute in for variables in your prompt. The "
+                                "substitution values can either be strings, or other Response input types like "
+                                "images or files",
+                        },
+                        "version": {
+                            "display_name": "Version",
+                            "type": AbstractDataProviderTypeMap."*string",
+                            "desc": "Optional version of the prompt template",
+                        },
+                    }.pairIterator()
+                )),
+            },
+            "prompt_cache_key": {
+                "display_name": "Prompt Cache Key",
+                "short_desc": "A key that can be used to cache prompts for the model",
+                "desc": "Used by OpenAI to cache responses for similar requests to optimize your cache hit rates",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "reasoning": {
                 "display_name": "Reasoning",
                 "short_desc": "Configuration options for o-series reasoning models",
                 "desc": "Configuration options for o-series reasoning models",
                 "type": ReasoningOrNothingDataType,
+            },
+            "safety_identifier": {
+                "display_name": "Safety Identifier",
+                "short_desc": "An optional unique identifier that enables additional safety checks",
+                "desc": "A stable identifier used to help detect users of your application that may be violating "
+                    "OpenAI's usage policies. The IDs should be a string that uniquely identifies each user. OpenAI "
+                    "recommends hashing their username or email address, in order to avoid sending any identifying "
+                    "information",
+                "type": AbstractDataProviderTypeMap."*string",
             },
             "service_tier": {
                 "display_name": "Service Tier",
@@ -942,6 +1387,11 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
                         "desc": "The request will be processed using the flex service tier",
                         "value": "flex",
                     },
+                    <AllowedValueInfo>{
+                        "display_name": "Priority",
+                        "desc": "The request will be processed using the priority service tier",
+                        "value": "priority",
+                    },
                 ),
             },
             "store": {
@@ -952,6 +1402,25 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
                 "default_value": False,
             },
             "stream": OpenAiChatCompletionRequestType::Fields.stream,
+            "stream_options": {
+                "display_name": "Stream Options",
+                "short_desc": "Options for controlling the stream output",
+                "desc": "Options for controlling the stream output",
+                "type": new HashDataType(AutoHashOrNothingType, "StreamOptions", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "include_obfuscation": {
+                            "display_name": "Include Obfuscation?",
+                            "type": AbstractDataProviderTypeMap."bool",
+                            "desc": "When true, stream obfuscation will be enabled. Stream obfuscation adds random "
+                                "characters to an `obfuscation` field on streaming delta events to normalize payload "
+                                "sizes as a mitigation to certain side-channel attacks. These obfuscation fields are "
+                                "included by default, but add a small amount of overhead to the data stream. You can "
+                                "set `include_obfuscation` to `false` to optimize for bandwidth if you trust the "
+                                "network links between your application and the OpenAI API",
+                        },
+                    }.pairIterator()
+                )),
+            },
             "temperature": OpenAiChatCompletionRequestType::Fields.temperature,
             "text": {
                 "display_name": "Response Text Format",
@@ -965,6 +1434,13 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
                 "short_desc": "The tools that the model can use to generate a response",
                 "desc": "The tools that the model can use to generate a response",
                 "type": new SoftListDataType("*ModelToolList", OpenAiModelToolDataType, True),
+            },
+            "top_logprobs": {
+                "display_name": "Top Log Probabilities",
+                "short_desc": "The number of most likely tokens to return at each token position",
+                "desc": "An integer between `0` and `20` specifying the number of most likely tokens to return at "
+                    "each token position, each with an associated log probability",
+                "type": AbstractDataProviderTypeMap."*int",
             },
             "top_p": OpenAiChatCompletionRequestType::Fields.top_p,
             "truncation": {
@@ -1204,7 +1680,8 @@ public class OpenAiModelCreateResponseResponseDataType inherits HashDataType {
             "output_text": {
                 "display_name": "Output Text",
                 "short_desc": "The text generated by the model",
-                "desc": "The text generated by the model",
+                "desc": "SDK-only convenience property that contains the aggregated text output from all "
+                    "`output_text` items in the output array, if any",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "parallel_tool_calls": {
