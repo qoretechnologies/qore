@@ -452,10 +452,10 @@ class ObjectBase inherits Qore::Serializable {
 class SchemaBase inherits Qore::Serializable {
     public {
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *float maximum;
+        *softfloat maximum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *float minimum;
+        *softfloat minimum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
         *bool exclusiveMax;
@@ -496,8 +496,8 @@ class SchemaBase inherits Qore::Serializable {
         @param oh deserialized hash from the source schema description
      */
     public constructor(string objType, hash<auto> oh) {
-        optional_field(objType, oh, "maximum", (NT_FLOAT: True, NT_INT: True), \maximum);
-        optional_field(objType, oh, "minimum", (NT_FLOAT: True, NT_INT: True), \minimum);
+        optional_field(objType, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+        optional_field(objType, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
         optional_field(objType, oh, "exclusiveMaximum", NT_BOOLEAN, \exclusiveMax);
         optional_field(objType, oh, "exclusiveMinimum", NT_BOOLEAN, \exclusiveMin);
         optional_field(objType, oh, "maxLength", NT_INT, \maxLength);
@@ -516,6 +516,10 @@ class SchemaBase inherits Qore::Serializable {
             "maximum", "minimum", "exclusiveMax", "exclusiveMin",
             "maxLength", "minLength", "pattern", "maxItems", "minItems",
             "uniqueItems", "enum", "multipleOf"), exists other.$1;
+    }
+
+    #! Private constructor
+    private constructor() {
     }
 
     #! returns an example value for the given type
@@ -1567,6 +1571,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (size > 1)
             throw "INVALID-REFERENCE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
                 $1 !~ /^x-/));
+        if (!(ref instanceof ParameterItemsSchemaObject)) {
+            return new ParameterItemsSchemaObject(ref);
+        }
         return ref;
     }
 
@@ -3753,7 +3760,7 @@ public class AbstractParameterObject inherits ObjectBase {
 
     #! gets a concrete instance of an AbstractParameterObject
     static AbstractParameterObject newParameter(string name, hash<auto> oh, SwaggerSchema swagger) {
-        on_error rethrow $1.err, sprintf("%s (while processing parameter %y)", $1.desc, name);
+        on_error rethrow $1.err, sprintf("%s (while processing parameter %y in %y)", $1.desc, name, oh."in");
         if (oh.hasKey("$ref"))
             return swagger.resolveParameter(name, oh."$ref", oh);
 
@@ -3845,7 +3852,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
         bool allowEmptyValue = False;
 
         #! Required if @ref TypedParameter::type "type" is \c "array". Describes the type of items in the array.
-        *ParameterItemsSchemaObject items;
+        *SchemaObject items;
 
         #! Determines the format of the array if type array is used.
         /**
@@ -4536,9 +4543,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         *int opt_flags = swagger.getParseFlags();
 
         if (optional_field(objType, oh, "type", NT_STRING, \type)) {
-            if (!ReferenceTypes{type})
+            if (!ReferenceTypes{type}) {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
                     "expected one of: %y", name, type, keys ReferenceTypes);
+            }
+            on_error rethrow $1.err, sprintf("%s (while processing schema %s)", $1.desc, name);
             if (type == "array" && (require_items || exists oh.items)) {
                 items = newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
             }
@@ -4589,18 +4598,35 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             hash props;
             if (optional_field(objType, oh, "properties", NT_HASH, \props)) {
                 checkObjectProperty(name, "properties");
-                foreach string k in (keys props) {
-                    auto val = props{k};
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
-                            "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
-                    if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
-                        nullable_properties{k} = True;
-                    }
-                }
+                addProperties(props, opt_flags);
             } else {
                 additionalProperties = True;
+            }
+        }
+
+        {
+            *list<auto> allOfList;
+            if (optional_field(objType, oh, "allOf", NT_LIST, \allOfList)) {
+                if (allOfList.size() < 1)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
+                foreach auto val in (allOfList) {
+                    string an = name + "_AllOf_" + (allOf.size() + 1);
+                    if (val.typeCode() != NT_HASH)
+                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
+                            "datatype: %y", name, val.type());
+                    SchemaObject so;
+                    if (val.size() == 1 && val.hasKey("$ref")) {
+                        so = swagger.resolveSchemaObject(an, val."$ref", val);
+                    } else if (val.type == "object" && val.properties) {
+                        addProperties(val.properties, opt_flags);
+                    } else {
+                        so = SchemaObject::newSchemaObject(an, val, swagger);
+                    }
+                    if (so) {
+                        allOf[allOf.size()] = so;
+                        map properties{$1.key} = $1.value, so.properties.pairIterator(), !properties.hasKey($1.key);
+                    }
+                }
             }
         }
 
@@ -4634,20 +4660,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         optional_field(objType, oh, "readOnly", NT_BOOLEAN, \readOnly);
 
-        {
-            *list<auto> allOfList;
-            if (optional_field(objType, oh, "allOf", NT_LIST, \allOfList)) {
-                if (allOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
-                foreach auto val in (allOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
-                            "datatype: %y", name, val.type());
-                    allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, swagger);
-                }
-            }
-        }
-
         *hash xmlObj;
         if (optional_field(objType, oh, "xml", NT_HASH, \xmlObj))
             xml = new XmlObject(xmlObj);
@@ -4658,6 +4670,24 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         if (oh.hasKey("example"))
             example = oh.example;
+    }
+
+    #! Private copy constructor
+    private constructor(SchemaObject o) {
+        map self{$1.key} = $1.value, o.pairIterator();
+    }
+
+    private addProperties(hash<string, auto> props, *int opt_flags) {
+        foreach string k in (keys props) {
+            auto val = props{k};
+            if (val.typeCode() != NT_HASH)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
+                    "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
+            properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
+            if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
+                nullable_properties{k} = True;
+            }
+        }
     }
 
     replaceType(AbstractDataProviderType t) {
@@ -5076,6 +5106,10 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
         *string collectionFormat;
     }
 
+    #! Copy constructor
+    constructor(SchemaObject o) : SchemaObject(o) {
+    }
+
     #! private constructor; use newSchemaObject() instead
     /**
         @param name the name of the object
@@ -5368,15 +5402,16 @@ namespace Priv {
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
-    sub required_field(string objType, hash<auto> oh, string name, hash<string, bool> typeCodes, reference<auto> target) {
+    sub required_field(string objType, hash<auto> oh, string name, hash<string, bool> typeCodes,
+            reference<auto> target) {
         if (!oh.hasKey(name))
             throw "REQUIRED-FIELD-MISSING", sprintf("%s Object%s: %y field is missing; fields present: %y", objType,
                 oh.name ? sprintf(" %y", oh.name) : "", name, keys oh);
         auto val = oh{name};
 
         if (!typeCodes{val.typeCode()})
-            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", objType,
-                oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: required %y field has invalid type %y (val: %y)",
+                objType, oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
         get_value(objType, name, val.typeCode(), val, \target);
     }
 
@@ -5422,8 +5457,9 @@ namespace Priv {
             return False;
         auto val = oh{name};
         if (!typeCodes{val.typeCode()})
-            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", objType,
-                oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: optional %y field has invalid type %y (val: %y); "
+                "expecting one of %y", objType, oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val,
+                (map TypeMap{$1}, keys typeCodes));
         get_value(objType, name, val.typeCode(), val, \target);
         return True;
     }

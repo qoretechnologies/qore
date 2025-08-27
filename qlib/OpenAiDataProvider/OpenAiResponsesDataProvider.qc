@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiDataResponsesProvider.qc Copyright 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,36 +25,29 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
-public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
+public class OpenAiResponsesDataProvider inherits OpenAiDataProviderCommon {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "openai",
-            "type": "OpenAiDataProvider",
+            "name": "responses",
+            "type": "OpenAiResponsesDataProvider",
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": True,
         };
+
+        #! Provider summary info
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
     }
 
     private {
-        #! Dynamic child data providers
-        static hash<string, Reflection::Class> childMap = DefaultChildMap;
-
         #! Child data providers
-        const DefaultChildMap = {
-            "assistants": Class::forName("OpenAiDataProvider::OpenAiAssistantsDataProvider"),
-            "create-assistant": Class::forName("OpenAiDataProvider::OpenAiAssistantCreateDataProvider"),
-            "create-image": Class::forName("OpenAiDataProvider::OpenAiImageCreateDataProvider"),
-            "files": Class::forName("OpenAiDataProvider::OpenAiFilesDataProvider"),
-            "models": Class::forName("OpenAiDataProvider::OpenAiModelsDataProvider"),
-            "multi-chat": Class::forName("OpenAiDataProvider::OpenAiChatCompletionDataProvider"),
-            "responses": Class::forName("OpenAiDataProvider::OpenAiResponsesDataProvider"),
-            "simple-chat": Class::forName("OpenAiDataProvider::OpenAiSimpleChatCompletionDataProvider"),
-            "threads": Class::forName("OpenAiDataProvider::OpenAiThreadsDataProvider"),
-            "upload-file": Class::forName("OpenAiDataProvider::OpenAiFileUploadDataProvider"),
-            "upload-file-from-location":
-                Class::forName("OpenAiDataProvider::OpenAiFileUploadFromLocationDataProvider"),
+        const ChildMap = {
+            "create": Class::forName("OpenAiDataProvider::OpenAiResponseCreateDataProvider"),
+            "delete": Class::forName("OpenAiDataProvider::OpenAiResponseDeleteDataProvider"),
+            "get": Class::forName("OpenAiDataProvider::OpenAiResponseGetDataProvider"),
         };
     }
 
@@ -63,7 +56,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from constructor options
-    constructor(*hash<auto> options) : OpenAiDataProviderCommon(options) {
+    constructor(hash<auto> options) : OpenAiDataProviderCommon(options) {
     }
 
     #! Returns the data provider name
@@ -71,25 +64,16 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
         return ProviderInfo.name;
     }
 
-    #! Register a new child data provider for Discord guilds
-    static registerChild(string pathname, Reflection::Class cls) {
-        if (childMap{pathname}) {
-            throw "OPENAI-CHILD-ERROR", sprintf("child %y already registered", pathname);
-        }
-
-        childMap{pathname} = cls;
-    }
-
     #! Return data provider summary info
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys childMap;
+        return keys ChildMap;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -98,7 +82,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
         @see getChildProviderEx()
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = childMap{name};
+        *Class cls = ChildMap{name};
         if (!cls) {
             return;
         }
