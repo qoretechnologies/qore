@@ -542,7 +542,7 @@ public hashdecl CookieInfo {
     bool secure = True;
 
     #! Whether the cookie is HTTP-only (ie not accessible to JavaScript in browsers)
-    *bool http_only;
+    bool http_only = True;
 
     #! Whether the cookie is SameSite (Lax, Strict, or None)
     string same_site = "Lax";
@@ -568,9 +568,11 @@ public class CookieHelper {
         }
         #string cookie = Qorus.cookie, *string val, *int max_age) {
         string cookiestr = sprintf(
-            "%s=%s; Max-Age=%d; SameSite=%s%s; Path=%s%s", cookie.name, cookie.value,
-            cookie.max_age, cookie.same_site, cookie.secure ? "; Secure" : "", cookie.path,
-            (cookie.domain.val() ? sprintf("; Domain=%s", cookie.domain) : "")
+            "%s=%s; Max-Age=%d; SameSite=%s; Path=%s%s%s%s", cookie.name, cookie.value,
+            cookie.max_age, cookie.same_site, cookie.path,
+            (cookie.secure ? "; Secure" : ""),
+            (cookie.domain.val() ? sprintf("; Domain=%s", cookie.domain) : ""),
+            (cookie.http_only ? "; HttpOnly" : "")
         );
         if (auto cookieval = hdr."Set-Cookie") {
             if (cookieval.typeCode() != NT_LIST) {
