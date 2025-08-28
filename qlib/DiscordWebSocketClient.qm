@@ -46,7 +46,7 @@
 %endtry
 
 module DiscordWebSocketClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "User module for communicating with the Discord WebSocket API gateway";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -77,6 +77,10 @@ module DiscordWebSocketClient {
       @ref connectionproviderintro "ConnectionProvider" module)
 
     @section discordwebsocketclientrelnotes Release Notes
+
+    @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0.1
+    - fixed a bug handling \c HELLO messages
+      (<a href="https://github.com/qorelanguage/qore/issues/4986">issue 4986</a>)
 
     @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0
     - the initial version of the %DiscordWebSocketClient module
@@ -522,11 +526,16 @@ hash<auto> h = ws.getInfo();
     private handleHello(hash<auto> d) {
         *int hbi = d.heartbeat_interval;
         if (!hbi) {
-            throw "DISCORD-ERROR", sprintf("missing heartbeat interval in Hello msg: %y", d);
+            throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);
         }
-        heartbeat_interval = hbi;
-        startHeartbeatThread();
-
+        if (hbi != heartbeat_interval) {
+            heartbeat_interval = hbi;
+            # wake up heartbeat thread to set the new interval
+            {
+                AutoLock al(heartbeat_lock);
+                heartbeat_cond.signal();
+            }
+        }
         sendIdentify();
     }
 
@@ -560,6 +569,9 @@ hash<auto> h = ws.getInfo();
     }
 
     private startHeartbeatThread() {
+        if (heartbeat_cnt.getCount()) {
+            throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
+        }
         heartbeat_cnt.inc();
         on_error {
             remove hb_tid;
