@@ -1089,8 +1089,14 @@ public class AbstractAuthenticator {
             authenticateByIP(\cx, cx."peer-info".address, \authenticated);
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string str = sprintf("Error in IP authentication: %s (from %s)", get_exception_string(ex),
-                cx."peer-info".address_desc);
+            string str;
+            if (ex.err == "AUTHENTICATION-ERROR") {
+                str = sprintf("Failed IP authentication from %y: %s: %s", cx."peer-info".address_desc, ex.err,
+                    ex.desc);
+            } else {
+                str = sprintf("Error in IP authentication: %s (from %s)", get_exception_string(ex),
+                    cx."peer-info".address_desc);
+            }
             listener.logError("%s", str);
         }
     }
