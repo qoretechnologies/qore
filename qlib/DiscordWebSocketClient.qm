@@ -484,6 +484,8 @@ hash<auto> h = ws.getInfo();
 
     #! Executes before a reconnect
     private reconnectPreamble() {
+        # NOTE: the hartbeat thread will be restarted automatically when the HELLO message is received in the new
+        # connection
         stopHeartbeatThread();
         disconnectIntern();
 
@@ -508,12 +510,6 @@ hash<auto> h = ws.getInfo();
         }
     }
 
-    #! Executes after a reconnect
-    private reconnectPostamble() {
-        # restart the heartbeat thread
-        startHeartbeatThread();
-    }
-
     #! Handle a message by raising a data event
     private int handleMessage(hash<auto> msg) {
         if (msg.d) {
@@ -528,11 +524,16 @@ hash<auto> h = ws.getInfo();
         if (!hbi) {
             throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);
         }
-        if (hbi != heartbeat_interval) {
-            heartbeat_interval = hbi;
-            # wake up heartbeat thread to set the new interval
-            {
-                AutoLock al(heartbeat_lock);
+        {
+            AutoLock al(heartbeat_lock);
+            if (hbi != heartbeat_interval) {
+                heartbeat_interval = hbi;
+            }
+            # the heartbeat thread will not be running on a new connection
+            if (!hb_tid) {
+                startHeartbeatThreadIntern();
+            } else if (hbi != heartbeat_interval) {
+                # in case we get a HELLO message while the connection is still up (should not happen)
                 heartbeat_cond.signal();
             }
         }
@@ -568,8 +569,11 @@ hash<auto> h = ws.getInfo();
         });
     }
 
-    private startHeartbeatThread() {
-        if (heartbeat_cnt.getCount()) {
+    #! Starts the heartbeat thread
+    /** Must be called with the heartbeat mutex locked
+    */
+    private startHeartbeatThreadIntern() {
+        if (hb_tid) {
             throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
         }
         heartbeat_cnt.inc();
@@ -602,6 +606,7 @@ hash<auto> h = ws.getInfo();
         AutoLock al(heartbeat_lock);
         remove hb_tid;
         remove hb_stop;
+        remove heartbeat_interval;
     }
 
     private heartbeatThread() {
