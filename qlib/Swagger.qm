@@ -4625,6 +4625,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     if (so) {
                         allOf[allOf.size()] = so;
                         map properties{$1.key} = $1.value, so.properties.pairIterator(), !properties.hasKey($1.key);
+                        nullable_properties += so.nullable_properties;
+                        if (!exists additionalProperties && exists so.additionalProperties) {
+                            additionalProperties = so.additionalProperties;
+                        }
                     }
                 }
             }
@@ -4815,12 +4819,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
     #! Sets fields of a schema object
     private getSchemaObjectFields(HashDataType type, string path, auto def_body) {
-        if (allOf) {
-            map $1.getSchemaObjectFields(type, path, def_body), allOf;
-        } else {
-            map type.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
-                required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
-        }
+        map type.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
+            required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
     }
 
     #! Returns a field definition from the Swagger parameter
