@@ -545,7 +545,7 @@ public hashdecl CookieInfo {
     bool http_only = True;
 
     #! Whether the cookie is SameSite (Lax, Strict, or None)
-    string same_site = "Lax";
+    string same_site = "Strict";
 }
 
 #! Class with cookie helper methods
@@ -568,11 +568,12 @@ public class CookieHelper {
         }
         #string cookie = Qorus.cookie, *string val, *int max_age) {
         string cookiestr = sprintf(
-            "%s=%s; Max-Age=%d; SameSite=%s; Path=%s%s%s%s", cookie.name, cookie.value,
-            cookie.max_age, cookie.same_site, cookie.path,
+            "%s=%s; SameSite=%s; Path=%s%s%s%s%s", cookie.name, cookie.value,
+            cookie.same_site, cookie.path,
             (cookie.secure ? "; Secure" : ""),
             (cookie.domain.val() ? sprintf("; Domain=%s", cookie.domain) : ""),
-            (cookie.http_only ? "; HttpOnly" : "")
+            (cookie.http_only ? "; HttpOnly" : ""),
+            (exists cookie.max_age ? sprintf("; Max-Age=%d", cookie.max_age) : "")
         );
         if (auto cookieval = hdr."Set-Cookie") {
             if (cookieval.typeCode() != NT_LIST) {
@@ -583,7 +584,7 @@ public class CookieHelper {
             hdr."Set-Cookie" = cookiestr;
         }
         if (set_cache_control && !hdr."Cache-Control") {
-            hdr."Cache-Control" = "no-store, must-revalidate, max-age=0";
+            hdr."Cache-Control" = "no-cache, no-store, must-revalidate, max-age=0";
         }
     }
 }
