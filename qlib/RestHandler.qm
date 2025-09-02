@@ -378,6 +378,10 @@ Content-Length: 16
 
     @section resthandler_relnotes RestHandler Release Notes
 
+    @subsection rh_1_6_4 RestHandler v1.6.4
+    - fixed handling \c OPTIONS requests with an \c action parameter
+      (<a href="https://github.com/qorelanguage/qore/issues/4988">issue 4988</a>)
+
     @subsection rh_1_6_3 RestHandler v1.6.3
     - fixed handling multiple \c Accept headers in requests
       (<a href="https://github.com/qorelanguage/qore/issues/4969">issue 4969</a>)
@@ -803,7 +807,7 @@ public namespace RestHandler {
                     # issue #2994: if we are on the last class and there is no "action" argument; see if we can find
                     # an action method instead
                     if (!cl && !args.action) {
-                        string mname = sprintf("%s%s%s", mn, cname[0].upr(), cname[1..]);
+                        string mname = (mn == "options" ? mn : sprintf("%s%s%s", mn, cname[0].upr(), cname[1..]));
                         if (self.hasCallableMethod(mname)) {
                             return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mname, args, cx));
                         }
@@ -817,8 +821,8 @@ public namespace RestHandler {
                 rh.logDebug("REST DBG: class %y: dispatching to subclass %y: method %y args: %y", name(), cname, mn,
                     args);
 
-                return cls.handleRequest(listener, rh, s, cl, mn, cx, args);            }
-
+                return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
+            }
             # try to mask passwords and sensitive data in args
             string astr = rh.maskData(sprintf("%y", args));
             rh.logDebug("REST DBG: class %y: dispatching method %y args: %s", name(), mn, astr);
@@ -833,11 +837,15 @@ public namespace RestHandler {
             try {
                 rsh = call_object_method_args(self, sn, (cx, ah));
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "METHOD-DOES-NOT-EXIST" && ex.desc.find(sn) != -1) {
-                    if (cx.hdr."transfer-encoding" == "chunked")
-                        cx.body = rh.getMessageBody(s, cx.hdr, NOTHING);
+                if (ex.err == "METHOD-DOES-NOT-EXIST") {
+                    bool found = (ex.desc.find(sn) != -1);
+                    if (found) {
+                        if (cx.hdr."transfer-encoding" == "chunked") {
+                            cx.body = rh.getMessageBody(s, cx.hdr, NOTHING);
+                        }
 
-                    return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));
+                        return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));
+                    }
                 }
                 string desc = !cx.debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -890,7 +898,7 @@ public namespace RestHandler {
                     rh.logError("DISPATCH-ERROR: cannot dispatch to unimplemented method %y: class %y, args: %s: %s",
                         mn, name(), astr, get_exception_string(ex));
                     # see if alternate methods would work
-                    list hl = ();
+                    list<string> hl = ();
                     # break flag
                     bool brk;
                     foreach hash<auto> mh in (RestHandler::Methods.pairIterator()) {
@@ -914,7 +922,7 @@ public namespace RestHandler {
                         string desc = sprintf("HTTP method %s is unimplemented in REST class %y (%s::%s())",
                             cx.hdr.method, name(), self.className(), mn);
                         if (cx.orig_method)
-                            desc += sprintf(" REST method %y", cx.orig_method);
+                            desc += sprintf(" REST action method %y", cx.orig_method);
                         desc += sprintf(", available methods: %s", ml);
                         return cast<hash<HttpHandlerResponseInfo>>(
                             HttpServer::AbstractHttpRequestHandler::makeResponse(("Allow": ml), 405, desc)
@@ -1103,13 +1111,13 @@ public namespace RestHandler {
             }
 
             # REST call context hash
-            cx += (
+            cx += {
                 "hdr": (
                     "method": method,
                 ),
                 "url": ("path": path),
                 "body": body,
-            );
+            };
 
             # get object and args
             hash<auto> ah = parse_uri_query(path);
@@ -1134,15 +1142,22 @@ public namespace RestHandler {
 
             {
                 auto action;
-                if (args.action)
+                if (args.action) {
                     action = remove args.action;
-                else if (body.action)
+                } else if (body.action) {
                     action = body.action;
+                }
+
+                if (action && (method == "OPTIONS")) {
+                    remove action;
+                    remove args.action;
+                }
 
                 if (action) {
-                    if (action.typeCode() != NT_STRING)
+                    if (action.typeCode() != NT_STRING) {
                         throw "INVALID-REST-ARGS", sprintf("cannot parse arguments in REST call %y, the 'action' key "
                             "is not assigned to a string; got %y instead", path, action.type()), 400;
+                    }
                     mn = action;
                     cx.orig_method = mn;
                     # ensure first letter of the action is in upper case
@@ -1281,7 +1296,7 @@ public namespace RestHandler {
                     return AbstractHttpRequestHandler::make400("cannot parse arguments in REST call %y, URI "
                         "arguments must be key/value pairs with an 'action' key; got type %y instead (value: %y)",
                         path, ah.params.type(), ah.params);
-                args = {} + ah.params;
+                args += ah.params;
             }
 
             # add path args, if any
@@ -1300,9 +1315,15 @@ public namespace RestHandler {
                 map args.$1 = body.$1, keys body, !exists args.$1;
             }
 
-            if (!Methods.(hdr.method))
+            if (!Methods.(hdr.method)) {
                 return AbstractHttpRequestHandler::make400("unsupported HTTP method %y given in REST call %y",
                     hdr.method, path);
+            }
+
+            if (hdr.method == "OPTIONS") {
+                remove args.action;
+                remove body.action;
+            }
 
             # make method name
             string mn;
@@ -1311,7 +1332,7 @@ public namespace RestHandler {
                     return AbstractHttpRequestHandler::make400("cannot parse arguments in REST call %y, the 'action' "
                         "key is not assigned to a string; got %y instead", path, args.action.type());
                 mn = args.action;
-                args -= "action";
+                remove args.action;
                 # ensure first letter of the action is in upper case
                 cx.orig_method = mn;
                 splice mn, 0, 1, mn[0].upr();

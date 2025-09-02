@@ -545,7 +545,7 @@ public hashdecl CookieInfo {
     bool http_only = True;
 
     #! Whether the cookie is SameSite (Lax, Strict, or None)
-    string same_site = "Strict";
+    string same_site = "Lax";
 }
 
 #! Class with cookie helper methods
@@ -554,19 +554,18 @@ public class CookieHelper {
     /** @param hdr the response header hash
         @param cookie the cookie info hash
         @param set_cache_control if @ref True "True", then a \c Cache-Control header is set to
-        \c "no-store, must-revalidate, max-age=0" if no \c Cache-Control header is already present
+        \c "no-cache, no-store, must-revalidate, max-age=0" if no \c Cache-Control header is already present
 
         @note https://datatracker.ietf.org/doc/html/rfc6265
     */
     static set(reference<hash<auto>> hdr, hash<CookieInfo> cookie, bool set_cache_control = True) {
         if (cookie.value.val()) {
-            if (!cookie.max_age) {
-                throw "COOKIE-ERROR", sprintf("Cookie set with value %y but no max age", cookie.value);
+            if (exists cookie.max_age && !cookie.max_age) {
+                throw "COOKIE-ERROR", sprintf("Cookie set with value %y but max age = %y", cookie.value, cookie.max_age);
             }
         } else if (cookie.max_age) {
             throw "COOKIE-ERROR", sprintf("Cookie set with max age %d but no value", cookie.max_age);
         }
-        #string cookie = Qorus.cookie, *string val, *int max_age) {
         string cookiestr = sprintf(
             "%s=%s; SameSite=%s; Path=%s%s%s%s%s", cookie.name, cookie.value,
             cookie.same_site, cookie.path,
@@ -1128,7 +1127,7 @@ public class AbstractAuthenticator {
                         return rv;
                     }
                 } else {
-                    listener.logError("Unsupported 'Authorization' header: %s (from %s)", hdr.authorization,
+                    listener.logError("Unsupported 'Authorization' header: %y (from %s)", hdr.authorization,
                         cx."peer-info".address_desc);
                 }
             } catch (hash<ExceptionInfo> ex) {

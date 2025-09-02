@@ -119,9 +119,6 @@ public namespace AwsRestClient {
 */
 public class AwsRestClient inherits RestClient::RestClient {
     public {
-        #! default send encoding
-        const DefaultSendEncoding = "gzip";
-
         #! required options
         const RequiredOptions = (
             "aws_keyid",
@@ -295,7 +292,7 @@ AwsRestClient rest({
     }
 
     string getSignature(string http_method, string path, reference<hash<auto>> hdr, *data body, date gmtime,
-        string scope, reference<string> signed_headers) {
+            string scope, reference<string> signed_headers) {
         string req_string = getRequestString(http_method, path, \hdr, body, gmtime, scope, \signed_headers);
 
         # calculate a signature
