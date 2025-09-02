@@ -1622,6 +1622,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
         Other exceptions can be thrown by the @ref Qore::HTTPClient::send() call used to make the HTTP request.
 
+        @note if a signRequest() method is implemented, the request will be signed with both algorhithms
+
         @see
         - @ref RestClient::RestClient::getSerialization() "RestClient::getSerialization()"
         - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
@@ -1851,6 +1853,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     prepareToSend(string method, reference<string> path, reference<auto> body, *reference<hash<auto>> hdr) {
         prepareMsg(method, path, \body, \hdr);
         preparePath(\path);
+        signRequest(method, path, body, \hdr);
     }
 
     #! The same as doRequest() except no schema validation is performed on the request
@@ -2154,6 +2157,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         # include signed request header if necessary
         if (as.alt_token_signer) {
             auth_hdr{as.alt_token_signer_header} = as.alt_token_signer({
+                "method": "POST",
                 "path": path,
                 "body": request_body,
                 "hdr": auth_hdr,
@@ -2422,13 +2426,15 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                         "hdr": hdr - shdr,
                     });
                     debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
-                } else {
-                    debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
                 }
+                # in case of any "signer" and "shdr" args, the request could be signed twice
+                signRequest(m, path, body, \hdr);
+                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
                 h = send(body, m, path, hdr, False, \info);
                 info."response-code" = h.status_code;
                 debug("RestClient sent: %y received: %y (%y: %s bytes%s)", info."request-uri", info."response-uri",
-                    (h.body ? h.body.encoding() : "n/a"), h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
+                    (h.body ? h.body.encoding() : "n/a"), h.body.size(), h.body.size() && h."content-type" ? (" " +
+                        h."content-type") : "");
                 if (!h."content-type".val() && assume_content_type.val()) {
                     debug("missing content-type from response; assuming %y", assume_content_type);
                     h."content-type" = assume_content_type;
@@ -2478,6 +2484,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
 
         return rv;
+    }
+
+    #! Signs requests before sending
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        # override in child classes to implement request signing
     }
 
     #! decode any REST errors returned if possible
