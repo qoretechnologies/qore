@@ -2694,9 +2694,14 @@ string decode_url(string url) [flags=CONSTANT] {
 nothing decode_url() [flags=RUNTIME_NOOP] {
 }
 
-//! Encodes URLs by substituting \c '%%' characters with \c '%25', spaces (\c ' ') with \c '%20', and non-ascii characters by percent-encoded representations
+//! Encodes URLs by substituting \c '%%' with \c '%25', spaces (\c ' ') with \c '%20', \c '"' with \c '%22', and non-ascii characters by percent-encoded representations
 /** @param url a URL string to encode
-    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), and non-ascii characters the following reserved characters (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a> are also encoded: \c '!', \c '*', \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#', \c '[', \c ']'
+    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), \c '"', and non-ascii
+    characters, the following reserved characters
+    (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a>) are also encoded: \c '!', \c '*',
+    \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#',
+    \c '[', \c ']', plus the following characters: \c '<', \c '>', \c '\\', \c '^', \c '`', \c '{', \c '}', \c '|',
+    \c '~', and the space character.
 
     @return the URL string with encoded according to the arguments
 
@@ -2713,9 +2718,9 @@ string encoded_url = encode_url(url);
     @since %Qore 0.8.9
 */
 string encode_url(string url, softbool encode_all = False) [flags=CONSTANT] {
-   QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
-   str->concatEncodeUrl(xsink, url, encode_all);
-   return *xsink ? QoreValue() : str.release();
+    QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
+    str->concatEncodeUrl(xsink, url, encode_all);
+    return *xsink ? QoreValue() : str.release();
 }
 
 //! Decodes percent-encoded codes in a URI path and converts \c "+" signs in the query component to spaces and returns the decoded string in UTF-8 encoding
@@ -2777,9 +2782,18 @@ string encoded_uri = encode_uri_request("path/to/something else?query=1+1 +2")'
     - the query, which is any string following a \c "?" character terminating the path and up to a possible \c "#" character
     - the fragment, which is any string following a \c "#" character
 
-    For all parts, any non-ASCII characters and the \c "%" character are subjected to percent encoding (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>).  The path component is identified and distinguished by a \c "?" or a \c "#" character.  Any spaces in the path component are also subjected to percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  Spaces in the query component are encoded with \c "+" for compatibility with AJAX libraries, and \c "+" signs are subjected to percent encoding.  The fragment component is identified as any text following a \c "#" character, and this is encoded with the same rules as in the path component.
+    For all parts, any non-ASCII characters and the \c "%" and \c '"' characters are subjected to percent encoding
+    (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>).  The path component is identified and
+    distinguished by a \c "?" or a \c "#" character.  Any spaces in the path component are also subjected to percent
+    encoding. The query component is any part of the URI string following a \c "?" character up to the end of the URI
+    string or until a \c "#" characer is found.  Spaces in the query component are encoded with \c "+" for
+    compatibility with AJAX libraries, and \c "+" signs are subjected to percent encoding. The fragment component is
+    identified as any text following a \c "#" character, and this is encoded with the same rules as in the path
+    component.
 
-    @note the difference between this function and @ref Qore::encode_url() is that this function employs special logic in the encoding of the different components of the URI string for compatibility with common AJAX libraries that encode ASCII spaces as \c "+" in the query component of the URI string
+    @note the difference between this function and @ref Qore::encode_url() is that this function employs special logic
+    in the encoding of the different components of the URI string for compatibility with common AJAX libraries that
+    encode ASCII spaces as \c "+" in the query component of the URI string
 
     @see
     - decode_uri_request()

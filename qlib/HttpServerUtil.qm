@@ -559,6 +559,9 @@ public class CookieHelper {
         @note https://datatracker.ietf.org/doc/html/rfc6265
     */
     static set(reference<hash<auto>> hdr, hash<CookieInfo> cookie, bool set_cache_control = True) {
+        if (!cookie.name.val()) {
+            throw "COOKIE-ERROR", sprintf("Cookie name is required (cookie params: %y)", cookie);
+        }
         if (cookie.value.val()) {
             if (exists cookie.max_age && !cookie.max_age) {
                 throw "COOKIE-ERROR", sprintf("Cookie set with value %y but max age = %y", cookie.value, cookie.max_age);

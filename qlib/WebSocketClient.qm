@@ -455,6 +455,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Flag for a user-initiated reconnect
         bool do_reconnect;
 
+        #! HTTP constructor options
+        hash<auto> http_opts;
+
         #! Connection sequence
         static Sequence seq();
 
@@ -590,6 +593,9 @@ ws.connect();
         option hash
     */
     hash<auto> connect(*hash<auto> opts, *reference<hash<auto>> info) {
+        if (!opts.hdr.Accept) {
+            opts.hdr.Accept = getAcceptHeader();
+        }
         return connectIntern(opts, \info);
     }
 
@@ -680,6 +686,11 @@ ws.connect();
     */
     *string getPassword() {
         return hc.getPassword();
+    }
+
+    #! Returns the Accept header value
+    private string getAcceptHeader() {
+        return MimeTypeText + "," + MimeTypeOctetStream;
     }
 
     #! Connects to the websocket server
@@ -929,7 +940,7 @@ ws.setEventQueue();
         }
 
         # += to keep "http_opts" "hash<auto>"
-        hash<auto> http_opts += opts;
+        http_opts += opts;
         url = getString(opts, "url", True);
 
         if (http_opts.hasKey("yield")) {
@@ -1245,10 +1256,7 @@ ws.setEventQueue();
     private reconnectPreamble() {
         # disconnect if still connected
         disconnectIntern();
-        # log connect with WS URL
-        string wsurl = hc.getURL();
-        wsurl =~ s/^http/ws/;
-        logInfo("Reconnect to %y", wsurl);
+        logInfo("Reconnect to %y", url);
     }
 
     #! Connects to the server when reconnecting
@@ -1425,8 +1433,10 @@ ws.setEventQueue();
             on_error {
                 logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
                     (url, info));
+                hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }
+            hc.connect();
             rh = hc.send(NOTHING, "GET", NOTHING, hdr, NOTHING, \info);
         }
 
@@ -1562,6 +1572,19 @@ class MyObserver inherits Observer {
         logDebug("Reconnected; raising reconnect event: %y", observer_map);
         notifyObservers(EVENT_WS_CONNECTED, {});
         return rv;
+    }
+
+    #! Returns the Accept header value
+    private string getAcceptHeader() {
+        switch (serialization) {
+            case "json":
+                return MimeTypeJson;
+            case "yaml":
+                return MimeTypeYaml;
+            case "none":
+            default:
+                return MimeTypeText + "," + MimeTypeOctetStream;
+        }
     }
 
     #! Connects and starts receiving messages
