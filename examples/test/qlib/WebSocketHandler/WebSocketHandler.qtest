@@ -163,7 +163,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         # check bad handler
         {
             WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + port});
-            wsc.connect({"hdr": {"Bad": 1}});
+            wsc.connect({"hdr": {"Bad": "1"}});
             wsc.disconnect();
         }
 
