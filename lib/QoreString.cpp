@@ -403,6 +403,9 @@ void qore_string_init() {
         '&', '=', '+', '$',
         ',', '/', '?', '#',
         '[', ']', '%', '\'',
+        '<', '>', '\\', '^',
+        '`', '{', '}', '|',
+        '~', ' '
     };
 #define URLIST_SIZE (sizeof(url_reserved_list) / sizeof(int))
 
@@ -704,9 +707,11 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
 
     const unsigned char* p = (const unsigned char*)str.buf;
     while (*p) {
-        if ((*p) == '%')
+        if ((*p) == '%') {
             concat("%25");
-        else if (*p > 127) {
+        } else if (*p == '"') {
+            concat("%22");
+        } else if (*p > 127) {
             size_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 getEncoding() found in string");
@@ -2507,6 +2512,8 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
     while (*p) {
         if ((*p) == '%') {
             concat("%25");
+        } else if ((*p) == '"') {
+            concat("%22");
         } else if ((*p) == ' ') {
             concat("%20");
         } else if (*p > 127) {

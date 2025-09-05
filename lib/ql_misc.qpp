@@ -2685,9 +2685,14 @@ string decode_url(string url) [flags=CONSTANT] {
 nothing decode_url() [flags=RUNTIME_NOOP] {
 }
 
-//! Encodes URLs by substituting \c '%%' characters with \c '%25', spaces (\c ' ') with \c '%20', and non-ascii characters by percent-encoded representations
+//! Encodes URLs by substituting \c '%%' with \c '%25', spaces (\c ' ') with \c '%20', \c '"' with \c '%22', and non-ascii characters by percent-encoded representations
 /** @param url a URL string to encode
-    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), and non-ascii characters the following reserved characters (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a> are also encoded: \c '!', \c '*', \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#', \c '[', \c ']'
+    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), \c '"', and non-ascii
+    characters, the following reserved characters
+    (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a>) are also encoded: \c '!', \c '*',
+    \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#',
+    \c '[', \c ']', plus the following characters: \c '<', \c '>', \c '\\', \c '^', \c '`', \c '{', \c '}', \c '|',
+    \c '~', and the space character.
 
     @return the URL string with encoded according to the arguments
 
@@ -2725,7 +2730,7 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
     - the query, which is any string following a \c "?" character terminating the path and up to a possible \c "#" character
     - the fragment, which is any string following a \c "#" character
 
-    For all parts, any percent-encoded codes (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponinding character.  The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path component is subjected to standard percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a \c "#" character, and this is decoded with the same rules as in the path component.
+    For all parts, any percent-encoded codes (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponding character.  The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path component is subjected to standard percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a \c "#" character, and this is decoded with the same rules as in the path component.
 
     @note the difference between this function and @ref Qore::decode_url() is that this function employs special logic in the decoding of the different components of the URI string for compatibility with common AJAX libraries that encode ASCII spaces as \c "+" in the query component of the URI string.
 
