@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -202,6 +202,12 @@ private:
             // ignore if this is the port separator
             if (!std::regex_search(sbuf.c_str() + path_start + 1, check_port)) {
                 path_start = sbuf.find('@', path_start + 1);
+            } else {
+                // ignore if there is no subsequent '@' sign
+                size_t at_sign = sbuf.find('@', path_start + 1);
+                if (at_sign == std::string::npos) {
+                    path_start = std::string::npos;
+                }
             }
         }
 
@@ -232,10 +238,10 @@ private:
             if (path_start != std::string::npos) {
                 // get pathname if not at EOS
                 path = new QoreStringNode(sbuf.c_str() + path_start);
-                //printd(5, "QoreURL::parse_intern path: '%s'\n", path->c_str());
+                printd(0, "QoreURL::parse_intern path: '%s'\n", path->c_str());
                 // get copy of hostname string for localized searching and invasive parsing
                 sbuf = sbuf.substr(0, path_start);
-                //printd(5, "QoreURL::sbuf: '%s' size: %d\n", sbuf.c_str(), sbuf.size());
+                printd(0, "QoreURL::sbuf: '%s' size: %d\n", sbuf.c_str(), sbuf.size());
             }
         }
 
@@ -262,7 +268,7 @@ private:
             size_t right_bracket = sbuf.find(']');
             if (right_bracket != std::string::npos) {
                 host = new QoreStringNode(sbuf.c_str() + (keep_brackets ? 0 : 1),
-                                        right_bracket - (keep_brackets ? -1 : 1));
+                    right_bracket - (keep_brackets ? -1 : 1));
                 sbuf = sbuf.substr(right_bracket + 1);
             }
         }
@@ -331,7 +337,7 @@ private:
                 path->replace(0, 0, sbuf.c_str());
             } else {
                 // set hostname
-                printd(5, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
+                printd(0, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
                 host = new QoreStringNode(sbuf.c_str());
             }
         }

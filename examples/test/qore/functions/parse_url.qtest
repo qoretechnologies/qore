@@ -87,6 +87,17 @@ public class parseUrlTest inherits QUnit::Test {
         assertEq("host", h.host);
         assertEq(1234, h.port);
         assertEq("?arg=true", h.path);
+
+        h = parse_url("https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription&TopicArn=arn:aws:sns:us-east-1"
+            ":12345:xyz&Token=cc6cba8cd1eee5b92c60c2e7fcd951aca960b1e71faa491d7d24e94a12332b5e0ce8de34e135991e8935e8e"
+            "a1dcb2c8413a7a41ff76bdba932665f0f0687ed05c404d38fa82139a0e528e81b63ef939694761c7c13abf7682c561a05456c78d"
+            "0e8ea2a1404c650a669dccd64079420048e7f70bdaee0443338e98c42f3f9ee69");
+        assertEq("https", h.protocol);
+        assertEq("sns.us-east-1.amazonaws.com", h.host);
+        assertEq("/?Action=ConfirmSubscription&TopicArn=arn:aws:sns:us-east-1:12345:xyz&Token=cc6cba8cd1eee5b92c60c2e"
+            "7fcd951aca960b1e71faa491d7d24e94a12332b5e0ce8de34e135991e8935e8ea1dcb2c8413a7a41ff76bdba932665f0f0687ed0"
+            "5c404d38fa82139a0e528e81b63ef939694761c7c13abf7682c561a05456c78d0e8ea2a1404c650a669dccd64079420048e7f70b"
+            "daee0443338e98c42f3f9ee69", h.path);
     }
 
     test() {
