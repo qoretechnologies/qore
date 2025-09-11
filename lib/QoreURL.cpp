@@ -238,10 +238,10 @@ private:
             if (path_start != std::string::npos) {
                 // get pathname if not at EOS
                 path = new QoreStringNode(sbuf.c_str() + path_start);
-                printd(0, "QoreURL::parse_intern path: '%s'\n", path->c_str());
+                //printd(5, "QoreURL::parse_intern path: '%s'\n", path->c_str());
                 // get copy of hostname string for localized searching and invasive parsing
                 sbuf = sbuf.substr(0, path_start);
-                printd(0, "QoreURL::sbuf: '%s' size: %d\n", sbuf.c_str(), sbuf.size());
+                //printd(5, "QoreURL::sbuf: '%s' size: %d\n", sbuf.c_str(), sbuf.size());
             }
         }
 
@@ -337,7 +337,7 @@ private:
                 path->replace(0, 0, sbuf.c_str());
             } else {
                 // set hostname
-                printd(0, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
+                //printd(5, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
                 host = new QoreStringNode(sbuf.c_str());
             }
         }
