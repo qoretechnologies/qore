@@ -833,7 +833,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             load_module(module_str);
             return True;
         } catch (hash<ExceptionInfo> ex) {
-            string err = sprintf("DataProvider load module %y: %s\n", module_str, get_exception_string(ex));
+            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
             if (logger) {
                 if (init) {
                     logger.debug("INIT: %s", err);
