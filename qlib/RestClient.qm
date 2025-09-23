@@ -3696,6 +3696,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         if (resp.access_token != real_opts.token) {
             new_opts.token = resp.access_token;
         }
+        if (resp.expires_in) {
+            if (!resp.expires_in.intp()) {
+                warn("Ignoring invalid 'expires_in' value with type %y; value: %y", resp.expires_in.fullType(),
+                    resp.expires_in);
+            } else {
+                new_opts.oauth2_token_expiry = now_us() + minutes(resp.expires_in);
+            }
+        }
         if (resp.refresh_token && resp.refresh_token != real_opts.oauth2_refresh_token) {
             new_opts.oauth2_refresh_token = resp.refresh_token;
         }
