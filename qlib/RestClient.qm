@@ -153,6 +153,8 @@ printf("%N\n", ans.body);
     - implemented support for PKCE
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
+    - fixed an infinite loop bug handling token request errors with the \c client_credentials grant
+      (<a href="https://github.com/qorelanguage/qore/issues/4990">issue 4990</a>)
 
     @subsection restclientv2_3_1 RestClient v2.3.1
     - fixed passing the correct path to the signature method
@@ -1810,7 +1812,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
     #! Makes a REST request and returns the result
     private hash<auto> doRequestIntern(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr, *code signer) {
+            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr, *code signer,
+            *bool no_auth_retry) {
         prepareMsg(m, path, \body, \hdr);
         on_exit if (exists body) {
             info += {
@@ -1839,7 +1842,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             rethrow $1.err, sprintf("%s (REST URL %y)", $1.desc, url);
         }
 
-        return sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr, signer);
+        return sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr, signer,
+            no_auth_retry);
     }
 
     #! Prepares and processes message parameters for sending without sending the message
@@ -2249,7 +2253,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             }
         }
         return RestClient::doRequestIntern("POST", url, login, \info, NOTHING, getOAuth2AuthHeaders(), NOTHING,
-            as.alt_token_signer_header, as.alt_token_signer).body;
+            as.alt_token_signer_header, as.alt_token_signer, True).body;
     }
 
     #! Returns headers to use with OAuth2 authorization / token requests
@@ -2402,10 +2406,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     #! sends the outgoing HTTP message and recodes the response to data
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
-            *code signer) {
+            *code signer, *bool no_auth_retry) {
         hash<auto> h;
 
-        bool retry = True;
+        bool retry = !no_auth_retry;
         hash<auto> rv;
         while (True) {
             # if we are in the token expiry window; get a new token first
