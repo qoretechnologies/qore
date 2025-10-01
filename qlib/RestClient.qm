@@ -149,12 +149,14 @@ printf("%N\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_3_2 RestClient v2.3.2
+    - fixed acqquiring OAuth2 tokens when the \c oauth2_token_use_basic_auth option is set
+      (<a href="https://github.com/qorelanguage/qore/issues/4991">issue 4991</a>)
+    - fixed an infinite loop bug handling token request errors with the \c client_credentials grant
+      (<a href="https://github.com/qorelanguage/qore/issues/4990">issue 4990</a>)
     - added the \c allow_any_response option to allow undeserializable responses to be returned as-is
     - implemented support for PKCE
       (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
-    - fixed an infinite loop bug handling token request errors with the \c client_credentials grant
-      (<a href="https://github.com/qorelanguage/qore/issues/4990">issue 4990</a>)
 
     @subsection restclientv2_3_1 RestClient v2.3.1
     - fixed passing the correct path to the signature method
@@ -2125,16 +2127,16 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private AbstractPollOperation startOAuth2AuthPoll(hash<auto> login) {
         # do not send a basic auth header with the username and password in the request
         clearUserPassword();
-        bool set_token_auth;
+        hash<auto> auth_hdr = getOAuth2AuthHeaders() + {
+            "Content-Type": MimeTypeFormUrlEncoded,
+        };
         *hash<auto> as;
         if (!oauth2_alt_token_url) {
             if (oauth2_token_use_basic_auth && oauth2_client_id.val() && oauth2_client_secret.val()) {
-                setUserPassword(oauth2_client_id, oauth2_client_secret);
-                set_token_auth = True;
+                auth_hdr.Authorization = "Basic " + sprintf("%s:%s", oauth2_client_id, oauth2_client_secret).toBase64();
                 login -= ("client_id", "client_secret");
             } else if (oauth2_token_auth_secret_only && oauth2_client_secret.val()) {
-                setUserPassword(oauth2_client_secret, "");
-                set_token_auth = True;
+                auth_hdr.Authorization = "Basic " + sprintf("%s:", oauth2_client_secret).toBase64();
                 login -= ("client_id", "client_secret");
             }
         } else {
@@ -2143,8 +2145,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         # restore the username and password on exit
         on_exit if (username) {
             setUserPassword(username, self.password ?? "");
-        } else if (set_token_auth) {
-            clearUserPassword();
         }
         string request_body = mime_get_form_urlencoded_string(login);
         string path = oauth2_alt_token_url ?? oauth2_token_url;
@@ -2153,10 +2153,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             setURL(path);
             path = "";
         }
-        hash<auto> auth_hdr = {
-            "Content-Type": MimeTypeFormUrlEncoded,
-            "Accept": MimeTypeJson + "," + MimeTypeFormUrlEncoded,
-        };
 
         # include signed request header if necessary
         if (as.alt_token_signer) {
@@ -2244,6 +2240,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             "body: %y", real_url ?? url, $1.err, $1.desc, info."request-uri", info.headers, info."request-body",
             info."response-uri", info."response-headers-raw", info."response-body");
 
+        # get auth headers
+        *hash<auto> hdr = getOAuth2AuthHeaders();
         # include signed request header if necessary
         *hash<auto> as;
         if (oauth2_alt_token_url) {
@@ -2251,8 +2249,16 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             if (!as.alt_token_signer) {
                 remove as;
             }
+        } else {
+            if (oauth2_token_use_basic_auth && oauth2_client_id.val() && oauth2_client_secret.val()) {
+                hdr.Authorization = "Basic " + sprintf("%s:%s", oauth2_client_id, oauth2_client_secret).toBase64();
+                login -= ("client_id", "client_secret");
+            } else if (oauth2_token_auth_secret_only && oauth2_client_secret.val()) {
+                hdr.Authorization = "Basic " + sprintf("%s:", oauth2_client_secret).toBase64();
+                login -= ("client_id", "client_secret");
+            }
         }
-        return RestClient::doRequestIntern("POST", url, login, \info, NOTHING, getOAuth2AuthHeaders(), NOTHING,
+        return RestClient::doRequestIntern("POST", url, login, \info, NOTHING, hdr, NOTHING,
             as.alt_token_signer_header, as.alt_token_signer, True).body;
     }
 
