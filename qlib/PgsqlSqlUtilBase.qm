@@ -2275,7 +2275,6 @@ auto v = c.name;
                         row.is_nullable == "YES", defval, row.description ? row.description : NOTHING,
                         row.character_octet_length);
                 }
-
                 rv{row.column_name} = c;
             }
 

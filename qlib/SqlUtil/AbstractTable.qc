@@ -6634,9 +6634,10 @@ list<auto> l = table.getAlignSql(table2);
                     c.name, name);
             } else {
                 # get any delta SQL
-                list cl = columns{c.name}.getModifySql(self, c);
-                # add delta SQL to list if there is any to add
+                list<auto> cl = columns{c.name}.getModifySql(self, c);
                 if (cl) {
+                    on_error rethrow $1.err, sprintf("%s (%y table: %y desc: %y)", $1.desc, c.name,
+                        columns{c.name}{"native_type", "qore_type"}, c.native_type{"native_type", "qore_type"});
                     l += AbstractDatabase::doCallback(opt, cl, AbstractDatabase::AC_Modify, "column", c.name, name,
                         NOTHING, c.getNativeTypeString());
                 } else
