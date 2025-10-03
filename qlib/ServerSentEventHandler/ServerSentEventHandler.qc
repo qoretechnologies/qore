@@ -157,17 +157,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** To accept a dedicated connection; make sure the return value hash's \c "code" key is 101 (i.e.
         \c "Switching Protocols") and the \c "close" key is not @ref False "False"
 
-        @param cx call context hash; this hash will have the following keys:
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from parseURL())
-        - \c id: the unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
-          @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
-        - \c listener-id: the HTTP server listener ID (see HttpServer::HttpServer::getListenerInfo() )
-        - \c user: the current RBAC username (if any)
+        @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
+        unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
+        @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -207,16 +199,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** This method should not return until the connection is closed or the stop() method is called
 
         @param lid the unique HTTP listener ID
-        @param cx call context hash; this hash will have the following keys:
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from parseURL())
-        - \c id: the unique HTTP connection ID
-        - \c listener-id: the HTTP server listener ID (see HttpServer::HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
+        @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
+        unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
         @param hdr a hash of headers in the request
         @param sock the @ref Qore::Socket "Socket" object for the dedicated connection to the client
     */

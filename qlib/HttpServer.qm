@@ -134,6 +134,7 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_4 HttpServer 1.4
+    - allow the listener class to be overridden and added \c "listener-name" to the context hash
     - allow authentication methods to set the call context
       (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
 
@@ -678,7 +679,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @since HttpServer 0.3.13.1
     */
-    final list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
+    list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
         if (bind !~ /:\w+/) {
             if (bind =~ /^\//) {
@@ -712,7 +713,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @since HttpServer 0.3.13.1
     */
-    final list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+    list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
         if (exists info.node && !exists info.service) {
             # try to bind without a service, can be a UNIX domain socket
             return list(addListenerIntern(info).getInfo());
@@ -1446,9 +1447,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         HttpServer::http_set_reply_headers(s, cx, \rv);
     }
 
+    #! Creates a new HttpListener object; reimplement in subclasses to override the listener class
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new HttpListener(server, id, seqSessions, info);
+    }
+
     #! @cond nodoc
-    # don't reimplement this method; fix/enhance it in the module
-    final private HttpListener addListenerIntern(*string node, *softstring service, *Qore::SSLCertificate cert,
+    private HttpListener addListenerIntern(*string node, *softstring service, *Qore::SSLCertificate cert,
             *Qore::SSLPrivateKey key, *hash<string, hash<HttpHandlerConfigInfo>> handler_info, *LoggerInterface logger,
             *code stopc, *string name, int family = AF_UNSPEC) {
         return addListenerIntern(<HttpListenerOptionInfo>{
@@ -1463,7 +1468,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         });
     }
 
-    final private HttpListener addListenerIntern(hash<HttpListenerOptionInfo> info) {
+    private HttpListener addListenerIntern(hash<HttpListenerOptionInfo> info) {
         if (!exists info.node && !exists info.service) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("missing both \"node\" and \"service\" from listener option hash: %y", info);
         }
@@ -1491,7 +1496,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
         on_error c.dec();
 
-        HttpListener l(self, info.name, id, seqSessions, info);
+        HttpListener l = getListener(self, id, info);
         listeners{id} = l;
         smap{sock} = id;
         nmap{info.name} = id;
@@ -1505,8 +1510,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return l;
     }
 
-    # don't reimplement this method; fix/enhance it in the module
-    final private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
+    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
         list<auto> al = getaddrinfo(info.node, info.service, info.family, AIFlags);
 
@@ -1559,8 +1563,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return rv;
     }
 
-    # don't reimplement this method; fix/enhance it in the module
-    final private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
+    private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
         string str = "";
         if (hdr.path)
             str = sprintf("url=%y", hdr.path);
@@ -1854,8 +1857,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     # sends a reply to a request
-    # don't reimplement this method; fix/enhance it in the module
-    final sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
+    sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
             reference<hash> cx, hash<auto> hdr, bool head, reference<bool> dedicated,
             reference<bool> dedicated_external) {
         if (exists rv.close)
@@ -2043,10 +2045,16 @@ class HttpPersistentHandlerInfo {
     }
 }
 
-#! this class implements the listeners for the @ref HttpServer::HttpServer "HttpServer" class
-/** this class is private; it's not exported in the module API
-*/
-class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
+#! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
+public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
+    public {
+        # TID of the background listener thread
+        int tid;
+
+        # default handler info
+        *HandlerInfo defaultHandler;
+    }
+
     private {
         HttpServer serv;
         Sequence ss;
@@ -2124,24 +2132,18 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         };
     }
 
-    public {
-        # TID of the background listener thread
-        int tid;
-
-        # default handler info
-        *HandlerInfo defaultHandler;
-    }
-
-    #! creates the object with the given parameters
+    #! Creates the object with the given parameters
     /**
         @param server the HTTP server
-        @param name the listener name
         @param id the listener ID
         @param ss the listener connection sequence
         @param opts listener options
     */
-    constructor(HttpServer server, string name, int id, Sequence ss, *hash<HttpListenerOptionInfo> opts) {
-        self.name = name;
+    constructor(HttpServer server, int id, Sequence ss, *hash<HttpListenerOptionInfo> opts) {
+        if (!opts.name.val()) {
+            throw "HTTPLISTENER-CONSTRUCTOR-ERROR", "Missing required listener option: name";
+        }
+        self.name = opts.name;
         if (opts.cert_loc && !opts.cert) {
             opts += http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
         }
@@ -2645,7 +2647,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                 break;
 
             # DEBUG
-            #printf("HTTP DEBUG: %y: accepting HTTP connection from %s\n", socket_info.address_desc, r.getPeerInfo().address_desc);
+            #printf("HTTP DEBUG: %y: accepting HTTP connection from %s\n", socket_info.address_desc,
+            #    r.getPeerInfo().address_desc);
             #log("accepting HTTP connection from %s", r.getPeerInfo().address_desc);
 
             cThreads.inc();
@@ -2699,14 +2702,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             info.desc += ":" + info.port;
 
         # static listener context
-        hash<auto> cx_listener = {
-            "socket": socket,
-            "socket-info": socket_info,
-            "peer-info": info,
-            "id": ss.next(),
-            "ssl": ssl,
-            "listener-id": id,
-        };
+        hash<auto> cx_listener = getContextTemplate(info);
 
         hash<auto> hdr;
         auto body;
@@ -2921,6 +2917,19 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
 
         remove shh{id};
     }
+
+    #! Returns the context template for new connections
+    private hash<auto> getContextTemplate(hash<auto> info) {
+        return {
+            "socket": socket,
+            "socket-info": socket_info,
+            "peer-info": info,
+            "id": ss.next(),
+            "ssl": ssl,
+            "listener-id": id,
+            "listener-name": name,
+        };
+    }
 }
 }
 
@@ -3066,7 +3075,8 @@ class HttpHandlerList {
     }
 
     # matches a handler to the request
-    *HandlerInfo findHandler(hash<auto> hdr, reference<int> score, bool finalv = False, *reference<string> root_path) {
+    *HandlerInfo findHandler(hash<auto> hdr, reference<int> score, bool finalv = False,
+            *reference<string> root_path) {
         if (!handlers)
             return;
 
@@ -3087,7 +3097,8 @@ class HttpHandlerList {
 
         foreach HandlerInfo hi in (handlers.iterator()) {
             int scr = hi.matchRequest(hdr, score);
-            #printf("findHandler() path: %s ct: %y %y score: %d (regex: %y)\n", hdr.path, hdr."content-type", hi.name, scr, hi.isregex);
+            #printf("findHandler() path: %s ct: %y %y score: %d (regex: %y)\n", hdr.path, hdr."content-type", hi.name,
+            #    scr, hi.isregex);
             if (scr > score) {
                 rv = hi;
                 score = scr;
@@ -3162,7 +3173,8 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
             on_exit dhl.writeUnlock();
 
             if (handlers{name}) {
-                throw "SETHANDLER-ERROR", sprintf("dynamic HTTP request handler %y already exists (dynamic handlers: %y)", name, keys handlers);
+                throw "SETHANDLER-ERROR", sprintf("dynamic HTTP request handler %y already exists (dynamic "
+                    "handlers: %y)", name, keys handlers);
             }
 
             handlers{name} = dhi;

@@ -109,7 +109,8 @@ module HttpServerUtil {
     |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
     |\c handler_name|string|the name of the handler serving the request
     |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-    |\c listener-id|string|a unique ID for the listener serving the request
+    |\c listener-id|int|a unique ID for the listener serving the request
+    |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
     |\c masked_path|string|the URI path after URL decoding and masking for sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding
@@ -501,6 +502,9 @@ public hashdecl HttpListenerOptionInfo {
 
     #! Additional info added to the notification callback when listeners are started
     hash<auto> ext_info;
+
+    #! Free-form information to be used by custom listener startup code
+    hash<auto> additional_info;
 }
 
 #! hash providing HTTP handler configuration info
