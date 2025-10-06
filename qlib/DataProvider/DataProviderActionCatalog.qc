@@ -1327,9 +1327,6 @@ public class DataProviderActionCatalog {
                     } else {
                         info.type = AbstractDataProviderType::get(type);
                     }
-                    if (!exists i.value.required && info.type.isMandatory()) {
-                        i.value.required = True;
-                    }
                     break;
 
                 case NT_STRING:
@@ -1344,6 +1341,9 @@ public class DataProviderActionCatalog {
                     throw "OPTION-ERROR", sprintf("Cannot set option type for option %y from \"type\" option with "
                         "type %y", i.key, type);
             }
+            if (!exists i.value.required && info.type.isMandatory()) {
+                i.value.required = True;
+            }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect"}
@@ -1352,6 +1352,9 @@ public class DataProviderActionCatalog {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
                     "validation_regex", "depends_on", "on_change"} + additional_fields;
+            }
+            if (info.required && !exists info.preselected) {
+                info.preselected = True;
             }
             if (i.value.allowed_values) {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>
