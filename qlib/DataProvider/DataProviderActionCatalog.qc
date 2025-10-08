@@ -1314,6 +1314,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.metadata) {
                     i.value.metadata = info.attr.metadata;
                 }
+                if (info.attr.option_type_name) {
+                    i.value.option_type_name = info.attr.option_type_name;
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -1331,7 +1334,9 @@ public class DataProviderActionCatalog {
                     if (type instanceof AbstractDataProviderType) {
                         info.type = type;
                     } else {
-                        info.type = AbstractDataProviderType::get(type);
+                        info.type = AbstractDataProviderType::get(type, NOTHING, i.value.option_type_name ? {
+                            "qore.external_name": i.value.option_type_name,
+                        } : NOTHING);
                     }
                     break;
 
@@ -1358,6 +1363,12 @@ public class DataProviderActionCatalog {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
                     "validation_regex", "depends_on", "on_change", "metadata"} + additional_fields;
+                if (i.value.option_type_name
+                    && info.type.getTag("qore.external_name") != i.value.option_type_name) {
+                    info.type = info.type.copyWithTags(info.type.getTags() + {
+                        "qore.external_name": i.value.option_type_name,
+                    });
+                }
             }
             if (info.required && !exists info.preselected) {
                 info.preselected = True;

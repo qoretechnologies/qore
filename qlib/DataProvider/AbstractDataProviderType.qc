@@ -328,6 +328,13 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
     }
 
+    #! Copy and set new tags to the copy
+    AbstractDataProviderType copyWithTags(*hash<auto> new_tags) {
+        AbstractDataProviderType t = self.copy();
+        t.tags = new_tags;
+        return t;
+    }
+
     #! Returns the description
     string getDesc() {
         return DefaultDesc;
