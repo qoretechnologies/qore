@@ -120,6 +120,9 @@ public hashdecl DataProviderOptionInfo {
 
     #! Should this option be preselected?
     *bool preselected;
+
+    #! Free-form metadata on options
+    *hash<auto> metadata;
 }
 
 #! Data provider summary info

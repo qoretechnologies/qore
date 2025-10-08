@@ -311,6 +311,9 @@ public hashdecl ActionOptionInfo {
 
     #! Any information about how to react to changes
     *softlist<softstring> on_change;
+
+    #! Free-form metadata for the option
+    *hash<auto> metadata;
 }
 
 #! DataProvider path var info
@@ -1308,6 +1311,9 @@ public class DataProviderActionCatalog {
                 if (exists info.attr.on_change) {
                     i.value.on_change = info.attr.on_change;
                 }
+                if (info.attr.metadata) {
+                    i.value.metadata = info.attr.metadata;
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -1346,12 +1352,12 @@ public class DataProviderActionCatalog {
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect"}
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect", "metadata"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
-                    "validation_regex", "depends_on", "on_change"} + additional_fields;
+                    "validation_regex", "depends_on", "on_change", "metadata"} + additional_fields;
             }
             if (info.required && !exists info.preselected) {
                 info.preselected = True;
