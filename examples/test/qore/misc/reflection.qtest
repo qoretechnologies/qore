@@ -689,8 +689,10 @@ class ReflectionTest inherits QUnit::Test {
             assertFalse(con.getSourceLocation().builtin);
 
             assertThrows("UNKNOWN-CONSTANT", \c1.getConstant(), "x");
+            assertNothing(c1.tryGetConstant("x"));
             ClassConstant con2 = c1.getConstant("C_I");
             assertTrue(con2.isEqual(con));
+            assertTrue(con2.isEqual(c1.tryGetConstant("C_I")));
             #map printf("%y %s: %y\n", $1.getModifierList(), $1.getName(), $1.getSourceLocation()), cl;
         }
 

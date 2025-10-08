@@ -1376,6 +1376,33 @@ ClassConstant Class::getConstant(string name) [flags=RET_VALUE_ONLY] {
     return new QoreObject(QC_CLASSCONSTANT, c->pgm, new QoreReflectionClassConstant(c->pgm, ce, c->cls));
 }
 
+//! Returns the given class constant if possible
+/** @par Example:
+    @code{.py}
+*ClassConstant con = cls.tryGetConstant(name);
+    @endcode
+
+    @return the given class constant or @ref nothing if the constant is not defined
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+*/
+*ClassConstant Class::tryGetConstant(string name) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the class ptr must be valid
+    const QoreExternalConstant* ce = c->cls->findConstant(tname->c_str());
+    if (!ce) {
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_CLASSCONSTANT, c->pgm, new QoreReflectionClassConstant(c->pgm, ce, c->cls));
+}
+
 //! Returns a list of all declared class constants
 /** @par Example:
     @code{.py}
