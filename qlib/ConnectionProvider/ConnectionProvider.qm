@@ -37,7 +37,7 @@
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "2.0.1";
+    version = "2.1";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -68,6 +68,7 @@ module ConnectionProvider {
     - @ref ConnectionProvider::HttpBasedConnection "HttpBasedConnection"
     - @ref ConnectionProvider::InvalidConnection "InvalidConnection"
     - @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor"
+    - @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper"
 
     Hashdecls:
     - @ref ConnectionProvider::ConfigInfo "ConfigInfo"
@@ -114,6 +115,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_2_1 ConnectionProvider 2.1
+    - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
 
     @subsection connectionprovider_2_0_1 ConnectionProvider 2.0.1
     - make the original connection status available when pings are made so that status changes can be detected
