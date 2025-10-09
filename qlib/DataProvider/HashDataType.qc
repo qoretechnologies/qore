@@ -50,6 +50,9 @@ public class HashDataType inherits QoreDataType {
 
         #! if the default value should be validated
         bool default_value_needs_check;
+
+        #! Are any fields required?
+        bool required_fields;
     }
 
     #! creates the object and assigns the name as the type
@@ -72,6 +75,9 @@ public class HashDataType inherits QoreDataType {
             : QoreDataType(base_type, options, tags, default_value, attr) {
         self.name = name ?? base_type.getName();
         self.fields = fields;
+        if (base_type == AutoHashType) {
+            scanFieldsForRequired();
+        }
     }
 
     #! creates the object from the given record description and assigns the name as the type
@@ -80,6 +86,7 @@ public class HashDataType inherits QoreDataType {
             : QoreDataType(AutoHashType, options, tags, default_value, attr) {
         self.name = name;
         self.fields = fields;
+        scanFieldsForRequired();
     }
 
     #! creates the object from the given TypedHash
@@ -198,9 +205,9 @@ auto v = t.getDefaultValue();
                 value{key} = field.acceptsValue(val);
             } catch (hash<ExceptionInfo> ex) {
                 AbstractDataProviderType field_type = field.getType();
-                rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y %s %s field %y: %s: %s", getName(),
-                    field.isMandatory() ? "mandatory" : "optional", field_type.getBaseTypeName(), key, ex.err,
-                    ex.desc);
+                rethrow exists val ? "RUNTIME-TYPE-ERROR" : "MISSING-VALUE-ERROR", sprintf("Error in type %y %s %s "
+                    "field %y: %s: %s", getName(), field.isMandatory() ? "mandatory" : "optional",
+                    field_type.getBaseTypeName(), key, ex.err, ex.desc);
             }
         }
         if (value_copy) {
@@ -210,15 +217,16 @@ auto v = t.getDefaultValue();
                         try {
                             value{i.key} = default_other_field_type.acceptsValue(i.value);
                         } catch (hash<ExceptionInfo> ex) {
-                            rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y default field %y: %s: %s",
-                                getName(), i.key, ex.err, ex.desc);
+                            rethrow exists i.value ? "RUNTIME-TYPE-ERROR" : "MISSING-VALUE-ERROR",
+                                sprintf("Error in type %y default field %y: %s: %s", getName(), i.key, ex.err,
+                                ex.desc);
                         }
                     }
                 } else {
                     value += value_copy;
                 }
             } else if (fields) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("error in type %y unsupported fields in value: %y; known "
+                throw "RUNTIME-TYPE-ERROR", sprintf("Error in type %y: unsupported fields in value: %y; known "
                     "fields: %y", getName(), keys value_copy, keys fields);
             }
         }
@@ -390,16 +398,23 @@ auto v = t.getDefaultValue();
         }
         *bool dyn = field.getAttributes().dynamic;
         # do not run getDefaultValue() for dynamic fields; do not generate a default value for "or nothing" types
-        if (!dyn && !or_nothing_type && (exists (auto val = field.getDefaultValue()))) {
-            if (type == AutoHashType) {
-                type = AutoHashOrNothingType;
+        if (!dyn) {
+            if (!or_nothing_type) {
+                if (exists (auto val = field.getDefaultValue())) {
+                    if ((type == AutoHashType) && !required_fields) {
+                        type = AutoHashOrNothingType;
+                    }
+                    default_value{field.getName()} = val;
+                    if (!default_value_needs_check) {
+                        default_value_needs_check = True;
+                    }
+                } else if ((type == AutoHashOrNothingType) && field.isMandatory()) {
+                    # or_nothing_type == False and type == *hash<auto> can only happen dynamically
+                    type = AutoHashType;
+                    required_fields = True;
+                }
             }
-            default_value{field.getName()} = val;
-            if (!default_value_needs_check) {
-                default_value_needs_check = True;
-            }
-        }
-        if (!tags.dynamic && dyn) {
+        } else if (!tags.dynamic) {
             tags.dynamic = True;
         }
     }
@@ -412,6 +427,16 @@ auto v = t.getDefaultValue();
     #! adds a field to the type from a typed hash member
     private addFieldIntern(Qore::Reflection::TypedHashMember mem) {
         postProcessAddedField(fields{mem.getName()} = new QoreDataField(mem));
+    }
+
+    #! Set the "required_fields" flag if any fields are mandatory
+    private scanFieldsForRequired() {
+        foreach AbstractDataField field in (fields.iterator()) {
+            if (field.isMandatory()) {
+                required_fields = True;
+                return;
+            }
+        }
     }
 }
 }
