@@ -285,9 +285,6 @@ public hashdecl ActionOptionInfo {
     */
     *string default_ref_data;
 
-    #! A tag allowing the type of the option to be retrieved at runtime
-    *string dynamic_type;
-
     #! If the option should be preselected
     bool preselected;
 
@@ -1459,9 +1456,6 @@ public class DataProviderActionCatalog {
             }
             if ((*string str = i.value.default_ref_data).val()) {
                 fh.attr.default_ref_data = str;
-            }
-            if ((*string str = i.value.dynamic_type).val()) {
-                fh.attr.dynamic_type = str;
             }
             if (*list<string> l = i.value.required_groups) {
                 fh.attr.required_groups = l;
