@@ -652,8 +652,8 @@ public class DataProviderTest inherits QUnit::Test {
         h2 += {
             "b": "string",
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), h2);
-        assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), h1);
+        assertThrows("MISSING-VALUE-ERROR", \t1.acceptsValue(), h2);
+        assertThrows("MISSING-VALUE-ERROR", \t2.acceptsValue(), h1);
         assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), 1);
         assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), 1);
         assertThrows("RUNTIME-TYPE-ERROR", \t3.acceptsValue(), 1);

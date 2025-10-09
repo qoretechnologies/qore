@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProvider.qm module for data access and introspection
 
-/*  DataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  DataProvider.qm Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -167,6 +167,8 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
+    - fixed setting the mandatory flag for hashes with dynamic fields
+      (<a href="https://github.com/qorelanguage/qore/issues/4992">issue 4992</a>)
     - fixed returning dynamic options for data-dependent action options
       (<a href="https://github.com/qorelanguage/qore/issues/4985">issue 4985</a>)
     - default values are no longer generated for optional hash types based on their fields
