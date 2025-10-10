@@ -1881,6 +1881,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getRequestTypeWithDataImpl(req);
     }
 
+    #! Returns the description of a successful request message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the request type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getRequestTypeWithOptions(*hash<auto> options) {
+        checkRequest();
+        return !options ? getRequestTypeImpl() : getRequestTypeWithOptionsImpl(options);
+    }
+
     #! Returns action options corresponding to the request type with the given request data, if possible
     /** @param req sample request data that can be used to determine the final type
 
@@ -1931,6 +1947,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *AbstractDataProviderType getResponseTypeWithData(auto req) {
         checkRequest();
         return getResponseTypeWithDataImpl(req);
+    }
+
+    #! Returns the description of a successful response message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the response type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getResponseTypeWithOptions(*hash<auto> options) {
+        checkRequest();
+        return !options ? getResponseTypeImpl() : getResponseTypeWithOptionsImpl(options);
     }
 
     #! Returns a hash of error responses, if any
@@ -2001,6 +2033,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getEventTypesImpl();
     }
 
+    #! Returns a hash of all supported event types in the context of the given options
+    /** @return a hash of all supported event types in the context of the given options
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @since DataProvider 3.3
+    */
+    hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptions(*hash<auto> options) {
+        checkObservable();
+        return !options ? getEventTypesImpl() : getEventTypesWithOptionsImpl(options);
+    }
+
     #! Returns action options corresponding to the given option data
     /** @param req sample option data that can be used to determine the final type
 
@@ -2048,6 +2092,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     hash<string, hash<DataProviderMessageInfo>> getMessageTypes() {
         checkMessages();
         return getMessageTypesImpl();
+    }
+
+    #! Returns a hash of all supported outbound messages with options
+    /** @param options any action options that can affect the message types returned
+
+        @return a hash of all supported outbound messages
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @since DataProvider 3.3
+    */
+    hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptions(*hash<auto> options) {
+        checkMessages();
+        return !options ? getMessageTypesImpl() : getMessageTypesWithOptionsImpl(options);
     }
 
     #! Returns example data for a request message
@@ -3364,6 +3422,89 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }, getRecordType(search_options).pairIterator();
     }
 
+    #! Returns the description of the record type in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type or @ref NOTHING if the data provider does not support a record type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        if (recordRequiresSearchOptions()) {
+            search_options = validateSearchOptions(search_options);
+        } else {
+            remove search_options;
+        }
+        return !options
+            ? getRecordTypeImpl(search_options)
+            : getRecordTypeWithOptionsImpl(options, search_options);
+    }
+
+    #! Returns the description of the record type for creating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getCreateRecordTypeWithOptions(*hash<auto> options, *hash<auto> create_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        create_options = validateCreateOptions(create_options);
+        return !options
+            ? getCreateRecordType(create_options)
+            : getCreateRecordTypeWithOptionsImpl(options, create_options);
+    }
+
+    #! Returns the description of the record type for updating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getUpdateRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        if (recordRequiresSearchOptions()) {
+            search_options = validateSearchOptions(search_options);
+        } else {
+            remove search_options;
+        }
+        return !options
+            ? getUpdateRecordTypeImpl(search_options)
+            : getUpdateRecordTypeWithOptionsImpl(options, search_options);
+    }
+
+    #! Returns the description of the record type with soft types, if any
+    *hash<string, AbstractDataField> getSoftRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        return map {
+            $1.key: $1.value.getSoftType()
+        }, getRecordTypeWithOptions(options, search_options).pairIterator();
+    }
+
+    #! Returns the description of the record type with "or nothing" types, if any
+    *hash<string, AbstractDataField> getOrNothingRecordTypeWithOptions(*hash<auto> options,
+            *hash<auto> search_options) {
+        return map {
+            $1.key: $1.value.getOrNothingType()
+        }, getRecordTypeWithOptions(options, search_options).pairIterator();
+    }
+
     #! Returns options that can be used for searching
     /** @return a hash of options that can be used for searching; keys are search option names, values describe the
         search option; if @ref nothing is returned, then the provider does not support any search options
@@ -3754,6 +3895,51 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getRecordTypeImpl();
     }
 
+    #! Returns the description of the record type in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type or @ref NOTHING if the data provider does not support a record type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> search_options) {
+        return getRecordTypeImpl(search_options);
+    }
+
+    #! Returns the description of the record type for creating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getCreateRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> create_options) {
+        return getCreateRecordTypeImpl(create_options);
+    }
+
+    #! Returns the description of the record type for updating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getUpdateRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> search_options) {
+        return getUpdateRecordTypeImpl(search_options);
+    }
+
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the number of records in a read block; must be a positive number
         @param where_cond the search criteria; after processing by processSearchParameters()
@@ -3970,6 +4156,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return rv;
     }
 
+    #! Returns the description of a successful request message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the request type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getRequestTypeWithOptionsImpl(hash<auto> options) {
+        return getRequestTypeImpl();
+    }
+
     #! Returns the description of a response message, if this object represents a response message
     /** @return the response type for this response message
 
@@ -3993,6 +4194,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     private *AbstractDataProviderType getResponseTypeWithDataImpl(auto req) {
         # the default is to return the standard response data and verify the request data against it
         return getResponseTypeImpl();
+    }
+
+    #! Returns the description of a successful response message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the response type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getResponseTypeWithOptionsImpl(hash<auto> options) {
+        getResponseTypeImpl();
     }
 
     #! Returns a hash of error responses, if any
@@ -4070,6 +4286,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         throwUnimplementedException();
     }
 
+    #! Returns a hash of all supported event types in the context of the given options
+    /** @return a hash of all supported event types in the context of the given options
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @since DataProvider 3.3
+    */
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptionsImpl(hash<auto> options) {
+        return getEventTypesImpl();
+    }
+
     #! Returns the type of an outbound message, if any
     /** @param message_id the ID of the message
 
@@ -4097,6 +4324,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
         throwUnimplementedException();
+    }
+
+    #! Returns a hash of all supported outbound messages with options
+    /** @param options any action options that can affect the message types returned
+
+        @return a hash of all supported outbound messages
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @since DataProvider 3.3
+    */
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptionsImpl(hash<auto> options) {
+        return getMessageTypesImpl();
     }
 
     #! Throws an \c INVALID-OPERATION exception
