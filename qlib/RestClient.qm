@@ -4014,7 +4014,21 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                     : "";
 %ifndef NoJson
                 if ((resp."code" / 100) == 2) {
-                    gotOAuth2LoginInfo(parse_json(body));
+                    auto parsed_body;
+                    switch (resp.info."response-headers"."content-type") {
+                        case MimeTypeJson:
+                            parsed_body = parse_json(body);
+                            break;
+
+                        case MimeTypeFormUrlEncoded:
+                            parsed_body = mime_parse_form_urlencoded_string(body);
+                            break;
+
+                        default:
+                            throw "REST-PING-ERROR", sprintf("Cannot parse OAuth2 token response with Content-Type: %y",
+                                resp.info."response-headers"."content-type");
+                    }
+                    gotOAuth2LoginInfo(parsed_body);
                     continue;
                 }
 %endif
