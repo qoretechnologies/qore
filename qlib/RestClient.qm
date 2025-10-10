@@ -4015,6 +4015,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 %ifndef NoJson
                 if ((resp."code" / 100) == 2) {
                     auto parsed_body;
+                    # remove modifiers from the content type
+                    resp.info."response-headers"."content-type" =~ s/;.*//;
                     switch (resp.info."response-headers"."content-type") {
                         case MimeTypeJson:
                             parsed_body = parse_json(body);
