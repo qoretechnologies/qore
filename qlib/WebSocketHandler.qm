@@ -39,7 +39,7 @@
 %new-style
 
 module WebSocketHandler {
-    version = "2.0";
+    version = "2.1";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -65,6 +65,9 @@ module WebSocketHandler {
     - @ref WebSocketHandler::WebSocketHandler
 
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_1 Version 2.1
+    - implemented support for a variable send timeout
 
     @subsection websockethandler_v2_0 Version 2.0
     - implemented support for @ref Logger::Logger "Logger" objects for logging
@@ -359,6 +362,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! heartbeat message
         string heartbeat_msg = DefaultHeartbeatMsg;
+
+        #! Send timeout
+        date send_timeout = DefaultSocketSendTimeout;
     }
 
     private:internal {
@@ -376,6 +382,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           (default: 20 seconds)
         - \c heartbeat_msg: a string giving the payload to send in heartbeat messages (default: \c "heartbeat"); may
           be an empty string meaning no message
+        - \c logger: a @ref Logger::Logger "Logger" object to use for logging (default: no logging)
+        - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
+          (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
 
         @throw WEBSOCKETHANDLER-OPTION-ERROR unknown or invalid option
     */
@@ -385,7 +394,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             switch (h.key) {
                 case "heartbeat": {
                     if (!h.value.intp()) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y value %y cannot be converted to an "
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y cannot be converted to an "
                             "integer giving the number of seconds in the heartbeat interval", h.key, h.value);
                     }
                     setHeartbeat(h.value);
@@ -393,7 +402,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 case "heartbeat_msg": {
                     if (h.value.typeCode() != NT_STRING) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting \"string\"",
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"string\"",
                             h.key, h.value.fullType());
                     }
                     heartbeat_msg = h.value;
@@ -401,14 +410,33 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 case "logger": {
                     if (!(h.value instanceof LoggerInterface)) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting "
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting "
                             "\"LoggerInterface\"", h.key, h.value.fullType());
                     }
                     logger = h.value;
                     break;
                 }
+                case "send_timeout": {
+                    if (h.value.typeCode() == NT_INT) {
+                        h.value = milliseconds(h.value);
+                    }
+                    if (h.value.typeCode() != NT_DATE) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
+                            h.key, h.value.fullType());
+                    }
+                    if (h.value.absolute()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is absolute; expecting "
+                            "relative date/time value", h.key, h.value);
+                    }
+                    if (h.value < 0s) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is negative; expecting "
+                            "non-negative relative date/time value", h.key, h.value);
+                    }
+                    send_timeout = h.value;
+                    break;
+                }
                 default:
-                    throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y is unknown; known options: %y", h.key,
+                    throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y is unknown; known options: %y", h.key,
                         Options);
             }
         }
@@ -452,6 +480,41 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     */
     setHeartbeatMessage(string msg) {
         heartbeat_msg = msg;
+    }
+
+    #! Returns the send timeout value as a relative date/time value
+    /** @return the send timeout value as a relative date/time value
+
+        @since WebSocketHandler 2.1
+    */
+    date getSendTimeout() {
+        return send_timeout;
+    }
+
+    #! Set the send timeout with a non-negative relative date/time value
+    /** @param the send timeout value as a relative date/time value
+
+        @since WebSocketHandler 2.1
+    */
+    setSendTimeout(date to) {
+        if (to.absolute()) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_timeout\" value %y is absolute; expecting "
+                "relative date/time value", to);
+        }
+        if (to < 0s) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_timeout\" value %y is negative; "
+                "expecting non-negative relative date/time value", to);
+        }
+        send_timeout = to;
+    }
+
+    #! Set the send timeout with a non-negative value in milliseconds
+    /** @param the send timeout as a non-negative value in milliseconds
+
+        @since WebSocketHandler 2.1
+    */
+    setSendTimeout(int ms) {
+        setSendTimeout(milliseconds(ms));
     }
 
     #! called by the HTTP server to handle incoming HTTP requests
@@ -589,7 +652,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # send any and all messages on the queue
                 *binary d = wsc.pollData();
                 if (d) {
-                    sock.send2(d, DefaultSocketSendTimeout);
+                    logDebug("Sending msg (%d bytes)", d.size());
+                    sock.send2(d, send_timeout);
                     update = True;
                     flushIoIntern(wsc, sock, False);
                 }
@@ -601,7 +665,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     int now = clock_getmillis() / 1000;
                     if (!update) {
                         if ((now - timestamp) >= heartbeat) {
-                            sock.send2(ws_encode_message(heartbeat_msg, WSOP_Ping), DefaultSocketSendTimeout);
+                            sock.send2(ws_encode_message(heartbeat_msg, WSOP_Ping), send_timeout);
                             timestamp = now;
                         }
                     } else {
@@ -652,7 +716,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 timestamp = clock_getmillis() / 1000;
 
                 if (h.op == WSOP_Ping) {
-                    sock.send2(ws_encode_message(h.msg ?? "", WSOP_Pong), DefaultSocketSendTimeout);
+                    sock.send2(ws_encode_message(h.msg ?? "", WSOP_Pong), send_timeout);
                     continue;
                 }
 
@@ -730,8 +794,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
-            #printf("TID %d: WebSocketHandler::flushIo() sending msg %d bytes\n", gettid(), d.size());
-            sock.send2(d, DefaultSocketSendTimeout);
+            logDebug("Sending msg (%d bytes)", d.size());
+            sock.send2(d, send_timeout);
             if (d && !rv) {
                 rv = True;
                 if (update_tld) {
@@ -826,7 +890,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         else
             txtmsg = WSCCMap{code};
         msg += txtmsg;
-        sock.send2(ws_encode_message(msg, WSOP_Close), DefaultSocketSendTimeout);
+        sock.send2(ws_encode_message(msg, WSOP_Close), send_timeout);
     }
 
     static string getDataString(*data d) {
