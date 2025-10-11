@@ -28,10 +28,12 @@
     Minor bugfixes; see below for more information
 
     @subsection qore_2_2_1_bug_fixes Bug Fixes in Qore
-
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
       - fixed parsing token responses with URL encoding in non-blocking pings
         (<a href="https://github.com/qorelanguage/qore/issues/4993">issue 4993</a>)
+    - fixed an infinite loop with a memory leak caused by a missing break statement in internal Socket SSL
+      error-handling code
+      (<a href="https://github.com/qorelanguage/qore/issues/4994">issue 4994</a>)
 
     @section qore_2_2_0 Qore 2.2.0
 

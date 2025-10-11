@@ -2475,10 +2475,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
                 if (rc == -1) {
-                    xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
+                    xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                         "openssl library reported an I/O error while calling %s()", mname, get_action_method(action));
                 } else if (rc) {
-                    xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported " \
+                    xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported "
                         "error code %d in %s() but the error queue is empty", mname, rc, get_action_method(action));
                 }
             }
@@ -2489,9 +2489,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
         } else if (err == SSL_ERROR_SSL) {
             // close the socket unconditionally
             qs.close();
-            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
+            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
+            break;
         } else {
             //printd(5, "SSLSocketHelper::doSSLRW(buf: %p, size: %d, to: %d) rc: %d err: %d\n", buf, size, timeout_ms,
             //    rc, err);
