@@ -3987,7 +3987,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                         });
                         continue;
 %else
-                        throw "REST-PING-ERROR", sprintf("Cannot decode REST body; missing 'json' module: %y", body);
+                        throw "REST-PING-ERROR", sprintf("Cannot decode REST body; missing 'json' module: %y",
+                            LoggerUtil::getArgSummary(body));
 %endif
                     }
                     if (real_opts.custom_token_location == "body-plain") {
@@ -4004,7 +4005,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 }
                 conn.authFailure();
                 throw "REST-PING-ERROR", sprintf("%y returned from %y'; response body: %y", resp.info."response-uri",
-                    resp.info."request-uri", body);
+                    resp.info."request-uri", LoggerUtil::getArgSummary(body));
             }
 
             if (state == SPS_OAUTH2_GET_TOKEN || state == SPS_OAUTH2_REFRESH_TOKEN) {
@@ -4036,7 +4037,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 %endif
                 conn.authFailure();
                 throw "REST-PING-ERROR", sprintf("%y returned from %y'; response body: %y", resp.info."response-uri",
-                    resp.info."request-uri", body);
+                    resp.info."request-uri", LoggerUtil::getArgSummary(body));
             }
 
             if (state == SPS_REST_PING) {
@@ -4050,7 +4051,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 if (check_auth && rc.isAuthTokenError(resp."code",
                         resp.info."response-headers", False, resp.info."body-content-type", body)) {
                     rc.detail("Found auth error in response with code: %d Content-Type: %y body: %y", resp."code",
-                        resp.info."body-content-type", body);
+                        resp.info."body-content-type", LoggerUtil::getArgSummary(body));
                     doStartRefresh();
                     continue;
                 }
@@ -4089,7 +4090,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 
                 conn.authFailure();
                 throw "REST-PING-ERROR", sprintf("%y returned from %y; response body: %y", resp.info."response-uri",
-                    resp.info."request-uri", body);
+                    resp.info."request-uri", LoggerUtil::getArgSummary(body));
             }
 
             checkOtherStates();
