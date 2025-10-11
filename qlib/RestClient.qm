@@ -4004,7 +4004,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                     }
                 }
                 conn.authFailure();
-                throw "REST-PING-ERROR", sprintf("%y returned from %y'; response body: %y", resp.info."response-uri",
+                throw "REST-PING-ERROR", sprintf("%y returned from %y; response body: %y", resp.info."response-uri",
                     resp.info."request-uri", LoggerUtil::getArgSummary(body));
             }
 
@@ -4036,7 +4036,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 }
 %endif
                 conn.authFailure();
-                throw "REST-PING-ERROR", sprintf("%y returned from %y'; response body: %y", resp.info."response-uri",
+                throw "REST-PING-ERROR", sprintf("%y returned from %y; response body: %y", resp.info."response-uri",
                     resp.info."request-uri", LoggerUtil::getArgSummary(body));
             }
 
