@@ -333,6 +333,8 @@ public const ER_All = ER_Search | ER_Field;
 #! Role map from codes to descriptions
 public const RoleCodeMap = {
     ER_Search: "search",
+    ER_Field: "field",
+    ER_All: "all",
 };
 
 #! Role map from descriptions to codes
