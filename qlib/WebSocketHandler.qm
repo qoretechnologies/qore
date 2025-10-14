@@ -652,7 +652,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # send any and all messages on the queue
                 *binary d = wsc.pollData();
                 if (d) {
-                    logDebug("Sending msg (%d bytes)", d.size());
                     sock.send2(d, send_timeout);
                     update = True;
                     flushIoIntern(wsc, sock, False);
@@ -794,7 +793,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
-            logDebug("Sending msg (%d bytes)", d.size());
             sock.send2(d, send_timeout);
             if (d && !rv) {
                 rv = True;
