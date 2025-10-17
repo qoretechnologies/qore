@@ -112,7 +112,7 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     */
     hash<auto> getValue() {
         if (!i) {
-            throw "INVALID-ITERATOR", sprintf("call %s::next() to advance the %y iterator before calling "
+            throw "INVALID-ITERATOR", sprintf("Call %s::next() to advance the %y iterator before calling "
                 "%s::getValue()", self.className(), bulk.className(), self.className());
         }
         return i.getValue();
