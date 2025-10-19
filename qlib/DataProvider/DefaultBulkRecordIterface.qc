@@ -54,7 +54,7 @@ public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordIn
         @note This call moves the internal record pointer forward, therefore multiple calls of this methods will
         return different results as long as data is available
     */
-    private hash<string, list<auto>> getValueImpl() {
+    private *hash<string, list<auto>> getValueImpl() {
         hash<string, list<auto>> rv;
         int cnt = 0;
         while (i.next()) {

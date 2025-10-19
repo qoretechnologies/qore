@@ -70,11 +70,11 @@ public class AbstractDataProviderBulkRecordInterface {
         - A short read from getValueImpl() indicates that the final block is being delivered
         - The first hash key must be assigned to a list and cannot be assigned to a constant value
     */
-    *hash<string, auto> getValue() {
+    *hash<auto> getValue() {
         if (!valid) {
             return;
         }
-        hash<string, auto> rv = getValueImpl();
+        *hash<auto> rv = getValueImpl();
         if ((int size = rv.firstValue().size()) < block_size) {
             valid = False;
             if (!size) {
@@ -97,9 +97,9 @@ public class AbstractDataProviderBulkRecordInterface {
     *hash<string, AbstractDataField> getRecordType() {
     }
 
-    #! Returns a hash of lists (or constant values) according to the block size or @ref nothing if no more data is available
-    /** @return a hash of lists (or constant values) according to the block size or @ref nothing if no more data is
-        available
+    #! Returns a hash of lists (or constant values) according to the block size
+    /** @return a hash of lists (or constant values) according to the block size; returning @ref nothing or a hash
+        where the first value is an empty list (or @ref nothing) indicates that there are no more records to return
 
         @throw INVALID-ITERATOR the iterator is not pointing at a valid element
 
@@ -108,6 +108,6 @@ public class AbstractDataProviderBulkRecordInterface {
           return different results as long as data is available
         - The first hash key must be assigned to a list and cannot be assigned to a constant value
     */
-    abstract private hash<string, auto> getValueImpl();
+    abstract private *hash<auto> getValueImpl();
 }
 }
