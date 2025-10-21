@@ -1040,17 +1040,17 @@ class QdpCmd {
         if (!exists rec) {
             QdpCmd::error("missing argument to 'create' action; a hash is required");
         }
-        *hash<auto> rv = provider.createRecord(rec);
+        *list<hash<auto>> rv = provider.createRecordsBulk(rec);
         if (opts.verbose) {
-            printf("new record: %y\n", rv);
+            printf("new record(s): %y\n", rv);
         }
-        printf("record successfully created\n");
+        printf("%d record%s successfully created\n", rv.lsize(), rv.lsize() == 1 ? "" : "s");
     }
 
     static upsert(AbstractDataProvider provider) {
         *hash<auto> rec = QdpCmd::getHash("upsert");
         *hash<auto> upsert_options = QdpCmd::getHash("upsert options");
-        string result = provider.upsertRecord(rec, upsert_options);
+        *list<string> result = provider.upsertRecordsBulk(rec, upsert_options);
         printf("upsert result: %y\n", result);
     }
 
