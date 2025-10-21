@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableBulkInserter class definition
 
-/** DbTableBulkInserter.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** DbTableBulkInserter.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,8 +27,10 @@ public namespace DbDataProvider {
 #! Bulk insert object for tables
 public class DbTableBulkInserter inherits DbDataProvider::AbstractDbTableBulkOperation {
     #! Creates the object
-    constructor(DbTableDataProvider provider, AbstractTable table)
-            : AbstractDbTableBulkOperation(provider, new BulkInsertOperation(table)) {
+    constructor(DbTableDataProvider provider, AbstractTable table, *int block_size)
+            : AbstractDbTableBulkOperation(provider, new BulkInsertOperation(table, {
+                "block_size": block_size,
+            })) {
     }
 }
 }

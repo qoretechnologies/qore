@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableDataProvider class definition
 
-/** DbTableDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbTableDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -354,17 +354,23 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     }
 
     #! Returns a bulk insert operation object for the data provider
-    /** @return a bulk insert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size of 1000 rows is
+        used
+
+        @return a bulk insert operation object for the data provider
     */
-    AbstractDataProviderBulkOperation getBulkInserter() {
-        return new DbTableBulkInserter(self, table);
+    AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
+        return new DbTableBulkInserter(self, table, block_size);
     }
 
     #! Returns a bulk upsert operation object for the data provider
-    /** @return a bulk upsert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size of 1000 rows is
+        used
+
+        @return a bulk upsert operation object for the data provider
     */
-    AbstractDataProviderBulkOperation getBulkUpserter() {
-        return new DbTableBulkUpserter(self, table);
+    AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
+        return new DbTableBulkUpserter(self, table, block_size);
     }
 
     #! Returns custom data mapper runtime keys

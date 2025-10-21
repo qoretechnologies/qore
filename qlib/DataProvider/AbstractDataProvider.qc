@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProvider class definition
 
-/** AbstractDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -2349,23 +2349,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns a bulk insert operation object for the data provider
-    /** @return a bulk insert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size for the data
+        provider is used (normally 1000 records)
+
+        @return a bulk insert operation object for the data provider
 
         @throw INVALID-OPERATION the data provider does not support create operations
     */
-    AbstractDataProviderBulkOperation getBulkInserter() {
+    AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
         checkCreate();
-        return new DefaultBulkInserter(self);
+        return new DefaultBulkInserter(self, block_size);
     }
 
     #! Returns a bulk upsert operation object for the data provider
-    /** @return a bulk upsert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size for the data
+        provider is used (normally 1000 records)
+
+        @return a bulk upsert operation object for the data provider
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
     */
-    AbstractDataProviderBulkOperation getBulkUpserter() {
+    AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
         checkUpsert();
-        return new DefaultBulkUpserter(self);
+        return new DefaultBulkUpserter(self, block_size);
     }
 
     #! Returns custom data mapper runtime keys
