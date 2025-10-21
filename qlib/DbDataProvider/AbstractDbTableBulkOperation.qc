@@ -32,7 +32,8 @@ public class AbstractDbTableBulkOperation inherits AbstractDataProviderBulkOpera
     }
 
     #! Creates the object
-    constructor(DbTableDataProvider provider, AbstractBulkOperation bulk) : AbstractDataProviderBulkOperation(provider) {
+    constructor(DbTableDataProvider provider, AbstractBulkOperation bulk)
+            : AbstractDataProviderBulkOperation(provider, bulk.getOperationName(), bulk.getBlockSize()) {
         self.bulk = bulk;
     }
 
@@ -60,6 +61,11 @@ public class AbstractDbTableBulkOperation inherits AbstractDataProviderBulkOpera
     */
     discard() {
         bulk.discard();
+    }
+
+    #! This method is not called in this implementation
+    private flushImpl() {
+        # not called in this implementation
     }
 }
 }

@@ -28,7 +28,7 @@ public namespace DbDataProvider {
 public class DbTableBulkInserter inherits DbDataProvider::AbstractDbTableBulkOperation {
     #! Creates the object
     constructor(DbTableDataProvider provider, AbstractTable table)
-        : AbstractDbTableBulkOperation(provider, new BulkInsertOperation(table)) {
+            : AbstractDbTableBulkOperation(provider, new BulkInsertOperation(table)) {
     }
 }
 }

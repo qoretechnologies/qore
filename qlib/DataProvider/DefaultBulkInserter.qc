@@ -22,49 +22,18 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# assume local scope for variables, do not use "$" signs
-%new-style
-# require type definitions everywhere
-%require-types
-#! strict argument handling
-%strict-args
-# enable all warnings
-%enable-all-warnings
-
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Default builk inserter class
 public class DefaultBulkInserter inherits AbstractDataProviderBulkOperation {
     #! Creates the object
-    constructor(AbstractDataProvider provider) : AbstractDataProviderBulkOperation(provider) {
+    constructor(AbstractDataProvider provider, *int block_size)
+            : AbstractDataProviderBulkOperation(provider, "create", block_size) {
     }
 
-    #! Queues data in the buffer
-    queueData(hash<auto> record) {
-        if (record.firstValue().typeCode() == NT_LIST) {
-            map provider.createRecord($1), record.contextIterator();
-        } else {
-            provider.createRecord(record);
-        }
-    }
-
-    #! Queues data in the buffer
-    queueData(list<hash<auto>> records) {
-        map provider.createRecord($1), records;
-    }
-
-    #! Flushes any remaining data to the data provider
-    /** This method should always be called before committing the transaction (if the data provider supports
-        transaction management) or destroying the object
-    */
-    flush() {
-    }
-
-    #! Discards any buffered data
-    /** This method should be called before rolling back the transaction (if the data provider supports transaction
-        management) or destroying the object if an error occurs
-    */
-    discard() {
+    #! flushes queued data to the database
+    private flushImpl() {
+        provider.createRecords(buf);
     }
 }
 }

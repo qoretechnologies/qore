@@ -1358,6 +1358,30 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return createRecordImpl(rec, validateCreateOptions(create_options));
     }
 
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+    */
+    *list<hash<auto>> createRecordsBulk(hash<auto> recs, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        if (!supportsBulkCreate()) {
+            return map createRecordImpl($1, create_options), recs.contextIterator();
+        }
+        return createRecordsBulkImpl(recs, create_options);
+    }
+
     #! Upserts the given record in the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
@@ -1369,6 +1393,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     string upsertRecord(hash<auto> rec, *hash<auto> upsert_options) {
         checkUpsert();
         return upsertRecordImpl(rec, validateUpsertOptions(upsert_options));
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+    */
+    *list<string> upsertRecordsBulk(hash<auto> recs, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateCreateOptions(upsert_options);
+        if (!supportsBulkUpsert()) {
+            return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+        }
+        return upsertRecordsBulkImpl(recs, upsert_options);
     }
 
     #! Returns the first record matching the search options
@@ -3980,16 +4023,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         throwUnimplementedException();
     }
 
-    #! Creates the given record to the data provider
+    #! Creates the given record in the data provider
     /** @param rec a hash representing a single input record
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider
-
-        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
-        duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        throwUnimplementedException();
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record
+    */
+    private *list<hash<auto>> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
         throwUnimplementedException();
     }
 
@@ -4000,6 +4051,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @return see @ref db_provider_upsert_results for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        throwUnimplementedException();
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+    */
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
         throwUnimplementedException();
     }
 

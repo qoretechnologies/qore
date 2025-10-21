@@ -314,6 +314,16 @@ on_error ds.rollback();
             return hbuf.firstValue().size();
         }
 
+        #! Returns the operation name
+        string getOperationName() {
+            return opname;
+        }
+
+        #! Returns the block size
+        int getBlockSize() {
+            return block_size;
+        }
+
         #! common constructor initialization
         private init(*hash<auto> opts) {
             block_size = opts.block_size ?? OptionDefaults.block_size;

@@ -408,6 +408,31 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return rec + returning;
     }
 
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record
+    */
+    private *list<hash<auto>> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        hash<auto> rh;
+        if (create_options.returning) {
+            create_options.rowcode = sub (hash<auto> h) {
+                rh = h;
+            };
+        }
+        BulkInsertOperation bulk(table, create_options + {
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return map $1, (recs + rh).contextIterator();
+    }
+
     #! Upserts the given record to the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options (see @ref UpsertOptions) after processing by validateUpsertOptions()
@@ -422,6 +447,26 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return DbUpsertMap{db.upsert(rec,
             AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto, upsert_options)};
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+    */
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        BulkUpsertOperation bulk(table, upsert_options + {
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return map UpsertResultVerified, xrange(recs.firstValue().lsize());
     }
 
     #! Returns a single record matching the search options
