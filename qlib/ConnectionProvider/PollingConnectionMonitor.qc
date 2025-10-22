@@ -202,28 +202,17 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 "URL %y is already being monitored; update the connection if this definition should replace the "
                 "existing one", name, conn.getSafeUrl(), name, info.conn.getSafeUrl());
         }
-        cache{name} = <PollInfo>{
-            "conn": conn,
-            "other": other,
-        };
-        if (autostart && !tid) {
-            startIntern();
-        }
-        if (start_pending) {
-            cache{name}.start = now_us();
-        } else if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
-            failedToStartPing(name, ex);
-        }
-        sendCmd(IO_ADD);
+        addOrUpdateIntern(IO_ADD, conn, other, start_pending);
     }
 
     #! Adds or updates an existing connection that is already being monitored
     /** @param conn the connection to be monitored; must support the connection polling API
         @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
 
         @throw MONITOR-CONNECTION-ERROR the connection does not support the connection polling API
     */
-    addOrUpdate(AbstractConnection conn, *hash<auto> other) {
+    addOrUpdate(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
             throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
@@ -242,12 +231,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         } else {
             cmd = IO_ADD;
         }
-        cache{name} = <PollInfo>{
-            "conn": conn,
-            "other": other,
-        };
-        restartPing(name, True);
-        sendCmd(cmd);
+        addOrUpdateIntern(cmd, conn, other, start_pending);
     }
 
     #! Removes the given connection
@@ -294,6 +278,29 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (!removeConnection(name)) {
             throw "MONITOR-REMOVE-ERROR", sprintf("no connection %y is being monitored", name);
         }
+    }
+
+    #! Adds or updates an existing connection that is already being monitored
+    /** @param cmd the command to send to the I/O thread
+        @param conn the connection to be monitored; must support the connection polling API
+        @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
+    */
+    private addOrUpdateIntern(string cmd, AbstractConnection conn, *hash<auto> other, *bool start_pending) {
+        string name = conn.getName();
+        cache{name} = <PollInfo>{
+            "conn": conn,
+            "other": other,
+        };
+        if (autostart && !tid) {
+            startIntern();
+        }
+        if (start_pending) {
+            cache{name}.start = now_us();
+        } else if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
+            failedToStartPing(name, ex);
+        }
+        sendCmd(cmd);
     }
 
     private startIntern() {
