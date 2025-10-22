@@ -422,7 +422,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         @return the data written to the data provider for each record
     */
     private *list<hash<auto>> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
-        DbTableTransactionHelper db(table);
+        DbOperationTransactionHelper db(table);
         hash<auto> rh;
         if (create_options.returning) {
             create_options.rowcode = sub (hash<auto> h) {
@@ -465,7 +465,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         for possible values
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
-        DbTableTransactionHelper db(table);
+        DbOperationTransactionHelper db(table);
         BulkUpsertOperation bulk(table, upsert_options + {
             "info_log": sub (string fmt, ...) {
                 logArgs(LoggerLevel::LevelInfo, fmt, argv);
