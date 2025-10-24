@@ -216,16 +216,27 @@ public class AbstractTable inherits AbstractSqlUtilBase {
 
         #! default upsert option keys
         /** The following keys can be set for this option:
-            - \c commit_block: the number of changes made before an automatic commit is made for upsert methods that perform commits
-            - \c delete_others: if this option is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation allows tables to be completely synchronized by removing rows in the target table not present in the source table.  This operation is expensive for large data sets.
+            - \c commit_block: the number of changes made before an automatic commit is made for upsert methods that
+              perform commits
+            - \c delete_others: if this option is @ref True "True", then a hash of primary key values in the input
+              data is built as the input data is iterated.  After iterating, if the row count of the table and the
+              input data matches, then nothing more is done, otherwise, every row of the table is iterated and
+              compared to the primary key hash; if a row does not match a primary key value, then it is deleted.
+              This operation allows tables to be completely synchronized by removing rows in the target table not
+              present in the source table. This operation is expensive for large data sets.
             - \c info_callback: see @ref upsert_info_callback
-            - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a smaller set is updated in case the unique key values are present in the target table; the value of this key should be set to the columns to omit in the update clause
+            - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
+              smaller set is updated in case the unique key values are present in the target table; the value of this
+              key should be set to the columns to omit in the update clause
+            - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
+              upsert operation
         */
         const UpsertOptions = {
-            "info_callback": "code",
             "commit_block": Type::Int,
             "delete_others": Type::Boolean,
+            "info_callback": "code",
             "omit_update": "softstringlist",
+            "upsert_columns": "softstringlist",
         };
 
         #! default insert option keys
@@ -3344,7 +3355,7 @@ table.upsertCommit(row);
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note if upserting multiple rows; it's better to use getBulkUpsertClosure(), getUpsertClosure(), or getUpsertClosureWithValidation() and execute the closure on each row; when using this method, the overhead for setting up the upsert is made for each row which is very inefficient
-        */
+    */
     int upsertCommit(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         on_success ds.commit();
         on_error ds.rollback();
@@ -3368,7 +3379,7 @@ table.upsert(row);
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note if upserting multiple rows; it's better to use getBulkUpsertClosure(), getUpsertClosure(), or getUpsertClosureWithValidation() and execute the closure on each row; when using this method, the overhead for setting up the upsert is made for each row which is very inefficient
-        */
+    */
     int upsert(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         return getUpsertClosure(row, upsert_strategy, opt)(row);
     }
@@ -3389,29 +3400,55 @@ on_error ds.rollback();
 map upsert($1), row_list;
         @endcode
 
-        @param row a hash representing an example row to insert or update; every row passed to the upsert closure returned must have the same keys in the same order
+        @param row a hash representing an example row to insert or update; every row passed to the upsert closure
+        returned must have the same keys in the same order
         @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for
+        common options; each driver can support additional driver-specific options
 
-        @return a closure that can be executed given a hash argument representing a single row that will be updated or inserted in the database with the given upsert strategy; the closure returned does not check the input hash for validity; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is an integer code giving the result of the update; see @ref upsert_results for more information
+        @return a closure that can be executed given a hash argument representing a single row that will be updated or
+        inserted in the database with the given upsert strategy; the closure returned does not check the input hash
+        for validity; the closure has the following signature:
+        @code{.py} int sub upsert(hash<auto> row) {} @endcode
+        The return value of the closure is an integer code giving the result of the update; see @ref upsert_results
+        for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
-        @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
+        @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the
+        unique constraint/index are used in the upsert statement
 
-        @note the row values passed to the closure for upserting are not checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data will cause errors; see @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating closure; the closure returned by this method is faster than the one returned by @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
-        */
+        @note the row values passed to the closure for upserting are not checked if they match the example row passed
+        to the getUpsertClosure() method; passing non-conforming data will cause errors; see
+        @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating
+        closure; the closure returned by this method is faster than the one returned by
+        @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
+    */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
-        if (upsert_strategy == UpsertAuto)
+        if (upsert_strategy == UpsertAuto) {
             upsert_strategy = emptyDataIntern() ? UpsertInsertFirst : UpsertUpdateFirst;
+        }
 
         # accommodate for bulk DML
-        if (row.firstValue().typeCode() == NT_LIST)
-            row = map {$1.key : $1.value[0]}, row.pairIterator();
+        if (row.firstValue().typeCode() == NT_LIST) {
+            row = map {$1.key : $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, row.pairIterator();
+        }
 
-        Columns cols = checkUpsertRow(row, \upsert_strategy);
+        hash<auto> upsert_row;
+        if (opt.upsert_columns) {
+            hash<auto> uch = map {$1: True}, opt.upsert_columns;
+            if (*hash<auto> invalid_cols = (uch - keys row)) {
+                throw "UPSERT-ERROR", sprintf("%s: 'upsert_columns' contains the following columns not referenced in "
+                    "the row data: %y", getDesc(), keys invalid_cols);
+            }
+            upsert_row = map {$1: NOTHING}, opt.upsert_columns;
+        } else {
+            upsert_row = row;
+        }
+
+        Columns cols = checkUpsertRow(upsert_row, \upsert_strategy);
 
         switch (upsert_strategy) {
             case UpsertInsertFirst:
@@ -3460,7 +3497,7 @@ upsert(row_hash);
         - upsertCommit()
         - getUpsertClosure()
         - getUpsertClosureWithValidation()
-        */
+    */
     code getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto, *hash<auto> opt) {
         code upsert = getUpsertClosure(example_row, upsert_strategy, opt);
         return int sub (hash<auto> h) {
@@ -3490,13 +3527,16 @@ map upsert($1), row_list;
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note the row values passed to the closure for upserting are checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data to the closure will cause the closure to throw an \c UPSERT-ERROR exception; see @ref SqlUtil::AbstractTable::getUpsertClosure() for a similar method that returns a non-validating closure; the closure returned by this method is a little slower than the one returned by @ref SqlUtil::AbstractTable::getUpsertClosure() since each row is validated
-        */
+    */
     code getUpsertClosureWithValidation(hash<auto> example_row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         code upsert = getUpsertClosure(example_row, upsert_strategy, opt);
 
         return int sub (hash<auto> row) {
-            if (!row.compareKeys(example_row))
-                throw "UPSERT-ERROR", sprintf("%s: the keys in the row passed to the upsert closure (%y) do not match the keys passed to AbstractTable::getUpsertClosureWithValidation() (%y)", getDesc(), row.keys, example_row.keys());
+            if (!row.compareKeys(example_row)) {
+                throw "UPSERT-ERROR", sprintf("%s: the keys in the row passed to the upsert closure (%y) do not "
+                    "match the keys passed to AbstractTable::getUpsertClosureWithValidation() (%y)", getDesc(),
+                    row.keys, keys example_row);
+            }
             return upsert(row);
         };
     }
@@ -5724,14 +5764,14 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         return rv.firstValue();
     }
 
-    #! returns a hash with a single value\
+    #! Returns a hash with a single value
     /** @param row if given, a row to match a unique constraint or unique index
 
         @return a hash where the key is a description of the column set returned in the value;
         - if \a row is given, then this method returns a column set matching \a row
-        - if \a row is not given, then this method return the first unique constraint or unique index
+        - if \a row is not given, then this method returns the first unique constraint or unique index
 
-        @throw UPSERT-ERROR either no unique constraint or index exists or none matching \a row exist
+        @throw UPSERT-ERROR either no unique constraint or index exists or none matching \a row exists
     */
     private hash<string, Columns> getAllUpsertColumns(*hash<auto> row) {
         if (!columns) {
@@ -5784,13 +5824,11 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         if (row{cols.keys()}.size() == cols.size()) {
             # now check the rest of the keys in the row to ensure that they are valid column names
             if (*hash<auto> invalid_columns = row - columns.keys()) {
-                throw "COLUMN-ERROR", sprintf("%s upsert row references invalid columns: %y (valid columns: %y)", getDesc(),
-                    invalid_columns, columns.keys());
+                throw "COLUMN-ERROR", sprintf("%s upsert row references invalid columns: %y (valid columns: %y)",
+                    getDesc(), keys invalid_columns, columns.keys());
             }
-
             return True;
         }
-
         return False;
     }
 

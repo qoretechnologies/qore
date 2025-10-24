@@ -1480,15 +1480,31 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         \a upsert_strategy argument is ignored and a closure using a merge statement is returned, otherwise the
         standard upsert closure is returned according to @ref SqlUtil::AbstractTable::getUpsertClosure()
     */
-    code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash opt) {
+    code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         if (!ss_has_merge)
             return AbstractTable::getUpsertClosure(row, upsert_strategy, opt);
 
-        Columns cols = checkUpsertRow(row, \upsert_strategy);
+        # check upsert options
+        validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
+
+        hash<auto> upsert_row;
+        if (opt.upsert_columns) {
+            hash<auto> uch = map {$1: True}, opt.upsert_columns;
+            if (*hash<auto> invalid_cols = (uch - keys row)) {
+                throw "UPSERT-ERROR", sprintf("%s: 'upsert_columns' contains the following columns not referenced in "
+                    "the row data: %y", getDesc(), keys invalid_cols);
+            }
+            upsert_row = map {$1: NOTHING}, opt.upsert_columns;
+        } else {
+            upsert_row = row;
+        }
+
+        Columns cols = checkUpsertRow(upsert_row, \upsert_strategy);
 
         # if the strategy is "select first", then respect this strategy; this is a slow upsert method anyway
-        if (upsert_strategy == UpsertSelectFirst)
+        if (upsert_strategy == UpsertSelectFirst) {
             return getUpsertSelectFirst(cols, row, opt);
+        }
 
         # get update columns
         list updc = ();
@@ -1496,8 +1512,9 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         *hash suh = map {$1: True}, opt.omit_update;
         map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
         # cannot use merge where only the join columns are present
-        if (!updc)
+        if (!updc) {
             return getUpsertInsertOnly(cols, row, opt);
+        }
 
         string sql = sprintf("merge %s t using (select ", getSqlName());
         sql += foldl $1 + "," + $2, (map "%v", keys row);
