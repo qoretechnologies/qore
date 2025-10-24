@@ -1295,11 +1295,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             */
             if (!head && (status_code >= 200) && (status_code != 204) && (status_code != 304)) {
                 if (msg.typeCode() == NT_STRING) {
-                    response_msg = !extra_hdrs."Content-Type"
-                        ? sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
-                            "%s</address></body></html>",
-                                status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
-                                html_encode(msg), http_server_string, gethostname())
+                    response_msg = !extra_hdrs."Content-Type" && acceptsHtml(cx)
+                        ? getHtmlErrorMessage(status_code, msg)
                         : msg;
                 } else {
                     response_msg = msg;
@@ -1351,6 +1348,21 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 logError("%s", estr);
             }
         }
+    }
+
+    string getHtmlErrorMessage(int status_code, string msg) {
+        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
+            "%s</address></body></html>",
+                status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
+                html_encode(msg), http_server_string, gethostname());
+    }
+
+    static bool acceptsHtml(hash<auto> cx) {
+        if (!cx.hdr.accept.val() || cx.hdr.accept =~ /\btext\/html\b/i || cx.hdr.accept =~ /\b\*\/\*\b/
+            || cx.hdr.accept =~ /\btext\/\*\b/i) {
+            return True;
+        }
+        return False;
     }
 
     #! masks log messages by removing sensitive data
