@@ -76,7 +76,7 @@ public class AbstractDataProviderBulkRecordInterface {
         }
         *hash<auto> rv = getValueImpl();
         if ((int size = rv.firstValue().size()) < block_size) {
-            valid = False;
+            markInvalid();
             if (!size) {
                 return;
             }
@@ -95,6 +95,11 @@ public class AbstractDataProviderBulkRecordInterface {
     /** This base class method returns @ref nothing; reimplement in subclasses to provide a record type
     */
     *hash<string, AbstractDataField> getRecordType() {
+    }
+
+    #! Called when the iterator is marked as invalid
+    private markInvalid() {
+        valid = False;
     }
 
     #! Returns a hash of lists (or constant values) according to the block size

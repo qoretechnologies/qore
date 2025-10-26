@@ -46,17 +46,26 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
     constructor(int block_size, AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractDataProviderBulkRecordInterface(block_size) {
         self.table = table;
-        # release the transaction with a rollback in the destructor by default if we do not already have a transaction
-        # lock
+        # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction();
         stmt = table.getStatement({"where": where_cond});
     }
 
-    #! rolls back the transaction if a transaction lock was acquired in the constructor and keepTransactionLock() was not called
+    #! Rolls back the transaction if applicable
+    /** Rolls back the transaction if a transaction lock was acquired in the constructor, keepTransactionLock()
+        was not called, and the transaction was not already rolled back by reaching the end of the data
+    */
     destructor() {
         if (release_transaction) {
             stmt.rollback();
         }
+    }
+
+    #! Returns a standard record iterator for this bulk iterator
+    /** @return a standard record iterator for this bulk iterator
+    */
+    AbstractDataProviderRecordIterator getRecordIterator() {
+        return new DataProviderBulkRecordIterator(self);
     }
 
     #! Ensures that no rollback is performed when the object is destroyed
@@ -64,11 +73,24 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         release_transaction = False;
     }
 
+    #! Returns True if the transaction is implicit and will be automatically rolled back
+    /** The transaction is rolled back automatically when all rows have been iterated or when the object is destroyed,
+        whichever comes first
+
+        @return True if the transaction is implicit and will be automatically rolled back
+    */
+    bool implicitTransaction() {
+        return release_transaction;
+    }
+
     #! Returns a hash of lists according to the block size
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
 
-        @note This call moves the internal record pointer forward, therefore multiple calls of this methods will
-        return different results as long as data is available
+        @note
+        - This call moves the internal record pointer forward, therefore multiple calls of this methods will
+          return different results as long as data is available
+        - If an implicit transaction is being used, reaching the end of the data will automatically roll back the
+          transaction
     */
     private hash<string, list<auto>> getValueImpl() {
         return stmt.fetchColumns(block_size);
@@ -79,6 +101,16 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
     */
     *hash<string, AbstractDataField> getRecordType() {
         return table.getRecordType();
+    }
+
+    #! Called when the iterator is marked as invalid
+    private markInvalid() {
+        AbstractDataProviderBulkRecordInterface::markInvalid();
+        if (release_transaction) {
+            # no more data; roll back the implicit transaction
+            stmt.rollback();
+            release_transaction = False;
+        }
     }
 }
 }
