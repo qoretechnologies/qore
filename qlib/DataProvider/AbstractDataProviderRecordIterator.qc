@@ -366,13 +366,35 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     }
 
     private {
-        #! Block size for bulk iteration
-        int block_size = DefaultBlockSize;
+        #! Number of records returned
+        int record_count = 0;
+
+        #! Requires result
+        bool requires_result;
+
+        #! Max records
+        *int max_records;
     }
 
     #! Creates the object and optionally sets the bulk iteration block size
-    constructor(int block_size = DefaultBlockSize) {
-        self.block_size = block_size;
+    constructor(*bool requires_result, *int max_records) {
+        self.requires_result = requires_result ?? False;
+        self.max_records = max_records;
+    }
+
+    #! Returns the number of records returned so far
+    int getRecordCount() {
+        return record_count;
+    }
+
+    #! Returns the 'requires_result' flag
+    bool requiresResult() {
+        return requires_result;
+    }
+
+    #! Returns the 'max_records' value
+    *int getMaxRecords() {
+        return max_records;
     }
 
     #! Returns @ref True if the iterator supports bulk operation
@@ -389,8 +411,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
 
         @note This base class method returns @ref DefaultBulkRecordIterface by default
     */
-    *AbstractDataProviderBulkRecordInterface getBulkApi() {
-        return new DefaultBulkRecordIterface(block_size, self);
+    *AbstractDataProviderBulkRecordInterface getBulkApi(int block_size = DefaultBlockSize) {
+        return new DefaultBulkRecordIterface(block_size, self, requires_result, max_records);
     }
 
     #! Returns the record description, if available
@@ -399,10 +421,38 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     *hash<string, AbstractDataField> getRecordType() {
     }
 
+    #! Positions the iterator on the next record if possible, returns @ref True if successful
+    /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
+
+        @note Calling getValue() after this method returns @ref False results in an exception
+
+        @throw NO-DATA no data available to return and \c requires_result is set
+        @throw MAX-RECORDS-EXCEEDED the maximum number of records has been exceeded as set by \c max_records
+    */
+    bool next() {
+        bool rv = nextImpl();
+        if (rv) {
+            ++record_count;
+            if ((max_records > 0) && (record_count > max_records)) {
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded", max_records);
+            }
+        } else if (!record_count && requires_result) {
+            throw "NO-DATA", "No records returrned from the search, but at least one record was required "
+                "('requires_result' = True)";
+        }
+        return rv;
+    }
+
     #! returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
     abstract hash<auto> getValue();
+
+    #! Positions the iterator on the next record if possible, returns @ref True if successful
+    /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
+    */
+    abstract private bool nextImpl();
 
     #! Returns the value of the given field in the current record, if the iterator is valid
     /** @param key the name of the field

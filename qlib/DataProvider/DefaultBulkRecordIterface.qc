@@ -42,9 +42,13 @@ public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordIn
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the record block size to use
         @param i the iterator to use
+        @param requires_result if set to @ref True, at least one record must be returned by the iterator; if no
+        records are available, an exception is thrown when this parameter is set to @ref True
+        @param max_records the maximum number of records to return; if set, an exception is thrown when the maximum
+        number of records is exceeded
     */
-    constructor(int block_size, AbstractDataProviderRecordIterator i)
-            : AbstractDataProviderBulkRecordInterface(block_size) {
+    constructor(int block_size, AbstractDataProviderRecordIterator i, *bool requires_result, *int max_records)
+            : AbstractDataProviderBulkRecordInterface(block_size, requires_result, max_records) {
         self.i = i;
     }
 

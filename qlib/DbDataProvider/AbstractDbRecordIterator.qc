@@ -37,13 +37,19 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
     #! creates the iterator
     /** @param release_transaction release the transaction with a rollback in the destructor?
         @param stmt the SQL statement to iterate
+        @param search_options search options
     */
-    constructor(bool release_transaction, AbstractSQLStatement stmt) {
+    constructor(bool release_transaction, AbstractSQLStatement stmt, *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result,
+                search_options.max_records) {
         self.release_transaction = release_transaction;
         self.stmt = stmt;
     }
 
-    #! rolls back the transaction if a transaction lock was acquired in the constructor and keepTransactionLock() was not called
+    #! Rolls back the transaction autoomatically if applicable
+    /** Rolls back the transaction if a transaction lock was acquired in the constructor and keepTransactionLock()
+        was not called
+    */
     destructor() {
         if (release_transaction) {
             stmt.rollback();
@@ -55,24 +61,16 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
         @return @ref True if the iterator is valid
     */
     bool valid() {
-        return stmt.valid();
-    }
-
-    #! Increments the row pointer when retrieving rows from a select statement; returns @ref True if there is a row to retrieve, @ref False if not
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
-
-        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
-        docs for more information
-    */
-    bool next() {
-        return stmt.next();
+        return stmt ? stmt.valid() : False;
     }
 
     #! Returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
     hash<auto> getValue() {
+        if (!stmt) {
+            throw "INVALID-ITERATOR", "This object was invalidated when a bulk iterator was created from it";
+        }
         return stmt.getValue();
     }
 
@@ -93,8 +91,19 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
 
         @note This object cannot be used after this call
     */
-    *AbstractDataProviderBulkRecordInterface getBulkApi() {
+    *AbstractDataProviderBulkRecordInterface getBulkApi(*int block_size = DefaultBlockSize) {
         return new DbSelectBulkRecordInterface(block_size, remove release_transaction, remove stmt);
+    }
+
+    #! Increments the row pointer when retrieving rows from a select statement
+    /**
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+
+        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
+        docs for more information
+    */
+    private bool nextImpl() {
+        return stmt.next();
     }
 }
 }

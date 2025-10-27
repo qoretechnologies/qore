@@ -45,7 +45,8 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
         @throw DBSELECT-BULK-ERROR where_cond must be empty
     */
     constructor(int block_size, AbstractDatasource ds, *hash<auto> where_cond, hash<auto> select_options)
-            : AbstractDataProviderBulkRecordInterface(block_size) {
+            : AbstractDataProviderBulkRecordInterface(block_size, select_options.requires_result,
+                select_options.max_records) {
         if (where_cond) {
             throw "DBSELECT-BULK-ERROR", sprintf("where_cond must be empty for %s; value provided: %y",
                 self.className(), where_cond);

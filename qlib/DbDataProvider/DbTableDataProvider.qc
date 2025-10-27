@@ -209,7 +209,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
               <a href="../../SqlUtil/html/sql_operations.html#select_option_forupdate">SqlUtil select option forupdate</a>
               for more information on this argument
         */
-        const SearchOptions = {
+        const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "columns": <DataProviderOptionInfo>{
                 "display_name": "Columns",
                 "short_desc": "Columns to include in the output of the query",
@@ -485,7 +485,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         try {
-            return table.selectRow(search_options + {"where": where_cond});
+            return table.selectRow(search_options - ("requires_result", "max_records") + {"where": where_cond});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DBI-SELECT-ROW-ERROR") {
                 rethrow "MULTIPLE-RECORDS-ERROR", ex.desc, ex.arg;
@@ -689,6 +689,13 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             table.clear();
         }
         info("DbTableDataProvider %y DDL: %s", table.getName(), (foldl $1 + "\n" + $2, sqll));
+    }
+
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+    */
+    private bool currentThreadInTransactionImpl() {
+        return table.getDatasource().currentThreadInTransaction();
     }
 }
 }

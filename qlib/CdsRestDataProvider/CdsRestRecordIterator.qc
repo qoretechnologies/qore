@@ -51,7 +51,8 @@ public class CdsRestRecordIterator inherits AbstractDataProviderRecordIterator {
         @param search_options search options; assumed to have already been processed for validity before this call
     */
     constructor(CdsRestClient::CdsRestClient rest, string name, hash<CdsRestRecordInfo> record_info,
-            *hash<auto> where_cond, *hash<auto> search_options) {
+            *hash<auto> where_cond, *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
         self.name = name;
         self.record_info = record_info;
@@ -80,17 +81,6 @@ public class CdsRestRecordIterator inherits AbstractDataProviderRecordIterator {
     */
     bool valid() {
         return i.valid();
-    }
-
-    #! Increments the row pointer when retrieving rows from a select statement; returns @ref True if there is a row to retrieve, @ref False if not
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
-
-        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
-        docs for more information
-    */
-    bool next() {
-        return i.next();
     }
 
     #! Returns a single record if the iterator is valid
@@ -252,6 +242,17 @@ public class CdsRestRecordIterator inherits AbstractDataProviderRecordIterator {
         }
 
         return sprintf("%s eq %s", key, getArgValue(key, value));
+    }
+
+    #! Increments the row pointer when retrieving rows from a select statement
+    /**
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+
+        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
+        docs for more information
+    */
+    private bool nextImpl() {
+        return i.next();
     }
 }
 }

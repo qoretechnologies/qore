@@ -68,7 +68,7 @@ public class DbDataProvider inherits DbDataProviderBase {
         };
 
         #! Search options
-        const SearchOptions = {
+        const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "sql": <DataProviderOptionInfo>{
                 "display_name": "SQL Query",
                 "short_desc": "The raw SQL query for the select statement",
@@ -147,7 +147,8 @@ public class DbDataProvider inherits DbDataProviderBase {
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Data provider for database `%s`; use the search API with the `sql` and `args` arguments to "
-            "execute record-based queries", db.getDatasourceDesc());
+            "execute record-based queries; note that generic filtering on SQL results is not supported by this "
+            "data provider and will result in an error if used", db.getDatasourceDesc());
     }
 
     #! Returns the record type description from a describe hash
@@ -264,7 +265,7 @@ public class DbDataProvider inherits DbDataProviderBase {
                 return;
             }
         } catch (hash<ExceptionInfo> ex) {
-            rethrow "CHILD-PROVIDER-ERROR", sprintf("table %y cannot be acquired from %y: %s: %s", name, getName(),
+            rethrow "CHILD-PROVIDER-ERROR", sprintf("Table %y cannot be acquired from %y: %s: %s", name, getName(),
                 ex.err, ex.desc), ex.arg;
         }
         return new DbTableDataProvider(table, logger);

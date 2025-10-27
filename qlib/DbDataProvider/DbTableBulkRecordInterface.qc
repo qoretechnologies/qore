@@ -44,7 +44,8 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         @param search_options search options; assumed to have already been processed for validity before this call
     */
     constructor(int block_size, AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)
-            : AbstractDataProviderBulkRecordInterface(block_size) {
+            : AbstractDataProviderBulkRecordInterface(block_size, search_options.requires_result,
+                search_options.max_records) {
         self.table = table;
         # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction();
@@ -59,13 +60,6 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         if (release_transaction) {
             stmt.rollback();
         }
-    }
-
-    #! Returns a standard record iterator for this bulk iterator
-    /** @return a standard record iterator for this bulk iterator
-    */
-    AbstractDataProviderRecordIterator getRecordIterator() {
-        return new DataProviderBulkRecordIterator(self);
     }
 
     #! Ensures that no rollback is performed when the object is destroyed

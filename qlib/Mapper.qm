@@ -3273,11 +3273,6 @@ public class MapperOutputRecordIterator inherits AbstractDataProviderRecordItera
         i = input.searchRecords(where_cond, search_options);
     }
 
-    #! Moves the current position to the next element; returns @ref False if there are no more elements
-    bool next() {
-        return i.next();
-    }
-
     #! Returns the mapped value of the current input record
     hash<auto> getValue() {
         return mapper.mapData(i.getValue());
@@ -3286,6 +3281,11 @@ public class MapperOutputRecordIterator inherits AbstractDataProviderRecordItera
     #! Returns @ref True if the iterator is currently pointing at a valid element, @ref False if not
     bool valid() {
         return i.valid();
+    }
+
+    #! Moves the current position to the next element; returns @ref False if there are no more elements
+    private bool nextImpl() {
+        return i.next();
     }
 }
 }

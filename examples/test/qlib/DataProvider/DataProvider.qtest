@@ -26,10 +26,6 @@ class TestRecordProvider inherits AbstractDataProviderRecordIterator {
         bool ok = False;
     }
 
-    bool next() {
-        return ok = !ok;
-    }
-
     bool valid() {
         return ok;
     }
@@ -44,19 +40,23 @@ class TestRecordProvider inherits AbstractDataProviderRecordIterator {
             "b": 2,
         };
     }
+
+    private bool nextImpl() {
+        return ok = !ok;
+    }
 }
 
 class InfiniteRecordProvider inherits AbstractDataProviderRecordIterator {
-    bool next() {
-        return True;
-    }
-
     bool valid() {
         return True;
     }
 
     hash<auto> getValue() {
         return {"a": 1, "b": 2};
+    }
+
+    private bool nextImpl() {
+        return True;
     }
 }
 
@@ -165,10 +165,6 @@ class DummyRecordProcessor inherits AbstractDataProcessor {
 }
 
 class TestBulkRecordIterator inherits AbstractDataProviderRecordIterator {
-    bool next() {
-        return False;
-    }
-
     bool valid() {
         return False;
     }
@@ -183,6 +179,10 @@ class TestBulkRecordIterator inherits AbstractDataProviderRecordIterator {
 
     *AbstractDataProviderBulkRecordInterface getBulkApi() {
         return new TestBulkRecordProvider();
+    }
+
+    private bool nextImpl() {
+        return False;
     }
 }
 

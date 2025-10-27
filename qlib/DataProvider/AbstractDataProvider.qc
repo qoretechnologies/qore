@@ -1201,31 +1201,56 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         const DataProviderSummaryInfoKeys = map $1.getName(),
             TypedHash::forName("DataProviderSummaryInfo").getMembers();
 
+        #! 'Requires Result' option info
+        const RequiresResultOption = <DataProviderOptionInfo>{
+            "display_name": "Requires Result",
+            "short_desc": "If True, the operation requires a result or affected records",
+            "desc": "If `True`, then an operation that returns no result or affects no records results in an error",
+            "type": AbstractDataProviderTypeMap."bool",
+        };
+
         #! Generic record search options; see details below
         /** Each record-based data provider should support the following search options:
             - \c columns: a list of one or more field names; allows a subset of fields to be output in searches
             - \c limit: the maximum number of records to return
+            - \c max_records: the maximum number of records to return or to affect; if more records are returned
+              or affected, the operation results in an error; for data provider supporting transactions; this will
+              normally result in a transaction rollback if a transaction is in progress
             - \c offset: the offset number in records to return
+            - \c requires_result: if \c True, then an operation that returns no result or affects no records
+              results in an error
         */
         const GenericRecordSearchOptions = {
             "columns": <DataProviderOptionInfo>{
                 "display_name": "Columns",
                 "short_desc": "Columns to include in output",
-                "type": AbstractDataProviderTypeMap."any",
                 "desc": "Allows a subset of fields to be output in searches",
+                "type": AbstractDataProviderTypeMap."any",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
-                "short_desc": "The maximum number of records to return",
-                "type": AbstractDataProviderType::get(IntType),
-                "desc": "The maximum number of records to return",
+                "short_desc": "The limit on the number of records to return from the data provider",
+                "desc": "The limit on the number of records to return from the data provider; additional "
+                    "records are silently ignored. This option is normally enforced by the server interfaced by the "
+                    "data provider",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "max_records": <DataProviderOptionInfo>{
+                "display_name": "Max Records",
+                "short_desc": "The maximum number of records to return or to affect",
+                "desc": "The maximum number of records to return or to affect; if more records are returned or "
+                    "affected, the operation results in an error; for data provider supporting transactions; this "
+                    "will normally result in a transaction rollback if a transaction is in progress. This option is "
+                    "noormally enforced externally from the server interfaced by the data provider",
+                "type": AbstractDataProviderTypeMap."int",
             },
             "offset": <DataProviderOptionInfo>{
                 "display_name": "Offset",
                 "short_desc": "The offset in the record list for records to return",
-                "type": AbstractDataProviderType::get(IntType),
                 "desc": "The offset in the record list for records to return",
+                "type": AbstractDataProviderType::get(IntType),
             },
+            "requires_result": RequiresResultOption,
         };
     }
 
@@ -1425,7 +1450,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *hash<auto> searchFirstRecord(hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchFirstRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        *hash<auto> rv = searchFirstRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns the first record matching the search options
@@ -1437,7 +1466,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *hash<auto> searchFirstRecord(hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchFirstRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        *hash<auto> rv = searchFirstRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns a single record matching the search options
@@ -1452,7 +1485,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *hash<auto> searchSingleRecord(hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchSingleRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        *hash<auto> rv = searchSingleRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns a single record matching the search options
@@ -1465,7 +1502,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *hash<auto> searchSingleRecord(*hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchSingleRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        *hash<auto> rv = searchSingleRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns an iterator iterating all records
@@ -1666,8 +1707,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             processSearchParameters(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Updates zero or more records matching the search options
@@ -1689,8 +1734,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Deletes zero or more records
@@ -1714,7 +1763,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Deletes zero or more records
@@ -1736,7 +1789,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Makes a request and returns the response
@@ -2310,7 +2367,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns @ref True if the data provider requires transaction management
     /** @return @ref True if the data provider requires transaction management, in which case commit() or rollback()
-        must be called to flush or discard data written to the data provider
+        must be called to flush or discard pending changes to the data provider
     */
     bool requiresTransactionManagement() {
         return getStaticInfoImpl().transaction_management;
@@ -2346,6 +2403,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         - commit()
     */
     rollback() {
+    }
+
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+
+        @throw INVALID-OPERATION the data provider does not support transaction management
+
+        @since DataProvider 3.3
+    */
+    bool currentThreadInTransaction() {
+        if (!requiresTransactionManagement()) {
+            throw "INVALID-OPERATION", sprintf("data provider %y (type %y) does not support transaction management",
+                getName(), self.className());
+        }
+        return currentThreadInTransactionImpl();
     }
 
     #! Returns a bulk insert operation object for the data provider
@@ -3879,8 +3951,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @note This default methods searches the entire data set for a matching record
     */
-    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond,
-            *hash<auto> search_options) {
+    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         # scans the whole data set to find a single record
         *list<*hash<auto>> records = map $1, searchRecordsImpl(where_cond, search_options);
         if (records.lsize() > 1) {
@@ -4010,8 +4081,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @see requestSearchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
-            *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         throwUnimplementedException();
     }
 
@@ -4024,8 +4094,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @see searchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
-            *hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
+            *hash<auto> search_options) {
         throwUnimplementedException();
     }
 
@@ -4415,7 +4485,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private throwUnimplementedException() {
         # should never be called
-        throw "UNIMPLEMENTED", sprintf("data provider %y of class %y has an error; the operation is not supported; "
+        throw "UNIMPLEMENTED", sprintf("Data provider %y of class %y has an error; the operation is not supported; "
             "this indicates a bug in the implementation of the data provider; please report this bug to the author "
             "of the data provider",
             getName(), self.className());
@@ -4518,6 +4588,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private auto getReferenceDataValueImpl(string type, *hash<auto> action_opts) {
         # intentionally empty
+    }
+
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+    */
+    private bool currentThreadInTransactionImpl() {
+        throwUnimplementedException();
     }
 
     #! Returns the data provider name

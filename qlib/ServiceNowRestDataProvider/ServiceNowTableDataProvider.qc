@@ -58,7 +58,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
         const ProviderInfo = ServiceNowRestDataProvider::ProviderInfo - "constructor_options"
                 + <DataProviderInfo>{
             "supports_children": False,
-            "search_options": {
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
                     "short_desc": "Columns to include in the output of the query",

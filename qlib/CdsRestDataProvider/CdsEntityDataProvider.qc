@@ -53,7 +53,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
         #! Static provider info
         const ProviderInfo = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
-            "search_options": {
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
                     "short_desc": "Columns to include in the output of the query",

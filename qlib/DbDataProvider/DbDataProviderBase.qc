@@ -139,6 +139,13 @@ public class DbDataProviderBase inherits AbstractDataProvider {
         db.rollback();
     }
 
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+    */
+    private bool currentThreadInTransactionImpl() {
+        return db.getDatasource().currentThreadInTransaction();
+    }
+
     #! Returns custom data mapper runtime keys
     /** @return custom data mapper runtime keys
     */

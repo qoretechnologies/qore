@@ -264,7 +264,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
         This will execute the request and perform a default search on any record(s) returned
 
-        @throw SWAGGER-SEARCH-ERROR the response type is not list or hash and does not support searching
+        @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
+        searching
     */
     private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
             *hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
@@ -273,6 +274,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         AbstractIterator i;
         switch (resp.body.typeCode()) {
             case NT_HASH:
+            case NT_NOTHING:
                 i = new SingleValueIterator(resp.body);
                 break;
             case NT_LIST:
@@ -283,7 +285,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     resp.body.type());
                 break;
         }
-        return new DefaultRecordIterator(i, where_cond, NOTHING, record_type);
+        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -293,7 +295,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
         This will execute the request and perform a default search on any record(s) returned
 
-        @throw SWAGGER-SEARCH-ERROR the response type is not list or hash and does not support searching
+        @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
+        searching
     */
     private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
             *hash<auto> search_options) {
@@ -302,6 +305,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         AbstractIterator i;
         switch (resp.body.typeCode()) {
             case NT_HASH:
+            case NT_NOTHING:
                 i = new SingleValueIterator(resp.body);
                 break;
             case NT_LIST:
@@ -312,7 +316,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     resp.body.type());
                 break;
         }
-        return new DefaultRecordIterator(i, where_cond, NOTHING, record_type);
+        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
     }
 
     #! Makes a REST request and returns the response
