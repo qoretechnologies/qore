@@ -1358,6 +1358,8 @@ ClassConstant con = cls.getConstant(name);
     @throw UNKNOWN-CONSTANT thrown if the constant cannot be found
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+
+    @since %Qore 2.3.0 this method searches the class hieararchy
 */
 ClassConstant Class::getConstant(string name) [flags=RET_VALUE_ONLY] {
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);

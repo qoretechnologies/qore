@@ -1515,6 +1515,7 @@ public:
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // inaccessible methods are ignored
     DLLLOCAL const QoreMethod* parseFindNormalMethod(const char* name, const qore_class_private* class_ctx,
@@ -1657,6 +1658,16 @@ public:
         for (auto& i : *this) {
             (*i).initializeBuiltin();
         }
+    }
+
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const {
+        for (auto& i : *this) {
+            const ConstantEntry* ce = (*i).findConstantEntry(name);
+            if (ce) {
+                return ce;
+            }
+        }
+        return nullptr;
     }
 };
 
@@ -2000,6 +2011,9 @@ public:
         @since %Qore 1.0.13
     */
     DLLLOCAL QoreValue getReferencedKeyValue(const char* key) const;
+
+    // Find a constant entry by name
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);

@@ -2144,6 +2144,11 @@ void BCNode::initializeBuiltin() {
     }
 }
 
+const ConstantEntry* BCNode::findConstantEntry(const char* name) const {
+    assert(sclass);
+    return sclass->priv->findConstantEntry(name);
+}
+
 void BCList::parseResolveAbstract() {
     for (auto& i : *this) {
         if (i->sclass) {
@@ -4711,6 +4716,14 @@ QoreValue qore_class_private::getReferencedKeyValue(const char* key) const {
     return i->second.refSelf();
 }
 
+const ConstantEntry* qore_class_private::findConstantEntry(const char* name) const {
+    const ConstantEntry* ce = constlist.findEntry(name);
+    if (ce) {
+        return ce;
+    }
+    return scl ? scl->findConstantEntry(name) : nullptr;
+}
+
 bool QoreClass::hasParentClass() const {
     return (bool)priv->scl;
 }
@@ -4848,7 +4861,7 @@ BinaryNode* QoreClass::getBinaryHash() const {
 }
 
 const QoreExternalConstant* QoreClass::findConstant(const char* name) const {
-    return reinterpret_cast<const QoreExternalConstant*>(priv->constlist.findEntry(name));
+    return reinterpret_cast<const QoreExternalConstant*>(priv->findConstantEntry(name));
 }
 
 const QoreNamespace* QoreClass::getNamespace() const {
