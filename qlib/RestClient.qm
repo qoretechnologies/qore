@@ -3485,7 +3485,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             uri += "?";
         }
         uri += sprintf("scope=%s&redirect_uri=%s&client_id=%s&response_type=%s", scope,
-            info.redirect_uri ?? opts.oauth2_redirect_url, opts{oauth2_client_id_opt}, info.response_type);
+            encode_url(info.redirect_uri ?? opts.oauth2_redirect_url, True), opts{oauth2_client_id_opt},
+            info.response_type);
         # add any optional auth args
         map uri += sprintf("&%s=%s", $1.key, getUriValue($1.value, real_opts.oauth2_scope_separator_char)),
             opts.oauth2_auth_args.pairIterator();
