@@ -1996,7 +1996,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *AbstractDataProviderType getRequestTypeWithOptions(*hash<auto> options) {
         checkRequest();
-        return !options ? getRequestTypeImpl() : getRequestTypeWithOptionsImpl(options);
+        return getRequestTypeWithOptionsImpl(options);
     }
 
     #! Returns action options corresponding to the request type with the given request data, if possible
@@ -2107,7 +2107,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns the description of an observable event, if any with option data, if any
     /** @param event_id the event ID of the event
-        @param req example option data that can be used to determine the final type
+        @param options example option data that can be used to determine the final type
 
         @return the event type for this provider according to any call data passed
 
@@ -2118,9 +2118,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.0
     */
-    hash<DataProviderMessageInfo> getEventInfoWithData(string event_id, auto req) {
+    hash<DataProviderMessageInfo> getEventInfoWithOptions(string event_id, *hash<auto> options) {
         checkObservable();
-        return getEventInfoWithDataImpl(event_id, req);
+        return getEventInfoWithOptionsImpl(event_id, options);
     }
 
     #! Returns a hash of all supported event types
@@ -2148,7 +2148,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data
-    /** @param req sample option data that can be used to determine the final type
+    /** @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -2156,12 +2156,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.1
     */
-    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithData(hash<DataProviderActionInfo> action, auto req) {
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptions(hash<DataProviderActionInfo> action,
+            *hash<auto> options) {
         if (action.data_dependent_options) {
-            if (*hash<string, hash<ActionOptionInfo>> rv = tryGetActionOptionsWithDataImpl(action, req)) {
+            if (*hash<string, hash<ActionOptionInfo>> rv = tryGetActionOptionsWithOptionsImpl(action, options)) {
                 return rv;
             }
-            if (supportsRequest() && (*AbstractDataProviderType rv = getRequestTypeImpl())
+            if (supportsRequest() && (*AbstractDataProviderType rv = getRequestTypeWithOptions(options))
                 && (*hash<auto> fields = rv.getFields())) {
                 return DataProviderActionCatalog::getActionOptionFromFields(fields);
             }
@@ -2952,7 +2953,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data
-    /** @param req sample option data that can be used to determine the final type
+    /** @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -2960,8 +2961,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.1
     */
-    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithDataImpl(hash<DataProviderActionInfo> action,
-            auto req) {
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
         # intentially blank
     }
 
@@ -4308,7 +4309,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.3
     */
-    private *AbstractDataProviderType getRequestTypeWithOptionsImpl(hash<auto> options) {
+    private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
         return getRequestTypeImpl();
     }
 
@@ -4402,7 +4403,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns the description of an observable event, if any with option data, if any
     /** @param event_id the event ID of the event
-        @param req example option data that can be used to determine the final type
+        @param options example option data that can be used to determine the final type
 
         @return the event type for this provider according to any call data passed
 
@@ -4412,7 +4413,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.0
     */
-    private hash<DataProviderMessageInfo> getEventInfoWithDataImpl(string event_id, auto req) {
+    private hash<DataProviderMessageInfo> getEventInfoWithOptionsImpl(string event_id, *hash<auto> options) {
         return getEventInfoImpl(event_id);
     }
 

@@ -446,14 +446,14 @@ class QdpCmd {
         }
         if (event.val()) {
             req = QdpCmd::getHash("request");
-            event_info = provider.getEventInfoWithData(event, req);
+            event_info = provider.getEventInfoWithOptions(event, req);
         }
         if (!event.val()) {
             hash<string, hash<DataProviderMessageInfo>> event_types = provider.getEventTypes();
             if (event_types.size() == 1) {
                 event = event_types.firstKey();
                 if (req) {
-                    event_info = provider.getEventInfoWithData(event, req);
+                    event_info = provider.getEventInfoWithOptions(event, req);
                 } else {
                     event_info = event_types.firstValue();
                 }
@@ -993,7 +993,7 @@ class QdpCmd {
         action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
         *hash<auto> req = getHashIntern(shift ARGV, "options");
         *hash<string, hash<ActionOptionInfo>> opts = provider
-            ? provider.tryGetActionOptionsWithData(action, req)
+            ? provider.tryGetActionOptionsWithOptions(action, req)
             : action.options;
         if (opts) {
             printf("Options:\n");
