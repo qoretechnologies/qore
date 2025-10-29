@@ -297,6 +297,9 @@ public hashdecl ActionOptionInfo {
     #! Is this option disabled?
     bool disabled;
 
+    #! Should this option only be populated by an expression?
+    bool expression_only;
+
     #! Option location for record-based data providers and data providers provided by a class
     /** values:
         - \c where: in the where clause
@@ -1317,6 +1320,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.metadata) {
                     i.value.metadata = info.attr.metadata;
                 }
+                if (info.attr.expression_only) {
+                    i.value.expression_only = True;
+                }
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
                 }
@@ -1365,7 +1371,7 @@ public class DataProviderActionCatalog {
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
-                    "validation_regex", "depends_on", "on_change", "metadata"} + additional_fields;
+                    "validation_regex", "depends_on", "on_change", "metadata", "expression_only"} + additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {
                     info.type = info.type.copyWithTags(info.type.getTags() + {
