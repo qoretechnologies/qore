@@ -414,6 +414,9 @@ public hashdecl DataProviderActionInfo {
 
     #! Data provider static info, useful for record-based data providers
     *hash<DataProviderInfo> data_provider_info;
+
+    #! A free-form string giving information about the exec type
+    *string exec_type;
 }
 
 #! DataProvider action and application catalog class
