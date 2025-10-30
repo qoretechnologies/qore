@@ -4901,8 +4901,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return searchFirstRecord({});
         } catch (hash<ExceptionInfo> ex) {
-            error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row: %s: %s; returning generated data", ex.err,
-                ex.desc);
+            error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row; returning generated data: %s",
+                get_exception_string(ex));
         }
         return generateExampleData(getRecordTypeImpl());
     }
