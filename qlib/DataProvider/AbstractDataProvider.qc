@@ -1362,6 +1362,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     *hash<auto> getAdditionalInfo() {
     }
 
+    #! Creates the given record in the data provider from create action options
+    /** @param options create action options
+
+        @return the data written to the data provider
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+        @throw CREATE-RECORD-ERROR the data provider raised an exception in the record creation operation
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordFromOptions(*hash<auto> options) {
+        return createRecord(options.rec, options - "rec");
+    }
+
     #! Creates the given record in the data provider
     /** @param rec a hash representing a single input record
         @param create_options the create options; will be processed by validateCreateOptions()
@@ -1381,6 +1397,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             }
         }
         return createRecordImpl(rec, validateCreateOptions(create_options));
+    }
+
+    #! Creates the given records in the data provider from create action options
+    /** @param options create action options
+
+        @return the data written to the data provider for each record
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *list<hash<auto>> createRecordsBulkFromOptions(*hash<auto> options) {
+        return createRecordsBulk(options.recs, options - "recs");
     }
 
     #! Creates the given records in the data provider
@@ -1407,6 +1437,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return createRecordsBulkImpl(recs, create_options);
     }
 
+    #! Upserts the given record in the data provider from upsert action options
+    /** @param options upsert action options
+
+        @return see @ref db_provider_upsert_results for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    string upsertRecordWithOptions(*hash<auto> options) {
+        return upsertRecord(options.rec, options - "rec");
+    }
+
     #! Upserts the given record in the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
@@ -1418,6 +1461,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     string upsertRecord(hash<auto> rec, *hash<auto> upsert_options) {
         checkUpsert();
         return upsertRecordImpl(rec, validateUpsertOptions(upsert_options));
+    }
+
+    #! Upserts the given records in the data provider from upsert action options
+    /** @param options upsert action options
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulkWithOptions(*hash<auto> options) {
+        return upsertRecordsBulk(options.recs, options - "recs");
     }
 
     #! Upserts the given records in the data provider
@@ -1439,11 +1496,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return upsertRecordsBulkImpl(recs, upsert_options);
     }
 
+    #! Returns the first record matching the search action options
+    /** @param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchFirstRecordWithOptions(*hash<auto> options) {
+        return searchFirstRecord(options.where_cond, options - "where_cond");
+    }
+
     #! Returns the first record matching the search options
     /** @param where_cond the search criteria; will be processed by processSearchParameters()
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
 
         @since DataProvider 2.3
     */
@@ -1462,6 +1532,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
     */
     *hash<auto> searchFirstRecord(hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
@@ -1473,12 +1544,26 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return rv;
     }
 
+    #! Returns a single record matching the search action options
+    /** @param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchSingleRecordWithOptions(*hash<auto> options) {
+        return searchSingleRecord(options.where_cond, options - "where_cond");
+    }
+
     #! Returns a single record matching the search options
     /** @param where_cond the search criteria; will be processed by processSearchParameters()
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
         @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
 
         @since DataProvider 2.3
     */
@@ -1498,6 +1583,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support reading
         @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
     */
     *hash<auto> searchSingleRecord(*hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
@@ -1532,6 +1618,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             *hash<auto> search_options) {
         checkRead();
         return searchRecordsBulk(block_size, NOTHING, validateSearchOptions(search_options));
+    }
+
+    #! Returns an iterator for zero or more records matching the search action options
+    /** @param options search action options
+
+        @return a bulk record interface object that will return the records in bulk format
+
+        @throw INVALID-BLOCK-SIZE the block size must be a positive number
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderBulkRecordInterface searchRecordsBulkWithOptions(*hash<auto> options) {
+        return searchRecordsBulk(options.block_size, options.where_cond, options - ("block_size", "where_cond"));
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -1577,6 +1677,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         search_options = validateSearchOptions(search_options);
         return searchRecordsBulkImpl(block_size, getSearchExpression(where_cond, search_options), search_options);
+    }
+
+    #! Returns an iterator for zero or more records matching the search action options
+    /** param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderRecordIterator searchRecordsWithOptions(*hash<auto> options) {
+        return searchRecords(options.where_cond, options - "where_cond");
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -1640,6 +1751,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return requestSearchRecordsImpl(req, getSearchExpression(where_cond, search_options), search_options);
     }
 
+    #! Updates a single record using update action options
+    /** @param options update action options
+
+        @returns @ref True if the record was updated, @ref False if not (no record found)
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.3
+    */
+    bool updateSingleRecordWithOptions(*hash<auto> options) {
+        return updateSingleRecord(options.set, options.where_cond, options - ("set", "where_cond"));
+    }
+
     #! Updates a single record matching the search options
     /** @param set the hash of field data to set; will be processed by processFieldValues()
         @param where_cond the search criteria; will be processed by processSearchParameters()
@@ -1684,6 +1809,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         return updateSingleRecordImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
+    }
+
+    #! Updates zero or more records matching the update action options
+    /** @param options update action options
+
+        @return the number of records updated
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.3
+    */
+    int updateRecordsWithOptions(*hash<auto> options) {
+        return updateRecords(options.set, options.where_cond, options - ("set", "where_cond"));
     }
 
     #! Updates zero or more records matching the search options
@@ -1740,6 +1879,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
         }
         return rc;
+    }
+
+    #! Deletes zero or more records from delete action options
+    /** @param options action options
+        @return the number of records deleted
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+        @throw DELETE-RECORDS-ERROR error deleting records
+
+        @since DataProvider 3.3
+    */
+    int deleteRecordsWithOptions(*hash<auto> options) {
+        return deleteRecords(options.where_cond, options - "where_cond");
     }
 
     #! Deletes zero or more records
@@ -2158,16 +2310,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptions(hash<DataProviderActionInfo> action,
             *hash<auto> options) {
-        if (action.data_dependent_options) {
-            if (*hash<string, hash<ActionOptionInfo>> rv = tryGetActionOptionsWithOptionsImpl(action, options)) {
-                return rv;
-            }
-            if (supportsRequest() && (*AbstractDataProviderType rv = getRequestTypeWithOptions(options))
-                && (*hash<auto> fields = rv.getFields())) {
-                return DataProviderActionCatalog::getActionOptionFromFields(fields);
-            }
+        if (!action.data_dependent_options) {
+            return action.options;
         }
-        return action.options;
+        return tryGetActionOptionsWithOptionsImpl(action, options);
     }
 
     #! Returns the description of an outbound message, if any
@@ -2952,6 +3098,193 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         # intentially blank
     }
 
+    #! Returns search options as action options
+    private *hash<string, hash<ActionOptionInfo>> getSearchOptionsAsActionOptions() {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "block_size": <ActionOptionInfo>{
+                "display_name": "Block Size",
+                "desc": "The maximum number of records to return in a single block when opening a record stream",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+        };
+        map rv{$1.key} = cast<hash<ActionOptionInfo>>($1.value - "type" + {
+            "type": $1.value.type[0],
+        }), getSearchOptions().pairIterator();
+        return rv;
+    }
+
+    #! Returns search options as action options
+    private *hash<string, hash<ActionOptionInfo>> getOptionsAsActionOptions(
+                *hash<string, hash<DataProviderOptionInfo>> options) {
+        return cast<*hash<string, hash<ActionOptionInfo>>>(map {$1.key: cast<hash<ActionOptionInfo>>($1.value - "type" + {
+            "type": $1.value.type[0],
+        })}, options.pairIterator());
+    }
+
+    #! Returns action options corresponding to the given option data for an event action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an event action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForEventWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "event_id": <ActionOptionInfo>{
+                "display_name": "Event",
+                "desc": "The event to subscribe to",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": (map <AllowedValueInfo>{
+                    "value": $1.key,
+                    "desc": $1.value.desc,
+                }, getEventTypesWithOptions(options).pairIterator()) ?? (),
+            },
+        };
+        return action.options + rv;
+    }
+
+    #! Returns action options corresponding to the given option data for a request action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a request action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = action.options;
+        if ((*AbstractDataProviderType type = getRequestTypeWithOptions(options))) {
+            if (*hash<auto> fields = type.getFields()) {
+                rv += DataProviderActionCatalog::getActionOptionFromFields(fields);
+            } else {
+                rv.request_data = <ActionOptionInfo>{
+                    "display_name": "API Request Data",
+                    "desc": "The request data",
+                    "type": type,
+                };
+            }
+        }
+        return rv + getOptionsAsActionOptions(getRequestOptions());
+    }
+
+    #! Returns action options corresponding to the given option data for a send message action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a send message action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForMessageWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "message_id": <ActionOptionInfo>{
+                "display_name": "Message",
+                "desc": "The message to send",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": (map <AllowedValueInfo>{
+                    "value": $1.key,
+                    "desc": $1.value.desc,
+                }, getMessageTypesWithOptions(options).pairIterator()) ?? (),
+            },
+        };
+        return action.options + rv + getOptionsAsActionOptions(getSendMessageOptions());
+    }
+
+    #! Returns action options corresponding to the given option data for a search action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a search action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "where_cond": <ActionOptionInfo>{
+                "display_name": "Search Expression",
+                "desc": "A boolean expression to be applied to each record to determine if it will be "
+                    "included in the record stream",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "expression_only": True,
+                "preselected": True,
+            },
+        };
+        return action.options + rv + getSearchOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data for a create action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a create action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+    }
+
+    #! Returns action options corresponding to the given option data for an upsert action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an upsert action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+    }
+
+    #! Returns action options corresponding to the given option data for an update action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an update action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+    }
+
+    #! Returns action options corresponding to the given option data for a delete action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a delete action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "where_cond": <ActionOptionInfo>{
+                "display_name": "Search Expression",
+                "desc": "A boolean expression to be applied to each record to determine if it will be "
+                    "deleted",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "expression_only": True,
+            },
+        };
+        return action.options + rv + getSearchOptionsAsActionOptions();
+    }
+
     #! Returns action options corresponding to the given option data
     /** @param options sample option data that can be used to determine the final type
 
@@ -2963,7 +3296,26 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        # intentially blank
+        switch (action.action_code) {
+            case DPAT_EVENT:
+                return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+            case DPAT_API:
+                return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+            case DPAT_SEND_MESSAGE:
+                return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+            case DPAT_FIND:
+            case DPAT_FIND_SINGLE:
+                return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+            case DPAT_CREATE:
+                return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+            case DPAT_UPSERT:
+                return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+            case DPAT_UPDATE:
+                return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+            case DPAT_DELETE:
+                return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+        }
+        return action.options;
     }
 
     #! Returns an argument for an expression
