@@ -297,8 +297,14 @@ public hashdecl ActionOptionInfo {
     #! Is this option disabled?
     bool disabled;
 
-    #! Should this option only be populated by an expression?
-    bool expression_only;
+    #! Does this option support templates?
+    bool supports_templates = True;
+
+    #! Does this option support literal values?
+    bool supports_custom_values = True;
+
+    #! Does this option support expressions?
+    bool supports_expressions = True;
 
     #! Option location for record-based data providers and data providers provided by a class
     /** values:
@@ -1320,8 +1326,14 @@ public class DataProviderActionCatalog {
                 if (info.attr.metadata) {
                     i.value.metadata = info.attr.metadata;
                 }
-                if (info.attr.expression_only) {
-                    i.value.expression_only = True;
+                if (info.attr.hasKey("supports_custom_values")) {
+                    i.value.supports_custom_values = info.attr.supports_custom_values;
+                }
+                if (info.attr.hasKey("supports_templates")) {
+                    i.value.supports_templates = info.attr.supports_templates;
+                }
+                if (info.attr.hasKey("supports_expressions")) {
+                    i.value.supports_expressions = info.attr.supports_expressions;
                 }
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
@@ -1371,7 +1383,8 @@ public class DataProviderActionCatalog {
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
-                    "validation_regex", "depends_on", "on_change", "metadata", "expression_only"} + additional_fields;
+                    "validation_regex", "depends_on", "on_change", "metadata", "supports_templates",
+                    "supports_custom_values", "supports_expressions"} + additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {
                     info.type = info.type.copyWithTags(info.type.getTags() + {

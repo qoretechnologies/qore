@@ -3216,7 +3216,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "desc": "A boolean expression to be applied to each record to determine if it will be "
                     "included in the record stream",
                 "type": AbstractDataProviderTypeMap."*bool",
-                "expression_only": True,
+                "supports_templates": False,
+                "supports_custom_values": False,
                 "preselected": True,
             },
         };
@@ -3279,7 +3280,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "desc": "A boolean expression to be applied to each record to determine if it will be "
                     "deleted",
                 "type": AbstractDataProviderTypeMap."*bool",
-                "expression_only": True,
+                "supports_templates": False,
+                "supports_custom_values": False,
             },
         };
         return action.options + rv + getSearchOptionsAsActionOptions();
