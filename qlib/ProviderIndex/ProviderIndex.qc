@@ -105,9 +105,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
     private static *hash<string, hash<auto>> getSerializableAppActions(string app) {
         hash<string, hash<auto>> rv;
         foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app)) {
-            action -= ("data_provider_info", "get_dynamic_options", "get_output_type", "output_type");
+            action -= ("get_dynamic_options", "get_output_type", "output_type");
             rv{action.action} = action + {
                 "options": getSerializableActionOptions(action.options),
+                "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
             };
         }
         return rv;
@@ -117,6 +118,39 @@ public class ProviderIndex inherits ProviderIndexUtil {
     private static *hash<auto> getSerializableActionOptions(*hash<auto> options) {
         return map {$1.key: $1.value + {
             "type": $1.value.type.getBaseTypeName(),
+        }}, options.pairIterator();
+    }
+
+    #! Get YAML-serializable data provider info
+    private static *hash<auto> getSerializableDataProviderInfo(*hash<auto> info) {
+        if (!info) {
+            return;
+        }
+        hash<auto> rv += info;
+        foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
+            "add_field", "update_field", "delete_field", "send_message") {
+            key += "_options";
+            if (rv{key}) {
+                rv{key} = getSerializableDataProviderOptions(rv{key});
+            }
+        }
+        if (info.expressions) {
+            rv.expressions = map {
+                $1.key: $1.value + {
+                    "args": (map $1 + {
+                        "type": $1.type.getBaseTypeName(),
+                    }, $1.value.args),
+                    "return_type": $1.value.return_type.getBaseTypeName(),
+                }
+            }, info.expressions.pairIterator();
+        }
+        return rv;
+    }
+
+    #! Get YAML-serializable data provider options
+    private static *hash<auto> getSerializableDataProviderOptions(*hash<auto> options) {
+        return map {$1.key: $1.value + {
+            "type": (map $1.getBaseTypeName(), $1.value.type),
         }}, options.pairIterator();
     }
 

@@ -399,12 +399,20 @@ public class ProviderIndexUtil {
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
         # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
         load_module("DataProvider");
+        load_module("MapperUtil");
         # get app info typed hash object
         TypedHash app_info_th = TypedHash::forName("DataProvider::DataProviderAppInfo");
         # get action typed hash objects
         TypedHash action_info_th = TypedHash::forName("DataProvider::DataProviderActionInfo");
         TypedHash option_info_th = TypedHash::forName("DataProvider::ActionOptionInfo");
         TypedHash path_vars_th = TypedHash::forName("DataProvider::DataProviderPathVarInfo");
+        TypedHash dp_info_th = TypedHash::forName("DataProvider::DataProviderInfo");
+        TypedHash dp_opt_info_th = TypedHash::forName("DataProvider::DataProviderOptionInfo");
+        TypedHash dp_exp_info_th = TypedHash::forName("DataProvider::DataProviderExpressionInfo");
+        TypedHash mapper_key_info_th = TypedHash::forName("Mapper::MapperRuntimeKeyInfo");
+        TypedHash dp_msg_info_th = TypedHash::forName("DataProvider::DataProviderMessageInfo");
+        TypedHash dp_sig_info_th = TypedHash::forName("DataProvider::DataProviderSignatureTypeInfo");
+        TypedHash dp_arg_info_th = TypedHash::forName("DataProvider::DataProviderArgInfo");
         # get the AbstractDataProviderTypeMap value
         hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
 
@@ -418,39 +426,90 @@ public class ProviderIndexUtil {
             }
             if (rv.actioninfomap) {
                 rv.actioninfomap = deserializeActions(rv.actioninfomap, action_info_th, option_info_th, path_vars_th,
-                    type_map);
+                    dp_info_th, dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th, dp_sig_info_th,
+                    dp_arg_info_th, type_map);
                 foreach hash<auto> i in (rv.actioninfomap.pairIterator()) {
                     map rv.top_actioninfomap{i.key + "/" + $1.key} = $1.value, i.value.pairIterator();
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s: %s", ex.err, ex.desc);
+            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
+            #log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s: %s", ex.err, ex.desc);
         }
         return rv;
     }
 
     #! Deserialize action options
     static private hash<auto> deserializeActions(hash<string, hash<string, hash<auto>>> actioninfomap,
-            TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, hash<auto> type_map) {
+            TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, TypedHash dp_info_th,
+            TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
+            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map) {
         hash<auto> rv;
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
+                on_error rethrow $1.err, sprintf("%s (app %y action %y)", $1.desc, i.key, j.key);
                 rv{i.key}{j.key} = action_info_th.doCast(j.value + {
                     "path_vars": (j.value.path_vars
                         ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
                         : NOTHING),
-                    "options": map {
+                    "options": (map {
                         $1.key: option_info_th.doCast($1.value + {
                             "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
                             "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
                                 $1.value.element_allowed_values),
-                            "type": type_map{$1.value.type} ?? type_map."auro",
+                            "type": type_map{$1.value.type} ?? type_map."auto",
                         })
-                    }, j.value.options.pairIterator(),
+                    }, j.value.options.pairIterator()),
+                    "data_provider_info": deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
+                        dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
+                        dp_sig_info_th, dp_arg_info_th, type_map),
                 });
             }
         }
         return rv;
+    }
+
+    #! Deserialize data provider info
+    static private *hash<auto> deserializeDataProviderInfo(*hash<auto> info, TypedHash dp_info_th,
+            TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
+            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map) {
+        if (!info) {
+            return;
+        }
+        foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
+            "add_field", "update_field", "delete_field", "send_message") {
+            key += "_options";
+            if (info{key}) {
+                info{key} = map {
+                    $1.key: dp_opt_info_th.doCast($1.value + {
+                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
+                        "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
+                            $1.value.element_allowed_values),
+                        "type": (map type_map{$1} ?? type_map."auto", $1.value.type),
+                    }),
+                }, info{key}.pairIterator();
+            }
+        }
+        return dp_info_th.doCast(info + {
+            "expressions": (map {
+                $1.key: dp_exp_info_th.doCast($1.value + {
+                    "args": (map dp_sig_info_th.doCast($1 + {
+                        "type": type_map{$1.type} ?? type_map."auto",
+                    }), $1.value.args),
+                    "arg_info": (map dp_arg_info_th.doCast($1), $1.value.arg_info),
+                    "return_type": type_map{$1.value.return_type} ?? type_map."auto",
+                })
+            }, info.expressions.pairIterator()),
+            "events": (map {
+                $1.key: dp_msg_info_th.doCast($1.value)
+            }, info.events.pairIterator()),
+            "mapper_keys": (map {
+                $1.key: mapper_key_info_th.doCast($1.value)
+            }, info.mapper_keys.pairIterator()),
+            "messages": (map {
+                $1.key: dp_msg_info_th.doCast($1.value)
+            }, info.messages.pairIterator()),
+        });
     }
 
     #! Writes the index to the configured directory

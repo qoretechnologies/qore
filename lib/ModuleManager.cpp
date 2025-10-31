@@ -808,8 +808,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         is_bin = false;
     }
 
-    printd(5, "QoreModuleManager::loadModuleIntern() name: '%s' path: '%s' reexport: %d pgm: %p\n", name,
-        raw_path ? raw_path : "n/a", reexport, pgm);
+    //printd(5, "QoreModuleManager::loadModuleIntern() name: '%s' path: '%s' reexport: %d pgm: %p\n", name,
+    //    raw_path ? raw_path : "n/a", reexport, pgm);
 
     // check for special "qore" feature
     if (!raw_path && !strcmp(name, "qore")) {
@@ -826,11 +826,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             break;
         }
         if (i->second == q_gettid()) {
-            /*
-            xsink.raiseException("LOAD-MODULE-ERROR", "module '%s' has a circular dependency back to itself",
-                name);
-            assert(false);
-            */
+            //printd(5, "ModuleManager::loadModule(%s) found circular dependency\n", name);
             return nullptr;
         }
         // otherwise wait for the load to complete in the other thread
@@ -901,7 +897,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     // if the feature already exists in this program, then return
     if (pgm && qore_program_private::get(*pgm)->hasFeature(name)) {
-        //printd(5, "QoreModuleManager::loadModuleIntern() '%s' pgm has feature\n", name);
+        //printd(5, "QoreModuleManager::loadModuleIntern() '%s' pgm %p has feature\n", name, pgm);
 
         if (load_opt & QMLO_INJECT) {
             xsink.raiseException("LOAD-MODULE-ERROR", "cannot load module '%s' for injection because the module "
@@ -1034,7 +1030,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
             //printd(5, "ModuleManager::loadModule(%s) trying binary module: %s\n", name, str.c_str());
             if (!stat(str.c_str(), &sb)) {
-                printd(5, "ModuleManager::loadModule(%s) found binary module: %s\n", name, str.c_str());
+                //printd(5, "ModuleManager::loadModule(%s) found binary module: %s\n", name, str.c_str());
                 if (mpgm) {
                     xsink.raiseException("LOAD-MODULE-ERROR", "cannot load a binary module with a Program container");
                     return nullptr;
@@ -1056,7 +1052,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 if (!q_absolute_path(str.c_str())) {
                     q_normalize_path(str);
                 }
-                printd(5, "ModuleManager::loadModule(%s) found user module: %s\n", name, str.c_str());
+                //printd(5, "ModuleManager::loadModule(%s) found user module: %s\n", name, str.c_str());
                 mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
                     load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
@@ -1069,6 +1065,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         modulePath += name;
 
         if (QoreDir::folder_exists(modulePath, xsink)) {
+            //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
             return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
