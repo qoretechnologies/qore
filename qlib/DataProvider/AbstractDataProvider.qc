@@ -574,6 +574,32 @@ public hashdecl DataProviderExpressionInfo {
 
     #! The last argument can be repeated indefinitely
     bool varargs = False;
+
+    #! Return type argument priority list
+    /** A list of types that indicate the priority order when determining the final return type
+        based on argument types; to determine the final return type, the first type in this list that matches
+        any of the argument types is used as the return type; i.e. the earlier the type appears in this list, the
+        higher its priority
+
+        If there are no matches, the declared \a return_type is used; normally \c "any"
+
+        This is useful for expressions that take multiple argument types and return different types depending on the
+        argument types
+
+        @note It is an error to set both this and \c return_type_first_arg to @ref True
+
+        @since DataProvider 3.3
+    */
+    *list<string> return_type_arg_priority;
+
+    #! Use the first argument's type as the return type
+    /** If set to @ref True, the type of the first argument is used as the return type
+
+        @note It is an error to set both this and \c return_type_arg_priority
+
+        @since DataProvider 3.3
+    */
+    *bool return_type_first_arg;
 }
 
 #! Data provider field reference
