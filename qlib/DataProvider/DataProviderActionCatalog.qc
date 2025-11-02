@@ -160,13 +160,6 @@ public const DPAT_UPDATE = 8;
 public const DPAT_DELETE = 9;
 #/@}
 
-#! Action types supporting record streams
-public const RecordStreamActionTypes = {
-    DPAT_FIND: True,
-    DPAT_CREATE: True,
-    DPAT_UPSERT: True,
-};
-
 #! Maps @ref dp_action_type "action type codes"  to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
@@ -347,6 +340,29 @@ public hashdecl DataProviderPathVarInfo {
     *string example_value;
 }
 
+/** @defgroup dp_action_data_types DataProvider Action Data Type Codes
+
+    The action data type indicates how the nature of the input or output data and how the declared type relates to it
+*/
+#/@{
+#! Normal data
+/** The type describes the input or output data directly
+*/
+public const DPAD_NORMAL = "normal";
+
+#! Record stream data
+/** The data is a record stream, and the type describes the records provided by it. The data type is
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface "AbstractDataProviderBulkRecordInterface"
+*/
+public const DPAD_RECORD_STREAM = "record-stream";
+
+#! Record iterator data
+/** The data is a record iterator, and the type describes the records returned by it. The data type is
+    @ref DataProvider::ListHashIterator "ListHashIterator"
+*/
+public const DPAD_RECORD_ITERATOR = "record-iterator";
+#/@}
+
 #! DataProvider action definition
 public hashdecl DataProviderActionInfo {
     #! Name of the application that provides the action
@@ -430,6 +446,12 @@ public hashdecl DataProviderActionInfo {
 
     #! Data provider static info, useful for record-based data providers
     *hash<DataProviderInfo> data_provider_info;
+
+    #! Describes acceptable input data types for the action
+    hash<string, bool> input_data_types;
+
+    #! Describes the output data of the action and how the output type relates to it
+    string output_data_type;
 
     #! A free-form string giving information about the exec type
     *string exec_type;
@@ -691,6 +713,40 @@ public class DataProviderActionCatalog {
 
         if (action.get_dynamic_options && !action.has_dynamic_options) {
             action.has_dynamic_options = True;
+        }
+
+        if (!action.input_data_types) {
+            switch (action.action_code) {
+                case DPAT_CREATE:
+                case DPAT_UPSERT:
+                    action.input_data_types = {
+                        DPAD_NORMAL: True,
+                        DPAD_RECORD_STREAM: True,
+                    };
+                    break;
+
+                default:
+                    action.input_data_types = {
+                        DPAD_NORMAL: True,
+                    };
+                    break;
+            }
+        }
+
+        if (!action.output_data_type) {
+            switch (action.action_code) {
+                case DPAT_FIND:
+                    action.output_data_type = DPAD_RECORD_STREAM;
+                    break;
+
+                case DPAT_CREATE:
+                    action.output_data_type = DPAD_RECORD_ITERATOR;
+                    break;
+
+                default:
+                    action.output_data_type = DPAD_NORMAL;
+                    break;
+            }
         }
 
         string key = sprintf("%s/%s", action.app, action.action);

@@ -474,6 +474,10 @@ public class DataProviderTest inherits QUnit::Test {
             "short_desc": short_desc,
             "desc": desc,
             "action_code": DPAT_API,
+            "input_data_types": {
+                DPAD_NORMAL: True,
+            },
+            "output_data_type": DPAD_NORMAL,
         };
         DataProviderActionCatalog::registerAction(action);
         my_app.supports_apis = True;
