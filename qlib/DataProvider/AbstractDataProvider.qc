@@ -1428,14 +1428,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Creates the given records in the data provider from create action options
     /** @param options create action options
 
-        @return the data written to the data provider for each record
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
 
         @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
         duplicate record
 
         @since DataProvider 3.3
     */
-    *list<hash<auto>> createRecordsBulkFromOptions(*hash<auto> options) {
+    *hash<auto> createRecordsBulkFromOptions(*hash<auto> options) {
         return createRecordsBulk(options.recs, options - "recs");
     }
 
@@ -1444,12 +1445,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of record values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
-        @return the data written to the data provider for each record
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
 
         @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
         duplicate record
     */
-    *list<hash<auto>> createRecordsBulk(hash<auto> recs, *hash<auto> create_options) {
+    *hash<auto> createRecordsBulk(hash<auto> recs, *hash<auto> create_options) {
         checkCreate();
         on_error {
             if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
@@ -1457,10 +1459,39 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             }
         }
         create_options = validateCreateOptions(create_options);
-        if (!supportsBulkCreate()) {
-            return map createRecordImpl($1, create_options), recs.contextIterator();
+        return createRecordsBulkIntern(recs, create_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param stream a record stream for insert
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordsBulk(AbstractDataProviderBulkRecordInterface stream, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
         }
-        return createRecordsBulkImpl(recs, create_options);
+        create_options = validateCreateOptions(create_options);
+        hash<auto> rv;
+        while (*hash<auto> recs = stream.getValue()) {
+            *hash<auto> r = createRecordsBulkIntern(recs, create_options);
+            if (!rv) {
+                rv = r;
+            } else {
+                map rv{$1.key} += $1.value, r.pairIterator();
+            }
+        }
+        return rv;
     }
 
     #! Upserts the given record in the data provider from upsert action options
@@ -1515,11 +1546,36 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *list<string> upsertRecordsBulk(hash<auto> recs, *hash<auto> upsert_options) {
         checkUpsert();
-        upsert_options = validateCreateOptions(upsert_options);
+        upsert_options = validateUpsertOptions(upsert_options);
         if (!supportsBulkUpsert()) {
             return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
         }
         return upsertRecordsBulkImpl(recs, upsert_options);
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param stream a record stream for upserting records
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulk(AbstractDataProviderBulkRecordInterface stream, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        list<string> rv;
+        while (*hash<auto> recs = stream.getValue()) {
+            if (!supportsBulkUpsert()) {
+                rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+            } else {
+                rv += upsertRecordsBulkImpl(recs, upsert_options);
+            }
+        }
+        return rv;
     }
 
     #! Returns the first record matching the search action options
@@ -3124,6 +3180,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         # intentially blank
     }
 
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+    */
+    private *hash<auto> createRecordsBulkIntern(hash<auto> recs, *hash<auto> create_options) {
+        if (!supportsBulkCreate()) {
+            hash<auto> rv;
+            foreach hash<auto> row in (recs.contextIterator()) {
+                hash<auto> out = createRecordImpl(row, create_options);
+                if (!rv) {
+                    rv = map {$1: ()}, keys out;
+                }
+                map rv{$1.key} += $1.value, out.pairIterator();
+            }
+            return rv;
+        }
+        return createRecordsBulkImpl(recs, create_options);
+    }
+
     #! Returns search options as action options
     private *hash<string, hash<ActionOptionInfo>> getSearchOptionsAsActionOptions() {
         hash<string, hash<ActionOptionInfo>> rv = {
@@ -4495,9 +4574,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of record values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
-        @return the data written to the data provider for each record
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
     */
-    private *list<hash<auto>> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
         throwUnimplementedException();
     }
 
