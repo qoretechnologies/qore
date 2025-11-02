@@ -160,6 +160,13 @@ public const DPAT_UPDATE = 8;
 public const DPAT_DELETE = 9;
 #/@}
 
+#! Action types supporting record streams
+public const RecordStreamActionTypes = {
+    DPAT_FIND: True,
+    DPAT_CREATE: True,
+    DPAT_UPSERT: True,
+};
+
 #! Maps @ref dp_action_type "action type codes"  to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
@@ -386,9 +393,6 @@ public hashdecl DataProviderActionInfo {
         - @ref DPAT_SEND_MESSAGE "DPAT_SEND_MESSAGE": this is the message type
     */
     *string action_val;
-
-    #! This action supports generating or processing a record stream
-    bool record_stream = False;
 
     #! The DataProvider class
     /** This is for the case when there is no application \c scheme and the application is not implied by the context.
