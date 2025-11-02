@@ -387,6 +387,9 @@ public hashdecl DataProviderActionInfo {
     */
     *string action_val;
 
+    #! This action supports generating or processing a record stream
+    bool record_stream = False;
+
     #! The DataProvider class
     /** This is for the case when there is no application \c scheme and the application is not implied by the context.
 
