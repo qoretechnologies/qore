@@ -255,6 +255,7 @@ public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
+        addTestCase("expression tests", \expressionTests());
         addTestCase("get display name", \getDisplayNameTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("string test", \stringTest());
@@ -266,6 +267,74 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    expressionTests() {
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_EQ,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "status"},
+                        "active",
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_REGEX,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "email"},
+                        {
+                            "pattern": "@example\\.com$",
+                        },
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_OR,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_BETWEEN,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "age"},
+                                18,
+                                30,
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_IN,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "role"},
+                                ("admin", "editor", "moderator"),
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": "calculate",
+                            "args": (
+                                <DataProviderFieldReference>{"field": "score"},
+                                1000,
+                                2000,
+                            ),
+                        },
+                    ),
+                },
+            ),
+        };
+        hash<DataProviderExpressionInfo> fexp = <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "name": "calculate",
+            "display_name": "calculate()",
+            "short_desc": "Calculates a value",
+            "desc": "Calculates a value",
+            "args": (DataProviderSignatureIntType),
+            "varargs": True,
+            "return_type": AbstractDataProviderTypeMap."int",
+        };
+
+        string str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "calculate": fexp
+        });
+        assertEq("({status} == \"active\") && ({email} =~ /\"@example\\\\.com$\"/) && (({age} between 18 and 30) || "
+            "({role} in ([\"admin\", \"editor\", \"moderator\"])) || calculate({score}, 1000, 2000))", str);
     }
 
     getDisplayNameTest() {

@@ -433,6 +433,12 @@ public const DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
     "type_code": ST_Any,
 };
 
+#! Data provider signature int type
+public const DataProviderSignatureIntType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."int",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature string type
 public const DataProviderSignatureStringType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
@@ -562,6 +568,15 @@ public hashdecl DataProviderExpressionInfo {
     /** @see @ref expression_role_codes
     */
     int role = ER_All;
+
+    #! Any template to render the expression
+    /** Placeholders are:
+        - $symbol: the expression symbol
+        - $arg[n]: the nth argument (0-based index), followed optionally by a dot and attribute name to access attributes of
+          argument hashes
+        - $args: all arguments as a comma-separated list
+    */
+    *string render_template;
 
     #! Argument types
     softlist<hash<DataProviderSignatureTypeInfo>> args;
@@ -980,6 +995,11 @@ public hashdecl DataProviderConnectionInfo {
     *hash<auto> info;
 }
 
+#! Data provider generic expression map
+public const DataProviderGenericExpressions = cast<hash<string, hash<DataProviderExpressionInfo>>>(
+    map {$1.key: $1.value."exp"}, AbstractDataProvider::GenericExpressionImplementations.pairIterator()
+);
+
 #! The AbstractDataProvider class
 public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
     public {
@@ -1143,6 +1163,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         "third",
                     "desc": "Returns `True` if the first argument is greater than the second and less than the third",
                     "symbol": "between",
+                    "render_template": "$arg[0] between $arg[1] and $arg[2]",
                     "args": (
                         DataProviderSignatureAnyType,
                         DataProviderSignatureListType,
@@ -1164,6 +1185,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if the first argument is found in the second argument",
                     "desc": "Returns `True` if the first argument is found in the second argument",
                     "symbol": "in",
+                    "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1195,6 +1217,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "regular expression operator; the first argument will be processed with the second as a "
                         "regular expression pattern",
                     "symbol": "regex",
+                    "render_template": "$arg[0] =~ /$arg[1].pattern/$arg[1].options",
                     "args": (
                         DataProviderSignatureStringType,
                         <DataProviderSignatureTypeInfo>{

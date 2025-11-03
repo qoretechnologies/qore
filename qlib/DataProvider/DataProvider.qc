@@ -568,6 +568,37 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         map DataProvider::tryLoad($1, True), FactoryModuleList;
     }
 
+    #! Returns a descriptive string for the given expression
+    /** @param exp the expression to describe
+        @param emap the expression map to use; by default, @ref DataProviderGenericExpressions is used
+
+        @return a descriptive string for the given expression
+
+        @throw INVALID-EXPRESSION an expression was not found in the expression map
+
+        @since DataProvider 3.3
+    */
+    static string renderExpression(hash<DataProviderExpression> exp,
+            *hash<string, hash<DataProviderExpressionInfo>> emap = DataProviderGenericExpressions) {
+        string str;
+        *hash<DataProviderExpressionInfo> info = emap{exp.exp};
+        if (!info) {
+            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", exp.exp);
+        }
+        if (info.type == DET_Function) {
+            str = sprintf("%s(%s)", info.name, (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap), exp.args)));
+        } else if (info.render_template) {
+            str = renderExpressionTemplate(info, exp, emap);
+        } else {
+            if (exp.args.size() == 1) {
+                str = sprintf("%s %s", info.symbol, renderExpressionArg(exp.args[0], emap));
+            } else {
+                str = foldl $1 + " " + info.symbol + " " + $2, (map renderExpressionArg($1, emap), exp.args);
+            }
+        }
+        return str;
+    }
+
     #! Loads data providers from the environment
     static loadProvidersFromEnvironment(*LoggerInterface logger) {
         DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", NOTHING, logger);
@@ -937,6 +968,75 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     private static bool checkInjection(object obj, hash<string, string> module_map) {
         *string module_name = Class::getClass(obj).getModuleName();
         return module_name && module_map{obj.className()} == module_name;
+    }
+
+    #! Returns a descriptive string for the given field reference argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
+            hash<string, hash<DataProviderExpressionInfo>> emap) {
+        return sprintf("{%s}", ref.field);
+    }
+
+    #! Returns a descriptive string for the given expression argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderExpression> exp,
+            hash<string, hash<DataProviderExpressionInfo>> emap) {
+        *hash<DataProviderExpressionInfo> info = emap{exp.exp};
+        if (!info) {
+            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", info.name);
+        }
+        string str;
+        if (info.type == DET_Operator) {
+            str = "(";
+        }
+        str += renderExpression(exp, emap);
+        if (info.type == DET_Operator) {
+            str += ")";
+        }
+        return str;
+    }
+
+    #! Returns a descriptive string for the given argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(auto v,
+            hash<string, hash<DataProviderExpressionInfo>> emap) {
+        if (!exists v) {
+            return "";
+        }
+%ifndef NoYaml
+        return trim(make_yaml(v));
+%else
+        throw "MISSING-YAML", "Missing YAML module";
+%endif
+    }
+
+    #! Renders the expression from the template
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionTemplate(hash<DataProviderExpressionInfo> info,
+            hash<DataProviderExpression> exp, hash<string, hash<DataProviderExpressionInfo>> emap) {
+        string str = info.render_template;
+        if (str =~ /\$symbol/) {
+            str = replace(str, "$symbol", info.symbol);
+        }
+        if (str =~ /\$args/) {
+            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap), exp.args)));
+        }
+        foreach string t in ((str =~ x/\$(arg\[[0-9]+\](?:\.[a-z0-9_]+)?)/g)) {
+            (softint n, *string attr) = (t =~ x/arg\[([0-9]+)\](?:\.([a-z0-9_]+))?/);
+            string argstr = attr
+                ? renderExpressionArg(exp.args[n]{attr}, emap)
+                : renderExpressionArg(exp.args[n], emap);
+            str = replace(str, "$" + t, argstr);
+        }
+        return str;
     }
 
     #! Deregisters a factory if an exception occurs during the other module's initialization
