@@ -3338,6 +3338,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getStaticInfoImpl().expressions;
         hash<string, hash<ActionOptionInfo>> rv = {
             "where_cond": <ActionOptionInfo>{
                 "display_name": "Search Expression",
@@ -3346,6 +3347,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "type": AbstractDataProviderTypeMap."*bool",
                 "supports_templates": False,
                 "supports_custom_values": False,
+                "supports_expressions": True,
+                "server_expression_handling": (expressions && expressions != DataProviderGenericExpressions)
+                    ? True
+                    : False,
                 "preselected": True,
             },
         };

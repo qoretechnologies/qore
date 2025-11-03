@@ -306,6 +306,9 @@ public hashdecl ActionOptionInfo {
     #! Does this option support expressions?
     bool supports_expressions = True;
 
+    #! Will any expression specified by this option be handled by the server?
+    bool server_expression_handling = False;
+
     #! Option location for record-based data providers and data providers provided by a class
     /** values:
         - \c where: in the where clause
@@ -1398,6 +1401,9 @@ public class DataProviderActionCatalog {
                 if (info.attr.hasKey("supports_expressions")) {
                     i.value.supports_expressions = info.attr.supports_expressions;
                 }
+                if (info.attr.hasKey("server_expression_handling")) {
+                    i.value.server_expression_handling = info.attr.server_expression_handling;
+                }
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
                 }
@@ -1447,7 +1453,8 @@ public class DataProviderActionCatalog {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
                     "validation_regex", "depends_on", "on_change", "metadata", "supports_templates",
-                    "supports_custom_values", "supports_expressions"} + additional_fields;
+                    "supports_custom_values", "supports_expressions", "server_expression_handling"} +
+                    additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {
                     info.type = info.type.copyWithTags(info.type.getTags() + {
