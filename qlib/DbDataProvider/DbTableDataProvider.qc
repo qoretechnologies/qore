@@ -419,9 +419,10 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         lists of record values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
-        @return the data written to the data provider for each record
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
     */
-    private *list<hash<auto>> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
         DbOperationTransactionHelper db(table);
         hash<auto> rh;
         if (create_options.returning) {
@@ -437,7 +438,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         on_error bulk.discard();
         bulk.queueData(recs);
         bulk.flush();
-        return map $1, (recs + rh).contextIterator();
+        return recs + rh;
     }
 
     #! Upserts the given record to the data provider

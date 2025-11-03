@@ -95,9 +95,13 @@ on_error ds.rollback();
         #! creates the object from the supplied arguments
         /** @param target the target table object
             @param opts an optional hash of options for the object as follows:
-            - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-style arguments
+            - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
+              style arguments
             - \c "block_size": the number of rows executed at once (default: 1000)
-            - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single hash argument and will be called for every row after a bulk insert; the hash argument representing the row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are used in the row hashes submitted to queueData())
+            - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
+              hash argument and will be called for every row after a bulk insert; the hash argument representing the
+              row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
+              used in the row hashes submitted to queueData())
 
             @see setRowCode()
         */
@@ -107,9 +111,13 @@ on_error ds.rollback();
         #! creates the object from the supplied arguments
         /** @param target the target table object
             @param opts an optional hash of options for the object as follows:
-            - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-style arguments
+            - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
+              style arguments
             - \c "block_size": the number of rows executed at once (default: 1000)
-            - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single hash argument and will be called for every row after a bulk insert; the hash argument representing the row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are used in the row hashes submitted to queueData())
+            - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
+              hash argument and will be called for every row after a bulk insert; the hash argument representing the
+              row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
+              used in the row hashes submitted to queueData())
 
             @see setRowCode()
         */
@@ -136,11 +144,16 @@ inserter.setRowCode(rowcode);
 }
             @endcode
 
-            @param rowc a @ref closure "closure" or @ref call_reference "call reference" that will be called when data has been sent to the database and all output data is available; must accept a hash argument that represents the data written to the database including any output arguments
+            @param rowc a @ref closure "closure" or @ref call_reference "call reference" that will be called when data
+            has been sent to the database and all output data is available; must accept a hash argument that
+            represents the data written to the database including any output arguments
 
             @note
-            - the per-row @ref closure "closure" or @ref call_reference "call reference" can also be set by using the \c "rowcode" option in the constructor()
-            - if this method is not called before the first row is queued then output values will not be retrieved; the initial query is built when the template row is queued and output values are only retrieved if a \c rowcode @ref closure "closure" or @ref call_reference "call reference" is set beforehand
+            - the per-row @ref closure "closure" or @ref call_reference "call reference" can also be set by using the
+              \c "rowcode" option in the constructor()
+            - if this method is not called before the first row is queued then output values will not be retrieved;
+              the initial query is built when the template row is queued and output values are only retrieved if a
+              \c rowcode @ref closure "closure" or @ref call_reference "call reference" is set beforehand
         */
         setRowCode(*code rowc) {
             rowcode = rowc;
@@ -166,7 +179,7 @@ inserter.setRowCode(rowcode);
         }
 
         private setupStaticRowValues(reference<hash> row) {
-            foreach hash h in (row.pairIterator()) {
+            foreach hash<auto> h in (row.pairIterator()) {
                 if (h.value.typeCode() == NT_HASH) {
                     ret_args += h.key;
                     static_ret_expr.(h.key) = h.value;
@@ -196,14 +209,12 @@ inserter.setRowCode(rowcode);
                 # create the statement for future inserts
                 stmt = table.getDatasource().getSQLStatement();
                 stmt.prepare(sql);
-            }
-            else {
+            } else {
                 # execute the statement on the args
                 if (table.hasArrayBind()) {
                     stmt.execArgs((hbuf + cval + static_ret_expr).values());
                     rh = stmt.getOutput();
-                }
-                else {
+                } else {
                     softlist args = (hbuf + cval + static_ret_expr).values();
                     int size = 0;
                     foreach auto arg in (args) {
@@ -215,7 +226,7 @@ inserter.setRowCode(rowcode);
                     if (size) {
                         for (int i = 0; i < size; ++i) {
                             # get arg list for row
-                            list targs = map $1.typeCode() == NT_LIST ? $1[i] : $1, args;
+                            list<auto> targs = map $1.typeCode() == NT_LIST ? $1[i] : $1, args;
                             stmt.execArgs(targs);
                         }
                     }
@@ -223,8 +234,9 @@ inserter.setRowCode(rowcode);
             }
 
             # call rowcode if it exists
-            if (rowcode)
+            if (rowcode) {
                 map rowcode($1), (hbuf + rh).contextIterator();
+            }
         }
     } # BulkInsertOperation class
 } # BulkSqlUtil namespace
