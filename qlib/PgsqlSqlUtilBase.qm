@@ -1686,6 +1686,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": "cast",
                     "desc": "cast operator",
                     "symbol": "cast",
+                    "group": "Data Conversion",
                     "args": (
                         DataProviderSignatureAnyType,
                         DataProviderSignatureStringValueType,
@@ -1722,6 +1723,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": COP_YEAR,
                     "desc": "returns the year component of a date as a string (ex: `2022`)",
                     "symbol": COP_YEAR,
+                    "group": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -1740,6 +1742,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": COP_YEAR_MONTH,
                     "desc": "returns the year and month components of a date as a string (ex: `2022-06`)",
                     "symbol": COP_YEAR_MONTH,
+                    "group": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -1758,6 +1761,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": COP_YEAR_DAY,
                     "desc": "returns the year, month, and day components of a date as a string (ex: `2022-06-29`)",
                     "symbol": COP_YEAR_DAY,
+                    "group": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -1777,6 +1781,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "desc": "returns the year, month, day, and hour components of a date as a string "
                         "(ex: `2022-06-29 15`)",
                     "symbol": COP_YEAR_HOUR,
+                    "group": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -1796,6 +1801,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "desc": "truncates the given date to the given resolution; args: date, string code: Y: year, "
                         "M: month, D: day, H: hour, m: minute, S: second",
                     "symbol": COP_TRUNC_DATE,
+                    "group": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                         DataProviderSignatureStringValueType,
@@ -1820,6 +1826,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": COP_SEQ,
                     "desc": "returns the next value in the given sequence; args: sequence name",
                     "symbol": COP_SEQ,
+                    "group": "Sequence",
                     "args": (
                         DataProviderSignatureStringValueType,
                     ),
@@ -1836,6 +1843,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "display_name": COP_SEQ_CURRVAL,
                     "desc": "returns the current value in the given sequence; args: sequence name",
                     "symbol": COP_SEQ_CURRVAL,
+                    "group": "Sequence",
                     "args": (
                         DataProviderSignatureStringValueType,
                     ),

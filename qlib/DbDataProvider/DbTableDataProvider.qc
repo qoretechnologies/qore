@@ -54,6 +54,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     "display_name": "like",
                     "name": OP_LIKE,
                     "symbol": "like",
+                    "group": "Comparison",
                     "short_desc": "The SQL 'like' operator",
                     "desc": "The SQL 'like' operator",
                     "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),

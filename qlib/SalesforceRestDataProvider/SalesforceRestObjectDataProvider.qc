@@ -139,6 +139,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     "display_name": "like",
                     "name": SOQL_OP_LIKE,
                     "symbol": "like",
+                    "group": "Comparison",
                     "desc": "The value to bind as the 'like' value (ex: '%some string%')",
                     "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
