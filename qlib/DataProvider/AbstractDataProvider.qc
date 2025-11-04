@@ -3643,7 +3643,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     static private hash<DataProviderExpressionInfo> getExpression(int role, string exp,
             *hash<string, hash<DataProviderExpressionInfo>> expmap) {
-        *hash<DataProviderExpressionInfo> expinfo = expmap{exp};
+        *hash<DataProviderExpressionInfo> expinfo = expmap{exp} ?? expmap{OperatorAliasMap{exp}};
         if (!expinfo) {
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is invalid; known expressions: %y", exp,
                 keys expmap);
@@ -3708,7 +3708,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 2.3
     */
     static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp) {
-        *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp};
+        *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
+            ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
         if (!expinfo) {
             throw "INVALID-OPERATION", sprintf("operator %y is unknown; supported "
                 "operators: %y", exp.exp, keys GenericExpressionImplementations);

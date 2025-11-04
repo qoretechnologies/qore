@@ -39,10 +39,10 @@ public namespace DataProvider {
 */
 #/@{
 #! AND logic
-public const DP_OP_AND = "AND";
+public const DP_OP_AND = "&&";
 
 #! OR logic
-public const DP_OP_OR = "OR";
+public const DP_OP_OR = "||";
 #/@}
 
 /** @defgroup dataprovider_generic_search_ops DataProvider Generic Search Operators
@@ -97,8 +97,25 @@ public const DP_SEARCH_OP_IN = "in";
 #! Identifies the generic data provider \c "not" operator for use in generic search criteria
 /** @see dp_op_not()
 */
-public const DP_SEARCH_OP_NOT = "not";
+public const DP_SEARCH_OP_NOT = "!";
 #/@}
+
+#! Operator alias map; maps from old operator names to canonical ones
+public const OperatorAliasMap = {
+    "AND": DP_OP_AND,
+    "OR": DP_OP_OR,
+    "NOT": DP_SEARCH_OP_NOT,
+    "not": DP_SEARCH_OP_NOT,
+    "=": DP_SEARCH_OP_EQ,
+    "eq": DP_SEARCH_OP_EQ,
+    "ne": DP_SEARCH_OP_NE,
+    "lt": DP_SEARCH_OP_LT,
+    "le": DP_SEARCH_OP_LE,
+    "gt": DP_SEARCH_OP_GT,
+    "ge": DP_SEARCH_OP_GE,
+    "BETWEEN": DP_SEARCH_OP_BETWEEN,
+    "IN": DP_SEARCH_OP_IN,
+};
 
 #! Generic operator info hash as returned by all @ref dataprovider_generic_search_op_funcs "generic search operator functions"
 public hashdecl SearchOperatorInfo {
@@ -489,7 +506,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     */
     private static bool matchGeneric(hash<auto> record, *hash<auto> where_cond) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
-            if (elem.value.op && (*hash<auto> op = DefaultGenericSearchOpMap{elem.value.op})) {
+            if (elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
+                ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
                 if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record)) {
                     return False;
                 }
@@ -504,7 +522,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     private static bool evalOperator(string field, hash<auto> cmd, hash<auto> op, hash<auto> record) {
         auto field_value = record{field};
         if (op.recursive && cmd.arg.op
-            && (*hash<auto> op0 = DefaultGenericSearchOpMap{cmd.arg.op})) {
+            && (*hash<auto> op0 = (DefaultGenericSearchOpMap{cmd.arg.op}
+                ?? DefaultGenericSearchOpMap{OperatorAliasMap{cmd.arg.op}}))) {
             field_value = AbstractDataProviderRecordIterator::evalOperator(field, cmd.arg, op0, record);
         }
         return op.code(cmd, field_value, field, record);
