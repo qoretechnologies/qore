@@ -2336,7 +2336,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *AbstractDataProviderType getResponseTypeWithOptions(*hash<auto> options) {
         checkRequest();
-        return !options ? getResponseTypeImpl() : getResponseTypeWithOptionsImpl(options);
+        return getResponseTypeWithOptionsImpl(options);
     }
 
     #! Returns a hash of error responses, if any
@@ -2416,7 +2416,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptions(*hash<auto> options) {
         checkObservable();
-        return !options ? getEventTypesImpl() : getEventTypesWithOptionsImpl(options);
+        return getEventTypesWithOptionsImpl(options);
     }
 
     #! Returns action options corresponding to the given option data
@@ -2474,7 +2474,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptions(*hash<auto> options) {
         checkMessages();
-        return !options ? getMessageTypesImpl() : getMessageTypesWithOptionsImpl(options);
+        return getMessageTypesWithOptionsImpl(options);
     }
 
     #! Returns example data for a request message
@@ -2486,7 +2486,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleRequestData() {
         checkRequest();
-        return getExampleRequestDataImpl() ?? getRequestTypeImpl().getExampleValue();
+        if (exists (auto v = getExampleRequestDataImpl())) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getRequestTypeImpl()) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for a successful request message
@@ -2498,7 +2503,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleResponseData() {
         checkRequest();
-        return getExampleResponseDataImpl() ?? getResponseTypeImpl().getExampleValue();
+        if (exists (auto v = getExampleResponseDataImpl())) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getResponseTypeImpl()) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the error message with the given error code
@@ -2513,7 +2523,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleErrorResponseData(string error_code) {
         checkRequest();
-        return getExampleErrorResponseDataImpl(error_code) ?? getErrorResponseTypeImpl(error_code).getExampleValue();
+        if (exists (auto v = getExampleErrorResponseDataImpl(error_code))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getErrorResponseTypeImpl(error_code)) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the given observable event
@@ -2528,7 +2543,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     auto getExampleEventData(string event_id) {
         checkObservable();
-        return getExampleEventDataImpl(event_id) ?? getEventInfoImpl(event_id).type.getExampleValue();
+        if (exists (auto v = getExampleEventDataImpl(event_id))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the record type
@@ -2538,7 +2558,110 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     hash<auto> getExampleRecordData() {
         checkRead();
-        return getExampleRecordDataImpl() ?? generateExampleData(getRecordTypeImpl());
+        if (exists (auto v = getExampleRecordDataImpl())) {
+            return v;
+        }
+        if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
+            return generateExampleData(rt);
+        }
+        return {};
+    }
+
+    #! Returns example data for a request message in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for a request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    auto getExampleRequestDataWithOptions(*hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleRequestDataWithOptionsImpl(options))) {
+            return v;
+        }
+        return getExampleRequestDataWithOptionsImpl(options)
+            ?? getRequestTypeWithOptionsImpl(options).getExampleValue();
+    }
+
+    #! Returns example data for a successful request message in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for a successful request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    auto getExampleResponseDataWithOptions(*hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleResponseDataWithOptionsImpl(options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getResponseTypeWithOptionsImpl(options)) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the error message with the given error code in the context of the given option data
+    /** @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @param options option data that can be used to determine the final type
+        @return example data for the error message with the given error code in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    auto getExampleErrorResponseDataWithOptions(string error_code, *hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleErrorResponseDataWithOptionsImpl(error_code, options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getErrorResponseTypeWithOptionsImpl(error_code, options)) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the given observable event in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+        @param event_id the event ID of the event
+
+        @return example data for the given observable event in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @since DataProvider 3.3
+    */
+    auto getExampleEventDataWithOptions(string event_id, *hash<auto> options) {
+        checkObservable();
+        if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the record type in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for the record type in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    hash<auto> getExampleRecordDataWithOptions(*hash<auto> options) {
+        checkRead();
+        if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
+            return v;
+        }
+        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
+            return generateExampleData(rt);
+        }
+        return {};
     }
 
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING
@@ -4852,7 +4975,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.3
     */
-    private *AbstractDataProviderType getResponseTypeWithOptionsImpl(hash<auto> options) {
+    private *AbstractDataProviderType getResponseTypeWithOptionsImpl(*hash<auto> options) {
         getResponseTypeImpl();
     }
 
@@ -4863,6 +4986,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, AbstractDataProviderType> getErrorResponseTypesImpl() {
         throwUnimplementedException();
+    }
+
+    #! Returns a hash of error responses, if any, in the context of the given option data
+    /** @return a hash of error responses, if any, keyed by response code or string, in the context of the given
+        option data
+
+        @note only called if the provider supports the request / response API
+    */
+    private *hash<string, AbstractDataProviderType> getErrorResponseTypesWithOptionsImpl(*hash<auto> options) {
+        return getErrorResponseTypesImpl();
     }
 
     #! Returns the type for the given error code
@@ -4876,6 +5009,26 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         # note: this should be reimplemented with a more efficient implementation if creating the error type hash on
         # demand is expensive
         *hash<string, AbstractDataProviderType> err_map = getErrorResponseTypesImpl();
+        *AbstractDataProviderType type = err_map{error_code};
+        if (!type) {
+            throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
+                keys err_map);
+        }
+        return type;
+    }
+
+    #! Returns the type for the given error code in the context of the given option data
+    /** @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @param options option data that can be used to determine the final type
+        @return the type for the given error code in the context of the given option data
+
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    private AbstractDataProviderType getErrorResponseTypeWithOptionsImpl(string error_code, *hash<auto> options) {
+        *hash<string, AbstractDataProviderType> err_map = getErrorResponseTypesWithOptionsImpl(options);
         *AbstractDataProviderType type = err_map{error_code};
         if (!type) {
             throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
@@ -4932,13 +5085,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns a hash of all supported event types in the context of the given options
-    /** @return a hash of all supported event types in the context of the given options
+    /** @param options option data that can be used to determine the final type
+
+        @return a hash of all supported event types in the context of the given options
 
         @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
 
         @since DataProvider 3.3
     */
-    private hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptionsImpl(hash<auto> options) {
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptionsImpl(*hash<auto> options) {
         return getEventTypesImpl();
     }
 
@@ -4980,7 +5135,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.3
     */
-    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptionsImpl(hash<auto> options) {
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptionsImpl(*hash<auto> options) {
         return getMessageTypesImpl();
     }
 
@@ -5004,6 +5159,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getRequestTypeImpl().getExampleValue();
     }
 
+    #! Returns example data for a request message in the context of the given option data
+    /** @param options action option data for the request
+
+        @return example data for a request message in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleRequestDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleRequestDataImpl();
+    }
+
     #! Returns example data for a successful request message
     /** @return example data for a successful request message
 
@@ -5012,7 +5178,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     private auto getExampleResponseDataImpl() {
-        return getResponseTypeImpl().getExampleValue();
+        *AbstractDataProviderType t = getResponseTypeImpl();
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for a successful request message in the context of the given option data
+    /** @param options action option data for the request
+
+        @return example data for a successful request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleResponseDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleResponseDataImpl();
     }
 
     #! Returns example data for the error message with the given error code
@@ -5026,7 +5206,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     private auto getExampleErrorResponseDataImpl(string error_code) {
-        return getErrorResponseTypeImpl(error_code).getExampleValue();
+        *AbstractDataProviderType t = getErrorResponseTypeImpl(error_code);
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for the error message with the given error code in the context of the given option data
+    /** @param options action option data for the request
+        @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @return example data for the error message with the given error code in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleErrorResponseDataWithOptionsImpl(string error_code, *hash<auto> options) {
+        return getExampleErrorResponseDataImpl(error_code);
     }
 
     #! Returns example data for the given observable event
@@ -5040,7 +5236,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     private auto getExampleEventDataImpl(string event_id) {
-        return getEventInfoImpl(event_id).type.getExampleValue();
+        *AbstractDataProviderType t = getEventInfoImpl(event_id).type;
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for the given observable event in the context of the given option data
+    /** @param event_id the event ID of the event
+        @param options action option data
+
+        @return example data for the given observable event in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleEventDataWithOptionsImpl(string event_id, *hash<auto> options) {
+        return getExampleEventDataImpl(event_id);
     }
 
     #! Returns example data for the record type
@@ -5055,7 +5267,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row; returning generated data: %s",
                 get_exception_string(ex));
         }
-        return generateExampleData(getRecordTypeImpl());
+        *hash<string, AbstractDataField> rec = getRecordTypeImpl();
+        return rec ? generateExampleData(rec) : {};
+    }
+
+    #! Returns example data for the record type in the context of the given option data
+    /** @param options action option data
+
+        @return example data for the record type in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    private hash<auto> getExampleRecordDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleRecordDataImpl();
     }
 
     #! Returns reference data of the given kind if available
