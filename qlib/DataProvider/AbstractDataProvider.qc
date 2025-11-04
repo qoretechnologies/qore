@@ -564,6 +564,9 @@ public hashdecl DataProviderExpressionInfo {
     #! The symbol to use when rendering expressions
     string symbol;
 
+    #! The group that the expression belongs to
+    string group = "Miscellaneous";
+
     #! The expression role code / bitfield
     /** @see @ref expression_role_codes
     */
@@ -1014,6 +1017,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if all arguments are True with logic short-circuiting",
                     "desc": "Returns `True` if all arguments are `True`; supports logic short-circuiting",
                     "symbol": "&&",
+                    "group": "Logical Operators",
                     "args": (DataProviderSignatureBoolType),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
@@ -1036,6 +1040,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if at least one argument is True with logic short-circuiting",
                     "desc": "Returns `True` if at least one argument is `True`; supports logic short-circuiting",
                     "symbol": "||",
+                    "group": "Logical Operators",
                     "args": (DataProviderSignatureBoolType),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
@@ -1049,6 +1054,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     return False;
                 },
             },
+            DP_SEARCH_OP_NOT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_SEARCH_OP_NOT,
+                    "display_name": "logical not (!)",
+                    "short_desc": "This operator reverses the logcal value of the argument",
+                    "desc": "This operator reverses the logcal value of the argument",
+                    "symbol": "!",
+                    "group": "Logical Operators",
+                    "args": (DataProviderSignatureBoolType,),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]));
+                },
+            },
             DP_SEARCH_OP_EQ: {
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
@@ -1059,6 +1080,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returs `True` if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "symbol": "==",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1078,6 +1100,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if the arguments are not equal",
                     "desc": "Returns `True` if the arguments are not equal; type conversions are performed",
                     "symbol": "!=",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1095,6 +1118,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is strictly less than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1112,6 +1136,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is less than or equal to the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<=",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1129,6 +1154,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is strictly greater than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": ">",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1146,6 +1172,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is greater than or equal to the second argument; "
                         "type conversions are performed if necessary",
                     "symbol": ">=",
+                    "group": "Comparison Operators",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1163,6 +1190,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         "third",
                     "desc": "Returns `True` if the first argument is greater than the second and less than the third",
                     "symbol": "between",
+                    "group": "Comparison Operators",
                     "render_template": "$arg[0] between $arg[1] and $arg[2]",
                     "args": (
                         DataProviderSignatureAnyType,
@@ -1185,6 +1213,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if the first argument is found in the second argument",
                     "desc": "Returns `True` if the first argument is found in the second argument",
                     "symbol": "in",
+                    "group": "Comparison Operators",
                     "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "return_type": AbstractDataProviderTypeMap."bool",
@@ -1192,21 +1221,6 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
                     return inlist(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]),
                         AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]));
-                },
-            },
-            DP_SEARCH_OP_NOT: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_SEARCH_OP_NOT,
-                    "display_name": "logical not (!)",
-                    "short_desc": "This operator reverses the logcal value of the argument",
-                    "desc": "This operator reverses the logcal value of the argument",
-                    "symbol": "!",
-                    "args": (DataProviderSignatureBoolType,),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]));
                 },
             },
             DP_SEARCH_OP_REGEX: {
@@ -1217,6 +1231,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "regular expression operator; the first argument will be processed with the second as a "
                         "regular expression pattern",
                     "symbol": "regex",
+                    "group": "Comparison Operators",
                     "render_template": "$arg[0] =~ /$arg[1].pattern/$arg[1].options",
                     "args": (
                         DataProviderSignatureStringType,
