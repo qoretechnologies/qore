@@ -3761,12 +3761,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private hash<DataProviderExpression> getEqualityComparisonExpression(int role, hash<DataProviderInfo> info,
             string key, auto value) {
-        if (!info.expressions."=") {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("data provider %s (type %y) provides no '=' operator; "
+        if (!info.expressions."==") {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("data provider %s (type %y) provides no '==' operator; "
                 "operators provided: %y", getName(), self.className(), keys info.expressions);
         }
         return <DataProviderExpression>{
-            "exp": "=",
+            "exp": "==",
             "args": (<DataProviderFieldReference>{"field": key}, value),
         };
     }

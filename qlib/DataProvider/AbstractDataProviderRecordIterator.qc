@@ -82,7 +82,7 @@ public const DP_SEARCH_OP_NE = "!=";
 #! Identifies the generic data provider equals operator (=) for use in generic search criteria
 /** @see dp_op_eq()
 */
-public const DP_SEARCH_OP_EQ = "=";
+public const DP_SEARCH_OP_EQ = "==";
 
 #! Identifies the generic data provider \c "between" operator for use in generic search criteria
 /** @see dp_op_between()

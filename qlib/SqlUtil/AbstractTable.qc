@@ -4887,10 +4887,10 @@ string sql = table.getSelectSql(sh, \args);
             if (!arg.exp) {
                 throw "EXPRESSION-ERROR", sprintf("expression %y is invalid; missing the \"exp\" key", arg);
             }
-            *hash<auto> exp = info.expression_map{arg.exp};
+            *hash<auto> exp = info.expression_map{arg.exp} ?? info.expression_map{OperatorAliasMap{arg.exp}};
             if (!exp) {
-                throw "EXPRESSION-ERROR", sprintf("expression %y does not have an implementation in module %y",
-                    arg.exp, self.className());
+                throw "EXPRESSION-ERROR", sprintf("expression %y does not have an implementation in module %y; known "
+                    "expressions: %y", arg.exp, self.className(), keys info.expression_map);
             }
             on_error rethrow $1.err, sprintf("%s (while processing expression %y)", $1.desc, arg.exp);
             AbstractDataProvider::verifyExpression(role, exp.exp, LC_All, expected_type,
