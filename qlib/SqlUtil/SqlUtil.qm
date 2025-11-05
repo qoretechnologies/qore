@@ -987,7 +987,7 @@ list<auto> rows = mytable.selectRows(select_hash);
 
     The where condition hash has the following format:
     - each key gives a column name or a table/alias with column name in dot notation
-    - the values are either direct values, meaning that the equality operator (\c "=") is used, or a
+    - the values are either direct values, meaning that the equality operator (\c "==") is used, or a
       @ref sql_op_funcs "SQL operator function" for operators in the where clause
 
     @note To reference a column more than once in a simple where clause, prefix the column specification with a unique
@@ -4506,11 +4506,6 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     */
     public const OP_IN_SELECT = "in_select";
 
-    #! Compat operator map
-    public const CompatOpMap = {
-        "=": OP_EQ,
-    };
-
     #! Default expressions to be supported by all SqlUtil modules
     public const DefaultExpressionMap = {
         # first the "AND" and "OR" "operators"
@@ -5461,14 +5456,14 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         - op_le(): for the \c "<=" operator when comparing column values to immediate values
         - op_lt(): for the \c "<" operator when comparing column values to immediate values
         - op_ne(): for the \c "!=" or \c "<>" operator when comparing column values to immediate values
-        - op_eq(): for the \c "=" operator when comparing column values to immediate values
+        - op_eq(): for the \c "==" operator when comparing column values to immediate values
         - op_not(): for negating other operators
         - op_cge(): for the \c ">=" operator when comparing the values of two columns
         - op_cgt(): for the \c ">" operator when comparing the values of two columns
         - op_cle(): for the \c "<=" operator when comparing the values of two columns
         - op_clt(): for the \c "<" operator when comparingthe values of two columns
         - op_cne(): for the \c "!=" or \c "<>" operator when comparing the values of two columns
-        - op_ceq(): for the \c "=" operator when comparing the values of two columns
+        - op_ceq(): for the \c "==" operator when comparing the values of two columns
         - wop_or(): for combining SQL expressions with \c "or"
      */
     #/@{
@@ -5573,7 +5568,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return make_op(OP_NE, arg);
     }
 
-    #! returns an @ref OperatorInfo hash for the \c "=" operator with the given argument for use in @ref where_clauses "where clauses" when comparing column values to immediate values
+    #! returns an @ref OperatorInfo hash for the \c "==" operator with the given argument for use in @ref where_clauses "where clauses" when comparing column values to immediate values
     /** @par Example:
         @code{.py}
 *list<auto> rows = table.selectRows(("where": ("name": op_eq("Smith"))));
@@ -5781,7 +5776,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return make_op(OP_CNE, arg);
     }
 
-    #! returns an @ref OperatorInfo hash for the \c "=" operator with the given argument for use in @ref where_clauses "where clauses" when comparing the values of two columns
+    #! returns an @ref OperatorInfo hash for the \c "==" operator with the given argument for use in @ref where_clauses "where clauses" when comparing the values of two columns
     /** @par Example:
         @code{.py}
 *list<auto> rows = table.selectRows(("where": ("name": op_ceq("other_name"))));
