@@ -2436,6 +2436,140 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return tryGetActionOptionsWithOptionsImpl(action, options);
     }
 
+    #! Returns action options corresponding to the given option data for an event action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an event action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForEventWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkObservable();
+        return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for a request action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a request action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkRequest();
+        return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for a send message action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a send message action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForMessageWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkMessages();
+        return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for a search action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a search action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkRead();
+        return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for a create action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a create action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkCreate();
+        return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for an upsert action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an upsert action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record upserting
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkUpsert();
+        return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for an update action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an update action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkUpdate();
+        return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+    }
+
+    #! Returns action options corresponding to the given option data for a delete action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a delete action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        checkDelete();
+        return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+    }
+
     #! Returns the description of an outbound message, if any
     /** @param message_id the ID of the message
 
@@ -4191,9 +4325,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } else {
             remove search_options;
         }
-        return !options
-            ? getRecordTypeImpl(search_options)
-            : getRecordTypeWithOptionsImpl(options, search_options);
+        return getRecordTypeWithOptionsImpl(options, search_options);
     }
 
     #! Returns the description of the record type for creating records in the context of the given options
@@ -4210,9 +4342,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             return;
         }
         create_options = validateCreateOptions(create_options);
-        return !options
-            ? getCreateRecordType(create_options)
-            : getCreateRecordTypeWithOptionsImpl(options, create_options);
+        return getCreateRecordTypeWithOptionsImpl(options, create_options);
     }
 
     #! Returns the description of the record type for updating records in the context of the given options
@@ -4235,9 +4365,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } else {
             remove search_options;
         }
-        return !options
-            ? getUpdateRecordTypeImpl(search_options)
-            : getUpdateRecordTypeWithOptionsImpl(options, search_options);
+        return getUpdateRecordTypeWithOptionsImpl(options, search_options);
     }
 
     #! Returns the description of the record type with soft types, if any

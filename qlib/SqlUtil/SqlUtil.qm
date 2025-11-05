@@ -4444,7 +4444,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! the SQL equals operator (=) for use in @ref where_clauses
     /** @see op_eq()
     */
-    public const OP_EQ = "=";
+    public const OP_EQ = "==";
 
     #! the SQL less than (<) operator for use in @ref where_clauses when comparing two columns
     /** @see op_clt()
@@ -4505,6 +4505,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     /** @see op_in_select()
     */
     public const OP_IN_SELECT = "in_select";
+
+    #! Compat operator map
+    public const CompatOpMap = {
+        "=": OP_EQ,
+    };
 
     #! Default expressions to be supported by all SqlUtil modules
     public const DefaultExpressionMap = {
