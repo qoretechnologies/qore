@@ -1438,7 +1438,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.3
     */
-    *hash<auto> createRecordFromOptions(*hash<auto> options) {
+    *hash<auto> createRecordWithOptions(*hash<auto> options) {
         return createRecord(options.rec, options - "rec");
     }
 
@@ -1474,13 +1474,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @since DataProvider 3.3
     */
-    *hash<auto> createRecordsBulkFromOptions(*hash<auto> options) {
+    *hash<auto> createRecordsBulkWithOptions(*hash<auto> options) {
         return createRecordsBulk(options.recs, options - "recs");
     }
 
     #! Creates the given records in the data provider
-    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
-        lists of record values or a single value that applies to all records
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider for each record in bulk format (keys are field names, values
@@ -1498,6 +1498,31 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         create_options = validateCreateOptions(create_options);
         return createRecordsBulkIntern(recs, create_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a list of hashes representing input records, where the keys are field names and values are field
+        values
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+    */
+    *hash<auto> createRecordsBulk(list<auto> recs, *hash<auto> create_options) {
+        hash<auto> h;
+        foreach auto rec in (recs) {
+            if (rec.typeCode() != NT_HASH) {
+                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+            }
+            if (!h) {
+                h = map {$1: ()}, keys rec;
+            }
+            map h{$1.key} += $1.value, rec.pairIterator();
+        }
+        return createRecordsBulk(h, create_options);
     }
 
     #! Creates the given records in the data provider
@@ -1522,6 +1547,39 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         create_options = validateCreateOptions(create_options);
         hash<auto> rv;
         while (*hash<auto> recs = stream.getValue()) {
+            *hash<auto> r = createRecordsBulkIntern(recs, create_options);
+            if (!rv) {
+                rv = r;
+            } else {
+                map rv{$1.key} += $1.value, r.pairIterator();
+            }
+        }
+        return rv;
+    }
+
+    #! Creates the given records in the data provider
+    /** @param i a record iterator for insert
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordsBulk(HashListIterator i, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        hash<auto> rv;
+        while (i.next()) {
+            hash<auto> recs = i.getValue();
             *hash<auto> r = createRecordsBulkIntern(recs, create_options);
             if (!rv) {
                 rv = r;
@@ -1573,8 +1631,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Upserts the given records in the data provider
-    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
-        lists of record values or a single value that applies to all records to be upserted
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
         @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
@@ -1589,6 +1647,35 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
         }
         return upsertRecordsBulkImpl(recs, upsert_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a list of hashes representing input records, where the keys are field names and values are field
+        values
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+    */
+    *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        hash<auto> h;
+        foreach auto rec in (recs) {
+            if (rec.typeCode() != NT_HASH) {
+                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+            }
+            if (!h) {
+                h = map {$1: ()}, keys rec;
+            }
+            map h{$1.key} += $1.value, rec.pairIterator();
+        }
+        return upsertRecordsBulk(h, upsert_options);
     }
 
     #! Upserts the given records in the data provider
@@ -1607,6 +1694,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         upsert_options = validateUpsertOptions(upsert_options);
         list<string> rv;
         while (*hash<auto> recs = stream.getValue()) {
+            if (!supportsBulkUpsert()) {
+                rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+            } else {
+                rv += upsertRecordsBulkImpl(recs, upsert_options);
+            }
+        }
+        return rv;
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param i a record iterator for upserting records
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulk(HashListIterator i, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        list<string> rv;
+        while (i.next()) {
+            hash<auto> recs = i.getValue();
             if (!supportsBulkUpsert()) {
                 rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
             } else {
@@ -1969,7 +2082,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
             processSearchParameters(where_cond, search_options), search_options);
         if (!rc && search_options.requires_result) {
-            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+            throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
         }
         return rc;
     }
@@ -1996,7 +2109,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
         if (!rc && search_options.requires_result) {
-            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+            throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
         }
         return rc;
     }
@@ -2063,7 +2176,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
         if (!rc && search_options.requires_result) {
-            throw "UPDATE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+            throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
         }
         return rc;
     }
@@ -3476,8 +3589,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Creates the given records in the data provider
-    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
-        lists of record values or a single value that applies to all records
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider for each record in bulk format (keys are field names, values
@@ -3498,19 +3611,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return createRecordsBulkImpl(recs, create_options);
     }
 
+    #! Returns create options as action options
+    private *hash<string, hash<ActionOptionInfo>> getCreateOptionsAsActionOptions() {
+        return getOptionsAsActionOptions(getCreateOptions());
+    }
+
     #! Returns search options as action options
-    private *hash<string, hash<ActionOptionInfo>> getSearchOptionsAsActionOptions() {
-        hash<string, hash<ActionOptionInfo>> rv = {
+    private hash<string, hash<ActionOptionInfo>> getSearchOptionsAsActionOptions() {
+        return cast<hash<string, hash<ActionOptionInfo>>>({
             "block_size": <ActionOptionInfo>{
                 "display_name": "Block Size",
                 "desc": "The maximum number of records to return in a single block when opening a record stream",
                 "type": AbstractDataProviderTypeMap."*int",
             },
-        };
-        map rv{$1.key} = cast<hash<ActionOptionInfo>>($1.value - "type" + {
-            "type": $1.value.type[0],
-        }), getSearchOptions().pairIterator();
-        return rv;
+        } + getOptionsAsActionOptions(getSearchOptions()));
+    }
+
+    #! Returns upsert options as action options
+    private *hash<string, hash<ActionOptionInfo>> getUpsertOptionsAsActionOptions() {
+        return getOptionsAsActionOptions(getUpsertOptions());
     }
 
     #! Returns search options as action options
@@ -3610,23 +3729,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        *hash<string, hash<DataProviderExpressionInfo>> expressions = getStaticInfoImpl().expressions;
-        hash<string, hash<ActionOptionInfo>> rv = {
-            "where_cond": <ActionOptionInfo>{
-                "display_name": "Search Expression",
-                "desc": "A boolean expression to be applied to each record to determine if it will be "
-                    "included in the record stream",
-                "type": AbstractDataProviderTypeMap."*bool",
-                "supports_templates": False,
-                "supports_custom_values": False,
-                "supports_expressions": True,
-                "server_expression_handling": (expressions && expressions != DataProviderGenericExpressions)
-                    ? True
-                    : False,
-                "preselected": True,
-            },
-        };
-        return action.options + rv + getSearchOptionsAsActionOptions();
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for a create action
@@ -3640,6 +3746,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv;
+        if (*hash<string, AbstractDataField> rt = getCreateRecordTypeWithOptions(options)) {
+            rv.recs = <ActionOptionInfo>{
+                "display_name": "Record Data",
+                "desc": "The records to create as a single record, a record stream, or a record iterator",
+                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
+            };
+        }
+        return action.options + rv + getCreateOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
@@ -3653,6 +3768,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv;
+        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
+            rv.recs = <ActionOptionInfo>{
+                "display_name": "Record Data",
+                "desc": "The records to create as a single record, a record stream, or a record iterator",
+                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
+            };
+        }
+        return action.options + rv + getUpsertOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for an update action
@@ -3666,6 +3790,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv;
+        if (*hash<string, AbstractDataField> rt = getUpdateRecordTypeWithOptionsImpl(options)) {
+            rv.set = <ActionOptionInfo>{
+                "display_name": "Set",
+                "desc": "The field data to set on the records matched",
+                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
+            };
+        }
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + rv + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for a delete action
@@ -3679,17 +3815,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        hash<string, hash<ActionOptionInfo>> rv = {
-            "where_cond": <ActionOptionInfo>{
-                "display_name": "Search Expression",
-                "desc": "A boolean expression to be applied to each record to determine if it will be "
-                    "deleted",
-                "type": AbstractDataProviderTypeMap."*bool",
-                "supports_templates": False,
-                "supports_custom_values": False,
-            },
-        };
-        return action.options + rv + getSearchOptionsAsActionOptions();
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data
@@ -3723,6 +3852,36 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
         }
         return action.options;
+    }
+
+    #! Returns an action where condition option in the context of the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    private hash<ActionOptionInfo> getWhereCondActionOption(
+            *hash<string, hash<DataProviderExpressionInfo>> expressions
+    ) {
+        return <ActionOptionInfo>{
+            "display_name": "Search Expression",
+            "desc": "A boolean expression to be applied to each record to determine if it will be "
+                "processed by the current operation",
+            "type": AbstractDataProviderTypeMap."*bool",
+            "supports_templates": False,
+            "supports_custom_values": False,
+            "supports_expressions": True,
+            "server_expression_handling": (expressions && expressions != DataProviderGenericExpressions)
+                ? True
+                : False,
+            "preselected": True,
+        };
+    }
+
+    #! Returns supported expression in the context of the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> getExpressionsWithOptions(*hash<auto> options) {
+        return getStaticInfoImpl().expressions;
     }
 
     #! Returns an argument for an expression
@@ -4865,8 +5024,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Creates the given records in the data provider
-    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
-        lists of record values or a single value that applies to all records
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider for each record in bulk format (keys are field names, values
@@ -4887,8 +5046,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Upserts the given records in the data provider
-    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
-        lists of record values or a single value that applies to all records to be upserted
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
         @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results

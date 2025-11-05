@@ -202,6 +202,14 @@ public const ActionNameMap = {
     DPAT_DELETE: "DELETE",
 };
 
+#! Set of actions that support search expressions
+public const ActionsWithSearch = {
+    DPAT_FIND: True,
+    DPAT_FIND_SINGLE: True,
+    DPAT_UPDATE: True,
+    DPAT_DELETE: True,
+};
+
 #! Data provider action option definition
 public hashdecl ActionOptionInfo {
     #! Data type of the option
@@ -724,6 +732,7 @@ public class DataProviderActionCatalog {
                 case DPAT_UPSERT:
                     action.input_data_types = {
                         DPAD_NORMAL: True,
+                        DPAD_RECORD_ITERATOR: True,
                         DPAD_RECORD_STREAM: True,
                     };
                     break;
