@@ -2396,17 +2396,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.0
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsFromRequestTypeWithData(auto req) {
-        checkRequest();
-        *AbstractDataProviderType rt;
         try {
-            rt = getRequestTypeWithData(req);
+            checkRequest();
+            *AbstractDataProviderType rt;
+            try {
+                rt = getRequestTypeWithData(req);
+            } catch (hash<ExceptionInfo> ex) {
+                LoggerWrapper::error("Failed to request arg type with data, options: %y, ignoring options: %s",
+                    req, get_exception_string(ex));
+                rt = getRequestType();
+            }
+            if (rt && (*hash<auto> fields = rt.getFields())) {
+                return DataProviderActionCatalog::getActionOptionFromFields(fields);
+            }
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to request arg type with data, options: %y, ignoring options: %s",
-                req, get_exception_string(ex));
-            rt = getRequestType();
-        }
-        if (rt && (*hash<auto> fields = rt.getFields())) {
-            return DataProviderActionCatalog::getActionOptionFromFields(fields);
+            LoggerWrapper::error("Failed to get request arg type with data (%y), cannot return options: %s", req,
+                get_exception_string(ex));
         }
     }
 
@@ -2546,7 +2551,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         if (!action.data_dependent_options) {
             return action.options;
         }
-        return tryGetActionOptionsWithOptionsImpl(action, options);
+        try {
+            return tryGetActionOptionsWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for an event action
@@ -2562,8 +2572,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForEventWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkObservable();
-        return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+        try {
+            checkObservable();
+            return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for event with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for a request action
@@ -2579,8 +2594,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkRequest();
-        return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+        try {
+            checkRequest();
+            return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for request with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for a send message action
@@ -2596,8 +2616,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForMessageWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkMessages();
-        return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+        try {
+            checkMessages();
+            return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for message with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for a search action
@@ -2613,8 +2638,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkRead();
-        return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+        try {
+            checkRead();
+            return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for search with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for a create action
@@ -2630,8 +2660,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkCreate();
-        return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+        try {
+            checkCreate();
+            return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for create with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
@@ -2647,8 +2682,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkUpsert();
-        return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+        try {
+            checkUpsert();
+            return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for upsert with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for an update action
@@ -2662,8 +2702,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkUpdate();
-        return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+        try {
+            checkUpdate();
+            return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for update with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns action options corresponding to the given option data for a delete action
@@ -2679,8 +2724,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptions(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        checkDelete();
-        return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+        try {
+            checkDelete();
+            return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for delete with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns the description of an outbound message, if any
