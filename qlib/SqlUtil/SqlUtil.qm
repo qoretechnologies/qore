@@ -4489,7 +4489,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! the SQL \c "not" operator for use in @ref where_clauses
     /** @see op_not()
     */
-    public const OP_NOT = "not";
+    public const OP_NOT = "!";
 
     #! the SQL \c "substr" operator for use in @ref where_clauses
     /** @see op_substr()
