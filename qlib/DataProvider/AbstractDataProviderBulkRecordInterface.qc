@@ -44,6 +44,9 @@ public class AbstractDataProviderBulkRecordInterface {
 
         #! Max records
         *int max_records;
+
+        #! Record limit
+        *int limit;
     }
 
     private {
@@ -60,16 +63,27 @@ public class AbstractDataProviderBulkRecordInterface {
         records are available, an exception is thrown when this parameter is set to @ref True
         @param max_records the maximum number of records to return; if set, an exception is thrown when the maximum
         number of records is exceeded
+        @param limit an optional limit on the number of records to return
 
         @since DataProvider 3.3
     */
-    constructor(int block_size, *bool requires_result, *int max_records) {
+    constructor(int block_size, *bool requires_result, *int max_records, *int limit) {
         if (max_records && (block_size > (max_records + 1))) {
             block_size = max_records + 1;
+        }
+        if (limit) {
+            if (max_records && (limit > max_records)) {
+                throw "LIMIT-MAX-RECORDS-ARG-ERROR", sprintf("\"limit\" cannot be greater than \"max_records\" "
+                    "(limit: %d, max_records: %d)", limit, max_records);
+            }
+            if (block_size > limit) {
+                block_size = limit;
+            }
         }
         self.block_size = block_size;
         self.requires_result = requires_result ?? False;
         self.max_records = max_records;
+        self.limit = limit;
     }
 
     #! Returns the block size
@@ -90,6 +104,11 @@ public class AbstractDataProviderBulkRecordInterface {
     #! Returns the 'max_records' value
     *int getMaxRecords() {
         return max_records;
+    }
+
+    #! Returns the 'limit' value
+    *int getLimit() {
+        return limit;
     }
 
     #! Returns the number of records returned so far
@@ -117,6 +136,11 @@ public class AbstractDataProviderBulkRecordInterface {
         *hash<auto> rv = getValueImpl();
         int size = rv.firstValue().lsize();
         if (size) {
+            if (limit && ((record_count + size) > limit)) {
+                size = limit - record_count;
+                # truncate all lists to the new size
+                map (extract rv{$1.key}, size), rv.pairIterator(), ($1.value.typeCode() == NT_LIST);
+            }
             record_count += size;
             if ((max_records > 0) && (record_count > max_records)) {
                 throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (%d) has been exceeded in the "

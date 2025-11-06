@@ -34,7 +34,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Default bulk record interface class for data providers that do not support bulk read APIs
-public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordInterface {
+public class DefaultBulkRecordInterface inherits AbstractDataProviderBulkRecordInterface {
     private {
         AbstractDataProviderRecordIterator i;
     }
@@ -46,9 +46,10 @@ public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordIn
         records are available, an exception is thrown when this parameter is set to @ref True
         @param max_records the maximum number of records to return; if set, an exception is thrown when the maximum
         number of records is exceeded
+        @param limit an optional limit on the number of records to return
     */
-    constructor(int block_size, AbstractDataProviderRecordIterator i, *bool requires_result, *int max_records)
-            : AbstractDataProviderBulkRecordInterface(block_size, requires_result, max_records) {
+    constructor(int block_size, AbstractDataProviderRecordIterator i, *bool requires_result, *int max_records,
+            *int limit) : AbstractDataProviderBulkRecordInterface(block_size, requires_result, max_records, limit) {
         self.i = i;
     }
 

@@ -94,7 +94,7 @@ module DataProvider {
     - @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
     - @ref DataProvider::DefaultBulkInserter "DefaultBulkInserter"
     - @ref DataProvider::DefaultBulkUpserter "DefaultBulkUpserter"
-    - @ref DataProvider::DefaultBulkRecordIterface "DefaultBulkRecordIterface"
+    - @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface"
     - @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator"
     - @ref DataProvider::QoreDataField "QoreDataField"
 
@@ -280,7 +280,7 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
       (<a href="https://github.com/qorelanguage/qore/issues/4463">issue 4463</a>)
 
     @subsection dataprovider_v2_1_1 DataProvider v2.1.1
-    - fixed a type error iterating data in @ref DataProvider::DefaultBulkRecordIterface "DefaultBulkRecordIterface"
+    - fixed a type error iterating data in @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface"
       (<a href="https://github.com/qorelanguage/qore/issues/4457">issue 4457</a>)
 
     @subsection dataprovider_v2_1 DataProvider v2.1

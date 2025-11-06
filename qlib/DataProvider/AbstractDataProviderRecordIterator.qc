@@ -391,12 +391,16 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
 
         #! Max records
         *int max_records;
+
+        #! Record limit
+        *int limit;
     }
 
     #! Creates the object and optionally sets the bulk iteration block size
-    constructor(*bool requires_result, *int max_records) {
+    constructor(*bool requires_result, *int max_records, *int limit) {
         self.requires_result = requires_result ?? False;
         self.max_records = max_records;
+        self.limit = limit;
     }
 
     #! Returns the number of records returned so far
@@ -414,6 +418,11 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         return max_records;
     }
 
+    #! Returns the 'limit' value
+    *int getLimit() {
+        return limit;
+    }
+
     #! Returns @ref True if the iterator supports bulk operation
     /** @return @ref True if the iterator supports bulk operation
 
@@ -426,10 +435,10 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     #! Returns the bulk data interface if supported
     /** @return the bulk data interface if supported
 
-        @note This base class method returns @ref DefaultBulkRecordIterface by default
+        @note This base class method returns @ref DefaultBulkRecordInterface by default
     */
     *AbstractDataProviderBulkRecordInterface getBulkApi(int block_size = DefaultBlockSize) {
-        return new DefaultBulkRecordIterface(block_size, self, requires_result, max_records);
+        return new DefaultBulkRecordInterface(block_size, self, requires_result, max_records, limit);
     }
 
     #! Returns the record description, if available
@@ -453,6 +462,9 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
             if ((max_records > 0) && (record_count > max_records)) {
                 throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
                     "exceeded", max_records);
+            }
+            if (limit && (record_count > limit)) {
+                rv = False;
             }
         } else if (!record_count && requires_result) {
             throw "NO-DATA", "No records returrned from the search, but at least one record was required "

@@ -5043,7 +5043,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
             *hash<auto> where_cond, *hash<auto> search_options) {
-        return new DefaultBulkRecordIterface(block_size, searchRecordsImpl(where_cond, search_options));
+        return new DefaultBulkRecordInterface(block_size, searchRecordsImpl(where_cond, search_options),
+            search_options.requires_result, search_options.max_records, search_options.limit);
     }
 
     #! Returns an iterator for zero or more records matching the search options
