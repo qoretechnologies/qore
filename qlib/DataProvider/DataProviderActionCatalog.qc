@@ -367,11 +367,10 @@ public const DPAD_NORMAL = "normal";
 */
 public const DPAD_RECORD_STREAM = "record-stream";
 
-#! Record iterator data
-/** The data is a record iterator, and the type describes the records returned by it. The data type is
-    @ref DataProvider::ListHashIterator "ListHashIterator"
+#! Record set data
+/** The data is a hash of record info; keys are field names, values are lists of field values
 */
-public const DPAD_RECORD_ITERATOR = "record-iterator";
+public const DPAD_RECORD_SET = "record-set";
 #/@}
 
 #! DataProvider action definition
@@ -732,7 +731,7 @@ public class DataProviderActionCatalog {
                 case DPAT_UPSERT:
                     action.input_data_types = {
                         DPAD_NORMAL: True,
-                        DPAD_RECORD_ITERATOR: True,
+                        DPAD_RECORD_SET: True,
                         DPAD_RECORD_STREAM: True,
                     };
                     break;
@@ -752,7 +751,7 @@ public class DataProviderActionCatalog {
                     break;
 
                 case DPAT_CREATE:
-                    action.output_data_type = DPAD_RECORD_ITERATOR;
+                    action.output_data_type = DPAD_RECORD_SET;
                     break;
 
                 default:

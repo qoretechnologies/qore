@@ -3796,15 +3796,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        hash<string, hash<ActionOptionInfo>> rv;
-        if (*hash<string, AbstractDataField> rt = getCreateRecordTypeWithOptions(options)) {
-            rv.recs = <ActionOptionInfo>{
-                "display_name": "Record Data",
-                "desc": "The records to create as a single record, a record stream, or a record iterator",
-                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
-            };
-        }
-        return action.options + rv + getCreateOptionsAsActionOptions();
+        return addCreateRecordOption(action, options) + getCreateOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
@@ -3818,15 +3810,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        hash<string, hash<ActionOptionInfo>> rv;
-        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
-            rv.recs = <ActionOptionInfo>{
-                "display_name": "Record Data",
-                "desc": "The records to create as a single record, a record stream, or a record iterator",
-                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
-            };
-        }
-        return action.options + rv + getUpsertOptionsAsActionOptions();
+        return addCreateRecordOption(action, options) + getUpsertOptionsAsActionOptions();
     }
 
     #! Returns action options corresponding to the given option data for an update action
@@ -3902,6 +3886,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
         }
         return action.options;
+    }
+
+    #! Adds a record option to the given action options based on the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> addCreateRecordOption(hash<DataProviderActionInfo> action,
+            *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = action.options;
+        *HashDataType record_type;
+        if (*hash<string, AbstractDataField> rt = getCreateRecordTypeWithOptionsImpl(options)) {
+            record_type = new HashDataType(AutoHashType, "RecordInfo", rt);
+        }
+        if (!rv.recs) {
+            rv.recs = <ActionOptionInfo>{
+                "display_name": "Record Data",
+                "desc": "The records to create",
+                "type": new SoftListDataType("RecordSet", record_type),
+            };
+        } else if (record_type) {
+            rv.recs.type = new SoftListDataType("RecordSet", record_type);
+        }
+        return rv;
     }
 
     #! Returns an action where condition option in the context of the given option data
