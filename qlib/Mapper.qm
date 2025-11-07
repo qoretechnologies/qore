@@ -2197,7 +2197,7 @@ Mapper mapv(DataMap);
 
     #! maps all input records and returns the mapped data as a list of output records
     /** this method applies the @ref mapData() method to all input records and returns the resulting list
-        @param recs an interator that returns hashes of input records on each iteration
+        @param recs an iterator that returns hashes of input records on each iteration
 
         @return the mapped data as a list of output records
 
@@ -2207,6 +2207,20 @@ Mapper mapv(DataMap);
     */
     list<hash<auto>> mapAll(AbstractIterator recs) {
         return map mapData($1), recs;
+    }
+
+    #! maps all input records and returns the mapped data as a list of output records
+    /** this method applies the @ref mapData() method to all input records and returns the resulting list
+        @param recs a bulk record iterator that returns hashes of input records on each iteration
+
+        @return the mapped data as a list of output records
+
+        @throw MISSING-INPUT a field marked mandatory is missing
+        @throw STRING-TOO-LONG a field value exceeds the maximum value and the 'trunc' key is not set
+        @throw INVALID-NUMBER the field is marked as numeric but the input value contains non-numeric data
+    */
+    list<hash<auto>> mapAll(AbstractDataProviderBulkRecordInterface recs) {
+        return map mapData($1), recs.getRecordIterator();
     }
 
     #! processes the input record and returns a hash of the mapped values where the keys in the hash returned are the target field names; the order of the fields in the hash returned is the same order as the keys in the map hash.
@@ -2257,7 +2271,7 @@ Mapper mapv(DataMap);
                 return mapData(recs);
 
             case NT_OBJECT: {
-                if (recs instanceof AbstractIterator) {
+                if ((recs instanceof AbstractIterator) || (recs instanceof AbstractDataProviderBulkRecordInterface)) {
                     return mapAll(recs);
                 }
                 # otherwise throw an exception
