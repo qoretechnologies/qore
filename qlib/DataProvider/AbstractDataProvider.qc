@@ -379,18 +379,6 @@ public const DataProviderSignatureFieldType = <DataProviderSignatureTypeInfo>{
     "type_code": ST_Field,
 };
 
-#! Data provider signature any type
-public const DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."any",
-    "type_code": ST_Any,
-};
-
-#! Data provider signature list type
-public const DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."list",
-    "type_code": ST_Any,
-};
-
 #! Data provider signature string value type
 public const DataProviderSignatureStringValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
@@ -421,15 +409,51 @@ public const DataProviderSignatureListValueType = <DataProviderSignatureTypeInfo
     "type_code": ST_Value,
 };
 
+#! Data provider signature optional list value type
+public const DataProviderSignatureOptionalListValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*list",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature optional string list value type
+public const DataProviderSignatureOptionalStringListValueType = <DataProviderSignatureTypeInfo>{
+    "type": new ListDataType("*list<string>", StringType, True),
+    "type_code": ST_Value,
+};
+
 #! Data provider signature hash value type
 public const DataProviderSignatureHashValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."hash",
     "type_code": ST_Value,
 };
 
+#! Data provider signature optional hash value type
+public const DataProviderSignatureOptionalHashValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*hash",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature any type
+public const DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature list type
+public const DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."list",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature bool type
 public const DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."bool",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional bool type
+public const DataProviderSignatureOptionalBoolType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*bool",
     "type_code": ST_Any,
 };
 
@@ -439,15 +463,33 @@ public const DataProviderSignatureIntType = <DataProviderSignatureTypeInfo>{
     "type_code": ST_Any,
 };
 
+#! Data provider signature optional int type
+public const DataProviderSignatureOptionalIntType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*int",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature string type
 public const DataProviderSignatureStringType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
     "type_code": ST_Any,
 };
 
+#! Data provider signature optional string type
+public const DataProviderSignatureOptionalStringType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*string",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature date type
 public const DataProviderSignatureDateType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."date",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional date type
+public const DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*date",
     "type_code": ST_Any,
 };
 
@@ -1003,6 +1045,70 @@ public const DataProviderGenericExpressions = cast<hash<string, hash<DataProvide
     map {$1.key: $1.value."exp"}, AbstractDataProvider::GenericExpressionImplementations.pairIterator()
 );
 
+#! Regular expression options
+public const RegexOpts = {
+    "RE_Caseless": RE_Caseless,
+    "RE_DotAll": RE_DotAll,
+    "RE_Extended": RE_Extended,
+    "RE_MultiLine": RE_MultiLine,
+    "RE_Unicode": RE_Unicode,
+    "RE_Global": RE_Global,
+};
+
+#! Regular expression argument info
+public const RegularExpressionArgInfo = (
+    <DataProviderArgInfo>{
+        "display_name": "String Value",
+        "short_desc": "The string value to be matched to the next argument",
+        "desc": "The string value to be matched to the next argument",
+    },
+    <DataProviderArgInfo>{
+        "display_name": "Regular Expression",
+        "short_desc": "The regular expression to use to match with the first argument",
+        "desc": "The regular expression to use to match with the first argument",
+        "example_value": "^[A-Z][0-9]+$",
+    },
+    <DataProviderArgInfo>{
+        "display_name": "Regex Options",
+        "short_desc": "The regular expression options to use when performing the match",
+        "desc": "The regular expression options to use when performing the match",
+        "allowed_values": (
+            <AllowedValueInfo>{
+                "display_name": "Dot Matches Newline?",
+                "short_desc": "The dot '.' character matches also a newline",
+                "desc": "The dot `.` character matches also a newline",
+                "value": "RE_DotAll",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Extended Regex?",
+                "short_desc": "Ignores whitespace characters and enables comments prefixed by '#'",
+                "desc": "Ignores whitespace characters and enables comments prefixed by `#`",
+                "value": "RE_Extended",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Full Unicode?",
+                "short_desc": "Character matches match the full Unicode character set",
+                "desc": "Character matches match the full Unicode character set",
+                "value": "RE_Unicode",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Ignore Case?",
+                "short_desc": "Ignore case when matching",
+                "desc": "Ignore case when matching",
+                "value": "RE_Caseless",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Multiline?",
+                "short_desc": "Makes start-of-line '^' or end-of-line '$' match after or before any "
+                    "newline in the subject string",
+                "desc": "Makes start-of-line `^` or end-of-line `$` match after or before any "
+                    "newline in the subject string",
+                "value": "RE_MultiLine",
+            },
+        ),
+    },
+);
+
 #! The AbstractDataProvider class
 public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
     public {
@@ -1232,23 +1338,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         "regular expression pattern",
                     "symbol": "regex",
                     "group": "Comparison",
-                    "render_template": "$arg[0] =~ /$arg[1].pattern/$arg[1].options",
+                    "render_template": "$arg[0] =~ /$arg[1]/$arg[2]",
                     "args": (
                         DataProviderSignatureStringType,
-                        <DataProviderSignatureTypeInfo>{
-                            "type": (new HashDataType())
-                                .addField(new QoreDataField("pattern", "the regular expression pattern",
-                                    AbstractDataProviderTypeMap."string"))
-                                .addField(new QoreDataField("options", "regular expression options",
-                                    AbstractDataProviderTypeMap."*int")),
-                        },
+                        DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType,
                     ),
+                    "arg_info": RegularExpressionArgInfo,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto arg1 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
-                    return regex(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]).toString(),
-                        arg1.pattern, arg1.options);
+                    string str = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    string pattern = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                    int opts;
+                    if (*list<auto> options = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2])) {
+                        opts = foldl $1 | $2, (map RegexOpts{$1}, options);
+                    }
+                    return regex(str, pattern, opts);
                 },
             },
         };

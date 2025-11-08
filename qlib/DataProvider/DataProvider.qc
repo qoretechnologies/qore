@@ -586,14 +586,16 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", exp.exp);
         }
         if (info.type == DET_Function) {
-            str = sprintf("%s(%s)", info.name, (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap), exp.args)));
+            str = sprintf("%s(%s)", info.name, (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap,
+                info.arg_info[$1]), exp.args)));
         } else if (info.render_template) {
             str = renderExpressionTemplate(info, exp, emap);
         } else {
             if (exp.args.size() == 1) {
-                str = sprintf("%s %s", info.symbol, renderExpressionArg(exp.args[0], emap));
+                str = sprintf("%s %s", info.symbol, renderExpressionArg(exp.args[0], emap, info.arg_info[0]));
             } else {
-                str = foldl $1 + " " + info.symbol + " " + $2, (map renderExpressionArg($1, emap), exp.args);
+                str = foldl $1 + " " + info.symbol + " " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+                    exp.args);
             }
         }
         return str;
@@ -975,7 +977,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         @since DataProvider 3.3
     */
     static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
-            hash<string, hash<DataProviderExpressionInfo>> emap) {
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
         return sprintf("{%s}", ref.field);
     }
 
@@ -984,7 +986,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         @since DataProvider 3.3
     */
     static private string renderExpressionArg(hash<DataProviderExpression> exp,
-            hash<string, hash<DataProviderExpressionInfo>> emap) {
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
         *hash<DataProviderExpressionInfo> info = emap{exp.exp};
         if (!info) {
             throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", info.name);
@@ -1004,10 +1006,12 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     /**
         @since DataProvider 3.3
     */
-    static private string renderExpressionArg(auto v,
-            hash<string, hash<DataProviderExpressionInfo>> emap) {
+    static private string renderExpressionArg(auto v, hash<string, hash<DataProviderExpressionInfo>> emap,
+            *hash<DataProviderArgInfo> arg_info) {
         if (!exists v) {
-            return "";
+            if (!exists (v = arg_info.default_value)) {
+                return "";
+            }
         }
 %ifndef NoYaml
         return trim(make_yaml(v));
@@ -1027,14 +1031,23 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             str = replace(str, "$symbol", info.symbol);
         }
         if (str =~ /\$args/) {
-            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap), exp.args)));
+            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+                exp.args)));
         }
-        foreach string t in ((str =~ x/\$(arg\[[0-9]+\](?:\.[a-z0-9_]+)?)/g)) {
-            (softint n, *string attr) = (t =~ x/arg\[([0-9]+)\](?:\.([a-z0-9_]+))?/);
-            string argstr = attr
-                ? renderExpressionArg(exp.args[n]{attr}, emap)
-                : renderExpressionArg(exp.args[n], emap);
+        # make direct substitutions for plain argument references
+        foreach string t in (str =~ x/\$(arg\[[0-9]+\])/g) {
+            softint n = (t =~ x/arg\[([0-9]+)\]/)[0];
+            string argstr = renderExpressionArg(exp.args[n], emap, info.arg_info[n]);
             str = replace(str, "$" + t, argstr);
+        }
+        # look for substitutions with curly bracks and optional ternary expressions
+        foreach string t in (str =~ x/\$\{(arg\[[0-9]+\](?:\s*\?[^:\}]*:[^\}]*)?)\}/) {
+            (softint n, *string t0, *string t1) = (t =~ x/arg\[([0-9]+)\](?:\s*\?([^:]*):(.*))?$/);
+            if (exp.args[n].val()) {
+                str = replace(str, "${" + t + "}", t0);
+            } else {
+                str = replace(str, "${" + t + "}", t1);
+            }
         }
         return str;
     }

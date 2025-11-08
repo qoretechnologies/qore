@@ -127,7 +127,7 @@ public hashdecl SearchOperatorInfo {
 public const DefaultGenericSearchOpMap = {
     DP_SEARCH_OP_REGEX: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
-            return regex(field_value.toString(), cmd.arg.pattern, cmd.arg.options);
+            return regex(field_value.toString(), cmd.arg[0], cmd.arg[1]);
         },
     ),
     DP_SEARCH_OP_LT: (
@@ -209,9 +209,7 @@ AbstractDataProviderRecordIterator i = dp.searchRecords({"name": dp_op_regex("%S
     @return an @ref SearchOperatorInfo hash for use in generic search criteria
 */
 public hash<SearchOperatorInfo> sub dp_op_regex(string str) {
-    return dp_make_op(DP_SEARCH_OP_REGEX, {
-        "pattern": str,
-    });
+    return dp_make_op(DP_SEARCH_OP_REGEX, str);
 }
 
 #! returns an @ref SearchOperatorInfo hash for the SQL-like \c "like" operator with the given argument
@@ -227,9 +225,7 @@ AbstractDataProviderRecordIterator i = dp.searchRecords({"name": dp_op_like("%Sm
 public hash<SearchOperatorInfo> sub dp_op_like(string str) {
     # translate str to a regex: replace % -> .*
     str =~ s/%/.*/g;
-    return dp_make_op(DP_SEARCH_OP_REGEX, {
-        "pattern": "^" + str + "$",
-    });
+    return dp_make_op(DP_SEARCH_OP_REGEX, "^" + str + "$");
 }
 
 #! returns an @ref SearchOperatorInfo hash for the \c "<" operator with the given argument
