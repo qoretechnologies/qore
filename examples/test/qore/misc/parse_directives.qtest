@@ -14,6 +14,7 @@
 public class ParseDirectiveTest inherits QUnit::Test {
 
     constructor() : Test("ParseDirectiveTest", "1.0") {
+        addTestCase("else test", \elseTest());
         addTestCase("strict-types test", \strictTypesTest());
         addTestCase("returns test", \returnsTest());
         addTestCase("missing arg to %append-include-path", \missingArgAppendIncludePath());
@@ -35,6 +36,26 @@ public class ParseDirectiveTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    elseTest() {
+        Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+        p.parse("
+%ifdef A
+int sub test() {
+%ifndef X
+    return -1;
+%else
+    return -2;
+%endif
+}
+%else
+int sub test() {
+    return 1;
+}
+%endif
+", "test");
+        assertEq(1, p.callFunction("test"));
     }
 
     strictTypesTest() {

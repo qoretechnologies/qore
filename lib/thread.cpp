@@ -194,7 +194,9 @@ struct ParseConditionalStack {
     }
 
     DLLLOCAL void push(bool do_mark = false) {
+        //printd(5, "ParseConditionalStack::push(%s) count %u -> %u\n", do_mark ? "true" : "false", count, count + 1);
         if (do_mark) {
+            //printd(5, "ParseConditionalStack::push() set mark %u\n", count);
             markvec.push_back(count);
         }
         ++count;
@@ -209,8 +211,12 @@ struct ParseConditionalStack {
             parse_error(*loc, "%%else without %%ifdef");
             return false;
         }
-        if (markvec.empty())
+        if (markvec.empty()) {
+            //printd(5, "ParseConditionalStack::test() ignoring; no mark (count %u)\n", count);
             return false;
+        }
+        //printd(5, "ParseConditionalStack::test() count %u mark %u -> %s\n", count, markvec.back(),
+        //    (count - 1) == markvec.back() ? "true" : "false");
         return markvec.back() == (count - 1);
     }
 
@@ -219,12 +225,15 @@ struct ParseConditionalStack {
             parse_error(*loc, "unmatched %%endif");
             return false;
         }
+        //printd(5, "ParseConditionalStack::pop() count %u -> %u\n", count, count - 1);
         --count;
         assert(!markvec.empty());
         if (count == markvec.back()) {
+            //printd(5, "ParseConditionalStack::pop() popping %%endif mark %u\n", count);
             markvec.pop_back();
             return true;
         }
+        //printd(5, "ParseConditionalStack::pop() ignoring; count %u != mark %u\n", count, markvec.back());
         return false;
     }
 
@@ -1319,8 +1328,9 @@ void parse_try_module_set(unsigned c) {
 
 void parse_cond_push(bool mark) {
     ThreadData* td = thread_data.get();
-    if (!td->pcs)
+    if (!td->pcs) {
         td->pcs = new ParseConditionalStack;
+    }
     td->pcs->push(mark);
 }
 

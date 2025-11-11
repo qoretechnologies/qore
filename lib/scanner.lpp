@@ -1012,7 +1012,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            }
 #ifdef DEBUG
                                            //else
-                                           //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
+                                           //printd(5, "p_skip_to_endtry: found %%endtry (%s) (not final)\n", yytext);
 #endif
                                         }
    ^.*                                  {
@@ -1022,7 +1022,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            }
 #ifdef DEBUG
                                            // ignore other text
-                                           //printd(5, "p_skip_to_endif: %s\n", yytext);
+                                           //printd(5, "p_skip_to_endtry: %s\n", yytext);
 #endif
                                         }
    \n                                   // ignore
@@ -1059,144 +1059,144 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%module-cmd                            BEGIN(module_cmd);
 <module_cmd>{WS}*                       // ignore white space
 <module_cmd>[^\n\r]+                    {
-                                           QoreString str(yytext);
-                                           str.trim();
-                                           const char* p = str.c_str();
-                                           const char* op = strchr(p, '(');
-                                           if (!op)
-                                              parse_error(*get_loc(yylloc), "%%module-cmd not in format '%%module-cmd(<module-name>) <command>'; missing open parenthesis '(' before module name; text given: '%%module-cmd %s'", p);
-                                           else {
-                                              p = op + 1;
-                                              const char* cp = strchr(p, ')');
-                                              if (!cp)
-                                                 parse_error(*get_loc(yylloc), "%%module-cmd not in format '%%module-cmd(<module-name>) <command>'; missing close parenthesis ')' after module name; text given: '%%module-cmd %s'", str.c_str());
-                                              else {
-                                                 // get module name
-                                                 QoreString module(p, cp - p);
-                                                 module.trim();
+                                            QoreString str(yytext);
+                                            str.trim();
+                                            const char* p = str.c_str();
+                                            const char* op = strchr(p, '(');
+                                            if (!op)
+                                                parse_error(*get_loc(yylloc), "%%module-cmd not in format '%%module-cmd(<module-name>) <command>'; missing open parenthesis '(' before module name; text given: '%%module-cmd %s'", p);
+                                            else {
+                                                p = op + 1;
+                                                const char* cp = strchr(p, ')');
+                                                if (!cp)
+                                                    parse_error(*get_loc(yylloc), "%%module-cmd not in format '%%module-cmd(<module-name>) <command>'; missing close parenthesis ')' after module name; text given: '%%module-cmd %s'", str.c_str());
+                                                else {
+                                                    // get module name
+                                                    QoreString module(p, cp - p);
+                                                    module.trim();
 
-                                                 // remove preface from string leaving only command
-                                                 str.replace(0, cp - str.c_str() + 1, (const char*)0);
-                                                 str.trim();
-                                                 const QoreProgramLocation* loc = get_loc(yylloc);
-                                                 if (str.empty())
-                                                    parse_error(*loc, "%%module-cmd not in format %%module-cmd(<module-name>) <command>; missing command; text given: '%%module-cmd %s'", str.c_str());
-                                                 else {
-                                                    QMM.issueParseCmd(loc, module.c_str(), str);
-                                                 }
-                                              }
-                                           }
-                                           BEGIN(INITIAL);
+                                                    // remove preface from string leaving only command
+                                                    str.replace(0, cp - str.c_str() + 1, (const char*)0);
+                                                    str.trim();
+                                                    const QoreProgramLocation* loc = get_loc(yylloc);
+                                                    if (str.empty())
+                                                        parse_error(*loc, "%%module-cmd not in format %%module-cmd(<module-name>) <command>; missing command; text given: '%%module-cmd %s'", str.c_str());
+                                                    else {
+                                                        QMM.issueParseCmd(loc, module.c_str(), str);
+                                                    }
+                                                }
+                                            }
+                                            BEGIN(INITIAL);
                                         }
 <module_cmd><<EOF>>                     {
-                                           QORE_FLEX_DO_EOF
+                                            QORE_FLEX_DO_EOF
                                         }
 ^%define{WS}*$                          { parse_error(*get_loc(yylloc), "missing argument to %%define"); }
 ^%define{WS}+                           BEGIN(p_def);
 <p_def>{WS}*                            // ignore white space
 <p_def>[^\n\r]+                         {
-                                           qore_parse_define(yylloc, yytext);
-                                           BEGIN(INITIAL);
+                                            qore_parse_define(yylloc, yytext);
+                                            BEGIN(INITIAL);
                                         }
 ^%ifdef{WS}*$                           { parse_error(*get_loc(yylloc), "missing argument to %%ifdef"); }
 ^%ifdef{WS}+                            BEGIN(p_ifdef);
 <p_ifdef>{
    [^\n\r]+$                            {
-                                           parse_cond_push(true);
-                                           if (parse_is_defined(yylloc, yytext)) {
-                                              //printd(5, "ifdef: '%s' is defined\n", yytext);
-                                              BEGIN(INITIAL);
-                                           } else {
-                                              //printd(5, "ifdef: '%s' is not defined\n", yytext);
-                                              // skip to the next %else or %endif
-                                              BEGIN(p_skip_to_endif_or_else);
-                                           }
+                                            parse_cond_push(true);
+                                            if (parse_is_defined(yylloc, yytext)) {
+                                                //printd(5, "%%ifdef: '%s' is defined\n", yytext);
+                                                BEGIN(INITIAL);
+                                            } else {
+                                                //printd(5, "%%ifdef: '%s' is not defined\n", yytext);
+                                                // skip to the next %else or %endif
+                                                BEGIN(p_skip_to_endif_or_else);
+                                            }
                                         }
    <<EOF>>                              {
-                                           QORE_FLEX_DO_EOF
+                                            QORE_FLEX_DO_EOF
                                         }
 }
-^%ifndef{WS}*$                           { parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
-^%ifndef{WS}+                            BEGIN(p_ifndef);
+^%ifndef{WS}*$                          { parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
+^%ifndef{WS}+                           BEGIN(p_ifndef);
 <p_ifndef>{
    [^\n\r]+$                            {
-                                           parse_cond_push(true);
-                                           if (!parse_is_defined(yylloc, yytext)) {
-                                              //printd(5, "ifndef: '%s' is not defined\n", yytext);
-                                              BEGIN(INITIAL);
-                                           } else {
-                                              //printd(5, "ifndef: '%s' is defined\n", yytext);
-                                              // skip to the next %else or %endif
-                                              BEGIN(p_skip_to_endif_or_else);
-                                           }
+                                            parse_cond_push(true);
+                                            if (!parse_is_defined(yylloc, yytext)) {
+                                                //printd(5, "ifndef: '%s' is not defined\n", yytext);
+                                                BEGIN(INITIAL);
+                                            } else {
+                                                //printd(5, "ifndef: '%s' is defined\n", yytext);
+                                                // skip to the next %else or %endif
+                                                BEGIN(p_skip_to_endif_or_else);
+                                            }
                                         }
    <<EOF>>                              {
-                                           QORE_FLEX_DO_EOF
+                                            QORE_FLEX_DO_EOF
                                         }
 }
 ^%else{WS}*$                            {
-                                              if (!parse_cond_else()) {
-                                                 parse_error(*get_loc(yylloc), "%%else found without %%if");
-                                              } else {
-                                                 BEGIN(p_skip_to_endif);
-                                              }
+                                            if (!parse_cond_else()) {
+                                                parse_error(*get_loc(yylloc), "%%else found without %%if");
+                                            } else {
+                                                BEGIN(p_skip_to_endif);
+                                            }
                                         }
 <p_skip_to_endif>{
    ^%endif{WS}*$                        {
-                                           if (parse_cond_pop(get_loc(yylloc))) {
-                                              printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
-                                              BEGIN(INITIAL);
-                                           }
+                                            if (parse_cond_pop(get_loc(yylloc))) {
+                                                printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
+                                                BEGIN(INITIAL);
+                                            }
 #ifdef DEBUG
-                                           //else
-                                           //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
+                                            //else
+                                            //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
    ^.*                                  {
-                                           if (!strncmp("%ifdef", yytext, 6)) {
-                                              //printd(5, "p_skip_to_endif: found %%ifdef (%s); skipping\n", yytext);
-                                              parse_cond_push();
-                                           }
+                                            if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
+                                                //printd(5, "p_skip_to_endif: found %%ifdef (%s); skipping\n", yytext);
+                                                parse_cond_push();
+                                            }
 #ifdef DEBUG
-                                           // ignore other text
-                                           //printd(5, "p_skip_to_endif: %s\n", yytext);
+                                            // ignore other text
+                                            //printd(5, "p_skip_to_endif: %s\n", yytext);
 #endif
                                         }
    \n                                   // ignore
    <<EOF>>                              {
-                                           QORE_FLEX_DO_EOF
+                                            QORE_FLEX_DO_EOF
                                         }
 }
 <p_skip_to_endif_or_else>{
    ^%else{WS}*$                         {
-                                           //printd(5, "p_skip_to_endif_or_else: found %else\n");
-                                           if (parse_cond_test(get_loc(yylloc))) {
-                                              BEGIN(INITIAL);
-                                           }
+                                            //printd(5, "p_skip_to_endif_or_else: found %else\n");
+                                            if (parse_cond_test(get_loc(yylloc))) {
+                                                BEGIN(INITIAL);
+                                            }
                                         }
    ^%endif{WS}*$                        {
-                                           if (parse_cond_pop(get_loc(yylloc))) {
-                                              //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
-                                              BEGIN(INITIAL);
-                                           }
+                                            if (parse_cond_pop(get_loc(yylloc))) {
+                                                //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
+                                                BEGIN(INITIAL);
+                                            }
 #ifdef DEBUG
-                                           //else
-                                           //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (not final)\n", yytext);
+                                            //else printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (not final)\n",
+                                            //    yytext);
 #endif
                                         }
    ^.*                                  {
-                                           if (!strncmp("%ifdef", yytext, 6)) {
-                                              //printd(5, "p_skip_to_endif_or_else: found %%ifdef (%s); skipping\n", yytext);
-                                              parse_cond_push();
-                                           }
+                                            if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
+                                                //printd(5, "p_skip_to_endif_or_else: found %%ifdef (%s); skipping\n", yytext);
+                                                parse_cond_push();
+                                            }
 #ifdef DEBUG
-                                           // ignore other text
-                                           //printd(5, "p_skip_to_endif_or_else: %s\n", yytext);
+                                            // ignore other text
+                                            //printd(5, "p_skip_to_endif_or_else ignoring: %s\n", yytext);
 #endif
                                         }
    \n                                   // ignore
    <<EOF>>                              {
-                                           QORE_FLEX_DO_EOF
+                                            QORE_FLEX_DO_EOF
                                         }
 }
 ^%endif{WS}*$                           parse_cond_pop(get_loc(yylloc));
@@ -1246,7 +1246,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     xsink->raiseErrnoException("PARSE-ERROR", errno, "stat() failed on include file: \"%s\"", fn);
                                                  BEGIN(INITIAL);
                                               } else {
-                                                 //printd(0, "%s: mode=%o, s_ifmt=%o, &=%o, reg=%o comp=%s\n", fname->c_str(), sbuf.st_mode, S_IFMT, sbuf.st_mode & S_IFMT, S_IFREG, (sbuf.st_mode & S_IFMT) != S_IFREG ? "true" : "false");
+                                                 //printd(5, "%s: mode=%o, s_ifmt=%o, &=%o, reg=%o comp=%s\n", fname->c_str(), sbuf.st_mode, S_IFMT, sbuf.st_mode & S_IFMT, S_IFREG, (sbuf.st_mode & S_IFMT) != S_IFREG ? "true" : "false");
                                                  if ((sbuf.st_mode & S_IFMT) != S_IFREG) {
                                                     parse_error(*get_loc(yylloc), "cannot include \"%s\"; is not a regular file", fn);
                                                     BEGIN(INITIAL);
