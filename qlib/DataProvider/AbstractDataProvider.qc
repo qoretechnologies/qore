@@ -635,6 +635,9 @@ public hashdecl DataProviderExpressionInfo {
     #! The last argument can be repeated indefinitely
     bool varargs = False;
 
+    #! Minimum arguments when varargs is set
+    *int min_args;
+
     #! Return type argument priority list
     /** A list of types that indicate the priority order when determining the final return type
         based on argument types; to determine the final return type, the first type in this list that matches
