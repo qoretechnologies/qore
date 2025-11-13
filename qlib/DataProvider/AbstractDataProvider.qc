@@ -575,6 +575,12 @@ public hashdecl DataProviderArgInfo {
     /** The value must be acceptable by the argument's type
     */
     auto example_value;
+
+    #! A label hint for display before the argument
+    *string label_before;
+
+    #! A label hint for display after the argument
+    *string label_after;
 }
 
 #! Data provider signature info
