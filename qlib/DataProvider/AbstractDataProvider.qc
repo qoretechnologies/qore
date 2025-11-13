@@ -5437,7 +5437,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.3
     */
     private *AbstractDataProviderType getResponseTypeWithOptionsImpl(*hash<auto> options) {
-        getResponseTypeImpl();
+        return getResponseTypeImpl();
     }
 
     #! Returns a hash of error responses, if any
