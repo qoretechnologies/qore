@@ -1070,12 +1070,14 @@ public const RegularExpressionArgInfo = (
         "display_name": "String Value",
         "short_desc": "The string value to be matched to the next argument",
         "desc": "The string value to be matched to the next argument",
+        "label_after": "~= /",
     },
     <DataProviderArgInfo>{
         "display_name": "Regular Expression",
         "short_desc": "The regular expression to use to match with the first argument",
         "desc": "The regular expression to use to match with the first argument",
         "example_value": "^[A-Z][0-9]+$",
+        "label_after": "/",
     },
     <DataProviderArgInfo>{
         "display_name": "Regex Options",
@@ -1134,6 +1136,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "&&",
                     "group": "Logical",
                     "args": (DataProviderSignatureBoolType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; all conditions must be `True` for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1157,6 +1167,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "||",
                     "group": "Logical",
                     "args": (DataProviderSignatureBoolType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; at least one condition must be `True` for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -1179,6 +1197,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "!",
                     "group": "Logical",
                     "args": (DataProviderSignatureBoolType,),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; the operator will negate the value of the "
+                                "expression",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1189,7 +1215,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
                     "name": DP_SEARCH_OP_EQ,
-                    "display_name": "equals (=)",
+                    "display_name": "equals (==)",
                     "short_desc": "Returs True if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "desc": "Returs `True` if the two arguments are logically equal; types are converted if "
@@ -1197,6 +1223,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "==",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must be equal for the "
+                                "overall expression to return `True`",
+                            "label_after": "==",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must be equal for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1217,6 +1258,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "!=",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must not be equal for the "
+                                "overall expression to return `True`",
+                            "label_after": "!=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must not be equal for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1235,6 +1291,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "<",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly less than the second value "
+                                "for the overall expression to return `True`",
+                            "label_after": "<",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly less than the second value "
+                                "for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1253,6 +1324,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": "<=",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be less than or equal to the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": "<=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be less than or equal to the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1271,6 +1357,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": ">",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly greater than the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": ">",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly greater than the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1289,6 +1390,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "symbol": ">=",
                     "group": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be greater than or equal to the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": ">=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be greater than or equal to the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1309,15 +1425,35 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "render_template": "$arg[0] between $arg[1] and $arg[2]",
                     "args": (
                         DataProviderSignatureAnyType,
-                        DataProviderSignatureListType,
+                        DataProviderSignatureAnyType,
+                        DataProviderSignatureAnyType,
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; first value must be greater than the second and less than "
+                                "the third for the overall expression to return `True`",
+                            "label_after": "between",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Lower Bound",
+                            "short_desc": "The lower bound for the first argument",
+                            "desc": "The lower bound for the first argument",
+                            "label_after": "and",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Upper Bound",
+                            "short_desc": "The upper bound for the first argument",
+                            "desc": "The upper bound for the first argument",
+                        },
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
                     auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1][0])
-                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1][1]);
-
+                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1])
+                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2]);
                 },
             },
             DP_SEARCH_OP_IN: {
@@ -1331,6 +1467,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "group": "Comparison",
                     "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to look for (needle)",
+                            "desc": "A value to look for; first value must be found in the second for the overall "
+                                "expression to return `True`",
+                            "label_after": "in",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Search Source",
+                            "short_desc": "The value to look for the value in (haystack)",
+                            "desc": "The value to look for the value in (haystack)",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
