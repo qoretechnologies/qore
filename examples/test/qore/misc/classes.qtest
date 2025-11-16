@@ -630,7 +630,7 @@ class Issue1576 {
     public {}
 }
 
-# https://github.com/qorelanguage/qore/issues/2380
+# https://github.com/qoretechnologies/qore/issues/2380
 class Issue2380 {
     private:internal int x() {
         return 1;

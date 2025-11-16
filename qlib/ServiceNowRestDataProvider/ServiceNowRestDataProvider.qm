@@ -242,27 +242,27 @@ module ServiceNowRestDataProvider {
 
     @subsection servicenowrestdataprovider_v2_0 ServiceNowRestDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection servicenowrestdataprovider_v1_2_1 ServiceNowRestDataProvider v1.2.1
     - fixed operator handling in searches
-      (<a href="https://github.com/qorelanguage/qore/issues/4759">issue 4759</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4759">issue 4759</a>)
 
     @subsection servicenowrestdataprovider_v1_2 ServiceNowRestDataProvider v1.2
     - updated to use new generic expression support for searches
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection servicenowrestdataprovider_v1_1_1 ServiceNowRestDataProvider v1.1.1
     - fixed bugs handling the \c orderby, \c orderbydesc, and \c groupby search options
-      (<a href="https://github.com/qorelanguage/qore/issues/4536">issue 4536</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4536">issue 4536</a>)
 
     @subsection servicenowrestdataprovider_v1_1 ServiceNowRestDataProvider v1.1
     - updated to no longer require OAuth2 login params
-      (<a href="https://github.com/qorelanguage/qore/issues/4295">issue 4295</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4295">issue 4295</a>)
 
     @subsection servicenowrestdataprovider_v1_0_1 ServiceNowRestDataProvider v1.0.1
     - fixed a type error in DataProvider API support
-      (<a href="https://github.com/qorelanguage/qore/issues/4104">issue 4104</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4104">issue 4104</a>)
 
     @subsection servicenowrestdataprovider_v1_0 ServiceNowRestDataProvider v1.0
     - initial release of the module

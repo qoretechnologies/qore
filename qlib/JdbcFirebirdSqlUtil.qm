@@ -63,7 +63,7 @@ module JdbcFirebirdSqlUtil {
     All the public symbols in the module are defined in the JdbcFirebirdSqlUtil namespace
 
     @note
-    - This module requires the <a href="https://github.com/qorelanguage/module-jni">jni</a> binary module
+    - This module requires the <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary module
       for communication with Firebird databases plus the Firebird client library and the Firebird JDBC driver
 
     @see @ref xdbcfirebirdsqlutilbaseintro for implementation information

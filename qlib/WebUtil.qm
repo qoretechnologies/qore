@@ -78,28 +78,28 @@ module WebUtil {
     @subsection webutil_v1_7 WebUtil v1.7
     - mark the context as handling file data in the authentication method to enable authentication errors to be
       redirected for handlers handling UI file data
-      (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
 
     @subsection webutil_v1_6_2 WebUtil v1.6.2
     - fixed a bug where files outside the root directory could be served with specially-formatted requests
-      (<a href="https://github.com/qorelanguage/qore/issues/4550">issue 4550</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4550">issue 4550</a>)
 
     @subsection webutil_v1_6_1 WebUtil v1.6.1
     - fixed a bug serving files did not work in server contexts with multiple threads
-      (<a href="https://github.com/qorelanguage/qore/issues/4096">issue 4096</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4096">issue 4096</a>)
 
     @subsection webutil_v1_6 WebUtil v1.6
     - fixed a bug when StaticTemplateManager does not respect constructor's parse options in templates
-      (<a href="https://github.com/qorelanguage/qore/issues/3334">issue 3334</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3334">issue 3334</a>)
 
     @subsection webutil_v1_5 WebUtil v1.5
     - added support for custom file serving
-      (<a href="https://github.com/qorelanguage/qore/issues/3260">issue 3260</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3260">issue 3260</a>)
     - updated for Qore 0.9
 
     @subsection webutil_v1_4_1 WebUtil v1.4.1
     - made it possible for FileHandler subclasses to add headers to response
-      (<a href="https://github.com/qorelanguage/qore/issues/2686">issue 2686</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2686">issue 2686</a>)
 
     @subsection webutil_v1_4 WebUtil v1.4
     - updated for complex types
@@ -109,7 +109,7 @@ module WebUtil {
     - fixed a bug where template programs with @ref Qore::PO_ALLOW_BARE_REFS set did not work
     - fixed a bug serving index files in @ref WebUtil::FileHandler::tryServeRequest() "FileHandler::tryServeRequest()"
       where index files could be incorrectly served with a \c "204 No Content" response
-      (<a href="https://github.com/qorelanguage/qore/issues/616">issue 616</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/616">issue 616</a>)
 
     @subsection webutil_v1_2 WebUtil v1.2
     - fixed a bug where template programs with parse option @ref Qore::PO_ALLOW_BARE_REFS set did not work

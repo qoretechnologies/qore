@@ -74,39 +74,39 @@ module WebSocketHandler {
 
     @subsection websockethandler_v1_5_4 Version 1.5.4
     - fixed a bug in @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4634">issue 4634</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4634">issue 4634</a>)
 
     @subsection websockethandler_v1_5_3 Version 1.5.3
     - fixed a bug handling valid empty \c PING messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4565">issue 4565</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4565">issue 4565</a>)
 
     @subsection websockethandler_v1_5_2 Version 1.5.2
     - fixed a bug handling closing server-side web sockets on demand
-      (<a href="https://github.com/qorelanguage/qore/issues/4075">issue 4075</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4075">issue 4075</a>)
     - fixed a bug where I/O could not be flushed before closing the socket
-      (<a href="https://github.com/qorelanguage/qore/issues/4074">issue 4074</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4074">issue 4074</a>)
     - added support for continuation frames
-      (<a href="https://github.com/qorelanguage/qore/issues/4073">issue 4073</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
     @subsection websockethandler_v1_5_1 Version 1.5.1
     - fixed a bug handling the case when a connection object is deleted in a callback method
-      (<a href="https://github.com/qorelanguage/qore/issues/4063">issue 4063</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4063">issue 4063</a>)
 
     @subsection websockethandler_v1_5 Version 1.5
     - allow the WebSocket handler to have connections added to it from outside the class
 
     @subsection websockethandler_v1_4_3 Version 1.4.3
     - added missing exception handling to connection registration code
-      (<a href="https://github.com/qorelanguage/qore/issues/3215">issue 3215</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3215">issue 3215</a>)
     - added @ref WebSocketHandler::WebSocketConnection::stop() and @ref WebSocketHandler::WebSocketHandler::stopOne()
 
     @subsection websockethandler_v1_4_2 Version 1.4.2
     - added support for heartbeat messages
-      (<a href="https://github.com/qorelanguage/qore/issues/2887">issue 2887</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
     @subsection websockethandler_v1_4_1 Version 1.4.1
     - fixed a bug where unsolicited \c PONG messages caused the connection to be prematurely closed
-      (<a href="https://github.com/qorelanguage/qore/issues/2566">issue 2566</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
     @subsection websockethandler_v1_4 Version 1.4
     - added support for complex types
@@ -114,11 +114,11 @@ module WebSocketHandler {
 
     @subsection websockethandler_v1_3 Version 1.3
     - added timeout values to @ref Qore::Socket "Socket" calls
-      (<a href="https://github.com/qorelanguage/qore/issues/1725">issue 1725</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
     @subsection websockethandler_v1_2 Version 1.2
     - fixed a bug parsing and generating the websocket close status code
-      (<a href="https://github.com/qorelanguage/qore/issues/1216">issue 1216</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
     @subsection websockethandler_v1_1 Version 1.1
     - bug fix: do not delete the connection object when the connection closes, remove it so it can go out of scope

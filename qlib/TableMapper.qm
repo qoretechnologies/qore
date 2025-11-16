@@ -224,32 +224,32 @@ on_error table1.rollback();
     @subsection tablemapperv1_2_2 TableMapper v1.2.2
     - updated to use the new SQL statement DBI method for efficient execution of queries only for describing
       result sets with outbound mappers to solve performance problems related to mappers that
-      have statements with large data sets (<a href="https://github.com/qorelanguage/qore/issues/2773">issue 2773</a>)
+      have statements with large data sets (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
     - fixed @ref TableMapper::RawSqlStatementOutboundMapper "RawSqlStatementOutboundMapper" to be usable without subclassing
-      (<a href="https://github.com/qorelanguage/qore/issues/2775">issue 2775</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2775">issue 2775</a>)
 
     @subsection tablemapperv1_2_1 TableMapper v1.2.1
-    - fixed issues where where description fields of input and output records for automatically-generated options did not reflect column comments and could not be overridden with user input (<a href="https://github.com/qorelanguage/qore/issues/2520">issue 2520</a>)
+    - fixed issues where where description fields of input and output records for automatically-generated options did not reflect column comments and could not be overridden with user input (<a href="https://github.com/qoretechnologies/qore/issues/2520">issue 2520</a>)
 
     @subsection tablemapperv1_2 TableMapper v1.2
-    - added support for upserts in @ref TableMapper::InboundTableMapper (<a href="https://github.com/qorelanguage/qore/issues/1067">issue 1067</a>)
+    - added support for upserts in @ref TableMapper::InboundTableMapper (<a href="https://github.com/qoretechnologies/qore/issues/1067">issue 1067</a>)
     - added @ref TableMapper::InboundTableMapper::queueData(list, __7_ hash)
-    - fixed a bug with the @ref TableMapper::SqlStatementOutboundMapper::iterator() method; corrected the iterator object return value which was causing \c AbstractMapperIterator::mapBulk() to fail (<a href="https://github.com/qorelanguage/qore/issues/979">issue 979</a>)
-    - fixed a bug with @ref TableMapper::SqlStatementOutboundMapper; it would throw an error if the required \c "table" or \c "sh" options were used and only worked with subclasses that declared these options (<a href="https://github.com/qorelanguage/qore/issues/981">issue 981</a>)
+    - fixed a bug with the @ref TableMapper::SqlStatementOutboundMapper::iterator() method; corrected the iterator object return value which was causing \c AbstractMapperIterator::mapBulk() to fail (<a href="https://github.com/qoretechnologies/qore/issues/979">issue 979</a>)
+    - fixed a bug with @ref TableMapper::SqlStatementOutboundMapper; it would throw an error if the required \c "table" or \c "sh" options were used and only worked with subclasses that declared these options (<a href="https://github.com/qoretechnologies/qore/issues/981">issue 981</a>)
     - updated for complex types
 
     @subsection tablemapperv1_1_4 TableMapper v1.1.4
-    - fixed a bug in flush messages in the @ref TableMapper::InboundTableMapper "InboundTableMapper" class (<a href="https://github.com/qorelanguage/qore/issues/1849">issue 1849</a>)
+    - fixed a bug in flush messages in the @ref TableMapper::InboundTableMapper "InboundTableMapper" class (<a href="https://github.com/qoretechnologies/qore/issues/1849">issue 1849</a>)
 
     @subsection tablemapperv1_1_3 TableMapper v1.1.3
-    - fixed bugs handling mapper fields with no input records in list mode (<a href="https://github.com/qorelanguage/qore/issues/1736">issue 1736</a>)
+    - fixed bugs handling mapper fields with no input records in list mode (<a href="https://github.com/qoretechnologies/qore/issues/1736">issue 1736</a>)
 
     @subsection tablemapperv1_1_2 TableMapper v1.1.2
-    - performance enhancements for @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" when called with a hash of lists (<a href="https://github.com/qorelanguage/qore/issues/1626">issue 1626</a>)
+    - performance enhancements for @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" when called with a hash of lists (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
 
     @subsection tablemapperv1_1_1 TableMapper v1.1.1
-    - fixed runtime option propagation to @ref TableMapper::SqlStatementMapperIterator "SqlStatementMapperIterator" from @ref TableMapper::AbstractSqlStatementOutboundMapper::iterator() "AbstractSqlStatementOutboundMapper::iterator()" (<a href="https://github.com/qorelanguage/qore/issues/1418">issue 1418</a>)
-    - fixed @ref TableMapper::SqlStatementMapperIterator::getCount() "SqlStatementMapperIterator::getCount()" (<a href="https://github.com/qorelanguage/qore/issues/1417">issue 1417</a>)
+    - fixed runtime option propagation to @ref TableMapper::SqlStatementMapperIterator "SqlStatementMapperIterator" from @ref TableMapper::AbstractSqlStatementOutboundMapper::iterator() "AbstractSqlStatementOutboundMapper::iterator()" (<a href="https://github.com/qoretechnologies/qore/issues/1418">issue 1418</a>)
+    - fixed @ref TableMapper::SqlStatementMapperIterator::getCount() "SqlStatementMapperIterator::getCount()" (<a href="https://github.com/qoretechnologies/qore/issues/1417">issue 1417</a>)
     - added the following methods:
       - @ref TableMapper::AbstractSqlStatementOutboundMapper::getRowIterator() "AbstractSqlStatementOutboundMapper::getRowIterator()"
       - @ref TableMapper::InboundTableMapper::iterator() "InboundTableMapper::iterator()"

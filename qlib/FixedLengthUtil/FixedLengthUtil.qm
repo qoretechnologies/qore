@@ -336,34 +336,34 @@ w.write(data);
 
     @subsection fixedlengthutil_v1_6 Version 1.6
     - added support for data provider application actions
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection fixedlengthutil_v1_5 Version 1.5
     - updated with initial support for generic expressions
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection fixedlengthutil_v1_4 Version 1.4
     - added support for resolving locations with the \c FileLocationHandler module
-      (<a href="https://github.com/qorelanguage/qore/issues/4456">issue 4456</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4456">issue 4456</a>)
 
     @subsection fixedlengthutil_v1_3 Version 1.3
     - added support for generic record search operators and options
-      (<a href="https://github.com/qorelanguage/qore/issues/4430">issue 4430</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
 
     @subsection fixedlengthutil_v1_2_1 Version 1.2.1
     - updated read and write data providers to provide verbose option support
-      (<a href="https://github.com/qorelanguage/qore/issues/4139">issue 4139</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4139">issue 4139</a>)
 
     @subsection fixedlengthutil_v1_1 Version 1.1
     - added support for streams; the following classes implement fixed-length input and output based on streams:
       - @ref FixedLengthUtil::FixedLengthIterator "FixedLengthIterator": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataIterator "FixedLengthDataIterator" and @ref FixedLengthUtil::FixedLengthFileIterator "FixedLengthFileIterator"
       - @ref FixedLengthUtil::FixedLengthWriter "FixedLengthWriter": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter" and @ref FixedLengthUtil::FixedLengthFileWriter "FixedLengthFileWriter"
-    - added @ref FixedLengthUtil::FixedLengthFileIterator::getFileName() (<a href="https://github.com/qorelanguage/qore/issues/1164">issue 1164</a>)
-    - added field as well as global option "truncate" (<a href="https://github.com/qorelanguage/qore/issues/1841">issue 1841</a>)
-    - added field as well as global option "tab2space" (<a href="https://github.com/qorelanguage/qore/issues/1866">issue 1866</a>)
+    - added @ref FixedLengthUtil::FixedLengthFileIterator::getFileName() (<a href="https://github.com/qoretechnologies/qore/issues/1164">issue 1164</a>)
+    - added field as well as global option "truncate" (<a href="https://github.com/qoretechnologies/qore/issues/1841">issue 1841</a>)
+    - added field as well as global option "tab2space" (<a href="https://github.com/qoretechnologies/qore/issues/1866">issue 1866</a>)
 
     @subsection fixedlengthutil_v1_0_1 Version 1.0.1
-    - fixes and improvements to errors and exceptions (<a href="https://github.com/qorelanguage/qore/issues/1828">issue 1828</a>)
+    - fixes and improvements to errors and exceptions (<a href="https://github.com/qoretechnologies/qore/issues/1828">issue 1828</a>)
 
     @subsection fixedlengthutil_v1_0 Version 1.0
     - initial version of module

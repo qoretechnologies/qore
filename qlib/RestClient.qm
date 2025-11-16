@@ -150,125 +150,125 @@ printf("%N\n", ans.body);
 
     @subsection restclientv2_3_2 RestClient v2.3.2
     - fixed acqquiring OAuth2 tokens when the \c oauth2_token_use_basic_auth option is set
-      (<a href="https://github.com/qorelanguage/qore/issues/4991">issue 4991</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4991">issue 4991</a>)
     - fixed an infinite loop bug handling token request errors with the \c client_credentials grant
-      (<a href="https://github.com/qorelanguage/qore/issues/4990">issue 4990</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4990">issue 4990</a>)
     - added the \c allow_any_response option to allow undeserializable responses to be returned as-is
     - implemented support for PKCE
-      (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
 
     @subsection restclientv2_3_1 RestClient v2.3.1
     - fixed passing the correct path to the signature method
-      (<a href="https://github.com/qorelanguage/qore/issues/4953">issue 4953</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4953">issue 4953</a>)
 
     @subsection restclientv2_3_0 RestClient v2.3.0
     - implemented support for custom token operations
 
     @subsection restclientv2_2_0 RestClient v2.2.0
     - major updates and improvements to OAuth2 handling
-      (<a href="https://github.com/qorelanguage/qore/issues/4820">issue 4820</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4820">issue 4820</a>)
     - allow the username to be set without a password; assume an empty password
 
     @subsection restclientv2_1_1 RestClient v2.1.1
     - fixed a bug where the OAuth2 refresh token was sometimes dropped when an access token was acquired
-      (<a href="https://github.com/qorelanguage/qore/issues/4821">issue 4821</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4821">issue 4821</a>)
     - fixed a bug returning the token URL
-      (<a href="https://github.com/qorelanguage/qore/issues/4809">issue 4809</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4809">issue 4809</a>)
 
     @subsection restclientv2_1 RestClient v2.1
     - added @ref RestClient::RestClient::setOAuth2Options() "RestClient::setOAuth2Options()"
     - do not try to get another OAuth2 token if the token was just retrieved
-      (<a href="https://github.com/qorelanguage/qore/issues/4796">issue 4796</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4796">issue 4796</a>)
 
     @subsection restclientv2_0 RestClient v2.0
     - implemented support for OAuth2 authorization flows
-      (<a href="https://github.com/qorelanguage/qore/issues/4766">issue 4766</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4766">issue 4766</a>)
     - fixed handling polling pings of REST connections to respect the connection parameters and behave like the
       non-polling ping
-      (<a href="https://github.com/qorelanguage/qore/issues/4764">issue 4764</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 
     @subsection restclientv1_10_1 RestClient v1.10.1
     - fixed URI path reporting in REST error messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4760">issue 4760</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4760">issue 4760</a>)
 
     @subsection restclientv1_10 RestClient v1.10
     - implemented the \c swagger_lax_parsing option to try to parse invalid Swagger schemas
-      (<a href="https://github.com/qorelanguage/qore/issues/4741">issue 4741</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
     @subsection restclientv1_9_3 RestClient v1.9.3
     - allow connection options designating files to be selected as files
-      (<a href="https://github.com/qorelanguage/qore/issues/4725">issue 4725</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4725">issue 4725</a>)
 
     @subsection restclientv1_9_2 RestClient v1.9.2
     - support full ping operations, also with polling, using an authenticated request
-      (<a href="https://github.com/qorelanguage/qore/issues/4677">issue 4677</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
     - apply the \c swagger_base_path argument to all REST validators
-      (<a href="https://github.com/qorelanguage/qore/issues/4663">issue 4663</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4663">issue 4663</a>)
 
     @subsection restclientv1_9_1 RestClient v1.9.1
     - non-blocking polling fixes
-      (<a href="https://github.com/qorelanguage/qore/issues/4595">issue 4595</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4595">issue 4595</a>)
 
     @subsection restclientv1_9 RestClient v1.9
     - enable the deserialized body to be returned in REST exception info when possible
-      (<a href="https://github.com/qorelanguage/qore/issues/4591">issue 4591</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4591">issue 4591</a>)
 
     @subsection restclientv1_8 RestClient v1.8
     - added support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4564">issue 4564</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
 
     @subsection restclientv1_7_5 RestClient v1.7.5
     - fixed a bug where REST schema validation was not applied in all contexts with specialized REST clients; this
       was enabled by refactoring the internal code that allowed the validation to be applied
-      (<a href="https://github.com/qorelanguage/qore/issues/4518">issue 4518</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4518">issue 4518</a>)
 
     @subsection restclientv1_7_4 RestClient v1.7.4
     - removed erroneous / extraneous URI encoding on REST paths before sending
-      (<a href="https://github.com/qorelanguage/qore/issues/4360">issue 4360</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4360">issue 4360</a>)
 
     @subsection restclientv1_7_3 RestClient v1.7.3
     - additional fixes to REST path handling with schema validators with a base path
-      (<a href="https://github.com/qorelanguage/qore/issues/4059">issue 4059</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
     @subsection restclientv1_7_2 RestClient v1.7.2
     - better fixes to REST URI path handling with schema validation; ensure that the connection path is always cleared
       when a REST validator is present
-      (<a href="https://github.com/qorelanguage/qore/issues/4059">issue 4059</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
     @subsection restclientv1_7_1 RestClient v1.7.1
     - added the \a swagger_base_path option to REST clients and connections to allow for Swagger schemas to have their
       base path overridden
-      (<a href="https://github.com/qorelanguage/qore/issues/4059">issue 4059</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
     @subsection restclientv1_7 RestClient v1.7
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
     - fixed a bug handling complex \c Content-Type headers in responses
-      (<a href="https://github.com/qorelanguage/qore/issues/4019">issue 4019</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4019">issue 4019</a>)
 
     @subsection restclientv1_6_1 RestClient v1.6.1
     - added the @ref no_charset option to options
-      (<a href="https://github.com/qorelanguage/qore/issues/3328">issue 3328</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3328">issue 3328</a>)
 
     @subsection restclientv1_6 RestClient v1.6
     - fixed a bug where the \c "response-code" key of the info output hash could be missing in some clases
-      (<a href="https://github.com/qorelanguage/qore/issues/3237">issue 3237</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3237">issue 3237</a>)
     - all connection clases have unified constructor
 
     @subsection restclientv1_5 RestClient v1.5
     - added the @ref RestClient::RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
       method to allow connections to be created dynamically, potentially in another process from a network
-      call (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      call (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection restclientv1_4_2 RestClient v1.4.2
     - fixed a bug handling default options including timeouts in REST connections in
       @ref RestClient::RestConnection "RestConnection"
-      (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
     @subsection restclientv1_4_1 RestClient v1.4.1
     - added support for REST requests with binary message bodies; added the \c "bin" serialization method
-      (<a href="https://github.com/qorelanguage/qore/issues/2816">issue 2816</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2816">issue 2816</a>)
 
     @subsection restclientv1_4 RestClient v1.4
     - added support for the \c text/plain Content-Type
@@ -281,12 +281,12 @@ printf("%N\n", ans.body);
 
     @subsection restclientv1_3_1 RestClient v1.3.1
     - added support for the \c "url" encoding for URL form encoded message bodies
-      (<a href="https://github.com/qorelanguage/qore/issues/1436">issue 1436</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
     - added support for the \c "rawxml" data type; when parsing XML responses, if the XML cannot be parsed as XML-RPC
       data, then it's attempted to be parsed as untyped XML data
-      (<a href="https://github.com/qorelanguage/qore/issues/1437">issue 1437</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1437">issue 1437</a>)
     - fixed a bug where an empty chunked response would cause a spurious exception to be thrown
-      (<a href="https://github.com/qorelanguage/qore/issues/1448">issue 1448</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1448">issue 1448</a>)
 
     @subsection restclientv1_3 RestClient v1.3
     - added:

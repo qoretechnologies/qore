@@ -74,18 +74,18 @@ module RestHandler {
 
     The @ref RestHandler::RestHandler "RestHandler" class uses any of the following modules if the modules are
     available when the RestHandler module is initialized:
-    - <a href="https://github.com/qorelanguage/module-json">json</a>: provides automatic support for JSON payload
+    - <a href="https://github.com/qoretechnologies/module-json">json</a>: provides automatic support for JSON payload
       de/serialization
-    - <a href="https://github.com/qorelanguage/module-xml">xml</a>: provides automatic support for XML-RPC payload
+    - <a href="https://github.com/qoretechnologies/module-xml">xml</a>: provides automatic support for XML-RPC payload
       de/serialization
-    - <a href="https://github.com/qorelanguage/module-yaml">yaml</a>: provides automatic support for YAML payload
+    - <a href="https://github.com/qoretechnologies/module-yaml">yaml</a>: provides automatic support for YAML payload
       de/serialization
 
     URL form encoding is supported as well for message bodies according to
     <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a> with
     \c "Content-Type: application/x-www-form-urlencoded".
 
-    For standard REST web service development, the <a href="https://github.com/qorelanguage/module-json">json</a>
+    For standard REST web service development, the <a href="https://github.com/qoretechnologies/module-json">json</a>
     module will be required to support JSON serialization.
 
     The @ref RestHandler::RestHandler "RestHandler" class will automatically deserialize request bodies if the
@@ -380,82 +380,82 @@ Content-Length: 16
 
     @subsection rh_1_6_4 RestHandler v1.6.4
     - fixed handling \c OPTIONS requests with an \c action parameter
-      (<a href="https://github.com/qorelanguage/qore/issues/4988">issue 4988</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
 
     @subsection rh_1_6_3 RestHandler v1.6.3
     - fixed handling multiple \c Accept headers in requests
-      (<a href="https://github.com/qorelanguage/qore/issues/4969">issue 4969</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4969">issue 4969</a>)
 
     @subsection rh_1_6_2 RestHandler v1.6.2
     - always set the \c socketobject request context property
-      (<a href="https://github.com/qorelanguage/qore/issues/4666">issue 4666</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4666">issue 4666</a>)
 
     @subsection rh_1_6_1 RestHandler v1.6.1
     - implemented the @ref RestHandler::RestHandler::errorResponseHeaders() to allow subclasses to return custom
       headers in error responses, such as when a request cannot be deserialized
-      (<a href="https://github.com/qorelanguage/qore/issues/4646">issue 4646</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4646">issue 4646</a>)
 
     @subsection rh_1_6 RestHandler v1.6
     - added request arguments to the
       @ref RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
       and @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
-      (<a href="https://github.com/qorelanguage/qore/issues/4578">issue 4578</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4578">issue 4578</a>)
 
     @subsection rh_1_5_2 RestHandler v1.5.2
     - allow a logger to be set in validators
-      (<a href="https://github.com/qorelanguage/qore/issues/4509">issue 4509</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
     @subsection rh_1_5_1 RestHandler v1.5.1
     - improved error handling and sending error messages when exceptions contain non-serializable objects
-      (<a href="https://github.com/qorelanguage/qore/issues/4501">issue 4501</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4501">issue 4501</a>)
 
     @subsection rh_1_5 RestHandler v1.5
     - implemented support for allowing alternate REST method dispatch approaches to be implemented
-      (<a href="https://github.com/qorelanguage/qore/issues/4478">issue 4478</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4478">issue 4478</a>)
 
     @subsection rh_1_4 RestHandler v1.4
     - added missing make*() methods with REST responses to the @ref RestHandler::RestHandler "RestHandler" class
 
     @subsection rh_1_3_2 RestHandler v1.3.2
     - fixed a bug handling errors registering stream errors with a stream handler
-      (<a href="https://github.com/qorelanguage/qore/issues/4291">issue 4291</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4291">issue 4291</a>)
 
     @subsection rh_1_3_1 RestHandler v1.3.1
     - fixed a bug handling exceptions in REST methods with unserializable exception data
-      (<a href="https://github.com/qorelanguage/qore/issues/3667">issue 3667</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3667">issue 3667</a>)
     - renamed \c RestHandler::getPossibleSubClasses() to
       @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
       avoid a collision with a REST method name
-      (<a href="https://github.com/qorelanguage/qore/issues/3614">issue 3614</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3614">issue 3614</a>)
     - fixed RestHandler losing internal exception info when response was considered invalid by schema validator
-      (<a href="https://github.com/qorelanguage/qore/issues/3435">issue 3435</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3435">issue 3435</a>)
     - fixed RestHandler incorrectly handling Accept header of incoming requests
-      (<a href="https://github.com/qorelanguage/qore/issues/3426">issue 3426</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3426">issue 3426</a>)
     - added debug loggging for REST schema validation errors
-      (<a href="https://github.com/qorelanguage/qore/issues/3410">issue 3410</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3410">issue 3410</a>)
 
     @subsection rh_1_3 RestHandler v1.3
     - added the @ref RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
       allows subclasses to determine how exceptions are handled
-      (<a href="https://github.com/qorelanguage/qore/issues/3235">issue 3235</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3235">issue 3235</a>)
     - updated to support alternative URI paths for actions so that an "action=xxx" argument is not needed; instead
       the action can be added to the end of the URI path so that \c "PUT path/xxx" can be used instead of
       \c "PUT path?action=xxx".  Additionally, support for fast static REST subclass lookups was added by moving the
       @ref RestHandler::AbstractRestClass::addClass() "addClass()" method from the
       @ref RestHandler::RestHandler "RestHandler" class to the @ref RestHandler::AbstractRestClass "AbstractRestClass"
       class.
-      (<a href="https://github.com/qorelanguage/qore/issues/2994">issue 2994</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2994">issue 2994</a>)
 
     @subsection rh_1_2_1 RestHandler v1.2.1
-    - updated to return a 400 Bad Request error when REST schema validation fails on messages received (<a href="https://github.com/qorelanguage/qore/issues/2344">issue 2344</a>)
-    - updated to return a 400 Bad Request error when there are string encoding errors with messages received (<a href="https://github.com/qorelanguage/qore/issues/2398">issue 2398</a>)
-    - updated to return a 404 Not Found error when REST subclass does not exist (<a href="https://github.com/qorelanguage/qore/issues/2405">issue 2405</a>)
-    - updated to return a 400 Bad Request error when ENCODING-CONVERSION-ERROR occurs during request parsing (<a href="https://github.com/qorelanguage/qore/issues/2543">issue 2543</a>)
+    - updated to return a 400 Bad Request error when REST schema validation fails on messages received (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
+    - updated to return a 400 Bad Request error when there are string encoding errors with messages received (<a href="https://github.com/qoretechnologies/qore/issues/2398">issue 2398</a>)
+    - updated to return a 404 Not Found error when REST subclass does not exist (<a href="https://github.com/qoretechnologies/qore/issues/2405">issue 2405</a>)
+    - updated to return a 400 Bad Request error when ENCODING-CONVERSION-ERROR occurs during request parsing (<a href="https://github.com/qoretechnologies/qore/issues/2543">issue 2543</a>)
 
     @subsection rh_1_2 RestHandler v1.2
-    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qorelanguage/qore/issues/1086">issue 1086</a>)
+    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
     - added @ref RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
-    - updated for complex types (<a href="https://github.com/qorelanguage/qore/issues/1724">issue 1724</a>)
+    - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - added support for REST schema validation
     - added default support for the HTTP \c "PATCH" method
 
@@ -466,11 +466,11 @@ Content-Length: 16
     - fixed a bug where an error calling an internal nonexistent method would be reported with an incorrect error message
     - implemented support for notifying persistent connections when the connection is terminated while a persistent connection is in place
     - @ref RestHandler::AbstractRestStreamRequestHandler is now the base abstract class for REST stream request handlers
-    - send errors are now reported in the @ref RestHandler::AbstractRestStreamRequestHandler object so they can be properly logged (<a href="https://github.com/qorelanguage/qore/issues/734">issue 734</a>)
-    - unknown REST class errors with the base class are now reported consistently like all other such errors (<a href="https://github.com/qorelanguage/qore/issues/859">issue 859</a>)
+    - send errors are now reported in the @ref RestHandler::AbstractRestStreamRequestHandler object so they can be properly logged (<a href="https://github.com/qoretechnologies/qore/issues/734">issue 734</a>)
+    - unknown REST class errors with the base class are now reported consistently like all other such errors (<a href="https://github.com/qoretechnologies/qore/issues/859">issue 859</a>)
 
     @subsection rh_1_0_1 RestHandler v1.0.1
-    - added support for URL form encoded formatted message bodies (<a href="https://github.com/qorelanguage/qore/issues/1436">issue 1436</a>)
+    - added support for URL form encoded formatted message bodies (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
 
     @subsection rh_1_0 RestHandler v1.0
     - the initial version of the RestHandler module

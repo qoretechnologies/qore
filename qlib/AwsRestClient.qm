@@ -98,11 +98,11 @@ printf("%N\n", ans.body);
 
     @subsection awsrestclientv2_0 AwsRestClient v1.2
     - added support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4564">issue 4564</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
 
     @subsection awsrestclientv1_1 AwsRestClient v1.1
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection awsrestclientv1_0 AwsRestClient v1.0
     - the initial version of the %AwsRestClient module

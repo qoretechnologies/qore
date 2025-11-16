@@ -163,11 +163,11 @@ poller.waitStop();
 
     @section ftppollerv2_1 Version 2.1
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @section ftppollerv2_0 Version 2.0
     - added support for the event-based DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4557">issue 4557</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
     @section ftppollerv1_0 Version 1.0
     - initial release

@@ -116,19 +116,19 @@ module RestClientDataProvider {
 
     @subsection restclientdataprovider_v2_0_1 RestClientDataProvider v2.0.1
     - fixed REST action \c body types
-      (<a href="https://github.com/qorelanguage/qore/issues/4982">issue 4982</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4982">issue 4982</a>)
 
     @subsection restclientdataprovider_v2_0 RestClientDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection restclientdataprovider_v1_1 RestClientDataProvider v1.1
     - implemented the \c swagger_lax_parsing option to try to parse invalid Swagger schemas
-      (<a href="https://github.com/qorelanguage/qore/issues/4741">issue 4741</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
     @subsection restclientdataprovider_v1_0_1 RestClientDataProvider v1.0.1
     - added support for the \c pre_encoded_urls option
-      (<a href="https://github.com/qorelanguage/qore/issues/4656">issue 4656</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
     @subsection restclientdataprovider_v1_0 RestClientDataProvider v1.0
     - initial release of the module

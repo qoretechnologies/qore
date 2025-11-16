@@ -68,7 +68,7 @@ module FreetdsSqlUtil {
 
     All the public symbols in the module are defined in the FreetdsSqlUtil namespace
 
-    @note This module requires the <a href="https://github.com/qorelanguage/module-sybase">freetds</a> binary module
+    @note This module requires the <a href="https://github.com/qoretechnologies/module-sybase">freetds</a> binary module
     for communication with MS SQL Server and Sybase databases
 
     @see @ref mssqlsqlutilbaseintro for implementation information about this module
@@ -78,50 +78,50 @@ module FreetdsSqlUtil {
 
     @subsection freetdssqlutilv15 FreetdsSqlUtil v1.5
     - fixed the prepend and append column operators
-      (<a href="https://github.com/qorelanguage/qore/issues/4548">issue 4548</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection freetdssqlutilv141 FreetdsSqlUtil v1.4.2
     - fixed a bug where \c offset and \c limit were not properly supported with MS SQL Server DBs
-      (<a href="https://github.com/qorelanguage/qore/issues/4408">issue 4408</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4408">issue 4408</a>)
     - fixed a bug where date/time values in other time zones were not bound correctly
-      (<a href="https://github.com/qorelanguage/qore/issues/4403">issue 4403</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4403">issue 4403</a>)
     - fixed a bug handling transaction savepoints
-      (<a href="https://github.com/qorelanguage/qore/issues/4402">issue 4402</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4402">issue 4402</a>)
     - allow a \c VARCHAR column to be created without a size, assume a default size
-      (<a href="https://github.com/qorelanguage/qore/issues/4399">issue 4399</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4399">issue 4399</a>)
 
     @subsection freetdssqlutilv141 FreetdsSqlUtil v1.4.1
     - added APIs to enable duplicate record creation errors to be detected
-      (<a href="https://github.com/qorelanguage/qore/issues/4308">issue 4308</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
     @subsection freetdssqlutilv14 FreetdsSqlUtil v1.4
     - added support for the DataProvider module
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection freetdssqlutilv131 FreetdsSqlUtil v1.3.1
     - fixed quoting of reserved words in column names in table alignment
-      (<a href="https://github.com/qorelanguage/qore/issues/3400">issue 3400</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3400">issue 3400</a>)
 
     @subsection freetdssqlutilv13 FreetdsSqlUtil v1.3
     - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects
-      (<a href="https://github.com/qorelanguage/qore/issues/2663">issue 2663</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
 
     @subsection freetdssqlutilv121 FreetdsSqlUtil v1.2.1
     - implemented support for custom column operators
-      (<a href="https://github.com/qorelanguage/qore/issues/2314">issue 2314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
 
     @subsection freetdssqlutilv12 FreetdsSqlUtil v1.2
     - fixed a bug where @ref SqlUtil::BLOB columns were created as \c VARBINARY columns instead of \c VARBINARY(MAX)
-      (<a href="https://github.com/qorelanguage/qore/issues/1852">issue 1852</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1852">issue 1852</a>)
     - implemented @ref cop_trunc_date() operator
-      (<a href="https://github.com/qorelanguage/qore/issues/2032">issue 2032</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection freetdssqlutilv11 FreetdsSqlUtil v1.1
     - implemented the \a force option (i.e. cascade) for dropping code objects
-      (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
 
     @subsection freetdssqlutilv10 FreetdsSqlUtil v1.0
     - initial release

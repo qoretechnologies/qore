@@ -80,7 +80,7 @@ module DiscordWebSocketClient {
 
     @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0.1
     - fixed a bug handling \c HELLO messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4986">issue 4986</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4986">issue 4986</a>)
 
     @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0
     - the initial version of the %DiscordWebSocketClient module

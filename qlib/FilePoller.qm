@@ -110,15 +110,15 @@ module FilePoller {
 
     @subsection file_poller_2_0 FilePoller v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection file_poller_1_0_1 FilePoller v1.0.1
     - the data provider factory uses the delayed observable class instead
-      (<a href="https://github.com/qorelanguage/qore/issues/4701">issue 4701</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4701">issue 4701</a>)
 
     @subsection file_poller_1_0 FilePoller v1.0
     - added support for the event-based DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4557">issue 4557</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
     @subsection file_poller_0_1_0 FilePoller v0.1.0
     - initial release

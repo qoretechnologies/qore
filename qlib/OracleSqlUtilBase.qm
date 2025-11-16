@@ -69,7 +69,7 @@ module OracleSqlUtilBase {
 
     All the public symbols in the module are defined in the OracleSqlUtilBase namespace
 
-    @note This module requires the <a href="https://github.com/qorelanguage/module-oracle">oracle</a> binary module
+    @note This module requires the <a href="https://github.com/qoretechnologies/module-oracle">oracle</a> binary module
     for communication with Oracle databases
 
     @section ora_sql_operations SQL Operations on Oracle
@@ -277,77 +277,77 @@ hash schema = (
 
     @subsection oracle16 OracleSqlUtilBase v1.6
     - fixed a bug in the IN operator
-      (<a href="https://github.com/qorelanguage/qore/issues/4901">issue 4901</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle
-      (<a href="https://github.com/qorelanguage/qore/issues/4897">issue 4897</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4897">issue 4897</a>)
     - reintroduced as the base module for all Oracle SqlUtil modules
 
     @subsection oracle15 OracleSqlUtilBase v1.5
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection oracle144 OracleSqlUtilBase v1.4.4
     - allow a \c VARCHAR column to be created without a size, assume a default size
-      (<a href="https://github.com/qorelanguage/qore/issues/4399">issue 4399</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4399">issue 4399</a>)
 
     @subsection oraclev143 OracleSqlUtilBase v1.4.3
     - added APIs to enable duplicate record creation errors to be detected
-      (<a href="https://github.com/qorelanguage/qore/issues/4308">issue 4308</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
     @subsection v142 OracleSqlUtilBase v1.4.2
     - fixed a bug where keywords were not properly quoted in merge / upsert statements
-      (<a href="https://github.com/qorelanguage/qore/issues/4297">issue 4297</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4297">issue 4297</a>)
 
     @subsection v141 OracleSqlUtilBase v1.4.1
     - fixed a bug where pseudocolumn references were used ambiguously in joins
-      (<a href="https://github.com/qorelanguage/qore/issues/4214">issue 4214</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4214">issue 4214</a>)
     - fixed a bug where pseudocolumn names were quoted in queries leading to errors
-      (<a href="https://github.com/qorelanguage/qore/issues/4210">issue 4210</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4210">issue 4210</a>)
     - fixed a bug generating queries with \c limit and \c forupdate
-      (<a href="https://github.com/qorelanguage/qore/issues/4206">issue 4206</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4206">issue 4206</a>)
 
     @subsection v14 OracleSqlUtilBase v1.4
     - added support for the DataProvider module
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection v131 OracleSqlUtilBase v1.3.1
     - fixed quoting of reserved words in column names in table alignment
-      (<a href="https://github.com/qorelanguage/qore/issues/3400">issue 3400</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3400">issue 3400</a>)
 
     @subsection v13 OracleSqlUtilBase v1.3
     - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects
-      (<a href="https://github.com/qorelanguage/qore/issues/2663">issue 2663</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
 
     @subsection v125 OracleSqlUtilBase v1.2.5
     - worked around an Oracle bug in materialized view creation where when the schema user is missing the
       <tt>CREATE MATERIALIZED VIEW</tt> grant the table backing the view is created but the materialized view itself
       is not created causing future creation actions to fail
-      (<a href="https://github.com/qorelanguage/qore/issues/2643">issue 2643</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2643">issue 2643</a>)
 
     @subsection v124 OracleSqlUtilBase v1.2.4
     - implemented support for custom column operators
-      (<a href="https://github.com/qorelanguage/qore/issues/2314">issue 2314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
     - implemented support for chained synonyms
-      (<a href="https://github.com/qorelanguage/qore/issues/2408">issue 2408</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2408">issue 2408</a>)
     - allow to use DBA_* views instead of ALL_* if possible
-      (<a href="https://github.com/qorelanguage/qore/issues/2418">issue 2418</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2418">issue 2418</a>)
 
     @subsection v123 OracleSqlUtilBase v1.2.3
     - fixed a bug in \c character_semantics for standalone column
-      (<a href="https://github.com/qorelanguage/qore/issues/1688">issue 1688</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1688">issue 1688</a>)
     - implemented @ref cop_trunc_date() operator
-      (<a href="https://github.com/qorelanguage/qore/issues/2032">issue 2032</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection v122 OracleSqlUtilBase v1.2.2
     - fixed a bug in the \a force option (i.e. cascade) for dropping types
-      (<a href="https://github.com/qorelanguage/qore/issues/1683">issue 1683</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1683">issue 1683</a>)
 
     @subsection v121 OracleSqlUtilBase v1.2.1
     - implemented the \a force option (i.e. cascade) for dropping code objects
-      (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
     - worked around ORA-22165 from op_in() caused by Oracle's limit on number of collection elements
-      (<a href="https://github.com/qorelanguage/qore/issues/1660">issue 1660</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1660">issue 1660</a>)
 
     @subsection v12 OracleSqlUtilBase v1.2
     - implemented support for the \c "returning" clause as an insert option
@@ -356,14 +356,14 @@ hash schema = (
     - implemented support for Oracle pseudocolumns in queries
     - implemented support for @ref SqlUtil::cop_cast() operator
     - fixed bugs in @ref SqlUtil::cop_seq() and @ref SqlUtil::cop_seq_currval()
-      (<a href="https://github.com/qorelanguage/qore/issues/624">issue 624</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/624">issue 624</a>)
     - return lists from Oracle's data dictionary ordered
     - implemented @ref OracleSqlUtilBase::OracleTable::bindEmptyStringsAsNull()
     - implemented high-performance "upsert" (merge) support also supporting bulk DML
     - implemented @ref SqlUtil::cop_substr() and @ref SqlUtil::uop_substr() operators
-      (<a href="https://github.com/qorelanguage/qore/issues/801">issue 801</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/801">issue 801</a>)
     - implemented @ref SqlUtil::op_substr() where operator
-      (<a href="https://github.com/qorelanguage/qore/issues/883">issue 883</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/883">issue 883</a>)
 
     @subsection v11 OracleSqlUtilBase v1.1
     - fixed selects with "limit" but no "offset"

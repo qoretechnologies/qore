@@ -283,7 +283,7 @@ module GoogleCalendarDataProvider {
     - split to a separate module
     - refactored to be generated from the Discovery API
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection googledataprovider_v1_0 GoogleCalendarDataProvider v1.0
     - initial release of the module

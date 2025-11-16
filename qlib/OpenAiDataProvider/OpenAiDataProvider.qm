@@ -306,7 +306,7 @@ module OpenAiDataProvider {
 
     @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis
-      (<a href="https://github.com/qorelanguage/qore/issues/4947">issue 4947</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
     - added APIs to handle image generation
 
     @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0

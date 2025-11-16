@@ -244,13 +244,13 @@ module FileDataProvider {
 
     @subsection filedataprovider_v2_1_2 FileDataProvider v2.1.2
     - now respects the root directory provided by a connection
-      (<a href="https://github.com/qorelanguage/qore/issues/4949">issue 4949</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4949">issue 4949</a>)
     - respects environment variables in the path
-      (<a href="https://github.com/qorelanguage/qore/issues/4950">issue 4950</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4950">issue 4950</a>)
 
     @subsection filedataprovider_v2_0 FileDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection filedataprovider_v1_0 FileDataProvider v1.0
     - initial release of the module

@@ -185,7 +185,7 @@ class PgsqlTest inherits SqlTestBase {
             # create the test schema
             schema = new PgsqlTestSchema(ds);
 
-            # workaround for issue #853 (https://github.com/qorelanguage/qore/issues/853)
+            # workaround for issue #853 (https://github.com/qoretechnologies/qore/issues/853)
             try {
                 on_error ds.rollback();
                 on_success ds.commit();

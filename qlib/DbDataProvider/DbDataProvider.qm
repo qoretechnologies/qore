@@ -227,26 +227,26 @@ module DbDataProvider {
 
     @subsection dbdataprovider_v2_1_1 DbDataProvider v2.1.1
     - @ref DbDataProvider::DbDataProvider "DbDataProvider" was missing search options
-      (<a href="https://github.com/qorelanguage/qore/issues/4713">issue 4713</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4713">issue 4713</a>)
 
     @subsection dbdataprovider_v2_1 DbDataProvider v2.1
     - enabled browsing the data provider hierarchy according to transactional support
-      (<a href="https://github.com/qorelanguage/qore/issues/4699">issue 4699</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4699">issue 4699</a>)
 
     @subsection dbdataprovider_v2_0_1 DbDataProvider v2.0.1
     - fixed \c sequence and \c sequence_currval mapper options in
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider"
-      (<a href="https://github.com/qorelanguage/qore/issues/4628">issue 4628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4628">issue 4628</a>)
 
     @subsection dbdataprovider_v2_0 DbDataProvider v2.0
     - added the @ref DbDataProvider::DbTransactionHelper "DbTransactionHelper" class
     - added support for creating, reading, updating, and modifying data providers
-      (<a href="https://github.com/qorelanguage/qore/issues/4395">issue 4395</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 
     @subsection dbdataprovider_v1_0_1 DbDataProvider v1.0.1
     - added support for starting a transaction in @ref DbDataProvider::DbDataProvider "DbDataProvider" and
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider"
-      (<a href="https://github.com/qorelanguage/qore/issues/4346">issue 4346</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
     @subsection dbdataprovider_v1_0 DbDataProvider v1.0
     - initial release of the module

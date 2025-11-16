@@ -74,7 +74,7 @@ module ServerSentEventHandler {
     @subsection serversenteventhandler_v1_0_2 Version 1.0.2
     - added supoprt for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP
       server handlers
-     (<a href="https://github.com/qorelanguage/qore/issues/4958">issue 4958</a>)
+     (<a href="https://github.com/qoretechnologies/qore/issues/4958">issue 4958</a>)
 
     @subsection serversenteventhandler_v1_0_1 Version 1.0.1
     - More flexible SSE handler support

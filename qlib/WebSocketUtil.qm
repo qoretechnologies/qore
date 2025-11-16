@@ -67,16 +67,16 @@ module WebSocketUtil {
 
     @subsection wsu_v141 v1.4.1
     - added support for continuation frames
-      (<a href="https://github.com/qorelanguage/qore/issues/4073">issue 4073</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
     @subsection wsu_v14 v1.4
     - added the @ref WebSocketUtil::ws_get_response_key() function
 
     @subsection wsu_v13 v1.3
-    - added timeout values to @ref Qore::Socket "Socket" calls (<a href="https://github.com/qorelanguage/qore/issues/1725">issue 1725</a>)
+    - added timeout values to @ref Qore::Socket "Socket" calls (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
     @subsection wsu_v12 v1.2
-    - fixed a bug parsing and generating the websocket close status code (<a href="https://github.com/qorelanguage/qore/issues/1216">issue 1216</a>)
+    - fixed a bug parsing and generating the websocket close status code (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
     @subsection wsu_v11 v1.1
     - converted to @ref new-style "%new-style"

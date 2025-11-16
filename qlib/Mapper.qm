@@ -312,92 +312,92 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
 
     @subsection mapperv1_6_2 Mapper v1.6.2
     - fixed a bug handling default values for output fields with required (not-null) types
-      (<a href="https://github.com/qorelanguage/qore/issues/4847">issue 4847</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4847">issue 4847</a>)
     - fixed a bug handling the \c trunc option in mappers when bulk processing
-      (<a href="https://github.com/qorelanguage/qore/issues/4845">issue 4845</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4845">issue 4845</a>)
 
     @subsection mapperv1_6_1 Mapper v1.6.1
     - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
-      (<a href="https://github.com/qorelanguage/qore/issues/4629">issue 4629</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4629">issue 4629</a>)
 
     @subsection mapperv1_6 Mapper v1.6
     - implemented options supporting suppressing data provider calls on input and output
-      (<a href="https://github.com/qorelanguage/qore/issues/4462">issue 4462</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4462">issue 4462</a>)
 
     @subsection mapperv1_5_9 Mapper v1.5.9
     - fixed an error mapping bulk data with custom output field handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/4460">issue 4460</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4460">issue 4460</a>)
 
     @subsection mapperv1_5_8 Mapper v1.5.8
     - fixed an error mapping bulk data with custom output field handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/4460">issue 4460</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4460">issue 4460</a>)
 
     @subsection mapperv1_5_7 Mapper v1.5.7
     - fixed a bug where it was not possible to use a Mapper with an output provider only for the output data type
-      (<a href="https://github.com/qorelanguage/qore/issues/4369">issue 4369</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4369">issue 4369</a>)
 
     @subsection mapperv1_5_6 Mapper v1.5.6
     - respect escaped dots in field names (\.) when separating field names
-      (<a href="https://github.com/qorelanguage/qore/issues/4315">issue 4315</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4315">issue 4315</a>)
 
     @subsection mapperv1_5_5 Mapper v1.5.5
     - fixed handling automatically-acquired input and output data structions with dots in field names; un-deprecated
       the \c allow_dot and \c allow_output_dot options
-      (<a href="https://github.com/qorelanguage/qore/issues/4309">issue 4309</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4309">issue 4309</a>)
 
     @subsection mapperv1_5_4 Mapper v1.5.4
     - fixed a bug handling the \c struct key in mappers
-      (<a href="https://github.com/qorelanguage/qore/issues/4189">issue 4189</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4189">issue 4189</a>)
 
     @subsection mapperv1_5_3 Mapper v1.5.3
     - fixed a bug handling external runtime keys with bulk input for keys that do not require the current input value
-      (<a href="https://github.com/qorelanguage/qore/issues/3931">issue 3931</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3931">issue 3931</a>)
 
     @subsection mapperv1_5_2 Mapper v1.5.2
     - added the @ref Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
     - added the following \c output_create_ignore_duplicates option
     - fixed a bug where mapper output data was not logged in case of an error in an output provider
-      (<a href="https://github.com/qorelanguage/qore/issues/3909">issue 3909</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3909">issue 3909</a>)
     - added support for mapper context in mapper field key handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/3893">issue 3893</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3893">issue 3893</a>)
     - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to return @ref NOTHING with no input
-      (<a href="https://github.com/qorelanguage/qore/issues/3872">issue 3872</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3872">issue 3872</a>)
     - implemented support for nested mappers including the \c submappers option
-      (<a href="https://github.com/qorelanguage/qore/issues/3414">issue 3414</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3414">issue 3414</a>)
 
     @subsection mapperv1_5_1 Mapper v1.5.1
     - added the \c ignore_missing_input mapper option
-      (<a href="https://github.com/qorelanguage/qore/issues/3837">issue 3837</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3837">issue 3837</a>)
     - added support for the \c use_input_record output field mapping key
-      (<a href="https://github.com/qorelanguage/qore/issues/3823">issue 3823</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3823">issue 3823</a>)
     - added the @ref Mapper::Mapper::setNullableOutput() "Mapper::setNullableOutput()" method and the
       \c output_nullable option
-      (<a href="https://github.com/qorelanguage/qore/issues/3788">issue 3788</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3788">issue 3788</a>)
 
     @subsection mapperv1_5 Mapper v1.5
     - added support for the DataProvider module to describe input and output records
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection mapperv1_4_1 Mapper v1.4.1
     - fixed a bug where list values could not be passed as a value in non-bulk mode
-      (<a href="https://github.com/qorelanguage/qore/issues/3611">issue 3611</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3611">issue 3611</a>)
     - added support for types "any" and "hash"
-      (<a href="https://github.com/qorelanguage/qore/issues/3453">issue 3453</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3453">issue 3453</a>)
     - added support for dot notation in output fields for the "hash" output type
-      (<a href="https://github.com/qorelanguage/qore/issues/3413">issue 3413</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3413">issue 3413</a>)
 
     @subsection mapperv1_4 Mapper v1.4
     - added support for complex types
-    - fixed a bug in the \c STRING-TOO-LONG exception (<a href="https://github.com/qorelanguage/qore/issues/2495">issue 2405</a>)
+    - fixed a bug in the \c STRING-TOO-LONG exception (<a href="https://github.com/qoretechnologies/qore/issues/2495">issue 2405</a>)
 
     @subsection mapperv1_3_1 Mapper v1.3.1
-    - fixed bugs handling mapper fields with no input records in list mode as passed from the \c TableMapper module (<a href="https://github.com/qorelanguage/qore/issues/1736">issue 1736</a>)
+    - fixed bugs handling mapper fields with no input records in list mode as passed from the \c TableMapper module (<a href="https://github.com/qoretechnologies/qore/issues/1736">issue 1736</a>)
 
     @subsection mapperv1_3 Mapper v1.3
-    - internal updates to allow for TableMapper insert performance improvements (<a href="https://github.com/qorelanguage/qore/issues/1626">issue 1626</a>)
+    - internal updates to allow for TableMapper insert performance improvements (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
 
     @subsection mapperv1_2 Mapper v1.2
-    - significantly improved mapper performance with identity (i.e. 1:1) and constant mappings (<a href="https://github.com/qorelanguage/qore/issues/1620">issue 1620</a>)
+    - significantly improved mapper performance with identity (i.e. 1:1) and constant mappings (<a href="https://github.com/qoretechnologies/qore/issues/1620">issue 1620</a>)
 
     @subsection mapperv1_1 Mapper v1.1
     - implemented \c "constant" field tag giving a constant value for the output of a field

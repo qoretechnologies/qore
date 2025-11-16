@@ -507,7 +507,7 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
             return n.get<const ParseReferenceNode>()->evalToIntermediate(xsink);
 
         // ensure closures are evaluated in the parent thread so closure-bound local vars can be found and bound before
-        // launching the background thread (fixes https://github.com/qorelanguage/qore/issues/12)
+        // launching the background thread (fixes https://github.com/qoretechnologies/qore/issues/12)
         case NT_CLOSURE:
             return n.get<const QoreClosureParseNode>()->evalBackground(xsink);
     }

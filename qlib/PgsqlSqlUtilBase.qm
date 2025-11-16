@@ -142,7 +142,7 @@ hash<auto> schema = {
     automatically.\n\n
     If your function is reported as needing updating even though it's already in the database correctly, then the
     logic in this module needs to be update to provide more flexibility (please raise an issue here:
-    https://github.com/qorelanguage/qore/issue).  Until the module can be enhanced, try the format as
+    https://github.com/qoretechnologies/qore/issue).  Until the module can be enhanced, try the format as
     in the following example:
     @code{.py}
 update_queue_data(qkey varchar, qdata text) returns integer language plpgsql as $function$
@@ -167,76 +167,76 @@ $function$
 
     @subsection pgsqlsqlutilbasev171 PgsqlSqlUtilBase v1.7.1
     - fixed bugs handling table objects in schemas other than \c public
-      (<a href="https://github.com/qorelanguage/qore/issues/4602">issue 4602</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4602">issue 4602</a>)
 
     @subsection pgsqlsqlutilbasev17 PgsqlSqlUtilBase v1.7
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection pgsqlsqlutilbasev16 PgsqlSqlUtilBase v1.6
     - added supoport for the \c XML, \c JSON, and \c JSONB types
-      (<a href="https://github.com/qorelanguage/qore/issues/4448">issue 4448</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
 
     @subsection pgsqlsqlutilbasev151 PgsqlSqlUtilBase v1.5.3
     - fixed handling column names that use reserved words
-      (<a href="https://github.com/qorelanguage/qore/issues/4348">issue 4348</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4348">issue 4348</a>)
 
     @subsection pgsqlsqlutilbasev151 PgsqlSqlUtilBase v1.5.2
     - added APIs to enable duplicate record creation errors to be detected
-      (<a href="https://github.com/qorelanguage/qore/issues/4308">issue 4308</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
     @subsection pgsqlsqlutilbasev151 PgsqlSqlUtilBase v1.5.1
     - fixed bugs dropping foreign constraints and indices when aligning tables
-      (<a href="https://github.com/qorelanguage/qore/issues/4246">issue 4246</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4246">issue 4246</a>)
 
     @subsection pgsqlsqlutilbasev15 PgsqlSqlUtilBase v1.5
     - implemented atomic merge support
-      (<a href="https://github.com/qorelanguage/qore/issues/3963">issue 3963</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3963">issue 3963</a>)
 
     @subsection pgsqlsqlutilbasev141 PgsqlSqlUtilBase v1.4.1
     - fixed a bug generating literal date/time values for SQL queries
-      (<a href="https://github.com/qorelanguage/qore/issues/3948">issue 3948</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3948">issue 3948</a>)
 
     @subsection pgsqlsqlutilbasev14 PgsqlSqlUtilBase v1.4
     - added support for the DataProvider module
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection pgsqlsqlutilbasev131 PgsqlSqlUtilBase v1.3.1
     - fixed compatibility with PostgreSQL 12
-      (<a href="https://github.com/qorelanguage/qore/issues/3589">issue 3589</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3589">issue 3589</a>)
     - fixed comparison of triggers with column restrictions with table alignment
-      (<a href="https://github.com/qorelanguage/qore/issues/3466">issue 3466</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3466">issue 3466</a>)
     - fixed quoting of reserved words in column names in table alignment
-      (<a href="https://github.com/qorelanguage/qore/issues/3400">issue 3400</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3400">issue 3400</a>)
 
     @subsection pgsqlsqlutilbasev13 PgsqlSqlUtilBase v1.3
     - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects
-      (<a href="https://github.com/qorelanguage/qore/issues/2663">issue 2663</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
 
     @subsection pgsqlsqlutilbasev121 PgsqlSqlUtilBase v1.2.1
     - implemented support for custom column operators
-      (<a href="https://github.com/qorelanguage/qore/issues/2314">issue 2314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
     - fixed a bug where default column values were compared incorrectly leading to false positives when comparing and
       aligning DB schemas
-      (<a href="https://github.com/qorelanguage/qore/issues/2527">issue 2527</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2527">issue 2527</a>)
 
     @subsection pgsqlsqlutilbasev12 PgsqlSqlUtilBase v1.2
     - updated for complex types
 
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.1.2
     - fixed a bug in setting a \c comment for a table column
-      (<a href="https://github.com/qorelanguage/qore/issues/1886">issue 1886</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1886">issue 1886</a>)
     - implemented @ref cop_trunc_date() operator
-      (<a href="https://github.com/qorelanguage/qore/issues/2032">issue 2032</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.1.1
     - implemented the \a force option (i.e. cascade) for dropping code objects
-      (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
 
     @subsection pgsqlsqlutilbasev11 PgsqlSqlUtilBase v1.1
     - added support for \c cop_cast operator
-      (<a href="https://github.com/qorelanguage/qore/issues/535">feature 535</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/535">feature 535</a>)
     - added support for the following datatypes and aliases: bool, float, int, timetz, timestamptz, varbit
     - fixed support for the following datatypes and aliases: bit, bit varying, char, character, character varying,
       char varying, oid, varchar
@@ -247,9 +247,9 @@ $function$
     - implemented support for the \c "returning" clause as an insert option
     - fixed a bug handling tablespaces in unique constraints
     - fixed bugs in @ref SqlUtil::cop_seq() and @ref SqlUtil::cop_seq_currval()
-      (<a href="https://github.com/qorelanguage/qore/issues/624">issue 624</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/624">issue 624</a>)
     - added support for listing PostgreSQL types and materialized views
-      (<a href="https://github.com/qorelanguage/qore/issues/699">issue 699</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/699">issue 699</a>)
 
     @subsection pgsqlsqlutilbasev10 PgsqlSqlUtilBase v1.0
     - initial release

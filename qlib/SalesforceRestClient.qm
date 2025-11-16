@@ -164,12 +164,12 @@ rc.bulkJobClose(h.id);
 
     @subsection salesforcerestclientv1_5 SalesforceRestClient v1.5
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection salesforcerestclientv1_4 SalesforceRestClient v1.4
     - removed the \c SalesforceRestConnection::getConstructorInfo() and
       \c SalesforceRestConnection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for the data provider API
 
     @subsection salesforcerestclientv1_3 SalesforceRestClient v1.3
@@ -179,12 +179,12 @@ rc.bulkJobClose(h.id);
     - added the \c SalesforceRestConnection::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in SalesforceRestClient 1.4)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection salesforcerestclientv1_1_1 SalesforceRestClient v1.1.1
     - fixed a bug handling default options including timeouts in
       @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection"
-      (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
     @subsection salesforcerestclientv1_1 SalesforceRestClient v1.1
     - added the @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" class to support the

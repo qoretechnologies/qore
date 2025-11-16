@@ -63,7 +63,7 @@ module OdbcFirebirdSqlUtil {
     All the public symbols in the module are defined in the OdbcFirebirdSqlUtil namespace
 
     @note
-    - This module requires the <a href="https://github.com/qorelanguage/module-odbc">odbc</a> binary module
+    - This module requires the <a href="https://github.com/qoretechnologies/module-odbc">odbc</a> binary module
       for communication with Firebird databases plus the Firebird client library and the Firebird ODBC driver
     - The Firebird \c ODBC driver is less capable and has more bugs than the equivalent \c JDBC driver.  Please use
       the Firebird \c JDBC driver if possible

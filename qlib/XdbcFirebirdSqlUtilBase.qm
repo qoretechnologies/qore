@@ -60,8 +60,8 @@ module XdbcFirebirdSqlUtilBase {
     All the public symbols in the module are defined in the XdbcFirebirdSqlUtilBase namespace
 
     @note
-    - This module requires the <a href="https://github.com/qorelanguage/module-xdbc">xdbc</a> or
-      <a href="https://github.com/qorelanguage/module-jni">jni</a> binary modules
+    - This module requires the <a href="https://github.com/qoretechnologies/module-xdbc">xdbc</a> or
+      <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary modules
       for communication with Firebird databases plus the Firebird client library and the Firebird XDBC driver or the
       Firebird JDBC drivers
     - This module supports basic DDL / schema management for Firebird DBs and basic functionality for DML as well

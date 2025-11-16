@@ -98,19 +98,19 @@ printf("%N\n", ans.body);
 
     @subsection ServiceNowrestclientv1_2 ServiceNowRestClient v1.2
     - use RestClient functionality for OAuth2 authorization
-      (<a href="https://github.com/qorelanguage/qore/issues/4766">issue 4766</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4766">issue 4766</a>)
 
     @subsection ServiceNowrestclientv1_1_2 ServiceNowRestClient v1.1.2
     - fixed to create URI request paths properly; restored functionality with recent versions of ServiceNow
-      (<a href="https://github.com/qorelanguage/qore/issues/4758">issue 4758</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4758">issue 4758</a>)
 
     @subsection ServiceNowrestclientv1_1_1 ServiceNowRestClient v1.1.1
     - support full ping operations, also with polling, using an authenticated request
-      (<a href="https://github.com/qorelanguage/qore/issues/4677">issue 4677</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
 
     @subsection ServiceNowrestclientv1_1 ServiceNowRestClient v1.1
     - updated to no longer require OAuth2 login params
-      (<a href="https://github.com/qorelanguage/qore/issues/4295">issue 4295</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4295">issue 4295</a>)
 
     @subsection ServiceNowrestclientv1_0 ServiceNowRestClient v1.0
     - the initial version of the %ServiceNowRestClient module

@@ -71,13 +71,13 @@ module TelnetClient {
 
     @subsection telnetclient_v1_7 TelnetClient v1.7
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection telnetclient_v1_6 TelnetClient v1.6
     - removed the \c TelnetConnection::getConstructorInfo() and \c TelnetConnection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
-      (<a href="https://github.com/qorelanguage/qore/issues/3425">issue 3425</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
     @subsection telnetclient_v1_5 TelnetClient v1.5
     - all connection clases have unified constructor
@@ -86,7 +86,7 @@ module TelnetClient {
     - added the \c TelnetConnection::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in TelnetClient 1.6)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection telnetclient_v1_3 TelnetClient v1.3
     - added the @ref TelnetClient::TelnetConnection "TelnetConnection" class to support the <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module

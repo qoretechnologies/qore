@@ -185,7 +185,7 @@ module CdsRestDataProvider {
 
     @subsection cdsrestdataprovider_v2_0 CdsRestDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection cdsrestdataprovider_v1_0 CdsRestDataProvider v1.0
     - initial release of the module

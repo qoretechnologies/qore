@@ -58,7 +58,7 @@ module MysqlSqlUtil {
 
     All the public symbols in the module are defined in the MysqlSqlUtil namespace
 
-    @note This module requires the <a href="https://github.com/qorelanguage/module-mysql">mysql</a> binary module for communication with MySQL databases
+    @note This module requires the <a href="https://github.com/qoretechnologies/module-mysql">mysql</a> binary module for communication with MySQL databases
 
     @section mysql_schema_management Schema Management on MySQL
 
@@ -93,61 +93,61 @@ module MysqlSqlUtil {
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed the prepend and append column operators
-      (<a href="https://github.com/qorelanguage/qore/issues/4548">issue 4548</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection mysqlsqlutilv143 MysqlSqlUtil v1.4.3
     - allow a \c VARCHAR column to be created without a size, assume a default size
-      (<a href="https://github.com/qorelanguage/qore/issues/4399">issue 4399</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4399">issue 4399</a>)
 
     @subsection mysqlsqlutilv142 MysqlSqlUtil v1.4.2
     - added APIs to enable duplicate record creation errors to be detected
-      (<a href="https://github.com/qorelanguage/qore/issues/4308">issue 4308</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
     @subsection mysqlsqlutilv141 MysqlSqlUtil v1.4.1
     - fixed a bug generating literal date/time values for SQL queries
-      (<a href="https://github.com/qorelanguage/qore/issues/3948">issue 3948</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3948">issue 3948</a>)
 
     @subsection mysqlsqlutilv14 MysqlSqlUtil v1.4
     - fixed a bug where the table collation and character set (encoding) could not be specified
-      (<a href="https://github.com/qorelanguage/qore/issues/3752">issue 3752</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3752">issue 3752</a>)
     - fixed quoting reserved words with backticks
-      (<a href="https://github.com/qorelanguage/qore/issues/3750">issue 3750</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3750">issue 3750</a>)
     - added support for the DataProvider module
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection mysqlsqlutilv132 MysqlSqlUtil v1.3.2
     - updated to work also with newer versions of MySQL / MariaDB that support sequences
-      (<a href="https://github.com/qorelanguage/qore/issues/3747">issue 3747</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3747">issue 3747</a>)
     - fixed a bug where the sequence table name was not respected in
       @ref MysqlSqlUtil::MysqlDatabase::getNextSequenceValueImpl() "MysqlDatabase::getNextSequenceValueImpl()"
-      (<a href="https://github.com/qorelanguage/qore/issues/3641">issue 3641</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3641">issue 3641</a>)
 
     @subsection mysqlsqlutilv131 MysqlSqlUtil v1.3.1
     - fixed quoting of reserved words in column names in table alignment
-      (<a href="https://github.com/qorelanguage/qore/issues/3400">issue 3400</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3400">issue 3400</a>)
 
     @subsection mysqlsqlutilv13 MysqlSqlUtil v1.3
-    - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects (<a href="https://github.com/qorelanguage/qore/issues/2663">issue 2663</a>)
+    - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
 
     @subsection mysqlsqlutilv121 MysqlSqlUtil v1.2.1
-    - implemented support for custom column operators (<a href="https://github.com/qorelanguage/qore/issues/2314">issue 2314</a>)
+    - implemented support for custom column operators (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
 
     @subsection mysqlsqlutilv12 MysqlSqlUtil v1.2
     - added support for complex types
 
     @subsection mysqlsqlutilv111 MysqlSqlUtil v1.1.1
-    - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
-    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qorelanguage/qore/issues/2032">issue 2032</a>)
+    - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
+    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection mysqlsqlutilv11 MysqlSqlUtil v1.1
-    - corrected support for the \c varbinary type (<a href="https://github.com/qorelanguage/qore/issues/403">bug 403</a>)
-    - corrected support for the \c binary type (<a href="https://github.com/qorelanguage/qore/issues/524">bug 524</a>)
-    - \c schema member incorrectly set by @ref Qore::SQL::AbstractDatasource::getUserName() "AbstractDatasource::getUserName()" instead of @ref Qore::SQL::AbstractDatasource::getDBName() "AbstractDatasource::getDBName()" (<a href="https://github.com/qorelanguage/qore/pull/519">bug 519</a>)
+    - corrected support for the \c varbinary type (<a href="https://github.com/qoretechnologies/qore/issues/403">bug 403</a>)
+    - corrected support for the \c binary type (<a href="https://github.com/qoretechnologies/qore/issues/524">bug 524</a>)
+    - \c schema member incorrectly set by @ref Qore::SQL::AbstractDatasource::getUserName() "AbstractDatasource::getUserName()" instead of @ref Qore::SQL::AbstractDatasource::getDBName() "AbstractDatasource::getDBName()" (<a href="https://github.com/qoretechnologies/qore/pull/519">bug 519</a>)
     - corrected support for datatypes \c binary, \c char, \c varbinary, \c varchar
-    - added support for \c cop_cast operator (<a href="https://github.com/qorelanguage/qore/issues/535">feature 535</a>)
+    - added support for \c cop_cast operator (<a href="https://github.com/qoretechnologies/qore/issues/535">feature 535</a>)
 
     @subsection mysqlsqlutilv10 MysqlSqlUtil v1.0
     - initial release

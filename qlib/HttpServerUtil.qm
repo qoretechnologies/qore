@@ -129,7 +129,7 @@ module HttpServerUtil {
 
     @subsection httputil1_3 HttpServerUtil 1.3
     - allow authentication methods to set the call context
-      (<a href="https://github.com/qorelanguage/qore/issues/4970">issue 4970</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
     - added utility functionality for cookies
 
     @subsection httputil1_2 HttpServerUtil 1.2
@@ -137,7 +137,7 @@ module HttpServerUtil {
 
     @subsection httputil1_1 HttpServerUtil 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
-      (<a href="https://github.com/qorelanguage/qore/issues/4574">issue 4574</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4574">issue 4574</a>)
 
     @subsection httputil1_0_12 HttpServerUtil 1.0.12
     - updated version to match %Qore and server version
@@ -145,37 +145,37 @@ module HttpServerUtil {
     @subsection httputil1_0 HttpServerUtil 1.0
     - fixed a bug handling wildcard address binds in
       @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4266">issue 4266</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4266">issue 4266</a>)
     - added a definition for the <tt>308 Permanent Redirect</tt> response
-      (<a href="https://github.com/qorelanguage/qore/issues/4169">issue 4169</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4169">issue 4169</a>)
     - added support for the Logger module for logging
-      (<a href="https://github.com/qorelanguage/qore/issues/4157">issue 4157</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4157">issue 4157</a>)
 
     @subsection httputil0911 HttpServerUtil 0.9.11
     - fixed a bug where it was not possible to include CORS headers or any context-sensitive information in a 401
       response
-      (<a href="https://github.com/qorelanguage/qore/issues/4136">issue 4136</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4136">issue 4136</a>)
     - fixed a bug that left hanging threads in HTTP operations with I/O callbacks with \c HEAD requests and a
       <tt>Transfer-Encoding: chunked</tt> header in the response
-      (<a href="https://github.com/qorelanguage/qore/issues/4109">issue 4109</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4109">issue 4109</a>)
 
     @subsection httputil095 HttpServerUtil 0.9.5
     - aligned version with the HttpServer module version
 
     @subsection httputil094 HttpServerUtil 0.9.4
     - added support for sending chunked replies from an @ref Qore::InputStream "InputStream"
-      (<a href="https://github.com/qorelanguage/qore/issues/3702">issue 3702</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3702">issue 3702</a>)
 
     @subsection httputil03121 HttpServerUtil 0.3.12.1
     - improved sensitive data masking in log messages
-      (<a href="https://github.com/qorelanguage/qore/issues/2621">issue 2621</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2621">issue 2621</a>)
 
     @subsection httputil0312 HttpServerUtil 0.3.12
     - fixed a bug in AbstractAuthenticator::do401() where the \a msg argument was ignored
-      (<a href="https://github.com/qorelanguage/qore/issues/1047">issue 1047</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1047">issue 1047</a>)
     - added logic to allow sensitive data to be masked in log messages
-      (<a href="https://github.com/qorelanguage/qore/issues/1086">issue 1086</a>)
-    - updated for complex types (<a href="https://github.com/qorelanguage/qore/issues/1724">issue 1724</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
+    - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - moved @ref HttpServer::parse_uri_query() to the @ref utilintro "Util" module
 
     @subsection httputil03112 HttpServerUtil 0.3.11.2
@@ -190,11 +190,11 @@ module HttpServerUtil {
       connection is in place
     - removed unused AbstractStreamRequestHandler class
     - fixed @ref HttpServer::parse_uri_query() to always return \a params as a hash
-      (<a href="https://github.com/qorelanguage/qore/issues/569">issue 569</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/569">issue 569</a>)
     - added \c root_path to the context hash if the path was matched by a URL path prefix
-      (<a href="https://github.com/qorelanguage/qore/issues/570">issue 570</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/570">issue 570</a>)
     - implemented support for custom timeout values in stream handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/719">issue 719</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
  */
 
 #! the main namespace for the HttpServer and HttpServerUtil modules

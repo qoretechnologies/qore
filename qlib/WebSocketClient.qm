@@ -180,84 +180,84 @@ c.waitForZero();
       support in the @ref WebSocketClient::WebSocketClient "WebSocketClient" class for tokens and a logger instead of
       log closures / callbacks
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - added support for protocol version 13
 
     @subsection wsc_v2_2 v2.2
     - fixed creating example WebSocket client data providers from factories with templated option values
-      (<a href="https://github.com/qorelanguage/qore/issues/4716">issue 4716</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
     - added a "wait for message" API data provider to the WebSocket client data providers
-      (<a href="https://github.com/qorelanguage/qore/issues/4716">issue 4716</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
 
     @subsection wsc_v2_1_1 v2.1.1
     - the data provider factory uses the delayed observable class instead
-      (<a href="https://github.com/qorelanguage/qore/issues/4701">issue 4701</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4701">issue 4701</a>)
 
     @subsection wsc_v2_1 v2.1
     - fixed a deadlock deleting the client object when it goes out of scope in the event thread
-      (<a href="https://github.com/qorelanguage/qore/issues/4697">issue 4697</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4697">issue 4697</a>)
     - added the \c headers option to allow auth headers to be set in WebSocket client connections and data providers
-      (<a href="https://github.com/qorelanguage/qore/issues/4694">issue 4694</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4694">issue 4694</a>)
 
     @subsection wsc_v2_0 v2.0
     - added support for events and messages from the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4557">issue 4557</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
     @subsection wsc_v1_9_1 v1.9.1
     - added support for continuation frames
-      (<a href="https://github.com/qorelanguage/qore/issues/4073">issue 4073</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
     @subsection wsc_v1_9 v1.9
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection wsc_v1_8 v1.8
     - removed the \c WebSocketConnectionObject::getConstructorInfo() and
       \c WebSocketConnectionObject::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
-      (<a href="https://github.com/qorelanguage/qore/issues/3425">issue 3425</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
     @subsection wsc_v1_7 v1.7
     - all connection clases have unified constructor
     - added the \c WebSocketConnectionObject::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in WebSocketClient 1.8)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
     - add WebSocketClient handling of WSCC_GoingAway event
 
     @subsection wsc_v1_6_3 v1.6.3
     - added missing exception handling in the connection close callback
-      (<a href="https://github.com/qorelanguage/qore/issues/3225">issue 3225</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3225">issue 3225</a>)
 
     @subsection wsc_v1_6_2 v1.6.2
     - allowed the handling of \c PING messages to be customized
-      (<a href="https://github.com/qorelanguage/qore/issues/2887">issue 2887</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
     @subsection wsc_v1_6_1 v1.6.1
     - added @ref WebSocketClient::WebSocketClient::pong() "WebSocketClient::pong()" to allow an unsolicited \c PONG
       message to be sent as a unidirectional keep-alive message from the client to the server
-      (<a href="https://github.com/qorelanguage/qore/issues/2566">issue 2566</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
     @subsection wsc_v1_6 v1.6
     - added the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
       <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
     - updated for complex types
     - fixed a bug where the event loop thread would immediately terminate after a reconnection
-      (<a href="https://github.com/qorelanguage/qore/issues/2061">issue 2061</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2061">issue 2061</a>)
     - improved client logging
     - fixed a bug where the @ref WebSocketClient::WebSocketClient class did not validate the \c Sec-WebSocket-Accept
       response header according to RFC6455
-      (<a href="https://github.com/qorelanguage/qore/issues/2062">issue 2062</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2062">issue 2062</a>)
     - added support for the \c yield option in the constructor
 
     @subsection wsc_v1_5 v1.5
     - added timeout values to @ref Qore::Socket "Socket" and @ref Qore::HTTPClient "HTTPClient" calls
-      (<a href="https://github.com/qorelanguage/qore/issues/1725">issue 1725</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
     @subsection wsc_v1_4 v1.4
     - fixed a bug parsing and generating the websocket close status code
-      (<a href="https://github.com/qorelanguage/qore/issues/1216">issue 1216</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
     @subsection wsc_v1_3 v1.3
     - ignore \c SOCKET-NOT-OPEN errors when closing (server already closed the connection)

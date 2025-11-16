@@ -218,13 +218,13 @@ module SalesforceRestDataProvider {
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection salesforcerestdataprovider_v1_0_1 SalesforceRestDataProvider v1.0.1
     - fixed a bug deleting records with no matches
-      (<a href="https://github.com/qorelanguage/qore/issues/3921">issue 3921</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3921">issue 3921</a>)
     - fixed serializing \c DATE fields
-      (<a href="https://github.com/qorelanguage/qore/issues/3908">issue 3908</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3908">issue 3908</a>)
 
     @subsection salesforcerestdataprovider_v1_0 SalesforceRestDataProvider v1.0
     - initial release of the module
