@@ -3612,11 +3612,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         where_cond = processFieldValues(where_cond, search_options);
         hash<DataProviderInfo> info = getInfo();
         hash<DataProviderExpressionInfo> expinfo = getExpression(ER_Search, DP_OP_AND, info.expressions);
-        hash<DataProviderExpression> rv = <DataProviderExpression>{
-            "exp": DP_OP_AND,
-            "args": map getSimpleArgumentIntern(ER_Search, info, expinfo, $1.key, $1.value),
-                where_cond.pairIterator(),
-        };
+        hash<DataProviderExpression> rv;
+        if (where_cond.size() != 1) {
+            rv = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": map getSimpleArgumentIntern(ER_Search, info, expinfo, $1.key, $1.value),
+                    where_cond.pairIterator(),
+            };
+        } else {
+            rv = getSimpleArgumentIntern(ER_Search, info, expinfo, where_cond.firstKey(), where_cond.firstValue());
+        }
         return rv;
     }
 
@@ -4217,14 +4222,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         hash<DataProviderExpression> rv;
         if (value.typeCode() == NT_HASH && value.op && value.hasKey("arg")) {
             hash<DataProviderExpressionInfo> expinfo = getExpression(role, value.op, info.expressions);
+            auto args;
+            args[0] = <DataProviderFieldReference>{"field": key};
+            if (value.arg.op && value.arg.arg) {
+                if (exists value.arg.arg) {
+                    if (value.op_args && (value.op_args != 1)) {
+                        args += value.arg.arg;
+                    } else {
+                        push args, value.arg.arg;
+                    }
+                }
+                args = <DataProviderExpression>{
+                    "exp": getExpression(role, value.arg.op, info.expressions).name,
+                    "args": args,
+                };
+            } else {
+                if (exists value.arg) {
+                    if (value.op_args && (value.op_args != 1)) {
+                        args += value.arg;
+                    } else {
+                        push args, value.arg;
+                    }
+                }
+            }
             rv = <DataProviderExpression>{
                 "exp": expinfo.name,
-                "args": value.arg.op && value.arg.arg
-                    ? <DataProviderExpression>{
-                        "exp": getExpression(role, value.arg.op, info.expressions).name,
-                        "args": (<DataProviderFieldReference>{"field": key}, value.arg.arg),
-                    }
-                    : (<DataProviderFieldReference>{"field": key}, value.arg),
+                "args": args,
             };
         } else {
             rv = getEqualityComparisonExpression(role, info, key, value);
@@ -4382,8 +4405,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
         # check arguments
         if (exp.args.lsize() > expinfo.args.size() && !expinfo.varargs) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("value provided for expression %y has too many values "
-                "(%d); only max %d are accepted", expinfo.name, exp.args.lsize(), expinfo.args.size());
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value provided for expression %y has too many values "
+                "(%d); only max %d are accepted (%y)", expinfo.name, exp.args.lsize(), expinfo.args.size(), exp.args);
         }
         map AbstractDataProvider::verifyExpressionArgValue(role, caps, expinfo, exp.args, $#), expinfo.args;
         if (exp.args.lsize() > expinfo.args.size()) {

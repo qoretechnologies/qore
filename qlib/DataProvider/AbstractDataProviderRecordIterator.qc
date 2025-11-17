@@ -121,6 +121,7 @@ public const OperatorAliasMap = {
 public hashdecl SearchOperatorInfo {
     string op;   #!< the operator string code
     auto arg;    #!< optional argument
+    int op_args = 1;
 }
 
 #! a hash of valid operators for use in generic search criteria
@@ -129,6 +130,7 @@ public const DefaultGenericSearchOpMap = {
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
             return regex(field_value.toString(), cmd.arg[0], cmd.arg[1]);
         },
+        "op_args": 2,
     ),
     DP_SEARCH_OP_LT: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
@@ -164,6 +166,7 @@ public const DefaultGenericSearchOpMap = {
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
             return field_value >= cmd.arg[0] && field_value <= cmd.arg[1];
         },
+        "op_args": 2,
     ),
     DP_SEARCH_OP_IN: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
@@ -194,8 +197,15 @@ public const DefaultGenericSearchOpMap = {
 */
 #/@{
 #! returns an @ref SearchOperatorInfo hash
-public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg) {
-    return new hash<SearchOperatorInfo>({"op": op, "arg": arg});
+public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg, *int op_args) {
+    if (!exists op_args) {
+        op_args = DefaultGenericSearchOpMap{op}.op_args ?? 1;
+    }
+    return new hash<SearchOperatorInfo>({
+        "op": op,
+        "arg": arg,
+        "op_args": op_args,
+    });
 }
 
 #! returns an @ref SearchOperatorInfo hash for regular expression matches
