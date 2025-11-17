@@ -26,6 +26,7 @@ test-ubuntu-amd64:
   stage: test
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
+    - k8s
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
@@ -47,6 +48,7 @@ test-ubuntu-arm64:
   stage: test
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
+    - k8s
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
@@ -68,6 +70,7 @@ test-alpine-amd64:
   stage: test
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
+    - k8s
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
@@ -89,6 +92,7 @@ test-alpine-arm64:
   stage: test
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
+    - k8s
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
