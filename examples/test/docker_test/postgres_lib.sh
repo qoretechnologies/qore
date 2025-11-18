@@ -41,17 +41,17 @@ setup_postgres_on_host() {
     echo export OMQ_DB_USER=${user} >> /tmp/env.sh
     echo export OMQ_DB_PASS=omq >> /tmp/env.sh
     echo export OMQ_DB_NAME=${user} >> /tmp/env.sh
-    echo export OMQ_DB_HOST=${RUNNER_HOST:=rippy} >> /tmp/env.sh
-    systemdb=pgsql:${user}/omq@${user}%${RUNNER_HOST:=rippy}
+    echo export OMQ_DB_HOST=${RUNNER_HOST:=pgsql} >> /tmp/env.sh
+    systemdb=pgsql:${user}/omq@${user}%${RUNNER_HOST:=pgsql}
     echo export QORE_DB_CONNSTR_PGSQL=${systemdb} >> /tmp/env.sh
     echo export QORE_DB_CONNSTR=${systemdb} >> /tmp/env.sh
 
     # if we have a password for the local postgres user, then use it and connect to localhost as well
     if [ -n "${POSTGRES_PASSWORD_MAP}" ]; then
-        PGPASSWORD=`qore -l Util -ne "printf(\"%s\", parse_to_qore_value(\"${POSTGRES_PASSWORD_MAP}\"){\"${RUNNER_HOST:=host}\"});"`
+        PGPASSWORD=`qore -l Util -ne "printf(\"%s\", parse_to_qore_value(\"${POSTGRES_PASSWORD_MAP}\"){\"${RUNNER_HOST:=pgsql}\"});"`
         if [ -n "${PGPASSWORD}" ]; then
             echo export PGPASSWORD=${PGPASSWORD} >> /tmp/env.sh
-            echo export PSQL_ARGS=" -h ${RUNNER_HOST:=host}" >> /tmp/env.sh
+            echo export PSQL_ARGS=" -h ${RUNNER_HOST:=pgsql}" >> /tmp/env.sh
         fi
     fi
 
