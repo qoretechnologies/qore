@@ -496,7 +496,9 @@ public class ProviderIndexUtil {
                     "args": (map dp_sig_info_th.doCast($1 + {
                         "type": type_map{$1.type} ?? type_map."auto",
                     }), $1.value.args),
-                    "arg_info": (map dp_arg_info_th.doCast($1), $1.value.arg_info),
+                    "arg_info": (map dp_arg_info_th.doCast($1 + {
+                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.allowed_values),
+                    }), $1.value.arg_info),
                     "return_type": type_map{$1.value.return_type} ?? type_map."auto",
                 })
             }, info.expressions.pairIterator()),
