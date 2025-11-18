@@ -51,7 +51,7 @@ setup_postgres_on_host() {
         PGPASSWORD=`qore -l Util -ne "printf(\"%s\", parse_to_qore_value(\"${POSTGRES_PASSWORD_MAP}\"){\"${RUNNER_HOST:=pgsql}\"});"`
         if [ -n "${PGPASSWORD}" ]; then
             echo export PGPASSWORD=${PGPASSWORD} >> /tmp/env.sh
-            echo export PSQL_ARGS=" -h ${RUNNER_HOST:=pgsql}" >> /tmp/env.sh
+            echo export PSQL_ARGS=\"-h ${RUNNER_HOST:=pgsql}\" >> /tmp/env.sh
         fi
     fi
 
