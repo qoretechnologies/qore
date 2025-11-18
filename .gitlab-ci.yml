@@ -17,6 +17,7 @@ default:
 variables:
   REPO_NAME: qore
   POSTGRES_PASSWORD: omq
+  POSTGRES_PASSWORD_MAP: pgsql=omq
   TZ: 'Europe/Prague'
   PGTZ: 'Europe/Prague'
   TDSVER: "7.3"
