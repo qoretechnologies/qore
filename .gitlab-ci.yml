@@ -3,8 +3,10 @@ stages:
 
 default:
   services:
-    - name: dnhsoft/mysql-utf8:5.7-mb4
+    - name: mariadb:lts
       alias: mysql
+    - name: postgres:18
+      alias: pgsql
   before_script:
     - |
         curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
