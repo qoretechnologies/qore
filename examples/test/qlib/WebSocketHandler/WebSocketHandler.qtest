@@ -147,7 +147,7 @@ class MyWsConnection inherits WebSocketConnection {
                 send(msg.substr(4), WSOP_Text, True);
                 break;
             case "WAIT":
-                send(strmul("x", 1024 * 1024 * 20), WSOP_Text, True);
+                send(strmul("x", 1024 * 1024 * 5), WSOP_Text, True);
                 break;
             default:
                 send("RESPONSE:" + msg);

@@ -54,6 +54,9 @@ void qore_thread_local_storage_init() {
 }
 
 void qore_thread_local_storage_destroy() {
+    if (!qore_storage_key) {
+        return;
+    }
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
         delete sm;
@@ -62,6 +65,9 @@ void qore_thread_local_storage_destroy() {
 }
 
 void qore_thread_local_storage_destroy(void* qtls) {
+    if (!qore_storage_key) {
+        return;
+    }
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
         storage_map_t::iterator i = sm->find(qtls);
