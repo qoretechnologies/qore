@@ -121,6 +121,9 @@ public hashdecl DataProviderOptionInfo {
     #! Should this option be preselected?
     *bool preselected;
 
+    #! Any information about how to react to changes
+    *softlist<softstring> on_change;
+
     #! Free-form metadata on options
     *hash<auto> metadata;
 }

@@ -1455,7 +1455,8 @@ public class DataProviderActionCatalog {
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect", "metadata"}
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
+                    "on_change", "metadata"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
