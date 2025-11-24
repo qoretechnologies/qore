@@ -1948,6 +1948,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
+            if ((rv.body.val() || rv.chunked_body.val()) && !rv.hdr."Content-Type") {
+                rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + (cx."response-encoding"
+                    ?? s.getEncoding().lwr());
+            }
+
             doResponse(listener, s, cx, rv);
         }
 

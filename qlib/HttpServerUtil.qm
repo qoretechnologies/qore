@@ -1072,13 +1072,25 @@ public class AbstractAuthenticator {
         @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
     hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server", *hash<auto> cx) {
+        return do401(msg, NOTHING, NOTHING, cx);
+    }
+
+    #! returns a 401 response with the given string argument as the message body
+    /** @param msg message body to return
+        @param content_type the Content-Type header value to return
+        @param hdr additional headers to return
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
+    */
+    hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server",
+            string content_type = MimeTypeHtml, *hash<auto> hdr, *hash<auto> cx) {
+        hdr."Content-Type" = content_type;
+        hdr += getAuthHeader(cx);
         return <HttpResponseInfo>{
             "code": 401,
             "body": msg,
-            "hdr": getAuthHeader(cx),
+            "hdr": hdr,
         };
     }
-
     #! Primary method called to authenticate each request
     /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
         @param hdr a hash of request headers
