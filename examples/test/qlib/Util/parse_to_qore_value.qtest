@@ -20,7 +20,7 @@
 
 public class ParseToQoreValueTest inherits QUnit::Test {
     constructor() : Test ("ParseToQoreValueTest", "1.0") {
-        addTestCase("placehlders", \testPlaceholders());
+        addTestCase("placeholders", \testPlaceholders());
         addTestCase("issue 3483", \issue3483());
         addTestCase("issue 3138", \issue3138());
         addTestCase("Tests for parse_to_qore_value()", \parseToQoreValueTest());
