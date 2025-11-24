@@ -43,9 +43,6 @@ public hashdecl ConnectionOptionInfo {
     #! Is the value sensitive? (password or other authentication info)
     bool sensitive = False;
 
-    #! Are allowed values elements of the list's element type that indicate what values the list can have?
-    bool multiselect;
-
     #! List of allowed values (enum)
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
 

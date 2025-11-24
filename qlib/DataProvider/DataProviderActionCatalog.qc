@@ -244,9 +244,6 @@ public hashdecl ActionOptionInfo {
     #! Is the option value sensitive?
     bool sensitive;
 
-    #! Are allowed values elements of the list's element type that indicate what values the list can have?
-    bool multiselect;
-
     #! List of allowed values (enum)
     *softlist<hash<AllowedValueInfo>> allowed_values;
 
@@ -1355,7 +1352,7 @@ public class DataProviderActionCatalog {
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "multiselect", "allowed_values", "allowed_values_creatable", "element_allowed_values",
+                    "allowed_values", "allowed_values_creatable", "element_allowed_values",
                     "element_allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
@@ -1455,12 +1452,12 @@ public class DataProviderActionCatalog {
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "on_change", "metadata"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
-                    "element_ref_data", "preselected", "required_groups", "exclusive_with", "multiselect",
+                    "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "validation_regex", "depends_on", "on_change", "metadata", "supports_templates",
                     "supports_custom_values", "supports_expressions", "server_expression_handling"} +
                     additional_fields;
@@ -1533,7 +1530,7 @@ public class DataProviderActionCatalog {
             if (!mand && i.value.type.isMandatory()) {
                 mand = True;
             }
-            hash<auto> fh = i.value{"display_name", "short_desc", "desc", "multiselect", "allowed_values",
+            hash<auto> fh = i.value{"display_name", "short_desc", "desc", "allowed_values",
                 "allowed_values_creatable", "element_allowed_values", "element_allowed_values_creatable",
                 "default_value", "example_value"} + {
                 "name": i.key,

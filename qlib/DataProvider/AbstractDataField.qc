@@ -46,9 +46,6 @@ public hashdecl DataFieldInfo {
     #! Any example value for the field
     auto example_value;
 
-    #! Are allowed values elements of the list's element type that indicate what values the list can have?
-    bool multiselect;
-
     #! for enum fields; allowed values
     *list<hash<AllowedValueInfo>> allowed_values;
 
@@ -76,9 +73,6 @@ public class AbstractDataField inherits Qore::Serializable {
     private {
         #! the default value for the field, if any
         auto default_value;
-
-        #! Are allowed values elements of the list's element type that indicate what values the list can have?
-        bool multiselect;
 
         #! for enum fields; raw allowed values
         list<hash<AllowedValueInfo>> allowed_values;
@@ -124,11 +118,6 @@ public class AbstractDataField inherits Qore::Serializable {
     #! returns True if the field's type must have a value
     bool isMandatory() {
         return getType().isMandatory();
-    }
-
-    #! Returns True if the type is a list and the allowed values are allowed values of the list's type
-    bool isMultiselect() {
-        return multiselect ?? False;
     }
 
     #! returns the value of the given option on the field's type
@@ -350,7 +339,6 @@ public class AbstractDataField inherits Qore::Serializable {
             "desc": getDescription(),
             "default_value": getDefaultValue(),
             "example_value": getExampleValue(),
-            "multiselect": multiselect ?? False,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
