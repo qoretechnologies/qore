@@ -950,6 +950,11 @@ public class HttpListenerInterface inherits AbstractLogger {
         throw "UNIMPLEMENTED";
     }
 
+    #! Returns a hash of extra headers to be added to all responses from this listener
+    *hash<auto> getDefaultResponseHeaders() {
+        # no implementation in the base class
+    }
+
     #! adds user-defined data to be returned in the \c "uctx" context key when serving requests from this listener
     /** @param uctx user-defined data to be returned in the \c "uctx" context key when serving requests from this
         listener
@@ -1366,7 +1371,11 @@ public class AbstractStreamRequest {
         @note this method is called after the message body has been received
     */
     private hash<HttpHandlerResponseInfo> getResponseHeaderMessage() {
-        return cast<hash<HttpHandlerResponseInfo>>(getResponseHeaderMessageImpl());
+        hash<HttpHandlerResponseInfo> rv = cast<hash<HttpHandlerResponseInfo>>(getResponseHeaderMessageImpl());
+        if (*hash<auto> hdr = listener.getDefaultResponseHeaders()) {
+            rv.hdr = hdr + rv.hdr;
+        }
+        return rv;
     }
 
     #! this is the primary callback for receiving chunked data; data will be logged, and then recvImpl() is called

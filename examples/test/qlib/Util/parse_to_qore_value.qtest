@@ -20,16 +20,16 @@
 
 public class ParseToQoreValueTest inherits QUnit::Test {
     constructor() : Test ("ParseToQoreValueTest", "1.0") {
-        addTestCase("file references", \testFileReferences());
+        addTestCase("placehlders", \testPlaceholders());
         addTestCase("issue 3483", \issue3483());
         addTestCase("issue 3138", \issue3138());
         addTestCase("Tests for parse_to_qore_value()", \parseToQoreValueTest());
         set_return_value(main());
     }
 
-    testFileReferences() {
-        assertThrows("PARSE-ERROR", "Unterminated file reference", \parse_to_qore_value(), "$<path");
-        assertThrows("PARSE-ERROR", "Unterminated file reference", \parse_to_qore_value(), "$yaml<path");
+    testPlaceholders() {
+        assertThrows("PARSE-ERROR", "Unterminated placeholder", \parse_to_qore_value(), "$<path");
+        assertThrows("PARSE-ERROR", "Unterminated placeholder", \parse_to_qore_value(), "$yaml<path");
 
         assertGt(100, parse_to_qore_value("$<" + get_script_path() + ">").size());
         assertGt(100, parse_base64_string_to_string(parse_to_qore_value("$base64<" + get_script_path() + ">")).size());
@@ -37,6 +37,10 @@ public class ParseToQoreValueTest inherits QUnit::Test {
             .size());
         assertGt(100, parse_to_qore_value("a=$<" + get_script_path() + ">").a.size());
         assertGt(100, parse_to_qore_value("a={b=$<" + get_script_path() + ">}").a.b.size());
+
+        assertEq(<abcd>, parse_to_qore_value("$hexdata<abcd>"));
+        assertEq(<abcd>, parse_to_qore_value("$base64data<q80=>"));
+        assertEq(<abcdef>, parse_to_qore_value("$base64urldata<q83v>"));
     }
 
     issue3483() {

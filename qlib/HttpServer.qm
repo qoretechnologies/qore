@@ -614,6 +614,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         stop();
     }
 
+    #! Returns default response headers
+    *hash<auto> getDefaultResponseHeaders() {
+        return hdr;
+    }
+
     #! Returns the TTL value
     date getTtl() {
         return ttl;
@@ -2238,6 +2243,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         cThreads.inc();
 
         tid = background mainThread();
+    }
+
+    #! Returns a hash of extra headers to be added to all responses from this listener
+    *hash<auto> getDefaultResponseHeaders() {
+        return serv.getDefaultResponseHeaders();
     }
 
     #! Reloads the HTTPS certificate from the original location

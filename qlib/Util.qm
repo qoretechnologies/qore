@@ -801,13 +801,13 @@ const ET_BracketString = 2;
 const ET_CurlyBracketString = 3;
 const ET_Eq = 4;
 const ET_Comma = 5;
-const ET_FileRef = 6;
+const ET_Placeholder = 6;
 const EtMap = {
     ET_RawString: "raw string",
     ET_QuotedString: "quoted string",
     ET_BracketString: "bracket expression",
     ET_CurlyBracketString: "curly bracket expression",
-    ET_FileRef: "file reference",
+    ET_Placeholder: "placeholder",
     ET_Eq: "=",
     ET_Comma: ",",
 };
@@ -826,19 +826,19 @@ list<hash> sub scan_exp(string arg) {
     *string quote;
 
     # active file ref
-    *string fileref;
+    *string placeholder;
 
     int len = arg.length();
     string str;
 
     for (int i = 0; i < len; ++i) {
         string c = arg[i];
-        if (fileref) {
+        if (placeholder) {
             if (c == ">") {
                 l += {
-                    "type": ET_FileRef,
+                    "type": ET_Placeholder,
                     "val": {
-                        "type": remove fileref,
+                        "type": remove placeholder,
                         "path": str,
                     },
                 };
@@ -923,10 +923,10 @@ list<hash> sub scan_exp(string arg) {
                     }
                     i += ft.length();
                     if (ft == "<") {
-                        fileref = "string";
+                        placeholder = "string";
                     } else {
                         splice ft, -1;
-                        fileref = ft;
+                        placeholder = ft;
                     }
                     continue;
                 }
@@ -938,9 +938,9 @@ list<hash> sub scan_exp(string arg) {
     if (quote) {
         throw "PARSE-ERROR", sprintf("Unterminated quoted string in %y", quote + str);
     }
-    if (fileref) {
-        throw "PARSE-ERROR", sprintf("Unterminated file reference in %y", "$" +
-            (fileref == "string" ? "" : fileref) + "<" + str);
+    if (placeholder) {
+        throw "PARSE-ERROR", sprintf("Unterminated placeholder in %y", "$" +
+            (placeholder == "string" ? "" : placeholder) + "<" + str);
     }
 
     trim str;
@@ -1049,20 +1049,25 @@ binary sub get_binary_file_data(string loc) {
     return m.call(loc);
 }
 
-auto sub get_file_ref(string type, string path) {
+auto sub process_placeholder(string type, string value) {
     switch (type) {
 %ifndef NoYaml
-        case "yaml": return parse_yaml(get_string_file_data(path));
+        case "yaml": return parse_yaml(get_string_file_data(value));
 %endif
 %ifndef NoJson
-        case "json": return parse_json(get_string_file_data(path));
+        case "json": return parse_json(get_string_file_data(value));
 %endif
-        case "bin": return get_binary_file_data(path);
-        case "base64": return make_base64_string(get_binary_file_data(path));
-        case "base64url": return make_base64_url_string(get_binary_file_data(path));
-        case "string": return get_string_file_data(path);
+        case "bin": return get_binary_file_data(value);
+        case "base64": return make_base64_string(get_binary_file_data(value));
+        case "base64url": return make_base64_url_string(get_binary_file_data(value));
+        case "string": return get_string_file_data(value);
+
+        case "base64data": return parse_base64_string(value);
+        case "base64urldata": return parse_base64_url_string(value);
+        case "hexdata": return parse_hex_string(value);
+
         default:
-            throw "PARSE-ERROR", sprintf("Do not know how to handle files of type %y", type);
+            throw "PARSE-ERROR", sprintf("Do not know how to handle placeholder type %y", type);
     }
 }
 
@@ -1080,12 +1085,17 @@ auto sub get_file_ref(string type, string path) {
     |<tt>$&lt;</tt><i>location</i><tt>&gt;</tt>|a string file reference; <i>location</i> can be a URL
     |<tt>$base64&lt;</tt><i>location</i><tt>&gt;</tt>|a file reference returning base64-encoded string; \
         <i>location</i> can be a URL
+    |<tt>$base64data&lt;</tt><i>base64 string</i><tt>&gt;</tt>|parse <i>base64 string</i> and return the binary \
+        value for it
     |<tt>$base64url&lt;</tt><i>location</i><tt>&gt;</tt>|a file reference returning base64-URL-encoded string; \
         <i>location</i> can be a URL
+    |<tt>$base64urldata&lt;</tt><i>base64 URL string</i><tt>&gt;</tt>|parse <i>base64 URL string</i> and return the \
+        binary value for it
     |<tt>$bin&lt;</tt><i>location</i><tt>&gt;</tt>|a binary file reference; <i>location</i> can be a URL
-    |<tt>$yaml&lt;</tt><i>location</i><tt>&gt;</tt>|a YAML file reference; the result of parsing the YAML data at \
-        the given location will be used as the value; <i>location</i> can be a URL
+    |<tt>$hexdata&lt;</tt><i>hex digits</i><tt>&gt;</tt>|parse <i>hex digits</i> and return the binary value for it
     |<tt>$json&lt;</tt><i>location</i><tt>&gt;</tt>|a JSON file reference; the result of parsing the JSON data at \
+        the given location will be used as the value; <i>location</i> can be a URL
+    |<tt>$yaml&lt;</tt><i>location</i><tt>&gt;</tt>|a YAML file reference; the result of parsing the YAML data at \
         the given location will be used as the value; <i>location</i> can be a URL
     |integers|an @ref integer "integer"
     |floats|a @ref float "float"
@@ -1145,7 +1155,7 @@ public auto sub parse_to_qore_value(string arg) {
             case ET_QuotedString: val = l[i+2].val; break;
             case ET_Comma: --i; break;
             case ET_Eq: throw "PARSE-ERROR", sprintf("Cannot parse %y after %y", EtMap{ET_Eq}, EtMap{ET_Eq});
-            case ET_FileRef: val = get_file_ref(l[i+2].val.type, l[i+2].val.path); break;
+            case ET_Placeholder: val = process_placeholder(l[i+2].val.type, l[i+2].val.path); break;
         }
         #printf("do_eq() i: %d key: %y v: %y val: %y\n", i, key, v, val);
         if (!exists v) {
@@ -1272,9 +1282,9 @@ public auto sub parse_to_qore_value(string arg) {
                 else
                     throw "PARSE-ERROR", sprintf("cannot parse %y at the beginning of the expression", EtMap{h.type});
             }
-            case ET_FileRef: {
+            case ET_Placeholder: {
                 check_val(i);
-                do_val(get_file_ref(h.val.type, h.val.path));
+                do_val(process_placeholder(h.val.type, h.val.path));
                 do_break = False;
                 break;
             }
