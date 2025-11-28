@@ -43,6 +43,9 @@ public hashdecl ConnectionOptionInfo {
     #! Is the value sensitive? (password or other authentication info)
     bool sensitive = False;
 
+    #! Should the option be preselected in UIs?
+    bool preselected = False;
+
     #! List of allowed values (enum)
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
 
