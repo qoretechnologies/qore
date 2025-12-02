@@ -1014,6 +1014,10 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             }
         }
 %ifndef NoYaml
+        # return any template references as-is
+        if (v.typeCode() == NT_STRING && (v =~ /^\$[a-z][-a-z]+:({.*}|[a-zA-Z0-9_\.]+|'.*')$/)) {
+            return v;
+        }
         return trim(make_yaml(v));
 %else
         throw "MISSING-YAML", "Missing YAML module";
