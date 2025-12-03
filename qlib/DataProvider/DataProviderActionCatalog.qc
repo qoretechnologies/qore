@@ -462,6 +462,9 @@ public hashdecl DataProviderActionInfo {
 
     #! A free-form string giving information about the exec type
     *string exec_type;
+
+    #! Free-form metadata for the action
+    *hash<auto> metadata;
 }
 
 #! DataProvider action and application catalog class
