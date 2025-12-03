@@ -48,8 +48,8 @@ public hashdecl DataProviderAppInfo {
     #! Any legal text, links, copyright notice(s), or disclaimer(s) related to the use of the app; markdown supported
     string legal;
 
-    #! The application group, if any
-    *string group;
+    #! The application groups, if any
+    *softlist<string> groups;
 
     #! Connection scheme for the application
     /** This is the connection scheme for the \c ConnectionProvider module and indicates that the given connection
@@ -224,8 +224,8 @@ public hashdecl ActionOptionInfo {
     #! Description of the option with markdown rendering
     string desc;
 
-    #! The group name for the option, if any
-    *string group;
+    #! The group names for the option, if any
+    *softlist<string> groups;
 
     #! Is the option required or not?
     bool required;
@@ -378,8 +378,8 @@ public hashdecl DataProviderActionInfo {
     #! The unique name for the action; unique in the application
     string action;
 
-    #! The action group within the app, if any
-    *string group;
+    #! The action groups within the app, if any
+    *softlist<string> groups;
 
     #! Any data provider subtype
     /** This is the value that will be passed to \c AbstractConnection::getDataProvider(string subtype)

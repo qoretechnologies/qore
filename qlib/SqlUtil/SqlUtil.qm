@@ -4535,7 +4535,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "The value to bind as the 'like' value (ex: '%some string%')",
                 "desc": "The value to bind as the 'like' value (ex: '%some string%')",
                 "symbol": "like",
-                "group": "Comparison",
+                "groups": "Comparison",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringValueType,
@@ -4655,7 +4655,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns a substring from a string; args: string, int start char, [int length]",
                 "desc": "returns a substring from a string; args: string, int start char, [int length]",
                 "symbol": "substr",
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureIntValueType,
@@ -4683,7 +4683,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "check if a value is in a sub-select; args: value, table name for the subselect, subselect "
                     "query hash",
                 "symbol": "in_select",
-                "group": "Comparison",
+                "groups": "Comparison",
                 "args": (
                     DataProviderSignatureAnyType,         # any value, expression, or field reference
                     DataProviderSignatureStringValueType, # table name
@@ -4708,7 +4708,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "aliases a result; args: expression or value, string label",
                 "desc": "aliases a result; args: expression or value, string label",
                 "symbol": "as",
-                "group": "Alias",
+                "groups": "Alias",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4733,7 +4733,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "prepends a string to another string; args: string to be prepended, string to prepend to the "
                     "first string",
                 "symbol": COP_PREPEND,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringType,
@@ -4756,7 +4756,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "appends or catenates a string to another string; args: string to be appended, string to "
                     "append or concatenate to the first string",
                 "symbol": COP_APPEND,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringType,
@@ -4777,7 +4777,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "converts a string to all upper case; arg: string",
                 "desc": "converts a string to all upper case; arg: string",
                 "symbol": COP_UPPER,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                 ),
@@ -4796,7 +4796,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "converts a string to all lower case; arg: string",
                 "desc": "converts a string to all lower case; arg: string",
                 "symbol": COP_LOWER,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                 ),
@@ -4815,7 +4815,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "indicates that only records with distinct values of the given field should be returned",
                 "desc": "indicates that only records with distinct values of the given field should be returned",
                 "symbol": COP_DISTINCT,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4835,7 +4835,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the minimum value in the group",
                 "desc": "Returns the minimum value in the group",
                 "symbol": COP_MIN,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4856,7 +4856,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the maximum value in the group",
                 "desc": "Returns the maximum value in the group",
                 "symbol": COP_MAX,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4877,7 +4877,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the average of the given values in the group",
                 "desc": "Returns the average of the given values in the group",
                 "symbol": COP_AVG,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4898,7 +4898,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the sum of the given values",
                 "desc": "Returns the sum of the given values",
                 "symbol": COP_SUM,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4919,7 +4919,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Count the number of rows in the group",
                 "desc": "Count the number of rows in the group",
                 "symbol": COP_COUNT,
-                "group": "Aggregate",
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4942,7 +4942,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Subtracts one number from another",
                 "desc": "Subtracts one number from another",
                 "symbol": COP_MINUS,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4963,7 +4963,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Adds two numbers",
                 "desc": "Adds two numbers",
                 "symbol": COP_PLUS,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4984,7 +4984,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Divides one number by another",
                 "desc": "Divides one number by another",
                 "symbol": COP_DIVIDE,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -5005,7 +5005,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Multiplies two numbers",
                 "desc": "Multiplies two numbers",
                 "symbol": COP_MULTIPLY,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -5026,7 +5026,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the value of the first expression with a value",
                 "desc": "Returns the value of the first expression with a value",
                 "symbol": COP_COALESCE,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                 ),
@@ -5046,7 +5046,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the length of the argument",
                 "desc": "Returns the length of the argument",
                 "symbol": COP_LENGTH,
-                "group": "Data Manipulation",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                 ),
@@ -5065,7 +5065,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns the next value in the given sequence; args: sequence name",
                 "desc": "returns the next value in the given sequence; args: sequence name",
                 "symbol": COP_SEQ,
-                "group": "Sequence",
+                "groups": "Sequence",
                 "args": (
                     DataProviderSignatureStringValueType,
                 ),
@@ -5084,7 +5084,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns the current value in the given sequence; args: sequence name",
                 "desc": "returns the current value in the given sequence; args: sequence name",
                 "symbol": COP_SEQ_CURRVAL,
-                "group": "Sequence",
+                "groups": "Sequence",
                 "args": (
                     DataProviderSignatureStringValueType,
                 ),
@@ -5105,7 +5105,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "returns the output of the SQL window given by the arguments; args: *string partiion by, "
                     "*string order by",
                 "symbol": COP_OVER,
-                "group": "Window",
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                     DataProviderSignatureOptionalStringValueType,
@@ -5158,7 +5158,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the rank of a row in an ordered group of rows as a number",
                 "desc": "Returns the rank of a row in an ordered group of rows as a number",
                 "symbol": COP_DENSE_RANK,
-                "group": "Window",
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."any",
@@ -5175,7 +5175,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the first value in an ordered group of rows",
                 "desc": "Returns the first value in an ordered group of rows",
                 "symbol": COP_FIRST_VALUE,
-                "group": "Window",
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                 ),
@@ -5194,7 +5194,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the last value in an ordered group of rows",
                 "desc": "Returns the last value in an ordered group of rows",
                 "symbol": COP_LAST_VALUE,
-                "group": "Window",
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                 ),
@@ -5213,7 +5213,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the group number of an ordered group of rows",
                 "desc": "Returns the group number of an ordered group of rows",
                 "symbol": COP_NTILE,
-                "group": "Window",
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureIntValueType,
                 ),
@@ -5232,7 +5232,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the percent rank of a row in an ordered group of rows",
                 "desc": "Returns the percent rank of a row in an ordered group of rows",
                 "symbol": COP_PERCENT_RANK,
-                "group": "Window",
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",
@@ -5249,7 +5249,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the row number of a row in an ordered group of rows",
                 "desc": "Returns the row number of a row in an ordered group of rows",
                 "symbol": COP_PERCENT_RANK,
-                "group": "Window",
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",
@@ -5266,7 +5266,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the row number of a result set",
                 "desc": "Returns the row number of a result set",
                 "symbol": COP_ROW_NUMBER,
-                "group": "Window",
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",

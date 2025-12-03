@@ -343,7 +343,7 @@ public class DataProviderTest inherits QUnit::Test {
             "desc": "Returns `True` if the given value starts with the given characters when converted to a string",
             "symbol": "startsWith",
             "render_template": "$arg[0].startsWith($arg[1], $arg[2])",
-            "group": "Comparison",
+            "groups": "Comparison",
             "args": (DataProviderSignatureStringType, DataProviderSignatureStringType, DataProviderSignatureBoolType),
             "arg_info": (
                 <DataProviderArgInfo>{
@@ -390,7 +390,7 @@ public class DataProviderTest inherits QUnit::Test {
                 "themselves",
             "symbol": "in",
             "render_template": "$arg[0] in ($arg[1])${arg[2] ? [IGNORE-CASE]:}",
-            "group": "Comparison",
+            "groups": "Comparison",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureListType, DataProviderSignatureBoolType),
             "return_type": AbstractDataProviderTypeMap."bool",
         };
@@ -428,7 +428,7 @@ public class DataProviderTest inherits QUnit::Test {
                 "themselves",
             "symbol": "in",
             "render_template": "$arg[0] in ($arg[1])${arg[2] ? [loc $arg[2]]:}",
-            "group": "Comparison",
+            "groups": "Comparison",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureListType,
                 DataProviderSignatureOptionalStringType),
             "return_type": AbstractDataProviderTypeMap."bool",

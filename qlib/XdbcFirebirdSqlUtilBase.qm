@@ -1029,7 +1029,7 @@ auto v = c.name;
                         "short_desc": "aliases a result; args: expression or value, string label",
                         "desc": "aliases a result; args: expression or value, string label",
                         "symbol": "as",
-                        "group": "Alias",
+                        "groups": "Alias",
                         "role": ER_Field,
                         "args": (
                             DataProviderSignatureAnyType,
@@ -1053,7 +1053,7 @@ auto v = c.name;
                         "short_desc": "cast operator",
                         "desc": "cast operator",
                         "symbol": "cast",
-                        "group": "Data Conversion",
+                        "groups": "Data Conversion",
                         "args": (
                             DataProviderSignatureAnyType,
                             DataProviderSignatureStringValueType,
@@ -1091,7 +1091,7 @@ auto v = c.name;
                         "short_desc": "Returns the length of the argument",
                         "desc": "Returns the length of the argument",
                         "symbol": COP_LENGTH,
-                        "group": "Data Manipulation",
+                        "groups": "Data Manipulation",
                         "args": (
                             DataProviderSignatureAnyType,
                         ),
@@ -1110,7 +1110,7 @@ auto v = c.name;
                         "short_desc": "Returns True if the first argument is found in the second argument",
                         "desc": "Returns True if the first argument is found in the second argument",
                         "symbol": OP_IN,
-                        "group": "Comparison",
+                        "groups": "Comparison",
                         "args": (
                             DataProviderSignatureAnyType,
                             DataProviderSignatureAnyType,

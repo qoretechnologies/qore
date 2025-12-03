@@ -609,8 +609,8 @@ public hashdecl DataProviderExpressionInfo {
     #! The symbol to use when rendering expressions
     string symbol;
 
-    #! The group that the expression belongs to
-    string group = "Miscellaneous";
+    #! The groups that the expression belongs to
+    softlist<string> groups = ("Miscellaneous",);
 
     #! The expression role code / bitfield
     /** @see @ref expression_role_codes
@@ -1131,7 +1131,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if all arguments are True with logic short-circuiting",
                     "desc": "Returns `True` if all arguments are `True`; supports logic short-circuiting",
                     "symbol": "&&",
-                    "group": "Logical",
+                    "groups": "Logical",
                     "args": (DataProviderSignatureBoolType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1162,7 +1162,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if at least one argument is True with logic short-circuiting",
                     "desc": "Returns `True` if at least one argument is `True`; supports logic short-circuiting",
                     "symbol": "||",
-                    "group": "Logical",
+                    "groups": "Logical",
                     "args": (DataProviderSignatureBoolType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1192,7 +1192,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "This operator reverses the logcal value of the argument",
                     "desc": "This operator reverses the logcal value of the argument",
                     "symbol": "!",
-                    "group": "Logical",
+                    "groups": "Logical",
                     "args": (DataProviderSignatureBoolType,),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1218,7 +1218,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returs `True` if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "symbol": "==",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1253,7 +1253,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if the arguments are not equal",
                     "desc": "Returns `True` if the arguments are not equal; type conversions are performed",
                     "symbol": "!=",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1286,7 +1286,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is strictly less than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1319,7 +1319,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is less than or equal to the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<=",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1352,7 +1352,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is strictly greater than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": ">",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1385,7 +1385,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "Returns `True` if the first argument is greater than or equal to the second argument; "
                         "type conversions are performed if necessary",
                     "symbol": ">=",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
                         <DataProviderArgInfo>{
@@ -1418,7 +1418,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         "third",
                     "desc": "Returns `True` if the first argument is greater than the second and less than the third",
                     "symbol": "between",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "render_template": "$arg[0] between $arg[1] and $arg[2]",
                     "args": (
                         DataProviderSignatureAnyType,
@@ -1461,7 +1461,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "short_desc": "Returns True if the first argument is found in the second argument",
                     "desc": "Returns `True` if the first argument is found in the second argument",
                     "symbol": "in",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                     "arg_info": (
@@ -1493,7 +1493,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "desc": "regular expression operator; the first argument will be processed with the second as a "
                         "regular expression pattern",
                     "symbol": "regex",
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "render_template": "$arg[0] =~ /$arg[1]/$arg[2]",
                     "args": (
                         DataProviderSignatureStringType,

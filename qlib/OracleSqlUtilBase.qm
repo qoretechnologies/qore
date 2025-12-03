@@ -2057,7 +2057,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "cast operator",
                     "desc": "cast operator",
                     "symbol": "cast",
-                    "group": "Data Conversion",
+                    "groups": "Data Conversion",
                     "args": (
                         DataProviderSignatureAnyType,
                         DataProviderSignatureStringValueType,
@@ -2095,7 +2095,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "returns the year component of a date as a string (ex: 2022)",
                     "desc": "returns the year component of a date as a string (ex: `2022`)",
                     "symbol": COP_YEAR,
-                    "group": "Date/Time",
+                    "groups": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -2115,7 +2115,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "returns the year and month components of a date as a string (ex: 2022-06)",
                     "desc": "returns the year and month components of a date as a string (ex: `2022-06`)",
                     "symbol": COP_YEAR_MONTH,
-                    "group": "Date/Time",
+                    "groups": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -2137,7 +2137,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "desc": "returns the year, month, and day components of a date as a string (ex: "
                         "`2022-06-29`)",
                     "symbol": COP_YEAR_DAY,
-                    "group": "Date/Time",
+                    "groups": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -2159,7 +2159,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "desc": "returns the year, month, day, and hour components of a date as a string "
                         "(ex: `2022-06-29 15`)",
                     "symbol": COP_YEAR_HOUR,
-                    "group": "Date/Time",
+                    "groups": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                     ),
@@ -2181,7 +2181,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "desc": "truncates the given date to the given resolution; args: date, string code: Y: year, "
                         "M: month, D: day, H: hour, m: minute, S: second",
                     "symbol": COP_TRUNC_DATE,
-                    "group": "Date/Time",
+                    "groups": "Date/Time",
                     "args": (
                         DataProviderSignatureDateType,
                         DataProviderSignatureStringValueType,
@@ -2211,7 +2211,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "Returns True if the first argument is found in the second argument",
                     "desc": "Returns True if the first argument is found in the second argument",
                     "symbol": OP_IN,
-                    "group": "Comparison",
+                    "groups": "Comparison",
                     "args": (
                         DataProviderSignatureAnyType,
                         DataProviderSignatureAnyType,
@@ -2311,7 +2311,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "returns the next value in the given sequence; args: sequence name",
                     "desc": "returns the next value in the given sequence; args: sequence name",
                     "symbol": COP_SEQ,
-                    "group": "Sequence",
+                    "groups": "Sequence",
                     "args": (
                         DataProviderSignatureStringValueType,
                     ),
@@ -2329,7 +2329,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "short_desc": "returns the current value in the given sequence; args: sequence name",
                     "desc": "returns the current value in the given sequence; args: sequence name",
                     "symbol": COP_SEQ_CURRVAL,
-                    "group": "Sequence",
+                    "groups": "Sequence",
                     "args": (
                         DataProviderSignatureStringValueType,
                     ),
