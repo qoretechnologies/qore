@@ -588,6 +588,13 @@ public class ConnectionSchemeCache {
             list<string> missing;
             foreach string req in (req_list) {
                 list<string> req_opt = req.split(",");
+                # ignore "url" if present, as this is not an option
+                if (req =~ /\burl\b/) {
+                    req_opt = map $1, req_opt, $1 != "url";
+                    if (!req_opt) {
+                        continue;
+                    }
+                }
                 # check which options are missing
                 *hash<auto> have = options{req_opt};
                 if (have.size() == req_opt.size()) {
