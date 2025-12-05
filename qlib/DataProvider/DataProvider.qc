@@ -1047,7 +1047,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         # look for substitutions with curly bracks and optional ternary expressions
         foreach string t in (str =~ x/\$\{(arg\[[0-9]+\](?:\s*\?[^:\}]*:[^\}]*)?)\}/) {
             (softint n, *string t0, *string t1) = (t =~ x/arg\[([0-9]+)\](?:\s*\?([^:]*):(.*))?$/);
-            if (exp.args[n].val()) {
+            if (exp.args[n].val() || info.arg_info[n].default_value.val()) {
                 str = replace(str, "${" + t + "}", t0);
             } else {
                 str = replace(str, "${" + t + "}", t1);

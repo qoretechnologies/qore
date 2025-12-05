@@ -403,6 +403,18 @@ public const DataProviderSignatureOptionalIntValueType = <DataProviderSignatureT
     "type_code": ST_Value,
 };
 
+#! Data provider signature bool value type
+public const DataProviderSignatureBoolValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."bool",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature *int value type
+public const DataProviderSignatureOptionalBoolValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*bool",
+    "type_code": ST_Value,
+};
+
 #! Data provider signature list value type
 public const DataProviderSignatureListValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."list",
