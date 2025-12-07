@@ -1521,63 +1521,63 @@ long long q_atoll(const char* str) {
 // returns seconds since epoch
 int64 q_epoch() {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      return 0;
-   }
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        return 0;
+    }
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      return 0;
-   }
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        return 0;
+    }
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 // returns seconds since epoch and gets microseconds
 int64 q_epoch_us(int &us) {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      us = 0;
-      return 0;
-   }
-   us = ts.tv_nsec / 1000;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        us = 0;
+        return 0;
+    }
+    us = ts.tv_nsec / 1000;
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      us = 0;
-      return 0;
-   }
-   us = ts.tv_usec;
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        us = 0;
+        return 0;
+    }
+    us = ts.tv_usec;
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 // returns seconds since epoch and gets nanoseconds
 int64 q_epoch_ns(int &ns) {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      ns = 0;
-      return 0;
-   }
-   ns = ts.tv_nsec;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        ns = 0;
+        return 0;
+    }
+    ns = ts.tv_nsec;
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      ns = 0;
-      return 0;
-   }
-   ns = ts.tv_usec * 1000;
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        ns = 0;
+        return 0;
+    }
+    ns = ts.tv_usec * 1000;
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {

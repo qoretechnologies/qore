@@ -29,6 +29,10 @@
 %requires(reexport) HttpServerUtil >= 1.0
 %requires Logger
 
+%try-module sysconf
+%define NO_SYSCONF
+%endtry
+
 %new-style
 %allow-weak-references
 
@@ -394,6 +398,15 @@ public hashdecl HttpServerOptionInfo {
 
     #! HTTP server logger
     *LoggerInterface logger;
+
+    #! Idle thread count for the connection thread pool
+    int idle_threads =
+%ifndef NO_SYSCONF
+        sysconf(SC_NPROCESSORS_ONLN) * 2
+%else
+        HttpServer::DefaultIdleThreads
+%endif
+        ;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -512,7 +525,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         DynamicHttpHandlerList dhandlers();
 
         # connection thread pool
-        ThreadPool threadPool(-1, DefaultIdleThreads);
+        ThreadPool threadPool;
 
         # other misc response headers
         hash<auto> hdr;
@@ -536,6 +549,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
+
+        #! Cached HTTP date header value
+        static string cached_date_header;
+
+        #! Epoch second when cache was last updated
+        static int cached_date_epoch = 0;
     }
     #! @endcond
 
@@ -565,12 +584,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     deprecated constructor(*code logfunc, *code errlogfunc, bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
-        http_server_string = name;
-        debug = dbg;
-        self.hdr = {
-            "Server": name,
-        } + hdr;
-
         logger = new Logger(http_server_string);
         if (logfunc || errlogfunc) {
             logger.addAppender(new HttpServerCallbackAppender(logfunc ?? errlogfunc));
@@ -582,31 +595,25 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         } else {
             logger.setLevel(LoggerLevel::INFO);
         }
+        init(<HttpServerOptionInfo>{
+            "name": name,
+            "debug": dbg,
+            "hdr": hdr,
+            "logger": logger,
+        });
     }
 
     #! Creates the server with the given options
     /** @param opts see @ref HttpServerOptionInfo for more info
     */
     constructor(hash<HttpServerOptionInfo> opts) {
-        http_server_string = opts.name;
-        debug = opts.debug;
-        hdr = opts.hdr;
-        protect_last_listener = opts.protect_last_listener ?? False;
-        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
-        if (opts.ttl) {
-            setTtl(opts.ttl);
-        }
+        init(opts);
     }
+
 
     #! Creates the server with default options and an empty logger
     constructor() {
-        hash<HttpServerOptionInfo> opts();
-        http_server_string = opts.name;
-        debug = opts.debug;
-        hdr = opts.hdr;
-        protect_last_listener = opts.protect_last_listener;
-        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
-        ttl = opts.ttl;
+        init(<HttpServerOptionInfo>{});
     }
 
     #! calls stop() and destroys the object
@@ -1340,7 +1347,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             hdr += extra_hdrs;
         }
 
-        hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        hdr.Date = getDateHeader();
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
@@ -1426,6 +1433,32 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     clearContextInfo() {
         # this method left intentionally blank
+    }
+
+    #! Calculate the Date header only once per second
+    static string getDateHeader() {
+        int now = clock_getseconds();
+        if (now != cached_date_epoch) {
+            cached_date_epoch = now;
+            cached_date_header = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        }
+        return cached_date_header;
+    }
+
+    #! Common constructor code
+    private init(hash<HttpServerOptionInfo> opts) {
+        if (opts.idle_threads < 1) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", opts.idle_threads);
+        }
+        threadPool = new ThreadPool(-1, opts.idle_threads);
+        http_server_string = opts.name;
+        debug = opts.debug;
+        hdr = opts.hdr;
+        protect_last_listener = opts.protect_last_listener ?? False;
+        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
+        if (opts.ttl) {
+            setTtl(opts.ttl);
+        }
     }
 
     #! returns the listener ID from the bind name or throws an exception if not valid
@@ -1916,7 +1949,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         }
 
-        rv.hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        rv.hdr.Date = getDateHeader();
 
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
@@ -2137,7 +2170,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         int lock_waiting;
 
         const PollInterval = 250ms;
-        const ListenQueue = 100;
+        const ListenQueue = 1024;
         const BodyLogLimit = 40;
 
         # handler ref count
@@ -2735,7 +2768,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         auto body;
 
         # set TCP_NODELAY on incoming socket
-        #s.setNoDelay(True);
+        s.setNoDelay(True);
 
         HttpPersistentHandlerInfo phi();
 
