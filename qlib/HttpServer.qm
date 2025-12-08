@@ -584,7 +584,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     deprecated constructor(*code logfunc, *code errlogfunc, bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
-        logger = new Logger(http_server_string);
+        logger = new Logger(name);
         if (logfunc || errlogfunc) {
             logger.addAppender(new HttpServerCallbackAppender(logfunc ?? errlogfunc));
             if (logfunc) {
