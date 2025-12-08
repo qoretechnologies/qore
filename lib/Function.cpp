@@ -1028,6 +1028,9 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx) const {
+    unsigned nargs = args ? args->size() : 0;
+    int64 ppo = runtime_get_parse_options();
+
     // the lowest score length with the highest score wins
     int score_len = -1;
     int score = -1;
@@ -1038,16 +1041,12 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     //  cctx: %p '%s'\n", this, className() ? className() : "", className() ? "::" : "", getName(), vlist.size(),
     //  ilist.size(), args, args ? args->size() : 0, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
-    unsigned nargs = args ? args->size() : 0;
-
     const QoreFunction* aqf = nullptr;
     AbstractFunctionSignature* sig = nullptr;
 
     // parent class while iterating
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
-
-    int64 ppo = runtime_get_parse_options();
 
     int cnt = 0;
 

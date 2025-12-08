@@ -220,6 +220,13 @@ public class ConnectionSchemeCache {
             "zeyosrest": "ZeyosRestClient",
             "zeyosrests": "ZeyosRestClient",
         };
+
+        #! Type alias map
+        const TypeMap = {
+            "int": Type::Int,
+            "boolean": Type::Boolean,
+            "file-as-string": Type::String,
+        };
     }
 
     private {
@@ -515,10 +522,8 @@ public class ConnectionSchemeCache {
                     continue;
                 }
                 string type = info.type;
-                if (type == "int") {
-                    type = Type::Int;
-                } else if (type == "file-as-string") {
-                    type = Type::String;
+                if (*string nt = TypeMap{type}) {
+                    type = nt;
                 }
                 string vtype = i.value.type();
                 if (type != "any" && type != "auto" && vtype != type) {

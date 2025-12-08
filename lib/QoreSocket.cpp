@@ -46,7 +46,7 @@
 #include "qore/intern/CompressionTransforms.h"
 
 // maximum number of non-blocking network operations before returning
-constexpr unsigned max_nonblock_ops = 10;
+constexpr unsigned max_nonblock_ops = 32;
 
 void se_in_op(const char* cname, const char* meth, ExceptionSink* xsink) {
     assert(xsink);
