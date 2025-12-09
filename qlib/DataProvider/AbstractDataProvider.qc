@@ -123,6 +123,15 @@ public hashdecl DataProviderOptionInfo {
 
     #! Free-form metadata on options
     *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
 }
 
 #! Data provider summary info

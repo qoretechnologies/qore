@@ -72,6 +72,18 @@ public hashdecl ConnectionOptionInfo {
 
     #! Ignore types for backwards compatibility when an option changes type
     *hash<string, bool> ignore_types;
+
+    #! Free-form metadata for the option
+    *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
 }
 
 #! Connection provider information

@@ -331,6 +331,15 @@ public hashdecl ActionOptionInfo {
 
     #! Free-form metadata for the option
     *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
 }
 
 #! DataProvider path var info
@@ -1400,6 +1409,15 @@ public class DataProviderActionCatalog {
                 if (info.attr.metadata) {
                     i.value.metadata = info.attr.metadata;
                 }
+                if (info.attr.messages) {
+                    i.value.messages = info.attr.messages;
+                }
+                if (info.attr.icon) {
+                    i.value.icon = info.attr.icon;
+                }
+                if (info.attr.image) {
+                    i.value.image = info.attr.image;
+                }
                 if (info.attr.hasKey("supports_custom_values")) {
                     i.value.supports_custom_values = info.attr.supports_custom_values;
                 }
@@ -1456,12 +1474,12 @@ public class DataProviderActionCatalog {
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "on_change", "metadata"}
+                    "on_change", "metadata", "messages", "icon", "image"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "validation_regex", "depends_on", "on_change", "metadata", "supports_templates",
+                    "validation_regex", "depends_on", "on_change", "metadata", "icon", "image", "supports_templates",
                     "supports_custom_values", "supports_expressions", "server_expression_handling"} +
                     additional_fields;
                 if (i.value.option_type_name
