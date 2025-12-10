@@ -124,6 +124,18 @@ public hashdecl ConnectionSchemeInfo {
         All strings must be valid option names in \a options
     */
     *string required_options;
+
+    #! Free-form metadata for the connection
+    *hash<auto> metadata;
+
+    #! Messages to be displayed when creating a connection
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the connection
+    *string icon;
+
+    #! Any image info for the connection
+    *string image;
 }
 
 #! Connection provider type cache class
