@@ -38,11 +38,11 @@ public namespace DataProvider {
 #! describes a data type based on a hash
 public class SoftListDataType inherits ListDataType {
     #! creates the object
-    constructor(hash<QoreTypeInfo> info, Type element_type = AutoType) : ListDataType(info.path, element_type) {
+    constructor(hash<QoreTypeInfo> info, Type element_type = AutoType) : ListDataType(info, element_type) {
     }
 
     #! creates the object
-    constructor(hash<QoreTypeInfo> info, *AbstractDataProviderType element_type) : ListDataType(info.path, element_type) {
+    constructor(hash<QoreTypeInfo> info, *AbstractDataProviderType element_type) : ListDataType(info, element_type) {
     }
 
     #! creates the object
