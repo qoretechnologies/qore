@@ -506,6 +506,32 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     auto getDefaultValue() {
     }
 
+    #! Get allowed values
+    *list<hash<AllowedValueInfo>> getAllowedValues() {
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getAllowedValueMap() {
+    }
+
+    #! Get the "allowed values creatable" flag
+    bool getAllowedValuesCreatable() {
+        return False;
+    }
+
+    #! Get element allowed values
+    *list<hash<AllowedValueInfo>> getElementAllowedValues() {
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getElementAllowedValueMap() {
+    }
+
+    #! Get the "element allowed values creatable" flag
+    bool getElementAllowedValuesCreatable() {
+        return False;
+    }
+
     #! Returns True if this type is a list
     bool isList() {
         *Type thistype = getValueType();
