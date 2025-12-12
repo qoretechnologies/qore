@@ -1151,6 +1151,21 @@ class QdpCmd {
                 printf("%s%s%s (%s)\n", offset, type.getName());
             }
         }
+
+        if (prov) {
+            *hash<auto> tags = type.getTags();
+            string info;
+            if (tags.ref_data.val()) {
+                *list<auto> l = prov.getReferenceDataSafe(tags.ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (tags.element_ref_data.val()) {
+                *list<auto> l = prov.getElementReferenceDataSafe(tags.element_ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            }
+            if (info) {
+                printf("  %s%s\n", offset, info);
+            }
+        }
     }
 
     static *hash<auto> getSearchExpression(string action, *bool required) {

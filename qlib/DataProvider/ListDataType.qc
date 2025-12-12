@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ListDataType class definition
 
-/** ListDataType.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ListDataType.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,20 @@ public class ListDataType inherits QoreDataType {
     private {
         #! element type
         AbstractDataProviderType element_type;
+    }
+
+    #! creates the object
+    constructor(hash<QoreTypeInfo> info, Type element_type = AutoType) : QoreDataType(ListDataType::checkInfo(info)) {
+        self.element_type = AbstractDataProviderType::get(element_type);
+    }
+
+    #! creates the object
+    constructor(hash<QoreTypeInfo> info, AbstractDataProviderType element_type)
+            : QoreDataType(ListDataType::checkInfo(info)) {
+        self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
     }
 
     #! creates the object
@@ -132,6 +146,20 @@ public class ListDataType inherits QoreDataType {
     #! Updates the element type
     updateElementType(AbstractDataProviderType element_type) {
         self.element_type = element_type;
+    }
+
+    #! Checks the info hash for required fields
+    private static hash<QoreTypeInfo> checkInfo(hash<QoreTypeInfo> info) {
+        if (!info.type) {
+            info.type = AutoListType;
+        } else if (info.type.getBaseTypeCode() != NT_LIST) {
+            throw "DATA-PROVIDER-ERROR", sprintf("ListDataType cannot be created from type %y not compatible with "
+                "'list'", info.type.getName());
+        }
+        if (!info.name) {
+            info.name = info.type.getName();
+        }
+        return info;
     }
 
     #! Returns the underlying %Qore type for this type

@@ -230,6 +230,18 @@ public hashdecl DataTypeInfo {
     #! The default value for the type
     auto default_value;
 
+    #! for enum types; allowed values
+    *list<hash<AllowedValueInfo>> allowed_values;
+
+    #! Does the type accept values not defined in allowed_values too?
+    bool allowed_values_creatable = False;
+
+    #! for enum types; allowed values for elements for list types
+    *list<hash<AllowedValueInfo>> element_allowed_values;
+
+    #! Do elements of the list accept values not defined in element_allowed_values too?
+    bool element_allowed_values_creatable = False;
+
     #! If fields can be added dynamically to the type and if the type will accept any field at runtime
     bool can_manage_fields = False;
 

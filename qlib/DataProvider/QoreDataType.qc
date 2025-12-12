@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreDataType class definition
 
-/** QoreDataType.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** QoreDataType.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,48 @@ public hashdecl NameDescInfo {
 
     #! The markdown description for the type
     string desc;
+}
+
+#! Type info for the QoreDataType constructor
+public hashdecl QoreTypeInfo {
+    #! the Qore type
+    Type type;
+
+    #! The name of the type
+    *string name;
+
+    #! The display name for the type
+    *string display_name;
+
+    #! The short plain-text description for the type
+    *string short_desc;
+
+    #! The markdown description for the type
+    *string desc;
+
+    #! type options
+    *hash<auto> options;
+
+    #! type tags
+    *hash<auto> tags;
+
+    #! The type path, if any
+    *string path;
+
+    #! Default value for type
+    auto default_value;
+
+    #! for enum types; allowed values
+    *list<hash<AllowedValueInfo>> allowed_values;
+
+    #! Does the type accept values not defined in allowed_values too?
+    *bool allowed_values_creatable;
+
+    #! for enum types; allowed values for elements for list types
+    *list<hash<AllowedValueInfo>> element_allowed_values;
+
+    #! Do elements of the list accept values not defined in element_allowed_values too?
+    *bool element_allowed_values_creatable;
 }
 
 #! describes a data type based on a %Qore data type
@@ -92,6 +134,28 @@ public class QoreDataType inherits AbstractDataProviderType {
         #! hash of type codes accepted by the base type but not accepted by this type: code -> True
         hash<string, bool> blacklist_type_hash;
 
+        #! for enum types; allowed values
+        *list<hash<AllowedValueInfo>> allowed_values;
+
+        #! Does the type accept values not defined in allowed_values too?
+        *bool allowed_values_creatable;
+
+        #! for enum types; allowed values for elements for list types
+        *list<hash<AllowedValueInfo>> element_allowed_values;
+
+        #! Do elements of the list accept values not defined in element_allowed_values too?
+        *bool element_allowed_values_creatable;
+
+        #! for enum fields; allowed values
+        /** only supported for types that convert to a string
+        */
+        hash<string, bool> allowed_values_map;
+
+        #! for enum fields; allowed values for elements for list types
+        /** only supported for types that convert to a string
+        */
+        hash<string, bool> element_allowed_values_map;
+
         #! supported options
         const SupportedOptions = {
             "qore.no_null": <DataProviderTypeOptionInfo>{
@@ -120,39 +184,24 @@ public class QoreDataType inherits AbstractDataProviderType {
     }
 
     #! creates the type
+    constructor(hash<QoreTypeInfo> info) : AbstractDataProviderType(info.path) {
+        init(info);
+    }
+
+    #! creates the type
     constructor(Type type, *hash<auto> options, *hash<auto> tags, auto default_value, *hash<NameDescInfo> attr,
             *string path) : AbstractDataProviderType(path) {
-        self.type = type;
-        base_type_hash{type.getBaseTypeCode()} = True;
-        if (type.isOrNothingType()) {
-            base_type_hash{NT_NOTHING} = True;
-        }
-        accept_type_hash = type.getAcceptTypeHash();
-        return_type_hash = type.getReturnTypeHash();
-        accept_type_hash_simple = type.getAcceptTypeHash(True);
-        return_type_hash_simple = type.getReturnTypeHash(True);
-
-        soft_type = (type.getName() =~ /^.?soft/);
-        or_nothing_type = type.isOrNothingType();
-
-        # set options after setting base type info
-        if (options) {
-            setOptions(options);
-        }
-        if (tags) {
-            self.tags = tags;
-        }
-        if (self.options."qore.no_null") {
-            accept_type_hash -= "null";
-            accept_type_hash_simple -= "null";
-            blacklist_type_hash{NT_NULL} = True;
-        }
-
-        self.default_value = default_value;
-
-        if (attr) {
-            self += attr;
-        }
+        init(<QoreTypeInfo>{
+            "name": attr.name,
+            "display_name": attr.display_name,
+            "short_desc": attr.short_desc,
+            "desc": attr.desc,
+            "type": type,
+            "options": options,
+            "tags": tags,
+            "default_value": default_value,
+            "path": path,
+        });
     }
 
     #! returns the type name
@@ -226,6 +275,36 @@ public class QoreDataType inherits AbstractDataProviderType {
         return default_value;
     }
 
+    #! Get allowed values
+    *list<hash<AllowedValueInfo>> getAllowedValues() {
+        return allowed_values;
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getAllowedValueMap() {
+        return allowed_values_map;
+    }
+
+    #! Get the "allowed values creatable" flag
+    bool getAllowedValuesCreatable() {
+        return allowed_values_creatable ?? False;
+    }
+
+    #! Get element allowed values
+    *list<hash<AllowedValueInfo>> getElementAllowedValues() {
+        return element_allowed_values;
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getElementAllowedValueMap() {
+        return element_allowed_values_map;
+    }
+
+    #! Get the "element allowed values creatable" flag
+    bool getElementAllowedValuesCreatable() {
+        return element_allowed_values_creatable ?? False;
+    }
+
     #! returns the subtype (for lists or hashes) if there is only one
     *AbstractDataProviderType getElementType() {
         if (*Type elementType = type.getElementType()) {
@@ -248,7 +327,29 @@ public class QoreDataType inherits AbstractDataProviderType {
         if ((!exists value || value == NULL) && exists default_value) {
             return default_value;
         }
-        return type.acceptsValue(value);
+        value = type.acceptsValue(value);
+        if (allowed_values && !allowed_values_creatable) {
+            if (!allowed_values_map{value}) {
+                throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed values: %y",
+                    name, value, (map $1.value, allowed_values));
+            }
+        }
+        if (element_allowed_values_map) {
+            foreach auto v in (value) {
+                if (!element_allowed_values_map{v}) {
+                    throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed "
+                        "values for elements: %y", name, v, (map $1.value, element_allowed_values));
+                }
+            }
+        } else if (element_allowed_values && !element_allowed_values_creatable) {
+            foreach auto v in (value) {
+                if (!inlist(v, element_allowed_values)) {
+                    throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed "
+                        "values for elements: %y", name, v, (map $1.value, element_allowed_values));
+                }
+            }
+        }
+        return value;
     }
 
     #! returns the fields of the data structure; if any
@@ -268,7 +369,12 @@ public class QoreDataType inherits AbstractDataProviderType {
 
     #! returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
-        hash<DataTypeInfo> rv = AbstractDataProviderType::getInfo(simple);
+        hash<DataTypeInfo> rv = AbstractDataProviderType::getInfo(simple) + <DataTypeInfo>{
+            "allowed_values": allowed_values,
+            "allowed_values_creatable": allowed_values_creatable ?? False,
+            "element_allowed_values": element_allowed_values,
+            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
+        };
         if ((base_type_hash{NT_HASH} || base_type_hash{NT_ALL}) && !rv.fields) {
             rv.can_manage_fields = True;
         }
@@ -343,6 +449,62 @@ public class QoreDataType inherits AbstractDataProviderType {
             return rv;
         }
         return self;
+    }
+
+    #! Common constructor initializer
+    private init(hash<QoreTypeInfo> info) {
+        type = info.type;
+        name = info.name ?? info.type.getName();
+        display_name = info.display_name ?? AbstractDataField::getDisplayName(name);
+        if (info.short_desc.val()) {
+            short_desc = info.short_desc;
+        }
+        if (info.desc.val()) {
+            desc = info.desc;
+        }
+        Type type = info.type;
+        base_type_hash{type.getBaseTypeCode()} = True;
+        if (type.isOrNothingType()) {
+            base_type_hash{NT_NOTHING} = True;
+            or_nothing_type = True;
+        } else {
+            or_nothing_type = False;
+        }
+        soft_type = (type.getName() =~ /^.?soft/);
+
+        # set options after setting base type info
+        if (info.options) {
+            setOptions(info.options);
+        }
+        if (info.tags) {
+            tags = info.tags;
+        }
+
+        default_value = info.default_value;
+
+        accept_type_hash = type.getAcceptTypeHash();
+        return_type_hash = type.getReturnTypeHash();
+        accept_type_hash_simple = type.getAcceptTypeHash(True);
+        return_type_hash_simple = type.getReturnTypeHash(True);
+
+        if (options."qore.no_null") {
+            accept_type_hash -= "null";
+            accept_type_hash_simple -= "null";
+            blacklist_type_hash{NT_NULL} = True;
+        }
+
+        allowed_values = info.allowed_values;
+        allowed_values_creatable = info.allowed_values_creatable;
+        if (info.allowed_values && !info.allowed_values_creatable) {
+            # NOTE: requires values that can be converted to a string hash key to simulate a set
+            allowed_values_map = map {$1.value: True}, allowed_values;
+        }
+        element_allowed_values = info.element_allowed_values;
+        element_allowed_values_creatable = info.element_allowed_values_creatable;
+        if (info.element_allowed_values && !info.element_allowed_values_creatable) {
+            # NOTE: requires values that can be converted to a string hash key to simulate a set
+            element_allowed_values_map = map {$1.value: True}, element_allowed_values;
+        }
     }
 
     # assigs the object's members after deserialization
