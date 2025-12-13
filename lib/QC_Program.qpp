@@ -2573,7 +2573,7 @@ int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
 
     @since %Qore 2.0
 */
-static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY] {
+static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY;dom=PROCESS] {
     if (n < 0) {
         xsink->raiseException("INVALID-STACK-FRAME", "The stack frame argument must be a non-negative number; got "
             QLLD, n);
@@ -2602,7 +2602,7 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
 
     @since %Qore 2.0
 */
-static nothing Program::issueModuleCmd(string module, string cmd) {
+static nothing Program::issueModuleCmd(string module, string cmd) [dom=MODULES] {
     TempEncodingHelper tmp_module(module, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();
@@ -2623,4 +2623,20 @@ static nothing Program::issueModuleCmd(string module, string cmd) {
 */
 static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
     return runtime_get_parse_options();
+}
+
+//! Retrieves all @ref conditional_parsing "parse defines" in the current Program
+/** @return the hash of values of all @ref conditional_parsing "parse defines" in the current Program
+
+    @par Example:
+    @code{.py}
+*hash<auto> val = Program::getAllDefines();
+    @endcode
+
+    @note A parse define may be defined with no value then values may have nothing values
+
+    @since %Qore 2.3
+ */
+static *hash<auto> Program::getAllDefines() [flags=CONSTANT;dom=PROCESS] {
+   return qore_program_private::runTimeGetAllDefines(getProgram());
 }
