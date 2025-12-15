@@ -385,6 +385,28 @@ public namespace Schema {
         });
     }
 
+    #! returns a column hash for a binary column
+    /** @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column. See constants
+        Schema::C_NULL and Schema::C_NOT_NULL
+        @param comment an optional comment for the column
+     */
+    public hash<GenericColumnInfo> sub c_binary(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a binary column
+    /** @param comment the comment for the column
+     */
+    public hash<GenericColumnInfo> sub c_binary(string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ));
+    }
+
     #! Provides information on schema changes
     public hashdecl SchemaAlignmentInfo {
         #! Set to True if only creations / additions were made
