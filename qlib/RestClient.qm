@@ -56,7 +56,7 @@
 %endtry
 
 module RestClient {
-    version = "2.3.2";
+    version = "2.3.3";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -147,6 +147,10 @@ printf("%N\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_3_3 RestClient v2.3.3
+    - fixed non-blocking polling with connections that use basic auth
+      (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
 
     @subsection restclientv2_3_2 RestClient v2.3.2
     - fixed acqquiring OAuth2 tokens when the \c oauth2_token_use_basic_auth option is set
@@ -4177,7 +4181,12 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
         if (*string url = rc.getURL()) {
             int len = min(url.length(), conn.real_url.length()) - 1;
             if (url[0..len] != conn.real_url[0..len]) {
+                *string username = rc.getUsername();
+                *string password = rc.getPassword();
                 rc.setURL(conn.real_url);
+                if (username.val()) {
+                    rc.setUserPassword(username, password);
+                }
             }
         }
     }
