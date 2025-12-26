@@ -714,19 +714,9 @@ public class CdsRestConnection inherits RestClient::RestConnection {
             # process scopes; substitute "{url}" with the connection URL
             opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
 
-            if (opts.ping_path) {
-                if (opts.ping_path =~ /\{api_uri_path\}/) {
-                    opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
-                        (opts.api ?? CdsRestClient::DefaultApiVersion));
-                }
-                /*
-                if (opts.ping_path =~ /\{instance_type\}/ && opts.instance_type) {
-                    opts.ping_path = replace(opts.ping_path, "{instance_type}", opts.instance_type);
-                }
-                if (opts.ping_path =~ /\{api\}/ && opts.api) {
-                    opts.ping_path = replace(opts.ping_path, "{api}", opts.api);
-                }
-                */
+            if (opts.ping_path =~ /\{api_uri_path\}/) {
+                opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
+                    (opts.api ?? CdsRestClient::DefaultApiVersion));
             }
         } else if (opts.url) {
             remove opts.url;
