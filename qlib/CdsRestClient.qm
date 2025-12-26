@@ -262,8 +262,9 @@ CdsRestClient rest({
                 raiseError("missing the required \"instance_type\" option for Business Central");
             }
             api = getString(opts, "api", True) ?? DefaultBcApiVersion;
-            # Build URI path prefix: /v2.0/{instance_type}/api/v2.0/
-            uri_path_pfx = "/" + api + "/" + instance_type + "/api/" + api + "/";
+            # Build URI path prefix: /api/v2.0/
+            # Note: URL already contains /{api}/{instance_type}/ from connection options
+            uri_path_pfx = "/api/" + api + "/";
         } else {
             # CDS / Dynamics profile
             api = getString(opts, "api", True, DefaultApiVersion);
@@ -704,6 +705,12 @@ public class CdsRestConnection inherits RestClient::RestConnection {
             }
             # process scopes; substitute "{url}" with the connection URL
             opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
+
+            # For Business Central, build URL with instance_type
+            if (prof == "dynamics-business-central" && opts.instance_type) {
+                string api = opts.api ?? CdsRestClient::DefaultBcApiVersion;
+                url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/";
+            }
 
             if (opts.ping_path) {
                 opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
