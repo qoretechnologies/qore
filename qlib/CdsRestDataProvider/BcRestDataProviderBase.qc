@@ -48,12 +48,11 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "type": AbstractDataProviderType::get(AutoHashType),
                 "desc": "Sets options to the REST client constructor",
             },
-            "environment": <DataProviderOptionInfo>{
-                "display_name": "Environment",
-                "short_desc": "Business Central environment",
+            "instance_type": <DataProviderOptionInfo>{
+                "display_name": "Instance Type",
+                "short_desc": "Business Central instance type",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Business Central environment (e.g., 'sandbox', 'production')",
-                "default_value": "sandbox",
+                "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
             },
             "oauth2_client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",
@@ -88,7 +87,7 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
             "oauth2_client_id": "BC_CLIENT_ID",
             "oauth2_client_secret": "BC_CLIENT_SECRET",
             "tenant": "BC_TENANT",
-            "environment": "BC_ENVIRONMENT",
+            "instance_type": "BC_INSTANCE_TYPE",
         };
 
         #! Hash of HTTP Methods

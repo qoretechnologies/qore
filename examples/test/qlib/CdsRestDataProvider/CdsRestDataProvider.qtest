@@ -52,7 +52,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             "bc_client_secret":   "s,bc-client-secret=s",
             "bc_url":             "u,bc-url=s",
             "bc_tenant":          "T,bc-tenant=s",
-            "bc_environment":     "e,bc-environment=s",
+            "bc_instance_type":   "e,bc-instance-type=s",
             # Common options
             "timeout":            "t,timeout=i",
         };
@@ -109,7 +109,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         printOption("-s,--bc-client-secret=ARG", "set Business Central OAuth2 client secret", OptionColumn);
         printOption("-u,--bc-url=ARG", "URL for the Business Central instance", OptionColumn);
         printOption("-T,--bc-tenant=ARG", "set Business Central Azure AD tenant", OptionColumn);
-        printOption("-e,--bc-environment=ARG", "set Business Central environment", OptionColumn);
+        printOption("-e,--bc-instance-type=ARG", "set Business Central instance type", OptionColumn);
         printOption("-t,--timeout=ARG", "set connection timeout in seconds", OptionColumn);
     }
 
@@ -173,7 +173,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             return;
         }
         opts.tenant = m_options.bc_tenant ?? ENV.BC_TENANT;
-        opts.environment = m_options.bc_environment ?? ENV.BC_ENVIRONMENT ?? "sandbox";
+        opts.instance_type = m_options.bc_instance_type ?? ENV.BC_INSTANCE_TYPE;
         if (m_options.timeout) {
             opts.connect_timeout = m_options.timeout;
         }
@@ -247,7 +247,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
                     "oauth2_client_id": "test-client-id",
                     "oauth2_client_secret": "test-client-secret",
                     "tenant": "test-tenant",
-                    "environment": "sandbox",
+                    "instance_type": "sandbox",
                 },
             });
             assertEq(True, conn instanceof BusinessCentralRestConnection);
@@ -265,6 +265,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
                 "opts": {
                     "oauth2_client_id": "test-client-id",
                     "oauth2_client_secret": "test-client-secret",
+                    "instance_type": "sandbox",
                 },
             });
             assertEq(True, conn instanceof BusinessCentralRestConnection);
@@ -285,6 +286,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
                     "oauth2_client_id": "test-client-id",
                     "oauth2_client_secret": "test-client-secret",
                     "tenant": "my-tenant-guid",
+                    "instance_type": "production",
                 },
             });
             string auth_url = conn.getAuthUrl();
@@ -300,7 +302,21 @@ class CdsRestDataProviderTest inherits QUnit::Test {
                 "opts": {
                     "oauth2_client_id": "x",
                     "oauth2_client_secret": "x",
+                    "instance_type": "sandbox",
                     "invalid_option": 1,
+                },
+            });
+        });
+
+        # Test missing required instance_type option
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            BusinessCentralRestConnection conn({
+                "name": "test-missing-instance",
+                "desc": "test",
+                "url": url,
+                "opts": {
+                    "oauth2_client_id": "x",
+                    "oauth2_client_secret": "x",
                 },
             });
         });

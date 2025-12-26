@@ -170,6 +170,8 @@ public class CdsRestClient inherits RestClient::RestClient {
             "dynamics-business-central": {
                 "url": DefaultBusinessCentralBaseUri,
                 "oauth2_scopes": (
+                    "https://api.businesscentral.dynamics.com/user_impersonation",
+                    "https://api.businesscentral.dynamics.com/Financials.ReadWrite.All",
                     "offline_access",
                     "{url}.default",
                 ),
@@ -689,7 +691,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
 /** This class provides a REST client for communication with Microsoft Dynamics 365 Business Central API.
 
     The Business Central API uses different URL structure than Dynamics 365 CDS:
-    - Base URL: https://api.businesscentral.dynamics.com/v2.0/{environment}/api/v2.0/
+    - Base URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
     - Entities are company-scoped: /companies({companyId})/{entity}
 
     @par Example:
@@ -699,7 +701,7 @@ BusinessCentralRestClient rest({
     "oauth2_client_id": oauth2_client_id,
     "oauth2_client_secret": oauth2_client_secret,
     "tenant": tenant_id,
-    "environment": "sandbox",
+    "instance_type": "sandbox",  # or production environment GUID
 });
 hash<auto> companies = rest.get("companies");
     @endcode
@@ -721,11 +723,18 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
         #! Default API version
         const DefaultApiVersion = "v2.0";
 
+        #! Default OAuth2 scopes for Business Central
+        const DefaultOAuth2Scopes = (
+            "https://api.businesscentral.dynamics.com/user_impersonation",
+            "https://api.businesscentral.dynamics.com/Financials.ReadWrite.All",
+            "offline_access",
+        );
+
         #! Default BC ping method
         const DefaultPingMethod = "GET";
 
-        #! Default BC ping path - lists companies
-        const DefaultPingPath = "companies";
+        #! Default BC ping path
+        const DefaultPingPath = "api/v2.0";
 
         #! Default BC ping headers
         const DefaultPingHeaders = {
@@ -736,8 +745,8 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
     private:internal {
         #! API version
         string api;
-        #! Environment (sandbox, production, or tenant GUID)
-        string environment;
+        #! Instance type (sandbox, production, or environment GUID)
+        string instance_type;
         #! Tenant ID
         string tenant;
         #! URI path prefix for API calls
@@ -749,7 +758,8 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
         @param opts valid options are the same as @ref RestClient::RestClient "RestClient" with the following
         differences:
         - \c api: the API version for Business Central (default: "v2.0")
-        - \c environment: the Business Central environment (e.g., "sandbox", "production", or tenant GUID)
+        - \c instance_type: (required) the Business Central instance type (e.g., "sandbox", "production", or
+          environment GUID)
         - \c tenant: the Azure AD tenant ID
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -765,8 +775,13 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
             raiseError("missing the \"oauth2_client_id\" and \"oauth2_client_secret\" options");
         }
 
+        # instance_type is required
+        instance_type = getString(opts, "instance_type", True);
+        if (!instance_type) {
+            raiseError("missing the required \"instance_type\" option");
+        }
+
         tenant = getString(opts, "tenant", True) ?? "common";
-        environment = getString(opts, "environment", True) ?? "sandbox";
         api = getString(opts, "api", True) ?? DefaultApiVersion;
 
         if (oauth2_token_url == "auto") {
@@ -776,8 +791,8 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
             oauth2_auth_url = OAuth2BaseUrl + tenant + OAuth2AuthUriPathSuffix;
         }
 
-        # Build URI path prefix: /v2.0/{environment}/api/v2.0/
-        uri_path_pfx = "/" + api + "/" + environment + "/api/" + api + "/";
+        # Build URI path prefix: /v2.0/{instance_type}/api/v2.0/
+        uri_path_pfx = "/" + api + "/" + instance_type + "/api/" + api + "/";
 
         setConnectionPath(uri_path_pfx);
 
@@ -795,9 +810,9 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
         return api;
     }
 
-    #! Returns the Business Central environment
-    string getEnvironment() {
-        return environment;
+    #! Returns the Business Central instance type
+    string getInstanceType() {
+        return instance_type;
     }
 
     #! Returns the tenant ID
@@ -822,8 +837,8 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
             url += "/";
         }
 
-        # Build OAuth2 scopes - use {url}.default for BC
-        list<auto> scopes = opts.oauth2_scopes ?? ("offline_access", url + ".default");
+        # Use default BC OAuth2 scopes if not provided
+        list<auto> scopes = opts.oauth2_scopes ?? DefaultOAuth2Scopes;
 
         return opts + {
             "url": url,
@@ -862,7 +877,8 @@ public class BusinessCentralRestClient inherits RestClient::RestClient {
 #! Class for Microsoft Dynamics 365 Business Central REST connections
 /** Supports options as in @ref RestClient::RestClient with the following differences:
     - \c "api": the API version for Business Central (default: "v2.0")
-    - \c "environment": the Business Central environment (e.g., "sandbox", "production", or tenant GUID)
+    - \c "instance_type": (required) the Business Central instance type (e.g., "sandbox", "production", or
+      environment GUID)
     - \c "tenant": the Azure AD tenant ID
     - \c "oauth2_client_id": (required) the Business Central OAuth2 client ID
     - \c "oauth2_client_secret": (required) the Business Central OAuth2 client secret
@@ -893,12 +909,11 @@ public class BusinessCentralRestConnection inherits RestClient::RestConnection {
                     "desc": "Sets the API version for Business Central (e.g., 'v2.0')",
                     "default_value": BusinessCentralRestClient::DefaultApiVersion,
                 },
-                "environment": <ConnectionOptionInfo>{
-                    "display_name": "Environment",
-                    "short_desc": "Business Central environment",
+                "instance_type": <ConnectionOptionInfo>{
+                    "display_name": "Instance Type",
+                    "short_desc": "Business Central instance type",
                     "type": "string",
-                    "desc": "Business Central environment (e.g., 'sandbox', 'production', or tenant environment GUID)",
-                    "default_value": "sandbox",
+                    "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
                 },
                 "tenant": <ConnectionOptionInfo>{
                     "display_name": "Tenant ID",
@@ -929,7 +944,7 @@ public class BusinessCentralRestConnection inherits RestClient::RestConnection {
                     "default_value": BusinessCentralRestClient::DefaultPingHeaders,
                 },
             },
-            "required_options": "oauth2_client_id,oauth2_client_secret",
+            "required_options": "oauth2_client_id,oauth2_client_secret,instance_type",
         };
 
         #! Options required to support the OAuth2 authorization code grant flow
