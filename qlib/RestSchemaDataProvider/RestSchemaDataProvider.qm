@@ -1,0 +1,90 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore RestSchemaDataProvider module definition
+
+/*  RestSchemaDataProvider.qm Copyright 2024 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+# allow the use of the weak reference assignment operator: ':='
+%allow-weak-references
+
+%requires(reexport) DataProvider
+%requires(reexport) RestSchemaValidator
+%requires(reexport) RestClient
+%requires(reexport) Swagger
+%requires(reexport) OpenApi3
+
+module RestSchemaDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for REST schemas (Swagger 2.0 and OpenAPI 3.0)";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new RestSchemaDataProviderFactory());
+    };
+}
+
+/** @mainpage RestSchemaDataProvider Module
+
+    @tableofcontents
+
+    @section restschemamdataproviderintro Introduction to the RestSchemaDataProvider Module
+
+    The %RestSchemaDataProvider module provides a @ref dataproviderintro "data provider" API for REST schemas
+    including both Swagger 2.0 and OpenAPI 3.0 schemas.
+
+    The @ref RestSchemaDataProvider::RestSchemaDataProvider "RestSchemaDataProvider" class allows for introspecting
+    REST schemas, while the @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider"
+    class supports the @ref dataproviderintro "data provider" request-reply API for communication with REST servers.
+
+    REST schema paths can be introspected with the following format:
+    - REST operation path: <tt><i>uri_path</i>/<i>HTTP_method</i></tt>
+      - ex: <tt><b>pet/PUT</b></tt>
+      - results in a
+        @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider" object where the
+        request and response messages can be queried and requests can be sent to the server
+
+    The following classes are provided by this module:
+    - @ref RestSchemaDataProvider::RestSchemaDataProvider "RestSchemaDataProvider"
+    - @ref RestSchemaDataProvider::RestSchemaDataProviderBase "RestSchemaDataProviderBase"
+    - @ref RestSchemaDataProvider::RestSchemaDataProviderFactory "RestSchemaDataProviderFactory"
+    - @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider"
+
+    @section restschemamdataprovider_relnotes Release Notes
+
+    @subsection restschemamdataprovider_v1_0 RestSchemaDataProvider v1.0
+    - initial release of the module supporting both Swagger 2.0 and OpenAPI 3.0 schemas
+*/
+
+#! contains all public definitions in the RestSchemaDataProvider module
+public namespace RestSchemaDataProvider {
+}

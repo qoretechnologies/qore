@@ -41,6 +41,7 @@
 %requires(reexport) ConnectionProvider >= 1.10
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
+%requires OpenApi3 >= 1.0
 %requires(reexport) Logger
 
 %try-module yaml >= 0.5
@@ -103,8 +104,8 @@ module RestClient {
     If none of the above modules can be loaded by the RestClient module, then the RestClient module will fail to
     initialize.
 
-    Runtime REST API validation against a REST schema is supported; see the \c validator and \c swagger options in
-    @ref RestClient::RestClient::constructor() "RestClient::constructor()".
+    Runtime REST API validation against a REST schema is supported; see the \c validator, \c openapi3, and \c swagger
+    options in @ref RestClient::RestClient::constructor() "RestClient::constructor()".
 
     For maximum compatibility with other REST solutions, the \c "json" encoding method is the default when no other
     encoding method is chosen and the \c "json" module is available.
@@ -711,6 +712,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           OAuth2 taken requests
         - \c oauth2_token_use_basic_auth: Use HTTP basic authentication with the client_id and client_secret when
           making OAuth2 token requests
+        - \c openapi3: the path to a <a href="https://swagger.io/">OpenApi 3</a> REST schema file for API
+          validation; only used if \a validator not provided (see the @ref openapi3intro "OpenApi3" module)
         - \c password: The password for authentication; only used if no username or password is set in the URL and if
           the \c username option is also used
         - \c proxy: The proxy URL for connecting through a proxy
@@ -741,7 +744,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c username: The username for authentication; only used if no username or password is set in the URL and
           if the \c password option is also used
         - \c validator: an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
-          object to validate request and response messages; overrides \a swagger
+          object to validate request and response messages; overrides \a swagger and \a openapi3
         - \c no_charset: if True no charset will be added to the Content-Type header
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -789,7 +792,14 @@ RestClient rest({"url": "http://localhost:8001/rest"});
                 validator.setBasePath(opts.swagger_base_path);
             }
         } else {
-            if (opts.swagger) {
+            if (opts.openapi3) {
+                # this will use FileLocationHandler::getTextFileFileLocation() that reads a file if there is no scheme
+                validator = OpenApi3Loader::fromUrl(opts.openapi3, NOTHING,
+                    opts.swagger_lax_parsing ? {"parse_flags": -1} : NOTHING);
+                if (opts.swagger_base_path) {
+                    validator.setBasePath(opts.swagger_base_path);
+                }
+            } else if (opts.swagger) {
                 # this will use FileLocationHandler::getTextFileFileLocation() that reads a file if there is no scheme
                 validator = SwaggerLoader::fromUrl(opts.swagger, NOTHING,
                     opts.swagger_lax_parsing ? {"parse_flags": -1} : NOTHING);
@@ -2594,6 +2604,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     - \c "oauth2_token_expiry": The expiry date of the token, if known
     - \c "oauth2_token_expiry_hint": A integer value in minutes giving the expected lifetime of the token
     - \c "oauth2_token_url": The token URL for OAuth2 flows; ignored if the \c token option is set
+    - \c "oauth2_token_use_basic_auth": Use basic authentication for the OAuth2 token request
+    - \c "openapi3": the path to a <a href="https://swagger.io/">OpenApi 3</a> REST schema file for API
+      validation; only used if \a validator not provided (see the @ref openapi3intro "OpenApi3" module)
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
     - \c "proxy": proxy URL to use
@@ -2975,6 +2988,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "desc": "Use basic authorization with the client ID and client secret when making token "
                         "requests",
                 },
+                "openapi3": <ConnectionOptionInfo>{
+                    "display_name": "OpenApi 3 Schema",
+                    "short_desc": "Sets the location of an OpenApi 3 schema to use for the connection",
+                    "type": "file-as-string",
+                    "desc": "Sets the location of an OpenApi 3 schema to use for message validation; processed with "
+                        "`FileLocationHandler::getTextFileFromLocation()` "
+                        "(ex: `file:///path/to/swagger-schema.json`); conflicts with `swagger` and `validator`",
+                    "freeform": True,
+                },
                 "password": <ConnectionOptionInfo>{
                     "display_name": "Password",
                     "short_desc": "The password for authentication",
@@ -3049,7 +3071,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "type": "file-as-string",
                     "desc": "Sets the location of a Swagger schema to use for message validation; processed with "
                         "`FileLocationHandler::getTextFileFromLocation()` "
-                        "(ex: `file:///path/to/swagger-schema.json`); conflicts with `validator`",
+                        "(ex: `file:///path/to/swagger-schema.json`); conflicts with `openapi3` and `validator`",
                     "freeform": True,
                 },
                 "swagger_base_path": <ConnectionOptionInfo>{
@@ -3103,8 +3125,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "display_name": "Schema Validator",
                     "short_desc": "Sets a schema validator object",
                     "type": "auto",
-                    "desc": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts "
-                        "with `swagger`",
+                    "desc": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with "
+                        "`openapi3` and `swagger`",
                 },
             },
         };
@@ -3153,6 +3175,13 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             flow
         */
         const RCF_OAUTH2_AUTH_CODE = "oauth2-auth-code";
+
+        #! Validator options
+        const ValOpts = (
+            "openapi3",
+            "swagger",
+            "validator",
+        );
     }
 
     private {
@@ -3362,7 +3391,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @throw DATA-PROVIDER-ERROR this object does not support the data provider API
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        if (opts.validator || opts.swagger) {
+        if (opts.validator || opts.swagger || opts.openapi3) {
             # get a REST client object without connecting
             RestClient rest = get(False);
             # get the validator and return the provider
@@ -3443,8 +3472,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     opts.headers.type());
         }
         # prefer "validator" over "swagger"
-        if (opts.swagger && opts.validator) {
-            throw "REST-CONNECTION-ERROR", "cannot include both \"validator\" and \"swagger\" options";
+        if ((*list<string> l = keys opts{ValOpts}).size() > 1) {
+            throw "REST-CONNECTION-ERROR", sprintf("cannot include %y options at the same time; only one option for a "
+                "validator can be provided", l);
         }
         if (opts.validator && !(opts.validator instanceof AbstractRestSchemaValidator)) {
             throw "REST-CONNECTION-ERROR", sprintf("\"validator\" is type %y; expecting an "
@@ -3708,7 +3738,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Processes OAuth2 login responses and returns updated options
     private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
         hash<auto> new_opts;
-        if (resp.access_token != real_opts.token) {
+        if (resp.hasKey("access_token") && resp.access_token != real_opts.token) {
             new_opts.token = resp.access_token;
         }
         if (resp.expires_in) {
@@ -3810,7 +3840,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Sets child data provider capabilities
     private setChildCapabilities() {
         children_can_support_apis = True;
-        if (exists opts.validator || exists opts.swagger) {
+        if (exists opts.validator || exists opts.swagger || exists opts.openapi3) {
             children_can_support_records = True;
         }
     }
@@ -3828,6 +3858,9 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
     public {
         #! Retrieve Swagger schema
         const SPS_GET_SWAGGER = 'get-swagger';
+
+        #! Retrieve OpenApi 3 schema
+        const SPS_GET_OPENAPI3 = 'get-openapi3';
 
         #! OAuth2 get token state
         const SPS_OAUTH2_GET_TOKEN = "oauth2-get-token";
@@ -3903,7 +3936,11 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             use_path_as_is = True;
         }
 
-        if (real_opts.swagger && !rc.getValidator().managesUriPath()) {
+        if (real_opts.openapi3 && !rc.getValidator().managesUriPath()) {
+            rc.debug("RestConnection ping: get OpenApi 3 schema: %y", real_opts.openapi3);
+            state = SPS_GET_OPENAPI3;
+            poller = FileLocationHandler::getIoPollerForLocation(real_opts.openapi3);
+        } else if (real_opts.swagger && !rc.getValidator().managesUriPath()) {
             rc.debug("RestConnection ping: get Swagger schema: %y", real_opts.swagger);
             state = SPS_GET_SWAGGER;
             poller = FileLocationHandler::getIoPollerForLocation(real_opts.swagger);
@@ -3954,6 +3991,20 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             *hash<SocketPollInfo> pinfo = poller.continuePoll();
             if (pinfo) {
                 return pinfo;
+            }
+
+            if (state == SPS_GET_OPENAPI3) {
+                # create OpenAPI 3 validator from file
+                rc.setValidator(OpenApi3Loader::fromString(poller.getOutput().toString()));
+                rc.debug("RestConnection ping: set OpenApi 3 schema for %y", rc.getValidator().getTargetUrl());
+                if (rc.requiresOAuth2Token()) {
+                    doStartGetToken();
+                } else if (rc.requiresRefresh()) {
+                    doStartRefresh();
+                } else {
+                    doStartPing();
+                }
+                continue;
             }
 
             if (state == SPS_GET_SWAGGER) {

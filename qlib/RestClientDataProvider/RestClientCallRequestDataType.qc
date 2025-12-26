@@ -59,7 +59,7 @@ public class RestClientCallRequestDataType inherits HashDataType {
                     "type": AbstractDataProviderTypeMap{$1.value.type == "auto" ? $1.value.type : "*" + $1.value.type},
                 }),
             }, (RestConnection::ConnectionScheme.options - ("headers", "validator")).pairIterator(),
-                $1.key !~ /swagger/ && $1.key !~ /ssl/
+                $1.key !~ /swagger/ && $1.key !~ /ssl/ && $1.key !~ /openapi3/
         );
     }
 

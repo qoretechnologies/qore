@@ -20,6 +20,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/RestSchemaValidator.qm
 %requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
 

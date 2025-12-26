@@ -11,6 +11,8 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/RestClientDataProvider
 %requires ../../../../qlib/HttpServerUtil.qm

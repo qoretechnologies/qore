@@ -1,0 +1,41 @@
+openapi: "3.0.0"
+info:
+  description: >-
+    This is oload api. It allows to upload files for deployment. Files should be sent
+    by using multipart content-type.
+  version: 1.0.0
+  title: Oload API
+  contact:
+    email: info@qoretechnologies.com
+paths:
+  /create:
+    post:
+      description: Uploads attached file(s) to qorus server
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - in: formData
+          required: true
+          name: upfile
+          schema:
+            type: string
+          description: The file to upload.
+      responses:
+        '201':
+          $ref: '#/components/responses/Success'
+        '400':
+          $ref: '#/components/responses/Failed'
+components:
+  responses:
+    Failed:
+      description: 'Bad request / Validation error'
+      schema:
+        type: string
+    Success:
+      description: 'File uploaded successfully'
+      schema:
+        type: string
+    default:
+      description: successful operation
