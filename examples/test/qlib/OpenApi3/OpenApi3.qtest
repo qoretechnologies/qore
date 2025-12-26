@@ -388,6 +388,18 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test validation", \testValidation());
         addTestCase("Test examples", \testExamples());
         addTestCase("Test real msgs", \testRealMessages());
+        addTestCase("Test OpenAPI 3.1 version detection", \testOpenApi31Version());
+        addTestCase("Test OpenAPI 3.1 type arrays", \testOpenApi31TypeArrays());
+        addTestCase("Test OpenAPI 3.1 exclusive min/max", \testOpenApi31ExclusiveNumeric());
+        addTestCase("Test OpenAPI 3.1 examples array", \testOpenApi31Examples());
+        addTestCase("Test OpenAPI 3.1 webhooks", \testOpenApi31Webhooks());
+        addTestCase("Test OpenAPI 3.1 mutualTLS", \testOpenApi31MutualTLS());
+        addTestCase("Test OpenAPI 3.1 contentEncoding", \testOpenApi31ContentEncoding());
+        addTestCase("Test OpenAPI 3.1 info.summary", \testOpenApi31InfoSummary());
+        addTestCase("Test OpenAPI 3.1 license.identifier", \testOpenApi31LicenseIdentifier());
+        addTestCase("Test common extensions", \testCommonExtensions());
+        addTestCase("Test OpenAPI 3.1 negative cases", \testOpenApi31NegativeCases());
+        addTestCase("Test OpenAPI 3.1 type validation", \testOpenApi31TypeValidation());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -3259,5 +3271,777 @@ public class OpenApi3Test inherits QUnit::Test {
         string json = my_make_json(b);
 
         return sprintf("HTTP/1.1 200 OK\r\nServer: Test/1.0\r\nContent-Type: application/json\r\nContent-Length: %d\r\nDate: %s GMT\r\n\r\n%s", json.size(), gmtime().format("Dy, DD Mon YYYY HH:mm:SS"), json);
+    }
+
+    testOpenApi31Version() {
+        checkModules();
+
+        # Test 3.0.x detection
+        {
+            hash<auto> schema30 = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema30);
+            assertFalse(so.is31OrLater());
+        }
+
+        # Test 3.1.x detection
+        {
+            hash<auto> schema31 = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema31);
+            assertTrue(so.is31OrLater());
+        }
+
+        # Test 3.1.1 detection
+        {
+            hash<auto> schema311 = {
+                "openapi": "3.1.1",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema311);
+            assertTrue(so.is31OrLater());
+        }
+
+        # Test jsonSchemaDialect
+        {
+            hash<auto> schema31 = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema31);
+            assertEq("https://json-schema.org/draft/2020-12/schema", so.jsonSchemaDialect);
+        }
+    }
+
+    testOpenApi31TypeArrays() {
+        checkModules();
+
+        # Test type array with null (OpenAPI 3.1 nullable syntax)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "NullableString": {
+                            "type": ("string", "null"),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject nullableString = so.components.schemas.NullableString;
+            assertEq("string", nullableString.type);
+            assertTrue(nullableString.nullable);
+        }
+
+        # Test type array with multiple types (first non-null type used)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "NullableInt": {
+                            "type": ("integer", "null"),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject nullableInt = so.components.schemas.NullableInt;
+            assertEq("integer", nullableInt.type);
+            assertTrue(nullableInt.nullable);
+        }
+    }
+
+    testOpenApi31ExclusiveNumeric() {
+        checkModules();
+
+        # Test exclusiveMinimum/exclusiveMaximum as numbers (OpenAPI 3.1 style)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "BoundedNumber": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "exclusiveMaximum": 100,
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
+            assertEq(0.0, bounded.exclusiveMinValue);
+            assertEq(100.0, bounded.exclusiveMaxValue);
+        }
+
+        # Test old-style exclusiveMinimum/Maximum (boolean) still works
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "BoundedNumber": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "exclusiveMinimum": True,
+                            "exclusiveMaximum": True,
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
+            assertTrue(bounded.exclusiveMin);
+            assertTrue(bounded.exclusiveMax);
+            assertEq(0.0, bounded.minimum);
+            assertEq(100.0, bounded.maximum);
+        }
+    }
+
+    testOpenApi31Examples() {
+        checkModules();
+
+        # Test examples array (OpenAPI 3.1)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "WithExamples": {
+                            "type": "string",
+                            "examples": ("example1", "example2", "example3"),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject withExamples = so.components.schemas.WithExamples;
+            assertEq(3, withExamples.examples.size());
+            assertEq("example1", withExamples.examples[0]);
+            assertEq("example2", withExamples.examples[1]);
+            assertEq("example3", withExamples.examples[2]);
+        }
+    }
+
+    testOpenApi31Webhooks() {
+        checkModules();
+
+        # Test webhooks parsing
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "webhooks": {
+                    "newPet": {
+                        "post": {
+                            "summary": "New pet notification",
+                            "operationId": "newPetWebhook",
+                            "requestBody": {
+                                "description": "Pet data",
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"type": "object"},
+                                    },
+                                },
+                            },
+                            "responses": {
+                                "200": {"description": "Success"},
+                            },
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertTrue(exists so.webhooks);
+            assertTrue(exists so.webhooks.newPet);
+            # Verify the webhook PathItemObject was parsed
+            assertEq("PathItemObject", so.webhooks.newPet.className());
+        }
+    }
+
+    testOpenApi31MutualTLS() {
+        checkModules();
+
+        # Test mutualTLS security scheme
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "securitySchemes": {
+                        "mtls": {
+                            "type": "mutualTLS",
+                            "description": "Mutual TLS authentication",
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertTrue(exists so.components.securitySchemes.mtls);
+            assertEq("mutualTLS", so.components.securitySchemes.mtls.type);
+        }
+    }
+
+    testOpenApi31ContentEncoding() {
+        checkModules();
+
+        # Test contentEncoding and contentMediaType
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "BinaryData": {
+                            "type": "string",
+                            "contentEncoding": "base64",
+                            "contentMediaType": "image/png",
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject binaryData = so.components.schemas.BinaryData;
+            assertEq("base64", binaryData.contentEncoding);
+            assertEq("image/png", binaryData.contentMediaType);
+        }
+    }
+
+    testOpenApi31InfoSummary() {
+        checkModules();
+
+        # Test info.summary field
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {
+                    "title": "Test API",
+                    "version": "1.0",
+                    "summary": "A short summary of the API",
+                    "description": "A longer description of the API",
+                },
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertEq("A short summary of the API", so.info.summary);
+        }
+    }
+
+    testOpenApi31LicenseIdentifier() {
+        checkModules();
+
+        # Test license.identifier field (SPDX)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {
+                    "title": "Test API",
+                    "version": "1.0",
+                    "license": {
+                        "name": "Apache 2.0",
+                        "identifier": "Apache-2.0",
+                    },
+                },
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertEq("Apache-2.0", so.info.license.identifier);
+            assertEq("Apache 2.0", so.info.license.name);
+        }
+
+        # Test license with URL (3.0 style) still works
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {
+                    "title": "Test API",
+                    "version": "1.0",
+                    "license": {
+                        "name": "MIT",
+                        "url": "https://opensource.org/licenses/MIT",
+                    },
+                },
+                "paths": {},
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertEq("MIT", so.info.license.name);
+            assertEq("https://opensource.org/licenses/MIT", so.info.license.url);
+        }
+    }
+
+    testCommonExtensions() {
+        checkModules();
+
+        # Test schema-specific extensions
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "Status": {
+                            "type": "string",
+                            "enum": ("active", "inactive", "pending"),
+                            "x-enum-varnames": ("STATUS_ACTIVE", "STATUS_INACTIVE", "STATUS_PENDING"),
+                            "x-enum-descriptions": ("Currently active", "Not active", "Awaiting activation"),
+                            "x-codegen-type": "StatusEnum",
+                            "x-model-name": "StatusModel",
+                            "x-class-name": "StatusClass",
+                            "x-example": "active",
+                            "x-examples": ("active", "pending"),
+                            "x-internal": True,
+                            "x-hidden": True,
+                            "x-deprecated": True,
+                            "x-displayName": "Status Field",
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject status = so.components.schemas.Status;
+            assertEq(("STATUS_ACTIVE", "STATUS_INACTIVE", "STATUS_PENDING"), status.getEnumVarnames());
+            assertEq(("Currently active", "Not active", "Awaiting activation"), status.getEnumDescriptions());
+            assertEq("StatusEnum", status.getCodegenType());
+            assertEq("StatusModel", status.getModelName());
+            assertEq("StatusClass", status.getClassName());
+            assertEq("active", status.getXExample());
+            assertEq(("active", "pending"), status.getXExamples());
+            # Test common ObjectBase extension accessors
+            assertTrue(status.isInternal());
+            assertTrue(status.isHidden());
+            assertTrue(status.isXDeprecated());
+            assertEq("Status Field", status.getDisplayName());
+        }
+
+        # Test top-level extensions (x-logo, x-tagGroups)
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "x-logo": {
+                    "url": "https://example.com/logo.png",
+                    "altText": "API Logo",
+                    "backgroundColor": "#FFFFFF",
+                },
+                "x-tagGroups": (
+                    {"name": "Core", "tags": ("users", "orders")},
+                    {"name": "Admin", "tags": ("admin", "settings")},
+                ),
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            hash<auto> logo = so.getLogo();
+            assertEq("https://example.com/logo.png", logo.url);
+            assertEq("API Logo", logo.altText);
+            assertEq("#FFFFFF", logo.backgroundColor);
+
+            list<hash<auto>> tagGroups = so.getTagGroups();
+            assertEq(2, tagGroups.size());
+            assertEq("Core", tagGroups[0].name);
+            assertEq(("users", "orders"), tagGroups[0].tags);
+        }
+
+        # Test displayName extension on tags
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "tags": (
+                    {
+                        "name": "users",
+                        "description": "User management",
+                        "x-displayName": "User Management",
+                    },
+                ),
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertEq("User Management", so.tags[0].getDisplayName());
+        }
+    }
+
+    testOpenApi31NegativeCases() {
+        checkModules();
+
+        # Test invalid OpenAPI version (not 3.x)
+        {
+            hash<auto> schema = {
+                "openapi": "2.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+            };
+            assertThrows("INVALID-OPENAPI3-VERSION", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid type array (empty list) - defaults to "any"
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "EmptyType": {
+                            "type": (),
+                        },
+                    },
+                },
+            };
+            # Empty type array defaults to "any" type
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertEq("any", so.components.schemas.EmptyType.type);
+        }
+
+        # Test type array with only null - defaults to "any" type with nullable
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "OnlyNull": {
+                            "type": ("null",),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            assertTrue(so.components.schemas.OnlyNull.nullable);
+            # When only null type, defaults to "any"
+            assertEq("any", so.components.schemas.OnlyNull.type);
+        }
+
+        # Test invalid exclusiveMinimum type (string)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "InvalidExclusive": {
+                            "type": "number",
+                            "exclusiveMinimum": "invalid",
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-FIELD-TYPE", "exclusiveMinimum", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid exclusiveMaximum type (string)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "InvalidExclusive": {
+                            "type": "number",
+                            "exclusiveMaximum": "invalid",
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-FIELD-TYPE", "exclusiveMaximum", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid examples type (not a list)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "InvalidExamples": {
+                            "type": "string",
+                            "examples": "not a list",
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-FIELD-TYPE", "examples", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid webhooks type (not a hash)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "webhooks": "invalid",
+            };
+            assertThrows("INVALID-FIELD-TYPE", "webhooks", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid security scheme type
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "securitySchemes": {
+                        "invalid": {
+                            "type": "unknownType",
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-SCHEME-TYPE", "unknownType", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid contentEncoding type
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "InvalidEncoding": {
+                            "type": "string",
+                            "contentEncoding": 123,
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-FIELD-TYPE", "contentEncoding", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid info.summary type
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {
+                    "title": "Test API",
+                    "version": "1.0",
+                    "summary": 123,
+                },
+                "paths": {},
+            };
+            assertThrows("INVALID-FIELD-TYPE", "summary", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid license.identifier type
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {
+                    "title": "Test API",
+                    "version": "1.0",
+                    "license": {
+                        "name": "MIT",
+                        "identifier": 123,
+                    },
+                },
+                "paths": {},
+            };
+            assertThrows("INVALID-FIELD-TYPE", "identifier", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+
+        # Test invalid jsonSchemaDialect type
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "jsonSchemaDialect": 123,
+            };
+            assertThrows("INVALID-FIELD-TYPE", "jsonSchemaDialect", sub () {
+                OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            });
+        }
+    }
+
+    testOpenApi31TypeValidation() {
+        checkModules();
+
+        # Test that nullable type from type array is parsed correctly
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "NullableObject": {
+                            "type": "object",
+                            "properties": {
+                                "nullableField": {
+                                    "type": ("string", "null"),
+                                },
+                                "requiredField": {
+                                    "type": "string",
+                                },
+                            },
+                            "required": ("requiredField",),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject objSchema = so.components.schemas.NullableObject;
+
+            # Verify nullable property is set correctly
+            assertTrue(objSchema.properties.nullableField.nullable);
+            assertEq("string", objSchema.properties.nullableField.type);
+            assertFalse(objSchema.properties.requiredField.nullable);
+            assertEq("string", objSchema.properties.requiredField.type);
+
+            # Verify required field is tracked (as hash with True values)
+            assertTrue(objSchema.required.requiredField);
+        }
+
+        # Test that exclusiveMinimum/Maximum as numbers are parsed correctly
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "BoundedNumber": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "exclusiveMaximum": 100,
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
+
+            # Verify the numeric exclusive values are set
+            assertEq(0.0, bounded.exclusiveMinValue);
+            assertEq(100.0, bounded.exclusiveMaxValue);
+            # Boolean exclusive flags should not be set
+            assertNothing(bounded.exclusiveMin);
+            assertNothing(bounded.exclusiveMax);
+        }
+
+        # Test backward compatibility with 3.0 boolean exclusiveMinimum/Maximum
+        {
+            hash<auto> schema = {
+                "openapi": "3.0.3",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "BoundedNumber": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "exclusiveMinimum": True,
+                            "exclusiveMaximum": True,
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
+
+            # Verify the boolean exclusive flags are set
+            assertTrue(bounded.exclusiveMin);
+            assertTrue(bounded.exclusiveMax);
+            assertEq(0.0, bounded.minimum);
+            assertEq(100.0, bounded.maximum);
+            # Numeric exclusive values should not be set
+            assertNothing(bounded.exclusiveMinValue);
+            assertNothing(bounded.exclusiveMaxValue);
+        }
+
+        # Test mixed types in type array (first non-null type used)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "NullableNumber": {
+                            "type": ("number", "null"),
+                            "minimum": 0,
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject numSchema = so.components.schemas.NullableNumber;
+
+            assertEq("number", numSchema.type);
+            assertTrue(numSchema.nullable);
+            assertEq(0.0, numSchema.minimum);
+        }
+
+        # Test multiple non-null types in type array (first type used)
+        {
+            hash<auto> schema = {
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "MultiType": {
+                            "type": ("string", "integer"),
+                        },
+                    },
+                },
+            };
+            OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
+            OpenApi3::SchemaObject multiSchema = so.components.schemas.MultiType;
+
+            # First non-null type should be used
+            assertEq("string", multiSchema.type);
+            assertFalse(multiSchema.nullable);
+        }
     }
 }

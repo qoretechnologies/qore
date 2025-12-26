@@ -36,6 +36,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         addTestCase("OpenAPI 3.0 schema test", \testOpenApi3Schema());
         addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
         addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
+        addTestCase("OpenAPI 3.1 data provider features", \testOpenApi31Features());
         addTestCase("Factory test", \testFactory());
         set_return_value(main());
     }
@@ -769,6 +770,87 @@ paths:
 
             hash missingAge = {"name": "John"};
             assertThrows("MISSING-VALUE-ERROR", "age", \bodyType.acceptsValue(), missingAge);
+        }
+    }
+
+    testOpenApi31Features() {
+        checkModules();
+
+        # Test OpenAPI 3.1 schema with nullable types (type array syntax)
+        {
+            string schemaStr = '{
+                "openapi": "3.1.0",
+                "info": {"title": "Test API", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "createTest",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "nullableField": {
+                                                    "type": ["string", "null"]
+                                                },
+                                                "requiredField": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": ["requiredField"]
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": {
+                                "200": {"description": "OK"}
+                            }
+                        }
+                    }
+                }
+            }';
+
+            hash<auto> opts = {"schema": schemaStr};
+            RestSchemaDataProvider provider(opts);
+            assertFalse(provider.isSwagger());
+            assertTrue(provider.isOpenApi3());
+
+            # Verify the provider can access the path
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            assertEq("POST", p0.getInfo().name);
+
+            # Get the request type and verify nullable field handling
+            AbstractDataProviderType req = p0.getRequestType();
+            assertEq(NT_HASH, req.getField("body").getType().getBaseTypeCode());
+        }
+
+        # Test OpenAPI 3.1 version detection via is31OrLater
+        {
+            string schema31 = '{
+                "openapi": "3.1.0",
+                "info": {"title": "Test API 3.1", "version": "1.0"},
+                "paths": {}
+            }';
+            hash<auto> opts = {"schema": schema31};
+            RestSchemaDataProvider provider(opts);
+            assertTrue(provider.isOpenApi3());
+            # Get the underlying schema object to verify version
+            assertEq("Test API 3.1", provider.getName());
+        }
+
+        # Test OpenAPI 3.0 backward compatibility
+        {
+            string schema30 = '{
+                "openapi": "3.0.3",
+                "info": {"title": "Test API 3.0", "version": "1.0"},
+                "paths": {}
+            }';
+            hash<auto> opts = {"schema": schema30};
+            RestSchemaDataProvider provider(opts);
+            assertTrue(provider.isOpenApi3());
+            assertEq("Test API 3.0", provider.getName());
         }
     }
 

@@ -280,6 +280,30 @@ class ObjectBase inherits Qore::Serializable {
     public initialize(hash<auto> oh) {
         vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
     }
+
+    #! Returns True if this object has the x-deprecated extension set.
+    /** This extension marks an object as deprecated without using the standard deprecated field. */
+    *bool isXDeprecated() {
+        return vendorExtensions."x-deprecated";
+    }
+
+    #! Returns True if this object has the x-internal extension set.
+    /** This extension marks an object as internal/private and not for public consumption. */
+    *bool isInternal() {
+        return vendorExtensions."x-internal";
+    }
+
+    #! Returns True if this object has the x-hidden extension set.
+    /** This extension marks an object as hidden from documentation. */
+    *bool isHidden() {
+        return vendorExtensions."x-hidden";
+    }
+
+    #! Returns the x-displayName extension value if set.
+    /** This extension provides a display name override for documentation. */
+    *string getDisplayName() {
+        return vendorExtensions."x-displayName";
+    }
 }
 
 #! Base used by @ref HeaderObject and @ref SchemaObject
@@ -292,10 +316,26 @@ class SchemaBase inherits Qore::Serializable {
         *softfloat minimum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
+        /** In OpenAPI 3.0, this is a boolean modifier for maximum.
+            In OpenAPI 3.1, exclusiveMaximum is a numeric value directly.
+        */
         *bool exclusiveMax;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
+        /** In OpenAPI 3.0, this is a boolean modifier for minimum.
+            In OpenAPI 3.1, exclusiveMinimum is a numeric value directly.
+        */
         *bool exclusiveMin;
+
+        #! OpenAPI 3.1 numeric exclusiveMaximum value
+        /** In OpenAPI 3.1, exclusiveMaximum is a direct numeric value (not a boolean modifier)
+        */
+        *softfloat exclusiveMaxValue;
+
+        #! OpenAPI 3.1 numeric exclusiveMinimum value
+        /** In OpenAPI 3.1, exclusiveMinimum is a direct numeric value (not a boolean modifier)
+        */
+        *softfloat exclusiveMinValue;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.1.
         *int maxLength;
@@ -332,8 +372,37 @@ class SchemaBase inherits Qore::Serializable {
     public constructor(string obj_type, hash<auto> oh) {
         optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
         optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
-        optional_field(obj_type, oh, "exclusiveMaximum", NT_BOOLEAN, \exclusiveMax);
-        optional_field(obj_type, oh, "exclusiveMinimum", NT_BOOLEAN, \exclusiveMin);
+
+        # Handle exclusiveMaximum - can be boolean (3.0) or numeric (3.1)
+        if (oh.hasKey("exclusiveMaximum")) {
+            int tc = oh.exclusiveMaximum.typeCode();
+            if (tc == NT_BOOLEAN) {
+                # OpenAPI 3.0 style: boolean modifier
+                exclusiveMax = oh.exclusiveMaximum;
+            } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
+                # OpenAPI 3.1 style: direct numeric value
+                exclusiveMaxValue = oh.exclusiveMaximum;
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMaximum' field has invalid type %y; "
+                    "expected boolean or number", obj_type, oh.exclusiveMaximum.type());
+            }
+        }
+
+        # Handle exclusiveMinimum - can be boolean (3.0) or numeric (3.1)
+        if (oh.hasKey("exclusiveMinimum")) {
+            int tc = oh.exclusiveMinimum.typeCode();
+            if (tc == NT_BOOLEAN) {
+                # OpenAPI 3.0 style: boolean modifier
+                exclusiveMin = oh.exclusiveMinimum;
+            } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
+                # OpenAPI 3.1 style: direct numeric value
+                exclusiveMinValue = oh.exclusiveMinimum;
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMinimum' field has invalid type %y; "
+                    "expected boolean or number", obj_type, oh.exclusiveMinimum.type());
+            }
+        }
+
         optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
         optional_field(obj_type, oh, "minLength", NT_INT, \minLength);
         optional_field(obj_type, oh, "pattern", NT_STRING, \pattern);
@@ -348,6 +417,7 @@ class SchemaBase inherits Qore::Serializable {
     constructor(SchemaBase other) {
         self += map {$1: other.$1}, (
             "maximum", "minimum", "exclusiveMax", "exclusiveMin",
+            "exclusiveMaxValue", "exclusiveMinValue",
             "maxLength", "minLength", "pattern", "maxItems", "minItems",
             "uniqueItems", "enum", "multipleOf"), exists other.$1;
     }
@@ -496,6 +566,7 @@ class SchemaBase inherits Qore::Serializable {
             }
         }
 
+        # Check maximum constraint (3.0 style with boolean exclusiveMax)
         if (exists maximum) {
             if (exclusiveMax) {
                 if (value >= maximum)
@@ -510,18 +581,35 @@ class SchemaBase inherits Qore::Serializable {
             }
         }
 
+        # Check exclusiveMaximum constraint (3.1 style with numeric value)
+        if (exists exclusiveMaxValue) {
+            if (value >= exclusiveMaxValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for path %y and method %y is too big (exclusiveMaximum: %f, actual: %d)",
+                        name, path, method, exclusiveMaxValue, value);
+        }
+
+        # Check minimum constraint (3.0 style with boolean exclusiveMin)
         if (exists minimum) {
             if (exclusiveMin) {
                 if (value <= minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
                         sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %d)",
-                            name, path, method, maximum, value);
+                            name, path, method, minimum, value);
             } else {
                 if (value < minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
                         sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %d)",
-                            name, path, method, maximum, value);
+                            name, path, method, minimum, value);
             }
+        }
+
+        # Check exclusiveMinimum constraint (3.1 style with numeric value)
+        if (exists exclusiveMinValue) {
+            if (value <= exclusiveMinValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for path %y and method %y is too small (exclusiveMinimum: %f, actual: %d)",
+                        name, path, method, exclusiveMinValue, value);
         }
 
         if (enum && !enum{value})
@@ -544,6 +632,8 @@ class SchemaBase inherits Qore::Serializable {
             string name, auto v, reference<auto> value) {
         if (type != "number" && type != "any")
             throwInvalidType(name, "number", type, v);
+
+        # Check maximum constraint (3.0 style with boolean exclusiveMax)
         if (exists maximum) {
             if (exclusiveMax) {
                 if (value >= maximum)
@@ -558,18 +648,35 @@ class SchemaBase inherits Qore::Serializable {
             }
         }
 
+        # Check exclusiveMaximum constraint (3.1 style with numeric value)
+        if (exists exclusiveMaxValue) {
+            if (value >= exclusiveMaxValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for path %y and method %y is too big (exclusiveMaximum: %f, actual: %f)",
+                        name, path, method, exclusiveMaxValue, value);
+        }
+
+        # Check minimum constraint (3.0 style with boolean exclusiveMin)
         if (exists minimum) {
             if (exclusiveMin) {
                 if (value <= minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
                         sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %f)",
-                            name, path, method, maximum, value);
+                            name, path, method, minimum, value);
             } else {
                 if (value < minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
                         sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %f)",
-                            name, path, method, maximum, value);
+                            name, path, method, minimum, value);
             }
+        }
+
+        # Check exclusiveMinimum constraint (3.1 style with numeric value)
+        if (exists exclusiveMinValue) {
+            if (value <= exclusiveMinValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for path %y and method %y is too small (exclusiveMinimum: %f, actual: %f)",
+                        name, path, method, exclusiveMinValue, value);
         }
 
         if (enum && !enum{value}) {
@@ -1124,6 +1231,16 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         #! Additional external documentation.
         *ExternalDocumentationObject externalDocs;
 
+        #! Webhooks for the API (OpenAPI 3.1+)
+        /** A map of webhook names to PathItemObject definitions for out-of-band callbacks
+        */
+        hash<string, PathItemObject> webhooks;
+
+        #! JSON Schema dialect URL (OpenAPI 3.1+)
+        /** The default value for the $schema keyword within Schema Objects
+        */
+        *string jsonSchemaDialect;
+
         #! OpenApi3Schema options
         /** Options are as follows:
             - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
@@ -1146,6 +1263,12 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     }
 
     private {
+        #! OpenAPI specification major version (e.g., 3 for "3.1.0")
+        int versionMajor = 3;
+
+        #! OpenAPI specification minor version (e.g., 1 for "3.1.0")
+        int versionMinor = 0;
+
         #! if serialized data should be subject to compact serialization (default: @ref True "True")
         bool compact_serialization;
 
@@ -1258,11 +1381,18 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 sprintf("%s Object: 'openapi' field has invalid type %y (should be string or float)", obj_type,
                     oh.openapi.type());
         {
-            float v = openapi3Spec.toFloat();
-            if (v < 3.0 || v >= 4.0)
-                throw "INVALID-OPENAPI3-VERSION", sprintf("invalid schema version %y; expecting >= 3.0 or < 4.0",
+            # Parse version string to extract major.minor.patch components
+            list<string> parts = openapi3Spec.split(".");
+            versionMajor = parts[0].toInt();
+            versionMinor = parts.size() > 1 ? parts[1].toInt() : 0;
+
+            if (versionMajor != 3)
+                throw "INVALID-OPENAPI3-VERSION", sprintf("invalid schema version %y; major version must be 3",
                     openapi3Spec);
         }
+
+        # Parse jsonSchemaDialect (OpenAPI 3.1+)
+        optional_field(obj_type, oh, "jsonSchemaDialect", NT_STRING, \jsonSchemaDialect);
 
         optional_field(obj_type, oh, "consumes", OpenApi3ListToStringSet, \consumes);
         foreach string mt in (keys consumes) {
@@ -1324,6 +1454,19 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             paths = new PathsObject(pathsObj, self);
         }
 
+        # Parse webhooks (OpenAPI 3.1+)
+        {
+            hash<auto> webhooksObj;
+            if (optional_field(obj_type, oh, "webhooks", NT_HASH, \webhooksObj)) {
+                foreach hash<auto> item in (webhooksObj.pairIterator()) {
+                    if (item.value.typeCode() != NT_HASH)
+                        throw "INVALID-FIELD-TYPE", sprintf("OpenApi3 Object: invalid webhook %y datatype: %s",
+                            item.key, item.value.type());
+                    webhooks{item.key} = new PathItemObject(item.key, item.value, self);
+                }
+            }
+        }
+
         optional_field(obj_type, oh, "host", NT_STRING, \host);
         if (optional_field(obj_type, oh, "basePath", NT_STRING, \basePath)) {
             if (exists basePath && basePath[0] != "/")
@@ -1381,6 +1524,29 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     *string getQueryDateFormat() {
         return query_date_format;
+    }
+
+    #! Returns the OpenAPI specification major version (e.g., 3 for "3.1.0")
+    int getVersionMajor() {
+        return versionMajor;
+    }
+
+    #! Returns the OpenAPI specification minor version (e.g., 1 for "3.1.0")
+    int getVersionMinor() {
+        return versionMinor;
+    }
+
+    #! Returns True if the schema uses OpenAPI 3.1 or later
+    /** This is useful for determining which features are available:
+        - 3.1+: type arrays for nullable (e.g., type: ["string", "null"])
+        - 3.1+: exclusiveMinimum/Maximum as numeric values
+        - 3.1+: examples array instead of single example
+        - 3.1+: webhooks support
+        - 3.1+: mutualTLS security scheme
+        - 3.1+: contentEncoding/contentMediaType
+    */
+    bool is31OrLater() {
+        return versionMinor >= 1;
     }
 
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {
@@ -2375,6 +2541,22 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 value.type(), value, key);
         return components.schemas{key} = SchemaObject::newSchemaObject(key, value, self);
     }
+
+    #! Returns the x-logo extension value if set.
+    /** This extension provides logo information for the API.
+        @return a hash with optional keys: url, altText, backgroundColor
+    */
+    *hash<auto> getLogo() {
+        return vendorExtensions."x-logo";
+    }
+
+    #! Returns the x-tagGroups extension value if set.
+    /** This extension provides grouping for tags in documentation.
+        @return a list of hashes with keys: name, tags
+    */
+    *list<hash<auto>> getTagGroups() {
+        return vendorExtensions."x-tagGroups";
+    }
 }
 
 #! The object provides metadata about the API. The metadata can be used by the clients if needed, and can be presented in the %OpenApi3-UI for convenience.
@@ -2385,6 +2567,9 @@ public class InfoObject inherits ObjectBase {
 
         #! A short description of the application. GFM syntax can be used for rich text representation.
         *string desc;
+
+        #! A short summary of the API (OpenAPI 3.1+).
+        *string summary;
 
         #! The Terms of Service for the API.
         *string termsOfService;
@@ -2411,6 +2596,7 @@ public class InfoObject inherits ObjectBase {
         required_field(obj_type, oh, "title", NT_STRING, \title);
         required_field(obj_type, oh, "version", NT_STRING, \version);
         optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
+        optional_field(obj_type, oh, "summary", NT_STRING, \summary);  # OpenAPI 3.1+
         optional_field(obj_type, oh, "termsOfService", NT_STRING, \termsOfService);
 
         *hash<auto> contactObj;
@@ -2458,6 +2644,9 @@ public class LicenseObject inherits ObjectBase {
 
         #! A URL to the license used for the API. MUST be in the format of a URL.
         *string url;
+
+        #! An SPDX license identifier for the API (OpenAPI 3.1+). Mutually exclusive with url.
+        *string identifier;
     }
 
     #! Constructor.
@@ -2471,6 +2660,7 @@ public class LicenseObject inherits ObjectBase {
         string obj_type = "License";
         required_field(obj_type, oh, "name", NT_STRING, \name);
         optional_field(obj_type, oh, "url", NT_STRING, \url);
+        optional_field(obj_type, oh, "identifier", NT_STRING, \identifier);  # OpenAPI 3.1+
     }
 }
 
@@ -3411,6 +3601,24 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
     private error(string err, string fmt, ...) {
         throw err, sprintf("%s %s Operation Object: %s", method.upr(), path, vsprintf(fmt, argv));
     }
+
+    #! Returns the x-tags extension value if set.
+    /** This extension provides additional tags for the operation. */
+    *list<string> getXTags() {
+        return vendorExtensions."x-tags";
+    }
+
+    #! Returns the x-swagger-router-controller extension value if set.
+    /** This extension specifies the router controller for the operation (used by swagger-tools). */
+    *string getRouterController() {
+        return vendorExtensions."x-swagger-router-controller";
+    }
+
+    #! Returns the x-summary extension value if set.
+    /** This extension provides an additional summary for the operation. */
+    *string getXSummary() {
+        return vendorExtensions."x-summary";
+    }
 }
 
 #! Allows referencing an external resource for extended documentation.
@@ -4298,6 +4506,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
          */
         bool deprec = False;
 
+        #! Content encoding for binary data (OpenAPI 3.1+)
+        /** Specifies the Content-Encoding for the schema, such as "base64".
+            Used in place of format: binary/base64 in OpenAPI 3.1+.
+        */
+        *string contentEncoding;
+
+        #! Content media type for binary data (OpenAPI 3.1+)
+        /** Specifies the media type of the contents, such as "image/png".
+            Used in conjunction with contentEncoding for binary data in OpenAPI 3.1+.
+        */
+        *string contentMediaType;
+
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.3.
         /**
             List of @ref SchemaObject "SchemaObjects"; MUST have at least one element.
@@ -4346,8 +4566,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         #! Additional external documentation for this schema.
         *ExternalDocumentationObject externalDocs;
 
-        #! A free-form property to include an example of an instance for this schema.
+        #! A free-form property to include an example of an instance for this schema (OpenAPI 3.0 style).
         auto example;
+
+        #! An array of examples for this schema (OpenAPI 3.1 style).
+        *list<auto> examples;
 
         #! The data type of the schema (required)
         *AbstractDataProviderType dataType;
@@ -4403,10 +4626,40 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         openapi3.cacheSchemaObject(name, hash_str, self);
         string obj_type = "Schema";
 
-        if (optional_field(obj_type, oh, "type", NT_STRING, \type)) {
-            if (!ReferenceTypes{type})
-                throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
-                    "expected one of: %y", name, type, keys ReferenceTypes);
+        # Parse type - supports both string (3.0) and array (3.1) formats
+        if (oh.hasKey("type")) {
+            if (oh.type.typeCode() == NT_LIST) {
+                # OpenAPI 3.1 style: type: ["string", "null"]
+                list<auto> rawTypes = oh.type;
+                # Check for "null" to set nullable and filter it out
+                list<string> types = ();
+                foreach auto t in (rawTypes) {
+                    if (t == "null") {
+                        nullable = True;
+                    } else {
+                        types += t;
+                    }
+                }
+                # Get the primary type (first non-null type)
+                if (types.size() > 0) {
+                    type = types[0];
+                    if (!ReferenceTypes{type})
+                        throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
+                            "expected one of: %y", name, type, keys ReferenceTypes);
+                } else {
+                    type = "any";
+                }
+            } else if (oh.type.typeCode() == NT_STRING) {
+                # OpenAPI 3.0 style: type: "string"
+                type = oh.type;
+                if (!ReferenceTypes{type})
+                    throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
+                        "expected one of: %y", name, type, keys ReferenceTypes);
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: \"type\" field has invalid type %y; "
+                    "expected string or list", name, oh.type.type());
+            }
+
             if (type == "array" && (require_items || exists oh.items)) {
                 items = newSchemaObject("items", oh.items ?? {"type": "object"}, openapi3);
             }
@@ -4421,8 +4674,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             type = "any";
         }
 
-        # check for x-nullable
+        # check for x-nullable (3.0 style) and nullable (standard)
         optional_field(obj_type, oh, "x-nullable", NT_BOOLEAN, \nullable);
+        # Also support standard nullable keyword (OpenAPI 3.0)
+        if (!nullable) {
+            optional_field(obj_type, oh, "nullable", NT_BOOLEAN, \nullable);
+        }
 
         if (optional_field(obj_type, oh, "format", NT_STRING, \format)) {
             # unrecognized format values should be ignored
@@ -4494,6 +4751,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         optional_field(obj_type, oh, "writeOnly", NT_BOOLEAN, \writeOnly);
         optional_field(obj_type, oh, "deprecated", NT_BOOLEAN, \deprec);
 
+        # OpenAPI 3.1+: contentEncoding and contentMediaType for binary data
+        optional_field(obj_type, oh, "contentEncoding", NT_STRING, \contentEncoding);
+        optional_field(obj_type, oh, "contentMediaType", NT_STRING, \contentMediaType);
+
         {
             *list allOfList;
             if (optional_field(obj_type, oh, "allOf", NT_LIST, \allOfList)) {
@@ -4551,8 +4812,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (optional_field(obj_type, oh, "externalDocs", NT_HASH, \extDocsObj))
             externalDocs = new ExternalDocumentationObject(extDocsObj);
 
+        # Parse example (3.0 style) and examples (3.1 style)
         if (oh.hasKey("example"))
             example = oh.example;
+        if (oh.hasKey("examples")) {
+            if (oh.examples.typeCode() == NT_LIST) {
+                examples = oh.examples;
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: 'examples' field has invalid type %y; "
+                    "expected list", name, oh.examples.type());
+            }
+        }
     }
 
     copy(SchemaObject old) {
@@ -5053,6 +5323,48 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
     }
+
+    #! Returns the x-example extension value if set.
+    /** This extension provides an additional example for the schema. */
+    auto getXExample() {
+        return vendorExtensions."x-example";
+    }
+
+    #! Returns the x-examples extension value if set.
+    /** This extension provides multiple examples for the schema. */
+    *list<auto> getXExamples() {
+        return vendorExtensions."x-examples";
+    }
+
+    #! Returns the x-enum-varnames extension value if set.
+    /** This extension provides variable names for enum values (used in code generation). */
+    *list<string> getEnumVarnames() {
+        return vendorExtensions."x-enum-varnames";
+    }
+
+    #! Returns the x-enum-descriptions extension value if set.
+    /** This extension provides descriptions for each enum value. */
+    *list<string> getEnumDescriptions() {
+        return vendorExtensions."x-enum-descriptions";
+    }
+
+    #! Returns the x-codegen-type extension value if set.
+    /** This extension overrides the generated type name in code generation. */
+    *string getCodegenType() {
+        return vendorExtensions."x-codegen-type";
+    }
+
+    #! Returns the x-model-name extension value if set.
+    /** This extension specifies the model class name for code generation. */
+    *string getModelName() {
+        return vendorExtensions."x-model-name";
+    }
+
+    #! Returns the x-class-name extension value if set.
+    /** This extension specifies the class name override for code generation. */
+    *string getClassName() {
+        return vendorExtensions."x-class-name";
+    }
 }
 
 #! A metadata object that allows for more fine-tuned XML model definitions.
@@ -5291,9 +5603,15 @@ public class SecuritySchemeObject inherits ObjectBase {
                 break;
             }
 
+            case "mutualTLS": {
+                # OpenAPI 3.1+: Mutual TLS authentication
+                # No additional required properties for mutualTLS
+                break;
+            }
+
             default:
                 throw "INVALID-SCHEME-TYPE", sprintf("Security Scheme Object: invalid security scheme type "
-                    "passed: %y; valid values are 'apiKey', 'http', 'oauth2', 'openIdConnect'", type);
+                    "passed: %y; valid values are 'apiKey', 'http', 'oauth2', 'openIdConnect', 'mutualTLS'", type);
         }
 
         optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
