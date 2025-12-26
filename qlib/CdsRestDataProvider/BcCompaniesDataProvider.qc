@@ -58,7 +58,7 @@ public class BcCompaniesDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::BusinessCentralRestClient rest) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest) : BcRestDataProviderBase(rest) {
     }
 
     #! Creates the object from constructor options
@@ -69,7 +69,7 @@ public class BcCompaniesDataProvider inherits BcRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        rest = new CdsRestClient::BusinessCentralRestClient(getClientOptions(copts));
+        rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {"api_profile": "dynamics-business-central"});
     }
 
     #! Returns the data provider name

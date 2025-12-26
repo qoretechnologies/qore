@@ -47,7 +47,7 @@ public class BcRestDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::BusinessCentralRestClient rest) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest) : BcRestDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -67,7 +67,7 @@ public class BcRestDataProvider inherits BcRestDataProviderBase {
         }
 
         if (!rest) {
-            rest = new CdsRestClient::BusinessCentralRestClient(getClientOptions(copts));
+            rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {"api_profile": "dynamics-business-central"});
         }
     }
 

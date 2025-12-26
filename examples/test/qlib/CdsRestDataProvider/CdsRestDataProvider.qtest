@@ -35,7 +35,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
         # Business Central connection
         *BusinessCentralRestConnection bc_conn;
-        *BusinessCentralRestClient bc_client;
+        *CdsRestClient bc_client;
 
         Logger logger;
 
@@ -178,7 +178,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             opts.connect_timeout = m_options.timeout;
         }
 
-        bc_client = new BusinessCentralRestClient(opts);
+        bc_client = new CdsRestClient(opts + {"api_profile": "dynamics-business-central"});
     }
 
     #! Test Dynamics connection class creation

@@ -106,7 +106,7 @@ public class BcTablesDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::BusinessCentralRestClient rest, string companyId) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest, string companyId) : BcRestDataProviderBase(rest) {
         self.companyId = companyId;
     }
 

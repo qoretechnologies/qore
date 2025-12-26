@@ -34,13 +34,13 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Sets the API version to use",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "Sets the Business Central API version to use",
-                "default_value": CdsRestClient::BusinessCentralRestClient::DefaultApiVersion,
+                "default_value": CdsRestClient::CdsRestClient::DefaultBcApiVersion,
             },
             "bcrestclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client to use",
-                "type": AbstractDataProviderType::get(new Type("BusinessCentralRestClient")),
-                "desc": "The `BusinessCentralRestClient` object to use",
+                "type": AbstractDataProviderType::get(new Type("CdsRestClient")),
+                "desc": "The `CdsRestClient` object to use for Business Central",
             },
             "bcrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
@@ -88,7 +88,7 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "short_desc": "The URL to the Business Central server",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The URL to the Business Central server instance",
-                "default_value": CdsRestClient::BusinessCentralRestClient::DefaultBaseUri,
+                "default_value": CdsRestClient::CdsRestClient::DefaultBusinessCentralBaseUri,
             },
         };
 
@@ -113,7 +113,7 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        CdsRestClient::BusinessCentralRestClient rest;
+        CdsRestClient::CdsRestClient rest;
 
         #! The connection object used to create the REST client
         *CdsRestClient::BusinessCentralRestConnection conn;
@@ -124,7 +124,7 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object
-    constructor(CdsRestClient::BusinessCentralRestClient rest) {
+    constructor(CdsRestClient::CdsRestClient rest) {
         self.rest = rest;
     }
 
@@ -142,7 +142,7 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
         LoggerWrapper::setLogger(logger);
     }
 
-    #! Returns options for the BusinessCentralRestClient
+    #! Returns options for the CdsRestClient
     static private *hash<auto> getClientOptions(*hash<auto> copts) {
         return copts - ("bcrestclient_options", "bcrestclient")
             + copts.bcrestclient_options;

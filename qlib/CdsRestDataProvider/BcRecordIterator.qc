@@ -49,7 +49,7 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
 
     private:internal {
         #! The REST client object for API calls
-        CdsRestClient::BusinessCentralRestClient rest;
+        CdsRestClient::CdsRestClient rest;
 
         #! The company ID
         string companyId;
@@ -75,7 +75,7 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
         @param where_cond the where clause for the query, if any
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(CdsRestClient::BusinessCentralRestClient rest, string companyId, string name,
+    constructor(CdsRestClient::CdsRestClient rest, string companyId, string name,
             hash<BcRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
