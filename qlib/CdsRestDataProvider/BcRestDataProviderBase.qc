@@ -53,6 +53,17 @@ public class BcRestDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Business Central instance type",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "sandbox",
+                        "display_name": "Sandbox",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "production",
+                        "display_name": "Production",
+                    },
+                ),
+                "allowed_values_creatable": True,
             },
             "oauth2_client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",

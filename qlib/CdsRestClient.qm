@@ -914,6 +914,16 @@ public class BusinessCentralRestConnection inherits RestClient::RestConnection {
                     "short_desc": "Business Central instance type",
                     "type": "string",
                     "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "sandbox",
+                            "display_name": "Sandbox",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "production",
+                            "display_name": "Production",
+                        },
+                    ),
                 },
                 "tenant": <ConnectionOptionInfo>{
                     "display_name": "Tenant ID",
