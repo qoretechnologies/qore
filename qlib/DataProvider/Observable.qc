@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Observable class definition
 
-/** Observable.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** Observable.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -209,6 +209,23 @@ public class Observable {
         # this method intentionally left blank
     }
 
+    #! Is this object still generating events
+    /** Override this method in base classes to signal when events are no longer being generated
+    */
+    bool isActive() {
+        return True;
+    }
+
+    #! Handover observers to another Observable object
+    /** @param other the Observable object to which observers are handed over
+    */
+    handoverObservers(Observable other) {
+        if (other == self) {
+            return;
+        }
+        other.observer_map = remove observer_map;
+    }
+
     #! Registers observer events
     private hash<ObserverEventInfo> registerObserverEventsArgs(hash<ObserverEventInfo> info, list<auto> events) {
         foreach auto event_id in (events) {
@@ -228,6 +245,12 @@ public class DelayedObservable inherits Observable {
     /** This method is meant to trigger event generation
     */
     abstract observersReady();
+
+    #! Called to stop generating events
+    /** By default this method does nothing; override in subclasses to add functionality
+    */
+    stopEvents() {
+    }
 }
 
 #! This abstract class can be used to filter events that are raised on an Observer

@@ -39,10 +39,10 @@ public namespace DataProvider {
 */
 #/@{
 #! AND logic
-public const DP_OP_AND = "AND";
+public const DP_OP_AND = "&&";
 
 #! OR logic
-public const DP_OP_OR = "OR";
+public const DP_OP_OR = "||";
 #/@}
 
 /** @defgroup dataprovider_generic_search_ops DataProvider Generic Search Operators
@@ -82,7 +82,7 @@ public const DP_SEARCH_OP_NE = "!=";
 #! Identifies the generic data provider equals operator (=) for use in generic search criteria
 /** @see dp_op_eq()
 */
-public const DP_SEARCH_OP_EQ = "=";
+public const DP_SEARCH_OP_EQ = "==";
 
 #! Identifies the generic data provider \c "between" operator for use in generic search criteria
 /** @see dp_op_between()
@@ -97,21 +97,40 @@ public const DP_SEARCH_OP_IN = "in";
 #! Identifies the generic data provider \c "not" operator for use in generic search criteria
 /** @see dp_op_not()
 */
-public const DP_SEARCH_OP_NOT = "not";
+public const DP_SEARCH_OP_NOT = "!";
 #/@}
+
+#! Operator alias map; maps from old operator names to canonical ones
+public const OperatorAliasMap = {
+    "AND": DP_OP_AND,
+    "OR": DP_OP_OR,
+    "NOT": DP_SEARCH_OP_NOT,
+    "not": DP_SEARCH_OP_NOT,
+    "=": DP_SEARCH_OP_EQ,
+    "eq": DP_SEARCH_OP_EQ,
+    "ne": DP_SEARCH_OP_NE,
+    "lt": DP_SEARCH_OP_LT,
+    "le": DP_SEARCH_OP_LE,
+    "gt": DP_SEARCH_OP_GT,
+    "ge": DP_SEARCH_OP_GE,
+    "BETWEEN": DP_SEARCH_OP_BETWEEN,
+    "IN": DP_SEARCH_OP_IN,
+};
 
 #! Generic operator info hash as returned by all @ref dataprovider_generic_search_op_funcs "generic search operator functions"
 public hashdecl SearchOperatorInfo {
     string op;   #!< the operator string code
     auto arg;    #!< optional argument
+    int op_args = 1;
 }
 
 #! a hash of valid operators for use in generic search criteria
 public const DefaultGenericSearchOpMap = {
     DP_SEARCH_OP_REGEX: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
-            return regex(field_value.toString(), cmd.arg.pattern, cmd.arg.options);
+            return regex(field_value.toString(), cmd.arg[0], cmd.arg[1]);
         },
+        "op_args": 2,
     ),
     DP_SEARCH_OP_LT: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
@@ -147,6 +166,7 @@ public const DefaultGenericSearchOpMap = {
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
             return field_value >= cmd.arg[0] && field_value <= cmd.arg[1];
         },
+        "op_args": 2,
     ),
     DP_SEARCH_OP_IN: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
@@ -177,8 +197,15 @@ public const DefaultGenericSearchOpMap = {
 */
 #/@{
 #! returns an @ref SearchOperatorInfo hash
-public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg) {
-    return new hash<SearchOperatorInfo>({"op": op, "arg": arg});
+public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg, *int op_args) {
+    if (!exists op_args) {
+        op_args = DefaultGenericSearchOpMap{op}.op_args ?? 1;
+    }
+    return new hash<SearchOperatorInfo>({
+        "op": op,
+        "arg": arg,
+        "op_args": op_args,
+    });
 }
 
 #! returns an @ref SearchOperatorInfo hash for regular expression matches
@@ -192,9 +219,7 @@ AbstractDataProviderRecordIterator i = dp.searchRecords({"name": dp_op_regex("%S
     @return an @ref SearchOperatorInfo hash for use in generic search criteria
 */
 public hash<SearchOperatorInfo> sub dp_op_regex(string str) {
-    return dp_make_op(DP_SEARCH_OP_REGEX, {
-        "pattern": str,
-    });
+    return dp_make_op(DP_SEARCH_OP_REGEX, str);
 }
 
 #! returns an @ref SearchOperatorInfo hash for the SQL-like \c "like" operator with the given argument
@@ -210,9 +235,7 @@ AbstractDataProviderRecordIterator i = dp.searchRecords({"name": dp_op_like("%Sm
 public hash<SearchOperatorInfo> sub dp_op_like(string str) {
     # translate str to a regex: replace % -> .*
     str =~ s/%/.*/g;
-    return dp_make_op(DP_SEARCH_OP_REGEX, {
-        "pattern": "^" + str + "$",
-    });
+    return dp_make_op(DP_SEARCH_OP_REGEX, "^" + str + "$");
 }
 
 #! returns an @ref SearchOperatorInfo hash for the \c "<" operator with the given argument
@@ -366,13 +389,44 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     }
 
     private {
-        #! Block size for bulk iteration
-        int block_size = DefaultBlockSize;
+        #! Number of records returned
+        int record_count = 0;
+
+        #! Requires result
+        bool requires_result;
+
+        #! Max records
+        *int max_records;
+
+        #! Record limit
+        *int limit;
     }
 
     #! Creates the object and optionally sets the bulk iteration block size
-    constructor(int block_size = DefaultBlockSize) {
-        self.block_size = block_size;
+    constructor(*bool requires_result, *int max_records, *int limit) {
+        self.requires_result = requires_result ?? False;
+        self.max_records = max_records;
+        self.limit = limit;
+    }
+
+    #! Returns the number of records returned so far
+    int getRecordCount() {
+        return record_count;
+    }
+
+    #! Returns the 'requires_result' flag
+    bool requiresResult() {
+        return requires_result;
+    }
+
+    #! Returns the 'max_records' value
+    *int getMaxRecords() {
+        return max_records;
+    }
+
+    #! Returns the 'limit' value
+    *int getLimit() {
+        return limit;
     }
 
     #! Returns @ref True if the iterator supports bulk operation
@@ -387,10 +441,10 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     #! Returns the bulk data interface if supported
     /** @return the bulk data interface if supported
 
-        @note This base class method returns @ref DefaultBulkRecordIterface by default
+        @note This base class method returns @ref DefaultBulkRecordInterface by default
     */
-    *AbstractDataProviderBulkRecordInterface getBulkApi() {
-        return new DefaultBulkRecordIterface(block_size, self);
+    *AbstractDataProviderBulkRecordInterface getBulkApi(int block_size = DefaultBlockSize) {
+        return new DefaultBulkRecordInterface(block_size, self, requires_result, max_records, limit);
     }
 
     #! Returns the record description, if available
@@ -399,10 +453,41 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     *hash<string, AbstractDataField> getRecordType() {
     }
 
+    #! Positions the iterator on the next record if possible, returns @ref True if successful
+    /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
+
+        @note Calling getValue() after this method returns @ref False results in an exception
+
+        @throw NO-DATA no data available to return and \c requires_result is set
+        @throw MAX-RECORDS-EXCEEDED the maximum number of records has been exceeded as set by \c max_records
+    */
+    bool next() {
+        bool rv = nextImpl();
+        if (rv) {
+            ++record_count;
+            if ((max_records > 0) && (record_count > max_records)) {
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded", max_records);
+            }
+            if (limit && (record_count > limit)) {
+                rv = False;
+            }
+        } else if (!record_count && requires_result) {
+            throw "NO-DATA", "No records returrned from the search, but at least one record was required "
+                "('requires_result' = True)";
+        }
+        return rv;
+    }
+
     #! returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
     abstract hash<auto> getValue();
+
+    #! Positions the iterator on the next record if possible, returns @ref True if successful
+    /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
+    */
+    abstract private bool nextImpl();
 
     #! Returns the value of the given field in the current record, if the iterator is valid
     /** @param key the name of the field
@@ -439,7 +524,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     */
     private static bool matchGeneric(hash<auto> record, *hash<auto> where_cond) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
-            if (elem.value.op && (*hash<auto> op = DefaultGenericSearchOpMap{elem.value.op})) {
+            if (elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
+                ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
                 if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record)) {
                     return False;
                 }
@@ -454,7 +540,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     private static bool evalOperator(string field, hash<auto> cmd, hash<auto> op, hash<auto> record) {
         auto field_value = record{field};
         if (op.recursive && cmd.arg.op
-            && (*hash<auto> op0 = DefaultGenericSearchOpMap{cmd.arg.op})) {
+            && (*hash<auto> op0 = (DefaultGenericSearchOpMap{cmd.arg.op}
+                ?? DefaultGenericSearchOpMap{OperatorAliasMap{cmd.arg.op}}))) {
             field_value = AbstractDataProviderRecordIterator::evalOperator(field, cmd.arg, op0, record);
         }
         return op.code(cmd, field_value, field, record);

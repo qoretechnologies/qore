@@ -57,7 +57,7 @@ module MapperUtil {
 
     @subsection mapperutil_v1_0_1 MapperUtil v1.0.1
     - added support for the \c use_input_record output field mapping key
-      (<a href="https://github.com/qorelanguage/qore/issues/3823">issue 3823</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3823">issue 3823</a>)
 
     @subsection mapperutil_v1_0 MapperUtil v1.0
     - initial release

@@ -162,8 +162,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     }
     parse_context.typeInfo = nullptr;
 
-    printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
-        args ? get_full_type_name(args) : "n/a", func);
+    //printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
+    //    args ? get_full_type_name(args) : "n/a", func);
 
     // resolves pending signatures unconditionally
     if (func) {
@@ -230,8 +230,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 //printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s variant: %p dflags: " QLLD
                 //    " fdflags: " QLLD "\n", this, func->className() ? func->className() : "", func->getName(),
                 //    variant, dflags, func->parseGetUniqueFunctionality());
-                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags))
+                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
                     invalid_access(loc, func);
+                    if (!err) {
+                        err = -1;
+                    }
+                }
                 int64 flags = variant->getFlags();
                 check_flags(loc, func, flags, parse_context.pflag);
             }
@@ -501,13 +505,13 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             SelfFunctionCallNode* sfcn = nullptr;
             if (!strcmp(c_str, "copy")) {
                 if (args) {
-                    parse_error(*loc, "no arguments may be passed to copy methods (%lu argument%s given in " \
+                    parse_error(*loc, "no arguments may be passed to copy methods (%lu argument%s given in "
                         "call to %s::copy())", args->size(), args->size() == 1 ? "" : "s", qc->getName());
                     return -1;
                 }
                 sfcn = new SelfFunctionCallNode(loc, takeName(), 0);
             } else {
-                const QoreMethod *m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
+                const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
                 if (m) {
                     if (!m->isStatic()) {
                         sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
@@ -523,6 +527,17 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 val = sfcn;
                 deref();
                 return sfcn->parseInitCall(val, parse_context);
+            }
+        }
+    } else {
+        qore_class_private* class_ctx = parse_get_class_priv();
+        // look for a static method
+        if (class_ctx) {
+            const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
+            if (m) {
+                val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                deref();
+                return parse_init_value(val, parse_context);
             }
         }
     }
@@ -808,16 +823,6 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             return -1;
         }
 
-// XXX DEBUG DELETEME
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> pl(parse_option_bitfield_to_string_list(parse_context.pgm->getParseOptions64(),
-        &xsink), &xsink);
-
-    ReferenceHolder<QoreListNode> cl(parse_option_bitfield_to_string_list(qc->getDomain(), &xsink), &xsink);
-
-    QoreNodeAsStringHelper pstr(*pl, FMT_NORMAL, &xsink);
-    QoreNodeAsStringHelper cstr(*cl, FMT_NORMAL, &xsink);
-
         // check class capabilities against parse options
         if (qore_program_private::parseAddDomain(parse_context.pgm, qc->getDomain())) {
             parseException(*loc, "INVALID-METHOD", "class '%s' implements capabilities that are not allowed by " \
@@ -835,12 +840,6 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         delete scope;
         scope = nullptr;
-
-        /*
-        // need to get the current contextual class when parsing in case we're in a static method for example
-        if (!pc)
-            pc = parse_get_class();
-        */
     } else {
         assert(!scope);
         // check class capabilities against parse options

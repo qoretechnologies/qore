@@ -80,3 +80,10 @@ HTTPClientPollOperation::copy() {
 *hash<HTTPClientPollInfo> HTTPClientPollOperation::continuePoll() {
     return op->continuePoll(xsink);
 }
+
+//! Aborts any asynchroous operation in progress and closes the connected object
+/**
+*/
+HTTPClientPollOperation::abort() {
+    op->abort(xsink);
+}

@@ -76,6 +76,9 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     private {
+        #! The connection object used to create the REST client
+        *DiscordWebSocketClient::DiscordWebSocketConnection conn;
+
         #! The WebSocket client object
         *DiscordWebSocketClient::DiscordWebSocketClient ws;
     }
@@ -88,13 +91,24 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object from a DiscordWebSocketClient
-    constructor(DiscordWebSocketClient ws) {
+    constructor(DiscordWebSocketClient::DiscordWebSocketClient ws) {
         self.ws = ws;
+    }
+
+    #! Creates the object from a DiscordWebSocketConnection
+    constructor(DiscordWebSocketClient::DiscordWebSocketConnection conn) {
+        self.conn = conn;
+        self.ws = conn.get();
     }
 
     #! Deletes the object
     destructor() {
         delete ws;
+    }
+
+    #! Disconnects from the gateway and stops all background threads
+    disconnect() {
+        ws.disconnect();
     }
 
     #! Reconnects with the gateway immediately
@@ -128,6 +142,13 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     */
     observersReady() {
         ws.observersReady();
+    }
+
+    #! Called to stop generating events
+    /** Disconnects from the server
+    */
+    stopEvents() {
+        ws.stopEvents();
     }
 
     #! Returns the data provider name

@@ -157,7 +157,7 @@ public class OpenAiFileDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."date",
             },
             "filename": {
-                "display_name": "Fiklename",
+                "display_name": "Filename",
                 "short_desc": "The filename of the file",
                 "desc": "The filename of the file",
                 "type": AbstractDataProviderTypeMap."string",

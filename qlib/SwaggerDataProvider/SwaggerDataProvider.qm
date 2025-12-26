@@ -79,62 +79,62 @@ module SwaggerDataProvider {
 
     @subsection swaggerdataprovider_v1_3 SwaggerDataProvider v1.3
     - implemented the \c lax_parsing option to try to parse invalid Swagger schemas
-      (<a href="https://github.com/qorelanguage/qore/issues/4741">issue 4741</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
     @subsection swaggerdataprovider_v1_2_3 SwaggerDataProvider v1.2.3
     - fixed a bug where HTTP method names were not accepted as wildcard values in URI paths
-      (<a href="https://github.com/qorelanguage/qore/issues/4598">issue 4598</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4598">issue 4598</a>)
     - fixed a bug setting the datas provider name in Swagger schemas provided by files
-      (<a href="https://github.com/qorelanguage/qore/issues/4587">issue 4587</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4587">issue 4587</a>)
 
     @subsection swaggerdataprovider_v1_2_2 SwaggerDataProvider v1.2.2
     - fixed a bug where data providers could return local names as paths with \c "/" characters in them, breaking
       some clients traversing the data provider hierarchy
-      (<a href="https://github.com/qorelanguage/qore/issues/4555">issue 4555</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4555">issue 4555</a>)
 
     @subsection swaggerdataprovider_v1_2_1 SwaggerDataProvider v1.2.1
     - fixed a bug where array types failed due to missing item definitions
-      (<a href="https://github.com/qorelanguage/qore/issues/4526">issue 4526</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4526">issue 4526</a>)
     - fixed a bug where \c object types in Swagger schemas could be converted directly to \c object types in %Qore
       instead of \c hash
-      (<a href="https://github.com/qorelanguage/qore/issues/4520">issue 4520</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4520">issue 4520</a>)
 
     @subsection swaggerdataprovider_v1_2 SwaggerDataProvider v1.2
     - fixed a bug where @ref SwaggerDataProvider::SwaggerDataProvider "SwaggerDataProvider" did not report binary and
       date types correctly
-      (<a href="https://github.com/qorelanguage/qore/issues/4484">issue 4484</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4484">issue 4484</a>)
     - applied the \c DTT_ClientOnly type tag to client-only constructor options in
       @ref SwaggerDataProvider::SwaggerDataProvider "SwaggerDataProvider"
-      (<a href="https://github.com/qorelanguage/qore/issues/4477">issue 4477</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4477">issue 4477</a>)
 
     @subsection swaggerdataprovider_v1_1_1 SwaggerDataProvider v1.1.1
     - fixed a bug where @ref SwaggerDataProvider::SwaggerDataProvider::getDesc() "SwaggerDataProvider::getDesc()"
       throws an exception when created without a \c RestClient option
-      (<a href="https://github.com/qorelanguage/qore/issues/4475">issue 4475</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4475">issue 4475</a>)
     - fixed a bug where the "from file" tag was not respected in constructor options
-      (<a href="https://github.com/qorelanguage/qore/issues/4473">issue 4473</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4473">issue 4473</a>)
 
     @subsection swaggerdataprovider_v1_1 SwaggerDataProvider v1.1
     - fixed a bug where requests messages were not validated and processed correctly
-      (<a href="https://github.com/qorelanguage/qore/issues/4369">issue 4369</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4369">issue 4369</a>)
     - implemented support for enum types
-      (<a href="https://github.com/qorelanguage/qore/issues/4368">issue 4368</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4368">issue 4368</a>)
 
     @subsection swaggerdataprovider_v1_0_4 SwaggerDataProvider v1.0.4
     - fixed a bug where recursive definitions in a Swagger schema resulted in runtime errors using the schema
-      (<a href="https://github.com/qorelanguage/qore/issues/4351">issue 4351</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4351">issue 4351</a>)
 
     @subsection swaggerdataprovider_v1_0_3 SwaggerDataProvider v1.0.3
     - fixed a bug where the base path in the Swagger schema was ignored
-      (<a href="https://github.com/qorelanguage/qore/issues/4059">issue 4059</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
     @subsection swaggerdataprovider_v1_0_2 SwaggerDataProvider v1.0.2
     - fixed support empty responses
-      (<a href="https://github.com/qorelanguage/qore/issues/3801">issue 3801</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3801">issue 3801</a>)
 
     @subsection swaggerdataprovider_v1_0_1 SwaggerDataProvider v1.0.1
     - fixed support for requests that do not require a request hash
-      (<a href="https://github.com/qorelanguage/qore/issues/3784">issue 3784</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3784">issue 3784</a>)
 
     @subsection swaggerdataprovider_v1_0 SwaggerDataProvider v1.0
     - initial release of the module

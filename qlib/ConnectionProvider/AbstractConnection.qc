@@ -39,6 +39,28 @@ public const PF_THROW_EXCEPTION = (1 << 0);
 public const PF_AUTOMATIC_PING =  (1 << 1);
 #/@}
 
+/** @defgroup ConnectionCustomizationStatuses Connection Customization Statuses
+*/
+#/@{
+#! Customization status: unsupported
+public const CCS_UNSUPPORTED = "unsupported";
+
+#! Customization status: uncustomized
+/** The connection supports customization, but customization has not yet been started
+*/
+public const CCS_UNCUSTOMIZED = "uncustomized";
+
+#! Customization status: in-progress
+/** The connection supports customization, and customization is currently in progress
+*/
+public const CCS_IN_PROGRESS = "in-progress";
+
+#! Customization status: customized
+/** The connection supports customization, and customization has been completed
+*/
+public const CCS_CUSTOMIZED = "customized";
+#/@}
+
 #! Abstract base class for connections
 /** this class can be specialized to provide for user-defined connection types
 
@@ -63,6 +85,9 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         #! "safe" URL (password information removed)
         string safe_url;
+
+        #! A string containing the real URL using a non-abstract / technical scheme
+        string real_url;
 
         #! original connection options
         *hash<auto> orig_opts;
@@ -90,6 +115,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         #! set to @ref True "True" for loopback connections
         bool loopback = False;
+
+        #! Customization support?
+        bool supports_customization = False;
+
+        #! Customization status
+        string customization_status = CCS_UNSUPPORTED;
+
+        #! Customization timestamp
+        *date customization_timestamp;
 
         #! optional code for default post-processing of objects created by getImpl()
         /** must take the connection object and the object created as arguments
@@ -152,6 +186,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         #! Connection info keys mapped 1:1 to DataProviderOptionInfo keys
         const CommonConnectionKeys = (
             "allowed_values",
+            "allowed_values_creatable",
             "default_value",
             "desc",
             "display_name",
@@ -321,6 +356,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         return False;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+
+        @since %ConnectionProvider 2.0
+    */
+    *string getAppName() {
+        # intentionally empty
+    }
+
     #! returns a hash with the results of the ping operation
     /** @param throw_exception throw an exception if a connection error occurs
 
@@ -363,6 +407,28 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
     }
 
+    #! Called after a new connection object is created from an existing connection
+    /** @param old the old connection object
+    */
+    persistInfo(AbstractConnection old) {
+        # intentionally empty
+    }
+
+    #! Starts customization for the object
+    /** @bool restart Restart any customization in progress
+
+        @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+        @throw CUSTOMIZATION-IN-PROGRESS this exception is thrown if customization is already in progress and
+        \a restart is not @ref True
+    */
+    startCustomization(*bool restart) {
+        if ((customization_status == CCS_IN_PROGRESS) && !restart) {
+            throw "CUSTOMIZATION-IN-PROGRESS", "Customization in progress; set the restart flag to restart "
+                "connection customization";
+        }
+        startCustomizationImpl();
+    }
+
     #! performs the ping by executing get(); returns a @ref PingInfo hash
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
@@ -403,7 +469,8 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = cast<hash<ConnectionInfo>>(self{
             "name", "display_name", "short_desc", "desc", "url", "monitor", "last_check", "updated", "status", "up",
-            "loopback", "enabled", "locked", "debug_data", "tags", "children_can_support_apis",
+            "loopback", "enabled", "locked", "supports_customization", "customization_status",
+            "customization_timestamp", "debug_data", "tags", "children_can_support_apis",
             "children_can_support_records", "children_can_support_observers", "children_can_support_messages",
             "children_can_support_transactions",
         } + {
@@ -414,11 +481,16 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             "dataprovider_subtypes": getDataProviderSubtypes(),
             "needs_auth": needsAuth(),
         });
+        if ((*string app = getAppName()).val()) {
+            h.app = app;
+        }
+        h.opts = orig_opts;
         if (!opts.with_passwords) {
             h.url = safe_url;
             delete h.url_hash.password;
+            # remove all sensitive option values as well
+            map remove h.opts{$1}, keys getConnectionSchemeInfo().sensitive_options;
         }
-        h.opts = orig_opts;
         # sort options by key
         if (h.opts) {
             h.opts = h.opts{sort(keys h.opts)};
@@ -706,13 +778,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     #! Called to start the connection polling operation
     /** Only called if the connection supports the polling API
 
+        @param an optional logger interface for any object used for polling
+
         @return a socket poll operation object that will allow the connection goal to be reached with polling
 
         @see supportsPollingApi()
 
         @since ConnectionProvider 1.7
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         throw "UNSUPPORTED", sprintf("connection %y (%s) does not support the polling API", name, safe_url);
     }
 
@@ -777,6 +851,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         }
         string targ = "http" + (ssl ? "s" : "");
         return regex_subst(url, "^" + scheme, targ);
+    }
+
+    #! Starts customization for the object
+    /** @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
+    */
+    private startCustomizationImpl() {
+        throw "CUSTOMIZATION-UNSUPPORTED", "This connection does not support customization";
     }
 
     #! returns a data provider object for the connection and subtype passed as an argument
@@ -969,6 +1050,19 @@ scheme://user:pass@hostname:port/path
         }
 
         setChildCapabilities();
+        setRealUrl(url);
+    }
+
+    #! Called by the constructor to set the real URL
+    /** @path the new URL
+
+        sets the real HTTP URL for HTTP-based connections
+    */
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = url;
+        }
+
     }
 
     #! Returns a hash of connection-defined features

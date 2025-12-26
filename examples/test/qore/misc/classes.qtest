@@ -470,7 +470,7 @@ class Test1 inherits Socket {
         b = 2;
         data = (n_a, n_b, n_c);
     }
-    any getData(int elem) {
+    auto getData(int elem) {
         if (exists elem)
             return data[elem];
         return data;
@@ -491,7 +491,7 @@ class Test1 inherits Socket {
             return sprintf("%s-%n-%n-%n", data[1], x, y, ++a);
         };
     }
-    any argTest() {
+    auto argTest() {
         return argv;
     }
 }
@@ -630,7 +630,7 @@ class Issue1576 {
     public {}
 }
 
-# https://github.com/qorelanguage/qore/issues/2380
+# https://github.com/qoretechnologies/qore/issues/2380
 class Issue2380 {
     private:internal int x() {
         return 1;
@@ -785,9 +785,28 @@ class Issue_4419_T {
     }
 }
 
+class StaticResolutionTest {
+    static int a0() {
+        return b0();
+    }
+
+    static int a1() {
+        return b1();
+    }
+
+    static int b0() {
+        return 1;
+    }
+
+    static private:internal int b1() {
+        return 1;
+    }
+}
+
 public class ClassesTest inherits QUnit::Test {
     constructor() : Test("Classes test", "1.0") {
         v = 1;
+        addTestCase("static method resolution", \staticMethodResolutionTest());
         addTestCase("issue 4605", \issue4605());
         addTestCase("another abstract test", \anotherAbstractTest());
         addTestCase("issue 4419", \issue4419());
@@ -819,6 +838,42 @@ public class ClassesTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    staticMethodResolutionTest() {
+        StaticResolutionTest t();
+        assertEq(1, t.a0());
+        assertEq(1, t.a1());
+
+        Program p(PO_NEW_STYLE);
+        p.parse("
+class C {
+    static int a() {
+        return 1;
+    }
+
+    code get0() {
+        return \\a();
+    }
+
+    static code get() {
+        return \\a();
+    }
+}
+
+code sub test0() {
+    C c();
+    return c.get();
+}
+
+code sub test() {
+    return C::get();
+}
+", "test");
+        code c = p.callFunction("test");
+        assertEq(1, c());
+        c = p.callFunction("test0");
+        assertEq(1, c());
     }
 
     issue4605() {

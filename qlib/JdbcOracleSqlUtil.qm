@@ -68,7 +68,7 @@ module JdbcOracleSqlUtil {
 
     All the public symbols in the module are defined in the JdbcOracleSqlUtil namespace
 
-    @note This module requires the <a href="https://github.com/qorelanguage/module-jni">jni</a> binary module and the
+    @note This module requires the <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary module and the
     PostgreSQL JDBC driver for communication with PostgreSQL databases
 
     @see @ref pgsqlsqlutilbaseintro for implementation information about this module

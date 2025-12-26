@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -258,6 +258,7 @@ DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
 DLLLOCAL int64 parse_get_parse_options();
 DLLLOCAL int64 runtime_get_parse_options();
+DLLLOCAL int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(int64 o);
 DLLLOCAL bool runtime_check_parse_option(int64 o);
@@ -311,6 +312,8 @@ DLLLOCAL QoreModuleDefContext* get_module_def_context();
 DLLLOCAL void parse_set_module_def_context_name(const char* name);
 DLLLOCAL const char* set_module_context_name(const char* n);
 DLLLOCAL const char* get_module_context_name();
+DLLLOCAL const char* set_module_context_path(const char* p);
+DLLLOCAL const char* get_module_context_path();
 
 DLLLOCAL void parse_set_try_reexport(bool tr);
 DLLLOCAL bool parse_get_try_reexport();
@@ -697,8 +700,21 @@ private:
 
 class OptionalObjectOnlySubstitutionHelper {
 public:
+    DLLLOCAL OptionalObjectOnlySubstitutionHelper() : subst(false) {
+#ifdef DEBUG
+        old_obj = nullptr;
+#endif
+    }
+
     DLLLOCAL OptionalObjectOnlySubstitutionHelper(QoreObject* obj);
+
     DLLLOCAL ~OptionalObjectOnlySubstitutionHelper();
+
+    DLLLOCAL void set(QoreObject* obj);
+
+    DLLLOCAL operator bool() const {
+        return subst;
+    }
 
 private:
     bool subst;

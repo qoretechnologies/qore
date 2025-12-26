@@ -39,50 +39,50 @@ public hashdecl QueryOperatorInfo {
 const QUERY_OP_CONTAINS = "contains";
 
 #! like/contains operator
-const QUERY_OP_ENDSWITH = "endswith";
+const QUERY_OP_ENDSWITH = "endsWith";
 
 #! like/contains operator
-const QUERY_OP_STARTSWITH = "startswith";
+const QUERY_OP_STARTSWITH = "startsWith";
 
 #! the Query less than (<) operator for use in queries
 /** @see query_op_lt()
 */
-public const QUERY_OP_LT = "lt";
+public const QUERY_OP_LT = "<";
 
 #! the Query less than or equals (<=) operator for use in queries
 /** @see query_op_le()
 */
-public const QUERY_OP_LE = "le";
+public const QUERY_OP_LE = "<=";
 
 #! the Query greater than operator (>) for use in queries
 /** @see query_op_gt()
 */
-public const QUERY_OP_GT = "gt";
+public const QUERY_OP_GT = ">";
 
 #! the Query greater than or equals operator (>=) for use in queries
 /** @see query_op_ge()
 */
-public const QUERY_OP_GE = "ge";
+public const QUERY_OP_GE = ">=";
 
 #! the Query not equals operator (!= or <>) for use in queries
 /** @see query_op_ne()
 */
-public const QUERY_OP_NE = "ne";
+public const QUERY_OP_NE = "!=";
 
 #! the Query equals operator (=) for use in queries
 /** @see query_op_eq()
 */
-public const QUERY_OP_EQ = "eq";
+public const QUERY_OP_EQ = "==";
 
 #! the Query \c "not" operator for use in queries
 /** @see query_op_not()
 */
-public const QUERY_OP_NOT = "not";
+public const QUERY_OP_NOT = "!";
 
 #! to combine Query expressions with \c "or" for use in queries
 /** @see query_wquery_op_or()
 */
-public const QUERY_OP_OR = "or";
+public const QUERY_OP_OR = "||";
 #/@}
 
 /** @defgroup query_op_funcs Query Operator Functions

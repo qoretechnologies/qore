@@ -37,82 +37,82 @@ public hashdecl QueryOperatorInfo {
 #! like/contains operator
 /** @see query_op_like()
 */
-public const QUERY_OP_LIKE = "LIKE";
+public const QUERY_OP_LIKE = "like";
 
 #! not like operator
 /** @see query_op_notlike()
 */
-public const QUERY_OP_NOTLIKE = "NOTLIKE";
+public const QUERY_OP_NOTLIKE = "not like";
 
 #! ends with operator
 /** @see query_op_endswith()
 */
-public const QUERY_OP_ENDSWITH = "ENDSWITH";
+public const QUERY_OP_ENDSWITH = "endsWith";
 
 #! starts with operator
 /** @see query_op_startswith()
 */
-public const QUERY_OP_STARTSWITH = "STARTSWITH";
+public const QUERY_OP_STARTSWITH = "startsWith";
 
 #! the Query less than (<) operator for use in queries
 /** @see query_op_lt()
 */
-public const QUERY_OP_LT = "lt";
+public const QUERY_OP_LT = "<";
 
 #! the Query less than or equals (<=) operator for use in queries
 /** @see query_op_le()
 */
-public const QUERY_OP_LE = "le";
+public const QUERY_OP_LE = "<=";
 
 #! the Query greater than operator (>) for use in queries
 /** @see query_op_gt()
 */
-public const QUERY_OP_GT = "gt";
+public const QUERY_OP_GT = ">";
 
 #! the Query greater than or equals operator (>=) for use in queries
 /** @see query_op_ge()
 */
-public const QUERY_OP_GE = "ge";
+public const QUERY_OP_GE = ">=";
 
 #! the Query not equals operator (!= or <>) for use in queries
 /** @see query_op_ne()
 */
-public const QUERY_OP_NE = "ne";
+public const QUERY_OP_NE = "!=";
 
 #! the Query equals operator (=) for use in queries
 /** @see query_op_eq()
 */
-public const QUERY_OP_EQ = "eq";
+public const QUERY_OP_EQ = "==";
 
 #! the Query "is empty string" operator (ISEMPTY) for use in queries
 /** @see query_op_isempty()
 */
-public const QUERY_OP_ISEMPTY = "ISEMPTY";
+public const QUERY_OP_ISEMPTY = "isEmpty";
 
 #! the Query "is not empty string" operator (ISNOTEMPTY) for use in queries
 /** @see query_op_isnotempty()
 */
-public const QUERY_OP_ISNOTEMPTY = "ISNOTEMPTY";
+public const QUERY_OP_ISNOTEMPTY = "isNotEmpty";
 
 #! the Query "IN" operator for use in queries
 /** @see query_op_in()
 */
-public const QUERY_OP_IN = "IN";
+public const QUERY_OP_IN = "in";
 
 #! the Query "NOTIN" operator for use in queries
 /** @see query_op_notin()
 */
-public const QUERY_OP_NOTIN = "NOTIN";
+public const QUERY_OP_NOTIN = "not in";
 
 #! the Query \c "not" operator for use in queries
 /** @see query_op_not()
 */
-public const QUERY_OP_NOT = "NOT";
+public const QUERY_OP_NOT = "!";
 
 #! to combine Query expressions with \c "or" for use in queries
 /** @see query_wquery_op_or()
 */
-public const QUERY_OP_OR = "OR";
+public const QUERY_OP_OR = "||";
 #/@}
 
 /** @defgroup query_op_funcs Query Operator Functions

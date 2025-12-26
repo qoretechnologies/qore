@@ -74,27 +74,28 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             "exp": DP_SEARCH_OP_GE,
             "args": (
                 <DataProviderFieldReference>{"field": "ClosedUtc"},
-                2021-11-01,
+                now() - 7D,
             ),
         };
         *hash<auto> rec;
         try {
             rec = orderitems.searchSingleRecord(where_cond, {"limit": 1});
+            assertEq(Type::Hash, rec.type());
+
+            AbstractDataProviderBulkRecordInterface i = orderitems.searchRecordsBulk(1000, where_cond, {"limit": 1});
+            hash<auto> q = i.getValue();
+            assertEq(Type::List, q.firstValue().type());
+            assertEq(1, q.firstValue().lsize());
+            assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg."response-code" == 408 || ex.arg."response-code" == 429) {
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
                 delete mews;
-                testSkip(sprintf("timeout (%d %s); assuming no connection", ex.arg."response-code",
-                    ex.arg."response-headers".status_message));
+                testSkip("Rate limited");
             }
             rethrow;
         }
-        assertEq(Type::Hash, rec.type());
-
-        AbstractDataProviderBulkRecordInterface i = orderitems.searchRecordsBulk(1000, where_cond, {"limit": 1});
-        hash<auto> q = i.getValue();
-        assertEq(Type::List, q.firstValue().type());
-        assertEq(1, q.firstValue().lsize());
-        assertNothing(i.getValue());
     }
 
     actionTest() {
@@ -102,28 +103,38 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             testSkip("no connection");
         }
 
-        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction("Mews", "get-order-items");
-        AbstractDataProvider prov = mews.getChildProviderPath(action.path[1..]);
-        assertEq("orderitems", prov.getName());
+        try {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction("Mews", "get-order-items");
+            AbstractDataProvider prov = mews.getChildProviderPath(action.path[1..]);
+            assertEq("orderitems", prov.getName());
 
-        *hash<auto> rec = prov.searchSingleRecord({"ClosedUtcStart": 2021-11-01}, {"limit": 1});
-        assertEq(Type::Hash, rec.type());
+            *hash<auto> rec = prov.searchSingleRecord({"ClosedUtcStart": now() - 7D}, {"limit": 1});
+            assertEq(Type::Hash, rec.type());
 
-        action = DataProviderActionCatalog::getAppAction("Mews", "get-payments");
-        prov = mews.getChildProviderPath(action.path[1..]);
-        assertEq("payments", prov.getName());
+            action = DataProviderActionCatalog::getAppAction("Mews", "get-payments");
+            prov = mews.getChildProviderPath(action.path[1..]);
+            assertEq("payments", prov.getName());
 
-        rec = prov.searchSingleRecord({"ClosedUtcStart": 2021-11-01}, {"limit": 1});
-        assertEq(Type::Hash, rec.type());
+            rec = prov.searchSingleRecord({"ClosedUtcStart": now() - 7D}, {"limit": 1});
+            assertEq(Type::Hash, rec.type());
 
-        action = DataProviderActionCatalog::getAppAction("Mews", "get-customers");
-        prov = mews.getChildProviderPath(action.path[1..]);
-        assertEq("customers", prov.getName());
+            action = DataProviderActionCatalog::getAppAction("Mews", "get-customers");
+            prov = mews.getChildProviderPath(action.path[1..]);
+            assertEq("customers", prov.getName());
 
-        *list<auto> recs = map $1, prov.searchRecords({"CreatedUtcStart": 2021-11-01}, {
-            "limit": 2,
-        });
-        assertEq(2, recs.size());
+            *list<auto> recs = map $1, prov.searchRecords({"CreatedUtcStart": now() - 7D}, {
+                "limit": 2,
+            });
+            assertEq(2, recs.size());
+        } catch (hash<ExceptionInfo> ex) {
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
+                delete mews;
+                testSkip("Rate limited");
+            }
+            rethrow;
+        }
     }
 
     private usageIntern() {
@@ -137,24 +148,33 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
     private setupConnection() {
         *string conn_name = m_options.conn ?? ENV.MEWS_CONNECTION;
-        if (conn_name.val()) {
-            AbstractConnection conn = get_connection(conn_name);
-            if (!(conn instanceof MewsRestConnection)) {
-                error("connection %y is type %y; expecting \"MewsRestConnection\"", conn_name, conn.className());
+        try {
+            if (conn_name.val()) {
+                AbstractConnection conn = get_connection(conn_name);
+                if (!(conn instanceof MewsRestConnection)) {
+                    error("connection %y is type %y; expecting \"MewsRestConnection\"", conn_name, conn.className());
+                }
+                mrc = conn;
+            } else {
+                mrc = new MewsRestConnection({
+                    "url": "https://api.mews-demo.com",
+                    "name": "demo",
+                    "desc": "Connection to demo environment",
+                    "opts": {
+                        "access_token": "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D",
+                        "client_token": "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D",
+                    },
+                });
             }
-            mrc = conn;
-        } else {
-            mrc = new MewsRestConnection({
-                "url": "https://api.mews-demo.com",
-                "name": "demo",
-                "desc": "Connection to demo environment",
-                "opts": {
-                    "access_token": "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D",
-                    "client_token": "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D",
-                },
-            });
-        }
 
-        mews = new MewsRestDataProvider(mrc.get());
+            mews = new MewsRestDataProvider(mrc.get());
+        } catch (hash<ExceptionInfo> ex) {
+            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
+                delete mews;
+            }
+            rethrow;
+        }
     }
 }

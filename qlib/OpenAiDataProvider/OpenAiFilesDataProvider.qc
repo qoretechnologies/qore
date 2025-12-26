@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataFilesProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiDataFilesProvider.qc Copyright 2024 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@ public class OpenAiFilesDataProvider inherits OpenAiDataProviderCommon {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "files",
+            "desc": "Parent data provider for OpenAI files",
             "type": "OpenAiFilesDataProvider",
             "supports_children": True,
             "constructor_options": ConstructorOptions,

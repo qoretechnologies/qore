@@ -93,12 +93,12 @@ printf("%N\n", ans.body);
 
     @subsection Sewiorestclientv1_4 SewioRestClient v1.4
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection Sewiorestclientv1_3 SewioRestClient v1.3
     - removed the \c SewioRestConnection::getConstructorInfo() and
       \c SewioRestConnection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
 
     @subsection Sewiorestclientv1_2 SewioRestClient v1.2
     - all connection clases have unified constructor
@@ -107,11 +107,11 @@ printf("%N\n", ans.body);
     - added the \c SewioConnection::getConstructorInfoImpl()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in SewioRestClient 1.3)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection sewiorestclientv1_0_1 SewioRestClient v1.0.1
    - fixed a bug handling default options including timeouts in @ref SewioRestClient::SewioRestConnection "SewioRestConnection"
-      (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
     @subsection sewiorestclientv1_0 SewioRestClient v1.0
     - the initial version of the %SewioRestClient module

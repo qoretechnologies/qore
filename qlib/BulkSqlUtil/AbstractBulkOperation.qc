@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractBulkOperation class definition
 
-/*  AbstractBulkOperation.qc Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  AbstractBulkOperation.qc Copyright 2015 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -312,6 +312,16 @@ on_error ds.rollback();
         */
         int size() {
             return hbuf.firstValue().size();
+        }
+
+        #! Returns the operation name
+        string getOperationName() {
+            return opname;
+        }
+
+        #! Returns the block size
+        int getBlockSize() {
+            return block_size;
         }
 
         #! common constructor initialization

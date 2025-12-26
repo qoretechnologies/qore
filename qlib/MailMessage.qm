@@ -83,24 +83,24 @@ msg.addTO("My Best Friend <you@friend.com>");
 
     @subsection mailmessage_v1_3_3 MailMessage 1.3.3
     - various fixes from downstream to MailMessage data handling
-      (<a href="https://github.com/qorelanguage/qore/issues/4352">issue 4352</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4352">issue 4352</a>)
 
     @subsection mailmessage_v1_3_2 MailMessage 1.3.2
     - fixed message serialization for SMTP handling; default to base64 encoding for attachments and if the message
       body has a single \c "." character on a line; convert any single \c "." characters on a line to two \c ".."
       characters if using inly quoted printable encoding
-      (issue <a href="https://github.com/qorelanguage/qore/issues/3275">issue 3275</a>)
+      (issue <a href="https://github.com/qoretechnologies/qore/issues/3275">issue 3275</a>)
 
     @subsection mailmessage_v1_3_1 MailMessage 1.3.1
     - fixed @ref MailMessage::Message::addBody() "Message::addBody()" with no body present
-      (issue <a href="https://github.com/qorelanguage/qore/issues/2360">issue 2360</a>)
+      (issue <a href="https://github.com/qoretechnologies/qore/issues/2360">issue 2360</a>)
 
     @subsection mailmessage_v1_3 MailMessage 1.3
     - added support for complex types
 
     @subsection mailmessage_v1_2_1 MailMessage 1.2.1
     - fixed a bug using the default encoding in @ref MailMessage::Message::attach() "Message::attach()"
-      (issue <a href="https://github.com/qorelanguage/qore/issues/1352">issue 1352</a>)
+      (issue <a href="https://github.com/qoretechnologies/qore/issues/1352">issue 1352</a>)
 
     @subsection mailmessage_v1_2 MailMessage 1.2
     - converted to @ref new-style "%new-style"

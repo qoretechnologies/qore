@@ -47,13 +47,23 @@ public class Main inherits QUnit::Test {
                 printf("%s: %s\n", ex.err, ex.desc);
             }
         }
+        setupLogger();
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
-    setUp() {
-        Logger logger("test", LoggerLevel::getLevelInfo());
+    setupLogger() {
+        LoggerLevel ll;
+        if (m_options.verbose > 3) {
+            ll = LoggerLevel::LevelDebug;
+        } else if (m_options.verbose > 2) {
+            ll = LoggerLevel::LevelInfo;
+        } else {
+            ll = LoggerLevel::LevelWarn;
+        }
+
+        logger = new Logger("test", ll);
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
@@ -74,7 +84,7 @@ public class Main inherits QUnit::Test {
             "access_token": "x",
             "client_token": "x",
         };
-        {
+        try {
             MewsRestConnection rc({
                 "url": "https://api.mews-demo.com",
                 "name": "test",
@@ -87,6 +97,13 @@ public class Main inherits QUnit::Test {
             # issue #3321: check default timeouts
             assertEq(45000, client.getTimeout());
             assertEq(45000, client.getConnectTimeout());
+        } catch (hash<ExceptionInfo> ex) {
+            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
+                remove mrc;
+                testSkip("rate limited");
+            }
+            rethrow;
         }
     }
 
@@ -95,7 +112,7 @@ public class Main inherits QUnit::Test {
             testSkip("no connection");
         }
 
-        {
+        try {
             # first test a standard ping
             hash<PingInfo> ping = mrc.ping(True);
             assertTrue(ping.ok);
@@ -110,6 +127,13 @@ public class Main inherits QUnit::Test {
                 printf("%s\n", get_exception_string(info.ex));
             }
             assertEq("OK", info.result);
+        } catch (hash<ExceptionInfo> ex) {
+            *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (status_code == 429 || status_code == 408) {
+                remove mrc;
+                testSkip("rate limited");
+            }
+            rethrow;
         }
     }
 
@@ -154,7 +178,12 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 
     hash<auto> waitForResult() {
-        return msgq.get();
+        return msgq.get(ping_timeout);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {

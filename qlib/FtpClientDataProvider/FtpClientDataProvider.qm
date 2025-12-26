@@ -147,7 +147,7 @@ module FtpClientDataProvider {
 
     @subsection ftpclientdataprovider_v2_0 FtpClientDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection ftpclientdataprovider_v1_0 FtpClientDataProvider v1.0
     - initial release of the module

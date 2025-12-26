@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1392,7 +1392,12 @@ protected:
             str.sprintf("type '%s'", n.getFullTypeName());
             return;
         }
-        str.sprintf("an object of class '%s'", n.get<const QoreObject>()->getClassName());
+        const QoreObject* obj = n.get<const QoreObject>();
+        if (!obj->isValid()) {
+            str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+            return;
+        }
+        str.sprintf("an object of class '%s'", obj->getClassName());
     }
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
@@ -1718,7 +1723,7 @@ class QoreHashDeclTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
             : QoreTypeInfo(q_accept_vec_t {{hd, nullptr, true}}, q_return_vec_t {{hd, true}},
-        QoreStringMaker("hash<%s>", name)) {
+            QoreStringMaker("hash<%s>", name)) {
         assert(path && *path);
         pname = "hash<";
         pname.append(path);

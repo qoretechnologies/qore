@@ -2,7 +2,7 @@
 
 # AC_PREREQ(2.59)
 # NOTE: Qore should always use semantic versioning: https://semver.org/
-AC_INIT([qore], [2.0.0],
+AC_INIT([qore], [2.3.0],
         [David Nichols <david@qore.org>],
         [qore])
 AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 tar-pax subdir-objects])
@@ -178,7 +178,7 @@ case "${host_os}" in
             if test -z "$NATIVE_CXX"; then
                 AC_MSG_ERROR(unable to find a native c++ compiler; please set NATIVE_CXX to the path to the native c++ compiler for building qpp)
             else
-                NATIVE_CXX="$NATIVE_CXX -std=c++11"
+                NATIVE_CXX="$NATIVE_CXX -std=c++17"
             fi
 		fi
 		if test -z "$NATIVE_CXX"; then
@@ -223,7 +223,7 @@ AC_SUBST(QPP_CPPFLAGS)
 AC_PROG_LEX
 
 # test for C++17
-AX_CXX_COMPILE_STDCXX_17([noext], [mandatory])
+AX_CXX_COMPILE_STDCXX_17()
 if test "$HAVE_CXX17" = "1"; then
     AM_CXXFLAGS=-std=gnu++17
 fi
@@ -489,18 +489,18 @@ AC_ARG_ENABLE([static-bz2],
       esac],
      [enable_static_bz2=no])
 
-AC_ARG_ENABLE([static-pcre],
-     [AS_HELP_STRING([--enable-static-pcre],
-		     [force static linkage of pcre libraries (default=auto)])],
-     [case "${enable_static_pcre}" in
+AC_ARG_ENABLE([static-pcre2],
+     [AS_HELP_STRING([--enable-static-pcre2],
+		     [force static linkage of pcre2 libraries (default=auto)])],
+     [case "${enable_static_pcre2}" in
        yes|no) ;;
-       *)      AC_MSG_ERROR(bad value ${enable_static_pcre} for --enable-static-pcre) ;;
+       *)      AC_MSG_ERROR(bad value ${enable_static_pcre2} for --enable-static-pcre2) ;;
       esac],
-     [enable_static_pcre=no])
+     [enable_static_pcre2=no])
 
 AC_ARG_ENABLE([static-common],
      [AS_HELP_STRING([--enable-static-common],
-		     [force static linkage of openssl and pcre libraries (default=auto)])],
+		     [force static linkage of openssl and pcre2 libraries (default=auto)])],
      [case "${enable_static_common}" in
        yes|no) ;;
        *)      AC_MSG_ERROR(bad value ${enable_static_common} for --enable-static-common) ;;
@@ -521,14 +521,14 @@ elif test "$enable_static_bz2" != "no" -a "$BZ2_STATIC" = "yes"; then
    bz2lib_static=yes
 fi
 
-if test "$enable_static_pcre" = "yes"; then
-   pcre_static=yes
+if test "$enable_static_pcre2" = "yes"; then
+   pcre2_static=yes
 fi
 
 if test "$enable_static_common" = "yes"; then
    zlib_static=yes
    openssl_static=yes
-   pcre_static=yes
+   pcre2_static=yes
    bz2lib_static=yes
 fi
 
@@ -791,17 +791,17 @@ else
    AC_MSG_RESULT([not found])
 fi
 
-set_pcre_cppflags() {
+set_pcre2_cppflags() {
     if test "$1" != "/usr/include"; then
-        PCRE_CPPFLAGS=-I$1
+        PCRE2_CPPFLAGS=-I$1
     fi
-    if test -n "$pcre_static"; then
-        PCRE_CPPFLAGS="${PCRE_CPPFLAGS} -DPCRE_STATIC=1"
+    if test -n "$pcre2_static"; then
+        PCRE2_CPPFLAGS="${PCRE2_CPPFLAGS} -DPCRE2_STATIC=1"
     fi
-    with_pcre_includes="$1"
+    with_pcre2_includes="$1"
 }
 
-find_pcre() {
+find_pcre2() {
     dir="$1"
     if test -z "$dir" -o "$dir" = "/"; then
         if test -h /lib${LIBSUFFIX}; then
@@ -817,77 +817,77 @@ find_pcre() {
         lib="$dir/lib${LIBSUFFIX}"
         inc="$dir/include"
     fi
-    # if we only want the static pcre libraries
-    if test -n "$pcre_static"; then
-    	if test -f "$lib/libpcre.a"; then
-            PCRE_LDFLAGS="$lib/libpcre.a"
-            with_pcre_libs="$lib"
-            pcre_static=1
+    # if we only want the static pcre2 libraries
+    if test -n "$pcre2_static"; then
+    	if test -f "$lib/libpcre2-8.a"; then
+            PCRE2_LDFLAGS="$lib/libpcre2-8.a"
+            with_pcre2_libs="$lib"
+            pcre2_static=1
     	fi
     else
-        if test -f "$lib/libpcre.${SHLIB_SUFFIX}"; then
+        if test -f "$lib/libpcre2-8.${SHLIB_SUFFIX}"; then
             if test "$lib" != "/lib" -a "$lib" != "/usr/lib"; then
-                PCRE_LDFLAGS="-L$lib"
+                PCRE2_LDFLAGS="-L$lib"
             fi
-            PCRE_LDFLAGS="$PCRE_LDFLAGS -lpcre"
-            with_pcre_libs="$lib"
-        elif test -f "$lib/libpcre.a"; then
+            PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2-8"
+            with_pcre2_libs="$lib"
+        elif test -f "$lib/libpcre2-8.a"; then
             if test "$mingw" = yes -a "$make_dll" = yes; then
-                PCRE_LDFLAGS="-Wl,$lib/libpcre.a"
+                PCRE2_LDFLAGS="-Wl,$lib/libpcre2-8.a"
             else
                 if test "$lib" != "/lib" -a "$lib" != "/usr/lib"; then
-                    PCRE_LDFLAGS="-L$lib"
+                    PCRE2_LDFLAGS="-L$lib"
                 fi
-                PCRE_LDFLAGS="$PCRE_LDFLAGS -lpcre"
+                PCRE2_LDFLAGS="$PCRE2_LDFLAGS -lpcre2-8"
             fi
-            with_pcre_libs="$lib"
-            pcre_static=1
-        elif test "$windows" = yes -a -f "$dir/bin/libpcre.${SHLIB_SUFFIX}"; then
-            PCRE_LDFLAGS="-L$dir/bin -lpcre"
+            with_pcre2_libs="$lib"
+            pcre2_static=1
+        elif test "$windows" = yes -a -f "$dir/bin/libpcre2-8.${SHLIB_SUFFIX}"; then
+            PCRE2_LDFLAGS="-L$dir/bin -lpcre2-8"
             with_pre_libs="$dir"
         fi
     fi
-    if test -z "$PCRE_LDFLAGS"; then
+    if test -z "$PCRE2_LDFLAGS"; then
         return
     fi
     # try to find include files
-    if test -f "$inc/pcre.h"; then
-        set_pcre_cppflags $inc
-    elif test -f "$inc/pcre/pcre.h"; then
-        set_pcre_cppflags $inc/pcre
+    if test -f "$inc/pcre2.h"; then
+        set_pcre2_cppflags $inc
+    elif test -f "$inc/pcre2/pcre2.h"; then
+        set_pcre2_cppflags $inc/pcre2
     else
-        unset PCRE_LDFLAGS
-        unset with_pcre_libs
+        unset PCRE2_LDFLAGS
+        unset with_pcre2_libs
         return
     fi
-    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $PCRE_LDFLAGS"
-    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $PCRE_CPPFLAGS"
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $PCRE2_LDFLAGS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $PCRE2_CPPFLAGS"
 }
 
-# see if we can figure out where the pcre library is
-AC_ARG_WITH([pcre-dir],
-  [AS_HELP_STRING([--with-pcre-dir@<:@=DIR@:>@],
-                  [PCRE directory])],
-  [if test ! -d "${with_pcre_dir}"; then AC_MSG_ERROR([bad value ${with_pcre_dir} for --with-pcre-dir]); unset with_pcre_dir; fi],
-  [with_pcre_dir="$PCRE_DIR"])
+# see if we can figure out where the pcre2 library is
+AC_ARG_WITH([pcre2-dir],
+  [AS_HELP_STRING([--with-pcre2-dir@<:@=DIR@:>@],
+                  [PCRE2 directory])],
+  [if test ! -d "${with_pcre2_dir}"; then AC_MSG_ERROR([bad value ${with_pcre2_dir} for --with-pcre2-dir]); unset with_pcre2_dir; fi],
+  [with_pcre2_dir="$PCRE2_DIR"])
 
-AC_MSG_CHECKING([for pcre libraries and header files])
-for dir in "${with_pcre_dir}" "${with_lib_prefix}" "${find_prefix}" /usr / /usr/local /opt/gnu /opt/pcre /usr/local/pcre /opt/local /sw /usr/sfw /opt/sfw; do
+AC_MSG_CHECKING([for pcre2 libraries and header files])
+for dir in "${with_pcre2_dir}" "${with_lib_prefix}" "${find_prefix}" /usr / /usr/local /opt/gnu /opt/pcre2 /usr/local/pcre2 /opt/local /sw /usr/sfw /opt/sfw; do
     if test -z "$dir"; then
         continue
     fi
-    find_pcre $dir
-    if test -n "$PCRE_LDFLAGS"; then
+    find_pcre2 $dir
+    if test -n "$PCRE2_LDFLAGS"; then
         break
     fi
 done
-if test -z "$PCRE_LDFLAGS"; then
-    AC_MSG_ERROR([no pcre library found])
+if test -z "$PCRE2_LDFLAGS"; then
+    AC_MSG_ERROR([no pcre2 library found])
 fi
-if test -n "$pcre_static"; then
-   AC_MSG_RESULT([includes $with_pcre_includes libs $with_pcre_libs (static)])
+if test -n "$pcre2_static"; then
+   AC_MSG_RESULT([includes $with_pcre2_includes libs $with_pcre2_libs (static)])
 else
-   AC_MSG_RESULT([includes $with_pcre_includes libs $with_pcre_libs (shared)])
+   AC_MSG_RESULT([includes $with_pcre2_includes libs $with_pcre2_libs (shared)])
 fi
 
 set_bz2lib_cppflags() {
@@ -1052,6 +1052,11 @@ find_openssl() {
         unset openssl_type
         return;
         #AC_MSG_ERROR([not found])
+    fi
+
+
+    if test -f "$inc/openssl/engine.h"; then
+        AC_DEFINE(HAVE_OPNESSL_ENGINE_H, 1, [define if openssl/engine.h is available])
     fi
 
     AC_MSG_RESULT([$lib ($openssl_type) $inc])
@@ -1225,6 +1230,15 @@ else
        [AC_MSG_RESULT([ok])
         AC_DEFINE([HAVE_SSL_READ_EX], 1, [Define if SSL_read_ex() is present])],
        [AC_MSG_RESULT([no HAVE_SSL_READ_EX() present])])
+
+    # check for TLS_server_method()
+    AC_MSG_CHECKING([TLS_server_method() in openssl])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+    [[#include <openssl/ssl.h>]],
+    [[TLS_server_method();]])],
+       [AC_MSG_RESULT([ok])
+        AC_DEFINE([HAVE_TLS_SERVER_METHOD], 1, [Define if TLS_server_method() is present])],
+       [AC_MSG_RESULT([no HAVE_TLS_SERVER_METHOD() present])])
 
     CPPFLAGS="$SAVE_CPPFLAGS"
     LIBS="$SAVE_LIBS"
@@ -1671,14 +1685,14 @@ AC_FUNC_STAT
 AC_FUNC_STRERROR_R
 AC_FUNC_STRTOD
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([bzero floor getaddrinfo gethostbyaddr gethostbyname gethostname getnameinfo getrlimit
-    gettimeofday memmove memset mkfifo putenv regcomp select socket setsockopt getsockopt strcasecmp
-    strchr strdup strerror strspn strstr atoll strtol strtoll isblank localtime_r gmtime_r exp2
-    clock_gettime realloc timegm seteuid setegid setenv unsetenv round
-    pthread_attr_getstacksize getpwuid_r getpwnam_r
-    getgrgid_r getgrnam_r backtrace glob system inet_ntop inet_pton lstat fsync lchown chown setsid
-    setuid mkfifo random kill getppid getgid getegid getuid geteuid setuid seteuid setgid setegid sleep
-    usleep nanosleep readlink symlink access strcasestr strncasecmp setgroups getgroups poll realpath
+AC_CHECK_FUNCS([bzero floor getaddrinfo gethostbyaddr gethostbyname gethostname getnameinfo getrlimit \
+    gettimeofday memmove memset mkfifo putenv regcomp select socket setsockopt getsockopt strcasecmp \
+    strchr strdup strerror strspn strstr atoll strtol strtoll isblank localtime_r gmtime_r exp2 \
+    clock_gettime realloc timegm seteuid setegid setenv unsetenv round \
+    pthread_attr_getstacksize getpwuid_r getpwnam_r \
+    getgrgid_r getgrnam_r backtrace glob system inet_ntop inet_pton lstat fsync lchown chown setsid \
+    setuid mkfifo random kill getppid getgid getegid getuid geteuid setuid seteuid setgid setegid sleep \
+    usleep nanosleep readlink symlink access strcasestr strncasecmp setgroups getgroups poll realpath \
     memmem getifaddrs pthread_get_stacksize_np pthread_get_name_np pthread_getname_np link_ntoa])
 
 # some systems have internal gethostby*_r in libc but don't hide the

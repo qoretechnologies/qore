@@ -278,7 +278,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
-            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml")
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
     else()
@@ -406,7 +406,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
-            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml")
+            "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
         file(GLOB _mod_jar_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/jar/*.jar")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
@@ -503,7 +503,7 @@ MACRO (QORE_USER_MODULES _inputs)
                 string(SUBSTRING ${f} 5 ${f_len} new_f)
 
                 file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/${f}/*.qm" "${CMAKE_SOURCE_DIR}/${f}/*.qc"
-                    "${CMAKE_SOURCE_DIR}/${f}/*.yaml")
+                    "${CMAKE_SOURCE_DIR}/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
                 set(qm_install_subdir "${new_f}") # install files into a subdir
                 #message(STATUS "_mod_targets ${_mod_targets}")
             else()

@@ -20,6 +20,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/RestSchemaValidator.qm
 %requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
 
@@ -418,6 +419,10 @@ public class SwaggerTest inherits QUnit::Test {
             so = Swagger::SwaggerLoader::fromFile(basePath + "PetStore.swagger.json");
             assertTrue(exists so);
             assertEq("/v2", so.getBasePath());
+
+            SwaggerSchema so2 = Serializable::deserialize(so.serialize());
+            assertEq("/v2", so2.getBasePath());
+
             delete so;
             so = Swagger::SwaggerLoader::fromFile(basePath + "PetStore.swagger.yaml");
             assertTrue(exists so);
@@ -901,7 +906,7 @@ public class SwaggerTest inherits QUnit::Test {
                 hash<auto> hdr = {"Test-Header": "Test"};
                 hash<RestRequestServerInfo> req = so.parseRequest("GET", uri_path, NOTHING, \hdr);
                 assertEq(Type::Float, req.query."float".type());
-                assertEq(2024-09-19T10:09:42, req.query.dt);
+                assertEq(2024-09-19T08:09:42Z, req.query.dt);
             }
 
             {
@@ -2636,8 +2641,8 @@ public class SwaggerTest inherits QUnit::Test {
                     "\"string\"", {"content-type": MimeTypeJson}));
             }
 
-            h = so.processRequest("get", "/v1/api/unix-time?t=2024-09-30T12:35:52", NOTHING, NOTHING, MimeTypeJson);
-            assertEq("/v1/api/unix-time?t=1727692552", h.uri_path);
+            h = so.processRequest("get", "/v1/api/unix-time?t=2024-09-30T12:35:52Z", NOTHING, NOTHING, MimeTypeJson);
+            assertEq("/v1/api/unix-time?t=1727699752", h.uri_path);
             assertNothing(h.body);
             assertNothing(h.content);
             #printf("h: %y\n", h);
@@ -2647,13 +2652,13 @@ public class SwaggerTest inherits QUnit::Test {
                 hash<RestRequestServerInfo> sh = so.parseRequest("get", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);
-                assertEq(2024-09-30T12:35:52, sh.query.t);
+                assertEq(2024-09-30T12:35:52Z, sh.query.t);
                 assertNothing(sh.body);
             }
 
-            h = so.processRequest("post", "/v1/api/unix-time", 2024-09-30T12:35:52, NOTHING, MimeTypeJson);
+            h = so.processRequest("post", "/v1/api/unix-time", 2024-09-30T12:35:52Z, NOTHING, MimeTypeJson);
             assertEq("/v1/api/unix-time", h.uri_path);
-            assertEq("1727692552", h.body);
+            assertEq("1727699752", h.body);
             assertEq(MimeTypeJson, h.content);
             #printf("h: %y\n", h);
 
@@ -2662,22 +2667,24 @@ public class SwaggerTest inherits QUnit::Test {
                 hash<RestRequestServerInfo> sh = so.parseRequest("post", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);
-                assertEq(2024-09-30T12:35:52, sh.body);
+                assertEq(2024-09-30T12:35:52Z, sh.body);
             }
 
             {
-                hash<HttpResponseInfo> res = so.processResponse("post", "/api/unix-time", 200, 2024-09-30T12:35:52, NOTHING, MimeTypeJson);
+                hash<HttpResponseInfo> res = so.processResponse("post", "/api/unix-time", 200, 2024-09-30T12:35:52Z,
+                    NOTHING, MimeTypeJson);
                 {
                     on_error printf("res: %N\n", res);
                     assertEq(200, res."code");
                     assertEq(MimeTypeJson, res.hdr."Content-Type");
-                    assertEq("1727692552", res.body);
+                    assertEq("1727699752", res.body);
                 }
 
-                hash<RestResponseClientInfo> cres = so.parseResponse("post", "/api/unix-time", res."code", res.body, res.hdr);
+                hash<RestResponseClientInfo> cres = so.parseResponse("post", "/api/unix-time", res."code", res.body,
+                    res.hdr);
                 assertEq(200, cres."code");
                 assertEq(MimeTypeJson, cres.hdr."Content-Type");
-                assertEq(2024-09-30T12:35:52, cres.body);
+                assertEq(2024-09-30T12:35:52Z, cres.body);
             }
         }
 
@@ -2942,9 +2949,12 @@ public class SwaggerTest inherits QUnit::Test {
 
     private testExamples(SwaggerSchema so) {
         hash<RestQoreExampleCodeInfo> qex = so.getQoreExampleRequest("GET", "/user/login");
-        assertEq(True, qex.example =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
+        {
+            on_error printf("%N\n", qex);
+            assertEq(True, qex.example =~ /\/user\/login\?username=[a-z ]+;password=[a-z ]+/im);
+        }
         hash<RestExampleRequestInfo> rex = so.getExampleRequest("GET", "/user/login");
-        assertEq(True, rex.request_uri =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
+        assertEq(True, rex.request_uri =~ /\/user\/login\?username=[a-z ]+;password=[a-z ]+/im);
 
         qex = so.getQoreExampleRequest("POST", "/pet");
         assertEq(Type::String, qex.example.type());

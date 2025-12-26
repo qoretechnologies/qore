@@ -40,9 +40,9 @@ module FilePoller {
         # NOTE: this application is also registed in the FileDataProvider module
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FilePoller::AppName,
-            "display_name": "Local Filesystem",
-            "short_desc": "Access to the local filesystem",
-            "desc": "Access to the local filesystem",
+            "display_name": "Server Filesystem",
+            "short_desc": "Access to the server filesystem",
+            "desc": "Access to the server filesystem",
             "scheme": "file",
             "logo": FileWhiteLogo,
             "logo_file_name": "generic-filesystem-logo.svg",
@@ -56,8 +56,8 @@ module FilePoller {
             "action": "file-received",
             "subtype": "filepoller",
             "display_name": "New File Created",
-            "short_desc": "A file is created in a local directory",
-            "desc": "React to files created in a local directory",
+            "short_desc": "A file is created in a server directory",
+            "desc": "React to files created in a server directory",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_FILE,
             "output_type": FilePollerFileEventInfoDataType,
@@ -110,15 +110,15 @@ module FilePoller {
 
     @subsection file_poller_2_0 FilePoller v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection file_poller_1_0_1 FilePoller v1.0.1
     - the data provider factory uses the delayed observable class instead
-      (<a href="https://github.com/qorelanguage/qore/issues/4701">issue 4701</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4701">issue 4701</a>)
 
     @subsection file_poller_1_0 FilePoller v1.0
     - added support for the event-based DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4557">issue 4557</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
     @subsection file_poller_0_1_0 FilePoller v0.1.0
     - initial release
@@ -126,7 +126,7 @@ module FilePoller {
 
 #! Main module namespace
 public namespace FilePoller {
-#! Generic app name for the local filesystem
+#! Generic app name for the server filesystem
 public const AppName = "Filesystem";
 
 #! File event constant
@@ -650,9 +650,9 @@ public class FilePoller {
     */
     abstract singleFileEvent(hash<FilePollerFileEventInfo> event);
 
-    #! checks a path on the local file system
+    #! checks a path on the server file system
     /**
-        @throw DIR-ERROR this exception is thrown if the local path does not exist, is not readable, is not a
+        @throw DIR-ERROR this exception is thrown if the server path does not exist, is not readable, is not a
         directory, or should be writable and is not
     */
     static checkPath(string path, string type, bool write = False) {
@@ -836,14 +836,15 @@ public class FilePollerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
-    updateConnectionObject(object conn) {
-        if (!(conn instanceof Dir)) {
+    updateConnectionObjects(object conn, object connobj) {
+        if (!(connobj instanceof Dir)) {
             throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"Dir\" object; got "
-                "%y instead", self.className(), conn.className());
+                "%y instead", self.className(), connobj.className());
         }
-        Dir dir = cast<Dir>(conn);
+        Dir dir = cast<Dir>(connobj);
         poller.setPath(dir.path() ?? "/");
     }
 
@@ -915,6 +916,13 @@ public class FileDelayedPollerDataProvider inherits FilePollerDataProviderBase, 
     */
     observersReady() {
         poller.start();
+    }
+
+    #! Called to stop generating events
+    /** Stops polling for new files
+    */
+    stopEvents() {
+        poller.stop();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

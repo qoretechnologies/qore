@@ -31,14 +31,58 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreHttpClientObject.h>
-#include "qore/intern/QC_HTTPClient.h"
-#include "qore/intern/QC_Queue.h"
-#include "qore/intern/QC_SocketPollOperation.h"
-#include "qore/intern/ssl_constants.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
+#include "qore/intern/QC_HTTPClient.h"
+#include "qore/intern/QC_Queue.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Serializable.h"
+#include "qore/intern/ssl_constants.h"
+
+/** @defgroup http_url_codes HTTP URL Codes
+
+    @since %Qore 2.0
+ */
+///@{
+//! Return the target portion of the URL
+const UC_TARGET = UC_TARGET;
+
+//! Return username (if any)
+const UC_USERNAME = UC_USERNAME;
+
+//! Return password (if any)
+const UC_PASSWORD = UC_PASSWORD;
+
+//! Mask any password returned
+const UC_MASK_PASSWORD = UC_MASK_PASSWORD;
+
+//! Return the path (if any)
+const UC_PATH = UC_PATH;
+
+//! Return all info
+const URL_NORMAL = URL_NORMAL;
+///@}
+
 extern QoreClass* QC_SOCKET;
+
+static QoreHashNode* HTTPClient_serializer(const QoreObject& self, const QoreHttpClientObject& z,
+        QoreSerializationContext& context, ExceptionSink* xsink) {
+    return z.getConfig();
+}
+
+static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
+        ExceptionSink* xsink) {
+    if (!sdata) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "missing serialization data for the HTTPClient class");
+        return;
+    }
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    if (sdata && client->setOptions(sdata, xsink)) {
+        return;
+    }
+    self.setPrivate(CID_HTTPCLIENT, client.release());
+}
 
 //! The HTTPClient class can be used to communicate with HTTP servers with and without TLS/SSL encryption
 /** The HTTPClient class can be used to communicate with HTTP servers using the HTTP or HTTPS (HTTP using an SSL/TLS
@@ -153,7 +197,13 @@ reject the request.@endverbatim
 
     @since %Qore 1.0 added code to add a \c ";charset=xxx" to HTTP messages with a non-ISO-8859-1 string message body
 */
-qclass HTTPClient [dom=NETWORK; arg=QoreHttpClientObject* client; vparent=Socket];
+qclass HTTPClient [
+    dom=NETWORK;
+    arg=QoreHttpClientObject* client;
+    vparent=Socket,Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(HTTPClient_serializer);
+    deserializer=HTTPClient_deserializer
+];
 
 //! Creates the HTTPClient object based on the option parameter passed
 /** To connect, call any method that requires a connection and an implicit connection is established, or call
@@ -260,7 +310,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       - \c pre_encoded_urls
     - %Qore 1.19 added the following option:
       - \c encode_chars
-    - %Qore 2.0 added the following option:
+    - %Qore 2.0 added the following options:
       - \c username
       - \c password
 */
@@ -428,6 +478,7 @@ nothing HTTPClient::disconnect() {
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the MIME \c Content-Type for the response body (if any)
+      - \c [response-body]: the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI
@@ -465,6 +516,7 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the Content-Type for the response body (if any)
+      - \c [response-body]: the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI
@@ -1390,7 +1442,9 @@ HTTPClient::setURL(string url) {
 }
 
 //! Returns the current URL
-/** @return the current URL with the scheme, address, port (if not the default) and also including any username,
+/** @param code see @ref http_url_codes the values for this bitfield
+
+    @return the current URL with the scheme, address, port (if not the default) and also including any username,
     password, and path
 
     @par Example:
@@ -1400,8 +1454,8 @@ HTTPClient::setURL(string url) {
 
     @see getSafeURL()
  */
-*string HTTPClient::getURL() [flags=CONSTANT] {
-    return client->getURL();
+*string HTTPClient::getURL(int code = URL_NORMAL) [flags=CONSTANT] {
+    return client->getUrl(code);
 }
 
 //! Returns the current URL without the password field
@@ -1418,7 +1472,7 @@ HTTPClient::setURL(string url) {
     @since %Qore 1.6.0
  */
 *string HTTPClient::getSafeURL() [flags=CONSTANT] {
-    return client->getSafeURL();
+    return client->getUrl(URL_MASK_PASSWORD);
 }
 
 //! Clears the new proxy URL value for the next connection
@@ -2255,4 +2309,13 @@ bool b = httpclient.getPreEncodedUrls();
 */
 bool HTTPClient::getPreEncodedUrls() [flags=CONSTANT] {
     return client->getPreEncodedUrls();
+}
+
+//! Returns the configuration of the HTTP client
+/** @return the configuration of the HTTP client
+
+    @since %Qore 2.0
+*/
+hash<auto> HTTPClient::getHttpConfig() [flags=CONSTANT] {
+    return client->getConfig();
 }

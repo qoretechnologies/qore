@@ -60,8 +60,8 @@ module XdbcFirebirdSqlUtilBase {
     All the public symbols in the module are defined in the XdbcFirebirdSqlUtilBase namespace
 
     @note
-    - This module requires the <a href="https://github.com/qorelanguage/module-xdbc">xdbc</a> or
-      <a href="https://github.com/qorelanguage/module-jni">jni</a> binary modules
+    - This module requires the <a href="https://github.com/qoretechnologies/module-xdbc">xdbc</a> or
+      <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary modules
       for communication with Firebird databases plus the Firebird client library and the Firebird XDBC driver or the
       Firebird JDBC drivers
     - This module supports basic DDL / schema management for Firebird DBs and basic functionality for DML as well
@@ -1029,6 +1029,7 @@ auto v = c.name;
                         "short_desc": "aliases a result; args: expression or value, string label",
                         "desc": "aliases a result; args: expression or value, string label",
                         "symbol": "as",
+                        "groups": "Alias",
                         "role": ER_Field,
                         "args": (
                             DataProviderSignatureAnyType,
@@ -1052,6 +1053,7 @@ auto v = c.name;
                         "short_desc": "cast operator",
                         "desc": "cast operator",
                         "symbol": "cast",
+                        "groups": "Data Conversion",
                         "args": (
                             DataProviderSignatureAnyType,
                             DataProviderSignatureStringValueType,
@@ -1089,6 +1091,7 @@ auto v = c.name;
                         "short_desc": "Returns the length of the argument",
                         "desc": "Returns the length of the argument",
                         "symbol": COP_LENGTH,
+                        "groups": "Data Manipulation",
                         "args": (
                             DataProviderSignatureAnyType,
                         ),
@@ -1107,6 +1110,7 @@ auto v = c.name;
                         "short_desc": "Returns True if the first argument is found in the second argument",
                         "desc": "Returns True if the first argument is found in the second argument",
                         "symbol": OP_IN,
+                        "groups": "Comparison",
                         "args": (
                             DataProviderSignatureAnyType,
                             DataProviderSignatureAnyType,

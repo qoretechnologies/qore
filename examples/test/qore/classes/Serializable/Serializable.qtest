@@ -172,6 +172,19 @@ class Issue3515 inherits Serializable {
     }
 }
 
+class S0 inherits Serializable {
+    public {
+        static int i0 = 1;
+        static TimeZone tz = new TimeZone(0);
+    }
+}
+
+class S1 inherits S0 {
+    public {
+        static int i1 = 2;
+    }
+}
+
 class SerializableTest inherits QUnit::Test {
     public {
         const Data = (
@@ -266,7 +279,20 @@ class SerializableTest inherits QUnit::Test {
     weakRefTest() {
         TimeZone tz0("Europe/Prague");
         Issue3515 obj(tz0);
-        assertEq(tz0.region(), Serializable::deserialize(Serializable::serialize(obj)).tz.region());
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { (Serializable::deserialize(Serializable::serialize(obj))).tz.region(); });
+
+        S1 s();
+        binary b = s.serialize(QSF_INCLUDE_STATIC_CLASS_VARS);
+        assertEq(1, S0::i0);
+        assertEq(2, S1::i1);
+        S0::i0 = S1::i1 = 0;
+        assertEq(0, S0::i0);
+        assertEq(0, S1::i1);
+        on_error printf("%N\n", Serializable::deserializeToData(b));
+        auto x = Serializable::deserialize(b, QDF_STATIC_CLASS_VARS);
+        remove x;
+        assertEq(1, S0::i0);
+        assertEq(2, S1::i1);
     }
 
     issue3395() {
@@ -283,7 +309,7 @@ class SerializableTest inherits QUnit::Test {
             T t();
             assertEq(2, t.skip);
             hash<SerializationInfo> h = t.serializeToData();
-            assertEq(3, h._index.size());
+            assertEq(6, h._index.size());
             assertEq(1, h._data.size());
             assertEq(Type::String, h._data._index.type());
             assertEq(1, h._index."0"._class_data.T.i);
@@ -407,7 +433,7 @@ class SerializableTest inherits QUnit::Test {
                 }
             }
             hash<SerializationInfo> h = Serializable::serializeToData(l);
-            #printf("%N\n", h);
+            on_error printf("%N\n", h);
             list<RTest> l1 = Serializable::deserialize(h);
             assertTrue(l1[0].l[0] == l1[1]);
             assertTrue(l1[0].l[1] == l1[2]);

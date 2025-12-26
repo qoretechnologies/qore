@@ -46,7 +46,7 @@ module DebugLinenoiseCmdLine {
 
     The %DebugLinenoiseCmdLine module provides <a href="https://github.com/antirez/linenoise">linenoise</a> command-line
     editing/history support for %Qore debugging; it is dependent on the binary
-    <a href="https://github.com/qorelanguage/module-linenoise">linenoise</a> module.
+    <a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a> module.
 
     @subsection dlcl_v0_1 v0.1
     - the initial version of the DebugLinenoiseCmdLine module

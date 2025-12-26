@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+%allow-injection
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class AsyncSocketIoTest
+
+public class AsyncSocketIoTest inherits QUnit::Test {
+    public {
+        const VALUE_TEXT = {
+            "input": "Lorem Ipsum",
+            "output": "Lorem Ipsum",
+        };
+    }
+
+    private {
+        Logger logger;
+        HttpServer http;
+        int port;
+    }
+
+    constructor() : Test("AsyncSocketIoTest Test", "1.0") {
+        addTestCase("main", \mainTest());
+
+        # Return for compatibility with a test harness that checks the return value
+        set_return_value(main());
+    }
+
+    setUp() {
+        LoggerLevel lvl = m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo;
+        logger = new Logger("test", lvl);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        http.setHandler("/api_text", "/api_text", MimeTypeText, new SimpleStringHandler(MimeTypeText,
+            VALUE_TEXT.input));
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    tearDown() {
+        delete http;
+    }
+
+    mainTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        assertThrows("REST-RESPONSE-ERROR", \rest.get(), ("/api_text", NOTHING, NOTHING, {"Do-Error": True}));
+        auto ret = rest.get("/api_text");
+        assertEq(VALUE_TEXT.output, ret.body);
+
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Do-Error": True});
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 10s,
+        });
+        *hash<auto> out = spop.getOutput();
+        assertEq(500, out."code");
+
+        spop = rest.startPollSendRecv("GET", "/api_text");
+        info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 10s,
+        });
+        out = spop.getOutput();
+        assertEq(200, out."code");
+        assertEq(VALUE_TEXT.output, out.info."response-body".toString());
+
+        # test I/O timeout
+        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 100ms,
+        });
+        assertEq("SOCKET-TIMEOUT", info.ex.err);
+        spop.abort();
+        SimpleStringHandler::interruptSleep();
+
+        # test cancellation
+        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Secs": 30});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+        });
+        io_controller.cancel(rest);
+        info = q.get();
+        assertTrue(info.canceled);
+    }
+}
+
+class SimpleStringHandler inherits AbstractHttpRequestHandler {
+    private {
+        *string m_data;
+        string m_mime;
+
+        static Mutex m();
+        static Condition c();
+        static bool waitflag;
+    }
+
+    constructor(string mime, *string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."do-error") {
+            return makeResponse(500, "test error", {"Content-Type": MimeTypeText});
+        }
+        if (hdr."wait-forever") {
+            interruptibleSleep();
+        }
+        if (hdr.method == "GET") {
+            return makeResponse(200, m_data ?? binary(body), {"Content-Type": m_mime});
+        } else if (hdr.method == "POST") {
+            return makeResponse(200, m_data ?? binary(body), {"Content-Type": m_mime});
+        }
+    }
+
+    static interruptibleSleep() {
+        AutoLock al(m);
+        waitflag = True;
+        while (waitflag) {
+            c.wait(m, 99999999);
+        }
+    }
+
+    static interruptSleep() {
+        AutoLock al(m);
+        waitflag = False;
+        c.broadcast();
+    }
+}
+

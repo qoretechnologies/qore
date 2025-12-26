@@ -65,6 +65,9 @@ public hashdecl DataProviderTypeEntryInfo {
 
     #! Epheremal ID for types
     *int epheremal_type_id;
+
+    #! Free-form information related to the type
+    *hash<auto> info;
 }
 
 #! the DataProviderTypeEntry class
@@ -98,6 +101,9 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
 
         #! Epheremal ID for the type
         *int epheremal_type_id;
+
+        #! Free-form information related to the type
+        *hash<auto> info;
 
         #! If epheremal IDs should be negative
         static bool neg;
@@ -168,12 +174,34 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         return epheremal_type_id;
     }
 
+    #! Returns free-form information related to the type, if any
+    /** @note Not to be confused with @ref getInfo()
+
+        @since DataProvider 3.2.1
+    */
+    *hash<auto> getFreeFormInfo() {
+        return info;
+    }
+
     #! Returns the locked status
     /** @since DataProvider 3.0
     */
     bool isLocked() {
         return locked;
     }
+
+    #! Returns the locked status and optionally throws an exception if locked
+    /** @param throw_exception if @ref True then an exception is thrown if the entry is locked
+
+        @since DataProvider 3.2.1
+    */
+    bool checkLocked(*bool throw_exception) {
+        if (throw_exception && locked) {
+            throw "TYPE-LOCK-ERROR", sprintf("Type entry %y is locked and cannot be modified", path);
+        }
+        return locked;
+    }
+
 
     #! Locks the entry, so it can't be removed or changed
     /** @return the previous lock status
@@ -232,12 +260,13 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     #! Sets or replaces the type for the entry
     /** @param type the type to set for this entry
         @param id optional epheremal type ID
+        @param info optional additional free-form information related to the type
 
         @return True if a new type was added, False if not
 
         @throw TYPE-LOCK-ERROR type entry cannot be replaced, because it is locked
     */
-    *AbstractDataProviderType setOrReplaceType(AbstractDataProviderType type, *int id) {
+    *AbstractDataProviderType setOrReplaceType(AbstractDataProviderType type, *int id, *hash<auto> info) {
         if (locked && type != self.type) {
             throw "TYPE-LOCK-ERROR", sprintf("type entry %y cannot be replaced, because it is locked", path);
         }
@@ -247,6 +276,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
             epheremal_type_id = id ?? (neg ? -seq.next() : seq.next());
         }
         parent = True;
+        self.info = info;
         setTypeChildren();
         return rv;
     }
@@ -255,6 +285,8 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     /** @param rec_children_only if @ref True, then only children with fields are returned
 
         @return information about this entry
+
+        @note Not to be confused with @ref getFreeFormInfo()
     */
     hash<DataProviderTypeEntryInfo> getInfo(*bool rec_children_only) {
         hash<DataProviderTypeEntryInfo> rv = <DataProviderTypeEntryInfo>{
@@ -271,6 +303,10 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         };
         if (epheremal_type_id) {
             rv.epheremal_type_id = epheremal_type_id;
+        }
+        # add any free-form info to the return value
+        if (info) {
+            rv.info = info;
         }
         return rv;
     }
@@ -361,17 +397,38 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         return rv;
     }
 
-    #! Removes the given child, if it exists
-    /** @throw TYPE-LOCK-ERROR the given child cannot be removed because it is locked
+    #! Checks if the given child can be removed, if it exists
+    /** @return @ref True if the child exists and can be removed, @ref False if not
     */
-    removeChild(string child) {
+    bool checkRemoveChild(string child) {
+        return children{child} && !children{child}.locked;
+    }
+
+    #! Checks if the given child can be removed, if it exists
+    /** @return @ref True if the child exists and can be removed, @ref False if not
+
+        @throw TYPE-LOCK-ERROR the given child cannot be removed, because it is locked
+    */
+    bool checkRemoveChildEx(string child) {
+        if (children{child}.locked) {
+            throw "TYPE-LOCK-ERROR", sprintf("%s/%s is locked and cannot be removed", path, child);
+        }
+        return children{child} ? True : False;
+    }
+
+    #! Removes the given child, if it exists
+    /** @return the type entry removed
+
+        @throw TYPE-LOCK-ERROR the given child cannot be removed because it is locked
+    */
+    DataProviderTypeEntry removeChild(string child) {
         if (children{child}.locked) {
             throw "TYPE-LOCK-ERROR", sprintf("%s/%s is locked and cannot be removed", path, child);
         }
         if (!children{child} && type_children{child}) {
             throw "TYPE-LOCK-ERROR", sprintf("%s/%s is an attribute of the type and cannot be removed", path, child);
         }
-        remove children{child};
+        return remove children{child};
     }
 
     #! Locks all types

@@ -298,6 +298,9 @@ public:
 
 class AbstractQoreFunctionVariant;
 
+#define ARG_DEF   (1 << 0)
+#define ARG_OTHER (1 << 1)
+
 class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -348,11 +351,14 @@ public:
         ct = n_ct;
     }
 
+    DLLLOCAL int prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
+        AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type);
+
     //! process default arguments for a function, method, or closure call
-    /** @param func the code being called
+    /** @param xsink the exception sink to use
+        @param func the code being called
         @param variant the variant to be called, if known, may be nullptr, in which case it will be resolved in the
         call
-        @param check_args set to true if argument compatibility with parameters should be validated
         @param is_copy set to true if this is a call to a copy method
         @param self the object of the call target; not (necessarily) the current contextual object where the call is
         made.  "self" is needed to handle executing default argument expressions for normal (non-static) methods in
@@ -360,8 +366,9 @@ public:
 
         @return 0 = OK, -1 Qore-language exception raised
     */
-    DLLLOCAL int processDefaultArgs(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
-        bool check_args, bool is_copy, QoreObject* self);
+    DLLLOCAL int processDefaultArgs(ExceptionSink* xsink, const QoreFunction* func,
+            const AbstractQoreFunctionVariant* variant, AbstractFunctionSignature* sig, bool is_copy,
+            QoreObject* self);
 
     DLLLOCAL void setArgs(QoreListNode* n_args) {
         assert(!*tmp);
@@ -395,7 +402,7 @@ public:
         return *loc;
     }
 
-    //! returns the name of the function or method call
+    //! returns the name of the function or method call (ex: "[Class::]method")
     DLLLOCAL virtual const std::string& getCallName() const {
         return callName;
     }
@@ -413,7 +420,7 @@ public:
         return stmt;
     }
 
-    //! Returns the method / function name
+    //! Returns the method / function name only without any class
     DLLLOCAL const char* getName() const {
         return name;
     }
@@ -437,6 +444,9 @@ protected:
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
+
+    DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
+        const qore_class_private* cctx);
 
     DLLLOCAL void setCallName(const QoreFunction* func);
 };
@@ -495,7 +505,7 @@ public:
         return is_user ? const_cast<AbstractQoreFunctionVariant*>(this)->getUserVariantBase() : nullptr;
     }
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         assert(false);
         return QoreValue();
     }
@@ -598,7 +608,8 @@ protected:
     DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr) const;
-    DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink) const;
+    DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
+            const;
 
 public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
@@ -641,15 +652,16 @@ public:
 };
 
 // the following defines the pure virtual functions that are common to all user variants
-#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const { return QDOM_DEFAULT; } \
-   using AbstractQoreFunctionVariant::getUserVariantBase; \
-   DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
-   DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
-   DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
-   DLLLOCAL virtual void setRecheck() { recheck = true; } \
-   DLLLOCAL virtual void parseCommit() { UserVariantBase::parseCommit(); } \
-   DLLLOCAL virtual bool hasVarargs() const { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
-
+#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const {\
+        const QoreClass* cls = getClass(); return QDOM_DEFAULT | (cls ? cls->getDomain() : 0);\
+    }\
+    using AbstractQoreFunctionVariant::getUserVariantBase; \
+    DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
+    DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
+    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
+    DLLLOCAL virtual void setRecheck() { recheck = true; } \
+    DLLLOCAL virtual void parseCommit() { UserVariantBase::parseCommit(); } \
+    DLLLOCAL virtual bool hasVarargs() const { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
 
 // this class ensures that instantiated variables in user code are uninstantiated, even if an exception occurs
 class UserVariantExecHelper : ProgramThreadCountContextHelper, ThreadFrameBoundaryHelper {
@@ -699,8 +711,8 @@ public:
     // the following defines the virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
-        return eval(name, &ceh, 0, xsink);
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+        return eval(ceh.getName(), &ceh, nullptr, xsink);
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
@@ -806,21 +818,25 @@ public:
         for (vlist_t::const_iterator i = old.vlist.begin(), e = old.vlist.end(); i != e; ++i) {
             if (!copy_all) {
                 if ((*i)->isUser()) {
-                    if (no_user || !(*i)->isModulePublic())
+                    if (no_user || !(*i)->isModulePublic()) {
                         continue;
+                    }
+                } else {
+                    if (no_builtin) {
+                        continue;
+                    }
                 }
-                else
-                    if (no_builtin)
-                        continue;
             }
 
             vlist.push_back((*i)->ref());
         }
 
-        if (no_user && has_user)
+        if (no_user && has_user) {
             has_user = false;
-        if (no_builtin && has_builtin)
+        }
+        if (no_builtin && has_builtin) {
             has_builtin = false;
+        }
 
         // make sure the new variant list is not empty if the parent also wasn't
         assert(old.vlist.empty() || !vlist.empty());
@@ -995,11 +1011,13 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
-    DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args, QoreProgram* pgm, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+            QoreProgram* pgm, ExceptionSink* xsink) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
-    DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args, QoreProgram* pgm, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            QoreProgram* pgm, ExceptionSink* xsink) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, ExceptionSink* xsink) const;
@@ -1188,8 +1206,11 @@ protected:
     }
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariant(ExceptionSink* xsink, const type_vec_t& args,
-    const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-    bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const;
+        const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
+        bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const;
+
+    DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, int64 ppo,
+        const AbstractQoreFunctionVariant* variant) const;
 };
 
 class QoreFunctionIterator {

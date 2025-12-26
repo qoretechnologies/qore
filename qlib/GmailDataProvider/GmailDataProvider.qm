@@ -296,14 +296,7 @@ module GmailDataProvider {
             "short_desc": "Send a message",
             "desc": "Send a message",
             "action_code": DPAT_API,
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GmailSendMessageRequestDataType::Fields{"to", "subject", "body"}, {
-                    "preselected": True,
-                    "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GmailSendMessageRequestDataType::Fields - ("to", "subject", "body")
-            ),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(GmailSendMessageRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
                 return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
                     GmailMessageSendDataProvider::ResourceAction);

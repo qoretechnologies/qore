@@ -122,18 +122,22 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     }
 */
 #if TRACK_REFS
-    if (type == NT_OBJECT)
-        printd(REF_LVL, "QoreObject::deref() %p class: %s (%d->%d) %d\n", this, ((QoreObject*)this)->getClassName(), references.load(), references.load() - 1, custom_reference_handlers);
-    else
-        printd(REF_LVL, "AbstractQoreNode::deref() %p type: %d %s (%d->%d)\n", this, type, getTypeName(), references.load(), references.load() - 1);
-
+    if (type == NT_OBJECT) {
+        printd(REF_LVL, "QoreObject::deref() %p class: %s (%d->%d) %d\n", this, ((QoreObject*)this)->getClassName(),
+            references.load(), references.load() - 1, custom_reference_handlers);
+    } else {
+        printd(REF_LVL, "AbstractQoreNode::deref() %p type: %d %s (%d->%d)\n", this, type, getTypeName(),
+            references.load(), references.load() - 1);
+    }
 #endif
     if (references.load() > 10000000 || references.load() <= 0){
-        if (type == NT_STRING)
+        if (type == NT_STRING) {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s) (val=\"%s\")\n",
                     this, references.load(), getTypeName(), ((QoreStringNode*)this)->getBuffer());
-        else
-            printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s)\n", this, references.load(), getTypeName());
+        } else {
+            printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s)\n", this,
+                references.load(), getTypeName());
+        }
         assert(false);
     }
 #endif
@@ -503,7 +507,7 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
             return n.get<const ParseReferenceNode>()->evalToIntermediate(xsink);
 
         // ensure closures are evaluated in the parent thread so closure-bound local vars can be found and bound before
-        // launching the background thread (fixes https://github.com/qorelanguage/qore/issues/12)
+        // launching the background thread (fixes https://github.com/qoretechnologies/qore/issues/12)
         case NT_CLOSURE:
             return n.get<const QoreClosureParseNode>()->evalBackground(xsink);
     }

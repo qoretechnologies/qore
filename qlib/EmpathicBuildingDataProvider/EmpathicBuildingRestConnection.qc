@@ -60,7 +60,7 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     private setupAuth(hash<auto> opts, *bool do_not_connect) {
         # set any token
         if (opts.token) {
-            setToken(opts.token_type ?? "Bearer", opts.token, opts.refresh_token);
+            setToken(opts.token_type ?? "Bearer", opts.token, opts.refresh_token, opts.oauth2_token_expiry);
         } else if (opts.refresh_token) {
             refresh_token = opts.refresh_token;
         }
@@ -99,7 +99,7 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
 
         # get a new token with the refresh token
         try {
-            return gotOAuth2LoginInfo(doHaltianTokenRefreshRequest(\info));
+            return gotOAuth2LoginInfo(doHaltianTokenRefreshRequest(\info), True);
         } catch (hash<ExceptionInfo> ex) {
             if (refreshTokenInvalid(ex, info) && username.val() && password.val()) {
                 debug("");
@@ -125,12 +125,12 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     }
 
     #! Called when OAuth2 login information has been received
-    hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+    hash<auto> gotOAuth2LoginInfo(hash<auto> h, *bool refresh) {
         # prefer "token" to "access_token"
         if (h.token && h.token != h.access_token) {
             h.access_token = h.token;
         }
-        return RestClient::gotOAuth2LoginInfo(h);
+        return RestClient::gotOAuth2LoginInfo(h, refresh);
     }
 
     #! Returns the deserialized response body of a Haltian token refresh request
@@ -163,7 +163,7 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     }
 
     #! Returns True if the request error indicates that a refresh operation should be performed
-    private bool needsRefresh(hash<ExceptionInfo> ex, *hash<auto> info, bool decode_errors) {
+    private bool needsRefresh(*hash<ExceptionInfo> ex, *hash<auto> info, bool decode_errors, auto body) {
         return refresh_token.val() || (username.val() && password.val());
     }
 

@@ -98,7 +98,7 @@ c.waitForZero();
 
     @subsection swsc_v1_2 v1.2
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection swsc_v1_1 v1.1
     - all connection clases have unified constructor

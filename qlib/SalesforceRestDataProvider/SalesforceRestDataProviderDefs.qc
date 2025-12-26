@@ -311,12 +311,12 @@ public const SOQL_OP_EQ = "=";
 #! the SOQL \c "not" operator for use in where clauses
 /** @see soql_op_not()
 */
-public const SOQL_OP_NOT = "not";
+public const SOQL_OP_NOT = "!";
 
 #! to combine SOQL expressions with \c "or" for use in where clauses
 /** @see soql_wsoql_op_or()
 */
-public const SOQL_OP_OR = "or";
+public const SOQL_OP_OR = "||";
 #/@}
 
 /** @defgroup soql_soql_cop_funcs SOQL Column Operator Functions

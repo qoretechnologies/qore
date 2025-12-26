@@ -38,31 +38,42 @@ public namespace DataProvider {
 #! describes a data type based on a hash
 public class SoftListDataType inherits ListDataType {
     #! creates the object
-    constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
-            : ListDataType(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()),
-            SoftListDataType::getQoreType(element_type.getValueType(), or_nothing), element_type,
-            or_nothing, options, tags) {
+    constructor(hash<QoreTypeInfo> info, Type element_type = AutoType) : ListDataType(info, element_type) {
     }
 
     #! creates the object
-    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
+    constructor(hash<QoreTypeInfo> info, *AbstractDataProviderType element_type) : ListDataType(info, element_type) {
+    }
+
+    #! creates the object
+    constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
+            : ListDataType(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()),
+            SoftListDataType::getQoreType(element_type.getValueType(), or_nothing), element_type,
+            or_nothing, options, tags, default_value, attr) {
+    }
+
+    #! creates the object
+    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
             : ListDataType(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()),
             SoftListDataType::getQoreType(element_type, or_nothing), AbstractDataProviderType::get(element_type),
-            or_nothing, options, tags) {
+            or_nothing, options, tags, default_value, attr) {
     }
 
     #! creates the object
     constructor(string name, AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
-            *hash<auto> tags)
+            *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
             : ListDataType(name, SoftListDataType::getQoreType(element_type.getValueType(), or_nothing),
-            element_type, or_nothing, options, tags) {
+            element_type, or_nothing, options, tags, default_value, attr) {
     }
 
     #! creates the object
-    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
+    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
             : ListDataType(name,
             SoftListDataType::getQoreType(element_type, or_nothing), AbstractDataProviderType::get(element_type),
-            or_nothing, options, tags) {
+            or_nothing, options, tags. default_value, attr) {
     }
 
     #! returns the subtype (for lists or hashes) if there is only one
@@ -103,8 +114,8 @@ public class SoftListDataType inherits ListDataType {
             Type::List: True,
         };
         if (or_nothing) {
-            accept_type_hash_simple{Type::NothingType} = accept_type_hash{Type::NothingType} = True;
-            return_type_hash_simple{Type::NothingType} = return_type_hash{Type::NothingType} = True;
+            accept_type_hash_simple."nothing" = accept_type_hash."nothing" = True;
+            return_type_hash_simple."nothing" = return_type_hash."nothing" = True;
         }
         *Type element_base_type = element_type.getValueType();
         if (element_base_type) {

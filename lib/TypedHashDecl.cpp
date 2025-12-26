@@ -312,7 +312,8 @@ int typed_hash_decl_private::parseCheckMemberAccess(const QoreProgramLocation* l
     return 0;
 }
 
-QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const {
+QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink) const {
     assert(!args || args->empty() || args->size() == 1);
     ValueEvalOptimizedRefHolder a(args && !args->empty() ? args->get(0) : QoreValue(), xsink);
     if (*xsink)
@@ -331,7 +332,8 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bo
     return newHash(init, runtime_check, xsink);
 }
 
-QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink) const {
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
+        QoreHashNode* rv) const {
     if (runtime_check) {
         ConstHashIterator i(init);
         while (i.next()) {
@@ -342,7 +344,13 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
         }
     }
 
-    ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
+    ReferenceHolder<QoreHashNode> h(xsink);
+    if (rv) {
+        qore_hash_private::get(*rv)->setHashDecl(thd);
+        h = rv;
+    } else {
+        h = qore_hash_private::newHashDecl(thd);
+    }
     initHash(*h, init, xsink);
     return *xsink ? nullptr : h.release();
 }

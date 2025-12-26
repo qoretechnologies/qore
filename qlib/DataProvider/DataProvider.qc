@@ -27,6 +27,40 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
+/** @defgroup DataProviderGlobalOptions Data Provider Global Options
+    These are constants for global data provider behavior
+
+    @see
+    - DataProvider::addOptions()
+    - DataProvider::getOptions()
+    - DataProvider::setOptions()
+*/
+#/@{
+#! Enable servers
+/** If this is set, then external server threads or programs may be started for data provider functionality; in this
+    case the user must call @ref DataProvider::shutdown() before exiting
+*/
+public const DPO_EnableServers                  = (1 << 0);
+
+#! Disable on-demand initialization
+/** This option ensures that all eligible data providers are initialized immediately instead of when they are used;
+    this can be useful for testing
+*/
+public const DPO_DisableOnDemandInitialization  = (1 << 1);
+
+#! Enable on-demand initialization of actions
+/** This option ensures that data providers are initialized immediately but action initialization is deferred
+*/
+public const DPO_EnableOnDemandActions          = (1 << 2);
+
+#! The mask of all data provider options
+public const DPO_AllOptions = (
+    DPO_EnableServers
+    | DPO_DisableOnDemandInitialization
+    | DPO_EnableOnDemandActions
+);
+#/@}
+
 #! Data provider class
 public class DataProvider {
     public {
@@ -56,6 +90,10 @@ public class DataProvider {
             "gcal": "GoogleCalendarDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+
+            # provided by the jni module
+            "kafka": "KafkaDataProvider",
+
             "mewsrest": "MewsRestDataProvider",
 
             # provided by the jni module
@@ -77,6 +115,8 @@ public class DataProvider {
             # provided by the xml module
             "soap": "SoapDataProvider",
 
+            "sseclient": "ServerSentEventClient",
+
             "swagger": "SwaggerDataProvider",
 
             # provided by the ts-toolkit repo
@@ -95,6 +135,9 @@ public class DataProvider {
         #! List of data provider factory modules
         const FactoryModuleList = keys (map {$1: True}, FactoryMap.iterator());
         # "map" is used above to ensure that the values only appear once in the final list
+
+        #! An invalid app name
+        const NoApp = "$NO_APP";
     }
 
     private {
@@ -123,6 +166,97 @@ public class DataProvider {
 
         #! set of module already loaded
         static hash<string, bool> mod_map;
+
+        #! Static initializer list
+        static list<code> ilist;
+
+        #! Deferred static initializers
+        static list<*list<code>> ilist_save;
+
+        #! Shutdown handlers; key -> handler
+        static hash<string, code> smap;
+
+        #! Global options
+        static int options = 0;
+
+        #! Global logger
+        static *LoggerInterface logger;
+    }
+
+    #! Sets or clears the global logger
+    /** @param logger the global data provider logger
+
+        @since DataProvider 3.0
+    */
+    static setGlobalLogger(*LoggerInterface logger) {
+        DataProvider::logger = logger;
+    }
+
+    #! Returns the global data provider logger
+    /** @return the global data provider logger
+
+        @since DataProvider 3.0
+    */
+    static *LoggerInterface getGlobalLogger() {
+        return logger;
+    }
+
+    #! Adds the given global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static addOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options |= options;
+    }
+
+    #! Removes the given global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static removeOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options &= ~options;
+    }
+
+    #! Returns global data provider options
+    /** @return global data provider options
+
+        @since DataProvider 3.0
+    */
+    static int getOptions() {
+        return options;
+    }
+
+    #! Replaces data provider global options with the value provided
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @throw INVALID-OPTIONS Invalid options provided
+
+        @since DataProvider 3.0
+    */
+    static setOptions(int options) {
+        DataProvider::checkOptions(options);
+        DataProvider::options = options;
+    }
+
+    #! Checks for valid global data provider options
+    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+
+        @since DataProvider 3.0
+    */
+    static checkOptions(int options) {
+        if (!(options & ~DPO_AllOptions)) {
+            return;
+        }
+        throw "INVALID-OPTIONS", sprintf("Data provider option value %s has invalid bits set (mask: %s)",
+            get_bit_string(options), get_bit_string(DPO_AllOptions));
     }
 
     #! Register a new data provider factory
@@ -156,7 +290,7 @@ public class DataProvider {
     #! Returns the given data provider factory or @ref nothing if not present
     static *AbstractDataProviderFactory getFactory(string name) {
         DataProvider::checkRequest();
-        if (!factory_cache{name}) {
+        if (!factory_cache{name} && !ProviderIndexUtil::checkFactoryModule(name)) {
             *string module_name = FactoryMap{name} ?? DataProvider::tryGetFactoryModuleName(name);
             if (!module_name) {
                 return;
@@ -289,8 +423,11 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 
         @throw PROVIDER-ERROR the given provider factory or child provider is unknown
     */
+
+
     static AbstractDataProvider getFactoryObjectFromStringUseEnv(string name) {
         hash<FactoryInfo> info = DataProvider::getFactoryInfoFromString(name);
+
         AbstractDataProviderFactory factory;
         if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
             factory = DataProvider::getFactoryEx(info.name);
@@ -426,25 +563,59 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Registers all known data provider factories
-    static registerKnownFactories(*Logger::LoggerInterface logger) {
+    static registerKnownFactories() {
         # load known modules
-        map DataProvider::tryLoad($1, logger), FactoryModuleList;
+        map DataProvider::tryLoad($1, True), FactoryModuleList;
+    }
+
+    #! Returns a descriptive string for the given expression
+    /** @param exp the expression to describe
+        @param emap the expression map to use; by default, @ref DataProviderGenericExpressions is used
+
+        @return a descriptive string for the given expression
+
+        @throw INVALID-EXPRESSION an expression was not found in the expression map
+
+        @since DataProvider 3.3
+    */
+    static string renderExpression(hash<DataProviderExpression> exp,
+            *hash<string, hash<DataProviderExpressionInfo>> emap = DataProviderGenericExpressions) {
+        string str;
+        *hash<DataProviderExpressionInfo> info = emap{exp.exp};
+        if (!info) {
+            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", exp.exp);
+        }
+        if (info.type == DET_Function) {
+            str = sprintf("%s(%s)", info.name, (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap,
+                info.arg_info[$1]), exp.args)));
+        } else if (info.render_template) {
+            str = renderExpressionTemplate(info, exp, emap);
+        } else {
+            if (exp.args.size() == 1) {
+                str = sprintf("%s %s", info.symbol, renderExpressionArg(exp.args[0], emap, info.arg_info[0]));
+            } else {
+                str = foldl $1 + " " + info.symbol + " " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+                    exp.args);
+            }
+        }
+        return str;
     }
 
     #! Loads data providers from the environment
-    static loadProvidersFromEnvironment() {
-        DataProvider::loadFromEnvironment("get_data_provider_map", "data provider");
+    static loadProvidersFromEnvironment(*LoggerInterface logger) {
+        DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", NOTHING, logger);
     }
 
     #! Tries to load a data provider from the environment from the connection name
-    static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype) {
+    static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
+            *LoggerInterface logger) {
         load_module("ConnectionProvider");
         load_module("DatasourceProvider");
         *object v = DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", <SymbolInfo>{
             "type": "connection",
             "name": name,
             "subtype": subtype,
-        });
+        }, logger);
         if (v) {
             return cast<AbstractDataProvider>(v);
         }
@@ -462,12 +633,12 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         DataProvider::registerType("qore/bool", new QoreBoolDataType());
         DataProvider::registerType("qore/binary", new QoreBinaryDataType());
 
-        map DataProvider::tryLoad($1), TypeMap.iterator();
+        map DataProvider::tryLoad($1, True), TypeMap.iterator();
     }
 
     #! Loads data types from the environment
-    static loadTypesFromEnvironment() {
-        DataProvider::loadFromEnvironment("get_type_provider_map", "type");
+    static loadTypesFromEnvironment(*LoggerInterface logger) {
+        DataProvider::loadFromEnvironment("get_type_provider_map", "type", NOTHING, logger);
     }
 
     #! Converts an info hash with objects to a hash with string descriptions instead of the objects
@@ -545,6 +716,83 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         return rv;
     }
 
+    #! Registers a static initializer
+    /** @since DataProvider 3.0
+    */
+    static registerStaticInitializer(code init) {
+        ilist += init;
+    }
+
+    #! Checks for static initialization
+    /** @since DataProvider 3.0
+    */
+    static checkStaticInit() {
+        if (ilist) {
+            DataProvider::checkStaticInitIntern();
+        }
+    }
+
+    #! Defers static initialization until restoreStaticInitialization() is called
+    /** @since DataProvider 3.0
+    */
+    static deferStaticInitialization() {
+        push ilist_save, remove ilist;
+    }
+
+    #! Restores static initialization deferred by deferStaticInitialization()
+    /** @since DataProvider 3.0
+    */
+    static restoreStaticInitialization() {
+        if (*list<code> l = pop ilist_save) {
+            ilist += l;
+        }
+    }
+
+    #! Checks for static initialization
+    private static synchronized checkStaticInitIntern() {
+        if (ilist) {
+            map $1(), (remove ilist);
+        }
+    }
+
+    #! Shuts down background services related to data providers
+    /** @since DataProvider 3.0
+    */
+    static shutdown() {
+        foreach hash<auto> i in ((remove smap).pairIterator()) {
+            try {
+                i.value();
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+            }
+        }
+    }
+
+    #! Registers a handler to run when shutting down data provider services
+    /** @param key a unique key for the shutdown handler
+        @param handler the shutdown handler
+
+        @since DataProvider 3.0
+    */
+    static registerShutdownHandler(string key, code handler) {
+        if (smap{key}) {
+            throw "SHUTDOWN-HANDLER-ERROR", sprintf("A shutdown handler with key %y has already been registered",
+                key);
+        }
+        smap{key} = handler;
+    }
+
+    #! Deregisters a shutdown handler
+    /** @param key the key used to register the shutdown handler
+
+        @return True if the handler was deregistered, False if not (no such key)
+
+        @since DataProvider 3.0
+    */
+    static bool deregisterShutdownHandler(string key) {
+        return exists (remove smap{key});
+    }
+
     #! Sets the \a env_config_locked variable if not already set
     private static checkRequest() {
         if (!env_config_locked) {
@@ -572,7 +820,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s\n", mod, ex.err, ex.desc);
+                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                        ex.err, ex.desc);
                     continue;
                 }
                 try {
@@ -609,7 +858,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Try to load the given module
-    private static bool tryLoad(string module_str, *Logger::LoggerInterface logger) {
+    private static bool tryLoad(string module_str, *bool init) {
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);
@@ -617,9 +866,13 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             load_module(module_str);
             return True;
         } catch (hash<ExceptionInfo> ex) {
-            string err = sprintf("DataProvider load module %y: %s\n", module_str, get_exception_string(ex));
+            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
             if (logger) {
-                logger.error("%s", err);
+                if (init) {
+                    logger.debug("INIT: %s", err);
+                } else {
+                    logger.error("%s", err);
+                }
             } else {
                 stderr.print(err + "\n");
             }
@@ -628,7 +881,8 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Loads modules from the QORE_DATA_PROVIDERS environment variable
-    private static *object loadFromEnvironment(string func, string type, *hash<SymbolInfo> info) {
+    private static *object loadFromEnvironment(string func, string type, *hash<SymbolInfo> info,
+            *LoggerInterface logger) {
         # load modules from the QORE_DATA_PROVIDERS environment variable
         *string prov = ENV.QORE_DATA_PROVIDERS;
         if (prov) {
@@ -641,11 +895,12 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                 Program p(PO_NO_USER_API);
                 try {
                     p.loadModule(mod);
-                    if (info && (*object rv = DataProvider::checkSymbol(info))) {
+                    if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
                         return rv;
                     }
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s\n", mod, ex.err, ex.desc);
+                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                        ex.err, ex.desc);
                 }
                 hash<string, string> dmap;
                 try {
@@ -663,22 +918,24 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
                     }
                     mod_map{mod_str} = True;
                     if (DataProvider::tryLoad(mod_str)) {
-                        if (info && (*object rv = DataProvider::checkSymbol(info))) {
+                        if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
                             return rv;
                         }
                     }
                 }
             }
-
         }
     }
 
     #! Returns True if an object of the given type has been loaded
-    private static *object checkSymbol(hash<SymbolInfo> info) {
+    private static *object checkSymbol(hash<SymbolInfo> info, *LoggerInterface logger) {
         switch (info.type) {
             case "connection": {
                 try {
                     object conn = call_function("get_connection", info.name);
+                    if (logger) {
+                        conn.setLogger(logger);
+                    }
                     return info.subtype.val() ? conn.getDataProvider(info.subtype) : conn.getDataProvider();
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err != "CONNECTION-ERROR") {
@@ -713,6 +970,90 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     private static bool checkInjection(object obj, hash<string, string> module_map) {
         *string module_name = Class::getClass(obj).getModuleName();
         return module_name && module_map{obj.className()} == module_name;
+    }
+
+    #! Returns a descriptive string for the given field reference argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
+        return sprintf("{%s}", ref.field);
+    }
+
+    #! Returns a descriptive string for the given expression argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderExpression> exp,
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
+        *hash<DataProviderExpressionInfo> info = emap{exp.exp};
+        if (!info) {
+            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", info.name);
+        }
+        string str;
+        if (info.type == DET_Operator) {
+            str = "(";
+        }
+        str += renderExpression(exp, emap);
+        if (info.type == DET_Operator) {
+            str += ")";
+        }
+        return str;
+    }
+
+    #! Returns a descriptive string for the given argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(auto v, hash<string, hash<DataProviderExpressionInfo>> emap,
+            *hash<DataProviderArgInfo> arg_info) {
+        if (!exists v) {
+            if (!exists (v = arg_info.default_value)) {
+                return "";
+            }
+        }
+%ifndef NoYaml
+        # return any template references as-is
+        if (v.typeCode() == NT_STRING && (v =~ /^\$[a-z][-a-z]+:({.*}|[a-zA-Z0-9_\.]+|'.*')$/)) {
+            return v;
+        }
+        return trim(make_yaml(v));
+%else
+        throw "MISSING-YAML", "Missing YAML module";
+%endif
+    }
+
+    #! Renders the expression from the template
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionTemplate(hash<DataProviderExpressionInfo> info,
+            hash<DataProviderExpression> exp, hash<string, hash<DataProviderExpressionInfo>> emap) {
+        string str = info.render_template;
+        if (str =~ /\$symbol/) {
+            str = replace(str, "$symbol", info.symbol);
+        }
+        if (str =~ /\$args/) {
+            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+                exp.args)));
+        }
+        # make direct substitutions for plain argument references
+        foreach string t in (str =~ x/\$(arg\[[0-9]+\])/g) {
+            softint n = (t =~ x/arg\[([0-9]+)\]/)[0];
+            string argstr = renderExpressionArg(exp.args[n], emap, info.arg_info[n]);
+            str = replace(str, "$" + t, argstr);
+        }
+        # look for substitutions with curly bracks and optional ternary expressions
+        foreach string t in (str =~ x/\$\{(arg\[[0-9]+\](?:\s*\?[^:\}]*:[^\}]*)?)\}/) {
+            (softint n, *string t0, *string t1) = (t =~ x/arg\[([0-9]+)\](?:\s*\?([^:]*):(.*))?$/);
+            if (exp.args[n].val() || info.arg_info[n].default_value.val()) {
+                str = replace(str, "${" + t + "}", t0);
+            } else {
+                str = replace(str, "${" + t + "}", t1);
+            }
+        }
+        return str;
     }
 
     #! Deregisters a factory if an exception occurs during the other module's initialization

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreDataField class definition
 
-/** QoreDataField.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** QoreDataField.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -83,10 +83,25 @@ public class QoreDataField inherits AbstractDataField {
             setDefaultValue(h.default_value);
         }
         if (exists h.allowed_values) {
-            setAllowedValues(h.allowed_values);
+            setAllowedValues(h.allowed_values, h.allowed_values_creatable);
+        }
+        if (exists h.element_allowed_values) {
+            setElementAllowedValues(h.element_allowed_values, h.element_allowed_values_creatable);
         }
         if (exists h.example_value) {
             example_value = type.acceptsValue(h.example_value);
+        }
+        if (h.allowed_values_creatable) {
+            allowed_values_creatable = True;
+            if (allowed_values_map) {
+                remove allowed_values_map;
+            }
+        }
+        if (h.element_allowed_values_creatable) {
+            element_allowed_values_creatable = True;
+            if (element_allowed_values_map) {
+                remove element_allowed_values_map;
+            }
         }
         if (h.attr) {
             attr += h.attr;
@@ -103,7 +118,8 @@ public class QoreDataField inherits AbstractDataField {
     }
 
     #! creates the field from the arguments
-    constructor(string name, *string desc, Type type, auto default_value, *softlist<auto> allowed_values) {
+    constructor(string name, *string desc, Type type, auto default_value, *softlist<auto> allowed_values,
+            *bool allowed_values_creatable) {
         self.name = name;
         display_name = AbstractDataField::getDisplayName(name);
         if (desc) {
@@ -115,13 +131,16 @@ public class QoreDataField inherits AbstractDataField {
             setDefaultValue(default_value);
         }
         if (exists allowed_values) {
-            setAllowedValues(allowed_values);
+            setAllowedValues(allowed_values, allowed_values_creatable);
+        }
+        if (allowed_values_creatable) {
+            self.allowed_values_creatable = True;
         }
     }
 
     #! creates the field from the arguments
     constructor(string name, *string desc, AbstractDataProviderType type, auto default_value,
-            *softlist<auto> allowed_values) {
+            *softlist<auto> allowed_values, *bool allowed_values_creatable) {
         self.name = display_name = name;
         self.desc = short_desc = desc;
         self.type = type;
@@ -129,7 +148,10 @@ public class QoreDataField inherits AbstractDataField {
             setDefaultValue(default_value);
         }
         if (exists allowed_values) {
-            setAllowedValues(allowed_values);
+            setAllowedValues(allowed_values, allowed_values_creatable);
+        }
+        if (allowed_values_creatable) {
+            self.allowed_values_creatable = True;
         }
     }
 
@@ -184,19 +206,54 @@ public class QoreDataField inherits AbstractDataField {
         return getNewFieldType(type.getOrNothingType());
     }
 
+    #! Returns a mandatory (i.e. not "or nothing") field equivalent to the current field
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory field
+
+        @return a mandatory (i.e. not "or nothing") field equivalent to the current field
+
+        @since DataProvider 3.0
+    */
+    AbstractDataField getMandatoryType() {
+        return getNewFieldType(type.getMandatoryType());
+    }
+
     #! Updates the field type
-    updateFieldType(AbstractDataProviderType type) {
+    AbstractDataField updateFieldType(AbstractDataProviderType type) {
         self.type = type;
+        return self;
     }
 
     #! Returns any example value for the field, if present
-    /** @return any example value for the field, otherwise the default value for the field, otherwise the example
+    /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+
+        @return any example value for the field, otherwise the default value for the field, otherwise the example
         value for the type
 
         @since DataProvider 3.0
     */
-    auto getExampleValue() {
-        return example_value ?? default_value ?? AbstractDataField::getExampleValue();
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+        return example_value ?? default_value ?? AbstractDataField::getExampleValue(emap, display_name ?? name);
+    }
+
+    #! returns information about the field
+    hash<DataFieldInfo> getConfigInfo() {
+        return <DataFieldInfo>{
+            "name": name,
+            "display_name": display_name,
+            "short_desc": short_desc,
+            "desc": desc,
+            "default_value": getDefaultValue(),
+            "example_value": example_value,
+            "allowed_values": allowed_values,
+            "allowed_values_creatable": allowed_values_creatable ?? False,
+            "element_allowed_values": element_allowed_values,
+            "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
+            "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
+                "default_field_type_info"},
+            "attr": attr,
+        };
     }
 
     #! returns a field with the new type

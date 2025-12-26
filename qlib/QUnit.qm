@@ -163,30 +163,30 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
     @subsection qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
-      (<a href="https://github.com/qorelanguage/qore/issues/3934">issue 3934</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3934">issue 3934</a>)
 
     @subsection qunit_v0_4_2 Version 0.4.2
     - allow %QUnit to be used from other languages like Java
-      (<a href="https://github.com/qorelanguage/qore/issues/3857">issue 3857</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3857">issue 3857</a>)
 
     @subsection qunit_v0_4_1 Version 0.4.1
     - allow binary modules to be subjected to dependency injections
-      (<a href="https://github.com/qorelanguage/qore/issues/3382">issue 3382</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3382">issue 3382</a>)
     - allow tests to be nested
-      (<a href="https://github.com/qorelanguage/qore/issues/3306">issue 3306</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3306">issue 3306</a>)
 
     @subsection qunit_v0_4 Version 0.4
     - updated @ref QUnit::Test::testSkip() "Test::testSkip()" to use the reason argument a format string with
       @ref Qore::vsprintf() "vsprintf()"
-      (<a href="https://github.com/qorelanguage/qore/issues/3172">issue 3172</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3172">issue 3172</a>)
     - fixed error reporting with type errors with number values
-      (<a href="https://github.com/qorelanguage/qore/issues/2984">issue 2984</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2984">issue 2984</a>)
 
     @subsection qunit_v0_3_3 Version 0.3.3
-    - improved output in assertion failures for strings with special whitespace and for multi-line data structures (<a href="https://github.com/qorelanguage/qore/issues/2680">issue 2680</a>)
+    - improved output in assertion failures for strings with special whitespace and for multi-line data structures (<a href="https://github.com/qoretechnologies/qore/issues/2680">issue 2680</a>)
 
     @subsection qunit_v0_3_2 Version 0.3.2
-    - improved error location reporting by providing all stack location information up until the QUnit call to cover the case when multiple code layers are used such as one or more test modules (<a href="https://github.com/qorelanguage/qore/issues/1720">issue 1720</a>)
+    - improved error location reporting by providing all stack location information up until the QUnit call to cover the case when multiple code layers are used such as one or more test modules (<a href="https://github.com/qoretechnologies/qore/issues/1720">issue 1720</a>)
     - overloaded testAssertionValue supports auto/number/float
     - more verbose output when number/float difference is found
 
@@ -210,7 +210,7 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - updated for complex types
 
     @subsection qunit_v0_2 Version 0.2
-    - fixed showing the assertion location when there are test modules on top of QUnit.qm (<a href="https://github.com/qorelanguage/qore/issues/1046">issue 1046</a>)
+    - fixed showing the assertion location when there are test modules on top of QUnit.qm (<a href="https://github.com/qoretechnologies/qore/issues/1046">issue 1046</a>)
 
     @subsection qunit_v0_1 Version 0.1
     - initial version of module

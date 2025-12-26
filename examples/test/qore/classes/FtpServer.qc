@@ -389,7 +389,7 @@ class FtpServer {
     private doEpsv(Socket ns, reference data, Counter dcnt, reference dataquit) {
         # get random port
         int dport;
-        # workaround for issue #1259 (https://github.com/qorelanguage/qore/issues/1259)
+        # workaround for issue #1259 (https://github.com/qoretechnologies/qore/issues/1259)
         while (True) {
             dport = 10000 + (rand() % 40000);
             try {

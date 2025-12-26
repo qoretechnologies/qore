@@ -154,12 +154,21 @@ sub issue_4419_t2(list<auto> x) {
 sub issue_4419_t2(list<Mutex> x) {
 }
 
+int sub exact_1(Mutex x) {
+    return 1;
+}
+
+int sub exact_1() {
+    return 0;
+}
+
 public class OverloadTest inherits QUnit::Test {
     public {
         const Api = "hash sub p() { return {}; }*hash sub p(string a) {return {};}any sub p(string a, string b) { return 1; }";
     }
 
     constructor() : Test("Overload test", "1.0") {
+        addTestCase("runtime exact", \runtimeExactTest());
         addTestCase("param type err", \paramTypeErrorTest());
         addTestCase("varargs", \varargsTest());
         addTestCase("reference matching", \referenceMatching());
@@ -174,6 +183,11 @@ public class OverloadTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    runtimeExactTest() {
+        Mutex m;
+        assertEq(0, exact_1(m));
     }
 
     paramTypeErrorTest() {

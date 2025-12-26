@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# @file qdp example program for the DataProvider module
+# @file qdp command-line interface for the DataProvider module
 
-/*  Copyright 2019 - 2023 Qore Technologies, s.r.o.
+/*  Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,11 @@
 %requires DbDataProvider
 %requires Util
 %requires Logger
+# for webhooks
+%requires HttpServer
+%requires RestHandler
+# to create the data provider index
+%requires ProviderIndex
 
 %try-module linenoise
 %define NoLinenoise
@@ -45,17 +50,39 @@
 
 class QdpCmd {
     public {
+        static HttpServer http;
+
+        static string cmd;
+        static string app;
+        static string action;
+
         static bool ix;
+
+        #! port for the HTTP server
+        static int http_port = 0;
+
+        # Global mutex for webhook handlers
+        static Mutex wh_lock();
+
+        # Global map for webhook handlers: webhook -> handler
+        static hash<string, WebhookHandler> whm;
+
+        # console logger
+        LoggerInterface logger;
 
         #! program options
         const Opts = {
             "bulk": "b,bulk",
+            "createindex": "I,create-index",
+            "host": "H,host=s",
             "listapps": "a,list-apps",
             "listconnections": "c,list-connections",
             "listfactories": "f,list-factories",
             "listtypes": "t,list-types",
             "modules": "m,module=s@",
             "options": "o,options=s",
+            "required": "R,show-required",
+            "servers": "S,servers",
             "subtype": "s,subtype=s",
             "verbose": "v,verbose:i+",
             "exp": "x,expressions",
@@ -64,7 +91,12 @@ class QdpCmd {
 
         #! commands
         const Cmds = {
+            "action-info": \QdpCmd::actionInfo(),
+            "ai": \QdpCmd::actionInfo(),
+            "ainfo": \QdpCmd::actionInfo(),
             "create": \QdpCmd::create(),
+            "create-record": \QdpCmd::getCreateRecord(),
+            "crecord": \QdpCmd::getCreateRecord(),
             "delete": \QdpCmd::del(),
             "dorequest": \QdpCmd::doRequest(),
             "errors": \QdpCmd::errors(),
@@ -114,8 +146,17 @@ class QdpCmd {
             "smsg": \QdpCmd::sendMessage(),
             "sp": \QdpCmd::showProviders(),
             "update": \QdpCmd::update(),
+            "update-record": \QdpCmd::getUpdateRecord(),
+            "urecord": \QdpCmd::getUpdateRecord(),
             "upsert": \QdpCmd::upsert(),
         };
+
+        #! Commands that don't need a data provider
+        const NoProviderCmds = (
+            "action-info": True,
+            "ai": True,
+            "ainfo": True,
+        );
 
         #! Disambiguation for common commands with the same initial letters
         const DisambiguationMap = {
@@ -154,6 +195,10 @@ class QdpCmd {
         # load any modules
         map load_module($1), opts.modules;
 
+        logger = getLogger();
+        DataProvider::setGlobalLogger(logger);
+        ProviderIndex::setGlobalLogger(logger);
+
         if (opts.listconnections) {
             listConnections();
         }
@@ -166,21 +211,41 @@ class QdpCmd {
         if (opts.listapps) {
             listApps();
         }
+        if (opts.createindex) {
+            createIndex();
+        }
         if (!ARGV[0]) {
             usage();
         }
 
-        ImpliedArgumentHelper iah;
+        on_exit {
+            DataProvider::shutdown();
+        }
+
+        DataProviderDataContextHelper dch;
         if (opts.options.val()) {
             auto v = parse_to_qore_value(opts.options);
             if (v.typeCode() != NT_HASH) {
                 error("options have type %y; expecting \"hash\"", v.fullType());
             }
-            iah = new ImpliedArgumentHelper(v);
+            dch = new DataProviderDataContextHelper(v);
         }
 
+        logger = getLogger();
+        DataProvider::setGlobalLogger(logger);
+
+        if (opts.servers) {
+            DataProvider::addOptions(DPO_EnableServers);
+        }
+
+        on_error rethrow $1.err, sprintf("%s%s", $1.desc,
+            $1.arg instanceof object && $1.arg.hasCallableMethod("getCause")
+                ? ": " + $1.arg.getCause().toString()
+                : NOTHING);
+
         AbstractDataProvider provider;
-        {
+        DataProviderContextHelper pctx;
+        try {
             # first extract any data provider options
             string name = shift ARGV;
             # get expression in curly brackets, if any, respecting balanced brackets
@@ -199,23 +264,44 @@ class QdpCmd {
                 if (path.size() == 1) {
                     showActions(name);
                 }
-                provider = getDataProviderForAppAction(path[0], path[1], opts);
+                app = path[0];
+                action = path[1];
+                provider = getDataProviderForAppAction(app, action, opts);
             } else {
                 list<string> path = name.split("/");
                 provider = getDataProvider((shift path) + opts);
-                # set logger on data provider
-                provider.setLogger(getLogger());
                 map provider = provider.getChildProviderEx($1), path;
+            }
+            provider.setLogger(logger);
+            pctx = new DataProviderContextHelper(provider);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!NoProviderCmds{ARGV[0]}) {
+                rethrow;
             }
         }
 
-        string cmd = shift ARGV ?? "list";
-        *code action = Cmds{cmd};
-        if (!action) {
+        # Set up fake webhook interface for the TypeScriptActionInterface module if possible
+        if (get_module_hash().TypeScriptActionInterface) {
+            # make sure symbols are loaded in this Program
+            load_module("TypeScriptActionInterface");
+            Class cls = Class::forName("TypeScriptActionInterface::TypeScriptActionInterface");
+            hash<MethodAccessInfo> info = cls.findStaticMethod("registerWebhookCreateDestroyApis");
+            StaticMethodVariant v = info.method.getVariants()[0];
+            v.call(\QdpCmd::getWebhook(), \QdpCmd::deleteWebhook());
+        }
+
+        on_exit if (http) {
+            http.stop();
+            delete http;
+        }
+
+        cmd = shift ARGV ?? "list";
+        *code qdp_action = Cmds{cmd};
+        if (!qdp_action) {
             # see if an abbreviation matches
             hash<string, bool> match = map {$1: True}, keys Cmds, $1.equalPartial(cmd);
             # try to disambiguate
-            if (match.size() > 1) {
+            if (provider && (match.size() > 1)) {
                 # only consider commands that are applicable for this data provider
                 # AbstractDataProvider::getSummaryInfo() is generally faster than getInfo()
                 hash<DataProviderSummaryInfo> info = provider.getSummaryInfo();
@@ -224,19 +310,19 @@ class QdpCmd {
                     || (info{DisambiguationMap{$1}}.typeCode() == NT_STRING && info{DisambiguationMap{$1}} != "NONE");
             }
             if (match.size() == 1) {
-                action = Cmds{match.firstKey()};
+                qdp_action = Cmds{match.firstKey()};
             } else if (match) {
                 # check if all matches have the same action
                 {
                     foreach string c in (keys match) {
-                        if (!action) {
-                            action = Cmds{c};
-                        } else if (Cmds{c} != action) {
+                        if (!qdp_action) {
+                            qdp_action = Cmds{c};
+                        } else if (Cmds{c} != qdp_action) {
                             break;
                         }
                     }
                 }
-                if (!action) {
+                if (!qdp_action) {
                     error("unknown action %y; matches %y; please provide additional character(s) to ensure a unique "
                         "match", cmd, keys match);
                 }
@@ -245,7 +331,7 @@ class QdpCmd {
             }
         }
         try {
-            action(provider);
+            qdp_action(provider);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "INVALID-OPERATION") {
                 error("%s: %s", ex.err, ex.desc);
@@ -255,7 +341,72 @@ class QdpCmd {
         }
     }
 
-    private Logger getLogger() {
+    hash<auto> getWebhook(hash<auto> h) {
+        if (h.method.typeCode() != NT_STRING) {
+            throw "WEBHOOK-ERROR", sprintf("\"method\" must be a string when registering a webhook; got type %y (%y)",
+                h.method.fullType(), h.method);
+        }
+        if (!h.callback.callp()) {
+            throw "WEBHOOK-ERROR", sprintf("\"callback\" must be a callable value when registering a webhook; got "
+                "type %y (%y)", h.callback.fullType(), h.method);
+        }
+        # auth is validated but ignored
+        if (exists h.auth && (h.auth.typeCode() != NT_INT)) {
+            throw "WEBHOOK-ERROR", sprintf("\"auth\" must be a valid auth code if present when registering a "
+                "webhook; got type %y (%y)", h.auth.fullType(), h.auth);
+        }
+        # perms is validated but ignored
+        if (exists h.perms && h.perms.typeCode() != NT_LIST) {
+            throw "WEBHOOK-ERROR", sprintf("\"perms\" must be a list of strings if present when registering a "
+                "webhook; got type %y (%y)", h.perms.fullType(), h.perms);
+        }
+
+        setupHttpServer();
+
+        string path = get_random_string();
+
+        WebhookHandler handler(h.method, path, h.callback);
+        hash<HttpHandlerConfigInfo> hinfo = <HttpHandlerConfigInfo>{
+            "path": path,
+            "handler": handler,
+        };
+
+        AutoLock al(wh_lock);
+        http.setDynamicHandler(path, hinfo);
+        whm{path} = handler;
+
+        string http_host = opts.host ?? "localhost";
+        if (*softint p = (http_host =~ x/:([0-9]+)$/)[0]) {
+            http_host =~ s/:.*$//;
+            http_port = p;
+        }
+
+        return {
+            "url": sprintf("http://%s:%d/webhooks/%s", http_host, http_port, path),
+        };
+    }
+
+    deleteWebhook(hash<auto> info) {
+        if (http) {
+            string path = (info.url =~ x/\/([^\/]+)$/)[0];
+            http.removeDynamicHandler(path, True);
+        }
+    }
+
+    synchronized setupHttpServer() {
+        if (http) {
+            return;
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": getLogger("http"),
+            "debug": True,
+        };
+
+        http = new HttpServer(http_opts);
+        http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    private Logger getLogger(string name = "console") {
         LoggerLevel level;
         if (opts.verbose > 1) {
             level = LoggerLevel::getLevelDebug();
@@ -264,7 +415,7 @@ class QdpCmd {
         } else {
             level = LoggerLevel::getLevelError();
         }
-        Logger logger("console", level);
+        Logger logger(name, level);
         logger.addAppender(new ConsoleAppender());
         return logger;
     }
@@ -288,16 +439,41 @@ class QdpCmd {
 
     static event(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
-        if (!exists event) {
-            QdpCmd::error("missing required event argument; valid events: %y", keys provider.getEventTypes());
+        *hash<auto> req;
+        hash<DataProviderMessageInfo> event_info;
+        if (event.val() && event =~ /=/) {
+            req = getHashIntern(remove event, "request");
         }
-        QdpCmd::showType(provider, event, provider.getEventInfo(event));
+        if (event.val()) {
+            req = QdpCmd::getHash("request");
+            event_info = provider.getEventInfoWithOptions(event, req);
+        }
+        if (!event.val()) {
+            hash<string, hash<DataProviderMessageInfo>> event_types = provider.getEventTypes();
+            if (event_types.size() == 1) {
+                event = event_types.firstKey();
+                if (req) {
+                    event_info = provider.getEventInfoWithOptions(event, req);
+                } else {
+                    event_info = event_types.firstValue();
+                }
+            } else {
+                QdpCmd::error("Missing required event argument; valid events: %y", keys event_types);
+            }
+        }
+        DataProviderDataContextHelper dch(req);
+        QdpCmd::showType(provider, event, event_info);
     }
 
     static exampleEvent(AbstractDataProvider provider) {
         *string event = QdpCmd::getString("event");
         if (!exists event) {
-            QdpCmd::error("missing required event argument; valid events: %y", keys provider.getEventTypes());
+            *list<string> l = keys provider.getEventTypes();
+            if (l.size() == 1) {
+                event = l[0];
+            } else {
+                QdpCmd::error("Missing required event argument; valid events: %y", l);
+            }
         }
         printf("%N\n", provider.getExampleEventData(event));
     }
@@ -551,15 +727,20 @@ class QdpCmd {
                 cast<DataProvider::DelayedObservable>(observable).observersReady();
             }
 
-            while (True) {
-                if (stdin.isDataAvailable()) {
+            while (observable.isActive()) {
+                if (stdin.isDataAvailable(250ms)) {
                     stdin.readBinary(1);
                     break;
                 }
             }
         }
+        bool active = observable.isActive();
         delete provider;
-        printf("listening stopped\n");
+        if (active) {
+            printf("listening stopped on user request\n");
+        } else {
+            printf("listening stopped due to an error\n");
+        }
     }
 
     static getRecord(AbstractDataProvider provider) {
@@ -572,11 +753,27 @@ class QdpCmd {
         }
     }
 
-    static showRecord(AbstractDataProvider prov, *hash<string, AbstractDataField> rec, string offset = "") {
-        QdpCmd::showRecord(prov, {}, rec, offset);
+    static getCreateRecord(AbstractDataProvider provider) {
+        *hash<auto> create_options = QdpCmd::getHash("create options");
+        *hash<string, AbstractDataField> rec = provider.getCreateRecordType(create_options);
+        if (opts.verbose > 1) {
+            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+        } else {
+            QdpCmd::showRecord(provider, rec);
+        }
     }
 
-    static getAllowedValues(reference<string> info, list<auto> l) {
+    static getUpdateRecord(AbstractDataProvider provider) {
+        *hash<auto> search_options = QdpCmd::getHash("search options");
+        *hash<string, AbstractDataField> rec = provider.getUpdateRecordType(search_options);
+        if (opts.verbose > 1) {
+            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+        } else {
+            QdpCmd::showRecord(provider, rec);
+        }
+    }
+
+    static getAllowedValues(reference<string> info, *list<auto> l) {
         if (info) {
             info += " ";
         }
@@ -591,63 +788,113 @@ class QdpCmd {
         }
     }
 
-    static showRecord(AbstractDataProvider prov, hash<auto> rmap, *hash<string, AbstractDataField> rec,
-            string offset = "") {
+    static showRecord(*AbstractDataProvider prov, *hash<string, AbstractDataField> rec,
+            string offset = "", auto dctxt) {
+        hash<string, bool> rmap;
+        showRecord(prov, \rmap, rec, offset, dctxt);
+    }
+
+    static showRecord(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, *hash<string, AbstractDataField> rec,
+            string offset = "", auto dctxt, *bool unsatisfied_deps) {
         foreach hash<auto> i in (rec.pairIterator()) {
-            {
-                string u = i.value.uniqueHash();
-                if (rmap{u}) {
-                    return;
+            *bool local_unsatisfied_deps = unsatisfied_deps;
+            auto dv = i.value.getDefaultValue();
+            if (prov && !exists dv && !unsatisfied_deps) {
+                if ((*string default_ref_data = i.value.getAttributes().default_ref_data).val()) {
+                    dv = prov.getReferenceDataValueSafe(default_ref_data, DataProviderDataContextHelper::getHash());
+                } else if (!offset.val() && prov.getSupportedReferenceDataValues(){i.key}) {
+                    dv = prov.getReferenceDataValueSafeEx(i.key, DataProviderDataContextHelper::getHash());
                 }
-                rmap{u} = True;
+            }
+            if (opts.required && (!i.value.isMandatory() || exists dv)) {
+                continue;
             }
             AbstractDataProviderType type = i.value.getType();
-            if (opts.verbose) {
-                string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
-                string info;
-                if (*string desc = i.value.getDescription()) {
-                    info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
-                }
-                if (auto val = i.value.getDefaultValue()) {
-                    if (info) {
-                        info += " ";
-                    }
-                    info += sprintf("default_value: %y", val);
-                }
-                if (*list<auto> l = i.value.getAllowedValues()) {
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceData(ref_data);
-                    QdpCmd::getAllowedValues(\info, l);
-                } else if (!offset.val() && prov.getSupportedReferenceData(){i.key}
-                    && (l = prov.getReferenceDataEx(i.key))) {
-                    QdpCmd::getAllowedValues(\info, l);
-                }
-                if (info) {
-                    txt += " (" + info + ")";
-                }
-                print(txt);
-            } else {
-                string info;
-                if (*list<auto> l = i.value.getAllowedValues()) {
-                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
-                } else if ((*string ref_data = i.value.getAttributes().ref_data).val()) {
-                    l = prov.getReferenceData(ref_data);
-                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
-                }
-                printf("%s%s %s%s", offset, type.getName(), i.key, info);
+            *hash<auto> attr = i.value.getAttributes();
+            # do not request dependent values if dependencies are not satisfied
+            if (!local_unsatisfied_deps && attr.depends_on && (dctxt{attr.depends_on}.size() != attr.depends_on.size())) {
+                local_unsatisfied_deps = True;
             }
-            if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
-                && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
-                printf(": elements ->\n");
-                QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
-            } else {
-                print("\n");
-            }
+            showField(prov, \rmap, i, dv, type, offset, dctxt, local_unsatisfied_deps);
             *hash<string, AbstractDataField> fields = type.getFields();
             if (fields) {
-                QdpCmd::showRecord(prov, rmap, fields, offset + "  ");
+                string u = type.uniqueHash();
+                if (!rmap{u}) {
+                    rmap{u} = True;
+                    QdpCmd::showRecord(prov, \rmap, fields, offset + "  ", dctxt{i.key}, local_unsatisfied_deps);
+                }
             }
+        }
+    }
+
+    static showField(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, hash<auto> i, auto dv,
+            AbstractDataProviderType type, string offset, auto dctxt, *bool unsatisfied_deps) {
+        if (opts.verbose) {
+            string txt = sprintf("%s%s %s", offset, type.getName(), i.key);
+            string info;
+            if (*string desc = i.value.getShortDescription()) {
+                info = sprintf("desc: %y", QdpCmd::getDesc(0, {"desc": desc}));
+            }
+            if (exists dv) {
+                if (info) {
+                    info += " ";
+                }
+                info += sprintf("default_value: %y", dv);
+            }
+
+            if (*list<auto> l = i.value.getAllowedValues()) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && (*string ref_data = i.value.getAttributes().ref_data).val()) {
+                l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && !offset.val() && prov.getSupportedReferenceData(){i.key}
+                && (l = prov.getReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (l = i.value.getElementAllowedValues()) {
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && (ref_data = i.value.getAttributes().element_ref_data).val()) {
+                l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (prov && !unsatisfied_deps && !offset.val() && prov.getSupportedElementReferenceData(){i.key}
+                && (l = prov.getElementReferenceDataSafeEx(i.key, DataProviderDataContextHelper::getHash()))) {
+                QdpCmd::getAllowedValues(\info, l);
+            }
+
+            if (info) {
+                txt += " (" + info + ")";
+            }
+            print(txt);
+        } else {
+            string info;
+            if (*list<auto> l = i.value.getAllowedValues()) {
+                info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+            } else if (prov && !unsatisfied_deps && (*string ref_data = i.value.getAttributes().ref_data).val()) {
+                l = prov.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                if (l) {
+                    info += sprintf(" (one of: %y)", (map $1.value ?? $1, l));
+                }
+            } else if (l = i.value.getElementAllowedValues()) {
+                info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+            } else if (prov && !unsatisfied_deps && (ref_data = i.value.getAttributes().element_ref_data).val()) {
+                l = prov.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                if (l) {
+                    info += sprintf(" (elements: one of: %y)", (map $1.value ?? $1, l));
+                }
+            }
+            printf("%s%s %s%s", offset, type.getName(), i.key, info);
+        }
+        if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
+            && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
+            string u = type.uniqueHash();
+            if (!rmap{u}) {
+                rmap{u} = True;
+                print(": elements ->\n");
+                QdpCmd::showRecord(prov, \rmap, element_rec, offset + "  ", dctxt{i.key}, unsatisfied_deps);
+            } else {
+                print(": (type already described)\n");
+            }
+        } else {
+            print("\n");
         }
     }
 
@@ -735,6 +982,52 @@ class QdpCmd {
         return rv;
     }
 
+    static actionInfo(*AbstractDataProvider provider) {
+        if (!exists app) {
+            QdpCmd::error("Missing app and action for action info; use:\n    %s @<app>/<action> %s",
+                get_script_name(), cmd);
+        }
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, QdpCmd::action);
+        printf("@%s/%s (%s%s): %s\n", app, QdpCmd::action, ActionNameMap{action.action_code},
+            (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
+        action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
+        *hash<auto> req = getHashIntern(shift ARGV, "options");
+        *hash<string, hash<ActionOptionInfo>> opts = provider
+            ? provider.tryGetActionOptionsWithOptions(action, req)
+            : action.options;
+        if (opts) {
+            printf("Options:\n");
+            foreach hash<auto> i in (opts.pairIterator()) {
+                string tn = i.value.type.getName();
+                # get allowed values or element allowed values
+                string info;
+                if (*list<auto> l = i.value.allowed_values) {
+                    info += sprintf(", one of: %y", (map $1.value ?? $1, l));
+                } else if (provider && (*string ref_data = i.value.ref_data).val()) {
+                    l = provider.getReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                    if (l) {
+                        info += sprintf(", one of: %y", (map $1.value ?? $1, l));
+                    }
+                } else if (l = i.value.element_allowed_values) {
+                    info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
+                } else if (provider && (ref_data = i.value.element_ref_data).val()) {
+                    l = provider.getElementReferenceDataSafe(ref_data, DataProviderDataContextHelper::getHash());
+                    if (l) {
+                        info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
+                    }
+                }
+                printf(" - %s (%s%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn, info,
+                    i.value.short_desc);
+            }
+        } else {
+            printf("Options: none\n");
+        }
+        if (action.output_type) {
+            printf("Output:\n");
+            QdpCmd::showType(provider, action.output_type, "  ");
+        }
+    }
+
     static update(AbstractDataProvider provider) {
         hash<auto> set = QdpCmd::getHash("update 'set'", True);
         *hash<auto> where_cond = QdpCmd::getSearchExpression("update 'where'", True);
@@ -747,17 +1040,18 @@ class QdpCmd {
         if (!exists rec) {
             QdpCmd::error("missing argument to 'create' action; a hash is required");
         }
-        *hash<auto> rv = provider.createRecord(rec);
+        *hash<auto> rv = provider.createRecordsBulk(rec);
         if (opts.verbose) {
-            printf("new record: %y\n", rv);
+            printf("new record(s): %y\n", (map $1, rv.contextIterator()));
         }
-        printf("record successfully created\n");
+        int size = rv.firstValue().lsize();
+        printf("%d record%s successfully created\n", size, size == 1 ? "" : "s");
     }
 
     static upsert(AbstractDataProvider provider) {
         *hash<auto> rec = QdpCmd::getHash("upsert");
         *hash<auto> upsert_options = QdpCmd::getHash("upsert options");
-        string result = provider.upsertRecord(rec, upsert_options);
+        *list<string> result = provider.upsertRecordsBulk(rec, upsert_options);
         printf("upsert result: %y\n", result);
     }
 
@@ -788,6 +1082,7 @@ class QdpCmd {
 
     static request(AbstractDataProvider provider) {
         if (*hash<auto> req = QdpCmd::getHash("request")) {
+            DataProviderDataContextHelper dch(req);
             QdpCmd::showType(provider, provider.getRequestTypeWithData(req));
         } else {
             QdpCmd::showType(provider, provider.getRequestType());
@@ -801,7 +1096,12 @@ class QdpCmd {
     }
 
     static response(AbstractDataProvider provider) {
-        QdpCmd::showType(provider, provider.getResponseType());
+        if (*hash<auto> req = QdpCmd::getHash("request")) {
+            DataProviderDataContextHelper dch(req);
+            QdpCmd::showType(provider, provider.getResponseTypeWithData(req));
+        } else {
+            QdpCmd::showType(provider, provider.getResponseType());
+        }
     }
 
     static showOptionHash(AbstractDataProvider prov, *hash<auto> req, string offset = "") {
@@ -820,30 +1120,50 @@ class QdpCmd {
         }
     }
 
-    static showType(AbstractDataProvider prov) {
+    static showType(*AbstractDataProvider prov) {
         # intentionally empty
     }
 
-    static showType(AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
-        printf("%s: %s\n", msg, QdpCmd::getDesc(0, info));
-        QdpCmd::showType(prov, info.type);
+    static showType(*AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
+        printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
+        hash<string, bool> rmap;
+        QdpCmd::showType(prov, \rmap, info.type);
     }
 
-    static showType(AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
-        QdpCmd::showType(prov, {}, type, offset);
+    static showType(*AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
+        hash<string, bool> rmap;
+        QdpCmd::showType(prov, \rmap, type, offset);
     }
 
-    static showType(AbstractDataProvider prov, hash<auto> rmap, AbstractDataProviderType type, *string offset) {
+    static showType(*AbstractDataProvider prov, reference<hash<string, bool>> rmap, AbstractDataProviderType type,
+            *string offset) {
         *hash<string, AbstractDataField> fields = type.getFields();
+        # get data context
+        auto dctxt = DataProviderDataContextHelper::get();
         if (fields) {
-            QdpCmd::showRecord(prov, rmap, fields, offset);
+            QdpCmd::showRecord(prov, \rmap, fields, offset, dctxt);
         } else {
             if (type.getBaseTypeCode() == NT_LIST && (*AbstractDataProviderType element_type = type.getElementType())
                 && (*hash<string, AbstractDataField> element_rec = element_type.getFields())) {
                 printf("%s%s elements ->\n", type.getName(), offset);
-                QdpCmd::showRecord(prov, rmap, element_rec, offset + "  ");
+                QdpCmd::showRecord(prov, \rmap, element_rec, offset + "  ", dctxt[0]);
             } else {
                 printf("%s%s%s (%s)\n", offset, type.getName());
+            }
+        }
+
+        if (prov) {
+            *hash<auto> tags = type.getTags();
+            string info;
+            if (tags.ref_data.val()) {
+                *list<auto> l = prov.getReferenceDataSafe(tags.ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            } else if (tags.element_ref_data.val()) {
+                *list<auto> l = prov.getElementReferenceDataSafe(tags.element_ref_data, DataProviderDataContextHelper::getHash());
+                QdpCmd::getAllowedValues(\info, l);
+            }
+            if (info) {
+                printf("  %s%s\n", offset, info);
             }
         }
     }
@@ -882,15 +1202,19 @@ class QdpCmd {
 
     static *hash<auto> getHash(string action, *bool required) {
         auto arg = shift ARGV;
+        return getHashIntern(arg, action, required);
+    }
+
+    static *hash<auto> getHashIntern(auto arg, string action, *bool required) {
         if (exists arg) {
             arg = parse_to_qore_value(arg);
             if (exists arg && arg.typeCode() != NT_HASH) {
-                QdpCmd::error("invalid %s argument %y; expecting type \"hash\"; got type %y instead", action, arg,
+                QdpCmd::error("Invalid %s argument %y; expecting type \"hash\"; got type %y instead", action, arg,
                     arg.type());
             }
         }
         if (required && !exists arg) {
-            QdpCmd::error("missing required %s argument; expecting type \"hash\"", action);
+            QdpCmd::error("Missing required %s argument; expecting type \"hash\"", action);
         }
         return arg;
     }
@@ -901,7 +1225,7 @@ class QdpCmd {
             return arg;
         }
         if (required && !arg) {
-            QdpCmd::error("missing required %s argument; expecting type \"string\"", action);
+            QdpCmd::error("Missing required %s argument; expecting type \"string\"", action);
         }
     }
 
@@ -914,7 +1238,9 @@ class QdpCmd {
     }
 
     private showActions(string app) {
-        DataProvider::registerKnownFactories();
+        if (!ENV.QORE_PROVIDER_INDEX_DIR) {
+            DataProvider::registerKnownFactories();
+        }
         *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash(app);
         if (!actions) {
             error("Application %y is unknown; known applications: %y", app, (map $1.name,
@@ -939,7 +1265,9 @@ class QdpCmd {
     }
 
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
-        DataProvider::registerKnownFactories();
+        if (!ENV.QORE_PROVIDER_INDEX_DIR) {
+            DataProvider::registerKnownFactories();
+        }
         *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash(app_name);
         if (!actions) {
             error("Application %y is unknown", app_name);
@@ -993,9 +1321,9 @@ class QdpCmd {
                 prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
             }
             # set logger on data provider
-            prov.setLogger(getLogger());
+            prov.setLogger(logger);
 
-            ImpliedArgumentHelper iah(options);
+            DataProviderDataContextHelper dch(options);
             foreach string seg in (action.path[1..].split("/")) {
                 if (*string var = (seg =~ x/^\{([^\}]+)\}$/)[0]) {
                     seg = remove options{var};
@@ -1012,7 +1340,10 @@ class QdpCmd {
     private AbstractDataProvider getDataProvider(string name) {
         if (name =~ /{([^}]*)}/) {
             try {
-                return DataProvider::getFactoryObjectFromStringUseEnv(name);
+                AbstractDataProvider dp = DataProvider::getFactoryObjectFromStringUseEnv(name);
+                # set logger on data provider
+                dp.setLogger(logger);
+                return dp;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "FACTORY-ERROR") {
                     error("%s", ex.desc);
@@ -1023,8 +1354,11 @@ class QdpCmd {
 
         # load providers from environment and try to load a connection
         try {
-            *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name, opts.subtype);
+            *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name, opts.subtype,
+                logger);
             if (dp) {
+                # set logger on data provider
+                dp.setLogger(logger);
                 return dp;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -1035,6 +1369,19 @@ class QdpCmd {
         }
 
         error("no connection or datasource connection %y exists in any known data provider", name);
+    }
+
+    static createIndex() {
+        *hash<auto> index = QdpCmd::getHash("index");
+        try {
+            hash<auto> info = ProviderIndex::createDataProviderIndex(
+                index ? cast<hash<DataProviderIndexInfo>>(index) : NOTHING
+            );
+            printf("Created index %y: %d bytes in %y (%y)\n", info.path, info.size, info.delta, info.summary);
+            exit(0);
+        } catch (hash<ExceptionInfo> ex) {
+            error("%s: %s", ex.err, ex.desc);
+        }
     }
 
     static listApps() {
@@ -1104,8 +1451,20 @@ class QdpCmd {
  %s [options] <factory>{<options>}[/child1/child2...] <cmd> [args...]
  %s [options] @<app>/<action>[{<options>}] [args...]
   <cmd> = create|delete|dorequest|errors|info|list|record|request|response|reply|rsearch|search|update|upsert (default=list)
+    action-info|ainfo|ai
+        show info for the given app action (must use @<app>/<action> for the data provider)
     create <new record> (ex create id=123,name=\"my name\")
         create a new record
+    example-error|exerror [error]
+        show an example error response
+    example-event|exevent [event]
+        show an example event
+    example-record|exrecord
+        show an example record
+    example-request|exrequest
+        show an example request
+    example-response|exresponse
+        show an example response
     field-add|fadd <name> <field desc hash>
         adds a field to a data provider
     field-delete|fdelete <name>
@@ -1165,8 +1524,12 @@ class QdpCmd {
  -b,--bulk                 use the bulk API for searches
  -c,--list-connections     list known connections and exit
  -f,--list-factories       list known data provider factories and exit
+ -H,--host=ARG             set the hostname (+ optionally port) for webhooks
+ -I,--create-index         create data provider indices in QORE_PROVIDER_INDEX_DIR
  -m,--module=ARG           Data Provider modules to load manually
  -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
+ -R,--show-required        show only required attributes when showing types
+ -S,--servers              enable data provider background threads and processes
  -s,--subtype=ARG          use Data Provider subtype when creating from a connection
  -t,--list-types           list known data provider types and exit
  -v,--verbose[=ARG]        show more output
@@ -1251,10 +1614,10 @@ class MyObserver inherits Observer {
         if (!data_) {
             msg += " no data";
         }
-        log("<", msg);
         if (data_) {
-            log("<", "data: %N", data_);
+            msg += sprintf("\n  %N", data_);
         }
+        log("<", msg);
         if (info.connection_event == event_id) {
             log("<", "connected to server");
         } else if (info.disconnection_event == event_id) {
@@ -1393,7 +1756,7 @@ class InputHelper {
                 continue;
             }
             if (line == "info") {
-                string msg = sprintf("using: %y: %s", provider.getName(), provider.getDesc());
+                string msg = sprintf("using: %y: %s", provider.getName(), provider.getShortDesc());
                 *hash<DataProviderConnectionInfo> cinfo = provider.getConnectionInfo();
                 if (cinfo.url) {
                     msg += sprintf(" (%s connected: %y auto reconnect: %y)", cinfo.url, cinfo.connected,
@@ -1404,10 +1767,10 @@ class InputHelper {
                     printf("info: %N\n", cinfo.info);
                 }
                 print("messages:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType($1.value.type)),
+                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
                     provider.getMessageTypes().pairIterator();
                 print("events:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType($1.value.type)),
+                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
                     provider.getEventTypes().pairIterator();
                 continue;
             }
@@ -1433,5 +1796,225 @@ class InputHelper {
         rv += map $1, keys Commands, $1.equalPartial(str);
         rv += map $1 + ": ", keys mmap, $1.equalPartial(str);
         return rv;
+    }
+}
+
+class WebhookHandler inherits RestHandler {
+    private {
+        string rest_method;
+        string root_path;
+        code callback;
+
+        static bool cors_enable = DefaultCorsEnable;
+        static *softlist<string> cors_accept_origin;
+        static *string cors_allow_methods = foldl $1 + ", " + $2, DefaultCorsAllowMethods;
+        static softstring cors_max_age = DefaultCorsMaxAge;
+        static *string cors_allow_headers = foldl $1 + ", " + $2, DefaultCorsAllowHeaders;
+        static bool cors_allow_credentials = DefaultCorsAllowCredentials;
+        static bool cors_accept_all_origins = DefaultCorsAcceptAllOrigins;
+        static hash<string, bool> cors_origin_map;
+
+        const DefaultCorsEnable = True;
+        const DefaultCorsAllowMethods = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+        const DefaultCorsMaxAge = 9999999;
+        const DefaultCorsAllowHeaders = (
+            "Content-Type", "content-type", "Content-Language", "content-language",
+            "Accept", "Accept-Language", "Authorization", "Qorus-Token", "Qorus-Client-Time-Zone",
+        );
+        const DefaultCorsAllowCredentials = True;
+        const DefaultCorsAcceptAllOrigins = True;
+    }
+
+    constructor(string method, string path, code callback) : RestHandler() {
+        rest_method = method;
+        root_path = (path =~ /^\//) ? path[1..] : path;
+        self.callback = callback;
+    }
+
+    removeRootPath(reference<string> path) {
+        if (path.startsWith(root_path)) {
+            splice path, 0, root_path.size();
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data b) {
+        #logDebug("Webhook headers: %N", hdr);
+
+        # handle OPTIONS requests
+        if (hdr.method == "OPTIONS" && (*hash<auto> cors_hdrs = getCorsResponseHeaders(cx))) {
+            # return a CORS response
+            return AbstractHttpRequestHandler::makeResponse(200, NOTHING, cors_hdrs);
+        }
+
+        # check for valid method
+        if (hdr.method != rest_method) {
+            # get rest class name
+            string path = cx.url.path ?? "";
+            removeRootPath(\path);
+            return AbstractHttpRequestHandler::makeResponse(405, sprintf("HTTP method %y is not supported with URI "
+                "path %y; supported method: %s", hdr.method, path, rest_method), getCorsResponseHeaders(cx) +
+                {"Allow": rest_method});
+        }
+
+        cx.sctx.listener = listener;
+        hash<HttpResponseInfo> rv = RestHandler::handleRequest(listener, s, cx, hdr, b);
+        if (!rv.hdr."Access-Control-Allow-Origin") {
+            rv.hdr += getCorsResponseHeaders(cx);
+        }
+        return rv;
+    }
+
+    hash<HttpHandlerResponseInfo> callWebhook(hash<auto> cx, *hash<auto> ah) {
+        logInfo("Webhook %y called", root_path);
+        logDebug("Webhook %y args: %y", root_path, ah);
+        on_error QdpCmd::http.logError("%s", get_exception_string($1));
+        try {
+            return <HttpHandlerResponseInfo>{
+                "code": 200,
+                "body": callback(ah),
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            QdpCmd::http.logError("Webhook %y args: %y error: %s", root_path, ah, get_exception_string(ex));
+            return <HttpHandlerResponseInfo>{
+                "code": 500,
+                "body": sprintf("%s: %s", ex.err, ex.desc),
+            };
+        }
+    }
+
+    private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
+        try {
+            if (ex.arg.typeCode() == NT_OBJECT) {
+                remove ex.arg;
+            }
+        } catch (hash<ExceptionInfo> ex0) {
+            remove ex.arg;
+        }
+        if (ex.err =~ /-ARG-ERROR$/) {
+            return <HttpHandlerResponseInfo>{
+                "code": 400,
+                "body": ex.desc,
+            };
+        }
+        if (ex.err == "AUTHORIZATION-ERROR" || ex.err =~ /-ACCESS-ERROR$/) {
+            return <HttpHandlerResponseInfo>{
+                "code": 403,
+                "body": ex,
+            };
+        }
+        if (ex.err == "REST-NOT-FOUND-ERROR") {
+            return <HttpHandlerResponseInfo>{
+                "code": 404,
+                "body": ex.desc,
+            };
+        }
+        # for all other errors, return the standard "409 Conflict" response
+        return RestHandler::returnRestException(ex);
+    }
+
+    private *hash<auto> errorResponseHeaders(hash<auto> cx) {
+        return getCorsResponseHeaders(cx);
+    }
+
+    static *hash<auto> getCorsResponseHeaders(hash<auto> cx) {
+        bool explicit_match;
+        if (!WebhookHandler::corsOriginOk(cx, \explicit_match)) {
+            return;
+        }
+        return WebhookHandler::getCorsResponseHeadersIntern(cx, explicit_match);
+    }
+
+    static private hash<auto> getCorsResponseHeadersIntern(hash<auto> cx, *bool explicit_match) {
+        hash<auto> rv;
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Origin
+        # if the server supports clients from multiple origins, it must return the origin for the specific client
+        # making the request
+        if (cx.hdr.origin && !cors_accept_all_origins) {
+            rv = {
+                "Access-Control-Allow-Origin": cx.hdr.origin,
+                "Vary": "Origin",
+            };
+        } else {
+            rv = {
+                "Access-Control-Allow-Origin": "*",
+            };
+        }
+        # return other headers for preflight (OPTIONS) requests
+        if (cx.hdr.method == "OPTIONS") {
+            rv += {
+                "Access-Control-Allow-Methods": cors_allow_methods,
+                "Access-Control-Max-Age": cors_max_age,
+            };
+            if (cors_allow_headers) {
+                rv."Access-Control-Allow-Headers" = cors_allow_headers;
+            }
+        }
+        if (cors_allow_credentials) {
+            rv."Access-Control-Allow-Credentials" = "true";
+        }
+        return rv;
+    }
+
+    static bool corsOriginOk(hash<auto> cx, *reference<bool> explicit_match) {
+        if (!cors_enable) {
+            return False;
+        }
+        if (cors_accept_all_origins) {
+            return True;
+        }
+        if (cors_origin_map{cx.hdr.origin}) {
+            explicit_match = True;
+            return True;
+        }
+        return False;
+    }
+
+    static corsUpdateOption(string opt, auto value) {
+        switch (opt) {
+            case "cors-enable":
+                cors_enable = value;
+                break;
+
+            case "cors-allow-origin": {
+                cors_accept_origin = value;
+                cors_accept_all_origins = False;
+                foreach string origin in (cors_accept_origin) {
+                    if (origin == "*") {
+                        cors_accept_all_origins = True;
+                    }
+                    cors_origin_map{origin} = True;
+                }
+                break;
+            }
+
+            case "cors-allow-methods":
+                cors_allow_methods = foldl $1 + ", " + $2, value;
+                break;
+
+            case "cors-max-age":
+                cors_max_age = value.toString();
+                break;
+
+            case "cors-allow-headers":
+                cors_allow_headers = foldl $1 + ", " + $2, value;
+                break;
+
+            case "cors-allow-credentials":
+                cors_allow_credentials = value;
+                break;
+        }
     }
 }

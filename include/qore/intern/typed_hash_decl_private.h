@@ -75,6 +75,7 @@ public:
     DLLLOCAL typed_hash_decl_private(const typed_hash_decl_private& old, TypedHashDecl* thd);
 
     DLLLOCAL ~typed_hash_decl_private() {
+        assert(!refs.reference_count());
         delete typeInfo;
         delete orNothingTypeInfo;
     }
@@ -92,7 +93,8 @@ public:
         if (name != other.name || members.size() != other.members.size())
             return false;
 
-        for (HashDeclMemberMap::const_iterator ti = members.member_list.begin(), oi = other.members.member_list.begin(),
+        for (HashDeclMemberMap::const_iterator ti = members.member_list.begin(),
+            oi = other.members.member_list.begin(),
             te = members.member_list.end(); ti != te; ++ti, ++oi) {
             // if the member's name is different, return false
             if (strcmp(oi->first, ti->first)) {
@@ -144,6 +146,7 @@ public:
 
     DLLLOCAL bool deref() {
         if (refs.ROdereference()) {
+            assert(thd->priv == this);
             delete thd;
             return true;
         }
@@ -187,7 +190,7 @@ public:
 
     DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const;
 
-    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink) const;
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
 

@@ -69,6 +69,22 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
         #! Minimum poll interval in seconds
         const MinPollInterval = 30;
+
+        #! For parsing months
+        const MonthMap = {
+            "jan": 1,
+            "feb": 2,
+            "mar": 3,
+            "apr": 4,
+            "may": 5,
+            "jun": 6,
+            "jul": 7,
+            "aug": 8,
+            "sep": 9,
+            "oct": 10,
+            "nov": 11,
+            "dec": 12,
+        };
     }
 
     private {
@@ -108,27 +124,13 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             hash<string, hash<DataProviderOptionInfo>> constructor_options, *hash<auto> options)
             : GoogleDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options,
-            ImpliedArgumentHelper::get(){keys constructor_options} + options);
+            DataProviderDataContextHelper::getHash(){keys constructor_options} + options);
         processOptions(copts);
     }
 
     #! Stops observing and deletes the object
     destructor() {
-        {
-            lck.lock();
-            on_exit lck.unlock();
-
-            if (io_tid) {
-                # set the stop flag
-                stop = True;
-                # signal the I/O thread to wake up
-                cond.signal();
-                # wait for the thread to terminate
-                while (io_tid) {
-                    cond.wait(lck);
-                }
-            }
-        }
+        stopIntern();
     }
 
     #! Called when all observers have been added to the object
@@ -145,6 +147,30 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
 
         # start the I/O thread
         io_tid = background pollThread();
+    }
+
+    #! Called to stop generating events
+    /** Stops polling for new events
+    */
+    stopEvents() {
+        stopIntern();
+    }
+
+    #! Stops polling
+    private stopIntern() {
+        lck.lock();
+        on_exit lck.unlock();
+
+        if (io_tid) {
+            # set the stop flag
+            stop = True;
+            # signal the I/O thread to wake up
+            cond.signal();
+            # wait for the thread to terminate
+            while (io_tid) {
+                cond.wait(lck);
+            }
+        }
     }
 
     #! Process constructor options
@@ -200,13 +226,10 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             epoch = mktime(start_date);
         }
 
-        AbstractDataProviderType msgtype = GoogleDataProviderBase::getTypeForSchema(GoogleDiscoveryGmailApiName,
-            "Message");
-
         return {
             "uri": uri,
             "epoch": epoch,
-            "msgtype": msgtype,
+            "msgtype": GmailMessageWatchDataProvider::getMessageEventType(),
         };
     }
 
@@ -232,7 +255,19 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 }
                 # retrieve each email
                 string msguri = sprintf("gmail/v1/users/me/messages/%s", minfo.id);
-                hash<auto> msg = setup.msgtype.acceptsValue(rest.get(msguri, NOTHING, \info).body);
+                hash<auto> msg = rest.get(msguri, NOTHING, \info).body;
+
+                # try to decode body as base64 if there is a Content-Transfer-Encoding header
+                # do not allow message bodies to be re-encoded as base64
+                processHeaders(\msg.payload, GmailMessageEventDataType::Fields,
+                    GmailMessageEventDataType::PartFields);
+
+                # check message structure and convert types where necessary
+                msg = setup.msgtype.acceptsValue(msg);
+
+                # convert base64-decoded message bodies to strings if they have text MIME types
+                processBody(\msg.payload);
+
                 # internalDate is given as a ms offset from the epoch
                 int msg_epoch = msg.internalDate / 1000;
                 if (msg_epoch > setup.epoch) {
@@ -249,25 +284,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                     msg.attachments = ();
                     foreach hash<auto> part in (msg.payload.parts) {
                         if (*string aid = part.body.attachmentId) {
-                            # parse headers
-                            *hash<auto> hdr = map {$1.name: $1.value}, part.headers;
                             # retrieve attachment
                             string atturi = sprintf("gmail/v1/users/me/messages/%s/attachments/%s", minfo.id,
                                 aid);
                             hash<auto> att = rest.get(atturi, NOTHING, \info).body;
-                            msg.attachments += getAttachment(att, hdr);
+                            msg.attachments += getAttachment(att, part.headers);
                         }
                     }
                     LoggerWrapper::info("Gmail: matched message %y attachments: %d", minfo.id,
                         msg.attachments.size());
                 } else {
                     LoggerWrapper::info("Gmail: matched message %y", minfo.id);
-                }
-
-                # try to decode body as base64 if there is a Content-Transfer-Encoding header
-                processBody(msg.payload.headers, \msg.payload.body);
-                foreach hash<auto> part in (\msg.payload.parts) {
-                    processBody(part.headers, \part.body);
                 }
 
                 if (setup.test_mode) {
@@ -299,29 +326,52 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     }
 
     #! Process headers and body
-    private processBody(*list<auto> headers, *reference<hash<auto>> body) {
-        if (headers && body.size) {
-            *hash<string, string> hdr = map {$1.name: $1.value}, headers;
-            if (hdr."Content-Type".val()) {
-                bool text = is_mime_text(hdr."Content-Type");
-                if (body."data".typeCode() == NT_BINARY) {
-                    if (text) {
-                        body."data" = body."data".toString();
-                    }
-                } else {
-                    if (hdr."Content-Transfer-Encoding".val() && body."data".val()) {
-                        try {
-                            body."data" = text
-                                ? parse_base64_string_to_string(body."data")
-                                : parse_base64_string(body."data");
-                        } catch (hash<ExceptionInfo> ex) {
-                            LoggerWrapper::error("Failed to parse message body with Content-Type: %y as base64, "
-                                "leaving as is: %s: %s", hdr."Content-Type", ex.err, ex.desc);
-                        }
-                    }
-                }
+    private processHeaders(*reference<hash<auto>> msg, hash<auto> fields, *hash<auto> pfields) {
+        # reformat message to make it more user-friendly
+        msg.headers = map {
+            $1.name: getHeaderValue($1.value, fields{$1.name}),
+        }, msg.headers, $1.value.val();
+
+        for (int i = 0; i < msg.parts.size(); ++i) {
+            processHeaders(\msg.parts[i], pfields ?? fields);
+        }
+    }
+
+    #! Process body
+    private processBody(*reference<hash<auto>> msg) {
+        # headers / body
+        if (msg.headers."Content-Type".val() && msg.body.size) {
+            bool text = is_mime_text(msg.headers."Content-Type");
+            if (text && (msg.body."data".typeCode() == NT_BINARY)) {
+                msg.body."data" = msg.body."data".toString();
             }
         }
+
+        for (int i = 0; i < msg.parts.size(); ++i) {
+            processBody(\msg.parts[i]);
+        }
+    }
+
+    #! Get header value
+    private static auto getHeaderValue(string val, hash<auto> f) {
+        if (f.type == AbstractDataProviderTypeMap."date") {
+            val =~ s/^[^,]+,\s*//;
+            val =~ s/ +/ /g;
+            list<string> l = val.split(" ");
+            if (*int m = MonthMap{l[1].lwr()}) {
+                return date(sprintf("%04d-%02d-%02dT%s %s", l[2], m, l[0], l[3], l[4]));
+            }
+            return;
+        }
+        if (f.type instanceof ListDataType) {
+            return val.split(",", "\'", True);
+        }
+        return val;
+    }
+
+    #! Get header value
+    private static auto getHeaderValue(string val) {
+        return val;
     }
 
     #! Returns attachment data
@@ -335,13 +385,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         # try to determine the content type
         *string content_type = hdr."Content-Type";
         *string encoding;
-        data body;
         if (content_type.val()) {
             encoding = (content_type =~ x/charset="([^"]+)"/)[0];
             content_type =~ s/;.*//;
         } else if (filename.val()) {
             content_type = get_mime_type_from_ext(filename);
         }
+        # get filename from content type, if necessary
+        if (!filename.val() && content_type.val() && (*string fn = (content_type =~ x/name=([^;]+)/)[0]).val()) {
+            filename = fn;
+        }
+        data body;
         if (content_type.val() && is_mime_text(content_type)) {
             body = parse_base64_url_string_to_string(att."data", encoding);
         } else {

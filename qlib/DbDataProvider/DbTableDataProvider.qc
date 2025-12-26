@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableDataProvider class definition
 
-/** DbTableDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbTableDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,7 @@
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
 #! Defines a data provider based on a single SQL table
-public class DbTableDataProvider inherits AbstractDataProvider {
+public class DbTableDataProvider inherits DbDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -54,6 +54,7 @@ public class DbTableDataProvider inherits AbstractDataProvider {
                     "display_name": "like",
                     "name": OP_LIKE,
                     "symbol": "like",
+                    "groups": "Comparison",
                     "short_desc": "The SQL 'like' operator",
                     "desc": "The SQL 'like' operator",
                     "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
@@ -209,7 +210,7 @@ public class DbTableDataProvider inherits AbstractDataProvider {
               <a href="../../SqlUtil/html/sql_operations.html#select_option_forupdate">SqlUtil select option forupdate</a>
               for more information on this argument
         */
-        const SearchOptions = {
+        const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "columns": <DataProviderOptionInfo>{
                 "display_name": "Columns",
                 "short_desc": "Columns to include in the output of the query",
@@ -269,15 +270,12 @@ public class DbTableDataProvider inherits AbstractDataProvider {
         #! the table
         AbstractTable table;
 
-        #! the database object, if required
-        AbstractDatabase db;
-
         #! lock for "db"
         Mutex db_lock();
     }
 
     #! Creates the object
-    constructor(AbstractTable table, *LoggerInterface logger) : AbstractDataProvider(logger) {
+    constructor(AbstractTable table, *LoggerInterface logger) : DbDataProviderBase(logger) {
         self.table = table;
     }
 
@@ -324,18 +322,6 @@ public class DbTableDataProvider inherits AbstractDataProvider {
         return rv;
     }
 
-    #! Returns child providers; return @ref nothing if there are no child providers
-    *AbstractDataProvider getChildProviders() {
-    }
-
-    #! Returns @ref True if the data provider supports transaction management
-    /** @return @ref True if the data provider supports transaction management, in which case commit() or rollback()
-        must be called to flush or discard data written to the data provider
-    */
-    bool requiresTransactionManagement() {
-        return True;
-    }
-
     #! Begins a transaction in the datasource underlying the table
     /**
         @see:
@@ -369,17 +355,23 @@ public class DbTableDataProvider inherits AbstractDataProvider {
     }
 
     #! Returns a bulk insert operation object for the data provider
-    /** @return a bulk insert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size of 1000 rows is
+        used
+
+        @return a bulk insert operation object for the data provider
     */
-    AbstractDataProviderBulkOperation getBulkInserter() {
-        return new DbTableBulkInserter(self, table);
+    AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
+        return new DbTableBulkInserter(self, table, block_size);
     }
 
     #! Returns a bulk upsert operation object for the data provider
-    /** @return a bulk upsert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size of 1000 rows is
+        used
+
+        @return a bulk upsert operation object for the data provider
     */
-    AbstractDataProviderBulkOperation getBulkUpserter() {
-        return new DbTableBulkUpserter(self, table);
+    AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
+        return new DbTableBulkUpserter(self, table, block_size);
     }
 
     #! Returns custom data mapper runtime keys
@@ -395,22 +387,7 @@ public class DbTableDataProvider inherits AbstractDataProvider {
                 db = AbstractDatabase::getDatabase(table.getDatasource());
             }
         }
-        hash<string, hash<MapperRuntimeKeyInfo>> rv(MapperKeyInfo);
-        rv.sequence.handler = \doSequenceKey();
-        rv.sequence_currval.handler = \doSequenceCurrvalKey();
-        return rv;
-    }
-
-    #! Processes the \c sequence runtime key in mappers as a mapper key handler
-    int doSequenceKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getNextSequenceValue(sequence_name);
-    }
-
-    #! Processes the \c sequence_currval runtime key in mappers as a mapper key handler
-    int doSequenceCurrvalKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence_currval' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getCurrentSequenceValue(sequence_name);
+        return DbDataProviderBase::getMapperRuntimeKeys();
     }
 
     #! Returns the description of the record type, if any
@@ -438,6 +415,33 @@ public class DbTableDataProvider inherits AbstractDataProvider {
         return rec + returning;
     }
 
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+    */
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        DbOperationTransactionHelper db(table);
+        hash<auto> rh;
+        if (create_options.returning) {
+            create_options.rowcode = sub (hash<auto> h) {
+                rh = h;
+            };
+        }
+        BulkInsertOperation bulk(table, create_options + {
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return recs + rh;
+    }
+
     #! Upserts the given record to the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options (see @ref UpsertOptions) after processing by validateUpsertOptions()
@@ -454,15 +458,36 @@ public class DbTableDataProvider inherits AbstractDataProvider {
             ?? AbstractTable::UpsertAuto, upsert_options)};
     }
 
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are record names and values are either
+        lists of record values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+    */
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        DbOperationTransactionHelper db(table);
+        BulkUpsertOperation bulk(table, upsert_options + {
+            "info_log": sub (string fmt, ...) {
+                logArgs(LoggerLevel::LevelInfo, fmt, argv);
+            },
+        });
+        on_error bulk.discard();
+        bulk.queueData(recs);
+        bulk.flush();
+        return map UpsertResultVerified, xrange(recs.firstValue().lsize());
+    }
+
     #! Returns a single record matching the search options
     /** @param where_cond the search criteria; will be processed by processFieldValues()
         @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
 
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
-    private *hash<auto> searchSingleRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         try {
-            return table.selectRow(search_options + {"where": where_cond});
+            return table.selectRow(search_options - ("requires_result", "max_records") + {"where": where_cond});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DBI-SELECT-ROW-ERROR") {
                 rethrow "MULTIPLE-RECORDS-ERROR", ex.desc, ex.arg;
@@ -666,6 +691,13 @@ public class DbTableDataProvider inherits AbstractDataProvider {
             table.clear();
         }
         info("DbTableDataProvider %y DDL: %s", table.getName(), (foldl $1 + "\n" + $2, sqll));
+    }
+
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+    */
+    private bool currentThreadInTransactionImpl() {
+        return table.getDatasource().currentThreadInTransaction();
     }
 }
 }

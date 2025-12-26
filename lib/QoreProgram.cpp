@@ -173,6 +173,8 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_INHERIT_PROGRAM_DATA, "PO_NO_INHERIT_PROGRAM_DATA");
     // 61
     doMap(PO_BROKEN_VARARGS, "PO_BROKEN_ELLIPSES");
+    // 62
+    doMap(PO_BROKEN_LIST_RANGE, "PO_BROKEN_LIST_RANGE");
 }
 
 // program serialization magic
@@ -437,7 +439,8 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : 0;
 
-        //printd(5, "qore_program_private::setThreadInit() this: %p thr_init: %p %d '%s'\n", this, thr_init, get_node_type(thr_init), get_type_name(thr_init));
+        //printd(5, "qore_program_private::setThreadInit() this: %p thr_init: %p %d '%s'\n", this, thr_init,
+        //    get_node_type(thr_init), get_type_name(thr_init));
     }
     return (bool)old;
 }
@@ -451,7 +454,6 @@ void qore_program_private_base::newProgram() {
     thread_local_storage = new qpgm_thread_local_storage_t;
 
     // save thread local storage hash
-    assert(!thread_local_storage->get());
     thread_local_storage->set(new QoreHashNode(autoTypeInfo));
 
     //printd(5, "qore_program_private_base::newProgram() this: %p\n", this);
@@ -832,7 +834,8 @@ void qore_program_private::addStatement(AbstractStatement* s) {
 void qore_program_private::runtimeImportSystemClassesIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_CLASSES)) {
-        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container where system classes have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container "
+            "where system classes have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_CLASSES;
@@ -842,7 +845,8 @@ void qore_program_private::runtimeImportSystemClassesIntern(const qore_program_p
 void qore_program_private::runtimeImportSystemHashDeclsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_HASHDECLS)) {
-        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container where system classes have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CLASSES-ERROR", "cannot import system classes in a Program container "
+            "where system classes have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_HASHDECLS;
@@ -852,7 +856,8 @@ void qore_program_private::runtimeImportSystemHashDeclsIntern(const qore_program
 void qore_program_private::runtimeImportSystemConstantsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_CONSTANTS)) {
-        xsink->raiseException("IMPORT-SYSTEM-CONSTANTS-ERROR", "cannot import system constants in a Program container where system constants have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-CONSTANTS-ERROR", "cannot import system constants in a Program "
+            "container where system constants have already been imported");
         return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_CONSTANTS;
@@ -862,12 +867,13 @@ void qore_program_private::runtimeImportSystemConstantsIntern(const qore_program
 void qore_program_private::runtimeImportSystemFunctionsIntern(const qore_program_private& spgm, ExceptionSink* xsink) {
     assert(&spgm != pgm->priv);
     if (!(pwo.parse_options & PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS)) {
-        xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "cannot import system functions in a Program container where system functions have already been imported");
+        xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "cannot import system functions in a Program container "
+            "where system functions have already been imported");
         return;
     }
-    if (po_locked)
+    if (po_locked) {
         xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "parse options have been locked on this program object");
-
+    }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
     qore_root_ns_private::runtimeImportSystemFunctions(*RootNS, *spgm.RootNS, xsink);
 }
@@ -921,15 +927,27 @@ void qore_program_private::runtimeImportSystemApi(ExceptionSink* xsink) {
     // acquire safe access to parse structures in the source program
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
     runtimeImportSystemClassesIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemFunctionsIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemConstantsIntern(*spgm->priv, xsink);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
     runtimeImportSystemHashDeclsIntern(*spgm->priv, xsink);
+    if (*xsink) {
+        return;
+    }
+    // merge builtin module / feature list
+    for (const auto& i : spgm->priv->featureList) {
+        if (featureList.find(i) == featureList.end()) {
+            featureList.insert(i);
+        }
+    }
     // issue #3461: must rebuild all indexes here or symbols will appear missing
     qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
 }
@@ -1086,35 +1104,63 @@ void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u,
     qore_root_ns_private::runtimeImportFunction(*RootNS, xsink, *tns, u, new_name, inject);
 }
 
-void qore_program_private::exportGlobalVariable(const char* vname, bool readonly, qore_program_private& tpgm, ExceptionSink* xsink) {
+void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char* vname, bool readonly,
+            qore_program_private& tpgm, const char* import_as) {
+    const char* target_name = import_as ? import_as : vname;
     if (&tpgm == this) {
-        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "cannot import global variable \"%s\" with the same source and target Program objects", vname);
+        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "Cannot import global variable \"%s\" with "
+            "the same source and target Program objects", target_name);
         return;
     }
 
-    const qore_ns_private* vns = 0;
+    const qore_ns_private* vns = nullptr;
     Var* v;
     {
         ProgramRuntimeParseAccessHelper pah(xsink, pgm);
-        if (*xsink)
+        if (*xsink) {
             return;
+        }
         v = qore_root_ns_private::runtimeFindGlobalVar(*RootNS, vname, vns);
     }
 
     if (!v) {
-        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "there is no global variable \"%s\"", vname);
+        xsink->raiseException("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "There is no global variable \"%s\"", vname);
         return;
     }
 
     // get exclusive access to program object for parsing
     ProgramRuntimeParseContextHelper pch(xsink, tpgm.pgm);
-    if (*xsink)
+    if (*xsink) {
         return;
+    }
 
     // find/create target namespace based on source namespace
-    QoreNamespace* tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS, *vns, !v->isBuiltin());
-    //printd(5, "qore_program_private::exportGlobalVariable() this: %p vname: '%s' ro: %d vns: %p '%s::' RootNS: %p '%s::'\n", this, vname, readonly, vns, vns->name.c_str(), RootNS, RootNS->getName());
-    qore_root_ns_private::runtimeImportGlobalVariable(*tpgm.RootNS, *tns, v, readonly, xsink);
+    QoreString tmp;
+    QoreNamespace* tns;
+    if (import_as) {
+        QoreString nspath(import_as);
+        ssize_t p = nspath.rfind("::");
+        if (p != -1) {
+            tmp = nspath.c_str() + p;
+            import_as = tmp.c_str();
+            nspath.terminate(p);
+            NamedScope ns(nspath.c_str());
+            // import into the specified namespace
+            tns = qore_root_ns_private::get(*tpgm.RootNS)->runtimeFindCreateNamespacePath(ns, false, !v->isBuiltin());
+        } else {
+            // import into the equivalent namespace as the source variable
+            tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
+                *vns, !v->isBuiltin());
+        }
+    } else {
+        // import into the equivalent namespace as the source variable
+        tns = vns->root ? tpgm.RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*tpgm.RootNS,
+            *vns, !v->isBuiltin());
+    }
+    //printd(5, "qore_program_private::exportGlobalVariable() this: %p vname: '%s' ro: %d vns: %p '%s::' RootNS: %p "
+    //    "'%s::'\n", this, vname, readonly, vns, vns->name.c_str(), RootNS, RootNS->getName());
+    qore_root_ns_private::get(*tpgm.RootNS)->runtimeImportGlobalVariable(xsink, *qore_ns_private::get(*tns), v,
+        readonly, import_as);
 }
 
 void qore_program_private::del(ExceptionSink* xsink) {

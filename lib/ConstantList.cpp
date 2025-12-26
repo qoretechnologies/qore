@@ -380,8 +380,9 @@ bool ConstantList::inList(const std::string& name) const {
 
 void ConstantList::mergeUserPublic(const ConstantList& src) {
     for (cnemap_t::const_iterator i = src.cnemap.begin(), e = src.cnemap.end(); i != e; ++i) {
-        if (!i->second->isUserPublic())
+        if (!i->second->isUserPublic()) {
             continue;
+        }
 
         assert(!inList(i->first));
 

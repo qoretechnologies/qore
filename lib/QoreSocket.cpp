@@ -37,14 +37,16 @@
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreSSLCertificate.h>
+#include <qore/Transform.h>
 
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/CompressionTransforms.h"
 
 // maximum number of non-blocking network operations before returning
-constexpr unsigned max_nonblock_ops = 10;
+constexpr unsigned max_nonblock_ops = 32;
 
 void se_in_op(const char* cname, const char* meth, ExceptionSink* xsink) {
     assert(xsink);
@@ -199,8 +201,9 @@ void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, con
     } else {
         if (host && host[0]) {
             desc->sprintf(" (target: %s", host);
-            if (svc)
+            if (svc && strcmp(svc, "-1")) {
                 desc->sprintf(":%s", svc);
+            }
             desc->concat(")");
         }
     }
@@ -258,8 +261,9 @@ void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, con
     } else {
         if (host) {
             desc->sprintf(" (target: %s", host);
-            if (svc)
+            if (svc && strcmp(svc, "-1")) {
                 desc->sprintf(":%s", svc);
+            }
             desc->concat(")");
         }
     }
@@ -287,7 +291,12 @@ void concat_target(QoreString& str, const struct sockaddr *addr, const char* typ
     QoreString host;
     q_addr_to_string2(addr, host);
     if (!host.empty()) {
-        str.sprintf(" (%s: %s:%d)", type, host.c_str(), q_get_port_from_addr(addr));
+        int port = q_get_port_from_addr(addr);
+        str.sprintf(" (%s: %s", type, host.c_str());
+        if (port != -1) {
+            str.sprintf(":%d", port);
+        }
+        str.concat(')');
     }
 }
 
@@ -335,7 +344,8 @@ SSLSocketHelper::~SSLSocketHelper() {
     }
 }
 
-int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* pk, ExceptionSink* xsink) {
+int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     SSLSocketReferenceHelper ssrh(this);
 
     assert(!ssl);
@@ -347,14 +357,23 @@ int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* 
         return -1;
     }
     if (cert) {
-        if (!SSL_CTX_use_certificate(ctx, cert)) {
+        if (!SSL_CTX_use_certificate(ctx, cert->getData())) {
             sslError(xsink, mname, "SSL_CTX_use_certificate");
             assert(*xsink);
             return -1;
         }
+        if (!cert->priv->chain.empty()) {
+            for (auto& i : cert->priv->chain) {
+                if (!SSL_CTX_add_extra_chain_cert(ctx, X509_dup(i))) {
+                    sslError(xsink, mname, "SSL_CTX_add_extra_chain_cert");
+                    assert(*xsink);
+                    return -1;
+                }
+            }
+        }
     }
-    if (pk) {
-        if (!SSL_CTX_use_PrivateKey(ctx, pk)) {
+    if (pkey) {
+        if (!SSL_CTX_use_PrivateKey(ctx, pkey->getData())) {
             sslError(xsink, mname, "SSL_CTX_use_PrivateKey");
             assert(*xsink);
             return -1;
@@ -408,10 +427,14 @@ int SSLSocketHelper::setIntern(const char* mname, int sd, X509* cert, EVP_PKEY* 
     return 0;
 }
 
-int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, int sd, X509* cert, EVP_PKEY* pk,
-        ExceptionSink* xsink) {
+int SSLSocketHelper::setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
+#ifdef HAVE_TLS_SERVER_METHOD
+    meth = TLS_client_method();
+#else
     meth = SSLv23_client_method();
-    int rc = setIntern(mname, sd, cert, pk, xsink);
+#endif
+    int rc = setIntern(xsink, mname, sd, cert, pkey);
     if (!rc && sni_target_host) {
         // issue #3053 set TLS server name for servers that require SNI
         assert(ssl);
@@ -425,9 +448,14 @@ int SSLSocketHelper::setClient(const char* mname, const char* sni_target_host, i
     return rc;
 }
 
-int SSLSocketHelper::setServer(const char* mname, int sd, X509* cert, EVP_PKEY* pk, ExceptionSink* xsink) {
+int SSLSocketHelper::setServer(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
+#ifdef HAVE_TLS_SERVER_METHOD
+    meth = TLS_server_method();
+#else
     meth = SSLv23_server_method();
-    return setIntern(mname, sd, cert, pk, xsink);
+#endif
+    return setIntern(xsink, mname, sd, cert, pkey);
 }
 
 // returns 0 for success
@@ -533,6 +561,12 @@ int SSLSocketHelper::startConnect(ExceptionSink* xsink) {
             case SSL_ERROR_SYSCALL: {
                 return sysCallError(xsink, rc, "startConnect", "SSL_connect");
             }
+            case SSL_ERROR_ZERO_RETURN:
+                // remote closed the connection
+                break;
+            default:
+                printd(0, "SSLSocketHelper::startConnect() SSL_get_error() reports error %d\n", err);
+                break;
         }
 
         if (sslError(xsink, "startConnect", "SSL_connect", true)) {
@@ -565,6 +599,9 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
             case SSL_ERROR_SYSCALL: {
                 return sysCallError(xsink, rc, "startAccept", "SSL_accept");
             }
+            default:
+                printd(0, "SSLSocketHelper::startAccept() err: %d\n", err);
+                break;
         }
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {
             return QSE_SSL_ERR;
@@ -1008,6 +1045,9 @@ int SocketConnectInetPollState::next(ExceptionSink* xsink) {
 int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
     sock->do_connect_event(p->ai_family, p->ai_addr, host.c_str(), service.c_str(), prt);
+    // make sure and close the socket if it is already open
+    sock->close_internal();
+    assert(sock->sock == QORE_INVALID_SOCKET);
     if ((sock->sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == QORE_INVALID_SOCKET) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "cannot establish a connection to %s:%s",
             host.c_str(), service.c_str());
@@ -1023,7 +1063,8 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     assert(xsink);
 
     // close socket if already open
-    sock->close();
+    sock->close_internal();
+    assert(sock->sock == QORE_INVALID_SOCKET);
 
     addr.sun_family = AF_UNIX;
     // copy path and terminate if necessary
@@ -1159,8 +1200,8 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
 }
 #endif
 
-SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock, X509* cert,
-        EVP_PKEY* pkey) : sock(sock) {
+SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
     assert(sock->sock);
     assert(!sock->ssl);
     SSLSocketHelperHelper sshh(sock, true);
@@ -1168,7 +1209,7 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     sock->do_start_ssl_event();
     // issue #3053: send target hostname to support SNI
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
-    if (sock->ssl->setClient("connectSsl", sni_target_host, sock->sock, cert, pkey, xsink)) {
+    if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey)) {
         sshh.error();
     }
 }
@@ -1212,7 +1253,7 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
                 assert(!real_io);
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 sent += real_io;
                 if (sent == size) {
                     break;
@@ -1264,6 +1305,46 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
         }
     }
     return 0;
+}
+
+SocketAcceptPollState::SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock) {
+}
+
+/** returns:
+- SOCK_POLLIN = wait for read and call this again
+- SOCK_POLLOUT = wait for write and call this again
+- 0 = done
+- < 1 = error (exception raised)
+*/
+int SocketAcceptPollState::continuePoll(ExceptionSink* xsink) {
+    // try an accept with no timeout
+    int rc = sock->accept_internal(xsink, nullptr, 0);
+    if (*xsink) {
+        return -1;
+    }
+    if (rc < 0) {
+        return SOCK_POLLIN;
+    }
+    descriptor = rc;
+    return 0;
+}
+
+SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
+    assert(sock->sock);
+    assert(!sock->ssl);
+    SSLSocketHelperHelper sshh(sock, true);
+
+    sock->do_start_ssl_event();
+    int rc;
+    if ((rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey))) {
+        sshh.error();
+        assert(*xsink);
+    }
+}
+
+int SocketAcceptSslPollState::continuePoll(ExceptionSink* xsink) {
+    return sock->ssl->startAccept(xsink);
 }
 
 SocketRecvPacketPollState::SocketRecvPacketPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock),
@@ -1325,7 +1406,7 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
                 }
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 if (real_io) {
                     realsize += real_io;
                 }
@@ -1345,8 +1426,6 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
                 }
                 // otherwise continue reading
                 continue;
-            } else {
-                assert(!real_io);
             }
             bin->setSize(realsize);
             if (realsize) {
@@ -1358,7 +1437,7 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketRecvPacketPollState::continuePoll() calling recv\n");
             rc = ::recv(sock->sock,
 #ifdef _Q_WINDOWS
-                const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received),
+                const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize),
 #else
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize)),
 #endif
@@ -1473,7 +1552,7 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
             if (*xsink) {
                 return -1;
             }
-            if (!rc) {
+            if (!rc && real_io) {
                 received += real_io;
                 if (received == size) {
                     bin->setSize(size);
@@ -1796,7 +1875,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
 
     std::vector<pollfd> fds;
-    fds.reserve(poll_list->size());
 
     ConstListIterator li(poll_list);
     while (li.next()) {
@@ -1856,15 +1934,25 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return nullptr;
         }
 
-        fds[li.index()] = {fd, arg, 0};
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = arg;
+        pfd.revents = 0;
+        fds.push_back(pfd);
     }
 
     int rc;
     while (true) {
-        rc = ::poll(&fds[0], poll_list->size(), timeout_ms);
+        rc = ::poll(&fds[0], fds.size(), timeout_ms);
+        // poll() returns 0 when there is a timeout
+        if (!rc) {
+            break;
+        }
+        // continue if interrupted
         if (rc == -1 && errno == EINTR) {
             continue;
         }
+        // throw an exception if there was an error
         if (rc < 0) {
             qore_socket_error(xsink, "SOCKET-POLL-ERROR", "poll(2) returned an error");
             break;
@@ -1901,6 +1989,208 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     return rv.release();
 #endif
+}
+
+static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
+        SimpleRefHolder<QoreStringNode>& value) {
+    assert(value && !value->empty());
+    if (!v) {
+        rv->setKeyValue(f, value.release(), xsink);
+    } else {
+        v.get<QoreStringNode>()->concat('\n');
+        v.get<QoreStringNode>()->concat(*value, xsink);
+        value->clear();
+    }
+}
+
+static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
+        SimpleRefHolder<QoreStringNode>& value) {
+    write_sse_key_value(xsink, rv, f, rv->getKeyValue(f), value);
+}
+
+static void write_sse_key(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
+        SimpleRefHolder<QoreStringNode>& value) {
+    QoreValue v = rv->getKeyValue(f);
+    if (!value || value->empty()) {
+        // if the field does not exist, set it to an empty string
+        if (!v) {
+            rv->setKeyValue(f, new QoreStringNode(QCS_UTF8), xsink);
+        }
+    } else {
+        write_sse_key_value(xsink, rv, f, v, value);
+    }
+}
+
+static bool sse_is_digits(const char* str) {
+    if (!str[0]) {
+        return false;
+    }
+    for (const char* p = str; *p; ++p) {
+        if (!isdigit(*p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+QoreHashNode* qore_socket_private::readServerSentEvent(ExceptionSink* xsink, Transform* transform, int timeout_ms) {
+    assert(xsink);
+
+    if (sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "readServerSentEvent", xsink);
+        return nullptr;
+    }
+    if (in_op >= 0) {
+        if (in_op == q_gettid()) {
+            se_in_op("Socket", "readServerSentEvent", xsink);
+            return nullptr;
+        }
+        se_in_op_thread("Socket", "readServerSentEvent", xsink);
+        return nullptr;
+    }
+
+    qore_socket_op_helper oh(this);
+
+    // event stream data is always UTF-8
+    QoreString str(QCS_UTF8);
+
+    int eol_count = 0;
+
+    size_t tbufsize = transform ? transform->outputBufferSize() : 0;
+    char* tbuf = tbufsize ? (char*)malloc(tbufsize * sizeof(char)) : nullptr;
+    ON_BLOCK_EXIT(free, tbuf);
+    size_t tlen = 0;
+    size_t tpos = 0;
+    // input buffer for transforms
+    QoreString cibuf;
+
+    while (true) {
+        char* cbuf;
+        ssize_t rc;
+        rc = brecv(xsink, "readServerSentEvent", cbuf, transform ? DEFAULT_SOCKET_BUFSIZE : 1, 0, timeout_ms, false);
+        if (rc <= 0) {
+            if (!*xsink) {
+                assert(!rc);
+                se_closed("Socket", "readServerSentEvent", xsink);
+            }
+            return 0;
+        }
+
+        char c;
+        // decompress data
+        if (transform) {
+            cibuf.concat(cbuf, rc);
+            if (tpos < tlen) {
+                c = tbuf[tpos++];
+            } else {
+                tpos = 0;
+                std::pair<int64, int64> i = transform->apply(cibuf.c_str(), cibuf.size(), tbuf, tbufsize, xsink);
+printd(0, "qore_socket_private::readServerSentEvent() cib: %p (%lld) (%s) tbuf: %p (%lld) read: %lld written: %lld\n", cibuf.c_str(), cibuf.size(), cibuf.c_str(), tbuf, tbufsize, i.first, i.second);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (i.first) {
+                    cibuf.removeBytes(i.first);
+                }
+                if (!i.second) {
+                    continue;
+                }
+                tlen = i.second;
+                c = tbuf[tpos++];
+            }
+        } else {
+            c = cbuf[0];
+        }
+
+        if (sse_got_cr) {
+            sse_got_cr = false;
+            if (c == '\n') {
+                continue;
+            }
+        }
+
+        if (c == '\r') {
+            str.concat('\n');
+            sse_got_cr = true;
+            if (++eol_count == 2) {
+                break;
+            }
+        } else if (c == '\n') {
+            str.concat('\n');
+            if (++eol_count == 2) {
+                break;
+            }
+        } else {
+            if (eol_count) {
+                eol_count = 0;
+            }
+            str.concat(c);
+        }
+    }
+    //printd(5, "readServerSentEvent: raw SSE message (" QSD " bytes): %s", str.strlen(), str.c_str());
+    return parseServerSentEvent(xsink, str);
+}
+
+QoreHashNode* qore_socket_private::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclSseMessageInfo, xsink), xsink);
+    assert(!*xsink);
+    SimpleRefHolder<QoreStringNode> field;
+    SimpleRefHolder<QoreStringNode> value;
+    int do_value = 0;
+    for (size_t i = 0, e = buf.size() - 1; i < e; ++i) {
+        char c = buf[i];
+        if (c == '\n') {
+            if (field && !field->empty()) {
+                if ((**field == "event") || (**field == "data")) {
+                    write_sse_key(xsink, rv, field->c_str(), value);
+                } else if (**field == "id") {
+                    if (value && !value->empty()) {
+                        write_sse_key_value(xsink, rv, "id", value);
+                    }
+                } else if (**field == "retry") {
+                    if (value && !value->empty() && sse_is_digits(value->c_str()) && !rv->getKeyValue("retry")) {
+                        rv->setKeyValue("retry", strtoll(value->c_str(), 0, 10), xsink);
+                    }
+                }
+                // ignore field data
+                field->clear();
+            }
+            if (value && !value->empty()) {
+                write_sse_key_value(xsink, rv, "comment", value);
+            }
+            if (do_value) {
+                do_value = 0;
+            }
+            continue;
+        }
+        if (!do_value && (c == ':')) {
+            do_value = 1;
+            continue;
+        }
+        if (do_value) {
+            if (!value) {
+                value = new QoreStringNode(QCS_UTF8);
+            }
+            // skip the first space after the colon
+            if (do_value == 1) {
+                do_value = 2;
+                if (c == ' ') {
+                    continue;
+                }
+            }
+            value->concat(c);
+            continue;
+        }
+        if (!field) {
+            field = new QoreStringNode(QCS_UTF8);
+        }
+        field->concat(c);
+    }
+
+    //QoreNodeAsStringHelper str(*rv, FMT_NORMAL, xsink);
+    //printd(0, "qore_socket_private::parseServerSentEvent() %s\n", str->c_str());
+
+    return rv.release();
 }
 
 void QoreSocket::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
@@ -2035,7 +2325,6 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             // close the local socket unconditionally
             qs.close();
-
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2053,8 +2342,8 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             // close the local socket unconditionally
             qs.close();
-            assert(*xsink);
-            rc = QSE_SSL_ERR;
+            // in case there is no exception when reading, the remote end closed the connection
+            rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
             qs.close();
@@ -2186,10 +2475,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
                 if (rc == -1) {
-                    xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
+                    xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                         "openssl library reported an I/O error while calling %s()", mname, get_action_method(action));
                 } else if (rc) {
-                    xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported " \
+                    xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported "
                         "error code %d in %s() but the error queue is empty", mname, rc, get_action_method(action));
                 }
             }
@@ -2200,9 +2489,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
         } else if (err == SSL_ERROR_SSL) {
             // close the socket unconditionally
             qs.close();
-            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
+            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
+            break;
         } else {
             //printd(5, "SSLSocketHelper::doSSLRW(buf: %p, size: %d, to: %d) rc: %d err: %d\n", buf, size, timeout_ms,
             //    rc, err);
@@ -2541,7 +2831,8 @@ AbstractPollState* QoreSocket::startConnect(ExceptionSink* xsink, const char* na
 #endif
 }
 
-AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey) {
+AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSslConnect", xsink);
         return nullptr;
@@ -2550,7 +2841,6 @@ AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, X509* cert,
         se_ssl_already_established("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-
     return new SocketConnectSslPollState(xsink, priv, cert, pkey);
 }
 
@@ -2590,7 +2880,6 @@ AbstractPollState* QoreSocket::startRecvPacket(ExceptionSink* xsink) {
     return new SocketRecvPacketPollState(xsink, priv);
 }
 
-#if 0
 AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startAccept", xsink);
@@ -2599,7 +2888,8 @@ AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
     return new SocketAcceptPollState(xsink, priv);
 }
 
-AbstractPollState* QoreSocket::startSslAccept(ExceptionSink* xsink, X509* cert, EVP_PKEY* pkey) {
+AbstractPollState* QoreSocket::startSslAccept(ExceptionSink* xsink, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSslAccept", xsink);
         return nullptr;
@@ -2610,7 +2900,6 @@ AbstractPollState* QoreSocket::startSslAccept(ExceptionSink* xsink, X509* cert, 
     }
     return new SocketAcceptSslPollState(xsink, priv, cert, pkey);
 }
-#endif
 
 // currently hardcoded to SOCK_STREAM (tcp-only)
 // opens and connects to a remote socket
@@ -2651,7 +2940,8 @@ int QoreSocket::connect(const char* name, ExceptionSink* xsink) {
 // * QoreSocket::connectSSL("hostname:<port_number>");
 // for AF_UNIX sockets:
 // * QoreSocket::connectSSL("filename");
-int QoreSocket::connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     const char* p;
     int rc;
 
@@ -2662,26 +2952,27 @@ int QoreSocket::connectSSL(const char* name, int timeout_ms, X509* cert, EVP_PKE
         if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
             host.terminate(host.strlen() - 1);
             //printd(5, "QoreSocket::connect(%s, %s) [ipv6]\n", host.c_str() + 1, service.c_str());
-            rc = connectINET2SSL(host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, timeout_ms,
-                cert, pkey, xsink);
+            rc = connectINET2SSL(xsink, host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, timeout_ms,
+                cert, pkey);
         } else {
-            rc = connectINET2SSL(host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms, cert,
-                pkey, xsink);
+            rc = connectINET2SSL(xsink, host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms, cert,
+                pkey);
         }
     } else {
         // else assume it's a file name for a UNIX domain socket
-        rc = connectUNIXSSL(name, SOCK_STREAM, 0, cert, pkey, xsink);
+        rc = connectUNIXSSL(xsink, name, SOCK_STREAM, 0, cert, pkey);
     }
 
     return rc;
 }
 
-int QoreSocket::connectSSL(const char* name, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
-   return connectSSL(name, -1, cert, pkey, xsink);
+int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
+   return connectSSL(xsink, name, -1, cert, pkey);
 }
 
-int QoreSocket::connectINETSSL(const char* host, int prt, int timeout_ms, X509* cert, EVP_PKEY* pkey,
-        ExceptionSink* xsink) {
+int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, int timeout_ms,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
     QoreString service;
     service.sprintf("%d", prt);
 
@@ -2689,29 +2980,30 @@ int QoreSocket::connectINETSSL(const char* host, int prt, int timeout_ms, X509* 
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectINETSSL", host, cert, pkey, timeout_ms, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectINETSSL", host, timeout_ms, cert, pkey);
 }
 
-int QoreSocket::connectINETSSL(const char* host, int prt, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
-   return connectINETSSL(host, prt, -1, cert, pkey, xsink);
+int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
+   return connectINETSSL(xsink, host, prt, -1, cert, pkey);
 }
 
-int QoreSocket::connectINET2SSL(const char* name, const char* service, int family, int sock_type, int protocol,
-        int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
+        int sock_type, int protocol, int timeout_ms, QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
     int rc = connectINET2(name, service, family, sock_type, protocol, timeout_ms, xsink);
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectINET2SSL", name, cert, pkey, timeout_ms, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectINET2SSL", name, timeout_ms, cert, pkey);
 }
 
-int QoreSocket::connectUNIXSSL(const char* p, int sock_type, int protocol, X509* cert, EVP_PKEY* pkey,
-        ExceptionSink* xsink) {
+int QoreSocket::connectUNIXSSL(ExceptionSink* xsink, const char* p, int sock_type, int protocol,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
     int rc = connectUNIX(p, sock_type, protocol, xsink);
     if (rc) {
         return rc;
     }
-    return priv->upgradeClientToSSLIntern("connectUNIXSSL", nullptr, cert, pkey, -1, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "connectUNIXSSL", nullptr, -1, cert, pkey);
 }
 
 int QoreSocket::sendi1(char i) {
@@ -3335,6 +3627,27 @@ QoreHashNode* QoreSocket::readHTTPChunkedBody(int timeout, ExceptionSink* xsink,
     return priv->readHttpChunkedBody(timeout, xsink, "Socket", source);
 }
 
+QoreHashNode* QoreSocket::readHttpChunk(int timeout, ExceptionSink* xsink) {
+    return priv->readHttpChunkedBodyBinary(timeout, xsink, "Socket", QORE_SOURCE_SOCKET, nullptr, nullptr, nullptr,
+        nullptr, true);
+}
+
+QoreHashNode* QoreSocket::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
+    return qore_socket_private::parseServerSentEvent(xsink, buf);
+}
+
+QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms) {
+    if (content_encoding && (*content_encoding != "identity")) {
+        SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(content_encoding, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        return priv->readServerSentEvent(xsink, *t, timeout_ms);
+    }
+    return priv->readServerSentEvent(xsink, nullptr, timeout_ms);
+}
+
 bool QoreSocket::isDataAvailable(int timeout) const {
     ExceptionSink xsink;
     int rc = priv->isDataAvailable(timeout, "isDataAvailable", &xsink);
@@ -3370,44 +3683,28 @@ int QoreSocket::asyncIoWait(int timeout_ms, bool read, bool write) const {
     return rc;
 }
 
-int QoreSocket::upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "upgradeClientToSSL", xsink);
         return -1;
     }
-    if (priv->ssl)
+    if (priv->ssl) {
         return 0;
-    return priv->upgradeClientToSSLIntern("upgradeClientToSSL", nullptr, cert, pkey, -1, xsink);
-}
-
-int QoreSocket::upgradeClientToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink) {
-    if (priv->sock == QORE_INVALID_SOCKET) {
-        se_not_open("Socket", "upgradeClientToSSL", xsink);
-        return -1;
     }
-    if (priv->ssl)
-        return 0;
-    return priv->upgradeClientToSSLIntern("upgradeClientToSSL", nullptr, cert, pkey, timeout_ms, xsink);
+    return priv->upgradeClientToSSLIntern(xsink, "upgradeClientToSSL", nullptr, timeout_ms, cert, pkey);
 }
 
-int QoreSocket::upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+int QoreSocket::upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "upgradeServerToSSL", xsink);
         return -1;
     }
-    if (priv->ssl)
+    if (priv->ssl) {
         return 0;
-    return priv->upgradeServerToSSLIntern("upgradeServerToSSL", cert, pkey, -1, xsink);
-}
-
-int QoreSocket::upgradeServerToSSL(X509* cert, EVP_PKEY* pkey, int timeout_ms, ExceptionSink* xsink) {
-    if (priv->sock == QORE_INVALID_SOCKET) {
-        se_not_open("Socket", "upgradeServerToSSL", xsink);
-        return -1;
     }
-    if (priv->ssl)
-        return 0;
-    return priv->upgradeServerToSSLIntern("upgradeServerToSSL", cert, pkey, timeout_ms, xsink);
+    return priv->upgradeServerToSSLIntern(xsink, "upgradeServerToSSL", timeout_ms, cert, pkey);
 }
 
 /* currently hardcoded to SOCK_STREAM (tcp-only)
@@ -3453,7 +3750,8 @@ int QoreSocket::bindUNIX(const char* name, int socktype, int protocol, Exception
    return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
-int QoreSocket::bindINET(const char* name, const char* service, bool reuseaddr, int family, int socktype, int protocol, ExceptionSink* xsink) {
+int QoreSocket::bindINET(const char* name, const char* service, bool reuseaddr, int family, int socktype,
+        int protocol, ExceptionSink* xsink) {
    return priv->bindINET(xsink, name, service, reuseaddr, family, socktype, protocol);
 }
 
@@ -3490,7 +3788,8 @@ int QoreSocket::bind(const char* iface, int prt, bool reuseaddr) {
 // to bind an INET socket to a particular address
 int QoreSocket::bind(const struct sockaddr *addr, int size) {
     // close if it's already been opened as an INET socket or with different parameters
-    if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != AF_INET || priv->stype != SOCK_STREAM || priv->sprot != 0))
+    if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != AF_INET || priv->stype != SOCK_STREAM
+        || priv->sprot != 0))
         close();
 
     // try to open socket if necessary
@@ -3516,7 +3815,8 @@ int QoreSocket::bind(int family, const struct sockaddr *addr, int size, int sock
     sock_type = q_get_sock_type(sock_type);
 
     // close if it's already been opened as an INET socket or with different parameters
-    if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != family || priv->stype != sock_type || priv->sprot != protocol))
+    if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != family || priv->stype != sock_type
+        || priv->sprot != protocol))
         close();
 
     // try to open socket if necessary
@@ -3566,7 +3866,8 @@ QoreSocket* QoreSocket::accept(SocketSource* source, ExceptionSink* xsink) {
 
 // QoreSocket::acceptSSL()
 // accepts a new connection, negotiates an SSL connection, and returns the new socket
-QoreSocket* QoreSocket::acceptSSL(SocketSource* source, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     QoreSocket* s = accept(source, xsink);
     if (!s)
         return nullptr;
@@ -3576,7 +3877,7 @@ QoreSocket* QoreSocket::acceptSSL(SocketSource* source, X509* cert, EVP_PKEY* pk
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
-    if (s->priv->upgradeServerToSSLIntern("acceptSSL", cert, pkey, -1, xsink)) {
+    if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", -1, cert, pkey)) {
         assert(*xsink);
         delete s;
         return nullptr;
@@ -3597,6 +3898,7 @@ int QoreSocket::acceptAndReplace(SocketSource* source) {
         return -1;
 
     priv->close_internal();
+    assert(priv->sock == QORE_INVALID_SOCKET);
     priv->sock = rc;
     return 0;
 }
@@ -3619,7 +3921,8 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
     return s;
 }
 
-QoreSocket* QoreSocket::acceptSSL(int timeout_ms, X509* cert, EVP_PKEY* pkey, ExceptionSink* xsink) {
+QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
     std::unique_ptr<QoreSocket> s(accept(timeout_ms, xsink));
     if (!s.get())
         return nullptr;
@@ -3629,7 +3932,7 @@ QoreSocket* QoreSocket::acceptSSL(int timeout_ms, X509* cert, EVP_PKEY* pkey, Ex
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
-    if (s->priv->upgradeServerToSSLIntern("acceptSSL", cert, pkey, timeout_ms, xsink)) {
+    if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", timeout_ms, cert, pkey)) {
         assert(*xsink);
         return nullptr;
     }
@@ -3643,6 +3946,7 @@ int QoreSocket::acceptAndReplace(int timeout_ms, ExceptionSink* xsink) {
         return -1;
 
     priv->close_internal();
+    assert(priv->sock == QORE_INVALID_SOCKET);
     priv->sock = rc;
     return 0;
 }
@@ -3877,7 +4181,7 @@ void QoreSocketThroughputHelper::finalize(int64 bytes) {
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock) : sock(sock) {
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
     sgoal = ssl ? SPG_CONNECT_SSL : SPG_CONNECT;
 
     AutoLocker al(sock->priv->m);
@@ -3968,6 +4272,11 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
             break;
         }
 
+        case SPS_NONE: {
+            // aborted
+            break;
+        }
+
         default:
             assert(false);
     }
@@ -3997,9 +4306,7 @@ int SocketConnectPollOperation::startSslConnect(ExceptionSink* xsink) {
 
     state = SPS_CONNECTING_SSL;
 
-    poll_state.reset(sock->priv->socket->startSslConnect(xsink,
-        sock->priv->cert ? sock->priv->cert->getData() : nullptr,
-        sock->priv->pk ? sock->priv->pk->getData() : nullptr));
+    poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
     if (*xsink) {
         poll_state.reset();
         state = SPS_NONE;
@@ -4029,8 +4336,172 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
+SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketAcceptPollSocketOperationBase(sock) {
+    sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
+
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer valid
+    if (sock->priv->checkValid(xsink)) {
+        return;
+    }
+
+    if (preVerify(xsink)) {
+        return;
+    }
+    if (!sock->priv->setNonBlock(xsink)) {
+        set_non_block = true;
+        poll_state.reset(sock->priv->socket->startAccept(xsink));
+        if (!*xsink) {
+            assert(poll_state);
+            state = SPS_ACCEPTING;
+        }
+        if (*xsink) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+}
+
+QoreHashNode* SocketAcceptPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = nullptr;
+
+    AutoLocker al(sock->priv->m);
+
+    if (state == SPS_ACCEPTED) {
+        // throw an exception and exit if the object is no longer valid
+        if (sock->priv->checkValid(xsink)) {
+            return nullptr;
+        }
+    } else {
+        // throw an exception and exit if the object is no longer open or valid
+        if (sock->priv->checkOpen(xsink)) {
+            return nullptr;
+        }
+    }
+
+    switch (state) {
+        case SPS_ACCEPTING: {
+            int rc = checkContinuePoll(xsink);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+
+            // if we are just accepting, we are done
+            if (sgoal == SPG_ACCEPT) {
+                // SPS_ACCEPTED set below
+                break;
+            }
+
+            assert(sgoal == SPG_ACCEPT_SSL);
+
+            if (startSslAccept(xsink)) {
+                break;
+            }
+        }
+        // fall down to next case
+
+        case SPS_ACCEPTING_SSL: {
+            int rc = checkContinuePoll(xsink);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+
+            // SPS_ACCEPTED set below
+            break;
+        }
+
+        case SPS_ACCEPTED: {
+            break;
+        }
+
+        case SPS_NONE: {
+            // aborted
+            break;
+        }
+
+        default:
+            assert(false);
+    }
+
+    if (!rv) {
+        if (*xsink) {
+            state = SPS_NONE;
+        } else {
+            accepted();
+        }
+        sock->priv->clearNonBlock();
+    } else {
+        assert(!*xsink);
+    }
+    return rv;
+}
+
+void SocketAcceptPollOperation::accepted() {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+    state = SPS_ACCEPTED;
+}
+
+int SocketAcceptPollOperation::startSslAccept(ExceptionSink* xsink) {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+
+    state = SPS_ACCEPTING_SSL;
+
+    assert(accepted_socket);
+    // we have the original socket locked, but do the SSL accept operation on the new socket without any locks,
+    // however, since no one else can access it yet, this is safe
+    poll_state.reset(accepted_socket->priv->socket->startSslAccept(xsink, accepted_socket->priv->cert,
+            accepted_socket->priv->pk));
+    if (*xsink) {
+        poll_state.reset();
+        state = SPS_NONE;
+        return -1;
+    }
+    return 0;
+}
+
+int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
+    // socket lock must be held here
+    assert(sock->priv->m.trylock());
+    assert(poll_state.get());
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    //printd(5, "SocketAcceptPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(), rc,
+    //    (int)*xsink);
+    if (*xsink) {
+        assert(rc < 0);
+        state = SPS_NONE;
+        return -1;
+    }
+    if (!rc) {
+        if (state == SPS_ACCEPTING) {
+            // save socket info for getOutput() value
+            assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
+            int descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+            accepted_socket = new QoreSocketObject(*sock, descriptor);
+        }
+        // release the AbstractPollState value
+        poll_state.reset();
+    }
+    return rc;
+}
+
+QoreValue SocketAcceptPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    if (accepted_socket) {
+        return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
+    }
+    return QoreValue();
+}
+
 SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : sock(sock) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
@@ -4042,9 +4513,7 @@ SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(Excepti
     if (!sock->priv->setNonBlock(xsink)) {
         set_non_block = true;
 
-        poll_state.reset(sock->priv->socket->startSslConnect(xsink,
-            sock->priv->cert ? sock->priv->cert->getData() : nullptr,
-            sock->priv->pk ? sock->priv->pk->getData() : nullptr));
+        poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
         if (*xsink) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -4086,8 +4555,63 @@ QoreHashNode* SocketUpgradeClientSslPollOperation::continuePoll(ExceptionSink* x
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketUpgradeServerSslPollOperation::SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
+    // been established
+    if (sock->priv->checkOpenAndNotSsl(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        set_non_block = true;
+
+        poll_state.reset(sock->priv->socket->startSslAccept(xsink, sock->priv->cert, sock->priv->pk));
+        if (*xsink) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+}
+
+QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (done) {
+        return nullptr;
+    }
+
+    // throw an exception and exit if the object is no longer open and valid
+    if (sock->priv->checkOpen(xsink)) {
+        return nullptr;
+    }
+
+    assert(poll_state);
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    //printd(5, "SocketUpgradeServerSslPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(),
+    //    rc, (int)*xsink);
+    if (*xsink) {
+        assert(rc < 0);
+        return nullptr;
+    }
+    if (!rc) {
+        // release the AbstractPollState value
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        done = true;
+        return nullptr;
+    }
+
+    return getSocketPollInfoHash(xsink, rc);
+}
+
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)
-        : data(data), sock(sock), buf(data->c_str()), size(data->size()) {
+        : SocketPollSocketOperationBase(sock), data(data), buf(data->c_str()), size(data->size()) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -4107,7 +4631,7 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStrin
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock)
-        : data(data), sock(sock), buf(reinterpret_cast<const char*>(data->getPtr())),
+        : SocketPollSocketOperationBase(sock), data(data), buf(reinterpret_cast<const char*>(data->getPtr())),
         size(data->size()) {
     AutoLocker al(sock->priv->m);
 
@@ -4124,6 +4648,14 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNod
             set_non_block = true;
         }
     }
+}
+
+bool SocketSendPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketSendPollState*>(poll_state.get())->getBytesSent() ? true : false;
+    }
+    return true;
 }
 
 QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -4224,6 +4756,14 @@ SocketRecvDataPollOperation::SocketRecvDataPollOperation(ExceptionSink* xsink, Q
     }
 }
 
+bool SocketRecvDataPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvPacketPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPacketPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
+}
+
 SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string)
         : SocketRecvPollOperationBase(sock, to_string), size(size) {
     AutoLocker al(sock->priv->m);
@@ -4237,6 +4777,14 @@ SocketRecvPollOperation::SocketRecvPollOperation(ExceptionSink* xsink, ssize_t s
         sock->priv->clearNonBlock();
         set_non_block = false;
     }
+}
+
+bool SocketRecvPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
 }
 
 SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
@@ -4253,4 +4801,59 @@ SocketRecvUntilBytesPollOperation::SocketRecvUntilBytesPollOperation(ExceptionSi
         sock->priv->clearNonBlock();
         set_non_block = false;
     }
+}
+
+bool SocketRecvUntilBytesPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
+}
+
+SocketReadHttpHeaderPollOperation::SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketRecvPollOperationBase(sock, true), out(xsink) {
+    AutoLocker al(sock->priv->m);
+    if (initIntern(xsink)) {
+        return;
+    }
+
+    poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+    if (*xsink) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+    }
+}
+
+QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = SocketRecvPollOperationBase::continuePoll(xsink);
+    if (rv || !data) {
+        return rv;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    assert(data->getType() == NT_STRING);
+    SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
+    ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
+        QORE_SOURCE_SOCKET), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+    out->setKeyValue("hdr", hdr.release(), xsink);
+    out->setKeyValue("info", info.release(), xsink);
+    return out.release();
+}
+
+QoreValue SocketReadHttpHeaderPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    return out.release();
+}
+
+bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
 }

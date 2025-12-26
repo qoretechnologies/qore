@@ -17,8 +17,8 @@ class DateTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DateTest", "1.0") {
-        addTestCase("subtraction", \subtractionTests());
         addTestCase("DateTests", \dateTests());
+        addTestCase("subtraction", \subtractionTests());
         addTestCase("TimeZoneTests", \timeZoneTests());
         addTestCase("WindowsTimeZoneTests", \windowsTimeZoneTests());
         addTestCase("issue 2546", \issue2546());
@@ -32,6 +32,16 @@ class DateTest inherits QUnit::Test {
     }
 
     dateTests() {
+        assertEq(1737461067, 2025-01-21T13:04:27.123456.getEpochSeconds());
+        assertEq(1737461067123, 2025-01-21T13:04:27.123456.getEpochMilliseconds());
+        assertEq(1737461067123456, 2025-01-21T13:04:27.123456.getEpochMicroseconds());
+
+        assertEq(1737461067, get_epoch_seconds(2025-01-21T13:04:27.123456));
+        assertEq(1737461067123, get_epoch_milliseconds(2025-01-21T13:04:27.123456));
+        assertEq(1737461067123456, get_epoch_microseconds(2025-01-21T13:04:27.123456));
+
+        assertLe(10000, (now_us() + 10s).durationMilliseconds());
+
         # issue #3239: test invalid year masks
         assertThrows("INVALID-DATE", \date(), ("01-03-218", "DD-MM-YYYY"));
         assertThrows("INVALID-DATE", \date(), ("01-03-2", "DD-MM-YY"));
@@ -243,6 +253,7 @@ class DateTest inherits QUnit::Test {
 
         date1 = 2018-03-10T05:39:57Z;
         assertEq("2018-03-10 05:39:57+00:00", date1.format("YYYY-MM-DD HH:mm:SSZ"));
+        assertEq("2018-03-10T05:39:57Z", date1.format("YYYY-MM-DDTHH:mm:SS@"));
 
         # issue #2716 & #2721
         # test the "IF" format
@@ -282,7 +293,9 @@ class DateTest inherits QUnit::Test {
         {
             date now = Qore::now();
             string region = now.info().zone.region();
-            assertEq(2, region.split("/").size());
+            on_error printf("region: %y\n", region);
+            # note that region() can return an absolute path to the region file
+            assertGe(2, region.split("/").size());
             assertEq(now, Serializable::deserialize(Serializable::serialize(now)));
         }
     }

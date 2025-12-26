@@ -252,6 +252,7 @@
 #include "UnicodeCharacterIterator.cpp"
 #include "QoreEllipsesNode.cpp"
 #include "QoreRegexInterface.cpp"
+#include "QoreThreadLocalStorage.cpp"
 #include "ql_thread.cpp"
 #include "ql_time.cpp"
 #include "ql_lib.cpp"

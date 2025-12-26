@@ -51,6 +51,25 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
         self.bulk = bulk;
     }
 
+    #! Returns the 'requires_result' flag
+    bool requiresResult() {
+        return bulk.requires_result;
+    }
+
+    #! Returns the 'max_records' value
+    *int getMaxRecords() {
+        return bulk.max_records;
+    }
+
+    #! Returns the number of records retrieved from the data provider so far
+    /** @return the number of records retrieved from the data provider so far
+
+        @note Does not match the number of records returned by this iterator when iterating a record block
+    */
+    int getRecordCount() {
+        return bulk.record_count;
+    }
+
     #! Returns @ref True as the iterator supports bulk operation
     /** @return @ref True as the iterator supports bulk operation
     */
@@ -59,9 +78,11 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     }
 
     #! Returns the bulk data interface
-    /** @return the bulk data interface
+    /** @param block_size ignored in this implementation
+
+        @return the bulk data interface
     */
-    *AbstractDataProviderBulkRecordInterface getBulkApi() {
+    *AbstractDataProviderBulkRecordInterface getBulkApi(*int block_size) {
         return bulk;
     }
 
@@ -80,6 +101,9 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
 
         @return @ref False if there are no more elements (in which case the iterator object is invalid and should not
         be used); @ref True if successful (meaning that the iterator object is valid)
+
+        @throw NO-DATA no data available to return and \c requires_result is set
+        @throw MAX-RECORDS-EXCEEDED the maximum number of records has been exceeded as set by \c max_records
 
         @par Example:
         @code{.py}
@@ -112,7 +136,7 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     */
     hash<auto> getValue() {
         if (!i) {
-            throw "INVALID-ITERATOR", sprintf("call %s::next() to advance the %y iterator before calling "
+            throw "INVALID-ITERATOR", sprintf("Call %s::next() to advance the %y iterator before calling "
                 "%s::getValue()", self.className(), bulk.className(), self.className());
         }
         return i.getValue();
@@ -123,6 +147,10 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     */
     *hash<string, AbstractDataField> getRecordType() {
         return bulk.getRecordType();
+    }
+
+    #! This method is never called by this implementation
+    private bool nextImpl() {
     }
 }
 }

@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,11 +36,13 @@
 #include "QC_LoggerEvent.h"
 
 QoreLoggerAppender::QoreLoggerAppender(ExceptionSink* xsink, QoreObject* self) : self(self) {
+    setupMethods();
     setDirect(xsink);
 }
 
 QoreLoggerAppender::QoreLoggerAppender(ExceptionSink* xsink, QoreObject* self, const QoreStringNode* n) : self(self),
         name(n->stringRefSelf()) {
+    setupMethods();
     setDirect(xsink);
 }
 
@@ -279,7 +281,7 @@ bool QoreLoggerAppender::pushEventLocked(ExceptionSink* xsink, int64 type, QoreV
 
     @return True if the event has been posted, @ref False if not (filtered out, appender inactive,
     event not accepted on queue, etc)
-*/
+ */
  bool QoreLoggerAppender::post(ExceptionSink* xsink, const QoreObject* event, QoreLoggerEvent* e) {
     // optimistically create method argument list
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -333,7 +335,7 @@ bool QoreLoggerAppender::pushEventLocked(ExceptionSink* xsink, int64 type, QoreV
     }
     if (!al) {
         QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
-        v = self->evalMethod("serializeImpl", *args, xsink);
+        v = self->evalMethod(*serializeImplMeth, *args, xsink);
     }
     if (*xsink || !v) {
         return false;
@@ -345,7 +347,7 @@ bool QoreLoggerAppender::pushEventLocked(ExceptionSink* xsink, int64 type, QoreV
         args->push(EVENT_LOG, xsink);
         args->push(v.release(), xsink);
         QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
-        v = self->evalMethod("pushEvent", *args, xsink);
+        v = self->evalMethod(*pushEventMeth, *args, xsink);
         return v->getAsBool();
     }
 }
@@ -359,13 +361,13 @@ void QoreLoggerAppender::processEvent(int type, const QoreValue params, Exceptio
     if (!direct_ensure_atomic_operations) {
         margs->push(type, xsink);
         QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
-        holder0 = self->evalMethod("ensureAtomicOperations", *margs, xsink);
+        holder0 = self->evalMethod(*ensureAtomicOperationsMeth, *margs, xsink);
         margs = new QoreListNode(autoTypeInfo);
     }
     margs->push(type, xsink);
     margs->push(params.refSelf(), xsink);
     QoreObjectContextHelper och(self, QC_LOGGERAPPENDER);
-    self->evalMethod("processEventImpl", *margs, xsink).discard(xsink);
+    self->evalMethod(*processEventImplMeth, *margs, xsink).discard(xsink);
 }
 
 void QoreLoggerAppender::derefIntern(ExceptionSink* xsink) {
@@ -378,4 +380,16 @@ void QoreLoggerAppender::derefIntern(ExceptionSink* xsink) {
     if (al) {
         al->deref(xsink);
     }
+}
+
+void QoreLoggerAppender::setupMethods() {
+    const QoreClass* cls = self->getClass();
+    serializeImplMeth = cls->findMethod("serializeImpl");
+    assert(serializeImplMeth);
+    pushEventMeth = cls->findMethod("pushEvent");
+    assert(pushEventMeth);
+    ensureAtomicOperationsMeth = cls->findMethod("ensureAtomicOperations");
+    assert(ensureAtomicOperationsMeth);
+    processEventImplMeth = cls->findMethod("processEventImpl");
+    assert(processEventImplMeth);
 }

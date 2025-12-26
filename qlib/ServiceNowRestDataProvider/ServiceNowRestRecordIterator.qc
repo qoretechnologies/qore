@@ -51,7 +51,8 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
         @param search_options search options; assumed to have already been processed for validity before this call
     */
     constructor(ServiceNowRestClient::ServiceNowRestClient rest, string name,
-            hash<ServiceNowRestRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options) {
+            hash<ServiceNowRestRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
         self.name = name;
         self.record_info = record_info;
@@ -81,17 +82,6 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
     */
     bool valid() {
         return i.valid();
-    }
-
-    #! Increments the row pointer when retrieving rows from a select statement; returns @ref True if there is a row to retrieve, @ref False if not
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
-
-        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
-        docs for more information
-    */
-    bool next() {
-        return i.next();
     }
 
     #! Returns a single record if the iterator is valid
@@ -293,6 +283,17 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
         }
 
         return value.toString();
+    }
+
+    #! Increments the row pointer when retrieving rows from a select statement
+    /**
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+
+        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
+        docs for more information
+    */
+    private bool nextImpl() {
+        return i.next();
     }
 }
 }

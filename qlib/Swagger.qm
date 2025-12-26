@@ -48,11 +48,12 @@
 %requires(reexport) HttpServerUtil >= 0.3.12
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires(reexport) FileLocationHandler
+%requires(reexport) DataProvider >= 3.0
 
 %allow-weak-references
 
 module Swagger {
-    version = "2.2.2";
+    version = "2.2.3";
     desc = "Swagger module providing functionality for Swagger 2.0 schema definitions";
     author = "Ondrej Musil <ondrej.musil@qoretechnologies.com>, David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -152,126 +153,130 @@ RestHandler handler(NOTHING, swagger);
 
     @section swagger_relnotes Swagger Module Release Notes
 
+    @subsection swagger_2_2_3 Swagger v2.2.3
+    - improved parsing Swagger schemas with type errors
+
     @subsection swagger_2_2_2 Swagger v2.2.2
     - fixed handling type declarations with unknown format values
-      (<a href="https://github.com/qorelanguage/qore/issues/4907">issue 4907</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4907">issue 4907</a>)
     - fixed validating Swagger schemas with objects that declare no properties
-      (<a href="https://github.com/qorelanguage/qore/issues/4906">issue 4906</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4906">issue 4906</a>)
+    - implemented the \c utc_dates and \c query_date_format options
 
     @subsection swagger_2_2_1 Swagger v2.2.1
     - fixed a bug converting arguments to fit the Swagger schema to avoid spurious and very difficult to debug type
       errors
-      (<a href="https://github.com/qorelanguage/qore/issues/4825">issue 4825</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4825">issue 4825</a>)
     - fixed a bug where any additionalProperties would cause all properties to be accepted
-      (<a href="https://github.com/qorelanguage/qore/issues/4823">issue 4823</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4823">issue 4823</a>)
     - fixed support of nullable object properties
-      (<a href="https://github.com/qorelanguage/qore/issues/4854">issue 4854</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4854">issue 4854</a>)
 
     @subsection swagger_2_2 Swagger v2.2
     - implemented lax mode parsing for Swagger schemas with common errors to work
-      (<a href="https://github.com/qorelanguage/qore/issues/4741">issue 4741</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
     @subsection swagger_2_1_1 Swagger v2.1.1
     - do not require \c items for arrays not describing a body parameter
-      (<a href="https://github.com/qorelanguage/qore/issues/4730">issue 4730</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4730">issue 4730</a>)
     - ensure that URI paths are created without duplicated slashes by handling the base path consistently
-      (<a href="https://github.com/qorelanguage/qore/issues/4728">issue 4728</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4728">issue 4728</a>)
 
     @subsection swagger_2_1 Swagger v2.1
     - parse and report path arguments when processing REST requests on the server side
-      (<a href="https://github.com/qorelanguage/qore/issues/4661">issue 4661</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4661">issue 4661</a>)
 
     @subsection swagger_2_0_10 Swagger v2.0.10
     - REST handlers must throw a \c DESERIALIZATION-ERROR when deserialization errors occur, so that a
       <tt>400 Bad Request</tt> response is returned
-      (<a href="https://github.com/qorelanguage/qore/issues/4647">issue 4647</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4647">issue 4647</a>)
     - do not reserialize already deserialized data when processing responses
-      (<a href="https://github.com/qorelanguage/qore/issues/4640">issue 4640</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4640">issue 4640</a>)
     - allow for the client's time zone locale to be set for data serialization / deserialization
-      (<a href="https://github.com/qorelanguage/qore/issues/4639">issue 4639</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4639">issue 4639</a>)
 
     @subsection swagger_2_0_9 Swagger v2.0.9
     - fixed a bug where empty definitions could be ignored
-      (<a href="https://github.com/qorelanguage/qore/issues/4545">issue 4545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4545">issue 4545</a>)
 
     @subsection swagger_2_0_8 Swagger v2.0.8
     - do not raise a validation error when a response with an unknown code has a message body; this hides the true
       error message from the caller in case of error messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4534">issue 4534</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4534">issue 4534</a>)
     - allow a logger to be set in validators
-      (<a href="https://github.com/qorelanguage/qore/issues/4509">issue 4509</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
     @subsection swagger_2_0_7 Swagger v2.0.7
     - fixed a bug where global \c consumes and \c produces declarations were not respected
-      (<a href="https://github.com/qorelanguage/qore/issues/4494">issue 4494</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4494">issue 4494</a>)
 
     @subsection swagger_2_0_6 Swagger v2.0.6
     - fixed a bug where schemas with recursive references could not be loaded
-      (<a href="https://github.com/qorelanguage/qore/issues/4350">issue 4350</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4350">issue 4350</a>)
 
     @subsection swagger_2_0_5 Swagger v2.0.5
     - fixed a bug where unknown string format types were not ignored but instead caused an exception to be thrown
-      (<a href="https://github.com/qorelanguage/qore/issues/4203">issue 4203</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4203">issue 4203</a>)
 
     @subsection swagger_2_0_4 Swagger v2.0.4
     - fixed a type error in @ref Swagger::Swagger::getBasePath() "Swagger::getBasePath()" for the case when the base
       path is not set
-      (<a href="https://github.com/qorelanguage/qore/issues/4064">issue 4064</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4064">issue 4064</a>)
 
     @subsection swagger_2_0_3 Swagger v2.0.3
     - fixed a bug supporting number formats
-      (<a href="https://github.com/qorelanguage/qore/issues/3979">issue 3979</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3979">issue 3979</a>)
 
     @subsection swagger_2_0_2 Swagger v2.0.2
     - fixed \c date-time value handling
-      (<a href="https://github.com/qorelanguage/qore/issues/3847">issue 3847</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3847">issue 3847</a>)
     - fixed a bug where sibling elements to a \c "$ref" were not ignored (see
       <a href="https://swagger.io/docs/specification/using-ref/">https://swagger.io/docs/specification/using-ref/</a>)
-      (<a href="https://github.com/qorelanguage/qore/issues/3843">issue 3843</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3843">issue 3843</a>)
     - fixed support for query parameters of type object
-      (<a href="https://github.com/qorelanguage/qore/issues/3799">issue 3799</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3799">issue 3799</a>)
 
     @subsection swagger_2_0_1 Swagger v2.0.1
     - added support for the <tt>x-nullable</tt> attribute to allow for nullable values
-      (<a href="https://github.com/qorelanguage/qore/issues/3785">issue 3785</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3785">issue 3785</a>)
     - added location support from the @ref filelocationhandlerintro "FileLocationHandler" module
-      (<a href="https://github.com/qorelanguage/qore/issues/3781">issue 3781</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3781">issue 3781</a>)
     - fixed support for types with no type declaration
-      (<a href="https://github.com/qorelanguage/qore/issues/3775">issue 3775</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3775">issue 3775</a>)
 
     @subsection swagger_2_0 Swagger v2.0
     - fixed support for additional YAML MIME types
-      (<a href="https://github.com/qorelanguage/qore/issues/3699">issue 3699</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3699">issue 3699</a>)
     - implemented support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection swagger_1_1_0 Swagger v1.1.0
     - fixed accepting multipart/form-data content-type and also working with list and hash parameters
-      (<a href="https://github.com/qorelanguage/qore/issues/2932">issue 2932</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2932">issue 2932</a>)
 
     @subsection swagger_1_0_2 Swagger v1.0.2
     - fixed sending of simple string responses to use text/plain Content-Type if possible
-      (<a href="https://github.com/qorelanguage/qore/issues/2893">issue 2893</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2893">issue 2893</a>)
     - fixed checking of response body in case response schema is not present
-      (<a href="https://github.com/qorelanguage/qore/issues/2894">issue 2894</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2894">issue 2894</a>)
 
     @subsection swagger_1_0_1 Swagger v1.0.1
-    - fixed handling of string type date and date-time formats (<a href="https://github.com/qorelanguage/qore/issues/2341">issue 2341</a>)
-    - fixed example value for binary type (<a href="https://github.com/qorelanguage/qore/issues/2342">issue 2342</a>)
-    - fixed serialization of date/time values (<a href="https://github.com/qorelanguage/qore/issues/2349">issue 2349</a>)
-    - fixed handling of non-string enum types (<a href="https://github.com/qorelanguage/qore/issues/2364">issue 2364</a>)
-    - fixed confusing error messages with invalid parameter types (<a href="https://github.com/qorelanguage/qore/issues/2365">issue 2365</a>)
-    - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qorelanguage/qore/issues/2366">issue 2366</a>)
-    - fixed handling of optional parameters (<a href="https://github.com/qorelanguage/qore/issues/2369">issue 2369</a>)
-    - fixed handling of non-string query parameters (<a href="https://github.com/qorelanguage/qore/issues/2388">issue 2388</a>)
-    - fixed a bug where string value constraints were only enforced in requests but not responses (<a href="https://github.com/qorelanguage/qore/issues/2396">issue 2396</a>)
-    - fixed a bug where invalid date, binary, and byte values would cause a <tt>500 Internal Server Error</tt> response to be returned instead of a <tt>400 Bad Request</tt> error (<a href="https://github.com/qorelanguage/qore/issues/2397">issue 2397</a>)
-    - fixed a bug where date values were formatted incorrectly in Swagger responses (<a href="https://github.com/qorelanguage/qore/issues/2409">issue 2409</a>)
-    - fixed a bug which made it impossible to send data with other content/mime types than json, yamlrpc, FormUrlEncoded or MultipartFormData (<a href="https://github.com/qorelanguage/qore/issues/2497">issue 2497</a>)
-    - fixed handling of string/binary values (<a href="https://github.com/qorelanguage/qore/issues/2505">issue 2505</a>)
-    - fixed a bug where consumes property of operations was sometimes ignored (<a href="https://github.com/qorelanguage/qore/issues/2507">issue 2507</a>)
-    - fixed parsing of responses without Content-Type header (<a href="https://github.com/qorelanguage/qore/issues/2517">issue 2517</a>)
-    - fixed path matching for paths not beginning with a slash (<a href="https://github.com/qorelanguage/qore/issues/2516">issue 2516</a>)
+    - fixed handling of string type date and date-time formats (<a href="https://github.com/qoretechnologies/qore/issues/2341">issue 2341</a>)
+    - fixed example value for binary type (<a href="https://github.com/qoretechnologies/qore/issues/2342">issue 2342</a>)
+    - fixed serialization of date/time values (<a href="https://github.com/qoretechnologies/qore/issues/2349">issue 2349</a>)
+    - fixed handling of non-string enum types (<a href="https://github.com/qoretechnologies/qore/issues/2364">issue 2364</a>)
+    - fixed confusing error messages with invalid parameter types (<a href="https://github.com/qoretechnologies/qore/issues/2365">issue 2365</a>)
+    - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qoretechnologies/qore/issues/2366">issue 2366</a>)
+    - fixed handling of optional parameters (<a href="https://github.com/qoretechnologies/qore/issues/2369">issue 2369</a>)
+    - fixed handling of non-string query parameters (<a href="https://github.com/qoretechnologies/qore/issues/2388">issue 2388</a>)
+    - fixed a bug where string value constraints were only enforced in requests but not responses (<a href="https://github.com/qoretechnologies/qore/issues/2396">issue 2396</a>)
+    - fixed a bug where invalid date, binary, and byte values would cause a <tt>500 Internal Server Error</tt> response to be returned instead of a <tt>400 Bad Request</tt> error (<a href="https://github.com/qoretechnologies/qore/issues/2397">issue 2397</a>)
+    - fixed a bug where date values were formatted incorrectly in Swagger responses (<a href="https://github.com/qoretechnologies/qore/issues/2409">issue 2409</a>)
+    - fixed a bug which made it impossible to send data with other content/mime types than json, yamlrpc, FormUrlEncoded or MultipartFormData (<a href="https://github.com/qoretechnologies/qore/issues/2497">issue 2497</a>)
+    - fixed handling of string/binary values (<a href="https://github.com/qoretechnologies/qore/issues/2505">issue 2505</a>)
+    - fixed a bug where consumes property of operations was sometimes ignored (<a href="https://github.com/qoretechnologies/qore/issues/2507">issue 2507</a>)
+    - fixed parsing of responses without Content-Type header (<a href="https://github.com/qoretechnologies/qore/issues/2517">issue 2517</a>)
+    - fixed path matching for paths not beginning with a slash (<a href="https://github.com/qoretechnologies/qore/issues/2516">issue 2516</a>)
 
     @subsection swagger_1_0 Swagger v1.0
 
@@ -356,15 +361,20 @@ const YamlSerialization = {
 };
 %endif
 
+%ifndef NoJson
+const JsonSerialization = {
+    "serialize": \make_json(),
+    "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
+    "deserialize": \parse_json(),
+    "module": "json",
+};
+%endif
+
 #! supported mime types for de/serializing data
 public const MimeDataTypes = {
 %ifndef NoJson
-    MimeTypeJson: (
-        "serialize": \make_json(),
-        "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
-        "deserialize": \parse_json(),
-        "module": "json",
-    ),
+    "application/vnd.oracle.resource+json": JsonSerialization,
+    MimeTypeJson: JsonSerialization,
 %endif
 %ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
@@ -374,19 +384,19 @@ public const MimeDataTypes = {
     "application/yaml": YamlSerialization,
 %endif
 %ifndef NoXml
-    MimeTypeXmlApp: (
+    MimeTypeXmlApp: {
         "serialize": \make_xml(),
         "serialize_verbose": string sub (auto val) {return make_xml(val, XGF_ADD_FORMATTING);},
         "deserialize": \parse_xml(),
         "module": "xml",
-    ),
+    },
 %endif
     # Content-Type: application/x-www-form-urlencoded
-    MimeTypeFormUrlEncoded: (
+    MimeTypeFormUrlEncoded: {
         "serialize": \mime_get_form_urlencoded_string(),
         "serialize_verbose": \mime_get_form_urlencoded_string(),
         "deserialize": \mime_parse_form_urlencoded_string(),
-    ),
+    },
     # Content-Type: multipart/form-data (handled manually)
     MimeTypeMultipartFormData: {},
 };
@@ -402,7 +412,7 @@ public const ValidSchemes = ("http", "https", "ws", "wss");
 public const ValidSchemesHash = map {$1: True}, ValidSchemes;
 
 #! Base class for the %Swagger specification objects, wrapping the vendor extensions.
-class ObjectBase {
+class ObjectBase inherits Qore::Serializable {
     public {
         #! Allows extensions to the %Swagger Schema.
         /**
@@ -439,13 +449,13 @@ class ObjectBase {
 }
 
 #! Base used by @ref OtherParameter, @ref HeaderObject and @ref SchemaObject.
-class SchemaBase {
+class SchemaBase inherits Qore::Serializable {
     public {
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *float maximum;
+        *softfloat maximum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *float minimum;
+        *softfloat minimum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
         *bool exclusiveMax;
@@ -486,8 +496,8 @@ class SchemaBase {
         @param oh deserialized hash from the source schema description
      */
     public constructor(string objType, hash<auto> oh) {
-        optional_field(objType, oh, "maximum", (NT_FLOAT: True, NT_INT: True), \maximum);
-        optional_field(objType, oh, "minimum", (NT_FLOAT: True, NT_INT: True), \minimum);
+        optional_field(objType, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+        optional_field(objType, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
         optional_field(objType, oh, "exclusiveMaximum", NT_BOOLEAN, \exclusiveMax);
         optional_field(objType, oh, "exclusiveMinimum", NT_BOOLEAN, \exclusiveMin);
         optional_field(objType, oh, "maxLength", NT_INT, \maxLength);
@@ -508,8 +518,12 @@ class SchemaBase {
             "uniqueItems", "enum", "multipleOf"), exists other.$1;
     }
 
+    #! Private constructor
+    private constructor() {
+    }
+
     #! returns an example value for the given type
-    private auto getExampleValue(string type, *string format) {
+    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
         if (enum) {
             auto rv = enum.firstKey();
             switch (type) {
@@ -545,7 +559,7 @@ class SchemaBase {
                     case "date-time": return 1987-05-23T07:45:30Z;
                     case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
                     default:
-                        return "value";
+                        return sprintf("Example %s", fname ?? "string");
                 }
             }
             case "integer": {
@@ -971,14 +985,7 @@ public class SwaggerLoader {
         @param swaggerSpecification <a href="https://swagger.io/">Swagger</a> API specification
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerSchema::SwaggerOptions
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with JSON module unavailable
         @throws YAML-MODULE-MISSING trying to parse a YAML %Swagger specification with YAML module unavailable
@@ -997,14 +1004,7 @@ public class SwaggerLoader {
     #! Load <a href="https://swagger.io/">Swagger</a> definition from a file.
     /**
         @param filepath path to the <a href="https://swagger.io/">Swagger</a> file
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerSchema::SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -1022,14 +1022,7 @@ public class SwaggerLoader {
         @ref filelocationhandlerintro "FileLocationHandler" to load the file
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -1164,7 +1157,7 @@ public class ParameterGroup inherits ObjectBase {
             }
             query_obj = key;
         }
-        parameters{key} := p;
+        parameters{key} = p;
     }
 }
 
@@ -1267,15 +1260,30 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
          */
         list<TagObject> tags;
 
+        #! Free-form data storage for types or other related information
+        hash<auto> store;
+
         #! Additional external documentation.
         *ExternalDocumentationObject externalDocs;
 
         #! SwaggerSchema options
+        /** Options are as follows:
+            - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
+              strings
+            - \c def_path: (type *string) the default path to use when retrieving external schema references
+            - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
+              references, must take a string argument (the resource name) and return a string (the resource data)
+            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+            - \c utc_dates: (type *bool) send date/time values in queries in UTC format
+            - \c query_date_format: (type *string) the format string for date/time values in queries
+        */
         const SwaggerOptions = (
             "compact_serialization": True,
             "def_path": True,
             "try_import": True,
             "parse_flags": True,
+            "utc_dates": True,
+            "query_date_format": True,
         );
     }
 
@@ -1297,8 +1305,17 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         #! parse option flags
         *int opt_flags;
 
+        #! Send dates in UTC format
+        *softbool utc_dates;
+
+        #! Date format for serializing dates in queries
+        *string query_date_format;
+
         #! maps name -> SHA1 hash of the config -> schema objects for recursive references
         hash<string, hash<string, SchemaObject>> so_map;
+
+        #! type map; identifer -> {Y,N} -> type
+        hash<string, hash<string, AbstractDataProviderType>> typemap;
     }
 
     private:internal {
@@ -1309,14 +1326,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /**
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -1333,14 +1343,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /** @param logger the logger to use
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions as follows:
-        - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
-          strings
-        - \c def_path: (type *string) the default path to use when retrieving external schema references
-        - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
-          references, must
-          take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+        @param opts options as per @ref SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -1357,13 +1360,15 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! common constructor implementation
     private constructorIntern(string schema_source, hash<auto> oh, *hash<auto> opts) {
-        hash_str = digest("sha256", schema_source).toHex();
+        hash_str = schema_source.toSHA256();
 
         # process options
         compact_serialization = remove opts.compact_serialization ?? True;
         def_path = remove opts.def_path;
         try_import = remove opts.try_import;
         opt_flags = remove opts.parse_flags;
+        utc_dates = remove opts.utc_dates;
+        query_date_format = remove opts.query_date_format;
         if (opts) {
             throw "SWAGGER-OPTION-ERROR", sprintf("unknown options in SwaggerSchema constructor: %y; known "
                 "options: %y", keys opts, keys SwaggerOptions);
@@ -1384,9 +1389,22 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             throw "INVALID-SWAGGER-VERSION", sprintf("invalid schema version %y; expecting \"2.0\"", swaggerSpec);
 
         optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes);
+        foreach string mt in (keys consumes) {
+            if (mt =~ /[;,]/) {
+                remove consumes{mt};
+                mt =~ s/[;,].*$//;
+                consumes{mt} = True;
+            }
+        }
 
         optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces);
-
+        foreach string mt in (keys produces) {
+            if (mt =~ /[;,]/) {
+                remove produces{mt};
+                mt =~ s/[;,].*$//;
+                produces{mt} = True;
+            }
+        }
         {
             optional_field(objType, oh, "definitions", NT_HASH, \source_definition_hash);
             map processDefinition($1.key, $1.value), source_definition_hash.pairIterator();
@@ -1410,7 +1428,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             foreach hash<auto> item in (obj.pairIterator()) {
                 if (item.value.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE", "Swagger Object: invalid response datatype: " + item.value.type();
-                responses{item.key} := ResponseObject::newResponse(item.key, item.value, self);
+                responses{item.key} = ResponseObject::newResponse(item.key, item.value, self);
             }
         }
 
@@ -1485,13 +1503,21 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         return opt_flags;
     }
 
+    *bool getUtcDates() {
+        return utc_dates;
+    }
+
+    *string getQueryDateFormat() {
+        return query_date_format;
+    }
+
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {
-        hash_str = sprintf("%y", oh).toSHA1();
+        hash_str = sprintf("%y", oh).toSHA256();
         return so_map{name}{hash_str};
     }
 
     cacheSchemaObject(string name, string hash_str, SchemaObject so) {
-        so_map{name}{hash_str} = so;
+        so_map{name}{hash_str} := so;
     }
 
     #! resolves a reference to a schema object
@@ -1521,26 +1547,33 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             ref = ref.copy();
             ref.xml = new XmlObject(xmlObj);
         }
-        # additional subling elements are ignored...
+        # additional sibling elements are ignored...
         return ref;
     }
 
     #! resolves a reference to a parameter items schema object
     /** @throw INVALID-REFERENCE invalid reference
     */
-    ParameterItemsSchemaObject resolveParameterItemsSchemaObject(string name, string refstr, hash<auto> oh, *string inLoc) {
+    ParameterItemsSchemaObject resolveParameterItemsSchemaObject(string name, string refstr, hash<auto> oh,
+            *string inLoc) {
         # resolve external reference
         if (refstr !~ /^#\//)
             return ParameterItemsSchemaObject::newSchemaObject(name, getExternalReference(refstr), self, inLoc);
         if (refstr !~ /^#\/definitions\//)
-            throw "INVALID-REFERENCE", sprintf("cannot resolve parameter items SchemaObject %y reference %y", name, refstr);
+            throw "INVALID-REFERENCE", sprintf("cannot resolve parameter items SchemaObject %y reference %y", name,
+                refstr);
         string rstr = (refstr =~ x/^#\/definitions\/(.*)$/)[0];
         *SchemaObject ref = definitions{rstr};
         if (!ref)
-            throw "INVALID-REFERENCE", sprintf("cannot resolve parameter items SchemaObject %y reference %y", name, refstr);
+            throw "INVALID-REFERENCE", sprintf("cannot resolve parameter items SchemaObject %y reference %y", name,
+                refstr);
         int size = foldl $1 + $2, (map 1, keys oh, $1 !~ /^x-/);
         if (size > 1)
-            throw "INVALID-REFERENCE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh, $1 !~ /^x-/));
+            throw "INVALID-REFERENCE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
+                $1 !~ /^x-/));
+        if (!(ref instanceof ParameterItemsSchemaObject)) {
+            return new ParameterItemsSchemaObject(ref);
+        }
         return ref;
     }
 
@@ -1586,6 +1619,187 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             throw "INVALID-RESPONSE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
                 $1 !~ /^x-/));
         return res;
+    }
+
+    #! Returns the data type corresponding to the reference type
+    AbstractDataProviderType getTypeForReference(string rstr, bool required = True, *HTTPClient rest) {
+        *SchemaObject ref = definitions{rstr};
+        if (!ref) {
+            throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
+        }
+        return ref.getDataType(required, rest);
+    }
+
+    replaceTypeForReference(string rstr, AbstractDataProviderType t) {
+        *SchemaObject ref = definitions{rstr};
+        if (!ref) {
+            throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
+        }
+        ref.replaceType(t);
+    }
+
+    #! Returns the data type corresponding to the values
+    AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
+            bool required = True) {
+        string id;
+        if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
+            return rv;
+        }
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+        typemap{id}{required ? "Y" : "N"} = rv;
+        return rv;
+    }
+
+    private *AbstractDataProviderType checkType(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required = True, reference<string> id) {
+        id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
+        return getCacheType(\typemap{id}, required ? "Y" : "N");
+    }
+
+    #! Returns the data type corresponding to the values
+    private AbstractDataProviderType getTypeIntern(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required = True) {
+        hash<auto> type_options;
+        if (required) {
+            type_options += {"qore.no_null": True};
+        }
+        if (typestr == "string") {
+            switch (format) {
+                case "byte": return required
+                    ? AbstractDataProviderType::get(Base64BinaryType)
+                    :  AbstractDataProviderType::get(Base64BinaryOrNothingType);
+                case "binary": return required
+                    ? AbstractDataProviderType::get(SoftBinaryType)
+                    :  AbstractDataProviderType::get(SoftBinaryOrNothingType);
+                case "date":
+                case "date-time": return required
+                    ? AbstractDataProviderType::get(SoftDateType)
+                    :  AbstractDataProviderType::get(SoftDateOrNothingType);
+            }
+        }
+        switch (typestr) {
+            case "boolean":
+                return required
+                    ? new QoreSoftBoolDataType(type_options)
+                    : new QoreSoftBoolOrNothingDataType(type_options);
+
+            case "file":
+                return required
+                    ? new QoreSoftStringDataType(type_options)
+                    : new QoreSoftStringOrNothingDataType(type_options);
+
+            case "array":
+                if (!arrayItems) {
+                    throw "SWAGGER-SCHEMA-ERROR", sprintf("no item definition for array path %y", path);
+                }
+                return new SoftListDataType(arrayItems.getDataType(True), !required);
+
+            case "object":
+                return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);
+        }
+
+        if (*string newname = OptimalQoreSoftDataTypeMap{typestr}) {
+            typestr = newname;
+        }
+        if (!required && (typestr != "any" && typestr != "auto")) {
+            typestr = "*" + typestr;
+        }
+        return AbstractDataProviderType::get(new Type(typestr), type_options);
+    }
+
+    #! Returns the data type for the given schema
+    AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
+            *HTTPClient rest) {
+        return schema.getDataType(required, rest);
+    }
+
+    #! Returns a field definition from the Swagger parameter
+    AbstractDataField getFieldFromSchema(string name, *string desc, SchemaObject schema,
+            bool required = True, *HTTPClient rest) {
+        return schema.getField(name, desc, required, rest);
+    }
+
+    #! Adds field definitions to a hash type from Swagger parameters
+    addFieldsFromParameters(HashDataType rv, hash<string, AbstractParameterObject> parameters,
+            reference<bool> required) {
+        addFieldsFromParametersIntern(rv, parameters, \required);
+    }
+
+    #! Returns a field of header fields
+    AbstractDataField getFieldForHeaders(string name, hash<auto> headers) {
+        HashDataType recordType();
+        map recordType.addField(getFieldFromParameter("!headers/" + $1.key, $1.key, $1.value.type,
+            $1.value.format, $1.value.items, $1.value.desc, False)), headers.pairIterator();
+        return new QoreDataField(name, "HTTP headers", recordType);
+    }
+
+    #! Returns a type object from the given cache
+    static *AbstractDataProviderType getCacheType(reference<hash<string, AbstractDataProviderType>> h, string key) {
+        if (h) {
+            if ((key == "N") && !h.N) {
+                return h.N = h.Y.getOrNothingType();
+            }
+            if ((key == "Y") && !h.Y) {
+                return h.Y = h.N.getMandatoryType();
+            }
+            return h{key};
+        }
+    }
+
+    #! Returns a field from a Swagger parameter
+    AbstractDataField getFieldFromParameter(string path, string name, string type, *string format,
+            *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values, auto default_value) {
+        return new QoreDataField({
+            "name": name,
+            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+            "type": getType(path, type, format, arrayItems, required),
+            "allowed_values": allowed_values,
+            "default_value": default_value,
+        });
+    }
+
+    #! Adds field definitions from Swagger parameters
+    private addFieldsFromParametersIntern(HashDataType rv, hash<string, AbstractParameterObject> parameters,
+            reference<bool> required) {
+        # temporary hash for fields: loc -> name -> field
+        hash<string, hash<string, AbstractDataField>> params;
+        # required flag map for type: loc -> bool
+        hash<string, bool> req_map;
+        foreach hash<auto> i in (parameters.pairIterator()) {
+            switch (i.value.inLoc) {
+                # body and formData parameters are handled directly under the operation
+                case "query": {
+                    params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!query/" + i.value.name,
+                        i.value.name, i.value.type, i.value.format, i.value.items, i.value.desc, i.value.required);
+                    # if at least one query argument is required, then we set "required" to True for the hash
+                    if (i.value.required && !req_map{i.value.inLoc}) {
+                        req_map{i.value.inLoc} = True;
+                    }
+                    break;
+                }
+
+                case "header": {
+                    params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!headers/" + i.value.name,
+                        i.value.name, "string", NOTHING, NOTHING, i.value.desc, i.value.required);
+                    # if at least one query argument is required, then we set "required" to True for the hash
+                    if (i.value.required) {
+                        if (!req_map{i.value.inLoc}) {
+                            req_map{i.value.inLoc} = True;
+                        }
+                        if (!required) {
+                            required = True;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        foreach hash<auto> i in (params.pairIterator()) {
+            HashDataType type(req_map{i.key} ? AutoHashType : AutoHashOrNothingType);
+            map type.addField($1), i.value.iterator();
+            rv.addField(new QoreDataField(i.key, "Swagger " + i.key + " parameter", type));
+        }
     }
 
     #! returns a unique hash for the schema that can be used to compare schemas
@@ -1642,14 +1856,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type"))
+            if (!headers.hasKey("content-type")) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
-            if (headers."content-type" =~ /^multipart\/form-data/) {
+            }
+            string ct = headers."content-type";
+            if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(headers."content-type", http_body.toString());
+                    MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
                 body = map {$1.key: $1.value.body}, h.pairIterator();
             } else {
-                *hash<auto> conf = MimeDataTypes{headers."content-type"};
+                # remove any qualifiers from the content type
+                ct =~ s/[;,].*$//;
+                *hash<auto> conf = MimeDataTypes{ct};
                 if (!conf) {
                     body = http_body;
                 } else {
@@ -1741,7 +1959,13 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             "hdr": hdr,
         ));
 
-        *string content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = hdr."content-type" ?? hdr."Content-Type";
+        if (content.typeCode() == NT_LIST) {
+            printf("content: %y\n", content);
+            content = content[0];
+        }
+        # remove any qualifiers from the content type
+        content =~ s/[;,].*$//;
 
         # deserialize body according to Content-Type
         if (exists response_body && content) {
@@ -1768,7 +1992,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             }
         }
 
-        hash<string, bool> mime_types;
+        hash<string, bool> mime_types = {};
         op.validateResponse(method, path, pio, code, \rv.body, \mime_types, False);
 
         if (content && !mime_types{content})
@@ -2012,7 +2236,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         OperationObject op = pio.getOperation(method, h.method);
 
         # perform validation
-        hash<string, bool> mime_types;
+        hash<string, bool> mime_types = {};
         op.validateRequest(True, pio, \h, \body, \headers, \mime_types);
 
         hash<RestRequestClientInfo> rv((
@@ -2120,7 +2344,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         OperationObject op = pio.getOperation(method, path);
 
         # perform validation
-        hash<string, bool> mime_types;
+        hash<string, bool> mime_types = {};
         op.validateResponse(method, path, pio, code, \response_body, \mime_types);
 
         hash<HttpResponseInfo> rv((
@@ -2245,10 +2469,16 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         *list<string> ct = map $1, keys headers, $1 =~ /content-type/i;
 
         # if found and it's not one of the default ones, use it
-        if (ct && ct.size() == 1 && !MimeDataTypes{headers{ct[0]}}) {
-            req.body = body;
-            req.content = headers{ct[0]};
-            return True;
+        if (ct && ct.size() == 1) {
+            string content = ct[0];
+            # remove any qualifiers from the content type
+            content =~ s/[;,].*$//;
+
+            if (!MimeDataTypes{headers{content}}) {
+                req.body = body;
+                req.content = headers{content};
+                return True;
+            }
         }
         return False;
     }
@@ -2319,7 +2549,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (value.typeCode() != NT_HASH)
             throw "INVALID-FIELD-TYPE", sprintf("Swagger Object: invalid definition datatype %y (val %y) for key %y",
                 value.type(), value, key);
-        return definitions{key} := SchemaObject::newSchemaObject(key, value, self);
+        return definitions{key} = SchemaObject::newSchemaObject(key, value, self);
     }
 }
 
@@ -2427,7 +2657,7 @@ public class LicenseObject inherits ObjectBase {
 
     This class stores a tree or a component of a path for path matching, supports wildcard matching
  */
-public class PathComponent {
+public class PathComponent inherits Qore::Serializable {
     private {
         #! path prefix
         string pfx;
@@ -2451,8 +2681,9 @@ public class PathComponent {
         name = "/";
         *int parse_flags = swagger.getParseFlags();
         foreach hash<auto> h in (oh.pairIterator()) {
-            if (!pfx.val() && h.key !~ /^\//)
+            if (!pfx.val() && h.key !~ /^\//) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Paths Object: root path %y does not begin with a slash", h.key);
+            }
             list<string> l = h.key.split("/");
             shift l;
             try {
@@ -2478,18 +2709,24 @@ public class PathComponent {
     private add(string full_path, list<auto> l, int offset, hash<auto> oh, SwaggerSchema swagger) {
         #printf("PathComponent::add(): pfx: %y name: %y: %y l: %y offset: %y\n", pfx, name, full_path, l, offset);
         if (offset == l.size()) {
-            if (pio)
-                throw "INVALID-PATH-COMPONENT", sprintf("cannot terminate path %y twice", full_path);
-            pio = new PathItemObject(full_path, oh, swagger);
+            if (!pio) {
+                pio = new PathItemObject(full_path, oh, swagger);
+            } else if (!(swagger.getParseFlags() & LM_IGNORE_INVALID_PATHS)) {
+                throw "INVALID-PATH-COMPONENT", sprintf("Cannot terminate path %y twice", full_path);
+            } else {
+                pio.merge(full_path, oh, swagger);
+            }
+            # otherwise we merge new methods in the existing PathItemObject
             return;
         }
 
         PathComponent next;
         string key = l[offset];
-        if (key =~ /^{/)
+        if (key =~ /^{/) {
             next = wildcard ?? (wildcard = new PathComponent(full_path, l, offset + 1, oh));
-        else
+        } else {
             next = paths{key} ?? (paths{key} = new PathComponent(full_path, l, offset + 1, oh));
+        }
 
         next.add(full_path, l, offset + 1, oh, swagger);
     }
@@ -2622,6 +2859,9 @@ public class PathItemObject inherits ParameterGroup {
             - \c "patch"
          */
         hash<string, OperationObject> operations;
+
+        #! This objet type
+        const ObjType = "Path Item";
     }
 
     #! Constructor.
@@ -2635,54 +2875,45 @@ public class PathItemObject inherits ParameterGroup {
         @throws REQUIRED-FIELD-MISSING required field is missing
      */
     public constructor(string path, hash<auto> oh, SwaggerSchema swagger) : ParameterGroup(oh) {
-        string objType = "Path Item";
-        optional_field(objType, oh, "$ref", NT_STRING, \ref);
+        optional_field(ObjType, oh, "$ref", NT_STRING, \ref);
 
-        *hash opObj;
-        if (optional_field(objType, oh, "get", NT_HASH, \opObj))
-            operations.get = new OperationObject(path, "get", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "put", NT_HASH, \opObj))
-            operations.put = new OperationObject(path, "put", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "post", NT_HASH, \opObj))
-            operations.post = new OperationObject(path, "post", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "delete", NT_HASH, \opObj))
-            operations."delete" = new OperationObject(path, "delete", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "options", NT_HASH, \opObj))
-            operations.options = new OperationObject(path, "options", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "head", NT_HASH, \opObj))
-            operations.head = new OperationObject(path, "head", opObj, swagger);
-
-        delete opObj;
-        if (optional_field(objType, oh, "patch", NT_HASH, \opObj))
-            operations.patch = new OperationObject(path, "patch", opObj, swagger);
+        foreach string m in ("get", "put", "post", "delete", "options", "head", "patch") {
+            *hash<auto> opObj;
+            if (optional_field(ObjType, oh, m, NT_HASH, \opObj)) {
+                operations{m} = new OperationObject(path, m, opObj, swagger);
+            }
+        }
 
         *list params;
-        if (optional_field(objType, oh, "parameters", NT_LIST, \params)) {
+        if (optional_field(ObjType, oh, "parameters", NT_LIST, \params)) {
             foreach auto param in (params) {
                 if (param.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE",
                         sprintf("Path Item Object: 'parameters' list value has invalid type %y",
                             param.type());
-                AbstractParameterObject p := AbstractParameterObject::newParameter(
+                AbstractParameterObject p = AbstractParameterObject::newParameter(
                     sprintf("%d/%d", $# + 1, params.lsize()), param, swagger
                 );
                 if (p.inLoc == "body") {
                     if (body)
                         throw "INVALID-FIELD-VALUE", sprintf("path %y: more than one \"body\" parameter provided",
                             path);
-                    body := p;
+                    body = p;
                 } else {
                     addParameter(p);
+                }
+            }
+        }
+    }
+
+    #! Try to merge another PathItemObject description for the same path into this one
+    merge(string path, hash<auto> oh, SwaggerSchema swagger) {
+        foreach string m in ("get", "put", "post", "delete", "options", "head", "patch") {
+            *OperationObject op = operations{m};
+            if (!op) {
+                *hash<auto> opObj;
+                if (optional_field(ObjType, oh, m, NT_HASH, \opObj)) {
+                    operations{m} = new OperationObject(path, m, opObj, swagger);
                 }
             }
         }
@@ -2845,11 +3076,27 @@ public class OperationObject inherits ParameterGroup {
         # use the global "consumes" definition if none is defined on the operation
         if (!optional_field(objType, oh, "consumes", SwaggerListToStringSet, \consumes) && swagger.consumes) {
             consumes = swagger.consumes;
+        } else {
+            foreach string mt in (keys consumes) {
+                if (mt =~ /[;,]/) {
+                    remove consumes{mt};
+                    mt =~ s/[;,].*$//;
+                    consumes{mt} = True;
+                }
+            }
         }
 
         # use the global "produces" definition if none is defined on the operation
         if (!optional_field(objType, oh, "produces", SwaggerListToStringSet, \produces) && swagger.produces) {
             produces = swagger.produces;
+        } else {
+            foreach string mt in (keys produces) {
+                if (mt =~ /[;,]/) {
+                    remove produces{mt};
+                    mt =~ s/[;,].*$//;
+                    produces{mt} = True;
+                }
+            }
         }
         {
             list listObj;
@@ -2897,10 +3144,10 @@ public class OperationObject inherits ParameterGroup {
                     error("INVALID-FIELD-TYPE", "invalid 'parameters' list value datatype %y; expecing \"hash\"",
                         p.fullType());
                 }
-                AbstractParameterObject param := AbstractParameterObject::newParameter(sprintf("%d/%d", $# + 1,
+                AbstractParameterObject param = AbstractParameterObject::newParameter(sprintf("%d/%d", $# + 1,
                     listObj.lsize()), p, swagger);
                 if (param.inLoc == "body") {
-                    body := param;
+                    body = param;
                 } else if (param.inLoc == "formData") {
                     formData{param.name} = param;
                     if (opt_flags & LM_AUTO_FORM_DATA && !consumes{MimeTypeFormUrlEncoded}) {
@@ -2964,14 +3211,16 @@ public class OperationObject inherits ParameterGroup {
     }
 
     #! Processes a generated request
-    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers) {
+    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers, *bool freeform) {
         *AbstractParameterObject body_po = self.body ?? pio.body;
         if (body_po) {
-            body_po.check(True, True, path, method, "body", \body);
+            if (!freeform) {
+                body_po.check(True, True, path, method, "body", \body);
+            }
         } else if (formData) {
             map $1.value.check(True, True, path, method, "formData." + $1.key, \body{$1.key}),
                 formData.pairIterator();
-        } else if (body) {
+        } else if (body && !freeform) {
             error("SCHEMA-VALIDATION-ERROR", "No message body is accepted; body keys passed: %y", keys body);
         }
 
@@ -2984,9 +3233,8 @@ public class OperationObject inherits ParameterGroup {
             throw "SERIALIZATION-ERROR", sprintf("%s %s: API supports no serialization types but a \"body\" "
                 "parameter is present", method.upr(), path);
         }
-        string ct = consumes.firstKey();
 
-        if (ct == MimeTypeMultipartFormData) {
+        if (consumes{MimeTypeMultipartFormData}) {
             hash<string, hash<FormDataMessageInfo>> parts =
                 cast<hash<string, hash<FormDataMessageInfo>>>(map {$1.key: cast<hash<FormDataMessageInfo>>({
                     "name": $1.key,
@@ -3000,9 +3248,11 @@ public class OperationObject inherits ParameterGroup {
             return mh.body;
         }
 
-        if (MimeDataTypes{ct}) {
-            headers."Content-Type" = ct;
-            return MimeDataTypes{ct}.serialize(body);
+        foreach string ct in (keys consumes) {
+            if (MimeDataTypes{ct}) {
+                headers."Content-Type" = ct;
+                return MimeDataTypes{ct}.serialize(body);
+            }
         }
 
         throw "SERIALIZATION-ERROR", sprintf("%s %s: message body cannot be serialized; available MIME type(s): %y; "
@@ -3016,12 +3266,13 @@ public class OperationObject inherits ParameterGroup {
         @param body a reference to the deserialized HTTP message body data
         @param headers a reference to a hash of HTTP headers
         @param mime_types a reference to a hash of valid mime types for the operation
+        @param freeform do not validate types
 
         @throws SCHEMA-VALIDATION-ERROR invalid parameter name or location, missing parameter and parameter has no
         default value
     */
     validateRequest(bool serialize, PathItemObject pio, reference<hash<UriQueryInfo>> h, reference<auto> body,
-            reference<hash> headers, *reference<hash<string, bool>> mime_types) {
+            reference<hash> headers, *reference<hash<string, bool>> mime_types, *bool freeform) {
         # check query parameters
         *string query_obj = self.query_obj ?? pio.query_obj;
         if (exists query_obj) {
@@ -3035,13 +3286,13 @@ public class OperationObject inherits ParameterGroup {
                 if (exists (*string op = (query_obj ?? pio.query_obj))) {
                     h.params{op}{key} = remove h.params{key};
                 } else {
-                    error("SCHEMA-VALIDATION-ERROR", "No query parameter named %y defined for this path and method; "
-                        "known query parameters: %y", key, keys (parameters + pio.parameters));
+                    error("SCHEMA-VALIDATION-ERROR", "No query parameter named %y defined for %s %s; known query "
+                        "parameters: %y", key, method, path, keys (parameters + pio.parameters));
                 }
             }
             if (po.inLoc != "query") {
-                error("SCHEMA-VALIDATION-ERROR", "invalid parameter %y given in the URI query; expected location %y",
-                    key, po.inLoc);
+                error("SCHEMA-VALIDATION-ERROR", "invalid parameter %y given in the URI query for %s %s; expected "
+                    "location %y", key, method.upr(), path, po.inLoc);
             }
 
             po.check(serialize, True, path, method, key, \h.params{key});
@@ -3068,13 +3319,16 @@ public class OperationObject inherits ParameterGroup {
         {
             *AbstractParameterObject body_po = self.body ?? pio.body;
             if (body_po) {
-                body_po.check(serialize, True, path, method, "body", \body);
+                if (!freeform) {
+                    body_po.check(serialize, True, path, method, "body", \body);
+                }
             } else if (formData) {
                 foreach hash<auto> i in (formData.pairIterator()) {
                     i.value.check(serialize, True, path, method, "formData." + i.key, \body{i.key});
                 }
-            } else if (body) {
-                error("SCHEMA-VALIDATION-ERROR", "No message body is accepted; body keys passed: %y", keys body);
+            } else if (body && !freeform) {
+                error("SCHEMA-VALIDATION-ERROR", "No message body is accepted for %s %s; body keys passed: %y",
+                    method.upr(), path, keys body);
             }
         }
 
@@ -3082,8 +3336,8 @@ public class OperationObject inherits ParameterGroup {
         foreach string param in (path =~ x/{([^}]+)}/g) {
             *OtherParameter po = parameters{param} ?? pio.parameters{param};
             if (!po) {
-                error("SCHEMA-VALIDATION-ERROR", "No path parameter named %y defined for this path and method; "
-                    "known parameters: %y", param, keys (parameters + pio.parameters));
+                error("SCHEMA-VALIDATION-ERROR", "No path parameter %y defined for %s %s (%y); known "
+                    "parameters: %y", param, method.upr(), path, keys (parameters + pio.parameters));
             }
 
             string pattern = replace(path, "{" + param + "}", "(.*)");
@@ -3172,9 +3426,11 @@ public class OperationObject inherits ParameterGroup {
         @param pio the PathItemObject corresponding to the URI path
         @param swagger the schema object itself
 
-        @return a @ref RestSchemaValidator::RestQoreExampleCodeInfo "RestQoreExampleCodeInfo" hash giving example Qore code to generate the given request message
+        @return a @ref RestSchemaValidator::RestQoreExampleCodeInfo "RestQoreExampleCodeInfo" hash giving example Qore
+        code to generate the given request message
     */
-    hash<RestQoreExampleCodeInfo> getQoreExampleRequest(string method, string path, PathItemObject pio, SwaggerSchema swagger) {
+    hash<RestQoreExampleCodeInfo> getQoreExampleRequest(string method, string path, PathItemObject pio,
+            SwaggerSchema swagger) {
         hash<RestQoreExampleCodeInfo> rv();
 
         #! URI query arguments
@@ -3198,7 +3454,8 @@ public class OperationObject inherits ParameterGroup {
         rv.example += "hash<auto> info;\n";
         if (headers) {
             rv.example += "hash<auto> hdr = (\n";
-            rv.example += foldl $1 + "\n" + $2, (map sprintf("    %y: %y,", $1.key, $1.value), headers.pairIterator());
+            rv.example += foldl $1 + "\n" + $2, (map sprintf("    %y: %y,", $1.key, $1.value),
+                headers.pairIterator());
             rv.example += "\n);\n";
         }
 
@@ -3466,8 +3723,6 @@ public class AbstractParameterObject inherits ObjectBase {
     }
 
     private {
-        static hash<string, AbstractParameterObject> cache;
-
         const OtherParameterMap = (
             "query": True,
             "header": True,
@@ -3494,12 +3749,6 @@ public class AbstractParameterObject inherits ObjectBase {
         } else {
             optional_field(objType, oh, "required", NT_BOOLEAN, \required);
         }
-
-        addToCache(self);
-    }
-
-    copy(AbstractParameterObject old) {
-        addToCache(self);
     }
 
     #! verifies the parameter in an actual REST API call
@@ -3511,7 +3760,7 @@ public class AbstractParameterObject inherits ObjectBase {
 
     #! gets a concrete instance of an AbstractParameterObject
     static AbstractParameterObject newParameter(string name, hash<auto> oh, SwaggerSchema swagger) {
-        on_error rethrow $1.err, sprintf("%s (while processing parameter %y)", $1.desc, name);
+        on_error rethrow $1.err, sprintf("%s (while processing parameter %y in %y)", $1.desc, name, oh."in");
         if (oh.hasKey("$ref"))
             return swagger.resolveParameter(name, oh."$ref", oh);
 
@@ -3526,16 +3775,6 @@ public class AbstractParameterObject inherits ObjectBase {
         }
         throw "INVALID-FIELD-VALUE", sprintf("Parameter Object %y: invalid location (\"in\") parameter value: %y",
             name, oh."in");
-    }
-
-    #! Adds an AbstractParameterObject to the cache
-    static private addToCache(AbstractParameterObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes an AbstractParameterObject from the cache
-    static private removeFromCache(AbstractParameterObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
@@ -3557,7 +3796,7 @@ public class BodyParameter inherits AbstractParameterObject {
     public constructor(hash<auto> oh, SwaggerSchema swagger) : AbstractParameterObject(oh, swagger.getParseFlags()) {
         hash schemaObj;
         required_field("Body Parameter", oh, "schema", NT_HASH, \schemaObj);
-        schema := SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
+        schema = SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
     }
 
     #! verifies the parameter in an actual REST API call
@@ -3577,8 +3816,11 @@ public class BodyParameter inherits AbstractParameterObject {
     }
 
     # returns an example value for a REST API call
-    auto getExampleValue() {
-        return schema.getExampleValue();
+    /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+    */
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+        return schema.getExampleValue(emap, fname);
     }
 }
 
@@ -3610,7 +3852,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
         bool allowEmptyValue = False;
 
         #! Required if @ref TypedParameter::type "type" is \c "array". Describes the type of items in the array.
-        *ParameterItemsSchemaObject items;
+        *SchemaObject items;
 
         #! Determines the format of the array if type array is used.
         /**
@@ -3651,7 +3893,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
         }
         if (type == "array") {
             if (exists oh.items) {
-                items := ParameterItemsSchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger,
+                items = ParameterItemsSchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger,
                     oh."in");
             }
             if (optional_field(objType, oh, "collectionFormat", NT_STRING, \collectionFormat)) {
@@ -3762,6 +4004,15 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
             # if we have a path and a missing value then ignore the missing value
             return;
         }
+        if (!exists value) {
+            if (exists defaultVal) {
+                value = defaultVal;
+                return;
+            }
+            if (!required || allowEmptyValue) {
+                return;
+            }
+        }
         SchemaBase::check(serialize, request, type, format, items, path, method, name, \value);
         switch (value.typeCode()) {
             case NT_NOTHING:
@@ -3778,10 +4029,10 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
     }
 
     #! returns an example value of the parameter (default: @ref nothing)
-    auto getExampleValue() {
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
         if (exists defaultVal)
             return defaultVal;
-        return getExampleValue(type, format);
+        return getExampleValueWithFormat(type, format, fname);
     }
 
     #! validates default values
@@ -3892,14 +4143,14 @@ public class ResponsesObject inherits ObjectBase {
         string objType = "Responses";
         *hash defaultObj;
         if (optional_field(objType, oh, "default", NT_HASH, \defaultObj))
-            defaultResp := ResponseObject::newResponse("default", defaultObj, swagger);
+            defaultResp = ResponseObject::newResponse("default", defaultObj, swagger);
 
         *hash r = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^[0-9]+$/;
         foreach hash resp in (r.pairIterator()) {
             if (resp.value.typeCode() != NT_HASH)
                 throw "INVALID-FIELD-TYPE", sprintf("%s %s: Responses Object: response has invalid type %y", method,
                     path, resp.value.type());
-            responses{resp.key} := ResponseObject::newResponse(resp.key, resp.value, swagger);
+            responses{resp.key} = ResponseObject::newResponse(resp.key, resp.value, swagger);
         }
 
         if (responses.empty() && !defaultObj)
@@ -3939,10 +4190,6 @@ public class ResponseObject inherits ObjectBase {
         hash examples;
     }
 
-    private {
-        static hash<string, ResponseObject> cache;
-    }
-
     #! private constructor; use newResponse() instead
     /**
         @param key the response code for error reporting
@@ -3958,7 +4205,7 @@ public class ResponseObject inherits ObjectBase {
 
         *hash<auto> schemaObj;
         if (optional_field(objType, oh, "schema", NT_HASH, \schemaObj))
-            schema := SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger);
+            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger);
 
         *hash<auto> headersObj;
         if (optional_field(objType, oh, "headers", NT_HASH, \headersObj))
@@ -3966,12 +4213,6 @@ public class ResponseObject inherits ObjectBase {
 
         optional_field(objType, oh, "examples", NT_HASH, \examples);
         # TODO keys should be Operation 'produces' values
-
-        addToCache(self);
-    }
-
-    copy(ResponseObject old) {
-        addToCache(self);
     }
 
     #! returns a new ResponseObject corresponding to the schema definition passed
@@ -3988,16 +4229,6 @@ public class ResponseObject inherits ObjectBase {
         if (oh.hasKey("$ref"))
             return swagger.resolveResponse(key, oh."$ref", oh);
         return new ResponseObject(key, oh, swagger);
-    }
-
-    #! Adds a ResponseObject to the cache
-    static private addToCache(ResponseObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a ResponseObject from the cache
-    static private removeFromCache(ResponseObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
@@ -4061,7 +4292,7 @@ public class HeaderObject inherits ObjectBase, SchemaBase {
             if (!exists oh.items) {
                 throw "INVALID-FIELD-VALUE", "Header Object: missing 'items' for array";
             }
-            items := SchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
+            items = SchemaObject::newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
             if (optional_field(objType, oh, "collectionFormat", NT_STRING, \collectionFormat)) {
                 if (!CollectionFormats{collectionFormat})
                     throw "INVALID-FIELD-VALUE",
@@ -4255,6 +4486,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         #! A free-form property to include an example of an instance for this schema.
         auto example;
 
+        #! The data type of the schema (required)
+        *AbstractDataProviderType dataType;
+
+        #! The data type of the schema (not required)
+        *AbstractDataProviderType orNothingDataType;
+
         #! valid scalar types
         const ScalarTypes = (
             "string": True,
@@ -4272,7 +4509,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     }
 
     private {
-        static hash<string, SchemaObject> cache;
+        SwaggerSchema swagger;
+
+        # maps fields: name -> {Y,N} -> field
+        hash<string, hash<string, AbstractDataField>> fieldmap;
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -4292,25 +4532,38 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     private constructor(string name, hash<auto> oh, SwaggerSchema swagger, *string hash_str, *bool require_items)
             : ObjectBase(oh), SchemaBase("Schema", oh) {
         self.name = name;
+        self.swagger := swagger;
         # add static map reference
-        swagger.cacheSchemaObject(name, hash_str ?? sprintf("%y", oh).toSHA1(), self);
+        if (!hash_str.val()) {
+            hash_str = sprintf("%y", oh).toSHA256();
+        }
+        swagger.cacheSchemaObject(name, hash_str, self);
         string objType = "Schema";
 
         *int opt_flags = swagger.getParseFlags();
 
         if (optional_field(objType, oh, "type", NT_STRING, \type)) {
-            if (!ReferenceTypes{type})
+            if (!ReferenceTypes{type}) {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
                     "expected one of: %y", name, type, keys ReferenceTypes);
+            }
+            on_error rethrow $1.err, sprintf("%s (while processing schema %s)", $1.desc, name);
             if (type == "array" && (require_items || exists oh.items)) {
-                items := newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
+                items = newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
             }
 
             if (oh.hasKey("default")) {
                 defaultVal = oh."default";
+                if (opt_flags & LM_IGNORE_INVALID_PATHS) {
+                    # Automatically correct badly-defined boolean parameter types
+                    if (defaultVal.typeCode() == NT_BOOLEAN && type != "boolean") {
+                        type = "boolean";
+                    }
+                }
+                defaultVal = oh."default";
                 SchemaObject::checkValueType(\defaultVal, type, items);
             }
-        } else if (oh.properties) {
+        } else if (oh.properties || oh.allOf) {
             type = "object";
         } else {
             type = "any";
@@ -4345,18 +4598,39 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             hash props;
             if (optional_field(objType, oh, "properties", NT_HASH, \props)) {
                 checkObjectProperty(name, "properties");
-                foreach string k in (keys props) {
-                    auto val = props{k};
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
-                            "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} := SchemaObject::newSchemaObject(k, val, swagger);
-                    if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
-                        nullable_properties{k} = True;
-                    }
-                }
+                addProperties(props, opt_flags);
             } else {
                 additionalProperties = True;
+            }
+        }
+
+        {
+            *list<auto> allOfList;
+            if (optional_field(objType, oh, "allOf", NT_LIST, \allOfList)) {
+                if (allOfList.size() < 1)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
+                foreach auto val in (allOfList) {
+                    string an = name + "_AllOf_" + (allOf.size() + 1);
+                    if (val.typeCode() != NT_HASH)
+                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
+                            "datatype: %y", name, val.type());
+                    SchemaObject so;
+                    if (val.size() == 1 && val.hasKey("$ref")) {
+                        so = swagger.resolveSchemaObject(an, val."$ref", val);
+                    } else if (val.type == "object" && val.properties) {
+                        addProperties(val.properties, opt_flags);
+                    } else {
+                        so = SchemaObject::newSchemaObject(an, val, swagger);
+                    }
+                    if (so) {
+                        allOf[allOf.size()] = so;
+                        map properties{$1.key} = $1.value, so.properties.pairIterator(), !properties.hasKey($1.key);
+                        nullable_properties += so.nullable_properties;
+                        if (!exists additionalProperties && exists so.additionalProperties) {
+                            additionalProperties = so.additionalProperties;
+                        }
+                    }
+                }
             }
         }
 
@@ -4364,7 +4638,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             \additionalProperties)) {
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
-                additionalProperties := SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
+                additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
                     swagger);
         }
         if (opt_flags & LM_ACCEPT_ALL_PROPERTIES) {
@@ -4390,20 +4664,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         optional_field(objType, oh, "readOnly", NT_BOOLEAN, \readOnly);
 
-        {
-            *list allOfList;
-            if (optional_field(objType, oh, "allOf", NT_LIST, \allOfList)) {
-                if (allOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
-                foreach auto val in (allOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
-                            "datatype: %y", name, val.type());
-                    allOf[allOf.size()] := SchemaObject::newSchemaObject(name + "AllOf", val, swagger);
-                }
-            }
-        }
-
         *hash xmlObj;
         if (optional_field(objType, oh, "xml", NT_HASH, \xmlObj))
             xml = new XmlObject(xmlObj);
@@ -4414,12 +4674,201 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         if (oh.hasKey("example"))
             example = oh.example;
-
-        addToCache(self);
     }
 
-    copy(SchemaObject old) {
-        addToCache(self);
+    #! Private copy constructor
+    private constructor(SchemaObject o) {
+        map self{$1.key} = $1.value, o.pairIterator();
+    }
+
+    private addProperties(hash<string, auto> props, *int opt_flags) {
+        foreach string k in (keys props) {
+            auto val = props{k};
+            if (val.typeCode() != NT_HASH)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
+                    "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
+            properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
+            if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
+                nullable_properties{k} = True;
+            }
+        }
+    }
+
+    replaceType(AbstractDataProviderType t) {
+        if (t.isOrNothingType()) {
+            if (dataType) {
+                dataType = t.getMandatoryType();
+            }
+            if (orNothingDataType) {
+                orNothingDataType = t;
+            }
+        } else {
+            if (dataType) {
+                dataType = t;
+            }
+            if (orNothingDataType) {
+                orNothingDataType = t.getOrNothingType();
+            }
+        }
+    }
+
+    AbstractDataProviderType getDataType(bool required = True, *HTTPClient rest) {
+        if (required) {
+            if (!dataType) {
+                if (orNothingDataType) {
+                    dataType = orNothingDataType.getMandatoryType();
+                } else {
+                    # "dataType" is assigned in the call below
+                    getDataTypeIntern("/", True, rest);
+                }
+            }
+            return dataType;
+        }
+        if (!orNothingDataType) {
+            if (dataType) {
+                orNothingDataType = dataType.getOrNothingType();
+            } else {
+                # "orNothingDataType" is assigned in the call below
+                getDataTypeIntern("/", False, rest);
+            }
+        }
+        return orNothingDataType;
+    }
+
+    #! Returns the data type for the given schema
+    private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
+        if (type == "string") {
+            AbstractDataProviderType type = AbstractDataProviderType::get((required ? "" : "*") + "string");
+            if (required) {
+                dataType = type;
+            } else {
+                orNothingDataType = type;
+            }
+            return type;
+        }
+
+        auto def_body;
+        if (rest) {
+            def_body = cast<object>(rest).preprocessRequestBody();
+            if (exists def_body && def_body.typeCode() != NT_HASH) {
+                remove def_body;
+            }
+        }
+
+        string typename = required
+            ? name
+            : "*" + name;
+        HashDataType type(required ? AutoHashType : AutoHashOrNothingType, typename);
+        if (required) {
+            dataType = type;
+        } else {
+            orNothingDataType = type;
+        }
+        getSchemaObjectFields(type, path, def_body);
+        if (additionalProperties === True) {
+            type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
+        } else if (additionalProperties) {
+            on_error printf("schema: %N\n", self);
+            string new_path = path == "/"
+                ? "/" + additionalProperties.type
+                : path + "/" + additionalProperties.type;
+            type.setDefaultOtherFieldType(swagger.getType(new_path,
+                additionalProperties.type, additionalProperties.format,
+                additionalProperties.items,
+                !additionalProperties.nullable));
+        } else {
+            # make sure that extra fields are not supported
+            type.setDefaultOtherFieldType();
+        }
+
+        return type;
+    }
+
+    #! Returns a field definition from the Swagger parameter
+    AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
+        string rstr = required ? "Y" : "N";
+        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            return rv;
+        }
+        return getFieldIntern(name, name, desc, required, rest, default_value, rstr);
+    }
+
+    #! Returns a field definition from the Swagger parameter
+    AbstractDataField getField(string path, string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
+        string rstr = required ? "Y" : "N";
+        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            return rv;
+        }
+        return getFieldIntern(path, name, desc, required, rest, default_value, rstr);
+    }
+
+    #! Returns a field object from the given cache
+    private static *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
+        if (h) {
+            if ((key == "N") && !h.N) {
+                return h.N = h.Y.getOrNothingType();
+            }
+            if ((key == "Y") && !h.Y) {
+                return h.Y = h.N.getMandatoryType();
+            }
+            return h{key};
+        }
+    }
+
+    #! Sets fields of a schema object
+    private getSchemaObjectFields(HashDataType type, string path, auto def_body) {
+        map type.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
+            required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
+    }
+
+    #! Returns a field definition from the Swagger parameter
+    private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
+            *HTTPClient rest, auto default_value, *string rstr) {
+        if (!rstr) {
+            rstr = required ? "Y" : "N";
+        }
+        if (self.desc.val()) {
+            if (desc.val()) {
+                desc += ": " + self.desc;
+            } else {
+                desc = self.desc;
+            }
+        }
+        if (!exists desc) {
+            desc = "";
+        }
+        if (type == "object") {
+            # create the field with a placeholder type
+            QoreDataField field({
+                "name": name,
+                "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+                "type": AutoType,
+                "allowed_values": keys enum,
+                "default_value": default_value,
+            } + (required ? {
+                "attr": {
+                    "preselected": True,
+                    "required": True,
+                },
+            } : NOTHING));
+            fieldmap{name}{rstr} = field;
+            field.updateFieldType(getDataType(required, rest));
+            return field;
+        }
+
+        # create the field with a placeholder type
+        QoreDataField field({
+            "name": name,
+            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+            "type": AutoType,
+            "allowed_values": keys enum,
+            "default_value": default_value,
+        });
+        fieldmap{name}{rstr} = field;
+        field.updateFieldType(swagger.getType(path, type, format, items, required));
+        return field;
     }
 
     #! returns example Qore code for the object
@@ -4496,21 +4945,37 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     }
 
     # returns an example value for a REST API call
-    auto getExampleValue() {
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
         if (exists example)
             return example;
         if (exists defaultVal)
             return defaultVal;
 
+        # Handle allOf by merging properties from all schemas
+        if (allOf) {
+            hash<auto> rv = {};
+            foreach SchemaObject schema in (allOf) {
+                *hash<auto> schemaExample = schema.getExampleValue(emap, fname);
+                if (schemaExample) {
+                    rv += schemaExample;
+                }
+            }
+            # Also add any local properties
+            if (properties) {
+                rv += map {$1.key: $1.value.getExampleValue(emap, $1.key)}, properties.pairIterator();
+            }
+            return rv;
+        }
+
         if (type == "object") {
-            return map {$1.key: $1.value.getExampleValue()}, properties.pairIterator();
+            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, properties.pairIterator();
         }
 
         if (type == "array") {
-            return (items.getExampleValue(),);
+            return (items.getExampleValue(emap, fname),);
         }
 
-        return SchemaBase::getExampleValue(type, format);
+        return SchemaBase::getExampleValueWithFormat(type, format);
     }
 
     #! validates the value against the schema definition
@@ -4542,13 +5007,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
     #! validates a schema object against a value
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, hash<auto> v, reference<hash<auto>> value) {
+            string name, hash<auto> v, reference<hash<auto>> value, *bool no_check_others) {
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
 
         # check "allOf" schemas, if any
-        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value), allOf;
+        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value, True), allOf;
 
         /*
             If additionalProperties is set to true, any number of additionalProperties may be present of any data
@@ -4557,7 +5022,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             allowed and must match the schema
         */
         # check properties in this schema definition
-        if (additionalProperties !== True && type != "any") {
+        if (additionalProperties !== True && type != "any" && !no_check_others) {
             # issue #4825: write the hash keys to another hash in case values need to change type
             hash<auto> nv;
             foreach string key in (keys value) {
@@ -4567,7 +5032,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                         prop = additionalProperties;
                     }
                     if (!prop) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("property %y is not valid for object %y "
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Property %y is not valid for object %y "
                             "(value: %y); valid properties: %y",  key, name, value, keys properties);
                     }
                 }
@@ -4635,16 +5100,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
     }
-
-    #! Adds a SchemaObject to the cache
-    static private addToCache(SchemaObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a SchemaObject from the cache
-    static private removeFromCache(SchemaObject obj) {
-        remove cache{obj.uniqueHash()};
-    }
 }
 
 #! items schema object for non-body parameters
@@ -4665,6 +5120,10 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
             Default value is \c "csv".
          */
         *string collectionFormat;
+    }
+
+    #! Copy constructor
+    constructor(SchemaObject o) : SchemaObject(o) {
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -4738,7 +5197,7 @@ public class XmlObject inherits ObjectBase {
             When defined alongside \c type being \c array (outside the \c items),
             it will affect the wrapping element and only if \c wrapped is \c true.
             If \c wrapped is \c false, it will be ignored.
-         */
+        */
         *string name;
 
         #! The URL of the namespace definition. Value SHOULD be in the form of a URL.
@@ -4747,14 +5206,18 @@ public class XmlObject inherits ObjectBase {
         #! The prefix to be used for the @ref XmlObject::name "name".
         *string prefix;
 
-        #! Declares whether the property definition translates to an attribute instead of an element. Default value is \c false.
+        #! Declares whether the property definition translates to an attribute instead of an element
+        /** Default value is \c false
+        */
         bool attribute = False;
 
-        #! MAY be used only for an array definition. Signifies whether the array is wrapped (for example, \c &lt;books&gt;&lt;book/&gt;&lt;book/&gt;&lt;/books&gt;) or unwrapped (\c &lt;book/&gt;&lt;book/&gt;).
-        /**
-            Default value is \c false. The definition takes effect only when
-            defined alongside \c type being \c array (outside the \c items).
-         */
+        #! MAY be used only for an array definition
+        /** Signifies whether the array is wrapped (for example,
+            \c &lt;books&gt;&lt;book/&gt;&lt;book/&gt;&lt;/books&gt;) or unwrapped (\c &lt;book/&gt;&lt;book/&gt;)
+
+            Default value is \c false. The definition takes effect only when defined alongside \c type being \c array
+            (outside the \c items).
+        */
         bool wrapped = False;
     }
 
@@ -4955,15 +5418,16 @@ namespace Priv {
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
-    sub required_field(string objType, hash<auto> oh, string name, hash<string, bool> typeCodes, reference<auto> target) {
+    sub required_field(string objType, hash<auto> oh, string name, hash<string, bool> typeCodes,
+            reference<auto> target) {
         if (!oh.hasKey(name))
             throw "REQUIRED-FIELD-MISSING", sprintf("%s Object%s: %y field is missing; fields present: %y", objType,
                 oh.name ? sprintf(" %y", oh.name) : "", name, keys oh);
         auto val = oh{name};
 
         if (!typeCodes{val.typeCode()})
-            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", objType,
-                oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: required %y field has invalid type %y (val: %y)",
+                objType, oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
         get_value(objType, name, val.typeCode(), val, \target);
     }
 
@@ -5009,8 +5473,9 @@ namespace Priv {
             return False;
         auto val = oh{name};
         if (!typeCodes{val.typeCode()})
-            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", objType,
-                oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: optional %y field has invalid type %y (val: %y); "
+                "expecting one of %y", objType, oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val,
+                (map TypeMap{$1}, keys typeCodes));
         get_value(objType, name, val.typeCode(), val, \target);
         return True;
     }

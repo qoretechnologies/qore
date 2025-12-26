@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,8 @@
 
 class QoreLoggerInterface : public AbstractPrivateData {
 public:
-    DLLLOCAL QoreLoggerInterface() {
+    DLLLOCAL QoreLoggerInterface(QoreObject* self) : logArgs(self->getClass()->findMethod("logArgs")) {
+        assert(logArgs);
     }
 
     //! Returns itself after referencing
@@ -42,6 +43,8 @@ public:
         ref();
         return const_cast<QoreLoggerInterface*>(this);
     }
+
+    const QoreMethod* logArgs;
 };
 
 #endif

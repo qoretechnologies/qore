@@ -10,14 +10,14 @@
 
 %exec-class ClosuresTest
 
-list sub closures(string x) {
-    my int a = 1;
+list<auto> sub closures(string x) {
+    int a = 1;
 
-    my code inc = string sub (any y) {
+    code inc = string sub (any y) {
         return sprintf("%s-%n-%n", x, y, ++a);
     };
 
-    my code dec = string sub (any y) {
+    code dec = string sub (any y) {
         return sprintf("%s-%n-%n", x, y, --a);
     };
 
@@ -34,10 +34,16 @@ public class ClosuresTest inherits QUnit::Test {
     }
 
     testPart1() {
-        my (code inc, code dec) = closures("test");
+        (code inc, code dec) = closures("test");
         assertEq("test-5-2", inc(5), "first closure");
         assertEq("test-7-3", inc(7), "second closure");
         assertEq("test-3-2", dec(3), "third closure");
+
+        Queue q();
+        background sub () {
+            q.push(1);
+        }();
+        assertEq(1, q.get(5s));
     }
 
     testPart2() {

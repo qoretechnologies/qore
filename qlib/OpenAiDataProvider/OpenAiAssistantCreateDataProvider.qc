@@ -251,7 +251,7 @@ public class OpenAiToolResourcesDataType inherits HashDataType {
 #! Constant for the tool resources data type
 public const OpenAiToolResourcesDataType = new OpenAiToolResourcesDataType();
 
-#! The file upload request type
+#! The Assistant create request type
 public class OpenAiAssistantCreateRequestType inherits HashDataType {
     public {
         #! fields
@@ -325,7 +325,7 @@ public class OpenAiAssistantCreateRequestType inherits HashDataType {
     }
 }
 
-#! File upload request type constant
+#! Assistant create request type constant
 public const OpenAiAssistantCreateRequestType = new OpenAiAssistantCreateRequestType();
 
 #! Assistant type

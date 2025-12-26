@@ -345,6 +345,23 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
     return meth ? 0 : -1;
 }
 
+StaticMethodReferenceNode::StaticMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* meth)
+        : AbstractParseObjectMethodReferenceNode(loc), meth(meth) {
+}
+
+StaticMethodReferenceNode::~StaticMethodReferenceNode() {
+}
+
+// returns a RunTimeObjectMethodReference or nullptr if there's an exception
+QoreValue StaticMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return new LocalStaticMethodCallReferenceNode(loc, meth);
+}
+
+int StaticMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    return 0;
+}
+
 ParseScopedSelfMethodReferenceNode::ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc,
         NamedScope* n_nscope) : AbstractParseObjectMethodReferenceNode(loc), nscope(n_nscope), method(0) {
 }
@@ -353,7 +370,7 @@ ParseScopedSelfMethodReferenceNode::~ParseScopedSelfMethodReferenceNode() {
     delete nscope;
 }
 
-// returns a RunTimeObjectMethodReference or NULL if there's an exception
+// returns a RunTimeObjectMethodReference or nullptr if there's an exception
 QoreValue ParseScopedSelfMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     return new RunTimeResolvedMethodReferenceNode(loc, runtime_get_stack_object(), method);
@@ -391,6 +408,12 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // run the reference in the Program where it was originally created
+    // NOTE: check this for race conditions
+    if (obj && !obj->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
     return qore_method_private::eval(*method, xsink, obj, args, qc, pgm);
 }
 
@@ -458,10 +481,19 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
     // try to resolve a method call if bare references are allowed
     // and we are parsing in an object context
     if (parse_check_parse_option(PO_ALLOW_BARE_REFS) && parse_context.oflag) {
-        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo());
+        const QoreClass* qc = parse_context.class_ctx;
         const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), str);
         if (m) {
             val = new ParseSelfMethodReferenceNode(loc, m);
+            delete this;
+            return 0;
+        }
+    } else if (parse_context.class_ctx) {
+        qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(parse_context.class_ctx));
+        const QoreMethod* m = priv->parseFindStaticMethod(str, priv);
+        if (m) {
+            assert(m->isStatic());
+            val = new StaticMethodReferenceNode(loc, m);
             delete this;
             return 0;
         }
@@ -534,10 +566,9 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    // set class ctx
-    ObjectSubstitutionHelper osh(0, class_ctx);
+    // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    return qore_method_private::eval(*method, xsink, 0, args, nullptr, pgm);
+    return qore_method_private::eval(*method, xsink, nullptr, args, class_ctx, pgm);
 }
 
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,

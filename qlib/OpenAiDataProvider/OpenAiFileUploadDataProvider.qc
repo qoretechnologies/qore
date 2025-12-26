@@ -22,6 +22,9 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+# for the manual processing of the file API with a raw HTTP call
+%requires json
+
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
@@ -63,7 +66,25 @@ public class OpenAiFileUploadDataProvider inherits OpenAiDataProviderCommon {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("POST", "files", req).body;
+        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        string ct = sprintf("%s; boundary=%s", MimeTypeMultipartFormData, mpboundary);
+        string msg = sprintf("--%s\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\n%s\r\n", mpboundary,
+            req.purpose);
+        msg += sprintf("--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n"
+            "Content-Type: %s\r\n\r\n", mpboundary, req.file.name,
+            req.file.mime_type);
+        msg += parse_base64_string_to_string(req.file.content);
+        msg += sprintf("\r\n--%s--\r\n", mpboundary);
+
+        hash<auto> hdr = {
+            "Content-Type": ct,
+            "Authorization": sprintf("%s %s", rest.getTokenType(), rest.getToken()),
+        };
+
+        hash<auto> info;
+        #on_error printf("INFO: %N\n", info);
+        hash<auto> h = rest.send(msg, "POST", "/v1/files", hdr, False, \info);
+        return parse_json(h.body);
     }
 
     #! Returns the description of a successful request message, if any
@@ -128,7 +149,7 @@ public class OpenAiFileUploadRequestType inherits HashDataType {
                 "display_name": "File Data",
                 "short_desc": "The contents of the file",
                 "desc": "The contents of the file",
-                "type": AbstractDataProviderTypeMap."any",
+                "type": FileDataType,
             },
         };
     }

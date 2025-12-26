@@ -81,55 +81,55 @@ module RestSchemaValidator {
 
     @subsection restschemavalidator_2_2 RestSchemaValidator v2.2
     - parse and report path arguments when processing REST requests on the server side
-      (<a href="https://github.com/qorelanguage/qore/issues/4661">issue 4661</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4661">issue 4661</a>)
 
     @subsection restschemavalidator_2_1_3 RestSchemaValidator v2.1.3
     - REST handlers must throw a \c DESERIALIZATION-ERROR when deserialization errors occur, so that a
       <tt>400 Bad Request</tt> response is returned
-      (<a href="https://github.com/qorelanguage/qore/issues/4647">issue 4647</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4647">issue 4647</a>)
     - allow for the client's time zone locale to be set for data serialization / deserialization
-      (<a href="https://github.com/qorelanguage/qore/issues/4639">issue 4639</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4639">issue 4639</a>)
 
     @subsection restschemavalidator_2_1_2 RestSchemaValidator v2.1.2
     - allow a logger to be set in validators
-      (<a href="https://github.com/qorelanguage/qore/issues/4509">issue 4509</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
     @subsection restschemavalidator_2_1_1 RestSchemaValidator v2.1.1
     - better fixes to REST URI path handling with schema validation; allow REST validator objects to declare if they
       manage the URI path in requests or not
-      (<a href="https://github.com/qorelanguage/qore/issues/4059">issue 4059</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
     @subsection restschemavalidator_2_1 RestSchemaValidator v2.1
     - fixed a bug handling complex \c Content-Type headers in responses
-      (<a href="https://github.com/qorelanguage/qore/issues/4019">issue 4019</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4019">issue 4019</a>)
     - fixed a bug where the \c Expect header was not supported and where binary message bodies were read as strings
-      (<a href="https://github.com/qorelanguage/qore/issues/4035">issue 4035</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4035">issue 4035</a>)
 
     @subsection restschemavalidator_2_0 RestSchemaValidator v2.0
     - implemented support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
     @subsection restschemavalidator_1_1_2 RestSchemaValidator v1.1.2
     - fixed \c NullRestSchemaValidator to report serialization errors instead of ignoring them and returning about
       <tt>200 OK</tt> response
-      (<a href="https://github.com/qorelanguage/qore/issues/3547">issue 3547</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3547">issue 3547</a>)
 
     @subsection restschemavalidator_1_1_1 RestSchemaValidator v1.1.1
     - fixed \c NullRestSchemaValidator not respecting set Content-Type header from RestClass
-      (<a href="https://github.com/qorelanguage/qore/issues/3427">issue 3427</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3427">issue 3427</a>)
 
     @subsection restschemavalidator_1_1 RestSchemaValidator v1.1
     - updated the default validator to try all serialization methods if multiple methods are available and one fails
-      (<a href="https://github.com/qorelanguage/qore/issues/2831">issue 2831</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2831">issue 2831</a>)
 
     @subsection restschemavalidator_1_0_2 RestSchemaValidator v1.0.2
     - fixed the null validator to handle binary message bodies; fixed issues with \c "text"
       serialization with binary message bodies
-      (<a href="https://github.com/qorelanguage/qore/issues/2816">issue 2816</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2816">issue 2816</a>)
 
     @subsection restschemavalidator_1_0_1 RestSchemaValidator v1.0.1
-    - updated docs for @ref RestSchemaValidator::AbstractRestSchemaValidator::parseRequest() "AbstractRestSchemaValidator::parseRequest()" to reflect how validation exceptions should be raised for proper error reporting (<a href="https://github.com/qorelanguage/qore/issues/2344">issue 2344</a>)
-    - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qorelanguage/qore/issues/2366">issue 2366</a>)
+    - updated docs for @ref RestSchemaValidator::AbstractRestSchemaValidator::parseRequest() "AbstractRestSchemaValidator::parseRequest()" to reflect how validation exceptions should be raised for proper error reporting (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
+    - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qoretechnologies/qore/issues/2366">issue 2366</a>)
 
     @subsection restschemavalidator_1_0 RestSchemaValidator v1.0
     - initial release of the RestSchemaValidator module
@@ -209,7 +209,7 @@ public namespace RestSchemaValidator {
     }
 
     #! abstract REST schema validation classes
-    public class AbstractRestSchemaValidator inherits LoggerWrapper {
+    public class AbstractRestSchemaValidator inherits Logger::LoggerWrapper, Qore::Serializable {
         #! Creates the object without a logger
         constructor() {
         }
@@ -592,6 +592,9 @@ public namespace RestSchemaValidator {
             const DataSerializationSupport = {
 %ifndef NoJson
                 MimeTypeJson: \make_json(),
+                "application/vnd.oracle.resource+json": \make_json(),
+                "application/swagger+json": \make_json(),
+                "application/vnd.api+json": \make_json(),
 %endif
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
@@ -678,10 +681,22 @@ public namespace RestSchemaValidator {
                     "in": \mime_parse_form_urlencoded_string(),
                 ),
 %ifndef NoJson
-                MimeTypeJson: (
+                MimeTypeJson: {
                     "code": "json",
                     "in": \parse_json(),
-                ),
+                },
+                "application/vnd.oracle.resource+json": {
+                    "code": "json",
+                    "in": \parse_json(),
+                },
+                "application/swagger+json":  {
+                    "code": "json",
+                    "in": \parse_json(),
+                },
+                "application/vnd.api+json": {
+                    "code": "json",
+                    "in": \parse_json(),
+                },
 %endif
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,
@@ -775,7 +790,8 @@ public namespace RestSchemaValidator {
             @throw SCHEMA-VALIDATION-ERROR this exception should be thrown if there is a validation error in the request so that a <tt>400 Bad Request</tt> response can be returned to the caller
             @throw INVALID-METHOD invalid HTTP method for the request; the \c arg argument should have a list of acceptable HTTP methods for this request
         */
-        private hash<RestRequestServerInfo> parseRequestImpl(string method, string path, *data http_body, reference<hash> headers) {
+        private hash<RestRequestServerInfo> parseRequestImpl(string method, string path, *data http_body,
+                reference<hash> headers) {
             hash<UriQueryInfo> h = parse_uri_query(path);
 
             hash<RestRequestServerInfo> rv({
@@ -783,12 +799,15 @@ public namespace RestSchemaValidator {
                 "query": h.params,
             });
 
+            *string ct = headers."content-type";
+            # remove modifiers
+            ct =~ s/[;,].*$//;
+
             if (exists http_body) {
-                *hash<auto> dh = DataDeserializationSupport.(headers."content-type");
+                *hash<auto> dh = DataDeserializationSupport{ct};
                 if (!dh)
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; "
-                        "types supported: %y; response body: %y", headers."content-type",
-                        keys DataDeserializationSupport, http_body);
+                        "types supported: %y; response body: %y", ct, keys DataDeserializationSupport, http_body);
 
                 string ds_code = dh.code;
                 try {
@@ -923,6 +942,8 @@ public namespace RestSchemaValidator {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body without a content-type; "
                         "response body: %y; headers: %y", response_body, hdr);
                 }
+                # remove modifiers
+                ct =~ s/[;,].*$//;
                 *hash<auto> dh = DataDeserializationSupport{ct};
                 if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; "

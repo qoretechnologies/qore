@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore HashDataType class definition
 
-/** HashDataType.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** HashDataType.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,12 @@ public class HashDataType inherits QoreDataType {
 
         #! if the type requires validation
         bool has_default_other_field_type = False;
+
+        #! if the default value should be validated
+        bool default_value_needs_check;
+
+        #! Are any fields required?
+        bool required_fields;
     }
 
     #! creates the object and assigns the name as the type
@@ -69,6 +75,9 @@ public class HashDataType inherits QoreDataType {
             : QoreDataType(base_type, options, tags, default_value, attr) {
         self.name = name ?? base_type.getName();
         self.fields = fields;
+        if (base_type == AutoHashType) {
+            scanFieldsForRequired();
+        }
     }
 
     #! creates the object from the given record description and assigns the name as the type
@@ -77,6 +86,7 @@ public class HashDataType inherits QoreDataType {
             : QoreDataType(AutoHashType, options, tags, default_value, attr) {
         self.name = name;
         self.fields = fields;
+        scanFieldsForRequired();
     }
 
     #! creates the object from the given TypedHash
@@ -87,11 +97,21 @@ public class HashDataType inherits QoreDataType {
         map addFieldIntern($1), t.getMembers();
     }
 
+    #! Copy and set new fields in the copy
+    HashDataType copyWithFields(hash<string, AbstractDataField> fields) {
+        HashDataType rv = copy();
+        rv.fields = fields;
+        return rv;
+    }
+
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
             has_default_other_field_type = default_other_field_type.hasType();
+            if (default_other_field_type.getTags().dynamic) {
+                setDynamicTag();
+            }
         } else {
             has_default_other_field_type = False;
         }
@@ -122,6 +142,26 @@ public class HashDataType inherits QoreDataType {
         type = type.getOrNothingType();
     }
 
+    #//! Returns the default value for the type or @ref nothing if the type has no default value
+    /** @par Example:
+        @code{.py}
+auto v = t.getDefaultValue();
+        @endcode
+
+        @return the default value for the type or @ref nothing if the type has no default value
+    */
+    *hash<auto> getDefaultValue() {
+        if (default_value && default_value_needs_check) {
+            try {
+                acceptsValue(default_value);
+                remove default_value_needs_check;
+            } catch (hash<ExceptionInfo> ex) {
+                remove default_value;
+            }
+        }
+        return default_value;
+    }
+
     #! Returns the value if the value can be assigned to the type
     /** @param input_value the value to assign to the type
 
@@ -132,12 +172,22 @@ public class HashDataType inherits QoreDataType {
     auto acceptsValue(auto input_value) {
         # specific check to provide a better error message in case of a missing argument
         on_error if (!exists input_value && fields && $1.err == "RUNTIME-TYPE-ERROR") {
-            rethrow "MISSING-VALUE-ERROR", sprintf("no input value provided for hash with defined fields: %y",
-                keys fields);
+            rethrow "MISSING-VALUE-ERROR", sprintf("No input value provided for hash type %y with defined fields: "
+                "%y: %s", getName(), keys fields, $1.desc);
         }
-        # {} + ensure that the hash value is "hash<auto>"
-        auto value = {} + QoreDataType::acceptsValue(input_value);
-        hash<auto> value_copy = value;
+        auto value;
+        bool checked;
+        if (exists input_value) {
+            if (input_value.typeCode() != NT_HASH) {
+                value = {} + QoreDataType::acceptsValue(input_value);
+                checked = True;
+            } else {
+                value = {} + input_value;
+            }
+        } else if (or_nothing_type) {
+            return;
+        }
+        *hash<auto> value_copy = value;
         # check fields if any are defined
         foreach AbstractDataField field in (fields.iterator()) {
             string key = field.getName();
@@ -154,8 +204,10 @@ public class HashDataType inherits QoreDataType {
             try {
                 value{key} = field.acceptsValue(val);
             } catch (hash<ExceptionInfo> ex) {
-                rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y field %y: %s: %s", getName(), key, ex.err,
-                    ex.desc);
+                AbstractDataProviderType field_type = field.getType();
+                rethrow exists val ? "RUNTIME-TYPE-ERROR" : "MISSING-VALUE-ERROR", sprintf("Error in type %y %s %s "
+                    "field %y: %s: %s", getName(), field.isMandatory() ? "mandatory" : "optional",
+                    field_type.getBaseTypeName(), key, ex.err, ex.desc);
             }
         }
         if (value_copy) {
@@ -165,15 +217,16 @@ public class HashDataType inherits QoreDataType {
                         try {
                             value{i.key} = default_other_field_type.acceptsValue(i.value);
                         } catch (hash<ExceptionInfo> ex) {
-                            rethrow "RUNTIME-TYPE-ERROR", sprintf("error in type %y default field %y: %s: %s",
-                                getName(), i.key, ex.err, ex.desc);
+                            rethrow exists i.value ? "RUNTIME-TYPE-ERROR" : "MISSING-VALUE-ERROR",
+                                sprintf("Error in type %y default field %y: %s: %s", getName(), i.key, ex.err,
+                                ex.desc);
                         }
                     }
                 } else {
                     value += value_copy;
                 }
             } else if (fields) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("error in type %y unsupported fields in value: %y; known "
+                throw "RUNTIME-TYPE-ERROR", sprintf("Error in type %y: unsupported fields in value: %y; known "
                     "fields: %y", getName(), keys value_copy, keys fields);
             }
         }
@@ -246,6 +299,12 @@ public class HashDataType inherits QoreDataType {
 
             if (exists (auto fv = field.getDefaultValue())) {
                 default_value{i.key} = fv;
+                if (!default_value_needs_check) {
+                    default_value_needs_check = True;
+                }
+            }
+            if (field.getType().getTags().dynamic) {
+                setDynamicTag();
             }
         }
         return self;
@@ -260,6 +319,22 @@ public class HashDataType inherits QoreDataType {
     #! Adds a field to the type from a typed hash member
     HashDataType addField(Qore::Reflection::TypedHashMember mem) {
         addFieldIntern(mem);
+        return self;
+    }
+
+    #! Replaces an existing field with a new definition
+    HashDataType replaceField(AbstractDataField field) {
+        if (!fields{field.getName()}) {
+            throw "REPLACE-FIELD-ERROR", sprintf("Field %y cannot be replaced, as it does not exist",
+                field.getName());
+        }
+        addFieldIntern(field);
+        return self;
+    }
+
+    #! Adds or replaces a field with a new definition
+    HashDataType addOrReplaceField(AbstractDataField field) {
+        addFieldIntern(field);
         return self;
     }
 
@@ -321,24 +396,47 @@ public class HashDataType inherits QoreDataType {
         if (default_other_field_type && !manual_default_other_field_type) {
             remove default_other_field_type;
         }
-        if (exists (auto val = field.getDefaultValue())) {
-            if (type == AutoHashType) {
-                type = AutoHashOrNothingType;
+        *bool dyn = field.getAttributes().dynamic;
+        # do not run getDefaultValue() for dynamic fields; do not generate a default value for "or nothing" types
+        if (!dyn) {
+            if (!or_nothing_type) {
+                if (exists (auto val = field.getDefaultValue())) {
+                    if ((type == AutoHashType) && !required_fields) {
+                        type = AutoHashOrNothingType;
+                    }
+                    default_value{field.getName()} = val;
+                    if (!default_value_needs_check) {
+                        default_value_needs_check = True;
+                    }
+                } else if ((type == AutoHashOrNothingType) && field.isMandatory()) {
+                    # or_nothing_type == False and type == *hash<auto> can only happen dynamically
+                    type = AutoHashType;
+                    required_fields = True;
+                }
             }
-            default_value{field.getName()} = val;
+        } else if (!tags.dynamic) {
+            tags.dynamic = True;
         }
     }
 
     #! adds a field to the type
     private addFieldIntern(AbstractDataField field) {
-        fields{field.getName()} = field;
-        postProcessAddedField(field);
+        postProcessAddedField(fields{field.getName()} = field);
     }
 
     #! adds a field to the type from a typed hash member
     private addFieldIntern(Qore::Reflection::TypedHashMember mem) {
-        fields{mem.getName()} = new QoreDataField(mem);
-        postProcessAddedField(fields{mem.getName()});
+        postProcessAddedField(fields{mem.getName()} = new QoreDataField(mem));
+    }
+
+    #! Set the "required_fields" flag if any fields are mandatory
+    private scanFieldsForRequired() {
+        foreach AbstractDataField field in (fields.iterator()) {
+            if (field.isMandatory()) {
+                required_fields = True;
+                return;
+            }
+        }
     }
 }
 }

@@ -194,7 +194,9 @@ struct ParseConditionalStack {
     }
 
     DLLLOCAL void push(bool do_mark = false) {
+        //printd(5, "ParseConditionalStack::push(%s) count %u -> %u\n", do_mark ? "true" : "false", count, count + 1);
         if (do_mark) {
+            //printd(5, "ParseConditionalStack::push() set mark %u\n", count);
             markvec.push_back(count);
         }
         ++count;
@@ -209,8 +211,12 @@ struct ParseConditionalStack {
             parse_error(*loc, "%%else without %%ifdef");
             return false;
         }
-        if (markvec.empty())
+        if (markvec.empty()) {
+            //printd(5, "ParseConditionalStack::test() ignoring; no mark (count %u)\n", count);
             return false;
+        }
+        //printd(5, "ParseConditionalStack::test() count %u mark %u -> %s\n", count, markvec.back(),
+        //    (count - 1) == markvec.back() ? "true" : "false");
         return markvec.back() == (count - 1);
     }
 
@@ -219,12 +225,15 @@ struct ParseConditionalStack {
             parse_error(*loc, "unmatched %%endif");
             return false;
         }
+        //printd(5, "ParseConditionalStack::pop() count %u -> %u\n", count, count - 1);
         --count;
         assert(!markvec.empty());
         if (count == markvec.back()) {
+            //printd(5, "ParseConditionalStack::pop() popping %%endif mark %u\n", count);
             markvec.pop_back();
             return true;
         }
+        //printd(5, "ParseConditionalStack::pop() ignoring; count %u != mark %u\n", count, markvec.back());
         return false;
     }
 
@@ -397,8 +406,11 @@ public:
     // used to capture the module definition in user modules
     QoreModuleDefContext* qmd = nullptr;
 
-    // user to track the current module context
+    // used to track the current module context
     const char* module_context_name = nullptr;
+
+    // used to track the current module context path
+    const char* module_context_path = nullptr;
 
     // AbstractQoreModule* with boolean ptr in bit 0
     uintptr_t qmi = 0;
@@ -1316,8 +1328,9 @@ void parse_try_module_set(unsigned c) {
 
 void parse_cond_push(bool mark) {
     ThreadData* td = thread_data.get();
-    if (!td->pcs)
+    if (!td->pcs) {
         td->pcs = new ParseConditionalStack;
+    }
     td->pcs->push(mark);
 }
 
@@ -1734,6 +1747,17 @@ const char* get_module_context_name() {
     return thread_data.get()->module_context_name;
 }
 
+const char* set_module_context_path(const char* p) {
+    ThreadData* td = thread_data.get();
+    const char* rv = td->module_context_path;
+    td->module_context_path = p;
+    return rv;
+}
+
+const char* get_module_context_path() {
+    return thread_data.get()->module_context_path;
+}
+
 void ModuleContextNamespaceList::clear() {
     for (mcnl_t::iterator i = begin(), e = end(); i != e; ++i)
         delete (*i).nns;
@@ -1873,12 +1897,12 @@ OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
     }
 }
 
-OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj)
-        : subst(obj ? true : false) {
+OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj) {
     if (obj) {
-        ThreadData* td = thread_data.get();
-        old_obj = td->current_obj;
-        td->current_obj = obj;
+#ifdef DEBUG
+        old_obj = nullptr;
+#endif
+        set(obj);
     }
 }
 
@@ -1886,6 +1910,15 @@ OptionalObjectOnlySubstitutionHelper::~OptionalObjectOnlySubstitutionHelper() {
     if (subst) {
         thread_data.get()->current_obj = old_obj;
     }
+}
+
+void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
+    assert(!old_obj);
+    assert(!subst);
+    ThreadData* td = thread_data.get();
+    old_obj = td->current_obj;
+    td->current_obj = obj;
+    subst = true;
 }
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
@@ -2302,6 +2335,23 @@ int64 parse_get_parse_options() {
 
 int64 runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
+}
+
+int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
+    assert(n);
+    ThreadData* td = thread_data.get();
+    const QoreStackLocation* w = td->current_stack_location;
+    size_t i = 0;
+    //printd(5, "runtime_get_parse_options_stack() n: %d w: %p\n", (int)n, w);
+    while (w) {
+        if (i == n) {
+            return w->getProgram()->getParseOptions64();
+        }
+        ++i;
+        w = w->getNext();
+    }
+    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", n);
+    return 0;
 }
 
 bool parse_check_parse_option(int64 o) {

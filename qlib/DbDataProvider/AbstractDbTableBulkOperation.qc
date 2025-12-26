@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDbTableBulkOperation class definition
 
-/** AbstractDbTableBulkOperation.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AbstractDbTableBulkOperation.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,8 @@ public class AbstractDbTableBulkOperation inherits AbstractDataProviderBulkOpera
     }
 
     #! Creates the object
-    constructor(DbTableDataProvider provider, AbstractBulkOperation bulk) : AbstractDataProviderBulkOperation(provider) {
+    constructor(DbTableDataProvider provider, AbstractBulkOperation bulk)
+            : AbstractDataProviderBulkOperation(provider, bulk.getOperationName(), bulk.getBlockSize()) {
         self.bulk = bulk;
     }
 
@@ -60,6 +61,11 @@ public class AbstractDbTableBulkOperation inherits AbstractDataProviderBulkOpera
     */
     discard() {
         bulk.discard();
+    }
+
+    #! This method is not called in this implementation
+    private flushImpl() {
+        # not called in this implementation
     }
 }
 }

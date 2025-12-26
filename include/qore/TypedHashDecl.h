@@ -246,4 +246,9 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclPipeInfo;
 
+//! SseMessageInfo hashdecl
+/** @since %Qore 2.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSseMessageInfo;
+
 #endif

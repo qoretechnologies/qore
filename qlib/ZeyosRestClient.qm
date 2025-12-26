@@ -95,7 +95,7 @@ printf("Response body: %N\n", response.body);
 
     @subsection Zeyosrestclientv1_1 ZeyosRestClient v1.1
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection Zeyosrestclientv1_0 ZeyosRestClient v1.0
     - the initial version of the %ZeyosRestClient module

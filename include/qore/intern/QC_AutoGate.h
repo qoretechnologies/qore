@@ -1,11 +1,11 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   QC_AutoGate.h
- 
+
   Qore Programming Language
- 
+
   Copyright (C) 2003 - 2023 David Nichols
- 
+
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
   to deal in the Software without restriction, including without limitation
@@ -42,25 +42,23 @@ DLLLOCAL extern QoreClass* QC_AUTOGATE;
 DLLLOCAL QoreClass *initAutoGateClass(QoreNamespace& ns);
 
 class QoreAutoGate : public AbstractPrivateData {
-   QoreGate *g;
-
 public:
-   DLLLOCAL QoreAutoGate(QoreGate *gt, ExceptionSink *xsink) {
-      g = gt;
-      g->grab(xsink);
-   }
+    DLLLOCAL QoreAutoGate(QoreGate* gt, ExceptionSink* xsink) : g(gt) {
+        g->grab(xsink);
+    }
 
-   using AbstractPrivateData::deref;
-   DLLLOCAL virtual void deref(ExceptionSink *xsink) {
-      if (ROdereference()) {
-	 g->deref(xsink);
-	 delete this;
-      }
-   }
+    using AbstractPrivateData::deref;
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+printf("QoreAutoGate::deref() this: %p: releasing gate\n", this);
+            g->release(xsink);
+            g->deref(xsink);
+            delete this;
+        }
+    }
 
-   DLLLOCAL virtual void destructor(ExceptionSink *xsink) {
-      g->release(xsink);
-   }
+private:
+    QoreGate* g;
 };
 
 #endif

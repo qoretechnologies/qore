@@ -61,14 +61,15 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
-    updateConnectionObject(object conn) {
-        if (!(conn instanceof RestClient)) {
+    updateConnectionObjects(object conn, object connobj) {
+        if (!(connobj instanceof RestClient)) {
             throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClient\" object; got "
-                "%y instead", self.className(), conn.className());
+                "%y instead", self.className(), connobj.className());
         }
-        rest = cast<RestClient>(conn);
+        rest = cast<RestClient>(connobj);
         rest.setLogger(logger);
     }
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -314,20 +314,20 @@ DLLEXPORT int64 getMicroSecZeroInt64(QoreValue a);
 
 //! to check if an AbstractQoreNode object is NOTHING
 static inline bool is_nothing(const AbstractQoreNode* n) {
-   if (!n || n->getType() == NT_NOTHING)
-      return true;
+    if (!n || n->getType() == NT_NOTHING)
+        return true;
 
-   return false;
+    return false;
 }
 
 //! to deref an AbstractQoreNode (when the pointer may be 0)
 static inline void discard(AbstractQoreNode* n, ExceptionSink* xsink) {
-   if (n)
-      n->deref(xsink);
+    if (n)
+        n->deref(xsink);
 }
 
 static inline const char* get_type_name(const AbstractQoreNode* n) {
-   return n ? n->getTypeName() : "nothing";
+    return n ? n->getTypeName() : "nothing";
 }
 
 //! returns a string type description of the full type of the value contained (ex: \c "nothing" for a null AbstractQoreNode pointer)
@@ -362,7 +362,7 @@ DLLEXPORT const char* get_full_type_name(const AbstractQoreNode* n, bool with_na
 DLLEXPORT const char* get_full_type_name(const AbstractQoreNode* n, bool with_namespaces, QoreString& scratch);
 
 static inline qore_type_t get_node_type(const AbstractQoreNode* n) {
-   return n ? n->getType() : NT_NOTHING;
+    return n ? n->getType() : NT_NOTHING;
 }
 
 typedef QoreStringNode* (*qore_uncompress_to_string_t)(const BinaryNode* b, const QoreEncoding* enc,
@@ -490,10 +490,10 @@ DLLEXPORT const char* tz_get_region_name(const AbstractQoreZoneInfo* tz);
 
 //! definition of the elements in the qore_option_list
 struct qore_option_s {
-   const char* option;   //!< name of the option
-   const char* constant; //!< name of the constant for this option
-   int type;             //!< the type of the option
-   bool value;           //!< the value of the option
+    const char* option;   //!< name of the option
+    const char* constant; //!< name of the constant for this option
+    int type;             //!< the type of the option
+    bool value;           //!< the value of the option
 };
 
 //! returns the error string as a QoreStringNode
@@ -837,5 +837,15 @@ DLLEXPORT void q_enforce_thread_size_on_primary_thread();
 /** @since %Qore 2.0
 */
 DLLEXPORT bool q_active_exception();
+
+//! Add the given module to the module blacklist
+/** @param name the name of the module
+    @param msg the message that will be included in any exception when the module is attempted to be loaded
+
+    @ereturn 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+
+    @since %Qore 2.0.1
+*/
+DLLEXPORT int q_add_module_to_blacklist(const char* name, const char* msg);
 
 #endif // _QORE_QORELIB_H

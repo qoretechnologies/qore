@@ -69,7 +69,7 @@ module BulkSqlUtil {
 
     @subsection bulksqlutil_v1_3_1 BulkSqlUtil v1.3.1
     - fixed a bug executing bulk upsert operations with constant data
-      (<a href="https://github.com/qorelanguage/qore/issues/4902">issue 4902</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4902">issue 4902</a>)
 
     @subsection bulksqlutil_v1_3 BulkSqlUtil v1.3
     - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the
@@ -81,7 +81,7 @@ module BulkSqlUtil {
     - added @ref BulkSqlUtil::AbstractBulkOperation::size() "AbstractBulkOperation::size()"
 
     @subsection bulksqlutil_v1_1 BulkSqlUtil v1.1
-    - fixed a bug in the @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation" class where inserts would fail or silently insert invalid data in the second or later blocks when constant hashes were used (<a href="https://github.com/qorelanguage/qore/issues/1625">issue 1625</a>)
+    - fixed a bug in the @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation" class where inserts would fail or silently insert invalid data in the second or later blocks when constant hashes were used (<a href="https://github.com/qoretechnologies/qore/issues/1625">issue 1625</a>)
 
     @subsection bulksqlutil_v1_0 BulkSqlUtil v1.0
     - initial release of the module

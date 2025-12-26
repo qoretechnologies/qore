@@ -135,9 +135,7 @@ public:
 
     // hashes should always be empty by the time they are deleted
     // because object destructors need to be run...
-    DLLLOCAL ~qore_hash_private() {
-        assert(member_list.empty());
-    }
+    DLLLOCAL ~qore_hash_private();
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
@@ -338,19 +336,21 @@ public:
 
     DLLLOCAL QoreHashNode* getCopy() const {
         QoreHashNode* h = new QoreHashNode;
-        if (hashdecl)
-            h->priv->hashdecl = hashdecl;
-        if (complexTypeInfo)
+        if (hashdecl) {
+            h->priv->setHashDecl(hashdecl);
+        } else if (complexTypeInfo) {
             h->priv->complexTypeInfo = complexTypeInfo;
+        }
         return h;
     }
 
     DLLLOCAL QoreHashNode* getEmptyCopy(bool is_value) const {
         QoreHashNode* h = new QoreHashNode(!is_value);
-        if (hashdecl)
-            h->priv->hashdecl = hashdecl;
-        if (complexTypeInfo)
+        if (hashdecl) {
+            h->priv->setHashDecl(hashdecl);
+        } else if (complexTypeInfo) {
             h->priv->complexTypeInfo = complexTypeInfo;
+        }
         return h;
     }
 
@@ -358,7 +358,7 @@ public:
         QoreHashNode* rv = copy();
         if (hashdecl || other.hashdecl) {
             if (!hashdecl || !other.hashdecl || !hashdecl->equal(other.hashdecl)) {
-                rv->priv->hashdecl = nullptr;
+                rv->priv->setHashDecl(nullptr);
                 rv->priv->complexTypeInfo = autoHashTypeInfo;
             }
         } else {
@@ -556,9 +556,12 @@ public:
         return false;
     }
 
+    DLLLOCAL void setHashDecl(const TypedHashDecl* hd);
+
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
-        if (!h->priv->hashdecl && !h->priv->complexTypeInfo)
+        if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {
             return h;
+        }
         // no exception is possible
         ReferenceHolder<QoreHashNode> holder(h, nullptr);
         return h->priv->copy(true);
@@ -566,7 +569,7 @@ public:
 
     DLLLOCAL static QoreHashNode* newHashDecl(const TypedHashDecl* hd) {
         QoreHashNode* rv = new QoreHashNode;
-        rv->priv->hashdecl = hd;
+        rv->priv->setHashDecl(hd);
         return rv;
     }
 

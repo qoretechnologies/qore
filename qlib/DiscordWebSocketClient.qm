@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DiscordWebSocketClient.qm Qore user module for calling Discord WebSocket services
 
-/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,7 +46,7 @@
 %endtry
 
 module DiscordWebSocketClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "User module for communicating with the Discord WebSocket API gateway";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -77,6 +77,10 @@ module DiscordWebSocketClient {
       @ref connectionproviderintro "ConnectionProvider" module)
 
     @section discordwebsocketclientrelnotes Release Notes
+
+    @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0.1
+    - fixed a bug handling \c HELLO messages
+      (<a href="https://github.com/qoretechnologies/qore/issues/4986">issue 4986</a>)
 
     @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0
     - the initial version of the %DiscordWebSocketClient module
@@ -389,6 +393,16 @@ hash<auto> h = ws.getInfo();
         return opts + DefaultOptions;
     }
 
+    #! Processes WebSocket events
+    private eventLoop() {
+        on_exit stopHeartbeatThread();
+        try {
+            WebSocketClient::eventLoop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("WebSocket event loop error: %y", get_exception_string(ex));
+        }
+    }
+
     #! Handles WebSocket protocol messages
     private int handleMessage(hash<WsMsgInfo> h, reference<data> buf) {
         if (h.op == WSOP_Close) {
@@ -470,6 +484,8 @@ hash<auto> h = ws.getInfo();
 
     #! Executes before a reconnect
     private reconnectPreamble() {
+        # NOTE: the hartbeat thread will be restarted automatically when the HELLO message is received in the new
+        # connection
         stopHeartbeatThread();
         disconnectIntern();
 
@@ -494,12 +510,6 @@ hash<auto> h = ws.getInfo();
         }
     }
 
-    #! Executes after a reconnect
-    private reconnectPostamble() {
-        # restart the heartbeat thread
-        startHeartbeatThread();
-    }
-
     #! Handle a message by raising a data event
     private int handleMessage(hash<auto> msg) {
         if (msg.d) {
@@ -512,11 +522,21 @@ hash<auto> h = ws.getInfo();
     private handleHello(hash<auto> d) {
         *int hbi = d.heartbeat_interval;
         if (!hbi) {
-            throw "DISCORD-ERROR", sprintf("missing heartbeat interval in Hello msg: %y", d);
+            throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);
         }
-        heartbeat_interval = hbi;
-        startHeartbeatThread();
-
+        {
+            AutoLock al(heartbeat_lock);
+            if (hbi != heartbeat_interval) {
+                heartbeat_interval = hbi;
+            }
+            # the heartbeat thread will not be running on a new connection
+            if (!hb_tid) {
+                startHeartbeatThreadIntern();
+            } else if (hbi != heartbeat_interval) {
+                # in case we get a HELLO message while the connection is still up (should not happen)
+                heartbeat_cond.signal();
+            }
+        }
         sendIdentify();
     }
 
@@ -549,7 +569,13 @@ hash<auto> h = ws.getInfo();
         });
     }
 
-    private startHeartbeatThread() {
+    #! Starts the heartbeat thread
+    /** Must be called with the heartbeat mutex locked
+    */
+    private startHeartbeatThreadIntern() {
+        if (hb_tid) {
+            throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
+        }
         heartbeat_cnt.inc();
         on_error {
             remove hb_tid;
@@ -580,6 +606,7 @@ hash<auto> h = ws.getInfo();
         AutoLock al(heartbeat_lock);
         remove hb_tid;
         remove hb_stop;
+        remove heartbeat_interval;
     }
 
     private heartbeatThread() {
@@ -604,11 +631,15 @@ hash<auto> h = ws.getInfo();
             if (hb_stop) {
                 break;
             }
-            # send a heartbeat message
-            sendData({
-                "op": DOP_HEARTBEAT,
-                "d": last_sequence,
-            });
+            try {
+                # send a heartbeat message
+                sendData({
+                    "op": DOP_HEARTBEAT,
+                    "d": last_sequence,
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                logError("Heartbeat failed: %y", get_exception_string(ex));
+            }
         }
     }
 
@@ -666,9 +697,6 @@ hash<auto> h = ws.getInfo();
 */
 public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConnectionObject {
     public {
-        #! A string containing the real URL using a wss scheme
-        string real_url;
-
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Discord WebSocket Connection",
@@ -705,7 +733,6 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     */
     constructor(string name, string description, *string url, hash<auto> attributes = {}, hash<auto> options = {})
             : WebSocketConnectionObject(name, description, url, attributes, options) {
-        setRealUrl(url);
     }
 
     #! creates the DiscordWebSocketConnection connection object

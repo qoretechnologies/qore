@@ -50,7 +50,9 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         @param where_cond the search conditions
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(SalesforceRestClient rest, string name, hash<SalesforceRestRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options) {
+    constructor(SalesforceRestClient rest, string name, hash<SalesforceRestRecordInfo> record_info,
+            *hash<auto> where_cond, *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
         self.name = name;
         self.record_info = record_info;
@@ -75,17 +77,6 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
     */
     bool valid() {
         return i.valid();
-    }
-
-    #! Increments the row pointer when retrieving rows from a select statement; returns @ref True if there is a row to retrieve, @ref False if not
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
-
-        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
-        docs for more information
-    */
-    bool next() {
-        return i.next();
     }
 
     #! Returns a single record if the iterator is valid
@@ -139,6 +130,9 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         }
         if (search_options.orderby) {
             soql += " order by " + getOrderBy(search_options.orderby);
+            if (search_options.orderby_desc) {
+                soql += " desc";
+            }
         }
         if (search_options.limit) {
             soql += sprintf(" limit %d", search_options.limit);
@@ -271,7 +265,8 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         }
 
         if (!exists cve && !cmd.nocolumn && !cmd.columnargs) {
-            throw "SELECT-ERROR", sprintf("column operator %y requires a column argument name but none was provided", cop);
+            throw "SELECT-ERROR", sprintf("column operator %y requires a column argument name but none was provided",
+                cop);
         }
 
         return cmd.code(cve, arg);
@@ -343,6 +338,17 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
         }
 
         return sprintf("'%s'", value.format("YYYY-MM-DDTHH:mm:SS.xxZ"));
+    }
+
+    #! Increments the row pointer when retrieving rows from a select statement; returns @ref True if there is a row to retrieve, @ref False if not
+    /**
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+
+        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
+        docs for more information
+    */
+    private bool nextImpl() {
+        return i.next();
     }
 }
 }

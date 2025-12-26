@@ -74,8 +74,8 @@ public class FileMoveDataProvider inherits FileDataProviderBase {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (root.val() && lock) {
-            checkPath(req.source);
-            checkPath(req.target);
+            checkPath(\req.source);
+            checkPath(\req.target);
         }
         checkReadOnly("move");
 

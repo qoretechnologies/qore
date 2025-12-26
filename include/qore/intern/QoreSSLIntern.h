@@ -55,16 +55,19 @@ public:
         return rv.release();
     }
 
-    DLLLOCAL X509* getX509(X509 **x) { return d2i_X509_bio(b, x); }
+    DLLLOCAL X509* getX509(X509** x) { return d2i_X509_bio(b, x); }
 
     DLLLOCAL BIO* getBIO() { return b; }
     DLLLOCAL BIO* operator*() const { return b; }
 
+    DLLLOCAL bool eof() const {
+        return BIO_eof(b) ? true : false;
+    }
 
 protected:
-    BIO *b;
+    BIO* b;
 
-    DLLLOCAL QoreBIO(BIO *n_b) : b(n_b) {}
+    DLLLOCAL QoreBIO(BIO* b) : b(b) {}
 };
 
 class QoreMemBIO : public QoreBIO {

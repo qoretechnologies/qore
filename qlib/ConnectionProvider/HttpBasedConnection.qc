@@ -30,11 +30,6 @@ public namespace ConnectionProvider {
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
 public class HttpBasedConnection inherits AbstractConnectionWithInfo {
-    public {
-        #! A string containing the real URL using a http/https scheme
-        string real_url;
-    }
-
     #! Creates the connection object
     /** @param name the name of the connection
         @param desc connection description
@@ -48,7 +43,6 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     */
     constructor(string name, string desc, string url, hash<auto> attributes, hash<auto> options, *Logger logger)
             : AbstractConnectionWithInfo(name, desc, url, attributes, options, logger) {
-        setRealUrl(url);
     }
 
     #! Creates the connection object
@@ -70,7 +64,6 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
-        setRealUrl(url);
     }
 
     #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
@@ -90,7 +83,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
 
         @since ConnectionProvider 1.7
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         return getPollImpl().startPollConnect();
     }
 
@@ -99,8 +92,10 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
 
         sets the real HTTP URL for HTTP-based connections
     */
-    private setRealUrl(string url) {
-        real_url = getRealUrl(url, getConnectionSchemeInfo(), getType());
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = getRealUrl(url, getConnectionSchemeInfo(), getType());
+        }
     }
 }
 } # ConnectionProvider namespace

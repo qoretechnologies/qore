@@ -33,6 +33,15 @@
 
 #define _QORE_QORELIBINTERN_H
 
+//#define _QORE_CYCLE_CHECK 1
+#ifdef _QORE_CYCLE_CHECK
+#define QORE_DEBUG_OBJ_REFS 0
+#define QRO_LVL 0
+#else
+#define QORE_DEBUG_OBJ_REFS 5
+#define QRO_LVL 1
+#endif
+
 #include "qore/intern/config.h"
 
 #include <atomic>
@@ -162,6 +171,7 @@ enum q_setpub_t : unsigned char {
 struct QoreParseContext {
     QoreProgram* pgm;
     LocalVar* oflag = nullptr;
+    const QoreClass* class_ctx = nullptr;
     int pflag = 0;
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
@@ -169,7 +179,10 @@ struct QoreParseContext {
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
 
-    DLLLOCAL QoreParseContext(LocalVar* oflag, QoreProgram* pgm = getProgram()) : pgm(pgm), oflag(oflag) {
+    DLLLOCAL QoreParseContext(LocalVar* oflag, QoreProgram* pgm = getProgram());
+
+    DLLLOCAL QoreParseContext(const QoreClass* class_ctx, QoreProgram* pgm = getProgram()) : pgm(pgm),
+            class_ctx(class_ctx) {
     }
 
     DLLLOCAL int unsetFlags(int flags) {
@@ -1140,5 +1153,11 @@ DLLLOCAL void qore_delete_module_options();
 DLLLOCAL const QoreTypeInfo* qore_get_type_from_string_intern(const char* str);
 
 DLLLOCAL QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink);
+
+// initialize thread-local storage
+DLLLOCAL void qore_thread_local_storage_init();
+
+// destroy thread-local storage
+DLLLOCAL void qore_thread_local_storage_destroy();
 
 #endif

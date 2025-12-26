@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -560,41 +560,32 @@ int getppid() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 #endif
 }
 
-//! Creates a copy of the current process with a new PID; returns 0 in the child process; returns the child's PID in the parent process
-/** This function will throw an \c ILLEGAL-FORK exception if more than one thread is running
-
-    @par Platform Availability:
+//! Creates a copy of the current process with a new PID
+/** @par Platform Availability:
     @ref Qore::Option::HAVE_FORK
 
-    @return 0 in the child process; returns the child's PID in the parent process; if an error occurs, then -1 is returned, in this case no child process was started and the error number can be retrieved with the errno() function
+    @return 0 in the child process; returns the child's PID in the parent process; if an error occurs, then -1 is
+    returned, in this case no child process was started and the error number can be retrieved with the errno()
+    function
 
     @par Example:
     @code{.py}
 int pid;
-if (pid = fork())
+if (pid = fork()) {
     printf("child has PID %d\n", pid);
+}
     @endcode
 
-    @throw ILLEGAL-FORK Cannot fork if more than one thread is running
-
     @note
-    - after a fork(), the only safe call is @ref exec(), many system calls are not async-signal safe, including pthread_create() which is
-      used to start new threads.
-    - the %Qore process will crash if unsafe operations are called after a fork()
-    - the signal-handling thread cannot be reliably started on many platforms (ex: FreeBSD) after a fork(), therefore signal handling
-      is disabled in the child process after a fork()
-    - on Darwin (OS/X) threading primitives are unusable in the child process after a fork()
+    - no background threads will be running in the new process
+    - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
+      safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
+      crash if unsafe operations are called after a fork()
+    - the signal-handling thread cannot be reliably started on some platforms after a fork(), so signal handling is
+      currently disabled in the child process after a fork() on all platforms but Linux and macOS
  */
 int fork() [dom=PROCESS] {
 #ifdef HAVE_FORK
-#ifdef HAVE_SIGNAL_HANDLING
-   int QORE_THREAD_LIMIT = 1 + (QSM.thread_running ? 1 : 0);
-#else
-#define QORE_THREAD_LIMIT 1
-#endif
-   if (thread_list.getNumThreads() > (unsigned)(QORE_THREAD_LIMIT))
-      return xsink->raiseException("ILLEGAL-FORK", "cannot fork() when other threads are running");
-
 #ifdef HAVE_SIGNAL_HANDLING
    // we may not fork from within a signal handler
    if (QSM.thread_running && q_gettid() == QSM.q_gettid())
@@ -1058,19 +1049,21 @@ list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family =
 close_all_fd();
     @endcode
 
-    @note if there are file descriptors open by Qore when this function is called, this function will also close those file descriptors; normally this function should only be used when starting a new process after a fork() and exec() to close any inherited descriptors, for example
+    @note if there are file descriptors open by Qore when this function is called, this function will also close those
+    file descriptors; normally this function should only be used when starting a new process after a fork() and exec()
+    to close any inherited descriptors, for example
  */
 nothing close_all_fd(*softbool strd) [dom=PROCESS] {
 #if defined(HAVE_UNISTD_H) && defined(_SC_OPEN_MAX)
-   int start = strd ? 0 : 2;
-   // get max file descriptor
-   int max = (int)sysconf(_SC_OPEN_MAX);
-   printd(5, "close_all_fd() start: %d max: %d\n", start, max);
+    int start = strd ? 0 : 3;
+    // get max file descriptor
+    int max = (int)sysconf(_SC_OPEN_MAX);
+    printd(5, "close_all_fd() start: %d max: %d\n", start, max);
 
-   for (;start < max; ++start)
-      close(start);
+    for (;start < max; ++start)
+        close(start);
 #else
-   missing_function_error("close_all_fd", xsink);
+    missing_function_error("close_all_fd", xsink);
 #endif // HAVE_UNISTD
 }
 
@@ -1214,5 +1207,51 @@ int qore_set_library_options(int opts) [dom=PROCESS] {
 */
 int qore_get_library_options() [dom=PROCESS] {
     return qore_library_options;
+}
+
+//! Adds the given module to the blacklist
+/** @param name the name of the module
+    @param msg the message that will be included in any exception when the module is attempted to be loaded
+
+    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+
+    @since %Qore 2.0.1
+*/
+int qore_add_module_to_blacklist(string name, string msg = "by an API call") [dom=PROCESS] {
+    TempEncodingHelper n(name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    TempEncodingHelper m(msg, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return QMM.addModuleToBlacklist(n->c_str(), m->c_str());
+}
+
+//! Adds the given module to the blacklist and throws an exception if here's an error
+/** @param name the name of the module
+    @param msg the message that will be included in any exception when the module is attempted to be loaded
+
+    @throw BLACKLIST-ERROR could not add module to blacklist
+
+    If the given module is already in the blacklist, then no error is raised
+
+    @since %Qore 2.0.1
+*/
+int qore_add_module_to_blacklist_ex(string name, string msg = "by an API call") [dom=PROCESS] {
+    TempEncodingHelper n(name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    TempEncodingHelper m(msg, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int rc = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
+    if (rc == -1) {
+        xsink->raiseException("BLACKLIST-ERROR", "Cannot blacklist module \"%s\", as it is already loaded",
+            n->c_str());
+    }
 }
 ///@}

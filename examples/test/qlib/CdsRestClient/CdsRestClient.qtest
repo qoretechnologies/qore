@@ -41,7 +41,6 @@ class CdsTest inherits QUnit::Test {
             "conn":           "c,connection=s",
             "client_id":      "i,client_id=s",
             "client_secret":  "s,client_secret=s",
-            "tenant":         "T,tenant,=s",
             "timeout":        "t,timeout=i",
             "url":            "u,url=s",
         };
@@ -81,7 +80,6 @@ class CdsTest inherits QUnit::Test {
         printOption("-c,--connection=ARG", "set CDS connection name", OptionColumn);
         printOption("-i,--client_id=ARG", "set CDS consumer key", OptionColumn);
         printOption("-s,--client_secret=ARG", "set CDS consumer secret", OptionColumn);
-        printOption("-T,--tenant=ARG", "set CDS tenant", OptionColumn);
         printOption("-t,--timeout=ARG", "set CDS timeout in seconds", OptionColumn);
         printOption("-u,--url=ARG", "URL for the CDS instance", OptionColumn);
     }
@@ -101,15 +99,12 @@ class CdsTest inherits QUnit::Test {
         if (!cdsopts.url) {
             error("missing --url or --connection options, CDS_URL or CDS_CONNECTION environment variables");
         }
-        cdsopts.client_id = m_options.client_id ?? ENV.CDS_CLIENT_ID;
-        if (!cdsopts.client_id)
+        cdsopts.oauth2_client_id = m_options.client_id ?? ENV.CDS_CLIENT_ID;
+        if (!cdsopts.oauth2_client_id)
             error("missing --client_id option or CDS_CLIENT_ID environment variable");
-        cdsopts.client_secret = m_options.client_secret ?? ENV.CDS_CLIENT_SECRET;
-        if (!cdsopts.client_secret)
+        cdsopts.oauth2_client_secret = m_options.client_secret ?? ENV.CDS_CLIENT_SECRET;
+        if (!cdsopts.oauth2_client_secret)
             error("missing --client_secret option or CDS_CLIENT_SECRET environment variable");
-        cdsopts.tenant = m_options.tenant ?? ENV.CDS_TENANT;
-        if (!cdsopts.tenant)
-            error("missing --tenant option or CDS_TENANT environment variable");
         if (cdsopts."timeout")
             cdsopts.connect_timeout = cdsopts."timeout";
 
@@ -123,7 +118,7 @@ class CdsTest inherits QUnit::Test {
     CdsDataProviderTests() {
         if (!rc) testSkip("no CDS connection");
 
-        CdsRestDataProvider dp(rc);
+        CdsRestTablesDataProvider dp(rc);
 
         assertFalse(dp.requiresTransactionManagement());
         {
@@ -208,9 +203,8 @@ class CdsTest inherits QUnit::Test {
                 "desc": "test",
                 "url": url,
                 "opts": {
-                    "client_id": "x",
-                    "client_secret": "x",
-                    "tenant": "x",
+                    "oauth2_client_id": "x",
+                    "oauth2_client_secret": "x",
                 }
             });
             assertEq(True, crc instanceof CdsRestConnection);
@@ -222,9 +216,8 @@ class CdsTest inherits QUnit::Test {
                 "desc": "test",
                 "url": url,
                 "opts": {
-                    "client_id": "x",
-                    "client_secret": "x",
-                    "tenant": "x",
+                    "oauth2_client_id": "x",
+                    "oauth2_client_secret": "x",
                     "x": 1,
                 },
             });
@@ -236,20 +229,19 @@ class CdsTest inherits QUnit::Test {
                 "desc": "test",
                 "url": "https://example.com",
                 "opts": {
-                    "client_id": "x",
-                    "client_secret": "x",
-                    "tenant": "x",
+                    "oauth2_client_id": "x",
+                    "oauth2_client_secret": "x",
                     "oauth2_grant_type": "authorization_code",
                     "api_profile": "dynamics",
                 },
             });
             assertEq(True, crc instanceof DynamicsRestConnection);
-            assertEq("https://login.microsoftonline.com/x/oauth2/v2.0/authorize?"
-                "scope=offline_access%20https://example.com/.default&redirect_uri=auto&"
+            assertEq("https://login.microsoftonline.com/common/oauth2/v2.0/authorize?"
+                "scope=offline_access%20https://example.com/user_impersonation&redirect_uri=auto&"
                 "client_id=x&response_type=code&response_mode=query",
                 crc.getAuthorizationCodeRequest());
-            assertEq("https://login.microsoftonline.com/x/oauth2/v2.0/authorize", crc.getAuthUrl());
-            assertEq("https://login.microsoftonline.com/x/oauth2/v2.0/token", crc.getTokenUrl());
+            assertEq("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", crc.getAuthUrl());
+            assertEq("https://login.microsoftonline.com/common/oauth2/v2.0/token", crc.getTokenUrl());
         }
 
 %ifdef NoJson
@@ -262,9 +254,8 @@ class CdsTest inherits QUnit::Test {
                 "desc": "test",
                 "url": url,
                 "opts": {
-                    "client_id": "x",
-                    "client_secret": "x",
-                    "tenant": "x",
+                    "oauth2_client_id": "x",
+                    "oauth2_client_secret": "x",
                 },
             });
             CdsRestClient client = crc.get(False);
@@ -286,6 +277,11 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
 
     hash<auto> waitForResult() {
         return msgq.get();
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {

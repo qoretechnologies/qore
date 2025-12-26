@@ -77,11 +77,11 @@ module HttpClientDataProvider {
 
     @subsection httpclientdataprovider_v1_1 HttpClientDataProvider v1.1
     - added the \c headers option to allow auth headers to be set in the data provider
-      (<a href="https://github.com/qorelanguage/qore/issues/4695">issue 4695</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4695">issue 4695</a>)
 
     @subsection httpclientdataprovider_v1_0_1 HttpClientDataProvider v1.0.1
     - added support for the \c pre_encoded_urls option
-      (<a href="https://github.com/qorelanguage/qore/issues/4656">issue 4656</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
     @subsection httpclientdataprovider_v1_0 HttpClientDataProvider v1.0
     - initial release of the module

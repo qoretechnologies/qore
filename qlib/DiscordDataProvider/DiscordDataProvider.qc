@@ -81,6 +81,8 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     }
 
     private {
+        static hash<string, code> dynamic_children;
+
         const ChildMap = {
             "guilds": Class::forName("DiscordDataProvider::DiscordGuildsDataProvider"),
             "guilds-by-name": Class::forName("DiscordDataProvider::DiscordGuildsByNameDataProvider"),
@@ -96,7 +98,18 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
 
     #! Creates the object from a DiscordRestClient
     constructor(DiscordRestClient rest) : DiscordDataProviderBase(rest) {
-        self.rest = rest;
+    }
+
+    #! Creates the object from a DiscordRestClient
+    constructor(DiscordRestConnection conn) : DiscordDataProviderBase(conn) {
+    }
+
+    #! Registers a child data provider
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+    */
+    static registerChild(string name, code generator) {
+        dynamic_children{name} = generator;
     }
 
     #! Returns a DiscordRestClient connection from the options
@@ -144,7 +157,6 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     #! Return data provider summary info
     *list<hash<DataProvider::DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
         *list<hash<DataProvider::DataProviderSummaryInfo>> rv;
-        #return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
         foreach Class cls in (ChildMap.iterator()) {
             try {
                 rv += cls.getConstant("ProviderSummaryInfo").getValue();
@@ -155,6 +167,9 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
             }
             rv += cls.getStaticMember("ProviderSummaryInfo").getValue();
         }
+        if (conn) {
+            map rv += $1.value($1.key, conn).getSummaryInfo(), dynamic_children.pairIterator();
+        }
         return rv;
     }
 
@@ -162,7 +177,11 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
+        list<string> rv = keys ChildMap;
+        if (dynamic_children && conn) {
+            rv += keys dynamic_children;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -172,7 +191,10 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = ChildMap{name};
-        if (!cls) {
+        if (!cls && conn) {
+            if (*code gen = dynamic_children{name}) {
+                return gen(name, conn);
+            }
             return;
         }
         return cls.newObject(rest);

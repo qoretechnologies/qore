@@ -61,7 +61,7 @@ module SalesforceRestDataProvider {
         # register all supported actions
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "create",
             "display_name": "Create Record",
             "short_desc": "Create a record in Salesforce",
@@ -75,11 +75,12 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_CREATE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find_single",
             "display_name": "Find Single Record",
             "short_desc": "Find a single record in Salesforce",
@@ -93,11 +94,12 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find",
             "display_name": "Find Matching Records",
             "short_desc": "Find records in Salesforce",
@@ -111,11 +113,12 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_FIND,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "update",
             "display_name": "Update Records",
             "short_desc": "Update records in Salesforce",
@@ -129,11 +132,12 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_UPDATE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "upsert",
             "display_name": "Upsert Records",
             "short_desc": "Upsert records in Salesforce",
@@ -147,11 +151,12 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_UPSERT,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SalesforceRestDataProvider::AppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "delete",
             "display_name": "Delete Records",
             "short_desc": "Delete records in Salesforce",
@@ -165,6 +170,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_DELETE,
+            "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
     };
 }
@@ -212,13 +218,13 @@ module SalesforceRestDataProvider {
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection salesforcerestdataprovider_v1_0_1 SalesforceRestDataProvider v1.0.1
     - fixed a bug deleting records with no matches
-      (<a href="https://github.com/qorelanguage/qore/issues/3921">issue 3921</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3921">issue 3921</a>)
     - fixed serializing \c DATE fields
-      (<a href="https://github.com/qorelanguage/qore/issues/3908">issue 3908</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3908">issue 3908</a>)
 
     @subsection salesforcerestdataprovider_v1_0 SalesforceRestDataProvider v1.0
     - initial release of the module
@@ -226,6 +232,8 @@ module SalesforceRestDataProvider {
 
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
+#! Application name
+public const AppName = "Salesforce";
 }
 
 namespace Priv {

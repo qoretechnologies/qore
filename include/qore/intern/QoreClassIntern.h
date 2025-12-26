@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -377,7 +377,7 @@ public:
                 err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
             }
         } else {
-            err = statements->parseInit(this);
+            err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
         }
 
         // recheck types against committed types if necessary
@@ -951,7 +951,7 @@ typedef std::vector<const qore_class_private*> cls_vec_t;
 // maps from an accessing context to the object storage context
 typedef std::map<const qore_class_private*, const qore_class_private*> cls_context_map_t;
 
-// list of inherited member info dsta structures for initialization
+// list of inherited member info data structures for initialization
 typedef std::deque<const QoreMemberInfo*> member_info_list_t;
 
 // the access stored here is a composite access for the member; the maximum of the class inheritance access
@@ -1199,8 +1199,9 @@ protected:
 template <typename T>
 class QoreMemberMapBase {
 public:
-    typedef std::pair<char*, std::unique_ptr<T>> member_list_element_t;
-    typedef std::deque<member_list_element_t> member_list_t;
+    typedef std::pair<char*, T*> member_list_element_t;
+    //typedef std::deque<member_list_element_t> member_list_t;
+    typedef std::list<member_list_element_t> member_list_t;
     typedef typename member_list_t::iterator iterator;
     typedef typename member_list_t::const_iterator const_iterator;
     member_list_t member_list;
@@ -1210,6 +1211,7 @@ public:
             //printd(5, "QoreMemberMap::~QoreMemberMap() this: %p freeing member %p '%s'\n", this, i->second, i->first);
             // the key is allocated normally in the scanner, and must be freed manually here
             free(i.first);
+            delete i.second;
         }
         member_list.clear();
     }
@@ -1222,7 +1224,7 @@ public:
         typename member_list_t::const_iterator i =
             std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
                 -> bool {return !strcmp(e.first, name); });
-        return i == member_list.end() ? nullptr : i->second.get();
+        return i == member_list.end() ? nullptr : i->second;
     }
 
     DLLLOCAL T* replace(const char* name, T* info) {
@@ -1230,8 +1232,8 @@ public:
             std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
                 -> bool {return !strcmp(e.first, name); });
         assert(i != member_list.end());
-        T* rv = i->second.release();
-        i->second = std::unique_ptr<T>(info);
+        T* rv = i->second;
+        i->second = info;
         return rv;
     }
 
@@ -1243,7 +1245,7 @@ public:
         assert(name);
         assert(info);
         assert(!inList(name));
-        member_list.push_back(std::make_pair(name, std::unique_ptr<T>(info)));
+        member_list.push_back(std::make_pair(name, info));
     }
 
     DLLLOCAL void addNoCheck(std::pair<char*, T*> pair) {
@@ -1275,7 +1277,7 @@ public:
         assert(name);
         assert(info);
         assert(!inList(name));
-        member_list.insert(member_list.begin(), std::make_pair(name, std::unique_ptr<QoreMemberInfo>(info)));
+        member_list.insert(member_list.begin(), std::make_pair(name, info));
     }
 
     DLLLOCAL int parseInit(LocalVar& selfid);
@@ -1297,6 +1299,7 @@ public:
             i->second->delVar(xsink);
             // the key is allocated normally in the scanner, and must be freed manually here
             free(i->first);
+            delete i->second;
         }
         member_list.clear();
     }
@@ -1310,6 +1313,7 @@ public:
             */
             // the key is allocated normally in the scanner, and must be freed manually here
             free(i->first);
+            delete i->second;
         }
         member_list.clear();
     }
@@ -1511,6 +1515,7 @@ public:
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // inaccessible methods are ignored
     DLLLOCAL const QoreMethod* parseFindNormalMethod(const char* name, const qore_class_private* class_ctx,
@@ -1653,6 +1658,16 @@ public:
         for (auto& i : *this) {
             (*i).initializeBuiltin();
         }
+    }
+
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const {
+        for (auto& i : *this) {
+            const ConstantEntry* ce = (*i).findConstantEntry(name);
+            if (ce) {
+                return ce;
+            }
+        }
+        return nullptr;
     }
 };
 
@@ -1847,7 +1862,7 @@ public:
 
     // member list (map)
     QoreMemberMap members;
-    // member initialization list in hierarchy nitialization order
+    // member initialization list in hierarchy initialization order
     member_init_list_t member_init_list;
 
     // static var list (map)
@@ -1996,6 +2011,9 @@ public:
         @since %Qore 1.0.13
     */
     DLLLOCAL QoreValue getReferencedKeyValue(const char* key) const;
+
+    // Find a constant entry by name
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
@@ -2576,32 +2594,7 @@ public:
     }
 
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
-            const qore_class_private* class_ctx) {
-        parseInitConstants();
-
-        // check constant list
-        ClassAccess access = Public;
-        QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
-
-        // check for accessibility to private constants
-        if (found) {
-            if (access == Internal) {
-                if (class_ctx == this)
-                    return rv;
-                else {
-                    cTypeInfo = nullptr;
-                    found = false;
-                }
-            } else if (access == Private && !parseCheckPrivateClassAccess(class_ctx)) {
-                cTypeInfo = nullptr;
-                found = false;
-            } else {
-                return rv;
-            }
-        }
-
-        return scl ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this) : QoreValue();
-    }
+            const qore_class_private* class_ctx);
 
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
@@ -3230,10 +3223,12 @@ public:
         assert(!scl);
         if (bcl) {
             scl = bcl;
-            if (!has_new_user_changes)
+            if (!has_new_user_changes) {
                 has_new_user_changes = true;
-            if (!has_sig_changes)
+            }
+            if (!has_sig_changes) {
                 has_sig_changes = true;
+            }
         }
     }
 
@@ -3724,7 +3719,7 @@ public:
 
     DLLLOCAL const U& getMember() const {
         assert(this->valid());
-        return *reinterpret_cast<const U*>(this->i->second.get());
+        return *reinterpret_cast<const U*>(this->i->second);
     }
 
     DLLLOCAL const char* getName() const {

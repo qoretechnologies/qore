@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file RestHandler.qm Qore handler definition for the HttpServer module for exporting REST services
 
-/* RestHandler.qm Copyright (C) 2013 - 2024 Qore Technologies, s.r.o.
+/* RestHandler.qm Copyright (C) 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -42,7 +42,7 @@
 %requires reflection
 
 module RestHandler {
-    version = "1.6.2";
+    version = "1.6.3";
     desc = "user module for implementing REST services with the Qore HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -74,18 +74,18 @@ module RestHandler {
 
     The @ref RestHandler::RestHandler "RestHandler" class uses any of the following modules if the modules are
     available when the RestHandler module is initialized:
-    - <a href="https://github.com/qorelanguage/module-json">json</a>: provides automatic support for JSON payload
+    - <a href="https://github.com/qoretechnologies/module-json">json</a>: provides automatic support for JSON payload
       de/serialization
-    - <a href="https://github.com/qorelanguage/module-xml">xml</a>: provides automatic support for XML-RPC payload
+    - <a href="https://github.com/qoretechnologies/module-xml">xml</a>: provides automatic support for XML-RPC payload
       de/serialization
-    - <a href="https://github.com/qorelanguage/module-yaml">yaml</a>: provides automatic support for YAML payload
+    - <a href="https://github.com/qoretechnologies/module-yaml">yaml</a>: provides automatic support for YAML payload
       de/serialization
 
     URL form encoding is supported as well for message bodies according to
     <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a> with
     \c "Content-Type: application/x-www-form-urlencoded".
 
-    For standard REST web service development, the <a href="https://github.com/qorelanguage/module-json">json</a>
+    For standard REST web service development, the <a href="https://github.com/qoretechnologies/module-json">json</a>
     module will be required to support JSON serialization.
 
     The @ref RestHandler::RestHandler "RestHandler" class will automatically deserialize request bodies if the
@@ -153,18 +153,7 @@ module RestHandler {
     @endcode
 
     The arguments passed to the REST action methods are as follows:
-    - \a cx: a call context hash; the same value as documented in the \a cx parameter of
-      @ref HttpServer::AbstractHttpRequestHandler::handleRequest(); with the following additions:
-      - \a body: the deserialized message body (if any); if no body was sent, then any parsed URI arguments are copied
-        here
-      - \a hdr: a copy of the header hash as returned by
-        @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" as received by the
-        @ref HttpServer::HttpServer "HttpServer" (for example cx.hdr.path gives the original URI request path)
-      - \a orig_method: the string if any \c "action" argumnt was sent either in the message body or as a URI argument
-      - \a rest_method: same as \a orig_method, only with the first letter capitalized (only present if an \c "action"
-        argument was sent)
-      - \a rest_action_method: the method name that will be called on the actual %Qore REST class (a subclass of
-        @ref RestHandler::AbstractRestClass "AbstractRestClass")
+    - \a cx: a call context hash; see @ref rest_context_argument
     - \c ah: these are the parsed URI query arguments to the REST call; see @ref restargs for more information
 
     The return value for these methods is the same as the return value for
@@ -177,8 +166,8 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
         hash<auto> h;
     }
 
-    constructor(hash<auto> n_h) {
-        h = n_h;
+    constructor(hash<auto> h) {
+        self.h = h;
     }
 
     hash<auto> get(hash<auto> cx, *hash<auto> ah) {
@@ -224,6 +213,21 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
       (note that 420 = 0644)
     - \c "PUT /files/info.txt?action=rename;newPath=/tmp/old.txt HTTP/1.1": calls the putRename() method above
 
+    @subsection rest_context_argument REST Handler Context Argument
+
+    The REST handler context argument (\c cx) has the value passed to it from the HTTP server (documented in
+    @ref httpserverutil_request_context), and sets values in the following table
+
+    |!Key|!Type|!Description
+    |\c aih|hash<string, bool>|a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
+    |\c arg_path|list<string>|a list of string URI path segments for any after the current node
+    |\c body|auto|the deserialized message body plus any query arguments
+    |\c orig_method|*string|the original REST action name in the request, if any
+    |\c orig-request-body|*string|the original unserialized message body in the request, if any (after content decoding)
+    |\c rest_action_method|string|the name of the method that will be called on the @ref RestHandler::AbstractRestClass "AbstractRestClass" object
+    |\c rest_api_path|string|the URI path after any prefix is removed used to resolve the REST API method
+    |\c rest_method|*string|any original REST action name in the request (if any) with the first letter capitalized
+
     @section resthierarchy Implementing Object Hierarchies
 
     To implement a hisearchy of REST objects in the URL, each @ref RestHandler::AbstractRestClass "AbstractRestClass"
@@ -249,8 +253,8 @@ class WorkflowOrderRestClass inherits AbstractRestClass {
         hash<auto> wf;
     }
 
-    constructor(hash<auto> n_wf) {
-        wf = n_wf;
+    constructor(hash<auto> wf) {
+        self.wf = wf;
     }
 
     # the name of the REST object
@@ -278,8 +282,8 @@ class WorkflowOrderInstanceRestClass inherits AbstractRestClass {
         hash<auto> oh;
     }
 
-    constructor(hash<auto> n_oh) {
-        oh = n_oh;
+    constructor(hash<auto> oh) {
+        self.oh = oh;
     }
 
     # the name of the REST object
@@ -374,76 +378,84 @@ Content-Length: 16
 
     @section resthandler_relnotes RestHandler Release Notes
 
+    @subsection rh_1_6_4 RestHandler v1.6.4
+    - fixed handling \c OPTIONS requests with an \c action parameter
+      (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
+
+    @subsection rh_1_6_3 RestHandler v1.6.3
+    - fixed handling multiple \c Accept headers in requests
+      (<a href="https://github.com/qoretechnologies/qore/issues/4969">issue 4969</a>)
+
     @subsection rh_1_6_2 RestHandler v1.6.2
     - always set the \c socketobject request context property
-      (<a href="https://github.com/qorelanguage/qore/issues/4666">issue 4666</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4666">issue 4666</a>)
 
     @subsection rh_1_6_1 RestHandler v1.6.1
     - implemented the @ref RestHandler::RestHandler::errorResponseHeaders() to allow subclasses to return custom
       headers in error responses, such as when a request cannot be deserialized
-      (<a href="https://github.com/qorelanguage/qore/issues/4646">issue 4646</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4646">issue 4646</a>)
 
     @subsection rh_1_6 RestHandler v1.6
     - added request arguments to the
       @ref RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
       and @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
-      (<a href="https://github.com/qorelanguage/qore/issues/4578">issue 4578</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4578">issue 4578</a>)
 
     @subsection rh_1_5_2 RestHandler v1.5.2
     - allow a logger to be set in validators
-      (<a href="https://github.com/qorelanguage/qore/issues/4509">issue 4509</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
     @subsection rh_1_5_1 RestHandler v1.5.1
     - improved error handling and sending error messages when exceptions contain non-serializable objects
-      (<a href="https://github.com/qorelanguage/qore/issues/4501">issue 4501</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4501">issue 4501</a>)
 
     @subsection rh_1_5 RestHandler v1.5
     - implemented support for allowing alternate REST method dispatch approaches to be implemented
-      (<a href="https://github.com/qorelanguage/qore/issues/4478">issue 4478</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4478">issue 4478</a>)
 
     @subsection rh_1_4 RestHandler v1.4
     - added missing make*() methods with REST responses to the @ref RestHandler::RestHandler "RestHandler" class
 
     @subsection rh_1_3_2 RestHandler v1.3.2
     - fixed a bug handling errors registering stream errors with a stream handler
-      (<a href="https://github.com/qorelanguage/qore/issues/4291">issue 4291</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4291">issue 4291</a>)
 
     @subsection rh_1_3_1 RestHandler v1.3.1
     - fixed a bug handling exceptions in REST methods with unserializable exception data
-      (<a href="https://github.com/qorelanguage/qore/issues/3667">issue 3667</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3667">issue 3667</a>)
     - renamed \c RestHandler::getPossibleSubClasses() to
       @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
       avoid a collision with a REST method name
-      (<a href="https://github.com/qorelanguage/qore/issues/3614">issue 3614</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3614">issue 3614</a>)
     - fixed RestHandler losing internal exception info when response was considered invalid by schema validator
-      (<a href="https://github.com/qorelanguage/qore/issues/3435">issue 3435</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3435">issue 3435</a>)
     - fixed RestHandler incorrectly handling Accept header of incoming requests
-      (<a href="https://github.com/qorelanguage/qore/issues/3426">issue 3426</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3426">issue 3426</a>)
     - added debug loggging for REST schema validation errors
-      (<a href="https://github.com/qorelanguage/qore/issues/3410">issue 3410</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3410">issue 3410</a>)
 
     @subsection rh_1_3 RestHandler v1.3
     - added the @ref RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
       allows subclasses to determine how exceptions are handled
-      (<a href="https://github.com/qorelanguage/qore/issues/3235">issue 3235</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3235">issue 3235</a>)
     - updated to support alternative URI paths for actions so that an "action=xxx" argument is not needed; instead
       the action can be added to the end of the URI path so that \c "PUT path/xxx" can be used instead of
       \c "PUT path?action=xxx".  Additionally, support for fast static REST subclass lookups was added by moving the
       @ref RestHandler::AbstractRestClass::addClass() "addClass()" method from the
       @ref RestHandler::RestHandler "RestHandler" class to the @ref RestHandler::AbstractRestClass "AbstractRestClass"
       class.
-      (<a href="https://github.com/qorelanguage/qore/issues/2994">issue 2994</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2994">issue 2994</a>)
 
     @subsection rh_1_2_1 RestHandler v1.2.1
-    - updated to return a 400 Bad Request error when REST schema validation fails on messages received (<a href="https://github.com/qorelanguage/qore/issues/2344">issue 2344</a>)
-    - updated to return a 400 Bad Request error when there are string encoding errors with messages received (<a href="https://github.com/qorelanguage/qore/issues/2398">issue 2398</a>)
-    - updated to return a 404 Not Found error when REST subclass does not exist (<a href="https://github.com/qorelanguage/qore/issues/2405">issue 2405</a>)
-    - updated to return a 400 Bad Request error when ENCODING-CONVERSION-ERROR occurs during request parsing (<a href="https://github.com/qorelanguage/qore/issues/2543">issue 2543</a>)
+    - updated to return a 400 Bad Request error when REST schema validation fails on messages received (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
+    - updated to return a 400 Bad Request error when there are string encoding errors with messages received (<a href="https://github.com/qoretechnologies/qore/issues/2398">issue 2398</a>)
+    - updated to return a 404 Not Found error when REST subclass does not exist (<a href="https://github.com/qoretechnologies/qore/issues/2405">issue 2405</a>)
+    - updated to return a 400 Bad Request error when ENCODING-CONVERSION-ERROR occurs during request parsing (<a href="https://github.com/qoretechnologies/qore/issues/2543">issue 2543</a>)
 
     @subsection rh_1_2 RestHandler v1.2
-    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qorelanguage/qore/issues/1086">issue 1086</a>)
+    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
     - added @ref RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
-    - updated for complex types (<a href="https://github.com/qorelanguage/qore/issues/1724">issue 1724</a>)
+    - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - added support for REST schema validation
     - added default support for the HTTP \c "PATCH" method
 
@@ -454,11 +466,11 @@ Content-Length: 16
     - fixed a bug where an error calling an internal nonexistent method would be reported with an incorrect error message
     - implemented support for notifying persistent connections when the connection is terminated while a persistent connection is in place
     - @ref RestHandler::AbstractRestStreamRequestHandler is now the base abstract class for REST stream request handlers
-    - send errors are now reported in the @ref RestHandler::AbstractRestStreamRequestHandler object so they can be properly logged (<a href="https://github.com/qorelanguage/qore/issues/734">issue 734</a>)
-    - unknown REST class errors with the base class are now reported consistently like all other such errors (<a href="https://github.com/qorelanguage/qore/issues/859">issue 859</a>)
+    - send errors are now reported in the @ref RestHandler::AbstractRestStreamRequestHandler object so they can be properly logged (<a href="https://github.com/qoretechnologies/qore/issues/734">issue 734</a>)
+    - unknown REST class errors with the base class are now reported consistently like all other such errors (<a href="https://github.com/qoretechnologies/qore/issues/859">issue 859</a>)
 
     @subsection rh_1_0_1 RestHandler v1.0.1
-    - added support for URL form encoded formatted message bodies (<a href="https://github.com/qorelanguage/qore/issues/1436">issue 1436</a>)
+    - added support for URL form encoded formatted message bodies (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
 
     @subsection rh_1_0 RestHandler v1.0
     - the initial version of the RestHandler module
@@ -495,23 +507,7 @@ public namespace RestHandler {
         }
 
         #! creates the object with the given arguments
-        /** @param cx call context hash; this hash will have the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed
-              information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+        /** @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param ah any URI arguments in the request
         */
         constructor(hash<auto> cx, *hash<auto> ah) {
@@ -598,8 +594,8 @@ public namespace RestHandler {
         }
 
         #! sets the internal socket I/O timeout value in ms
-        setTimeout(timeout n_timeout_ms) {
-            timeout_ms = n_timeout_ms;
+        setTimeout(timeout timeout_ms) {
+            self.timeout_ms = timeout_ms;
         }
 
         #! returns the timeout in milliseconds or @ref nothing if no timeout is set
@@ -608,9 +604,9 @@ public namespace RestHandler {
         }
 
         #! registers stream errors in the send operation with the stream handler if no error is already present
-        streamError(hash<auto> n_ex) {
-            if (!ex)
-                ex = n_ex;
+        streamError(hash<auto> ex) {
+            if (!self.ex)
+                self.ex = ex;
         }
 
         #! this method should return the response message description hash
@@ -653,12 +649,12 @@ public namespace RestHandler {
         }
 
         #! creates the object with the given attributes
-        constructor(RestHandler::AbstractRestStreamRequestHandler n_stream,
+        constructor(RestHandler::AbstractRestStreamRequestHandler stream,
                 HttpServer::HttpListenerInterface listener, HttpServer::AbstractHttpRequestHandler handler, Socket s,
                 hash<auto> cx, hash<auto> hdr, auto body)
                 : HttpServer::AbstractStreamRequest(listener, handler, s,
                     cx + (exists body ? {"deserialized": True} : NOTHING), hdr, body) {
-            stream = n_stream;
+            self.stream = stream;
             if (!handler.isPersistent()) {
                 *code c = stream.getPersistentClosedNotification();
                 if (c) {
@@ -756,24 +752,7 @@ public namespace RestHandler {
             called to return invoice \c 1; return @ref nothing if the object doesn't exist
 
             @param name the name of the subclass
-            @param cx call context hash; this hash will have the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c arg_path: a list of string URI path segments for any after the current node
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed
-              information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+            @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param args the holds URI and / or message body arguments for the REST call; if a request has both URI
             query arguments and message body arguments, then this value will be a combination of URI query arguments
             and deserialized message body arguments with URI query arguments taking precedence over the message body
@@ -796,23 +775,7 @@ public namespace RestHandler {
             called to return invoice \c 1; return @ref nothing if the object doesn't exist
 
             @param name the name of the subclass
-            @param cx call context hash; this hash will have the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c arg_path: a list of string URI path segments for any after the current node
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+            @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param args the holds URI and / or message body arguments for the REST call; if a request has both URI
             query arguments and message body arguments, then this value will be a combination of URI query arguments
             and deserialized message body arguments with URI query arguments taking precedence over the message body
@@ -844,7 +807,7 @@ public namespace RestHandler {
                     # issue #2994: if we are on the last class and there is no "action" argument; see if we can find
                     # an action method instead
                     if (!cl && !args.action) {
-                        string mname = sprintf("%s%s%s", mn, cname[0].upr(), cname[1..]);
+                        string mname = (mn == "options" ? mn : sprintf("%s%s%s", mn, cname[0].upr(), cname[1..]));
                         if (self.hasCallableMethod(mname)) {
                             return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mname, args, cx));
                         }
@@ -857,9 +820,9 @@ public namespace RestHandler {
 
                 rh.logDebug("REST DBG: class %y: dispatching to subclass %y: method %y args: %y", name(), cname, mn,
                     args);
+
                 return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
             }
-
             # try to mask passwords and sensitive data in args
             string astr = rh.maskData(sprintf("%y", args));
             rh.logDebug("REST DBG: class %y: dispatching method %y args: %s", name(), mn, astr);
@@ -874,11 +837,15 @@ public namespace RestHandler {
             try {
                 rsh = call_object_method_args(self, sn, (cx, ah));
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "METHOD-DOES-NOT-EXIST" && ex.desc.find(sn) != -1) {
-                    if (cx.hdr."transfer-encoding" == "chunked")
-                        cx.body = rh.getMessageBody(s, cx.hdr, NOTHING);
+                if (ex.err == "METHOD-DOES-NOT-EXIST") {
+                    bool found = (ex.desc.find(sn) != -1);
+                    if (found) {
+                        if (cx.hdr."transfer-encoding" == "chunked") {
+                            cx.body = rh.getMessageBody(s, cx.hdr, NOTHING);
+                        }
 
-                    return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));
+                        return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));
+                    }
                 }
                 string desc = !cx.debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -915,22 +882,7 @@ public namespace RestHandler {
             query arguments and message body arguments, then this value will be a combination of URI query arguments
             and deserialized message body arguments with URI query arguments taking precedence over the message body
             arguments
-            @param cx call context hash; this hash will have the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+            @param cx the call context hash; see @ref rest_context_argument for information about this value
 
             @return the return value is the same as the return value for
             @ref HttpServer::AbstractHttpRequestHandler::handleRequest()
@@ -946,7 +898,7 @@ public namespace RestHandler {
                     rh.logError("DISPATCH-ERROR: cannot dispatch to unimplemented method %y: class %y, args: %s: %s",
                         mn, name(), astr, get_exception_string(ex));
                     # see if alternate methods would work
-                    list hl = ();
+                    list<string> hl = ();
                     # break flag
                     bool brk;
                     foreach hash<auto> mh in (RestHandler::Methods.pairIterator()) {
@@ -970,7 +922,7 @@ public namespace RestHandler {
                         string desc = sprintf("HTTP method %s is unimplemented in REST class %y (%s::%s())",
                             cx.hdr.method, name(), self.className(), mn);
                         if (cx.orig_method)
-                            desc += sprintf(" REST method %y", cx.orig_method);
+                            desc += sprintf(" REST action method %y", cx.orig_method);
                         desc += sprintf(", available methods: %s", ml);
                         return cast<hash<HttpHandlerResponseInfo>>(
                             HttpServer::AbstractHttpRequestHandler::makeResponse(("Allow": ml), 405, desc)
@@ -987,23 +939,7 @@ public namespace RestHandler {
 
         #! returns a 404 Not Found response when a request tries to access an unknown subclass
         /** @param cls_name the URI path element that could not be matched to a REST subclass
-            @param cx the HTTP call context hash with the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c arg_path: a list of string URI path segments for any after the current node
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+            @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param ah the holds URI and / or message body arguments for the REST call; if a request has both URI
             query arguments and message body arguments, then this value will be a combination of URI query arguments
             and deserialized message body arguments with URI query arguments taking precedence over the message body
@@ -1031,23 +967,7 @@ public namespace RestHandler {
         }
 
         #! returns a set of possible subclasses for a particular request
-        /** @param cx the HTTP call context hash with the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c arg_path: a list of string URI path segments for any after the current node
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+        /** @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param ah the holds URI and / or message body arguments for the REST call; if a request has both URI
             query arguments and message body arguments, then this value will be a combination of URI query arguments
             and deserialized message body arguments with URI query arguments taking precedence over the message body
@@ -1191,13 +1111,13 @@ public namespace RestHandler {
             }
 
             # REST call context hash
-            cx += (
+            cx += {
                 "hdr": (
                     "method": method,
                 ),
                 "url": ("path": path),
                 "body": body,
-            );
+            };
 
             # get object and args
             hash<auto> ah = parse_uri_query(path);
@@ -1222,15 +1142,22 @@ public namespace RestHandler {
 
             {
                 auto action;
-                if (args.action)
+                if (args.action) {
                     action = remove args.action;
-                else if (body.action)
+                } else if (body.action) {
                     action = body.action;
+                }
+
+                if (action && (method == "OPTIONS")) {
+                    remove action;
+                    remove args.action;
+                }
 
                 if (action) {
-                    if (action.typeCode() != NT_STRING)
+                    if (action.typeCode() != NT_STRING) {
                         throw "INVALID-REST-ARGS", sprintf("cannot parse arguments in REST call %y, the 'action' key "
                             "is not assigned to a string; got %y instead", path, action.type()), 400;
+                    }
                     mn = action;
                     cx.orig_method = mn;
                     # ensure first letter of the action is in upper case
@@ -1303,23 +1230,7 @@ public namespace RestHandler {
 
             @param listener a listener API object
             @param s the @ref Qore::Socket "Socket" object serving the request
-            @param cx call context hash; this hash will have the following keys:
-            - \c aih: a hash of \c "Accept" values, keys are hash values, values are boolean @ref True
-            - \c body: the deserialized message body
-            - \c hdr: a hash of header information as returned by
-              @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
-            - \c id: the unique HTTP connection ID
-            - \c listener-id: the HTTP server listener ID (see
-              @ref HttpServer::HttpServer::getListenerInfo() "HttpServer::getListenerInfo()")
-            - \c peer-info: a hash of socket information for the remote socket (as returned by
-              @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-            - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed
-              information)
-            - \c socket-info: a hash of socket information for the listening socket (as returned by
-              @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
-            - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-            - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url() "parse_url()")
-            - \c user: the current authorized username (if any)
+            @param cx the call context hash; see @ref rest_context_argument for information about this value
             @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following
             keys will be present:
             - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -1385,7 +1296,7 @@ public namespace RestHandler {
                     return AbstractHttpRequestHandler::make400("cannot parse arguments in REST call %y, URI "
                         "arguments must be key/value pairs with an 'action' key; got type %y instead (value: %y)",
                         path, ah.params.type(), ah.params);
-                args = {} + ah.params;
+                args += ah.params;
             }
 
             # add path args, if any
@@ -1404,9 +1315,15 @@ public namespace RestHandler {
                 map args.$1 = body.$1, keys body, !exists args.$1;
             }
 
-            if (!Methods.(hdr.method))
+            if (!Methods.(hdr.method)) {
                 return AbstractHttpRequestHandler::make400("unsupported HTTP method %y given in REST call %y",
                     hdr.method, path);
+            }
+
+            if (hdr.method == "OPTIONS") {
+                remove args.action;
+                remove body.action;
+            }
 
             # make method name
             string mn;
@@ -1415,7 +1332,7 @@ public namespace RestHandler {
                     return AbstractHttpRequestHandler::make400("cannot parse arguments in REST call %y, the 'action' "
                         "key is not assigned to a string; got %y instead", path, args.action.type());
                 mn = args.action;
-                args -= "action";
+                remove args.action;
                 # ensure first letter of the action is in upper case
                 cx.orig_method = mn;
                 splice mn, 0, 1, mn[0].upr();
@@ -1450,14 +1367,15 @@ public namespace RestHandler {
             }
 
             # make a hash of "accept" values
-            *string astr = hdr.accept;
             hash<auto> aih;
-            if (astr) {
-                do {
-                    astr =~ s/;[^,]*//;
-                } while (astr.rfind(";") != -1);
-                astr =~ s/ +//g;
-                map aih.$1 = True, astr.split(",");
+            if (hdr.accept) {
+                foreach string astr in (hdr.accept) {
+                    do {
+                        astr =~ s/;[^,]*//;
+                    } while (astr.rfind(";") != -1);
+                    astr =~ s/ +//g;
+                    map aih.$1 = True, astr.split(",");
+                }
             } else {
                 # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If no Accept header field is present, then
                 # it is assumed that the client accepts all media types
@@ -1467,7 +1385,13 @@ public namespace RestHandler {
             #logDebug("REST DBG: aih: %y", aih);
 
             # set up context hash
-            cx += {"hdr": hdr, "body": body, "aih": aih};
+            cx += {
+                "hdr": hdr,
+                "body": body,
+                "aih": aih,
+                "orig-request-body": b,
+                "rest_api_path": ah.method,
+            };
 
             # handle call with class
             hash<HttpHandlerResponseInfo> rv;
@@ -1479,7 +1403,7 @@ public namespace RestHandler {
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
 
-                logError(desc);
+                logError("RestHandler: %s", desc);
                 rv = returnRestException(ex);
             }
 

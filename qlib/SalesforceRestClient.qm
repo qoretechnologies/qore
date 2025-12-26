@@ -80,8 +80,8 @@ module SalesforceRestClient {
 %requires SalesforceRestClient
 
 hash<auto> opts = (
-    "client_id": ENV.SALESFORCE_CONSUMER_KEY,
-    "client_secret": ENV.SALESFORCE_CONSUMER_SECRET,
+    "oauth2_client_id": ENV.SALESFORCE_CONSUMER_KEY,
+    "oauth2_client_secret": ENV.SALESFORCE_CONSUMER_SECRET,
     "username": ENV.SALESFORCE_USER,
     "password": ENV.SALESFORCE_PASS,
 );
@@ -127,8 +127,8 @@ list<string> sub create_accounts(list account_list) {
 %requires json
 
 hash<auto> opts = {
-    "client_id": ENV.SALESFORCE_CONSUMER_KEY,
-    "client_secret": ENV.SALESFORCE_CONSUMER_SECRET,
+    "oauth2_client_id": ENV.SALESFORCE_CONSUMER_KEY,
+    "oauth2_client_secret": ENV.SALESFORCE_CONSUMER_SECRET,
     "username": ENV.SALESFORCE_USER,
     "password": ENV.SALESFORCE_PASS,
 };
@@ -164,12 +164,12 @@ rc.bulkJobClose(h.id);
 
     @subsection salesforcerestclientv1_5 SalesforceRestClient v1.5
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection salesforcerestclientv1_4 SalesforceRestClient v1.4
     - removed the \c SalesforceRestConnection::getConstructorInfo() and
       \c SalesforceRestConnection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for the data provider API
 
     @subsection salesforcerestclientv1_3 SalesforceRestClient v1.3
@@ -179,12 +179,12 @@ rc.bulkJobClose(h.id);
     - added the \c SalesforceRestConnection::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in SalesforceRestClient 1.4)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection salesforcerestclientv1_1_1 SalesforceRestClient v1.1.1
     - fixed a bug handling default options including timeouts in
       @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection"
-      (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
     @subsection salesforcerestclientv1_1 SalesforceRestClient v1.1
     - added the @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" class to support the
@@ -274,16 +274,16 @@ public const BulkJobContentTypes = {
 
 #! this class provides the REST client API for communication with Salesforce.com
 /** This class requires the following options for Salesforce.com authentication and authorization to the target Connected App:
-    - \c client_id: the Salesforce.com "consumer key"
-    - \c client_secret: the Salesforce.com "consumer secret"
+    - \c oauth2_client_id: the Salesforce.com "consumer key"
+    - \c oauth2_client_secret: the Salesforce.com "consumer secret"
     - \c username: the Salesforce.com account username
     - \c password: the Salesforce.com account password
 
     The following options can be overridden; default values are provided as follows:
     - \c api: default value \c "auto" for the Salesforce.com REST API version; \c "auto" means use the latest version available
-    - \c oauth_url_auth: default value \c "https://login.salesforce.com/services/oauth2/authorize"
-    - \c oauth_url_token: default value \c "https://login.salesforce.com/services/oauth2/token" (used for logging in to Salesforce.com)
-    - \c oauth_url_revoke: default value \c "https://login.salesforce.com/services/oauth2/revoke"
+    - \c oauth2_auth_url: default value \c "https://login.salesforce.com/services/oauth2/authorize"
+    - \c oauth2_token_url: default value \c "https://login.salesforce.com/services/oauth2/token" (used for logging in to Salesforce.com)
+    - \c oauth2_logout_url: default value \c "https://login.salesforce.com/services/oauth2/revoke"
 
     This class also automatically adds support for the \c "PATCH" HTTP method used by Salesforce.com for updates to existing objects,
     as well as the @ref SalesforceRestClient::SalesforceRestClient::patch() "SalesforceRestClient::patch()" method
@@ -322,11 +322,11 @@ public class SalesforceRestClient inherits RestClient::RestClient {
     public {
         #! defaults for direct member values
         const Defaults = {
-            "oauth_url_auth": "https://login.salesforce.com/services/oauth2/authorize",
-            "oauth_url_token": "https://login.salesforce.com/services/oauth2/token",
-            "oauth_url_revoke": "https://login.salesforce.com/services/oauth2/revoke",
+            "oauth2_auth_url": "https://login.salesforce.com/services/oauth2/authorize",
+            "oauth2_token_url": "https://login.salesforce.com/services/oauth2/token",
+            "oauth2_logout_url": "https://login.salesforce.com/services/oauth2/revoke",
             "api": "auto",
-            "oauth2_grant_type": "password",
+            "oauth2_grant_type": "authorization_code",
             "oauth2_scopes": (
                 "full",
                 "api",
@@ -341,9 +341,9 @@ public class SalesforceRestClient inherits RestClient::RestClient {
         #! required options
         const RequiredOptions = (
             # the Salesforce.com "consumer key"
-            "client_id",
+            "oauth2_client_id",
             # the Salesforce.com "consumer secret"
-            "client_secret",
+            "oauth2_client_secret",
         );
 
         #! Salesforce.com async dataload namespace
@@ -358,23 +358,11 @@ public class SalesforceRestClient inherits RestClient::RestClient {
     }
 
     private {
-        #! Salesforce.com OAuth2 Authorization URL
-        string oauth_url_auth;
-
-        #! Salesforce.com OAuth2 Get Token URL
-        string oauth_url_token;
-
         #! Salesforce.com OAuth2 Revoke Token URL
-        string oauth_url_revoke;
+        string oauth2_logout_url;
 
         #! Mutex for token acquisition
         Mutex m();
-
-        #! Salesforce.com "consumer key"
-        string client_id;
-
-        #! Salesforce.com "consumer secret"
-        string client_secret;
 
         #! Salesforce.com REST API version to be used (\c "auto" = latest version)
         string api;
@@ -409,8 +397,8 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
 ("additional_methods": ("PROPFIND": True, "MKCOL": True ));
             @endcode
         - \c api: the Salesforce.com API to use; use \c "auto" (the default) to use the latest API version
-        - \c client_id: (required) the Salesforce.com "consumer key" for the Connected App
-        - \c client_secret: (required) the Salesforce.com "consumer secret" for the Connected App
+        - \c oauth2_client_id: (required) the Salesforce.com "consumer key" for the Connected App
+        - \c oauth2_client_secret: (required) the Salesforce.com "consumer secret" for the Connected App
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be
           a relative date-time value for clarity, ex: \c 20s)
         - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
@@ -445,8 +433,8 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server and a token will be received
 
-        The following are mandatory options for Salesforce.com authentication: \c client_id, \c client_secret, other
-        options may be required depending on the OAuth2 grant type used
+        The following are mandatory options for Salesforce.com authentication: \c oauth2_client_id,
+        \c oauth2_client_secret, other options may be required depending on the OAuth2 grant type used
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
         @throw SALESFORCERESTCLIENT-ERROR missing or invalid connection option
@@ -989,7 +977,7 @@ sfrest.logout();
         }
 
         # use the Salesforce.com OAuth2 revocation URL to log out
-        setURL(oauth_url_revoke);
+        setURL(oauth2_logout_url);
 
         # use URL form encoding for the message body
         string serialization = getSerialization();
@@ -1060,7 +1048,7 @@ sfrest.logout();
     #! Returns @ref True if the response was related to an authorization token error
     /** @return @ref True if the response was related to an authorization token error
     */
-    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_decoded, *string body_content_type,
+    bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
             auto body) {
         if (status_code != 403) {
             return False;
@@ -1068,10 +1056,20 @@ sfrest.logout();
         if (body == "Bad_OAuth_Token") {
             return True;
         }
-        if (!body_decoded) {
+        if (!body_deserialized) {
             return body =~ /token validity expired/;
         }
         return body.error_description == "token validity expired";
+    }
+
+    #! Return OAuth2 options
+    /** @return a hash of OAuth2 options
+    */
+    hash<auto> getOAuth2Options() {
+        return RestClient::getOAuth2Options() + {
+            "instance_url": instance_url,
+            "id_service_url": id_service_url,
+        };
     }
 
     #! returns a date string for use with Salesforce.com Bulk REST API requests
@@ -1094,6 +1092,7 @@ sfrest.logout();
     /** @since %SalesforceRestClient 2.0
     */
     private setApi() {
+        setHeaders();
         if (!api_hash) {
             # set the URL to the Salesforce.com URL for REST API calls
             setURL(instance_url);
@@ -1133,12 +1132,12 @@ sfrest.logout();
             "additional_methods": {"PATCH": False} + opts.additional_methods,
             "data": "json",
 
-            "oauth2_auth_url": opts.oauth_url_auth ?? Defaults.oauth_url_auth,
-            "oauth2_token_url": opts.oauth_url_token ?? Defaults.oauth_url_token,
-            "oauth2_client_id": opts.client_id,
-            "oauth2_client_secret": opts.client_secret,
+            "oauth2_auth_url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
+            "oauth2_token_url": opts.oauth2_token_url ?? Defaults.oauth2_token_url,
+            "oauth2_client_id": opts.oauth2_client_id,
+            "oauth2_client_secret": opts.oauth2_client_secret,
 
-            "url": opts.oauth_url_auth ?? Defaults.oauth_url_auth,
+            "url": opts.oauth2_auth_url ?? Defaults.oauth2_auth_url,
         } + Defaults + opts;
     }
 
@@ -1151,8 +1150,8 @@ sfrest.logout();
         }
     }
 
-    #! performs authentication and authorization with Salesforce.com using the OAuth2 authorization URL
-    private hash<auto> loginIntern(*reference<hash> info) {
+    #! Set headers for Salesforce REST communications
+    private setHeaders() {
         # ensure that if a non-xml serialization is set, we do not accept XML responses, because otherwise
         # Salesforce will prefer XML responses to JSON
         if (ds !~ /xml/) {
@@ -1160,6 +1159,11 @@ sfrest.logout();
         } else {
             delete headers.Accept;
         }
+    }
+
+    #! performs authentication and authorization with Salesforce.com using the OAuth2 authorization URL
+    private hash<auto> loginIntern(*reference<hash> info) {
+        setHeaders();
 
         # must set the final URL after login; RestClient::loginIntern() will reset the original URL
         on_success setURL(instance_url + api_hash{api_used}.url);
@@ -1208,12 +1212,12 @@ sfrest.logout();
 /** In addition to all options supported by @ref RestClient::RestClientConnection "RestClientConnection", this
     connection class supports the following options:
     - \c api: the Salesforce.com API to use; use \c "auto" (the default) to use the latest API version
-    - \c client_id: (required) the Salesforce.com "consumer key" for the Connected App
-    - \c client_secret: (required) the Salesforce.com "consumer secret" for the Connected App
-    - \c oauth_url_auth: default value \c "https://login.salesforce.com/services/oauth2/authorize"
-    - \c oauth_url_token: default value \c "https://login.salesforce.com/services/oauth2/token" (used for logging in
+    - \c oauth2_client_id: (required) the Salesforce.com "consumer key" for the Connected App
+    - \c oauth2_client_secret: (required) the Salesforce.com "consumer secret" for the Connected App
+    - \c oauth2_auth_url: default value \c "https://login.salesforce.com/services/oauth2/authorize"
+    - \c oauth2_token_url: default value \c "https://login.salesforce.com/services/oauth2/token" (used for logging in
       to Salesforce.com)
-    - \c oauth_url_revoke: default value \c "https://login.salesforce.com/services/oauth2/revoke"
+    - \c oauth2_logout_url: default value \c "https://login.salesforce.com/services/oauth2/revoke"
 
     @see @ref SalesforceRestClient::SalesforceRestClient::constructor() "SalesforceRestClient::constructor()" for more
     information on the above options
@@ -1228,6 +1232,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
             "short_desc": "A connection to a Salesforce instance with the REST API",
             "desc": "A connection to a Salesforce instance with the REST API",
             "cls": Class::forName("SalesforceRestConnection"),
+            "auto_url": True,
             "schemes": {
                 "sfrests": True,
             },
@@ -1243,10 +1248,10 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                         "version",
                     "default_value": SalesforceRestClient::Defaults.api,
                 },
-                "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
+                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
                     "desc": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
                 },
-                "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
+                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
                     "desc": "The OAuth2 client_secret and also the Salesforce \"consumer secret\" for the Connected "
                         "App",
                     "sensitive": True,
@@ -1268,18 +1273,18 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                     "desc": "The Salesforce.com instance URL returned in the OAuth2 login process (set automatically "
                         "on login)",
                 },
-                "oauth_url_auth": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth_url_auth,
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
+                    "default_value": SalesforceRestClient::Defaults.oauth2_auth_url,
                 },
-                "oauth_url_token": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClient::Defaults.oauth_url_token,
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
+                    "default_value": SalesforceRestClient::Defaults.oauth2_token_url,
                 },
-                "oauth_url_revoke": <ConnectionOptionInfo>{
+                "oauth2_logout_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Revocation URL",
                     "short_desc": "The OAuth logout / revoke token URL",
                     "type": "string",
                     "desc": "The OAuth logout / revoke token URL",
-                    "default_value": SalesforceRestClient::Defaults.oauth_url_revoke,
+                    "default_value": SalesforceRestClient::Defaults.oauth2_logout_url,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
                     + <ConnectionOptionInfo>{
@@ -1304,15 +1309,15 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                 },
             },
             # FIXME: username and password are currently optional for backwards compatibility with URL auth options
-            "required_options": "client_id,client_secret",
+            "required_options": "oauth2_client_id,oauth2_client_secret",
         };
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (
-            "client_id",
-            "client_secret",
-            "oauth_url_auth",
-            "oauth_url_token",
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_auth_url",
+            "oauth2_token_url",
             "oauth2_redirect_url",
         );
 
@@ -1320,13 +1325,13 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         const OAuth2Options = {
             "oauth2_auto_refresh": "oauth2_auto_refresh",
             "oauth2_auth_args": "oauth2_auth_args",
-            "oauth_url_auth": "oauth2_auth_url",
-            "client_id": "oauth2_client_id",
-            "client_secret": "oauth2_client_secret",
+            "oauth2_auth_url": "oauth2_auth_url",
+            "oauth2_client_id": "oauth2_client_id",
+            "oauth2_client_secret": "oauth2_client_secret",
             "oauth2_redirect_url": "oauth2_redirect_url",
             "oauth2_refresh_token": "oauth2_refresh_token",
             "oauth2_scopes": "oauth2_scopes",
-            "oauth_url_token": "oauth2_token_url",
+            "oauth2_token_url": "oauth2_token_url",
             "password": "password",
             "username": "username",
         };
@@ -1386,6 +1391,13 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         return True;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Salesforce";
+    }
+
     #! returns a data provider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 
@@ -1397,7 +1409,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the SalesforceRestDataProvider and creates the data provider
         # object dynamically
         load_module("SalesforceRestDataProvider");
-        return create_object("SalesforceRestDataProvider", get());
+        return create_object("SalesforceRestDataProvider", self);
     }
 
     #! Returns the OAuth2 option name for this connection
@@ -1495,7 +1507,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         if (!opts.ping_method || !exists opts.ping_path) {
             return HttpBasedConnection::startPollConnect();
         }
@@ -1506,6 +1518,9 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         }
 
         SalesforceRestClient rc = getPollImpl();
+        if (logger) {
+            rc.setLogger(logger);
+        }
         rc.setSerialization("json");
 
         # returns a RestClient option without connecting and without retrieving any external schemas with I/O
@@ -1554,7 +1569,7 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
 
     private gotOAuth2LoginInfo(hash<auto> h) {
         SalesforceRestClient src = cast<SalesforceRestClient>(rc);
-        src.gotOAuth2LoginInfo(h);
+        src.gotOAuth2LoginInfo(h, True);
         # set the URL to the Salesforce.com URL for REST API calls
         src.setURL(h.instance_url);
 

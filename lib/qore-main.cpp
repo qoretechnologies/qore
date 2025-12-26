@@ -48,7 +48,9 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/conf.h>
+#ifdef HAVE_OPENSSL_ENGINE_H
 #include <openssl/engine.h>
+#endif
 
 #ifdef OPENSSL_3_PLUS
 #include <openssl/provider.h>
@@ -164,6 +166,9 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 #endif
     }
 
+    // initialize thread-local storage
+    qore_thread_local_storage_init();
+
     // init random salt
     qore_init_random_salt();
 
@@ -264,12 +269,17 @@ void qore_cleanup() {
     // delete threading infrastructure
     delete_qore_threads();
 
+    // destroy thread-local storage
+    qore_thread_local_storage_destroy();
+
     // only perform openssl cleanup if not performed externally
     if (!qore_check_option(QLO_DISABLE_OPENSSL_CLEANUP)) {
         // cleanup openssl library
         ERR_free_strings();
 
+#ifdef HAVE_OPENSSL_ENGINE_H
         ENGINE_cleanup();
+#endif
         EVP_cleanup();
 
         CONF_modules_finish();

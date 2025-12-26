@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -346,7 +346,8 @@ const PO_NO_DATABASE = PO_NO_DATABASE;
 const PO_NO_EMBEDDED_LOGIC = PO_NO_EMBEDDED_LOGIC;
 
 //! Prohibits any external access
-/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM | @ref PO_NO_DATABASE | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_PROCESS_CONTROL | @ref PO_NO_NETWORK | @ref PO_NO_FILESYSTEM | @ref PO_NO_DATABASE
+    | @ref PO_NO_EXTERNAL_INFO | @ref PO_NO_EXTERNAL_PROCESS | @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-external-access "%no-external-access"
  */
@@ -383,7 +384,8 @@ const PO_NO_GLOBAL_VARS = PO_NO_GLOBAL_VARS;
 const PO_NO_GUI = PO_NO_GUI;
 
 //! Prohibits all terminal and file I/O and GUI operations
-/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK | @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
+/** made up of @ref PO_NO_GUI | @ref PO_NO_TERMINAL_IO | @ref PO_NO_FILESYSTEM | @ref PO_NO_NETWORK
+    | @ref PO_NO_DATABASE | @ref PO_NO_UNCONTROLLED_APIS
 
     @see @ref no-io "%no-io"
  */
@@ -438,7 +440,8 @@ const PO_NO_INHERIT_SYSTEM_CLASSES = PO_NO_INHERIT_SYSTEM_CLASSES;
 
 //! Prohibits system classes from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES "PO_NO_INHERIT_SYSTEM_CLASSES" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES "PO_NO_INHERIT_SYSTEM_CLASSES" was added in %Qore 0.8.12 with the
+    same value of this constant to provide a consistent naming convention for inheritance permissions
  */
 const PO_NO_SYSTEM_CLASSES = PO_NO_INHERIT_SYSTEM_CLASSES;
 
@@ -451,7 +454,8 @@ const PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 
 //! Prohibits builtin/system function variants from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS "PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS "PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS" was added in %Qore 0.8.12
+    with the same value of this constant to provide a consistent naming convention for inheritance permissions
 */
 const PO_NO_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 
@@ -461,8 +465,10 @@ const PO_NO_SYSTEM_FUNC_VARIANTS = PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
 */
 const PO_NO_TERMINAL_IO = PO_NO_TERMINAL_IO;
 
-//! Disallows access to any thread-control functions and thread-relevant statements and operators (for example the @ref background "background operator" and the @ref thread_exit "thread_exit statement")
-/**
+//! Disallows access to any thread-control functions and thread-relevant statements and operators
+/** Examples of unavailable functionality: the @ref background "background operator" and the
+    @ref thread_exit "thread_exit statement"
+
     @see @ref no-thread-control "%no-thread-control"
 */
 const PO_NO_THREAD_CONTROL = PO_NO_THREAD_CONTROL;
@@ -494,7 +500,8 @@ const PO_NO_INHERIT_USER_CLASSES = PO_NO_INHERIT_USER_CLASSES;
 
 //! Prohibits user classes from being imported into the new Program object
 /**
-    @note @ref Qore::PO_NO_INHERIT_USER_CLASSES "PO_NO_INHERIT_USER_CLASSES" was added in %Qore 0.8.12 with the same value of this constant to provide a consistent naming convention for inheritance permissions
+    @note @ref Qore::PO_NO_INHERIT_USER_CLASSES "PO_NO_INHERIT_USER_CLASSES" was added in %Qore 0.8.12 with the same
+    value of this constant to provide a consistent naming convention for inheritance permissions
  */
 const PO_NO_USER_CLASSES = PO_NO_INHERIT_USER_CLASSES;
 
@@ -616,6 +623,13 @@ const PO_NO_API = PO_NO_API;
     @since %Qore 0.8.12
 */
 const PO_BROKEN_LIST_PARSING = PO_BROKEN_LIST_PARSING;
+
+//! allows for old pre-%Qore 2.0 broken list range handling
+/** @see @ref broken-list-range "%broken-list-range"
+
+    @since %Qore 2.0
+*/
+const PO_BROKEN_LIST_RANGE = PO_BROKEN_LIST_RANGE;
 
 //! allows for old pre-%Qore 0.8.12 precedence of logical and bitwise operators
 /** @see @ref broken-logic-precedence "%broken-logic-precedence"
@@ -937,7 +951,7 @@ qclass Program [arg=QoreProgram* p];
     object with fewer restrictions than the parent Program object (any attempt to do so will be silently ignored).
 
     However, if @ref PO_NO_CHILD_PO_RESTRICTIONS is set in the parent Program object, then the parse option argument
-    to the constructor will be applied literally to the child object.  Additionally in this case module-specific-
+    to the constructor will be applied literally to the child object. Additionally in this case module-specific-
     program data is not imported into the child Program object.
 
     @ref Qore::ProgramControl "ProgramControl" provides internal Program data for debugging purposes.
@@ -946,6 +960,7 @@ qclass Program [arg=QoreProgram* p];
     running program
 
     @param po A binary OR'ed product of @ref parse_options "parse options"
+    @param independent create an independent Program object with no connection or imports from the calling context
 
     @par Example:
     @code{.py}
@@ -954,13 +969,14 @@ Program pgm();
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
  */
-Program::constructor(softint po = PO_DEFAULT) [dom=EMBEDDED_LOGIC] {
+Program::constructor(softint po = PO_DEFAULT, *bool independent) [dom=EMBEDDED_LOGIC] {
     if (po & PO_SYSTEM_OPS) {
-        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that can only be set by the system", po);
+        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that "
+            "can only be set by the system", po);
         return;
     }
 
-    QoreProgram* pgm = new QoreProgram(getProgram(), po);
+    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), po);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
 
@@ -976,14 +992,12 @@ Program::copy() {
     xsink->raiseException("PROGRAM-COPY-ERROR", "copying Program objects is currently unsupported");
 }
 
-//! Waits for all threads to finish executing, then deletes all global variables, dereferences the internal Program object and deletes the %Qore object
-/**
+//! Deletes the Program
+/** Waits for all threads to finish executing, then deletes all global variables, dereferences the internal Program
+    object and deletes the %Qore object
  */
 Program::destructor() {
     printd(5, "Program::destructor() pgm: %p pgmid: %d self: %p\n", p, p->getProgramId(), self);
-    // inherited system object destructor is not executed
-    //p->unregisterQoreObject(self, xsink);
-
     p->waitForTerminationAndDeref(xsink);
 }
 
@@ -1225,7 +1239,7 @@ auto Program::callFunction(string name, ...) {
     if (args->size() > 1)
         vargs = args->copyListFrom(1);
 
-    return p->callFunction(tmp->getBuffer(), *vargs, xsink);
+    return p->callFunction(tmp->c_str(), *vargs, xsink);
 }
 
 //! Calls a function in the program object giving the arguments to the function as a list and returns the return value
@@ -1251,7 +1265,7 @@ auto Program::callFunctionArgs(string name, *softlist<auto> vargs) {
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
-    return p->callFunction(tmp->getBuffer(), vargs, xsink);
+    return p->callFunction(tmp->c_str(), vargs, xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
@@ -1335,7 +1349,7 @@ bool Program::existsFunction(string name) [flags=RET_VALUE_ONLY] {
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp)
         return false;
-    return p->existsFunction(tmp->getBuffer());
+    return p->existsFunction(tmp->c_str());
 }
 
 //! Runs the program and optionally returns a value if the top-level code exits with a @ref return "return statement
@@ -1370,7 +1384,7 @@ nothing Program::importFunction(string func) {
     TempEncodingHelper tmp(func, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
-    qore_program_private::exportFunction(getProgram(), xsink, p, tmp->getBuffer());
+    qore_program_private::exportFunction(getProgram(), xsink, p, tmp->c_str());
 }
 
 //! Imports a function into the program object's space and gives it a new name; any calls to the imported function will run with the parent Program object's permissions
@@ -1411,28 +1425,64 @@ nothing Program::importFunction(string func, string new_name, *softbool inject) 
     if (tnew_name->empty())
         xsink->raiseException("FUNCTION-IMPORT-ERROR", "the new function name while importing function '%s' may not be empty", func);
 
-    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->getBuffer(), tnew_name->getBuffer(), inject);
+    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->c_str(), tnew_name->c_str(), inject);
 }
 
 //! Imports a global variable into the program object's space
 /** If the variable is an object, then any methods called from the subprogram will run in the parent's space
 
     @param varname The name of the global variable without the \c "$"
-    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed by the subprogram (note that if the imported
+    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
+    by the subprogram
 
     @par Example:
     @code{.py}
 pgm.importGlobalVariable("var");
     @endcode
 
-    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the target variable already exists
-    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the @ref default_encoding "default character encoding"
+    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the
+    target variable already exists
+    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
+    @ref default_encoding "default character encoding"
  */
 nothing Program::importGlobalVariable(string varname, bool readonly = False) {
     TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
-    if (!tmp)
+    if (!tmp) {
         return QoreValue();
-    qore_program_private::exportGlobalVariable(getProgram(), tmp->getBuffer(), readonly, p, xsink);
+    }
+    qore_program_private::get(*getProgram())->exportGlobalVariable(xsink, tmp->c_str(), readonly,
+        *qore_program_private::get(*p));
+}
+
+//! Imports a global variable into the program object's space
+/** If the variable is an object, then any methods called from the subprogram will run in the parent's space
+
+    @param varname The name of the global variable in the source container without any \c "$"
+    @param import_as The name of the variable as it will be imported
+    @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
+    by the subprogram
+
+    @par Example:
+    @code{.py}
+pgm.importGlobalVariable("var", "another_var");
+    @endcode
+
+    @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the
+    target variable already exists
+    @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
+    @ref default_encoding "default character encoding"
+ */
+nothing Program::importGlobalVariable(string varname, string import_as, bool readonly = False) {
+    TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
+    if (!tmp) {
+        return QoreValue();
+    }
+    TempEncodingHelper target(import_as, QCS_DEFAULT, xsink);
+    if (!target) {
+        return QoreValue();
+    }
+    qore_program_private::get(*getProgram())->exportGlobalVariable(xsink, tmp->c_str(), readonly,
+        *qore_program_private::get(*p), target->c_str());
 }
 
 //! Imports a class into the program object's space; any calls to the imported class's code will run with the parent Program object's permissions
@@ -1461,7 +1511,7 @@ pgm.importClass("MyNamespace::MyClass");
     @since
     - This method was first implemented in %Qore 0.8.7
     - %Qore 0.8.12 added the \a new_name and \a inject parameters
-    - %Qore 0.9,3 added the \a module_visibility parameter
+    - %Qore 0.9.3 added the \a module_visibility parameter
  */
 nothing Program::importClass(string cls, *string new_name, *softbool inject, int module_visibility = CSP_UNCHANGED) {
     TempEncodingHelper tmp(cls, QCS_DEFAULT, xsink);
@@ -1677,18 +1727,18 @@ nothing Program::setScriptPath(*string path) {
     @endcode
  */
 *string Program::getScriptPath() [flags=CONSTANT] {
-   return p->getScriptPath();
+    return p->getScriptPath();
 }
 
 //! Locks parse options so that they cannot be changed
 /**
     @par Example:
     @code{.py}
- pgm.lockOptions();
+pgm.lockOptions();
    @endcode
  */
 nothing Program::lockOptions() {
-   p->lockOptions();
+    p->lockOptions();
 }
 
 //! Returns a the value of the global variable identified by the first string argument
@@ -1737,9 +1787,10 @@ pgm.setTimeZoneRegion("Europe/Prague");
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
  */
 nothing Program::setTimeZoneRegion(string region) {
-   const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->getBuffer(), xsink);
-   if (!*xsink)
-      p->setTZ(zone);
+    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
+    if (!*xsink) {
+        p->setTZ(zone);
+    }
 }
 
 //! Sets the default time zone for the Program object based on the number of seconds east of UTC; for zones west of UTC, use negative numbers
@@ -1804,7 +1855,7 @@ pgm.define("PRODUCTION", True);
 nothing Program::define(string def, auto val) {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
    if (t)
-      qore_program_private::runTimeDefine(p, t->getBuffer(), val.refSelf(), xsink);
+      qore_program_private::runTimeDefine(p, t->c_str(), val.refSelf(), xsink);
 }
 
 //! Unsets a @ref conditional_parsing "parse define" for the current Program
@@ -1818,7 +1869,7 @@ pgm.undefine("PRODUCTION");
 nothing Program::undefine(string def) {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
    if (t)
-      qore_program_private::runTimeUnDefine(p, t->getBuffer(), xsink);
+      qore_program_private::runTimeUnDefine(p, t->c_str(), xsink);
 }
 
 //! Returns @ref True if the given @ref conditional_parsing "parse define" is defined in the current Program (does not have to have a value defined to return @ref True), @ref False if not
@@ -1835,7 +1886,7 @@ bool b = pgm.isDefined("PRODUCTION");
  */
 bool Program::isDefined(string def) [flags=RET_VALUE_ONLY] {
    TempEncodingHelper t(def, QCS_DEFAULT, xsink);
-   return t ? qore_program_private::runTimeIsDefined(p, t->getBuffer()) : false;
+   return t ? qore_program_private::runTimeIsDefined(p, t->c_str()) : false;
 }
 
 //! Retrieves the value of the given @ref conditional_parsing "parse define" in the current Program
@@ -2228,13 +2279,17 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
     return QoreValue();
 }
 
-//! imports system classes into a Program container at runtime; will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+//! imports system classes into a Program container at runtime
 /** @par Example:
     @code{.py}
 pgm.importSystemClasses();
     @endcode
 
-    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object; conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object will not contain the full system API and is most likely unusable
+    This method will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+
+    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object;
+    conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object
+    will not contain the full system API and is most likely unusable
 
     @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES from the parse option mask after a successful completion
 
@@ -2289,23 +2344,33 @@ pgm.importSystemFunctions();
     @since %Qore 0.8.12
 */
 Program::importSystemFunctions() {
-   qore_program_private::runtimeImportSystemFunctions(*p, xsink);
+    qore_program_private::runtimeImportSystemFunctions(*p, xsink);
 }
 
-//! imports system classes and functions into a Program container at runtime; will throw an exception if the Program was not created with @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS, @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
+//! imports system classes and functions into a Program container at runtime
 /** @par Example:
     @code{.py}
 pgm.importSystemApi();
     @endcode
 
-    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object; conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object will not contain the full system API and is most likely unusable
+    This method will throw an exception if the Program was not created with
+    @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS,
+    @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES
 
-    @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS, @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS from the parse option mask after a successful completion
+    This method also merges the builtin feature / module list from the source calling context as well
+
+    @throw IMPORT-SYSTEM-API-ERROR objects already imported; parse options are locked on the Program object;
+    conflicting object found; system API incorrectly imported; in case this exception is raised, the Program object
+    will not contain the full system API and is most likely unusable
+
+    @note removes @ref Qore::PO_NO_INHERIT_SYSTEM_CLASSES, @ref Qore::PO_NO_INHERIT_SYSTEM_HASHDECLS,
+    @ref Qore::PO_NO_INHERIT_SYSTEM_CONSTANTS, and @ref Qore::PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS from the parse option
+    mask after a successful completion
 
     @since %Qore 0.8.12
 */
 Program::importSystemApi() {
-   qore_program_private::runtimeImportSystemApi(*p, xsink);
+    qore_program_private::runtimeImportSystemApi(*p, xsink);
 }
 
 //! Sets a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started
@@ -2327,7 +2392,7 @@ pgm.setThreadInit(sub () { var = 123; });
     @since %Qore 0.8.13
 */
 bool Program::setThreadInit(*code init) [dom=THREAD_CONTROL] {
-   return qore_program_private::setThreadInit(*p, init, xsink);
+    return qore_program_private::setThreadInit(*p, init, xsink);
 }
 
 //! returns a hash of global variables
@@ -2408,8 +2473,10 @@ ProgramControl Program::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
    return QoreProgram::getQoreObject(p);
 }
 
-//! issues a module command for the given module; the module is loaded into the current %Program object if it is not already present
-/** @par Example:
+//! issues a module command for the given module
+/** The module is loaded into the current %Program object if it is not already present
+
+    @par Example:
     @code{.py}
 pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
     @endcode
@@ -2488,4 +2555,88 @@ Expression Program::getExpression(string source, string label) {
 */
 list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
     return p->getFeatureList();
+}
+
+//! Returns the capability mask of the program
+/** @return the capability mask of the program
+
+    @since %Qore 2.0
+*/
+int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
+    return p->getParseOptions64();
+}
+
+//! Returns the capability mask of the program n calls above this call
+/** @param n the number of stack frames above this call; must be a non-negative number
+
+    @return the capability mask of the program n calls above this call
+
+    @since %Qore 2.0
+*/
+static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY;dom=PROCESS] {
+    if (n < 0) {
+        xsink->raiseException("INVALID-STACK-FRAME", "The stack frame argument must be a non-negative number; got "
+            QLLD, n);
+        return -1;
+    }
+    return !n
+        ? runtime_get_parse_options()
+        : runtime_get_parse_options_stack(xsink, (size_t)n);
+}
+
+//! Issues a module command for the given module in the current Program object
+/** The module is loaded into the current %Program object if it is not already present
+
+    @par Example:
+    @code{.py}
+Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
+    @endcode
+
+    @param module the module name
+    @param cmd the command string to execute to be parsed by the module
+
+    @throw PARSE-COMMAND-ERROR the module does not support commands
+
+    @note command errors can result in other module- and command-specific exceptions being thrown; see
+    documentation for the module and command in question for more details
+
+    @since %Qore 2.0
+*/
+static nothing Program::issueModuleCmd(string module, string cmd) [dom=MODULES] {
+    TempEncodingHelper tmp_module(module, QCS_DEFAULT, xsink);
+    if (!tmp_module) {
+        return QoreValue();
+    }
+
+    TempEncodingHelper tmp_cmd(cmd, QCS_DEFAULT, xsink);
+    if (!tmp_cmd) {
+        return QoreValue();
+    }
+
+    QMM.issueRuntimeCmd(tmp_module->c_str(), getProgram(), **tmp_cmd, xsink);
+}
+
+//! Returns the capability mask of the current program
+/** @return the capability mask of the current program
+
+    @since %Qore 2.0
+*/
+static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
+    return runtime_get_parse_options();
+}
+
+//! Retrieves all @ref conditional_parsing "parse defines" in the current Program
+/** @return the hash of values of all @ref conditional_parsing "parse defines" in the current Program
+
+    @par Example:
+    @code{.py}
+*hash<auto> val = Program::getAllDefines();
+    @endcode
+
+    @note A parse define may be defined with no value then values may have nothing values
+
+    @since %Qore 2.3
+ */
+static *hash<auto> Program::getAllDefines() [flags=CONSTANT;dom=PROCESS] {
+   return qore_program_private::runTimeGetAllDefines(getProgram());
 }

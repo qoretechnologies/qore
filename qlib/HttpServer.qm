@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServer.qm HTTP multi-threaded server module definition
 
-/*  HttpServer.qm Copyright (C) 2012 - 2024 Qore Technologies, s.r.o.
+/*  HttpServer.qm Copyright (C) 2012 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,12 +29,16 @@
 %requires(reexport) HttpServerUtil >= 1.0
 %requires Logger
 
+%try-module sysconf
+%define NO_SYSCONF
+%endtry
+
 %new-style
 %allow-weak-references
 
 module HttpServer {
-    version = "1.3";
-    desc = "HttpServer class definition";
+    version = "1.4";
+    desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
@@ -106,7 +110,7 @@ class MyHandler inherits AbstractHttpRequestHandler {
 
 sub log(string str, ...) {
     printf("%y: %s\n", now_us(), vsprintf(str, argv));    - fixed a bug reloading X.509 certificates on running listeners
-      (<a href="https://github.com/qorelanguage/qore/issues/4720">issue 4720</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4720">issue 4720</a>)
 
 }
 
@@ -133,9 +137,14 @@ log("started listener on %s", lh.desc);
 
     @section http_relnotes HttpServer Module Release Notes
 
+    @subsection http1_4 HttpServer 1.4
+    - allow the listener class to be overridden and added \c "listener-name" to the context hash
+    - allow authentication methods to set the call context
+      (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
+
     @subsection http1_3 HttpServer 1.3
     - fixed a bug where idle connections were never disconnected
-      (<a href="https://github.com/qorelanguage/qore/issues/4878">issue 4878</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4878">issue 4878</a>)
 
     @subsection http1_2 HttpServer 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
@@ -143,82 +152,82 @@ log("started listener on %s", lh.desc);
     @subsection http1_1_2 HttpServer 1.1.2
     - allow context info to be cleared after handling each request to ensure that context info (like thread-local
       data) does not leak into other connections on the same thread
-      (<a href="https://github.com/qorelanguage/qore/issues/4802">issue 4802</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4802">issue 4802</a>)
 
     @subsection http1_1_1 HttpServer 1.1.1
     - fixed a bug reloading X.509 certificates on running listeners
-      (<a href="https://github.com/qorelanguage/qore/issues/4720">issue 4720</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4720">issue 4720</a>)
 
     @subsection http1_1 HttpServer 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
-      (<a href="https://github.com/qorelanguage/qore/issues/4574">issue 4574</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4574">issue 4574</a>)
 
     @subsection http1_0_12 HttpServer 1.0.12
     - fixed a bug where incorrect URI decoding was applied to URLs in received HTTP messages instead of URL decoding
-      (<a href="https://github.com/qorelanguage/qore/issues/4363">issue 4363</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4363">issue 4363</a>)
 
     @subsection http1_0_2 HttpServer 1.0.2
     - @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
       to the caller
-      (<a href="https://github.com/qorelanguage/qore/issues/4312">issue 4312</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4312">issue 4312</a>)
 
     @subsection http1_0_1 HttpServer 1.0.1
     - allow dynamic handlers to be removed without waiting for all connections to terminate
-      (<a href="https://github.com/qorelanguage/qore/issues/4273">issue 4273</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4273">issue 4273</a>)
     - allow for full logging of authentication errors if HTTP server debugging is enabled
-      (<a href="https://github.com/qorelanguage/qore/issues/4217">issue 4217</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4217">issue 4217</a>)
 
     @subsection http1_0 HttpServer 1.0
     - allow dynamic handlers to be disabled before being removed
-      (<a href="https://github.com/qorelanguage/qore/issues/4173">issue 4173</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4173">issue 4173</a>)
     - added support for the Logger module for logging
-      (<a href="https://github.com/qorelanguage/qore/issues/4157">issue 4157</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4157">issue 4157</a>)
     - removed deprecated APIs
 
     @subsection http0911 HttpServer 0.9.11
     - fixed a bug shutting down dedicated socket I/O handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/4130">issue 4130</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4130">issue 4130</a>)
     - fixed a bug where invalid HTTP responses were send with error messages and chunked transfer encoding
-      (<a href="https://github.com/qorelanguage/qore/issues/4124">issue 4124</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4124">issue 4124</a>)
     - fixed a bug where it was not possible for an HTTP stream handler to support switching protocols
-      (<a href="https://github.com/qorelanguage/qore/issues/4111">issue 4111</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4111">issue 4111</a>)
 
     @subsection http095 HttpServer 0.9.5
     - fixed a bug where the HTTP server would not always stop the ThreadPool which caused process shutdowns to hang
-      (<a href="https://github.com/qorelanguage/qore/issues/3999">issue 3999</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3999">issue 3999</a>)
 
     @subsection http094 HttpServer 0.9.4
     - added support for sending chunked replies from an @ref Qore::InputStream "InputStream"
-      (<a href="https://github.com/qorelanguage/qore/issues/3702">issue 3702</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3702">issue 3702</a>)
 
     @subsection http03131 HttpServer 0.3.13.1
     - enable remote certificates to be retrieved in listeners and handlers by default; added new API entry points for
       listeners and handlers with more flexible and saner parameters, deprecated old complex methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3512">issue 3512</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3512">issue 3512</a>)
     - shut down dedicated socket conenctions last in order to allow for effective keep-alive implementations with
       WebSocket for example
-      (<a href="https://github.com/qorelanguage/qore/issues/3488">issue 3488</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3488">issue 3488</a>)
     - fixed certificate and key errors for HTTPS listeners to generate user-friendly exceptions
-      (<a href="https://github.com/qorelanguage/qore/issues/3397">issue 3397</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3397">issue 3397</a>)
 
     @subsection http0313 HttpServer 0.3.13
     - added the \c "header-info" hash to the context argument when calling handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/3026">issue 3026</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3026">issue 3026</a>)
     - added support for adding new HTTP methods to the server with the
       @ref HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
-      (<a href="https://github.com/qorelanguage/qore/issues/2805">issue 2805</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2805">issue 2805</a>)
 
     @subsection http03121 HttpServer 0.3.12.1
     - fixed \c HEAD and other responses that cannot have a message body
-      (<a href="https://github.com/qorelanguage/qore/issues/3116">bug 3116</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3116">bug 3116</a>)
 
     @subsection http0312 HttpServer 0.3.12
     - added a minimal substring of string bodies received to the log message when logging HTTP requests
-    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qorelanguage/qore/issues/1086">issue 1086</a>)
+    - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
     - added support for the HTTP \c "PATCH" method
 
     @subsection http03111 HttpServer 0.3.11.1
-    - fixed a bug where @ref HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qorelanguage/qore/issues/1284">bug 1284</a>)
+    - fixed a bug where @ref HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
 
     @subsection http0311 HttpServer 0.3.11
     - fixed a bug setting the response encoding in @ref HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
@@ -240,7 +249,7 @@ log("started listener on %s", lh.desc);
     - fixed a bug in @ref HttpServer::HttpServer::addListener() with an integer argument; a UNIX socket was opened instead of a wildcard listener on the given port
     - added the @ref HttpServer::HttpServer::listenerStarted() method to allow for reporting when listeners are actually running since they are started asynchronously
     - added the \c "ssl" key to the listener socket info hash
-    - fixed typos causing bugs in HTTP error logging (<a href="https://github.com/qorelanguage/qore/issues/308">bug 308</a>)
+    - fixed typos causing bugs in HTTP error logging (<a href="https://github.com/qoretechnologies/qore/issues/308">bug 308</a>)
     - fixed bugs handling persistent connections
 
     @subsection http0310 HttpServer 0.3.10
@@ -389,6 +398,15 @@ public hashdecl HttpServerOptionInfo {
 
     #! HTTP server logger
     *LoggerInterface logger;
+
+    #! Idle thread count for the connection thread pool
+    int idle_threads =
+%ifndef NO_SYSCONF
+        sysconf(SC_NPROCESSORS_ONLN) * 2
+%else
+        HttpServer::DefaultIdleThreads
+%endif
+        ;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -507,7 +525,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         DynamicHttpHandlerList dhandlers();
 
         # connection thread pool
-        ThreadPool threadPool(-1, DefaultIdleThreads);
+        ThreadPool threadPool;
 
         # other misc response headers
         hash<auto> hdr;
@@ -531,6 +549,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
+
+        #! Cached HTTP date header value
+        static string cached_date_header;
+
+        #! Epoch second when cache was last updated
+        static int cached_date_epoch = 0;
     }
     #! @endcond
 
@@ -560,13 +584,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     deprecated constructor(*code logfunc, *code errlogfunc, bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
-        http_server_string = name;
-        debug = dbg;
-        hdr = {
-            "Server": name,
-        } + hdr;
-
-        logger = new Logger(http_server_string);
+        logger = new Logger(name);
         if (logfunc || errlogfunc) {
             logger.addAppender(new HttpServerCallbackAppender(logfunc ?? errlogfunc));
             if (logfunc) {
@@ -577,36 +595,35 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         } else {
             logger.setLevel(LoggerLevel::INFO);
         }
+        init(<HttpServerOptionInfo>{
+            "name": name,
+            "debug": dbg,
+            "hdr": hdr,
+            "logger": logger,
+        });
     }
 
     #! Creates the server with the given options
     /** @param opts see @ref HttpServerOptionInfo for more info
     */
     constructor(hash<HttpServerOptionInfo> opts) {
-        http_server_string = opts.name;
-        debug = opts.debug;
-        hdr = opts.hdr;
-        protect_last_listener = opts.protect_last_listener ?? False;
-        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
-        if (opts.ttl) {
-            setTtl(opts.ttl);
-        }
+        init(opts);
     }
+
 
     #! Creates the server with default options and an empty logger
     constructor() {
-        hash<HttpServerOptionInfo> opts();
-        http_server_string = opts.name;
-        debug = opts.debug;
-        hdr = opts.hdr;
-        protect_last_listener = opts.protect_last_listener;
-        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
-        ttl = opts.ttl;
+        init(<HttpServerOptionInfo>{});
     }
 
     #! calls stop() and destroys the object
     destructor() {
         stop();
+    }
+
+    #! Returns default response headers
+    *hash<auto> getDefaultResponseHeaders() {
+        return hdr;
     }
 
     #! Returns the TTL value
@@ -674,7 +691,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @since HttpServer 0.3.13.1
     */
-    final list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
+    list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
         if (bind !~ /:\w+/) {
             if (bind =~ /^\//) {
@@ -708,7 +725,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @since HttpServer 0.3.13.1
     */
-    final list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+    list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
         if (exists info.node && !exists info.service) {
             # try to bind without a service, can be a UNIX domain socket
             return list(addListenerIntern(info).getInfo());
@@ -1271,7 +1288,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     #! sends an HTTP error message on the socket
-    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int code, *data msg, *InputStream chunked_msg, *hash<auto> extra_hdrs, *string encoding, bool head) {
+    sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
+            *hash<auto> extra_hdrs, *string encoding, bool head) {
         if (!s.isOpen()) {
             listener.log("cid %d: connection closed by peer", cx.id);
             return;
@@ -1287,13 +1305,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 header fields, regardless of the entity-header fields present in
                 the message.
             */
-            if (!head && (code >= 200) && (code != 204) && (code != 304)) {
+            if (!head && (status_code >= 200) && (status_code != 204) && (status_code != 304)) {
                 if (msg.typeCode() == NT_STRING) {
-                    response_msg = !extra_hdrs."Content-Type"
-                        ? sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
-                            "%s</address></body></html>",
-                                code, HttpServer::HttpCodes{code}, HttpServer::HttpCodes{code}, html_encode(msg),
-                                http_server_string, gethostname())
+                    response_msg = !extra_hdrs."Content-Type" && acceptsHtml(cx)
+                        ? getHtmlErrorMessage(status_code, msg)
                         : msg;
                 } else {
                     response_msg = msg;
@@ -1312,37 +1327,54 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         on_exit if (old_encoding != s.getEncoding())
             s.setEncoding(old_encoding);
 
-        if (!encoding)
+        if (!encoding) {
             encoding = s.getEncoding().lwr();
-        else if (encoding != s.getEncoding().lwr())
+        } else if (encoding != s.getEncoding().lwr()) {
             s.setEncoding(encoding);
+        }
 
-        hash<auto> v_hdr;
-        v_hdr += hdr;
+        hash<auto> hdr += self.hdr;
 
-        if (!extra_hdrs."Content-Type")
-            v_hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
-        else if (extra_hdrs."Content-Type" !~ /charset=/)
+        if (!extra_hdrs."Content-Type") {
+            hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
+        } else if (extra_hdrs."Content-Type" !~ /charset=/) {
             extra_hdrs."Content-Type" += ";charset=" + encoding;
+        }
 
-        if (cx.close)
-            v_hdr += ("Connection": "close");
-        else
-            v_hdr += ("Connection": "Keep-Alive");
+        hdr.Connection = cx.close ? "close" : "Keep-Alive";
 
-        if (extra_hdrs)
-            v_hdr += extra_hdrs;
+        if (extra_hdrs) {
+            hdr += extra_hdrs;
+        }
+
+        hdr.Date = getDateHeader();
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
-            s.sendHTTPResponse(code, HttpServer::HttpCodes{code}, "1.1", v_hdr, response_msg ?? chunked_msg);
-            listener.logResponse(cx, code, response_msg ?? chunked_msg, v_hdr);
+            s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
+                response_msg ?? chunked_msg);
+            listener.logResponse(cx, status_code, response_msg ?? chunked_msg, hdr);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-SEND-ERROR") {
                 string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
-                logError(estr);
+                logError("%s", estr);
             }
         }
+    }
+
+    string getHtmlErrorMessage(int status_code, string msg) {
+        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
+            "%s</address></body></html>",
+                status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
+                html_encode(msg), http_server_string, gethostname());
+    }
+
+    static bool acceptsHtml(hash<auto> cx) {
+        if (!cx.hdr.accept.val() || cx.hdr.accept =~ /\btext\/html\b/i || cx.hdr.accept =~ /\b\*\/\*\b/
+            || cx.hdr.accept =~ /\btext\/\*\b/i) {
+            return True;
+        }
+        return False;
     }
 
     #! masks log messages by removing sensitive data
@@ -1403,6 +1435,32 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # this method left intentionally blank
     }
 
+    #! Calculate the Date header only once per second
+    static string getDateHeader() {
+        int now = clock_getseconds();
+        if (now != cached_date_epoch) {
+            cached_date_epoch = now;
+            cached_date_header = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        }
+        return cached_date_header;
+    }
+
+    #! Common constructor code
+    private init(hash<HttpServerOptionInfo> opts) {
+        if (opts.idle_threads < 1) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", opts.idle_threads);
+        }
+        threadPool = new ThreadPool(-1, opts.idle_threads);
+        http_server_string = opts.name;
+        debug = opts.debug;
+        hdr = opts.hdr;
+        protect_last_listener = opts.protect_last_listener ?? False;
+        logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
+        if (opts.ttl) {
+            setTtl(opts.ttl);
+        }
+    }
+
     #! returns the listener ID from the bind name or throws an exception if not valid
     /** @throw INVALID-LISTENER-ERROR invalid listener bind address
     */
@@ -1436,12 +1494,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! helper method to set HTTP response headers
     static nothing setReplyHeaders(Socket s, hash<auto> cx, reference<hash<auto>> rv) {
-        return HttpServer::http_set_reply_headers(s, cx, \rv);
+        HttpServer::http_set_reply_headers(s, cx, \rv);
+    }
+
+    #! Creates a new HttpListener object; reimplement in subclasses to override the listener class
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new HttpListener(server, id, seqSessions, info);
     }
 
     #! @cond nodoc
-    # don't reimplement this method; fix/enhance it in the module
-    final private HttpListener addListenerIntern(*string node, *softstring service, *Qore::SSLCertificate cert,
+    private HttpListener addListenerIntern(*string node, *softstring service, *Qore::SSLCertificate cert,
             *Qore::SSLPrivateKey key, *hash<string, hash<HttpHandlerConfigInfo>> handler_info, *LoggerInterface logger,
             *code stopc, *string name, int family = AF_UNSPEC) {
         return addListenerIntern(<HttpListenerOptionInfo>{
@@ -1456,7 +1518,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         });
     }
 
-    final private HttpListener addListenerIntern(hash<HttpListenerOptionInfo> info) {
+    private HttpListener addListenerIntern(hash<HttpListenerOptionInfo> info) {
         if (!exists info.node && !exists info.service) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("missing both \"node\" and \"service\" from listener option hash: %y", info);
         }
@@ -1484,7 +1546,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
         on_error c.dec();
 
-        HttpListener l(self, info.name, id, seqSessions, info);
+        HttpListener l = getListener(self, id, info);
         listeners{id} = l;
         smap{sock} = id;
         nmap{info.name} = id;
@@ -1498,8 +1560,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return l;
     }
 
-    # don't reimplement this method; fix/enhance it in the module
-    final private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
+    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
         list<auto> al = getaddrinfo(info.node, info.service, info.family, AIFlags);
 
@@ -1552,8 +1613,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return rv;
     }
 
-    # don't reimplement this method; fix/enhance it in the module
-    final private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
+    private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
         string str = "";
         if (hdr.path)
             str = sprintf("url=%y", hdr.path);
@@ -1572,15 +1632,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         });
     }
 
-    # handles an incoming request - do not call externally; this method is called by the listeners when a request is received
-    # don't reimplement this method; fix/enhance it in the module
-    final handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
-            HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated, reference<bool> dedicated_external) {
+    #! Handles incoming requests
+    /** this method is called by the listeners when a request is received
+    */
+    handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
+            HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated,
+            reference<bool> dedicated_external) {
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
                 listener.getListenerSocketInfo().address_desc);
-            listener.logError(str);
+            listener.logError("%s", str);
             cx.close = True;
             sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
             return;
@@ -1601,7 +1663,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # erase the encoding string on exit
         on_exit remove cx.encoding;
 
-        hash url = {
+        hash<auto> url += {
             "path": hdr.path,
         };
 
@@ -1625,7 +1687,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         HttpServer::AbstractHttpRequestHandler handler;
-        # the dynamic handler helper maintains the request count for dynamic handlers so any call to remove the handler will only return after all in-progress requests are completed; the object is only allocated if needed
+        # the dynamic handler helper maintains the request count for dynamic handlers so any call to remove the
+        # handler will only return after all in-progress requests are completed; the object is only allocated if
+        # needed
         DynamicHandlerHelper dhh;
 
         if (phi.handler) {
@@ -1677,7 +1741,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError(str);
+                    listener.logError("%s", str);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
@@ -1699,7 +1763,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         hdr."content-length", ex.err, ex.desc);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError(str);
+                    listener.logError("%s", str);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
@@ -1727,76 +1791,94 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 rv = noHandlerError(cx, hdr, body);
             } else {
                 # check for authentication info
-                #printf("HTTP DEBUG: handler: %y (auth: %y) hdr: %y\n", cx.handler_name, exists handler.auth && handler.auth.requiresAuthentication(), hdr);
+                #printf("HTTP DEBUG: handler: %y (auth: %y) hdr: %y\n", cx.handler_name,
+                #    exists handler.auth && handler.auth.requiresAuthentication(), hdr);
 
                 # allow the handler to remove any authentication information in thread-local data, for example
                 on_exit if (handler.auth) {
                     handler.auth.endRequest();
                 }
 
-                if (handler.auth) {
-                    try {
-                        *hash<auto> ah = handler.auth.authenticateRequest(listener, hdr, \cx);
-                        # return an error if authentication failed
-                        if (ah) {
-                            if (!ah.code)
-                                ah.code = 401;
-                            if (!ah.body && !ah.hasKeyValue("chunked_body"))
-                                ah.body = "Authentication is required to access this server";
-                            cx.close = True;
-                            sendHttpError(listener, cx, s, ah.code, ah.body,
-                                ah.hasKey("chunked_body") ? ah.chunked_body : NOTHING, ah.hdr, cx."response-encoding",
-                                head);
-                            return;
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        # log the error
-                        string desc = !debug
-                            ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                            : get_exception_string(ex);
-                        desc += sprintf(": received from %s", cx."peer-info".address_desc);
-                        listener.logError("%s", desc);
-                        cx.close = True;
-                        sendHttpError(listener, cx, s, 501, "Server Authentication Error", NOTHING, NOTHING, NOTHING,
-                            head);
-                        return;
-                    }
-                    if (exists cx.user) {
-                        listener.log("authenticated with user %y", cx.user);
-                    } else {
-                        listener.log("authenticated without a user context");
-                    }
-                } else {
-                    listener.log("no authentication required");
-                }
-
                 *hash<auto> tld_save = handler.saveThreadLocalData();
                 on_exit handler.restoreThreadLocalData(tld_save);
 
-                # decode body if applicable
-                if (body && hdr."content-encoding" && handler.decompress)
-                    body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
-                        handler.decompress_to_string ? s.getEncoding() : NOTHING);
+                # preform any pre-processing on the request that can aid in authentication and has to be performed to
+                # handle the request anyway
+                *hash<HttpResponseInfo> ah;
+                try {
+                    ah = handler.preprocessRequest(listener, \hdr, \cx);
+                } catch (hash<ExceptionInfo> ex) {
+                    # log the error
+                    string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
+                        cx."peer-info".address_desc) + (
+                            !debug
+                                ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                : get_exception_string(ex)
+                        );
+                    listener.logError("%s", desc);
+                    ah = <HttpResponseInfo>{
+                        "code": 501,
+                        "body": "Server Preprocessing Error",
+                    };
+                }
 
-                rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
-
-                # manage persistent handler info, if applicable
-                if (!phi.handler) {
-                    if (handler.isPersistent()) {
-                        phi.assign(dhh, handler);
-                        if (!cx.persistent && !rv.close) {
-                            cx.persistent = True;
-                        }
+                if (!ah) {
+                    try {
+                        ah = handler.authenticateRequest(listener, hdr, \cx);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # log the error
+                        string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
+                            cx."peer-info".address_desc) + (
+                                !debug
+                                    ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                    : get_exception_string(ex)
+                            );
+                        listener.logError("%s", desc);
+                        ah = <HttpResponseInfo>{
+                            "code": 501,
+                            "body": "Server Authentication Error",
+                        };
                     }
-                } else if (!handler.isPersistent()) {
-                    phi.clear();
-                } else if (!cx.persistent && !rv.close) {
-                    cx.persistent = True;
                 }
 
-                if (rv.reply_sent) {
-                    return;
+                # return an error if authentication failed
+                if (ah) {
+                    if (!ah."code") {
+                        ah."code" = 401;
+                        cx.close = True;
+                    } else if ((ah."code" / 100) >= 4) {
+                        cx.close = True;
+                    }
+                    if (!ah.body.val() && !ah.hasKeyValue("chunked_body")) {
+                        ah.body = "Authentication is required to access this server";
+                    }
+                    rv = ah;
+                } else {
+                    # decode body if applicable
+                    if (body && hdr."content-encoding" && handler.decompress)
+                        body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
+                            handler.decompress_to_string ? s.getEncoding() : NOTHING);
+
+                    rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
+
+                    # manage persistent handler info, if applicable
+                    if (!phi.handler) {
+                        if (handler.isPersistent()) {
+                            phi.assign(dhh, handler);
+                            if (!cx.persistent && !rv.close) {
+                                cx.persistent = True;
+                            }
+                        }
+                    } else if (!handler.isPersistent()) {
+                        phi.clear();
+                    } else if (!cx.persistent && !rv.close) {
+                        cx.persistent = True;
+                    }
                 }
+            }
+
+            if (rv.reply_sent) {
+                return;
             }
 
             sendReply(listener, s, handler, rv, \cx, hdr, head, \dedicated, \dedicated_external);
@@ -1820,13 +1902,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
             sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
-            logError(str);
+            logError("%s", str);
         }
     }
 
     # sends a reply to a request
-    # don't reimplement this method; fix/enhance it in the module
-    final sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
+    sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
             reference<hash> cx, hash<auto> hdr, bool head, reference<bool> dedicated,
             reference<bool> dedicated_external) {
         if (exists rv.close)
@@ -1838,7 +1919,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         on_exit if (s.pendingHttpChunkedBody())
             s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
-        if (!HttpCodes.(rv.code)) { # if the handler returns an invalid hash
+        if (!HttpCodes{rv."code"}) { # if the handler returns an invalid hash
             string str = sprintf("%s handler returned an invalid response rv: %y", cx.handler_name, rv);
             cx.close = True;
             remove cx.persistent;
@@ -1859,29 +1940,31 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")))
             && (head
-                || (rv.code < 200
-                    || (rv.code == 204
-                    || rv.code == 304)))) {
+                || (rv."code" < 200
+                    || (rv."code" == 204
+                    || rv."code" == 304)))) {
             remove rv.body;
             if (chunked_body) {
                 remove rv.chunked_body;
             }
         }
 
+        rv.hdr.Date = getDateHeader();
+
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
-        if (rv.code >= 300 && rv.code < 400) {
+        if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv);
-        } else if (rv.code >= 400) {
+        } else if (rv."code" >= 400) {
             if (!rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
             }
-            sendHttpError(listener, cx, s, rv.code, rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
+            sendHttpError(listener, cx, s, rv."code", rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
                 rv.hdr, cx."response-encoding", head);
             remove cx.persistent;
         } else {
-            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv.code, rv.hdr."Content-Type",
+            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # compress body if eligible for compression
@@ -1898,6 +1981,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
+            if ((rv.body.val() || rv.chunked_body.val()) && !rv.hdr."Content-Type") {
+                rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + (cx."response-encoding"
+                    ?? s.getEncoding().lwr());
+            }
+
             doResponse(listener, s, cx, rv);
         }
 
@@ -1911,7 +1999,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.user_state += rv.user_state;
         }
 
-        if (rv."code" == 101) {
+        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
             if (rv.close)
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -1953,27 +2041,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     # rv is "hash" to strip types
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv) {
-        if ((rv.body || !rv.hasKeyValue("chunked_body"))
-            && !rv.hdr."Transfer-Encoding"
-            && !(rv.body instanceof InputStream)) {
-
-            s.sendHTTPResponse(rv.code, HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
-        } else {
-            if (exists rv.chunked_body) {
-                rv.body = rv.chunked_body;
-            }
-            if (rv.body instanceof StringInputStream) {
-                StringInputStream input_stream = cast<StringInputStream>(rv.body);
-                if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
-                    rv.body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
+        try {
+            if (!rv.chunked_body && (!rv.body || (!rv.hdr."Transfer-Encoding" && !(rv.body instanceof InputStream)))) {
+                # send a normal monolithic response
+                s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
+            } else {
+                # send a chunked response stream
+                auto body = rv.chunked_body ?? rv.body;
+                if (body instanceof StringInputStream) {
+                    StringInputStream input_stream = cast<StringInputStream>(body);
+                    if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
+                        body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
+                    }
+                } else if ((body instanceof string) || (body instanceof binary)) {
+                    body = new BinaryInputStream(body);
                 }
-            } else if ((rv.body instanceof string) || (rv.body instanceof binary)) {
-                rv.body = new BinaryInputStream(rv.body);
-            }
-            if (rv.body instanceof InputStream) {
                 rv.hdr."Transfer-Encoding" = "chunked";
+                s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, body);
             }
-            s.sendHTTPResponse(rv.code, HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.body);
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logResponseError(cx, rv, ex);
+            rethrow;
         }
         listener.logResponse(cx, rv);
     }
@@ -2012,10 +2100,16 @@ class HttpPersistentHandlerInfo {
     }
 }
 
-#! this class implements the listeners for the @ref HttpServer::HttpServer "HttpServer" class
-/** this class is private; it's not exported in the module API
-*/
-class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
+#! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
+public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
+    public {
+        # TID of the background listener thread
+        int tid;
+
+        # default handler info
+        *HandlerInfo defaultHandler;
+    }
+
     private {
         HttpServer serv;
         Sequence ss;
@@ -2076,7 +2170,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         int lock_waiting;
 
         const PollInterval = 250ms;
-        const ListenQueue = 100;
+        const ListenQueue = 1024;
         const BodyLogLimit = 40;
 
         # handler ref count
@@ -2093,24 +2187,18 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         };
     }
 
-    public {
-        # TID of the background listener thread
-        int tid;
-
-        # default handler info
-        *HandlerInfo defaultHandler;
-    }
-
-    #! creates the object with the given parameters
+    #! Creates the object with the given parameters
     /**
         @param server the HTTP server
-        @param name the listener name
         @param id the listener ID
         @param ss the listener connection sequence
         @param opts listener options
     */
-    constructor(HttpServer server, string name, int id, Sequence ss, *hash<HttpListenerOptionInfo> opts) {
-        self.name = name;
+    constructor(HttpServer server, int id, Sequence ss, *hash<HttpListenerOptionInfo> opts) {
+        if (!opts.name.val()) {
+            throw "HTTPLISTENER-CONSTRUCTOR-ERROR", "Missing required listener option: name";
+        }
+        self.name = opts.name;
         if (opts.cert_loc && !opts.cert) {
             opts += http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
         }
@@ -2193,6 +2281,11 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         cThreads.inc();
 
         tid = background mainThread();
+    }
+
+    #! Returns a hash of extra headers to be added to all responses from this listener
+    *hash<auto> getDefaultResponseHeaders() {
+        return serv.getDefaultResponseHeaders();
     }
 
     #! Reloads the HTTPS certificate from the original location
@@ -2343,8 +2436,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                             : get_exception_string(ex);
                         string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                             socket_info.address_desc);
-                        logError(str);
-                        logError(sprintf("hdr=%y", hdr));
+                        logError("%s", str);
+                        logError("hdr=%y", hdr);
                     }
                 }
             } else {
@@ -2481,9 +2574,9 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         }
     }
 
-    logResponse(hash<auto> cx, int code, *data body, *hash<auto> hdr) {
+    string getResponseLogString(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
         # do log msg
-        string lstr = sprintf("cid %d: HTTP/1.1 %d %s", cx.id, code, HttpServer::HttpCodes{code});
+        string lstr = sprintf("cid %d: HTTP/1.1 %d %s", cx.id, status_code, HttpServer::HttpCodes{status_code});
         if (cx.handler_name)
             lstr += sprintf(" handler: %y", cx.handler_name);
         if (cx.user)
@@ -2492,10 +2585,16 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             lstr += sprintf(" size: %d", body.size());
         if (hdr."Content-Type")
             lstr += sprintf(" CT: %y", hdr."Content-Type");
-        log(lstr);
+        return lstr;
+    }
+
+    logResponse(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
+        # do log msg
+        string lstr = getResponseLogString(cx, status_code, body, hdr);
+        log("%s", lstr);
 
         if (log_send_headers)
-            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, hdr);
+            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, status_code, hdr);
         if (log_send_body)
             log("cid %d: SEND BODY: %y", cx.id, body);
     }
@@ -2509,7 +2608,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             lstr += sprintf(" user: %y", cx.user);
         if (hdr."Content-Type")
             lstr += sprintf(" CT: %y", hdr."Content-Type");
-        log(lstr);
+        log("%s", lstr);
 
         if (log_send_headers)
             log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, hdr);
@@ -2520,9 +2619,27 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
     logResponse(hash<auto> cx, hash<auto> rv) {
         #  "rv" can be a "HttpHandlerResponseInfo", so we can't access "chunked_body" directly
         if (rv.body || !rv.hasKeyValue("chunked_body")) {
-            logResponse(cx, rv.code, rv.body, rv.hdr);
+            logResponse(cx, rv."code", rv.body, rv.hdr);
         } else {
-            logResponse(cx, rv.code, rv.chunked_body, rv.hdr);
+            logResponse(cx, rv."code", rv.chunked_body, rv.hdr);
+        }
+    }
+
+    # Called when an HTTP response could not be sent
+    logResponseError(hash<auto> cx, hash<auto> rv, hash<ExceptionInfo> ex) {
+        # do log msg
+        string lstr = sprintf("ERROR: %s: Could not send response: %s",
+            getResponseLogString(cx, rv."code", rv.chunked_body ?? rv.body, rv.hdr),
+            !serv.getDebug()
+                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
+                : get_exception_string(ex));
+        log("%s", lstr);
+
+        if (log_send_headers) {
+            log("ERROR: cid %d: FAILED TO SEND HDR: HTTP code %d: %y", cx.id, rv."code", rv.hdr);
+        }
+        if (log_send_body) {
+            log("ERROR: cid %d: FAILED TO SEND BODY: %y", cx.id, rv.chunked_body ?? rv.body);
         }
     }
 
@@ -2590,7 +2707,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                 break;
 
             # DEBUG
-            #printf("HTTP DEBUG: %y: accepting HTTP connection from %s\n", socket_info.address_desc, r.getPeerInfo().address_desc);
+            #printf("HTTP DEBUG: %y: accepting HTTP connection from %s\n", socket_info.address_desc,
+            #    r.getPeerInfo().address_desc);
             #log("accepting HTTP connection from %s", r.getPeerInfo().address_desc);
 
             cThreads.inc();
@@ -2644,20 +2762,13 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
             info.desc += ":" + info.port;
 
         # static listener context
-        hash<auto> cx_listener = {
-            "socket": socket,
-            "socket-info": socket_info,
-            "peer-info": info,
-            "id": ss.next(),
-            "ssl": ssl,
-            "listener-id": id,
-        };
+        hash<auto> cx_listener = getContextTemplate(info);
 
         hash<auto> hdr;
         auto body;
 
         # set TCP_NODELAY on incoming socket
-        #s.setNoDelay(True);
+        s.setNoDelay(True);
 
         HttpPersistentHandlerInfo phi();
 
@@ -2709,17 +2820,26 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                         # log error and close connection on timeout
                         string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
                         string str = sprintf("%s from %s via %s", err, info.address_desc, socket_info.address_desc);
-                        logError(str);
+                        logError("%s", str);
                         cx.close = True;
                         serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
                         break;
                     }
                     string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
-                    #if (ex.arg)
-                    #    etxt += printf(" (%s)", ex.arg);
+                    if (ex.arg) {
+                        etxt += printf(" (%y)", ex.arg);
+                        binary b = ex.arg.toBinary();
+                        for (int i = 0; i < b.size(); ++i) {
+                            if (b[i] < 32 || b[i] > 126) {
+                                etxt += sprintf(" 0x%02x", b[i]);
+                            } else {
+                                etxt += sprintf(" '%s'", chr(b[i]));
+                            }
+                        }
+                    }
                     string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                         socket_info.address_desc);
-                    logError(str);
+                    logError("%s", str);
                     cx.close = True;
                     serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
                     break;
@@ -2783,7 +2903,7 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                     if (ssl)
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
                     lstr += ")";
-                    log(lstr);
+                    log("%s", lstr);
                 }
 
                 cx.uctx = get_thread_data("uctx");
@@ -2814,8 +2934,8 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             string str = sprintf("%s: received from %s via %s", etxt, info.address_desc, socket_info.address_desc);
-            logError(str);
-            logError(sprintf("hdr=%y", hdr));
+            logError("%s", str);
+            logError("hdr=%y", hdr);
             cx.close = True;
             serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
         }
@@ -2856,6 +2976,19 @@ class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
         on_exit m.unlock();
 
         remove shh{id};
+    }
+
+    #! Returns the context template for new connections
+    private hash<auto> getContextTemplate(hash<auto> info) {
+        return {
+            "socket": socket,
+            "socket-info": socket_info,
+            "peer-info": info,
+            "id": ss.next(),
+            "ssl": ssl,
+            "listener-id": id,
+            "listener-name": name,
+        };
     }
 }
 }
@@ -3002,7 +3135,8 @@ class HttpHandlerList {
     }
 
     # matches a handler to the request
-    *HandlerInfo findHandler(hash<auto> hdr, reference<int> score, bool finalv = False, *reference<string> root_path) {
+    *HandlerInfo findHandler(hash<auto> hdr, reference<int> score, bool finalv = False,
+            *reference<string> root_path) {
         if (!handlers)
             return;
 
@@ -3023,7 +3157,8 @@ class HttpHandlerList {
 
         foreach HandlerInfo hi in (handlers.iterator()) {
             int scr = hi.matchRequest(hdr, score);
-            #printf("findHandler() path: %s ct: %y %y score: %d (regex: %y)\n", hdr.path, hdr."content-type", hi.name, scr, hi.isregex);
+            #printf("findHandler() path: %s ct: %y %y score: %d (regex: %y)\n", hdr.path, hdr."content-type", hi.name,
+            #    scr, hi.isregex);
             if (scr > score) {
                 rv = hi;
                 score = scr;
@@ -3098,7 +3233,8 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
             on_exit dhl.writeUnlock();
 
             if (handlers{name}) {
-                throw "SETHANDLER-ERROR", sprintf("dynamic HTTP request handler %y already exists (dynamic handlers: %y)", name, keys handlers);
+                throw "SETHANDLER-ERROR", sprintf("dynamic HTTP request handler %y already exists (dynamic "
+                    "handlers: %y)", name, keys handlers);
             }
 
             handlers{name} = dhi;

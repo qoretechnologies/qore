@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,11 +53,12 @@
 #include <QC_Type.h>
 #include <QC_Namespace.h>
 
-QoreReflectionClass::QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm) : AbstractReflectionObject(pgm) {
+QoreReflectionClass::QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm)
+        : AbstractReflectionObject(pgm) {
     cls = pgm->findClass(name, xsink);
     if (!cls) {
         if (!*xsink) {
-            xsink->raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", name);
+            xsink->raiseException("UNKNOWN-CLASS", "Cannot resolve class '%s'", name);
         }
         return;
     }
@@ -296,13 +297,19 @@ hashdecl ClassAccessInfo {
 
     @since %Qore 0.9
  */
-qclass AbstractClass [ns=Qore::Reflection; arg=QoreReflectionClass* c; dom=REFLECTION];
+qclass AbstractClass [
+    ns=Qore::Reflection;
+    arg=QoreReflectionClass* c;
+    dom=REFLECTION
+];
 
 //! Throws an exception if called directly; this class can only be instantiated by builtin subclasses
-/** @throw ABSTRACTCLASS-CONSTRUCTOR-ERROR this exception is thrown if this class is constructed directly (also if directly inherited by user classes)
+/** @throw ABSTRACTCLASS-CONSTRUCTOR-ERROR this exception is thrown if this class is constructed directly (also if
+    directly inherited by user classes)
  */
 AbstractClass::constructor() {
-    xsink->raiseException("ABSTRACTCLASS-CONSTRUCTOR-ERROR", "this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class");
+    xsink->raiseException("ABSTRACTCLASS-CONSTRUCTOR-ERROR", "this class is an abstract class and cannot be "
+        "constructed directly or inherited directly by a user-defined class");
 }
 
 //! returns the class's name

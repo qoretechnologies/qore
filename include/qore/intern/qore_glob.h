@@ -110,7 +110,7 @@ public:
       str.concat("$");
 
       ExceptionSink xsink;
-      QoreRegex qrn(&str, PCRE_CASELESS, &xsink);
+      QoreRegex qrn(&str, PCRE2_CASELESS, &xsink);
       if (xsink)
 	 return -1;
 

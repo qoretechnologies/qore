@@ -59,7 +59,8 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
     */
     constructor(RestClient::RestClient rest, string name, hash<auto> index,
             hash<string, DataProvider::AbstractDataField> record_type, *hash<auto> where_cond,
-            *hash<auto> search_options) {
+            *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
         self.name = name;
         self.index = index;
@@ -93,17 +94,6 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
     */
     bool valid() {
         return i.valid();
-    }
-
-    #! Increments the row pointer when retrieving rows from a select statement
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
-
-        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
-        docs for more information
-    */
-    bool next() {
-        return i.next();
     }
 
     #! Returns a single record if the iterator is valid
@@ -158,6 +148,17 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
     */
     *hash<string, DataProvider::AbstractDataField> getRecordType() {
         return record_type;
+    }
+
+    #! Increments the row pointer when retrieving rows from a select statement
+    /**
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+
+        @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
+        docs for more information
+    */
+    private bool nextImpl() {
+        return i.next();
     }
 }
 }

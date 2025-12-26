@@ -49,7 +49,7 @@ public class OpenAiRunsDataProvider inherits OpenAiDataProviderCommon {
 
     #! Creates the object from the arguments
     constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
-        *string thread_id = ImpliedArgumentHelper::get().thread_id;
+        *string thread_id = DataProviderDataContextHelper::getHash().thread_id;
         if (!thread_id) {
             throw "CONSTRUCTOR-ERROR", sprintf("Missing 'thread_id' in implied arguments");
         }

@@ -80,6 +80,28 @@ static int check_response_code(int status_code, ExceptionSink* xsink) {
     return 0;
 }
 
+//! Server-sent event hash
+/**
+*/
+hashdecl Qore::SseMessageInfo {
+    //! Event type
+    string event;
+
+    //! Message data
+    /** This is sent and received as a string, but with data serialization, it could be any data type
+    */
+    auto data;
+
+    //! Message ID
+    auto id;
+
+    //! Client should set the reconnection time to this value in milliseconds
+    int retry;
+
+    //! Any comment
+    string comment;
+}
+
 //! Socket or other pollable object poll info hash
 /** for use with @ref Qore::Socket::poll() "Socket::poll()""
 */
@@ -627,6 +649,31 @@ AbstractPollOperation Socket::startPollSend(binary data) {
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
+/** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
+    connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
+    the new Socket after a successful poll operation
+
+    An SSL connection is automatically negotiated with the new connection if the Socket has a certificate and private
+    key configured.
+
+    @since %Qore 2.0
+*/
+AbstractPollOperation Socket::startPollAccept() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketAcceptPollOperation(xsink, s),
+        xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("accept"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read data in non-blocking mode
 /** @param size the size of the string to receive
 
@@ -746,6 +793,66 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP header without blocking
+/**
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP header without blocking
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful poll for inbound socket data:
+    - hdr: a hash of header info like that returned from @ref readHTTPHeader():
+      - \c http_version: a string giving the HTTP version set in the header
+      - \c status_code: (HTTP responses only) an integer giving the status code
+      - \c status_message: (HTTP responses only) if present in an HTTP response, this key will be set to the message
+        after the status code
+      - \c method: (HTTP requests only) a string giving the HTTP method (i.e. \c "GET", \c "POST", etc)
+      - \c path: (HTTP requests only) a string giving the path in a request without any decoding; use decode_url() to
+        decode if necessary
+    - info: a hash of other information:
+      - \c headers-raw: the raw headers read without any case conversions or other processing
+      - \c request-uri: (only set when parsing a request header) gives the request URI in an HTTP request
+      - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
+      - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
+      - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this
+        key
+      - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed
+        after responding, @ref False "False" if not; see notes below about how this value is calculated
+      - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+        \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
+        the first requested character encoding in the list
+      - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
+
+    @since %Qore 2.0
+*/
+AbstractPollOperation Socket::startPollReadHttpHeader() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketReadHttpHeaderPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+/*
+AbstractPollOperation Socket::startPollReadServerSentEvent() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketReadServerSentEventPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+*/
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected client socket to SSL
 /** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected client socket to
     SSL
@@ -765,6 +872,29 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("upgrade-client-ssl"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected server socket to SSL
+/** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to upgrade a connected server socket to
+    SSL
+
+    The poll operation returned will upgrade a server connection to an SSL/TLS connection using the certificate and
+    private key set on the socket.
+
+    @since %Qore 1.12
+*/
+AbstractPollOperation Socket::startPollUpgradeServerToSSL() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeServerSslPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("upgrade-server-ssl"), xsink);
     }
     return rv.release();
 }
@@ -895,7 +1025,7 @@ sock.connectSSL("/tmp/socket"); @endcode
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
-    s->connectSSL(target->c_str(), timeout_ms, xsink);
+    s->connectSSL(xsink, target->c_str(), timeout_ms);
 }
 
 //! Connects to the given host and port and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -925,7 +1055,7 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
 */
 nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectINET2SSL(host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms, xsink);
+    s->connectINET2SSL(xsink, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms);
 }
 
 //! Connects to the given UNIX domain socket file and attempts to establish a TLS/SSL connection
@@ -950,7 +1080,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
     @note UNIX domain sockets are not available on native Windows ports
 */
 nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectUNIXSSL(path->c_str(), socktype, protocol, xsink);
+    s->connectUNIXSSL(xsink, path->c_str(), socktype, protocol);
 }
 
 //! Opens and binds the socket to a port, interface and port (if the bind_to string has a format "host:port"), or UNIX domain socket file.
@@ -1117,7 +1247,7 @@ Socket Socket::accept() {
         return QoreValue();
 
     // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
+    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
 
     // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
     my_socket_priv::setAccept(*n, ns);
@@ -1144,7 +1274,7 @@ Socket Socket::accept() {
     @see Socket::accept(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::acceptSSL() {
-    QoreSocketObject *n = s->acceptSSL(-1, xsink);
+    QoreSocketObject *n = s->acceptSSL(xsink, -1);
     if (!n) {
         assert(*xsink);
         return QoreValue();
@@ -1178,7 +1308,7 @@ Socket Socket::acceptSSL() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::acceptSSL(timeout timeout_ms) {
-    QoreSocketObject* n = s->acceptSSL(timeout_ms, xsink);
+    QoreSocketObject* n = s->acceptSSL(xsink, timeout_ms);
     if (!n)
         return QoreValue();
 
@@ -2775,6 +2905,38 @@ hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
     return s->readHTTPChunkedBodyBinary(timeout_ms, xsink);
 }
 
+//! Reads in a single HTTP message chunk
+/** If any errors are encountered, an exception is raised. The chunk body is returned as a binary value.
+
+    @par Example:
+    @code{.py}
+hash<auto> ans = sock.readHTTPChunk(20s);
+    @endcode
+
+    @par Events:
+    @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
+
+    @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed,
+    then the call will not time out and will not return until all the data has been read or the remote end closes the
+    connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions
+    and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
+    clear (i.e. \c 2m = two minutes, etc.)
+
+    @return a hash of any HTTP footers received (with footer keys converted to lower case), with the body returned in
+    the \c "body" key as a binary value
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw SOCKET-CLOSED The remote end has closed the connection
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+*/
+hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) {
+    // when rc = -3 it's a timeout, but rv will be NULL anyway, so we do nothing
+    return s->readHttpChunk(timeout_ms, xsink);
+}
+
 //! Reads in an HTTP message body sent in chunked transfer encoding, writes it in an @ref OutputStream and returns any footers received
 /** If any errors are encountered, an exception is raised
 
@@ -2854,7 +3016,11 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     Header or trailer data is placed in a hash with the following keys:
     - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
-    @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
+    @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed,
+    then the call will not time out and will not return until all the data has been read or the remote end closes the
+    connection. If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and
+    methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
+    clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
@@ -2867,6 +3033,47 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
 */
 Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1) {
     s->readHTTPChunkedBodyBinaryWithCallback(*rcb, self, timeout_ms, xsink);
+}
+
+//! Read a server sent event message
+/**
+    @param content_encoding any content encoding to use to decode the stream (ex: \c "deflate")
+    @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed,
+    then the call will not time out and will not return until all the data has been read or the remote end closes the
+    connection. If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and
+    methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
+    clear (i.e. \c 2m = two minutes, etc.)
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw SOCKET-CLOSED The remote end closed the connection without sending any data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+
+    @since %Qore 2.0
+*/
+hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+    return s->readServerSentEvent(xsink, content_encoding, timeout_ms);
+}
+
+//! Read a server sent event message
+/**
+    @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed,
+    then the call will not time out and will not return until all the data has been read or the remote end closes the
+    connection. If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and
+    methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
+    clear (i.e. \c 2m = two minutes, etc.)
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw SOCKET-CLOSED The remote end closed the connection without sending any data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+
+    @since %Qore 2.0
+*/
+hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
+    return s->readServerSentEvent(xsink, nullptr, timeout_ms);
 }
 
 //! Closes an open socket
@@ -3384,7 +3591,7 @@ sock.upgradeClientToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
-    s->upgradeClientToSSL(timeout_ms, xsink);
+    s->upgradeClientToSSL(xsink, timeout_ms);
 }
 
 //! Upgrades a server socket connection to a TLS/SSL connection
@@ -3403,7 +3610,7 @@ sock.upgradeServerToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
-    s->upgradeServerToSSL(timeout_ms, xsink);
+    s->upgradeServerToSSL(xsink, timeout_ms);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -3642,6 +3849,15 @@ int conn_id = sock.getConnectionId();
 */
 int Socket::getConnectionId() [flags=CONSTANT] {
     return s->getConnectionId();
+}
+
+//! Parse the given string as a Server Sent Event (SSE) string
+/** @param str the string to parse as a Server Sent Event (SSE) string
+
+    @return a hash of the event information
+*/
+static hash<SseMessageInfo> Socket::parseServerSentEvent(string str) {
+    return QoreSocket::parseServerSentEvent(xsink, str);
 }
 
 //! polls multiple sockets and returns all sockets with events

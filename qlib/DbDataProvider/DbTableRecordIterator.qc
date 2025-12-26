@@ -36,8 +36,9 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
         @param search_options search options; assumed to have already been processed for validity before this call
     */
     constructor(AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)
-        : AbstractDbRecordIterator(!table.getDatasource().currentThreadInTransaction(),
-            table.getStatement(search_options + {"where": where_cond})) {
+        : AbstractDbRecordIterator(!table.getDatasource().currentThreadInTransaction() && !search_options.forupdate,
+            table.getStatement(search_options - ("requires_result", "max_records") + {"where": where_cond}),
+            search_options) {
         self.table = table;
     }
 

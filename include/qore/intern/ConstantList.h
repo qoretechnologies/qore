@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     constants can only be defined when parsing
     constants values will be substituted during the 2nd parse phase
@@ -339,10 +339,11 @@ public:
     }
 
     DLLLOCAL bool next() {
-        if (i == cl.end())
+        if (i == cl.end()) {
             i = cl.begin();
-        else
+        } else {
             ++i;
+        }
         return i != cl.end();
     }
 

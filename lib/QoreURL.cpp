@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <regex>
+
+static std::regex check_port("[0-9]{1,5}(/|$)", std::regex::extended);
 
 struct qore_url_private {
 public:
@@ -52,7 +55,7 @@ public:
     }
 
     DLLLOCAL void zero() {
-        protocol = path = username = password = host = 0;
+        protocol = path = username = password = host = nullptr;
         port = 0;
     }
 
@@ -112,8 +115,9 @@ public:
             ph->setKeyValueIntern("host", host);
             host = nullptr;
         }
-        if (port)
+        if (port) {
             ph->setKeyValueIntern("port", port);
+        }
 
         return h;
     }
@@ -193,14 +197,20 @@ private:
         }
 
         // find end of hostname; look for username and password separator characters first
-        size_t path_start = sbuf.rfind('@');
-        if (path_start != std::string::npos) {
-            size_t sep = sbuf.find(':');
-            // ignore if there is no ':' character before
-            if (sep == std::string::npos || sep > path_start) {
-                path_start = 0;
+        size_t path_start = sbuf.find(':');
+        if (path_start != std::string::npos && path_start) {
+            // ignore if this is the port separator
+            if (!std::regex_search(sbuf.c_str() + path_start + 1, check_port)) {
+                path_start = sbuf.find('@', path_start + 1);
+            } else {
+                // ignore if there is no subsequent '@' sign
+                size_t at_sign = sbuf.find('@', path_start + 1);
+                if (at_sign == std::string::npos) {
+                    path_start = std::string::npos;
+                }
             }
         }
+
         if (path_start == std::string::npos) {
             path_start = 0;
         }
@@ -258,7 +268,7 @@ private:
             size_t right_bracket = sbuf.find(']');
             if (right_bracket != std::string::npos) {
                 host = new QoreStringNode(sbuf.c_str() + (keep_brackets ? 0 : 1),
-                                        right_bracket - (keep_brackets ? -1 : 1));
+                    right_bracket - (keep_brackets ? -1 : 1));
                 sbuf = sbuf.substr(right_bracket + 1);
             }
         }
@@ -327,7 +337,7 @@ private:
                 path->replace(0, 0, sbuf.c_str());
             } else {
                 // set hostname
-                printd(5, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
+                //printd(5, "QoreURL::parse_intern host: %s\n", sbuf.c_str());
                 host = new QoreStringNode(sbuf.c_str());
             }
         }

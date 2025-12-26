@@ -54,6 +54,52 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
         #! Metadata description
         hash<auto> meta;
 
+        #! Provider info
+        const ProviderInfo = ServiceNowRestDataProvider::ProviderInfo - "constructor_options"
+                + <DataProviderInfo>{
+            "supports_children": False,
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
+                "columns": <DataProviderOptionInfo>{
+                    "display_name": "Columns",
+                    "short_desc": "Columns to include in the output of the query",
+                    "type": AbstractDataProviderTypeMap."auto",
+                    "desc": "Columns to include in the output of the query; `select` argument for the query expression",
+                },
+                "limit": <DataProviderOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "The maximum number of records to return",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "desc": "The maximum number of records to return",
+                },
+                "offset": <DataProviderOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "The offset in the record list for records to return",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "desc": "The offset in the record list for records to return",
+                },
+                "groupby": <DataProviderOptionInfo>{
+                    "display_name": "Group By",
+                    "short_desc": "Field(s) to group results by",
+                    "type": new QoreListDataType(new Type("softlist<auto>")),
+                    "desc": "Field(s) to group results by in case there are aggregate expressions in the query; the "
+                        "`GROUPBY` argument for the query expression",
+                },
+                "orderby": <DataProviderOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Fields to order the query result by",
+                    "type": new QoreListDataType(new Type("softlist<string>")),
+                    "desc": "Fields to order the query result by; the `ORDERBY` argument for the query expression",
+                },
+                "orderbydesc": <DataProviderOptionInfo>{
+                    "display_name": "Order By Descending",
+                    "short_desc": "Fields to order the query result in descending order by",
+                    "type": new QoreListDataType(new Type("softlist<string>")),
+                    "desc": "Fields to order the query result in descending order by; the `ORDERBYDESC` argument for "
+                        "the query expression",
+                },
+            },
+        };
+
         #! System columns
         const SysColumns = {
             "sys_created_by": {
@@ -136,6 +182,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'notin' operator",
                     "desc": "An expression with the ServiceNow 'notin' operator",
                     "symbol": "NOTIN",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -151,6 +198,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'like' operator",
                     "desc": "An expression with the ServiceNow 'like' operator",
                     "symbol": "LIKE",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -166,6 +214,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'notlike' operator",
                     "desc": "An expression with the ServiceNow 'notlike' operator",
                     "symbol": "NOTLIKE",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -181,6 +230,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'startswith' operator",
                     "desc": "An expression with the ServiceNow 'startswith' operator",
                     "symbol": "STARTSWITH",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -196,6 +246,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'endswith' operator",
                     "desc": "An expression with the ServiceNow 'endswith' operator",
                     "symbol": "ENDSWITH",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -211,6 +262,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "short_desc": "An expression with the ServiceNow 'isnotempty' operator",
                     "desc": "An expression with the ServiceNow 'isnotempty' operator",
                     "symbol": "ISNOTEMPTY",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType,),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -266,50 +318,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
-        hash<DataProviderInfo> rv = ServiceNowRestDataProvider::ProviderInfo - "constructor_options"
-                + <DataProviderInfo>{
-            "supports_children": False,
-            "search_options": {
-                "columns": <DataProviderOptionInfo>{
-                    "display_name": "Columns",
-                    "short_desc": "Columns to include in the output of the query",
-                    "type": AbstractDataProviderType::get(AbstractDataProviderType::anyType),
-                    "desc": "Columns to include in the output of the query; `select` argument for the query expression",
-                },
-                "limit": <DataProviderOptionInfo>{
-                    "display_name": "Limit",
-                    "short_desc": "The maximum number of records to return",
-                    "type": AbstractDataProviderType::get(IntType),
-                    "desc": "The maximum number of records to return",
-                },
-                "offset": <DataProviderOptionInfo>{
-                    "display_name": "Offset",
-                    "short_desc": "The offset in the record list for records to return",
-                    "type": AbstractDataProviderType::get(IntType),
-                    "desc": "The offset in the record list for records to return",
-                },
-                "groupby": <DataProviderOptionInfo>{
-                    "display_name": "Group By",
-                    "short_desc": "Field(s) to group results by",
-                    "type": new QoreListDataType(new Type("softlist<auto>")),
-                    "desc": "Field(s) to group results by in case there are aggregate expressions in the query; the "
-                        "`GROUPBY` argument for the query expression",
-                },
-                "orderby": <DataProviderOptionInfo>{
-                    "display_name": "Order By",
-                    "short_desc": "Fields to order the query result by",
-                    "type": new QoreListDataType(new Type("softlist<string>")),
-                    "desc": "Fields to order the query result by; the `ORDERBY` argument for the query expression",
-                },
-                "orderbydesc": <DataProviderOptionInfo>{
-                    "display_name": "Order By Descending",
-                    "short_desc": "Fields to order the query result in descending order by",
-                    "type": new QoreListDataType(new Type("softlist<string>")),
-                    "desc": "Fields to order the query result in descending order by; the `ORDERBYDESC` argument for "
-                        "the query expression",
-                },
-            },
-        };
+        hash<DataProviderInfo> rv = ProviderInfo;
         if (record_info.record_type) {
             rv += {
                 "has_record": True,
@@ -484,7 +493,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
     private hash<DataProviderExpression> getEqualityComparisonExpression(int role, hash<DataProviderInfo> info, string key,
             auto value) {
         return <DataProviderExpression>{
-            "exp": info.expressions.eq.label,
+            "exp": info.expressions.eq.name,
             "args": (<DataProviderFieldReference>{"field": key},) + value,
         };
     }

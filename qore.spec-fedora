@@ -2,7 +2,7 @@
 %global user_module_dir %{_datadir}/qore-modules/
 
 Name: qore
-Version: 2.0.0
+Version: 2.3.0
 Release: 1%{?dist}
 Summary: Multithreaded Programming Language
 
@@ -17,7 +17,7 @@ BuildRequires: cmake >= 3.5
 BuildRequires: gcc-c++
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
-BuildRequires: pcre-devel
+BuildRequires: pcre2-devel
 BuildRequires: gmp-devel
 BuildRequires: pkgconfig
 BuildRequires: pkgconfig(openssl)
@@ -45,7 +45,7 @@ This package provides the qore library required for all clients using qore
 functionality.
 
 %files -n libqore
-%{_libdir}/libqore.so.12.5.0
+%{_libdir}/libqore.so.12.7.0
 %{_libdir}/libqore.so.12
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 %doc README.md README-MODULES RELEASE-NOTES AUTHORS ABOUT
@@ -165,7 +165,7 @@ mkdir -p $RPM_BUILD_ROOT%{module_dir}
 rm -f $RPM_BUILD_ROOT%{_libdir}/libqore.la
 
 %check
-export QORE_MODULE_DIR=qlib
+export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
 ./qore examples/test/qore/threads/background.qtest
 ./qore examples/test/qore/threads/deadlock.qtest
 ./qore examples/test/qore/threads/max-threads-count.qtest
@@ -183,9 +183,26 @@ export QORE_MODULE_DIR=qlib
 %{_mandir}/man1/qore.1.*
 
 %changelog
+* Fri Aug 1 2025 David Nichols <david@qore.org> 2.3.0-1
+- updated version to 2.3.0-1
+- updated libqore version to 12.7.0
+
+* Fri Jun 13 2025 David Nichols <david@qore.org> 2.2.0-1
+- updated version to 2.2.0-1
+
+* Mon May 26 2025 David Nichols <david@qore.org> 2.1.2-1
+- updated version to 2.1.2-1
+
+* Tue May 6 2025 David Nichols <david@qore.org> 2.1.1-1
+- updated version to 2.1.1-1
+
+* Wed Sep 20 2023 David Nichols <david@qore.org> 2.1.0-1
+- updated version to 2.1.0-1
+- updated libqore version to 12.6.0
+
 * Wed Sep 20 2023 David Nichols <david@qore.org> 2.0.0-1
 - updated version to 2.0.0-1
-- updated libqore version to 12.4.2
+- updated libqore version to 12.5.0
 
 * Sat Aug 19 2023 David Nichols <david@qore.org> 1.19.0-1
 - updated version to 1.19.0-1

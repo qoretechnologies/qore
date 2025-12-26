@@ -398,6 +398,9 @@ void qore_string_init() {
         '&', '=', '+', '$',
         ',', '/', '?', '#',
         '[', ']', '%', '\'',
+        '<', '>', '\\', '^',
+        '`', '{', '}', '|',
+        '~', ' '
     };
 #define URLIST_SIZE (sizeof(url_reserved_list) / sizeof(int))
 
@@ -699,9 +702,11 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
 
     const unsigned char* p = (const unsigned char*)str.buf;
     while (*p) {
-        if ((*p) == '%')
+        if ((*p) == '%') {
             concat("%25");
-        else if (*p > 127) {
+        } else if (*p == '"') {
+            concat("%22");
+        } else if (*p > 127) {
             size_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 getEncoding() found in string");
@@ -822,7 +827,8 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
     }
 
     if (!getEncoding()->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode to non-ASCII-compatible encoding \"%s\"", getEncoding()->getCode());
+        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode to non-ASCII-compatible encoding \"%s\"",
+            getEncoding()->getCode());
         return -1;
     }
 
@@ -836,7 +842,8 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
         p = cstr->priv;
     } else {
         if (!str.priv->getEncoding()->isAsciiCompat()) {
-            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode from non-ASCII-compatible encoding \"%s\"", str.priv->getEncoding()->getCode());
+            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode from non-ASCII-compatible encoding \"%s\"",
+                str.priv->getEncoding()->getCode());
             return -1;
         }
         p = str.priv;
@@ -1975,10 +1982,7 @@ char* QoreString::giveBuffer() {
 }
 
 void QoreString::clear() {
-    if (priv->allocated) {
-        priv->len = 0;
-        priv->buf[0] = '\0';
-    }
+    priv->clear();
 }
 
 void QoreString::reset() {
@@ -2504,6 +2508,8 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
             concat("%25");
         } else if ((*p) == ' ') {
             concat("%20");
+        } else if ((*p) == '"') {
+            concat("%22");
         } else if (*p > 127) {
             size_t len = q_UTF8_get_char_len((const char*)p, str->size() - ((const char*)p - str->c_str()));
             if (len <= 0) {
@@ -2516,8 +2522,11 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
             }
             p += len;
             continue;
+        // issue #4917 always encode control characters
+        } else if ((*p) < 32) {
+            sprintf("%%%02X", (unsigned)*p);
         } else if (encode_all && url_reserved.find(*p) != url_reserved.end()) {
-            sprintf("%%%X", (unsigned)*p);
+            sprintf("%%%02X", (unsigned)*p);
         } else {
             concat(*p);
         }
@@ -3292,6 +3301,10 @@ int64 QoreString::toBigInt() const {
 
 qore_offset_t QoreString::getByteOffset(size_t i, ExceptionSink* xsink) const {
    return priv->getByteOffset(i, xsink);
+}
+
+size_t QoreString::removeBytes(size_t len) {
+    return priv->removeBytes(len);
 }
 
 size_t QoreString::getCharWidth(ExceptionSink* xsink) const {

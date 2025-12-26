@@ -34,7 +34,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Default bulk record interface class for data providers that do not support bulk read APIs
-public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordInterface {
+public class DefaultBulkRecordInterface inherits AbstractDataProviderBulkRecordInterface {
     private {
         AbstractDataProviderRecordIterator i;
     }
@@ -42,9 +42,14 @@ public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordIn
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the record block size to use
         @param i the iterator to use
+        @param requires_result if set to @ref True, at least one record must be returned by the iterator; if no
+        records are available, an exception is thrown when this parameter is set to @ref True
+        @param max_records the maximum number of records to return; if set, an exception is thrown when the maximum
+        number of records is exceeded
+        @param limit an optional limit on the number of records to return
     */
-    constructor(int block_size, AbstractDataProviderRecordIterator i)
-            : AbstractDataProviderBulkRecordInterface(block_size) {
+    constructor(int block_size, AbstractDataProviderRecordIterator i, *bool requires_result, *int max_records,
+            *int limit) : AbstractDataProviderBulkRecordInterface(block_size, requires_result, max_records, limit) {
         self.i = i;
     }
 
@@ -54,7 +59,7 @@ public class DefaultBulkRecordIterface inherits AbstractDataProviderBulkRecordIn
         @note This call moves the internal record pointer forward, therefore multiple calls of this methods will
         return different results as long as data is available
     */
-    private hash<string, list<auto>> getValueImpl() {
+    private *hash<string, list<auto>> getValueImpl() {
         hash<string, list<auto>> rv;
         int cnt = 0;
         while (i.next()) {

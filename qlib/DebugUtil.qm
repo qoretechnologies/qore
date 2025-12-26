@@ -50,7 +50,7 @@ module DebugUtil {
 
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging
-      (<a href="https://github.com/qorelanguage/qore/issues/4635">issue 4635</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4635">issue 4635</a>)
 
     @subsection du_v0_1 v0.1
     - the initial version of the DebugUtil module

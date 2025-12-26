@@ -60,11 +60,11 @@ module Qdx {
 
     @subsection qdx_1_1_1 Qdx v1.1.1
     - fixed stripping the final \c "\" character in multi-line entries in tables
-      (<a href="https://github.com/qorelanguage/qore/issues/4195>issue 4195</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4195>issue 4195</a>)
 
     @subsection qdx_1_1 Qdx v1.1
     - do not apply %Qore-specific post-processing doc fixes to non-Qore docs
-      (<a href="https://github.com/qorelanguage/qore/issues/3985>issue 3985</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3985>issue 3985</a>)
 
     @subsection qdx_1_0 Qdx v1.0
     - the initial version of the Qdx module

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -432,99 +432,99 @@ const SIGXRES = SIGXRES;
 
 //! maps signal names to signal values
 const NameToSignal = (
-   "SIGABRT": SIGABRT,
-   "SIGALRM": SIGALRM,
-   "SIGBUS": SIGBUS,
-   "SIGCANCEL": SIGCANCEL,
-   "SIGCHLD": SIGCHLD,
-   "SIGCLD": SIGCLD,
-   "SIGCONT": SIGCONT,
-   "SIGEMT": SIGEMT,
-   "SIGFPE": SIGFPE,
-   "SIGFREEZE": SIGFREEZE,
-   "SIGHUP": SIGHUP,
-   "SIGILL": SIGILL,
-   "SIGINFO": SIGINFO,
-   "SIGINT": SIGINT,
-   "SIGIO": SIGIO,
-   "SIGIOT": SIGIOT,
-   "SIGJVM1": SIGJVM1,
-   "SIGJVM2": SIGJVM2,
-   "SIGKILL": SIGKILL,
-   "SIGLOST": SIGLOST,
-   "SIGLWP": SIGLWP,
-   "SIGPIPE": SIGPIPE,
-   "SIGPOLL": SIGPOLL,
-   "SIGPROF": SIGPROF,
-   "SIGPWR": SIGPWR,
-   "SIGQUIT": SIGQUIT,
-   "SIGSEGV": SIGSEGV,
-   "SIGSTKFLT": SIGSTKFLT,
-   "SIGSTOP": SIGSTOP,
-   "SIGSYS": SIGSYS,
-   "SIGTERM": SIGTERM,
-   "SIGTHAW": SIGTHAW,
-   "SIGTRAP": SIGTRAP,
-   "SIGTSTP": SIGTSTP,
-   "SIGTTIN": SIGTTIN,
-   "SIGTTOU": SIGTTOU,
-   "SIGURG": SIGURG,
-   "SIGUSR1": SIGUSR1,
-   "SIGUSR2": SIGUSR2,
-   "SIGVTALRM": SIGVTALRM,
-   "SIGWAITING": SIGWAITING,
-   "SIGWINCH": SIGWINCH,
-   "SIGXCPU": SIGXCPU,
-   "SIGXFSZ": SIGXFSZ,
-   "SIGXRES": SIGXRES,
+    "SIGABRT": SIGABRT,
+    "SIGALRM": SIGALRM,
+    "SIGBUS": SIGBUS,
+    "SIGCANCEL": SIGCANCEL,
+    "SIGCHLD": SIGCHLD,
+    "SIGCLD": SIGCLD,
+    "SIGCONT": SIGCONT,
+    "SIGEMT": SIGEMT,
+    "SIGFPE": SIGFPE,
+    "SIGFREEZE": SIGFREEZE,
+    "SIGHUP": SIGHUP,
+    "SIGILL": SIGILL,
+    "SIGINFO": SIGINFO,
+    "SIGINT": SIGINT,
+    "SIGIO": SIGIO,
+    "SIGIOT": SIGIOT,
+    "SIGJVM1": SIGJVM1,
+    "SIGJVM2": SIGJVM2,
+    "SIGKILL": SIGKILL,
+    "SIGLOST": SIGLOST,
+    "SIGLWP": SIGLWP,
+    "SIGPIPE": SIGPIPE,
+    "SIGPOLL": SIGPOLL,
+    "SIGPROF": SIGPROF,
+    "SIGPWR": SIGPWR,
+    "SIGQUIT": SIGQUIT,
+    "SIGSEGV": SIGSEGV,
+    "SIGSTKFLT": SIGSTKFLT,
+    "SIGSTOP": SIGSTOP,
+    "SIGSYS": SIGSYS,
+    "SIGTERM": SIGTERM,
+    "SIGTHAW": SIGTHAW,
+    "SIGTRAP": SIGTRAP,
+    "SIGTSTP": SIGTSTP,
+    "SIGTTIN": SIGTTIN,
+    "SIGTTOU": SIGTTOU,
+    "SIGURG": SIGURG,
+    "SIGUSR1": SIGUSR1,
+    "SIGUSR2": SIGUSR2,
+    "SIGVTALRM": SIGVTALRM,
+    "SIGWAITING": SIGWAITING,
+    "SIGWINCH": SIGWINCH,
+    "SIGXCPU": SIGXCPU,
+    "SIGXFSZ": SIGXFSZ,
+    "SIGXRES": SIGXRES,
 );
 
 //! maps signal numbers (as a string key) to the symbolic name for the signal
 const SignalToName = (
-   SIGABRT: "SIGABRT",
-   SIGALRM: "SIGALRM",
-   SIGBUS: "SIGBUS",
-   SIGCANCEL: "SIGCANCEL",
-   SIGCHLD: "SIGCHLD",
-   SIGCONT: "SIGCONT",
-   SIGEMT: "SIGEMT",
-   SIGFPE: "SIGFPE",
-   SIGFREEZE: "SIGFREEZE",
-   SIGHUP: "SIGHUP",
-   SIGILL: "SIGILL",
-   SIGINFO: "SIGINFO",
-   SIGINT: "SIGINT",
-   SIGIO: "SIGIO",
-   SIGIOT: "SIGIOT",
-   SIGJVM1: "SIGJVM1",
-   SIGJVM2: "SIGJVM2",
-   SIGKILL: "SIGKILL",
-   SIGLOST: "SIGLOST",
-   SIGLWP: "SIGLWP",
-   SIGPIPE: "SIGPIPE",
-   SIGPOLL: "SIGPOLL",
-   SIGPROF: "SIGPROF",
-   SIGPWR: "SIGPWR",
-   SIGQUIT: "SIGQUIT",
-   SIGSEGV: "SIGSEGV",
-   SIGSTKSZ: "SIGSTKSZ",
-   SIGSTOP: "SIGSTOP",
-   SIGSYS: "SIGSYS",
-   SIGTERM: "SIGTERM",
-   SIGTHAW: "SIGTHAW",
-   SIGTRAP: "SIGTRAP",
-   SIGTSTP: "SIGTSTP",
-   SIGTTIN: "SIGTTIN",
-   SIGTTOU: "SIGTTOU",
-   SIGURG: "SIGURG",
-   SIGUSR1: "SIGUSR1",
-   SIGUSR2: "SIGUSR2",
-   SIGVTALRM: "SIGVTALRM",
-   SIGWAITING: "SIGWAITING",
-   SIGWINCH: "SIGWINCH",
-   SIGXCPU: "SIGXCPU",
-   SIGXFSZ: "SIGXFSZ",
-   SIGXRES: "SIGXRES",
+    SIGABRT: "SIGABRT",
+    SIGALRM: "SIGALRM",
+    SIGBUS: "SIGBUS",
+    SIGCANCEL: "SIGCANCEL",
+    SIGCHLD: "SIGCHLD",
+    SIGCONT: "SIGCONT",
+    SIGEMT: "SIGEMT",
+    SIGFPE: "SIGFPE",
+    SIGFREEZE: "SIGFREEZE",
+    SIGHUP: "SIGHUP",
+    SIGILL: "SIGILL",
+    SIGINFO: "SIGINFO",
+    SIGINT: "SIGINT",
+    SIGIO: "SIGIO",
+    SIGIOT: "SIGIOT",
+    SIGJVM1: "SIGJVM1",
+    SIGJVM2: "SIGJVM2",
+    SIGKILL: "SIGKILL",
+    SIGLOST: "SIGLOST",
+    SIGLWP: "SIGLWP",
+    SIGPIPE: "SIGPIPE",
+    SIGPOLL: "SIGPOLL",
+    SIGPROF: "SIGPROF",
+    SIGPWR: "SIGPWR",
+    SIGQUIT: "SIGQUIT",
+    SIGSEGV: "SIGSEGV",
+    SIGSTKSZ: "SIGSTKSZ",
+    SIGSTOP: "SIGSTOP",
+    SIGSYS: "SIGSYS",
+    SIGTERM: "SIGTERM",
+    SIGTHAW: "SIGTHAW",
+    SIGTRAP: "SIGTRAP",
+    SIGTSTP: "SIGTSTP",
+    SIGTTIN: "SIGTTIN",
+    SIGTTOU: "SIGTTOU",
+    SIGURG: "SIGURG",
+    SIGUSR1: "SIGUSR1",
+    SIGUSR2: "SIGUSR2",
+    SIGVTALRM: "SIGVTALRM",
+    SIGWAITING: "SIGWAITING",
+    SIGWINCH: "SIGWINCH",
+    SIGXCPU: "SIGXCPU",
+    SIGXFSZ: "SIGXFSZ",
+    SIGXRES: "SIGXRES",
 );
 ///@}
 
@@ -1574,7 +1574,8 @@ string parse_base64_url_string_to_string(string str, *string encoding) [flags=RE
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module
+    - \c filename: the path to the module's primary file
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1597,6 +1598,7 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1624,6 +1626,7 @@ list<hash<auto>> get_module_list() {
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -1646,6 +1649,7 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
     - \c filename: the path to the module
+    - \c path: the path to the module itself (different from \c filename with split user modules)
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2690,9 +2694,14 @@ string decode_url(string url) [flags=CONSTANT] {
 nothing decode_url() [flags=RUNTIME_NOOP] {
 }
 
-//! Encodes URLs by substituting \c '%%' characters with \c '%25', spaces (\c ' ') with \c '%20', and non-ascii characters by percent-encoded representations
+//! Encodes URLs by substituting \c '%%' with \c '%25', spaces (\c ' ') with \c '%20', \c '"' with \c '%22', and non-ascii characters by percent-encoded representations
 /** @param url a URL string to encode
-    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), and non-ascii characters the following reserved characters (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a> are also encoded: \c '!', \c '*', \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#', \c '[', \c ']'
+    @param encode_all if @ref True "True", then in addition to \c '%%', spaces (\c ' '), \c '"', and non-ascii
+    characters, the following reserved characters
+    (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a>) are also encoded: \c '!', \c '*',
+    \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#',
+    \c '[', \c ']', plus the following characters: \c '<', \c '>', \c '\\', \c '^', \c '`', \c '{', \c '}', \c '|',
+    \c '~', and the space character.
 
     @return the URL string with encoded according to the arguments
 
@@ -2709,9 +2718,9 @@ string encoded_url = encode_url(url);
     @since %Qore 0.8.9
 */
 string encode_url(string url, softbool encode_all = False) [flags=CONSTANT] {
-   QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
-   str->concatEncodeUrl(xsink, url, encode_all);
-   return *xsink ? QoreValue() : str.release();
+    QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
+    str->concatEncodeUrl(xsink, url, encode_all);
+    return *xsink ? QoreValue() : str.release();
 }
 
 //! Decodes percent-encoded codes in a URI path and converts \c "+" signs in the query component to spaces and returns the decoded string in UTF-8 encoding
@@ -2730,9 +2739,19 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
     - the query, which is any string following a \c "?" character terminating the path and up to a possible \c "#" character
     - the fragment, which is any string following a \c "#" character
 
-    For all parts, any percent-encoded codes (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponinding character.  The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path component is subjected to standard percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a \c "#" character, and this is decoded with the same rules as in the path component.
+    For all parts, any percent-encoded codes
+    (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>) are decoded to the corresponding
+    character. The path component is identified and distinguished by a \c "?" or a \c "#" character.  The path
+    component is subjected to standard percent encoding.  The query component is any part of the URI string following
+    a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  The query component is
+    subjected to special decoding for AJAX compatibility; \c "+" characters are decoded to ASCII space (therefore any
+    \c "+" charaters in the query component of the URI must be encoded with percent encoding, such is the case with
+    @ref Qore::encode_uri_request() for example).  The fragment component is identified as any text following a
+    \c "#" character, and this is decoded with the same rules as in the path component.
 
-    @note the difference between this function and @ref Qore::decode_url() is that this function employs special logic in the decoding of the different components of the URI string for compatibility with common AJAX libraries that encode ASCII spaces as \c "+" in the query component of the URI string.
+    @note the difference between this function and @ref Qore::decode_url() is that this function employs special logic
+    in the decoding of the different components of the URI string for compatibility with common AJAX libraries that
+    encode ASCII spaces as \c "+" in the query component of the URI string.
 
     @see
     - encode_uri_request()
@@ -2763,9 +2782,18 @@ string encoded_uri = encode_uri_request("path/to/something else?query=1+1 +2")'
     - the query, which is any string following a \c "?" character terminating the path and up to a possible \c "#" character
     - the fragment, which is any string following a \c "#" character
 
-    For all parts, any non-ASCII characters and the \c "%" character are subjected to percent encoding (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>).  The path component is identified and distinguished by a \c "?" or a \c "#" character.  Any spaces in the path component are also subjected to percent encoding.  The query component is any part of the URI string following a \c "?" character up to the end of the URI string or until a \c "#" characer is found.  Spaces in the query component are encoded with \c "+" for compatibility with AJAX libraries, and \c "+" signs are subjected to percent encoding.  The fragment component is identified as any text following a \c "#" character, and this is encoded with the same rules as in the path component.
+    For all parts, any non-ASCII characters and the \c "%" and \c '"' characters are subjected to percent encoding
+    (<a href="http://tools.ietf.org/html/rfc3986#section-2.1">RFC 3986 2.1</a>).  The path component is identified and
+    distinguished by a \c "?" or a \c "#" character.  Any spaces in the path component are also subjected to percent
+    encoding. The query component is any part of the URI string following a \c "?" character up to the end of the URI
+    string or until a \c "#" characer is found.  Spaces in the query component are encoded with \c "+" for
+    compatibility with AJAX libraries, and \c "+" signs are subjected to percent encoding. The fragment component is
+    identified as any text following a \c "#" character, and this is encoded with the same rules as in the path
+    component.
 
-    @note the difference between this function and @ref Qore::encode_url() is that this function employs special logic in the encoding of the different components of the URI string for compatibility with common AJAX libraries that encode ASCII spaces as \c "+" in the query component of the URI string
+    @note the difference between this function and @ref Qore::encode_url() is that this function employs special logic
+    in the encoding of the different components of the URI string for compatibility with common AJAX libraries that
+    encode ASCII spaces as \c "+" in the query component of the URI string
 
     @see
     - decode_uri_request()
@@ -3162,5 +3190,75 @@ nothing set_module_option(string module, string option, auto value) [dom=PROCESS
  */
 code get_call_reference(string identifier) [flags=RET_VALUE_ONLY] {
     return get_call_reference_intern(runtime_get_stack_object(), identifier, xsink);
+}
+
+//! Returns the name of the module currently being loaded, if any
+/** @return the name of the module currently being loaded, if any
+
+    @see
+    - @ref Qore::get_module_context_name_ex()
+
+    @since %Qore 2.2.0
+*/
+*string get_module_context_name() [flags=CONSTANT] {
+    const char* str = get_module_context_name();
+    if (!str) {
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the path of the module currently being loaded, if any
+/** @return the path of the module currently being loaded, if any
+
+    @see
+    - @ref Qore::get_module_context_path_ex()
+
+    @since %Qore 2.2.0
+*/
+*string get_module_context_path() [flags=CONSTANT] {
+    const char* str = get_module_context_path();
+    if (!str) {
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the name of the module currently being loaded
+/** @return the name of the module currently being loaded
+
+    @throw NO-MODULE-CONTEXT Thrown if there is no module context
+
+    @see
+    - @ref Qore::get_module_context_name()
+
+    @since %Qore 2.2.0
+*/
+string get_module_context_name_ex() [flags=CONSTANT] {
+    const char* str = get_module_context_name();
+    if (!str) {
+        xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
+}
+
+//! Returns the path of the module currently being loaded
+/** @return the path of the module currently being loaded
+
+    @throw NO-MODULE-CONTEXT Thrown if there is no module context
+
+    @see
+    - @ref Qore::get_module_context_path()
+
+    @since %Qore 2.2.0
+*/
+string get_module_context_path_ex() [flags=CONSTANT] {
+    const char* str = get_module_context_path();
+    if (!str) {
+        xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
+        return QoreValue();
+    }
+    return new QoreStringNode(str);
 }
 ///@}

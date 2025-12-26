@@ -69,6 +69,11 @@ public:
     // set of objects in a cyclic directed graph
     RSet* rset = nullptr;
 
+#ifdef _QORE_CYCLE_CHECK
+    // set of objects pointing at this object
+    std::set<RObject*> refmap;
+#endif
+
     // reference count
     std::atomic_int& references;
 
@@ -84,14 +89,16 @@ public:
 
     DLLLOCAL void tRef() const {
 #ifdef QORE_DEBUG_OBJ_REFS
-        printd(QORE_DEBUG_OBJ_REFS, "RObject::tRef() this: %p tref %d->%d\n", this, tRefs.reference_count(), tRefs.reference_count() + 1);
+        printd(QORE_DEBUG_OBJ_REFS, "RObject::tRef() this: %p tref %d->%d\n", this, tRefs.reference_count(),
+            tRefs.reference_count() + 1);
 #endif
         tRefs.ROreference();
     }
 
     DLLLOCAL void tDeref() {
 #ifdef QORE_DEBUG_OBJ_REFS
-        printd(QORE_DEBUG_OBJ_REFS, "RObject::tDeref() this: %p tref %d->%d\n", this, tRefs.reference_count(), tRefs.reference_count() - 1);
+        printd(QORE_DEBUG_OBJ_REFS, "RObject::tDeref() this: %p tref %d->%d\n", this, tRefs.reference_count(),
+            tRefs.reference_count() - 1);
 #endif
         if (tRefs.ROdereference())
             deleteObject();
@@ -166,24 +173,8 @@ typedef vector_set_t<RObject*> rset_t;
    of the members of the graph can be dereferenced.
  */
 
-// set of objects in recursive directed graph
+// set of objects in a recursive directed graph
 class RSet {
-protected:
-    rset_t set;
-    unsigned acnt;
-    bool valid;
-
-    // called with the write lock held
-    DLLLOCAL void invalidateIntern() {
-        assert(valid);
-        valid = false;
-        // remove the weak references to all contained objects
-        for (rset_t::iterator i = begin(), e = end(); i != e; ++i)
-            (*i)->tDeref();
-        clear();
-        //printd(6, "RSet::invalidateIntern() this: %p\n", this);
-    }
-
 public:
     QoreRWLock rwl;
 
@@ -206,20 +197,23 @@ public:
         bool del = false;
         {
             QoreAutoRWWriteLocker al(rwl);
-            if (valid)
+            if (valid) {
                 valid = false;
+            }
             //printd(5, "RSet::deref() this: %p %d -> %d\n", this, acnt, acnt - 1);
             assert(acnt > 0);
             del = !--acnt;
         }
-        if (del)
+        if (del) {
             delete this;
+        }
     }
 
     DLLLOCAL void invalidate() {
         QoreAutoRWWriteLocker al(rwl);
-        if (valid)
+        if (valid) {
             invalidateIntern();
+        }
     }
 
     DLLLOCAL void invalidateDeref() {
@@ -234,8 +228,9 @@ public:
             assert(acnt > 0);
             del = !--acnt;
         }
-        if (del)
+        if (del) {
             delete this;
+        }
     }
 
     DLLLOCAL void ref() {
@@ -303,6 +298,23 @@ public:
         return acnt;
     }
 #endif
+
+protected:
+    rset_t set;
+    unsigned acnt;
+    bool valid;
+
+    // called with the write lock held
+    DLLLOCAL void invalidateIntern() {
+        assert(valid);
+        valid = false;
+        // remove the weak references to all contained objects
+        for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+            (*i)->tDeref();
+        }
+        clear();
+        //printd(6, "RSet::invalidateIntern() this: %p\n", this);
+    }
 };
 
 typedef std::vector<RObject*> rvec_t;
@@ -311,18 +323,18 @@ class RSetHelper;
 typedef vector_set_t<RSet*> rs_set_t;
 
 struct RSetStat {
-    RSet* rset;
-    int rcount;
+    RSet* rset = nullptr;
+    int rcount = 0;
     bool in_cycle : 1,
         ok : 1;
 
-    DLLLOCAL RSetStat() : rset(0), rcount(0), in_cycle(false), ok(false) {
+    DLLLOCAL RSetStat() : in_cycle(false), ok(false) {
     }
 
     DLLLOCAL RSetStat(const RSetStat& old) : rset(old.rset), rcount(old.rcount), in_cycle(old.in_cycle), ok(old.ok) {
     }
 
-    DLLLOCAL void finalize(RSet* rs = 0) {
+    DLLLOCAL void finalize(RSet* rs = nullptr) {
         assert(!ok);
         assert(!rset);
         rset = rs;
@@ -334,68 +346,10 @@ class QoreClosureBase;
 class RSetHelper {
     friend class RSectionScanHelper;
     friend class RObject;
-private:
-    DLLLOCAL RSetHelper(const RSetHelper&);
-
-protected:
-    // these must be a map and a set for performance reasons
-    typedef std::map<RObject*, RSetStat> omap_t;
-    typedef std::set<QoreClosureBase*> closure_set_t;
-    // map of all objects scanned to rset (rset = finalized, 0 = not finalized, in current list)
-    omap_t fomap;
-
-    typedef std::vector<omap_t::iterator> ovec_t;
-    // current objects being scanned, used to establish a cycle
-    ovec_t ovec;
-
-    // list of RSet objects to be invalidated when the transaction is committed
-    rs_set_t tr_invalidate;
-
-    // set of RObjects not participating in any recursive set
-    rset_t tr_out;
-
-    // RSectionLock notification helper when waiting on locks
-    RNotifier notifier;
-
-    // set of scanned closures
-    closure_set_t closure_set;
-
-#ifdef DEBUG
-    int lcnt;
-    DLLLOCAL void inccnt() { ++lcnt; }
-    DLLLOCAL void deccnt() { --lcnt; }
-#else
-    DLLLOCAL void inccnt() {}
-    DLLLOCAL void deccnt() {}
+#ifdef _QORE_CYCLE_CHECK
+    friend class RSetContextHelper;
+    friend class RSetScanContextHelper;
 #endif
-
-    // rollback transaction due to lock error
-    DLLLOCAL void rollback();
-
-    // commit transaction
-    DLLLOCAL void commit(RObject& obj);
-
-    // returns true if a lock error has occurred, false if otherwise
-    DLLLOCAL bool checkIntern(RObject& obj);
-    // returns true if a lock error has occurred, false if otherwise
-    DLLLOCAL bool checkIntern(AbstractQoreNode* n);
-
-    // queues nodes not scanned to tr_invalidate and tr_out
-    DLLLOCAL bool removeInvalidate(RSet* ors, int tid = q_gettid());
-
-    DLLLOCAL bool inCurrentSet(omap_t::iterator fi) {
-        for (size_t i = 0; i < ovec.size(); ++i)
-            if (ovec[i] == fi)
-                return true;
-        return false;
-    }
-
-    DLLLOCAL bool addToRSet(omap_t::iterator oi, RSet* rset, int tid);
-
-    DLLLOCAL void mergeRSet(int i, RSet*& rset);
-
-    DLLLOCAL bool makeChain(int i, omap_t::iterator fi, int tid);
-
 public:
     DLLLOCAL RSetHelper(RObject& obj);
 
@@ -425,7 +379,132 @@ public:
     DLLLOCAL bool checkNode(RObject& robj) {
         return checkIntern(robj);
     }
+
+#ifdef _QORE_CYCLE_CHECK
+    DLLLOCAL void setScanContext(RObject* scan_context) {
+        this->scan_context = scan_context;
+    }
+#endif
+
+protected:
+    // these must be a map and a set for performance reasons
+    typedef std::map<RObject*, RSetStat> omap_t;
+    typedef std::set<QoreClosureBase*> closure_set_t;
+    // map of all objects scanned to rset (rset = finalized, 0 = not finalized, in current list)
+    omap_t fomap;
+
+    // map scanned hashes to ensure they are only scanned once
+    typedef std::set<QoreHashNode*> hset_t;
+    hset_t hset;
+
+    // map scanned lists to ensure they are only scanned once
+    typedef std::set<QoreListNode*> lset_t;
+    lset_t lset;
+
+    typedef std::vector<omap_t::iterator> ovec_t;
+    // current objects being scanned, used to establish a cycle
+    ovec_t ovec;
+
+    // list of RSet objects to be invalidated when the transaction is committed
+    rs_set_t tr_invalidate;
+
+    // set of RObjects not participating in any recursive set
+    rset_t tr_out;
+
+    // RSectionLock notification helper when waiting on locks
+    RNotifier notifier;
+
+    // set of scanned closures
+    closure_set_t closure_set;
+
+#ifdef _QORE_CYCLE_CHECK
+    RObject* scan_context = nullptr;
+#endif
+
+#ifdef DEBUG
+    int lcnt;
+    DLLLOCAL void inccnt() { ++lcnt; }
+    DLLLOCAL void deccnt() { --lcnt; }
+#else
+    DLLLOCAL void inccnt() {}
+    DLLLOCAL void deccnt() {}
+#endif
+
+    // rollback transaction due to lock error
+    DLLLOCAL void rollback();
+
+    // commit transaction
+    DLLLOCAL void commit(RObject& obj);
+
+    // returns true if a lock error has occurred, false if otherwise
+    DLLLOCAL bool checkIntern(RObject& obj);
+    // returns true if a lock error has occurred, false if otherwise
+    DLLLOCAL bool checkIntern(AbstractQoreNode* n);
+
+    // queues nodes not scanned to tr_invalidate and tr_out
+    DLLLOCAL bool removeInvalidate(RSet* ors, int tid = q_gettid());
+
+    DLLLOCAL bool inCurrentSet(omap_t::iterator fi) {
+        for (size_t i = 0; i < ovec.size(); ++i) {
+            if (ovec[i] == fi) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // returns true if there is a lock failure
+    DLLLOCAL bool addToRSet(omap_t::iterator oi, RSet* rset, int tid);
+
+    DLLLOCAL void mergeRSet(int i, RSet*& rset);
+
+    DLLLOCAL void mergeRSetIntern(RSet*& rset, RSet* old_rset);
+
+    DLLLOCAL bool makeChain(int i, omap_t::iterator fi, int tid);
+
+#ifdef _QORE_CYCLE_CHECK
+    DLLLOCAL void setObjectScanContext(RObject& obj, int rcount);
+#endif
+
+private:
+    DLLLOCAL RSetHelper(const RSetHelper&);
 };
+
+#ifdef _QORE_CYCLE_CHECK
+class RSetContextHelper {
+public:
+    DLLLOCAL RSetContextHelper(RSetHelper& rsh) : rsh(rsh), scan_context_save(rsh.scan_context) {
+    }
+
+    DLLLOCAL ~RSetContextHelper() {
+        if (rsh.scan_context != scan_context_save) {
+            rsh.scan_context = scan_context_save;
+        }
+    }
+
+private:
+    RSetHelper& rsh;
+    RObject* scan_context_save;
+};
+
+class RSetScanContextHelper {
+public:
+    DLLLOCAL RSetScanContextHelper(RSetHelper& rsh, RObject* new_context) : rsh(rsh),
+            scan_context_save(rsh.scan_context) {
+        rsh.scan_context = new_context;
+    }
+
+    DLLLOCAL ~RSetScanContextHelper() {
+        if (rsh.scan_context != scan_context_save) {
+            rsh.scan_context = scan_context_save;
+        }
+    }
+
+private:
+    RSetHelper& rsh;
+    RObject* scan_context_save;
+};
+#endif
 
 class qore_object_private;
 

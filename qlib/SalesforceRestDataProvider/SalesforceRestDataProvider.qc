@@ -24,9 +24,6 @@
 
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
-#! Application name
-public const AppName = "Salesforce";
-
 #! The SalesforceRest data provider class
 public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase {
     public {
@@ -37,95 +34,24 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
-            "children_can_support_observers": False,
-            "children_identical": True,
+            "children_can_support_observers": True,
         };
+    }
 
-        #! Constructor options
-        const ConstructorOptions = {
-            "client_id": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Client ID",
-                "short_desc": "Sets the Salesforce consumer key",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "the Salesforce consumer key / OAuth2 client ID",
-            },
-            "client_secret": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Client Secret",
-                "short_desc": "Sets the Salesforce consumer secret",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "the Salesforce.com consumer secret / OAuth2 client secret",
-            },
-            "username": <DataProviderOptionInfo>{
-                "display_name": "Username",
-                "short_desc": "Sets the username for authentication",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "the Salesforce.com account username",
-            },
-            "password": <DataProviderOptionInfo>{
-                "display_name": "Password",
-                "short_desc": "The password for authentication",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "the Salesforce.com account password",
-            },
-            "salesforcerestclient": <DataProviderOptionInfo>{
-                "display_name": "REST Client",
-                "short_desc": "The REST client to use",
-                "type": AbstractDataProviderType::get(new Type("SalesforceRestClient")),
-                "desc": "The `SalesforceRestClient` object to use",
-            },
-            "api": <DataProviderOptionInfo>{
-                "display_name": "API Version",
-                "short_desc": "The Salesforce API version to use",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The Salesforce API version to use (\"auto\" = latest version available)",
-            },
-            "oauth_url_auth": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Auth URL",
-                "short_desc": "The OAuth2 auth URL",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL for logging in, overrides the default value",
-            },
-            "oauth_url_token": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Token URL",
-                "short_desc": "The OAuth2 token URL",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL for token acquisition, overrides the default value, used when logging in",
-            },
-            "oauth_url_revoke": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Revoke URL",
-                "short_desc": "The OAuth2 token revoke URL",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL for token revocation, overrides the default value, used when logging out",
-            },
-            "salesforcerestclient_options": <DataProviderOptionInfo>{
-                "display_name": "REST Client Options",
-                "short_desc": "Options when creating a REST client",
-                "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options to the SalesforceRestClient constructor; only used if a `SalesforceRestClient` "
-                    "object is created for a call",
-            },
-        };
+    private {
+        static hash<string, code> dynamic_children;
 
-        #! Environment options
-        const EnvOptions = {
-            "client_id": "SALESFORCE_CONSUMER_KEY",
-            "client_secret": "SALESFORCE_CONSUMER_SECRET",
-            "username": "SALESFORCE_USER",
-            "password": "SALESFORCE_PASS",
-        };
-
-        #! Hash of HTTP Methods
-        const HttpMethods = {
-            "GET": True,
-            "PUT": True,
-            "PATCH": True,
-            "POST": True,
-            "DELETE": True,
+        const ChildMap = {
+            "tables": Class::forName("SalesforceRestDataProvider::SalesforceRestTablesDataProvider"),
         };
     }
 
     #! Creates the object from the arguments
-    constructor(SalesforceRestClient rest) : SalesforceRestDataProviderBase(rest) {
+    constructor(SalesforceRestClient::SalesforceRestClient rest) : SalesforceRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    constructor(SalesforceRestClient::SalesforceRestConnection conn) : SalesforceRestDataProviderBase(conn) {
     }
 
     #! Creates the object from constructor options
@@ -153,45 +79,45 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Root Salesforce data provider for URL `%s`; supports child data provider objects with a "
-            "record-based interface", rest.getURL());
+        return sprintf("Root Salesforce data provider for URL `%s`", rest.getURL());
+    }
+
+    #! Registers a child data provider
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+    */
+    static registerChild(string name, code generator) {
+        dynamic_children{name} = generator;
     }
 
     #! Return data provider summary info
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        *list<auto> v = rest.get("sobjects").body.sobjects;
-        if (!v) {
-            return;
+        *list<hash<DataProvider::DataProviderSummaryInfo>> rv;
+        foreach Class cls in (ChildMap.iterator()) {
+            try {
+                rv += cls.getConstant("ProviderSummaryInfo").getValue();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "UNKNOWN-CONSTANT") {
+                    rethrow;
+                }
+            }
+            rv += cls.getStaticMember("ProviderSummaryInfo").getValue();
         }
-        v = sort(v, int sub(hash<auto> l, hash<auto> r) {
-            return l.name <=> r.name;
-        });
-
-        return map <DataProviderSummaryInfo>{
-            "name": $1.name,
-            "desc": sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-                "interface", rest.getURL(), $1.name),
-            "type": "SalesforceRestObjectDataProvider",
-            "supports_read": $1.queryable,
-            "supports_create": $1.createable,
-            "supports_update": $1.updateable,
-            "supports_upsert": $1.mergeable,
-            "supports_delete": $1.deletable,
-            "supports_native_search": $1.queryable,
-            "supports_request": False,
-            "supports_children": False,
-            "has_record": $1.queryable || $1.mergeable || $1.deletable || $1.createable,
-            "children_can_support_records": False,
-        }, v;
+        if (conn) {
+            map rv += $1.value($1.key, conn).getSummaryInfo(), dynamic_children.pairIterator();
+        }
+        return rv;
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        hash<auto> v = rest.get("sobjects");
-        *list<string> rv = map $1.name, v.body.sobjects, $1.queryable;
-        return rv ? sort(rv) : NOTHING;
+        list<string> rv = keys ChildMap;
+        if (conn && dynamic_children) {
+            rv += keys dynamic_children;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -200,30 +126,19 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
         @see getChildProviderEx()
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        hash<auto> info;
-        try {
-            hash<auto> v = rest.get("sobjects/" + name, NOTHING, \info);
-            if (!v.body.objectDescribe) {
-                return;
+        *Class cls = ChildMap{name};
+        if (!cls && conn) {
+            if (*code gen = dynamic_children{name}) {
+                return gen(name, conn);
             }
-            return new SalesforceRestObjectDataProvider(rest, name, v.body.objectDescribe);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && info."response-headers".status_code == 404) {
-                return;
-            }
-            rethrow;
+            return;
         }
+        return cls.newObject(rest);
     }
 
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
-    }
-
-    #! Returns options for the SalesforceRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("salesforcerestclient_options", "salesforcerestclient")
-            + copts.salesforcerestclient_options;
     }
 }
 }

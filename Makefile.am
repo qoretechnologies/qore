@@ -38,14 +38,15 @@ DOX_SRC_MODULES = qlib/Mime.qm \
 
 DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
-    qlib/SqlUtil \
     qlib/DataProvider \
     qlib/DbDataProvider \
-    qlib/FileLocationHandler \
-    qlib/RestClientDataProvider \
     qlib/ElasticSearchDataProvider \
     qlib/EmpathicBuildingDataProvider \
-    qlib/GoogleDataProvider
+    qlib/FileLocationHandler \
+    qlib/GoogleDataProvider \
+    qlib/ProviderIndexUtil \
+    qlib/RestClientDataProvider \
+    qlib/SqlUtil
 
 DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/DebugCmdLine.qm \
@@ -96,6 +97,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
     qlib/AwsRestClient.qm
 
 DOX_SPLIT_MODULES = \
+    qlib/AsyncSocketIo \
     qlib/AwsRestClientDataProvider \
     qlib/BulkSqlUtil \
 	qlib/CsvUtil \
@@ -110,65 +112,78 @@ DOX_SPLIT_MODULES = \
     qlib/MewsRestDataProvider \
     qlib/OpenAiDataProvider \
     qlib/Pop3ClientDataProvider \
+    qlib/ProviderIndex \
     qlib/SalesforceRestDataProvider \
+    qlib/ServerSentEventClient \
+    qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider
 
-SqlUtil_modverdir = $(modverdir)/SqlUtil
-ConnectionProvider_modverdir = $(modverdir)/ConnectionProvider
-DataProvider_modverdir = $(modverdir)/DataProvider
-FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
-DbDataProvider_modverdir = $(modverdir)/DbDataProvider
-BulkSqlUtil_modverdir = $(modverdir)/BulkSqlUtil
-CsvUtil_modverdir = $(modverdir)/CsvUtil
-FixedLengthUtil_modverdir = $(modverdir)/FixedLengthUtil
-OpenApi3DataProvider_modverdir = $(modverdir)/OpenApi3DataProvider
-SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
-SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
-CdsRestDataProvider_modverdir = $(modverdir)/CdsRestDataProvider
-ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
-RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
+AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
 AwsRestClientDataProvider_modverdir = $(modverdir)/AwsRestClientDataProvider
+BulkSqlUtil_modverdir = $(modverdir)/BulkSqlUtil
+CdsRestDataProvider_modverdir = $(modverdir)/CdsRestDataProvider
+ConnectionProvider_modverdir = $(modverdir)/ConnectionProvider
+CsvUtil_modverdir = $(modverdir)/CsvUtil
+DataProvider_modverdir = $(modverdir)/DataProvider
+DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
-FileDataProvider_modverdir = $(modverdir)/FileDataProvider
-FtpClientDataProvider_modverdir = $(modverdir)/FtpClientDataProvider
-GoogleDataProvider_modverdir = $(modverdir)/GoogleDataProvider
-GmailDataProvider_modverdir = $(modverdir)/GmailDataProvider
-GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
-HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
+FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
+FixedLengthUtil_modverdir = $(modverdir)/FixedLengthUtil
+FileDataProvider_modverdir = $(modverdir)/FileDataProvider
+FtpClientDataProvider_modverdir = $(modverdir)/FtpClientDataProvider
+GmailDataProvider_modverdir = $(modverdir)/GmailDataProvider
+GoogleDataProvider_modverdir = $(modverdir)/GoogleDataProvider
+GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
+HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
+OpenApi3DataProvider_modverdir = $(modverdir)/OpenApi3DataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
+ProviderIndex_modverdir = $(modverdir)/ProviderIndex
+ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
+RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
+SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
+ServerSentEventClient_modverdir = $(modverdir)/ServerSentEventClient
+ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
+ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
+SqlUtil_modverdir = $(modverdir)/SqlUtil
+SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
 
-dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
-dist_ConnectionProvider_modver_DATA = $(wildcard qlib/ConnectionProvider/*.q[cm])
-dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
-dist_FileLocationHandler_modver_DATA = $(wildcard qlib/FileLocationHandler/*.q[cm])
-dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
-dist_BulkSqlUtil_modver_DATA = $(wildcard qlib/BulkSqlUtil/*.q[cm])
-dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
-dist_FixedLengthUtil_modver_DATA = $(wildcard qlib/FixedLengthUtil/*.q[cm])
-dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q[cm])
-dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
-dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestDataProvider/*.q[cm])
-dist_CdsRestDataProvider_modver_DATA = $(wildcard qlib/CdsRestDataProvider/*.q[cm])
-dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
-dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
+dist_AsyncSocketIo_modver_DATA = $(wildcard qlib/AsyncSocketIo/*.q[cm])
 dist_AwsRestClientDataProvider_modver_DATA = $(wildcard qlib/AwsRestClientDataProvider/*.q[cm])
+dist_BulkSqlUtil_modver_DATA = $(wildcard qlib/BulkSqlUtil/*.q[cm])
+dist_CdsRestDataProvider_modver_DATA = $(wildcard qlib/CdsRestDataProvider/*.q[cm])
+dist_ConnectionProvider_modver_DATA = $(wildcard qlib/ConnectionProvider/*.q[cm])
+dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
+dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
+dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
-dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
-dist_FtpClientDataProvider_modver_DATA = $(wildcard qlib/FtpClientDataProvider/*.q[cm])
-dist_GoogleDataProvider_modver_DATA = $(wildcard qlib/GoogleDataProvider/*.q[cm])
-dist_GmailDataProvider_modver_DATA = $(wildcard qlib/GmailDataProvider/*.q[cm])
-dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarDataProvider/*.q[cm])
-dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
+dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
+dist_FileLocationHandler_modver_DATA = $(wildcard qlib/FileLocationHandler/*.q[cm])
+dist_FixedLengthUtil_modver_DATA = $(wildcard qlib/FixedLengthUtil/*.q[cm])
+dist_FtpClientDataProvider_modver_DATA = $(wildcard qlib/FtpClientDataProvider/*.q[cm])
+dist_GmailDataProvider_modver_DATA = $(wildcard qlib/GmailDataProvider/*.q[cm])
+dist_GoogleDataProvider_modver_DATA = $(wildcard qlib/GoogleDataProvider/*.q[cm])
+dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarDataProvider/*.q[cm])
+dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
 dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]) $(wildcard qlib/OpenAiDataProvider/*-swagger-2.0.yaml)
+dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q[cm])
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])
+dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
+dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
+dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
+dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestDataProvider/*.q[cm])
+dist_ServerSentEventClient_modver_DATA = $(wildcard qlib/ServerSentEventClient/*.q[cm])
+dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler/*.q[cm])
+dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
+dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
+dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
 	$(DOX_MODULES)
@@ -962,6 +977,7 @@ noinst_HEADERS = \
 	include/qore/intern/QC_FilePollOperation.h \
 	include/qore/intern/QoreEllipsesNode.h \
 	include/qore/intern/getopt_long.h \
+	include/qore/intern/qore_type_safe_ref_helper_priv.h \
 	command-line.h
 
 LIB_DOXYFILES_FIXED = \
@@ -1075,13 +1091,16 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	modules/logger_bin/docs/mainpage.dox.tmpl \
 	modules/logger_bin/CMakeLists.txt \
 	modules/logger_bin/cmake/cmake_uninstall.cmake.in \
-    doxygen/lang/mainpage.dox.tmpl \
+	doxygen/lang/mainpage.dox.tmpl \
 	doxygen/lang/Doxyfile.in \
 	doxygen/qlib/Doxyfile.in \
-    doxygen/qlib/Doxyfile.cmake.tmpl \
+	doxygen/qlib/Doxyfile.cmake.tmpl \
 	doxygen/modules/Doxyfile.in \
-    doxygen/modules/Doxyfile.cmake.in \
+	doxygen/modules/Doxyfile.cmake.in \
 	doxygen/lib/Doxyfile.in \
+	qlib/DbDataProvider/db-logo.svg \
+	qlib/MewsRestDataProvider/mews-M-white.svg \
+	qlib/ServerSentEventClient/sse-generic-logo.svg \
 	$(LIB_DOXYFILES_SRC) \
 	$(LANG_DOXYFILES_SRC) \
 	$(LANG_QPP_SRC) \
@@ -1197,6 +1216,9 @@ doxygen/qlib/Doxyfile.GoogleDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 
 doxygen/qlib/Doxyfile.Logger: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/Logger.qm:doxygen/qlib/Logger.qm $< $@
+
+doxygen/qlib/Doxyfile.ProviderIndexUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/ProviderIndexUtil:doxygen/qlib/ProviderIndexUtil.qm $< $@
 
 doxygen/qlib/Doxyfile.WebSocketUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/WebSocketUtil.qm:doxygen/qlib/WebSocketUtil.qm $< $@

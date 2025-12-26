@@ -61,7 +61,7 @@ module CdsRestDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CdsRestDataProvider::DynamicsAppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "create-record",
             "display_name": "Create Record",
             "short_desc": "Create a record in a Dynamics table",
@@ -75,11 +75,12 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
+            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CdsRestDataProvider::DynamicsAppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find-single-record",
             "display_name": "Find Single Record",
             "short_desc": "Find a specific record in Dynamics",
@@ -93,11 +94,12 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
+            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CdsRestDataProvider::DynamicsAppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "find-records",
             "display_name": "Find Records",
             "short_desc": "Find records in Dynamics",
@@ -111,11 +113,12 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
+            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CdsRestDataProvider::DynamicsAppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "update-records",
             "display_name": "Update Records",
             "short_desc": "Update records in Dynamics",
@@ -129,11 +132,12 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
+            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CdsRestDataProvider::DynamicsAppName,
-            "path": "/{table}",
+            "path": "/tables/{table}",
             "action": "delete-records",
             "display_name": "Delete Records",
             "short_desc": "Delete records in Dynamics",
@@ -147,6 +151,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
+            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
     };
 }
@@ -180,7 +185,7 @@ module CdsRestDataProvider {
 
     @subsection cdsrestdataprovider_v2_0 CdsRestDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection cdsrestdataprovider_v1_0 CdsRestDataProvider v1.0
     - initial release of the module
@@ -188,6 +193,8 @@ module CdsRestDataProvider {
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
+#! Application name for Dynamics
+public const DynamicsAppName = "Dynamics";
 }
 
 namespace Priv {

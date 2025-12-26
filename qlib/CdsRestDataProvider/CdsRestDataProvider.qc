@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/** CdsRestDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** CdsRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,9 +24,6 @@
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! Application name for Dynamics
-public const DynamicsAppName = "Dynamics";
-
 #! The CdsRest data provider class
 public class CdsRestDataProvider inherits CdsRestDataProviderBase {
     public {
@@ -39,84 +36,22 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
             "children_can_support_records": True,
             "children_can_support_observers": False,
         };
-
-        #! Constructor options
-        const ConstructorOptions = {
-            "api": <DataProviderOptionInfo>{
-                "display_name": "API Version",
-                "short_desc": "Sets the API version to use",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "Sets the CDS API version to use",
-                "default_value": CdsRestClient::DefaultApiVersion,
-            },
-            "cdsrestclient_options": <DataProviderOptionInfo>{
-                "display_name": "REST Client Options",
-                "short_desc": "Sets options to the REST client constructor",
-                "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Sets options to the REST client constructor",
-            },
-            "client_id": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Client ID",
-                "short_desc": "Sets the OAuth2 client ID",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "Sets the OAuth2 client ID (required if 'client_secret' provided)",
-            },
-            "client_secret": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Client Secret",
-                "short_desc": "Sets the OAuth2 client secret",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "Sets the OAuth2 client secret (required if 'client_id' provided)",
-            },
-            "scope": <DataProviderOptionInfo>{
-                "display_name": "OAuth2 Scope",
-                "short_desc": "The OAuth2 scope string",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The OAuth2 scope string",
-            },
-            "tenant": <DataProviderOptionInfo>{
-                "display_name": "Tenant",
-                "short_desc": "The tenant ID of the CDS server instance",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The tenant ID of the CDS server instance",
-            },
-            "url": <DataProviderOptionInfo>{
-                "display_name": "URL",
-                "short_desc": "The URL to the CDS server instance",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL to the CDS server instance",
-                "required": True,
-            },
-        };
-
-        #! Environment options
-        const EnvOptions = {
-            "url": "CDS_URL",
-            "client_id": "CDS_CLIENT_ID",
-            "client_secret": "CDS_CLIENT_SECRET",
-            "tenant": "CDS_TENANT",
-            "scope": "CDS_SCOPE",
-        };
-
-        #! Hash of HTTP Methods
-        const HttpMethods = {
-            "GET": True,
-            "PUT": True,
-            "PATCH": True,
-            "POST": True,
-            "DELETE": True,
-        };
     }
 
     private {
-        #! Metadata keyed by entity type
-        *hash<auto> meta;
+        static hash<string, code> dynamic_children;
 
-        #! Metadata mutex
-        Qore::Thread::Mutex lck();
+        const ChildMap = {
+            "tables": Class::forName("CdsRestDataProvider::CdsRestTablesDataProvider"),
+        };
     }
 
     #! Creates the object from the arguments
     constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    constructor(CdsRestClient::CdsRestConnection conn) : CdsRestDataProviderBase(conn) {
     }
 
     #! Creates the object from constructor options
@@ -127,7 +62,14 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        rest = new CdsRestClient(getClientOptions(copts));
+        if (copts.cdsrestclient) {
+            copts.cdsrestclient.checkClientOptions(copts);
+            rest = copts.cdsrestclient;
+        }
+
+        if (!rest) {
+            rest = new CdsRestClient(getClientOptions(copts));
+        }
     }
 
     #! Returns the data provider name
@@ -135,17 +77,42 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
         return "/";
     }
 
-    #! Accepts a LoggerInterface object for logging (or clears it)
-    setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
-        LoggerWrapper::setLogger(logger);
+    #! Registers a child data provider
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+    */
+    static registerChild(string name, code generator) {
+        dynamic_children{name} = generator;
+    }
+
+    #! Return data provider summary info
+    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
+        *list<hash<DataProvider::DataProviderSummaryInfo>> rv;
+        foreach Class cls in (ChildMap.iterator()) {
+            try {
+                rv += cls.getConstant("ProviderSummaryInfo").getValue();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "UNKNOWN-CONSTANT") {
+                    rethrow;
+                }
+            }
+            rv += cls.getStaticMember("ProviderSummaryInfo").getValue();
+        }
+        if (conn) {
+            map rv += $1.value($1.key, conn).getSummaryInfo(), dynamic_children.pairIterator();
+        }
+        return rv;
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys getMetadata();
+        list<string> rv = keys ChildMap;
+        if (conn && dynamic_children) {
+            rv += keys dynamic_children;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -154,50 +121,18 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        *hash<auto> obj_meta = getMetadata(){name};
-        if (obj_meta) {
-            return new CdsEntityDataProvider(rest, name, obj_meta);
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
         }
-    }
-
-    #! Returns metadata
-    private *hash<auto> getMetadata() {
-        if (meta) {
-            return meta;
+        if (conn && (*code gen = dynamic_children{name})) {
+            return gen(name, conn);
         }
-
-        lck.lock();
-        on_exit lck.unlock();
-
-        # check again in the lock
-        if (meta) {
-            return meta;
-        }
-
-        hash<auto> resp;
-        hash<auto> info;
-        try {
-            resp = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"."edmx:DataServices".Schema;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
-        #printf("%N\n", resp.EntityType);
-
-        meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
-        return meta;
     }
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
-    }
-
-    #! Returns options for the CdsRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("cdsrestclient_options", "cdsrestclient")
-            + copts.cdsrestclient_options;
     }
 }
 }

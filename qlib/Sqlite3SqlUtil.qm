@@ -59,7 +59,7 @@ module Sqlite3SqlUtil {
     All the public symbols in the module are defined in the Sqlite3SqlUtil namespace
 
     @note
-    - This module requires the <a href="https://github.com/qorelanguage/module-sqlite3">sqlite3</a> binary module
+    - This module requires the <a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a> binary module
       for communication with Sqlite3 databases
     - This module does not yet support schema management for sqlite3 DBs
 
@@ -89,7 +89,7 @@ module Sqlite3SqlUtil {
     @subsection sqlite3sqlutilv10 Sqlite3SqlUtil_1_1 Sqlite3SqlUtil Module v1.1
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection sqlite3sqlutilv10 Sqlite3SqlUtil_1_0 Sqlite3SqlUtil Module v1.0
     - initial release

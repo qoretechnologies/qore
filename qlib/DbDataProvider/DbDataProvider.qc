@@ -28,7 +28,7 @@ public namespace DbDataProvider {
 /** Generic post-SQL search is provided just for completeness sake, but record filtering should be done in the \c sql
     search option and not in the generic post-SQL generic data provider search for performance reasons.
 */
-public class DbDataProvider inherits AbstractDataProvider {
+public class DbDataProvider inherits DbDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -48,32 +48,9 @@ public class DbDataProvider inherits AbstractDataProvider {
             "record_requires_search_options": True,
             "supports_child_create": True,
             "supports_child_delete": True,
-            "children_can_support_apis": False,
+            "children_can_support_apis": True,
             "children_can_support_records": True,
             "children_can_support_transactions": True,
-            "children_identical": True,
-        };
-
-        #! Mapper runtime key info; see details below
-        /** The DbDataProvider class supports the following create option:
-            - \c sequence: names the DB sequence that will be used to populate the field
-            - \c sequence_currval: names the DB sequence that will be used to populate the field; the current value of
-              the sequence is used; will not increment the sequence
-        */
-        const MapperKeyInfo = Mapper::MapperKeyInfo + {
-            "sequence": <MapperRuntimeKeyInfo>{
-                "desc": "names the DB sequence that will be used to populate the field",
-                "value_type": "string",
-                "unique_roles": "*",
-                "returns_type": "int",
-            },
-            "sequence_currval": <MapperRuntimeKeyInfo>{
-                "desc": "names the DB sequence that will be used to populate the field; the current value of the "
-                    "sequence is used; will not increment the sequence",
-                "value_type": "string",
-                "unique_roles": "*",
-                "returns_type": "int",
-            },
         };
 
         #! Constructor options
@@ -91,7 +68,7 @@ public class DbDataProvider inherits AbstractDataProvider {
         };
 
         #! Search options
-        const SearchOptions = {
+        const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "sql": <DataProviderOptionInfo>{
                 "display_name": "SQL Query",
                 "short_desc": "The raw SQL query for the select statement",
@@ -143,36 +120,23 @@ public class DbDataProvider inherits AbstractDataProvider {
     }
 
     private {
-        #! The database object
-        AbstractDatabase db;
-
-        #! Lookup to get an abstract datasource from a name
-        static *code datasource_lookup;
-
-        #! Lookup to get an abstract table from a datasource and a name
-        static *code table_lookup;
+        #! Child map
+        const ChildMap = {
+            "exec-sql": Class::forName("DbDataProvider::DbExecSqlDataProvider"),
+            "tables": Class::forName("DbDataProvider::DbTablesDataProvider"),
+        };
     }
 
     #! creates the object
-    constructor(AbstractDatasource ds, *hash<auto> opts) {
-        db = AbstractDatabase::getDatabase(ds, opts);
+    constructor(AbstractDatasource ds, *hash<auto> opts) : DbDataProviderBase(ds, opts){
     }
 
     #! creates the object
-    constructor(AbstractDatabase db) {
-        self.db = db;
+    constructor(AbstractDatabase db) : DbDataProviderBase(db) {
     }
 
     #! Creates the object from constructor options
-    constructor(*hash<auto> options) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        AbstractDatasource ds;
-        if (copts.datasource instanceof AbstractDatasource) {
-            ds = copts.datasource;
-        } else {
-            ds = getDatasource(copts.datasource);
-        }
-        db = AbstractDatabase::getDatabase(ds);
+    constructor(*hash<auto> options) : DbDataProviderBase(options) {
     }
 
     #! Returns the data provider name
@@ -183,61 +147,8 @@ public class DbDataProvider inherits AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Data provider for database `%s`; use the search API with the `sql` and `args` arguments to "
-            "execute record-based queries", db.getDatasourceDesc());
-    }
-
-    #! Begins a transaction in the datasource
-    /**
-        @see:
-        - commit()
-        - rollback()
-
-        @since DbDataProvider 1.0.1
-    */
-    beginTransaction() {
-        db.beginTransaction();
-    }
-
-    #! Commits any transaction in progress in the datasource
-    /**
-        @see:
-        - beginTransaction()
-        - rollback()
-    */
-    commit() {
-        db.commit();
-    }
-
-    #! Rolls back any transaction in progress in the datasource
-    /**
-        @see:
-        - beginTransaction()
-        - commit()
-    */
-    rollback() {
-        db.rollback();
-    }
-
-    #! Returns custom data mapper runtime keys
-    /** @return custom data mapper runtime keys
-    */
-    *hash<string, hash<MapperRuntimeKeyInfo>> getMapperRuntimeKeys() {
-        hash<string, hash<MapperRuntimeKeyInfo>> rv(MapperKeyInfo);
-        rv.sequence.handler = \doSequenceKey();
-        rv.sequence_currval.handler = \doSequenceCurrvalKey();
-        return rv;
-    }
-
-    #! Processes the \c sequence runtime key in mappers as a mapper key handler
-    int doSequenceKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getNextSequenceValue(sequence_name);
-    }
-
-    #! Processes the \c sequence_currval runtime key in mappers as a mapper key handler
-    int doSequenceCurrvalKey(string sequence_name, hash<auto> ctx, *reference<bool> missing_input) {
-        on_error rethrow $1.err, sprintf("%s (mapper 'sequence_currval' error; sequence: %y)", $1.desc, sequence_name);
-        return db.getCurrentSequenceValue(sequence_name);
+            "execute record-based queries; note that generic filtering on SQL results is not supported by this "
+            "data provider and will result in an error if used", db.getDatasourceDesc());
     }
 
     #! Returns the record type description from a describe hash
@@ -325,22 +236,14 @@ public class DbDataProvider inherits AbstractDataProvider {
 
     #! Return data provider summary info
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map cast<hash<DataProviderSummaryInfo>>(DbTableDataProvider::ProviderInfo{DataProviderSummaryInfoKeys}
-            + {
-            "name": $1,
-            "desc": sprintf("Record-based data provider for db table `%s`; supports create, read/search, update, delete, "
-                "upsert, and bulk operations", $1),
-            "type": "DbTableDataProvider",
-            "supports_children": False,
-            "children_can_support_records": False,
-        }), getChildProviderNames();
+        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return db.listTables();
+        return keys ChildMap;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -351,6 +254,10 @@ public class DbDataProvider inherits AbstractDataProvider {
         @see getChildProviderEx()
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (*Class cls = ChildMap{name}) {
+            return cls.newObject(db, logger);
+        }
+        # for backwards compatibility, we try to get a table object
         *AbstractTable table;
         try {
             table = db.getTable(name);
@@ -358,7 +265,7 @@ public class DbDataProvider inherits AbstractDataProvider {
                 return;
             }
         } catch (hash<ExceptionInfo> ex) {
-            rethrow "CHILD-PROVIDER-ERROR", sprintf("table %y cannot be acquired from %y: %s: %s", name, getName(),
+            rethrow "CHILD-PROVIDER-ERROR", sprintf("Table %y cannot be acquired from %y: %s: %s", name, getName(),
                 ex.err, ex.desc), ex.arg;
         }
         return new DbTableDataProvider(table, logger);
@@ -404,121 +311,6 @@ public class DbDataProvider inherits AbstractDataProvider {
         DbTableTransactionHelper th(t);
         info("DbDataProvider %y DDL: %s", name, (foldl $1 + "\n" + $2, t.getDropSql()));
         th.drop();
-    }
-
-    #! Sets the datasource lookup
-    static setDatasourceLookup(code datasource_lookup) {
-        DbDataProvider::datasource_lookup = datasource_lookup;
-    }
-
-    #! Sets the table lookup
-    static setTableLookup(code table_lookup) {
-        DbDataProvider::table_lookup = table_lookup;
-    }
-
-    #! Returns the given AbstractDatasource object
-    static AbstractDatasource getDatasource(AbstractDatasource ds) {
-        return ds;
-    }
-
-    #! Returns an AbstractDatasource object from the given string
-    static AbstractDatasource getDatasource(string ds_string) {
-        return datasource_lookup && (ds_string !~ /:/)
-            ? DbDataProvider::datasource_lookup(ds_string)
-            : new Datasource(ds_string);
-    }
-
-    #! Returns an AbstractTable object from the given datasource and table strings
-    static AbstractTable getTable(string ds_string, string table_string) {
-        if (table_lookup && (ds_string !~ /:/)) {
-            return DbDataProvider::table_lookup(ds_string, table_string);
-        }
-        AbstractDatasource ds = DbDataProvider::getDatasource(ds_string);
-        return AbstractTable::getTable(ds, table_string);
-    }
-
-    #! Returns an AbstractTable object from the given datasource and table arguments
-    static AbstractTable getTable(AbstractDatasource ds, string table_string) {
-        if (table_lookup) {
-            return DbDataProvider::table_lookup(ds, table_string);
-        }
-        return AbstractTable::getTable(ds, table_string);
-    }
-
-    #! Returns a column description hash for a field
-    static hash<GenericColumnInfo> getColumnDesc(AbstractDatabase db, AbstractDataField field, *hash<auto> opts) {
-        AbstractDataProviderType type = field.getType();
-        hash<GenericColumnInfo> col({
-            "default_value": field.getDefaultValue(),
-            "notnull": !field.isAssignableFrom(Reflection::NothingType),
-        });
-
-        string type_name = type.getName();
-        switch (type.getBaseTypeCode()) {
-            case NT_INT:
-                type_name = "integer";
-                break;
-
-            case NT_STRING:
-                if (*int size = field.getType().getOptionValue("string.max_size_chars")) {
-                    col.size = size;
-                }
-                break;
-
-            case NT_NUMBER:
-                if (db.requiresScale()) {
-                    col.size = db.getMaximumPrecision();
-                    col.scale = col.size / 3;
-                }
-                break;
-        }
-        col.qore_type = type_name;
-
-        # add field description as a comment if possible
-        if (*string desc = field.getDescription()) {
-            col.comment = desc;
-        }
-        return col;
-    }
-
-    #! Returns a table description hash from a field description
-    /** @throw TABLE-DESC-ERROR error in table description
-    */
-    hash<auto> makeTableDesc(string name, hash<string, AbstractDataField> fields, *hash<auto> opts) {
-        hash<string, hash<GenericColumnInfo>> cols = map {$1.key: getColumnDesc(db, $1.value, opts)},
-            fields.pairIterator();
-
-        hash<auto> tdesc += {
-            "columns": cols,
-        };
-        # process PK
-        if (opts.primary_key) {
-            foreach auto cname in (opts.primary_key) {
-                if (cname.typeCode() != NT_STRING) {
-                    throw "TABLE-DESC-ERROR", sprintf("table %y primary key column value %d/%d (starting from 1) is "
-                        "type %y; expecting \"string\"", name, $# + 1, opts.primary_key.size(), name.type());
-                }
-                if (!fields{cname}) {
-                    throw "TABLE-DESC-ERROR", sprintf("table %y primary key column %y is not present in the input "
-                        "field description; known fields: %y", name, cname, keys fields);
-                }
-            }
-            string pk_name = opts.primary_key_name ?? sprintf("pk_%s", name);
-            tdesc.primary_key = {
-                "name": pk_name,
-                "columns": opts.primary_key,
-            };
-        }
-        # process indexes
-        if (opts.indexes) {
-            tdesc.indexes = opts.indexes;
-        }
-        # process foreign_constraints
-        if (opts.foreign_constraints) {
-            tdesc.foreign_constraints = opts.foreign_constraints;
-        }
-
-        return tdesc;
     }
 }
 }

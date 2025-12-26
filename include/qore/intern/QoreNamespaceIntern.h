@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,7 @@
 
 class qore_root_ns_private;
 class qore_ns_private;
+class QoreModuleContext;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -105,6 +106,8 @@ public:
         if (mod_name) {
             from_module = mod_name;
         }
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
     // called when assimilating
@@ -113,7 +116,10 @@ public:
             path(old.path),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
-            builtin(false), from_module(old.from_module) {
+            builtin(old.builtin), from_module(old.from_module) {
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::", 0) == 0);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
     // called when parsing
@@ -138,10 +144,12 @@ public:
         if (!old.from_module.empty()) {
             from_module = old.from_module;
         }
+        assert(name.rfind("::") == std::string::npos);
+        assert(path.rfind("::", 0) == 0);
+        assert(path.rfind("::::", 0) == std::string::npos);
     }
 
-    DLLLOCAL ~qore_ns_private() {
-    }
+    DLLLOCAL ~qore_ns_private();
 
     // get the full namespace path with the leading "::"
     DLLLOCAL const char* getPath() const {
@@ -163,7 +171,7 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
-   //! Sets a key value in the namespace's key-value store
+    //! Sets a key value in the namespace's key-value store
     /** @param key the key to store
         @param value the value to store
 
@@ -574,7 +582,8 @@ protected:
     std::string from_module;
 
     // called from the root namespace constructor only
-    DLLLOCAL qore_ns_private(QoreNamespace* n_ns) : ns(n_ns), constant(this), root(true), pub(true), builtin(true) {
+    DLLLOCAL qore_ns_private(QoreNamespace* n_ns) : ns(n_ns), constant(this), root(true), pub(true), builtin(true),
+            path("::") {
     }
 
     DLLLOCAL void setModuleName() {
@@ -1560,20 +1569,12 @@ protected:
         return nullptr;
     }
 
-    DLLLOCAL void runtimeImportGlobalVariable(qore_ns_private& tns, Var* v, bool readonly, ExceptionSink* xsink) {
-        Var* var = tns.var_list.import(v, xsink, readonly);
-        if (!var)
-            return;
-
-        varmap.update(var->getName(), &tns, var);
-    }
-
     DLLLOCAL Var* runtimeCreateVar(qore_ns_private& vns, const char* vname, const QoreTypeInfo* typeInfo,
             bool builtin) {
         Var* v = vns.var_list.runtimeCreateVar(vname, typeInfo, builtin);
-
-        if (v)
+        if (v) {
             varmap.update(v->getName(), &vns, v);
+        }
         return v;
     }
 
@@ -1699,13 +1700,14 @@ public:
     DLLLOCAL qore_root_ns_private(const qore_root_ns_private& old, int64 po, QoreProgram* pgm, RootQoreNamespace* ns)
             : qore_ns_private(old, po, ns), pgm(pgm) {
         assert(pgm);
-        if ((po & PO_NO_API) == PO_NO_API) {
+        if ((po & PO_SYSTEM_INHERITANCE_OPTIONS) == PO_SYSTEM_INHERITANCE_OPTIONS) {
             // create empty Qore namespace
             qoreNS = new QoreNamespace("Qore");
             nsl.nsmap.insert(nsmap_t::value_type("Qore", qoreNS));
             qoreNS->priv->nsl.nsmap.insert(nsmap_t::value_type("Option", new QoreNamespace("Option")));
-        } else
+        } else {
             qoreNS = nsl.find("Qore");
+        }
         assert(qoreNS);
 
         // always set the module public flag to true in the root namespace
@@ -1738,6 +1740,15 @@ public:
 
     DLLLOCAL void deferParseCheckAbstractNew(const qore_class_private* qc, const QoreProgramLocation* loc) {
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
+    }
+
+    DLLLOCAL void runtimeImportGlobalVariable(ExceptionSink* xsink, qore_ns_private& tns, Var* v, bool readonly,
+            const char* import_as) {
+        Var* var = tns.var_list.import(v, xsink, readonly, import_as);
+        if (!var) {
+            return;
+        }
+        varmap.update(var->getName(), &tns, var);
     }
 
     DLLLOCAL QoreNamespace* runtimeFindNamespace(const NamedScope& name) {
@@ -2126,7 +2137,8 @@ public:
         return getRootNS()->rpriv->parseFindGlobalVarIntern(nscope);
     }
 
-    DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns, QoreModuleContext& qmc) {
+    DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
+            QoreModuleContext& qmc) {
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
@@ -2143,10 +2155,6 @@ public:
 
     DLLLOCAL static Var* runtimeCreateVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname, const QoreTypeInfo* typeInfo, bool builtin = false) {
         return rns.rpriv->runtimeCreateVar(*vns.priv, vname, typeInfo, builtin);
-    }
-
-    DLLLOCAL static void runtimeImportGlobalVariable(RootQoreNamespace& rns, QoreNamespace& tns, Var* v, bool readonly, ExceptionSink* xsink) {
-        return rns.rpriv->runtimeImportGlobalVariable(*tns.priv, v, readonly, xsink);
     }
 
     /*

@@ -70,6 +70,8 @@ public:
 
     DLLLOCAL virtual bool goalReached() const = 0;
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) = 0;
+
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) = 0;
 
     DLLLOCAL virtual QoreValue getOutput() const {

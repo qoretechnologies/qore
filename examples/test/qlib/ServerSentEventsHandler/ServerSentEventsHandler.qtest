@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/MapperUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventClient
+%requires ../../../../qlib/ServerSentEventHandler
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class Main
+
+class MySseHandler inherits ServerSentEventHandler {
+    constructor(*HttpServer::AbstractAuthenticator auth, *hash<auto> opts) : ServerSentEventHandler(auth, opts) {
+    }
+}
+
+public class Main inherits QUnit::Test {
+    public {
+        HttpServer http;
+        ServerSentEventHandler sse;
+        Logger logger;
+        int port;
+    }
+
+    constructor() : Test("ServerSentEventsHandlerTest", "1.0") {
+        addTestCase("main test", \mainTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        sse = new ServerSentEventHandler({
+            "logger": logger,
+        });
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        http = new HttpServer(http_opts);
+        on_exit http.stop();
+        http.setHandler("sse-handler", "", NOTHING, sse);
+        http.setDefaultHandler("sse-handler", sse);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    mainTest() {
+        checkModule();
+
+        ServerSentEventClient client({
+            "url": "sse://localhost:" + port,
+        });
+
+        MyObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+
+        string str = get_random_string(50);
+        hash<SseMessageInfo> event = <SseMessageInfo>{
+            "event": "event",
+            "data": str,
+            "id": 1,
+        };
+        sse.sendAll(event);
+
+        hash<SseMessageInfo> event0 = observer.wait();
+        assertEq(event, event0);
+    }
+}
+
+class MyObserver inherits Observer {
+    public {
+        list<hash<auto>> l();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+        int waiting;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        l += {
+            "id": event_id,
+            "data": data_,
+        };
+
+        if (waiting) {
+            cond.broadcast();
+        }
+    }
+
+    hash<SseMessageInfo> wait() {
+        date start = now_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
+            date d = now_us() - start;
+            if (d > 5s) {
+                throw "ERROR", sprintf("no matching data received in timeout; l: %y", l);
+            }
+            foreach hash<auto> h in (l) {
+                if (h.id == EVENT_SSE_DATA) {
+                    return h."data";
+                }
+            }
+        }
+    }
+
+    clear() {
+        m.lock();
+        on_exit m.unlock();
+
+        remove l;
+    }
+}

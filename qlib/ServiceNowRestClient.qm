@@ -98,19 +98,19 @@ printf("%N\n", ans.body);
 
     @subsection ServiceNowrestclientv1_2 ServiceNowRestClient v1.2
     - use RestClient functionality for OAuth2 authorization
-      (<a href="https://github.com/qorelanguage/qore/issues/4766">issue 4766</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4766">issue 4766</a>)
 
     @subsection ServiceNowrestclientv1_1_2 ServiceNowRestClient v1.1.2
     - fixed to create URI request paths properly; restored functionality with recent versions of ServiceNow
-      (<a href="https://github.com/qorelanguage/qore/issues/4758">issue 4758</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4758">issue 4758</a>)
 
     @subsection ServiceNowrestclientv1_1_1 ServiceNowRestClient v1.1.1
     - support full ping operations, also with polling, using an authenticated request
-      (<a href="https://github.com/qorelanguage/qore/issues/4677">issue 4677</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
 
     @subsection ServiceNowrestclientv1_1 ServiceNowRestClient v1.1
     - updated to no longer require OAuth2 login params
-      (<a href="https://github.com/qorelanguage/qore/issues/4295">issue 4295</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4295">issue 4295</a>)
 
     @subsection ServiceNowrestclientv1_0 ServiceNowRestClient v1.0
     - the initial version of the %ServiceNowRestClient module
@@ -125,13 +125,16 @@ public namespace ServiceNowRestClient {
     - \c password: the ServiceNow password
 
     To use an OAuth2 login, include the following options:
-   - \c client_id: the OAuth2 client ID
-   - \c client_secret: the OAuth2 client secret
+   - \c oauth2_client_id: the OAuth2 client ID
+   - \c oauth2_client_secret: the OAuth2 client secret
 */
 public class ServiceNowRestClient inherits RestClient::RestClient {
     public {
         #! OAuth2 default grant type
-        const OAuth2DefaultGrantType = "authorization_code";
+        /** Not using "authorization_code" for now as getting an OAuth2 client published requires an expensive
+            partner program
+        */
+        const OAuth2DefaultGrantType = "none";
 
         #! OAuth2 auth URL
         const OAuth2AuthUriPathSuffix = "/oauth_auth.do";
@@ -144,10 +147,14 @@ public class ServiceNowRestClient inherits RestClient::RestClient {
 
         #! Request URI path prefix
         const RequestUriPathPrefix = "/api/";
+
+        #! Default API key header
+        const DefaultApiKeyHeader = "x-sn-apikey";
     }
 
     private:internal {
         *string api;
+        *string apikey;
         string uri_path_pfx;
     }
 
@@ -172,8 +179,8 @@ ServiceNowRestClient rest({
 {"additional_methods": {"PROPFIND": True, "MKCOL": True}}
             @endcode
         - \c api: the API version for ServiceNow
-        - \c client_id: (required) the OAuth2 client ID
-        - \c client_secret: (required) the OAuth2 client secret
+        - \c oauth2_client_id: (required) the OAuth2 client ID
+        - \c oauth2_client_secret: (required) the OAuth2 client secret
         - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
             \c "send_encoding" option is not set) and the requested response encoding (note that the
             @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
@@ -217,6 +224,10 @@ ServiceNowRestClient rest({
             # default: use latest API
             uri_path_pfx = RequestUriPathPrefix + DefaultApiVersion;
         }
+        if (opts.apikey.val()) {
+            apikey = opts.apikey;
+            headers{opts.apikey_header ?? DefaultApiKeyHeader} = apikey;
+        }
         setConnectionPath(uri_path_pfx);
 
         if (!do_not_connect) {
@@ -237,9 +248,11 @@ ServiceNowRestClient rest({
 
     #! sends the outgoing HTTP message and recodes the response to data
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
-            *reference<hash<auto>> info, *softbool decode_errors) {
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+            *code signer) {
         try {
-            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors);
+            return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type,
+                shdr, signer);
         } catch (hash<ExceptionInfo> ex) {
             # throw an exception for the error
             if (info."response-body".response.error.message.typeCode() == NT_STRING) {
@@ -264,8 +277,8 @@ ServiceNowRestClient rest({
             "oauth2_auth_url": opts.oauth2_auth_url ?? OAuth2AuthUriPathSuffix,
             "oauth2_token_url": opts.oauth2_token_url ?? OAuth2TokenUriPathSuffix,
             "oauth2_grant_type": opts.oauth2_grant_type ?? OAuth2DefaultGrantType,
-            "oauth2_client_id": opts.client_id,
-            "oauth2_client_secret": opts.client_secret,
+            "oauth2_client_id": opts.oauth2_client_id,
+            "oauth2_client_secret": opts.oauth2_client_secret,
         };
     }
 }
@@ -274,8 +287,8 @@ ServiceNowRestClient rest({
 /** In addition to all options supported by @ref RestClient::RestClientConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "api": the API version for ServiceNow
-    - \c "client_id": (optional) the ServiceNow OAuth2 client ID (mapped to the \c oauth2_client_id option)
-    - \c "client_secret": (optional) the ServiceNow OAuth2 client secret (mapped to the \c oauth2_client_secret option)
+    - \c "oauth2_client_id": (optional) the ServiceNow OAuth2 client ID (mapped to the \c oauth2_client_id option)
+    - \c "oauth2_client_secret": (optional) the ServiceNow OAuth2 client secret (mapped to the \c oauth2_client_secret option)
 
     @see @ref ServiceNowRestClient::ServiceNowRestClient::constructor() for more information on the above options
 */
@@ -301,10 +314,24 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "desc": "the API version for ServiceNow; if not set the latest version is used",
                     "default_value": ServiceNowRestClient::DefaultApiVersion,
                 },
-                "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "The REST API key",
+                    "type": "string",
+                    "desc": "the REST API key",
+                    "sensitive": True,
+                },
+                "apikey_header": <ConnectionOptionInfo>{
+                    "display_name": "API Key Header",
+                    "short_desc": "The REST API key header",
+                    "type": "string",
+                    "desc": "the REST API key header",
+                    "default_value": ServiceNowRestClient::DefaultApiKeyHeader,
+                },
+                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
                     "desc": "the ServiceNow OAuth2 client ID",
                 },
-                "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
+                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
                     "desc": "the ServiceNow OAuth2 client secret",
                     "sensitive": True,
                 },
@@ -312,12 +339,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "default_value": ServiceNowRestClient::OAuth2AuthUriPathSuffix,
                 },
                 "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type + <ConnectionOptionInfo>{
-                    "allowed_values": RestConnection::ConnectionScheme.options.oauth2_grant_type.allowed_values + (
-                        <AllowedValueInfo>{
-                            "value": "none",
-                            "desc": "no OAuth2 grant flow used",
-                        },
-                    ),
+                    "allowed_values": RestConnection::ConnectionScheme.options.oauth2_grant_type.allowed_values,
                     "default_value": ServiceNowRestClient::OAuth2DefaultGrantType,
                 },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
@@ -340,7 +362,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "desc": "the ServiceNow username",
                 },
             },
-            "required_options": "username,password|token|client_id,client_secret",
+            "required_options": "apikey|token|oauth2_client_id,oauth2_client_secret",
         };
 
         #! Default ServiceNow ping method
@@ -348,8 +370,8 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
 
         #! Default ServiceNow ping path (from the API root)
         const DefaultServiceNowPingPath = "table/sys_properties?sysparm_exclude_reference_link=true"
-                        "&sysparm_suppress_pagination_header=true&sysparm_fields=value"
-                        "&sysparm_query=name=mid.version";
+            "&sysparm_suppress_pagination_header=true&sysparm_fields=value"
+            "&sysparm_query=name=mid.version";
 
         #! Default ServiceNow ping headers
         const DefaultServiceNowPingHeaders = {
@@ -358,8 +380,8 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (
-            "client_id",
-            "client_secret",
+            "oauth2_client_id",
+            "oauth2_client_secret",
             "oauth2_auth_url",
             "oauth2_token_url",
             "oauth2_redirect_url",
@@ -370,8 +392,8 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
             "oauth2_auto_refresh": "oauth2_auto_refresh",
             "oauth2_auth_args": "oauth2_auth_args",
             "oauth2_auth_url": "oauth2_auth_url",
-            "client_id": "oauth2_client_id",
-            "client_secret": "oauth2_client_secret",
+            "oauth2_client_id": "oauth2_client_id",
+            "oauth2_client_secret": "oauth2_client_secret",
             "oauth2_redirect_url": "oauth2_redirect_url",
             "oauth2_refresh_token": "oauth2_refresh_token",
             "oauth2_scopes": "oauth2_scopes",
@@ -423,9 +445,16 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
     constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
     }
 
-    #! returns \c "snrest"
+    #! returns \c "snrests"
     string getType() {
-        return "snrest";
+        return "snrests";
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "ServiceNow";
     }
 
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
@@ -473,9 +502,14 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
 
         @see supportsPollingApi()
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        ServiceNowRestClient client = getPollImpl();
+        if (logger) {
+            client.setLogger(logger);
+        }
+
         # start the polling operation manually using the full request path
-        return new RestPingPollOperation(self, getPollImpl(), real_opts);
+        return new RestPingPollOperation(self, client, real_opts);
     }
 
     #! Sets the auth code feature if supported

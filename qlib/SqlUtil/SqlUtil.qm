@@ -41,7 +41,7 @@
 %enable-all-warnings
 
 module SqlUtil {
-    version = "1.9.2";
+    version = "2.3.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -81,13 +81,13 @@ module SqlUtil {
 
     Currently the following driver-specific modules are available:
     - <a href="../../FreetdsSqlUtil/html/index.html">FreetdsSqlUtil</a>: for working with MS SQL Server and Sybase
-      databases through the <a href="https://github.com/qorelanguage/module-sybase">freetds driver</a>
+      databases through the <a href="https://github.com/qoretechnologies/module-sybase">freetds driver</a>
     - <a href="../../MysqlSqlUtil/html/index.html">MysqlSqlUtil</a>: for working with MySQL databases
     - <a href="../../OracleSqlUtil/html/index.html">OracleSqlUtil</a>: for working with Oracle databases
     - <a href="../../PgsqlSqlUtil/html/index.html">PgsqlSqlUtil</a>: for working with PostgreSQL databases
     - <a href="../../Sqlite3SqlUtil/html/index.html">Sqlite3SqlUtil</a>: for working with SQLite3 databases
     - <a href="../../OdbcFirebirdSqlUtil/html/index.html">OdbcFirebirdSqlUtil</a>: for working with Firebird databases
-      through the <a href="https://github.com/qorelanguage/module-odbc">odbc driver</a>
+      through the <a href="https://github.com/qoretechnologies/module-odbc">odbc driver</a>
 
     The underlying driver-specific module is automatically loaded and used when required; the classes provided in
     the %SqlUtil module provide a generic API that uses the driver-specific implementations for the underlying
@@ -116,118 +116,128 @@ module SqlUtil {
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
+    @subsection sqlutilv2_3_0 SqlUtil v2.3.0
+    - implemented support for specifying the columns to use for upserts separately from the row data
+      (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
+
+    @subsection sqlutilv1_9_3 SqlUtil v1.9.3
+    - fixed support for orderby with a matching unique index
+      (<a href="https://github.com/qoretechnologies/qore/issues/4977">issue 4977</a>)
+    - added support for complex expressions and field reference in update operations
+      (<a href="https://github.com/qoretechnologies/qore/issues/4959">issue 4959</a>)
+
     @subsection sqlutilv1_9_2 SqlUtil v1.9.2
     - fixed a bug where @ref SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()
       "AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()" did not work on foreign constraints
-      (<a href="https://github.com/qorelanguage/qore/issues/4875">issue 4875</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4875">issue 4875</a>)
 
     @subsection sqlutilv1_9_1 SqlUtil v1.9.1
     - set the column size in the type when creating types for \c VARCHAR columns
-      (<a href="https://github.com/qorelanguage/qore/issues/4832">issue 4832</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4832">issue 4832</a>)
 
     @subsection sqlutilv1_9 SqlUtil v1.9
     - updated the logic used to find implementation-specific %SqlUtil modules to use the new
       @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()" APIs to
       better support the \c jdbc and \c odbc drivers
-      (<a href="https://github.com/qorelanguage/qore/issues/4684">issue 4684</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4684">issue 4684</a>)
 
     @subsection sqlutilv1_8_1 SqlUtil v1.8.1
     - fixed a bug serializing and deserializing \c Table objects using the \c odbc driver
-      (<a href="https://github.com/qorelanguage/qore/issues/4620">issue 4620</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4620">issue 4620</a>)
 
     @subsection sqlutilv1_8 SqlUtil v1.8
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
     @subsection sqlutilv1_7_5 SqlUtil v1.7.5
     - respect "or nothing" %Qore types when mapping to column types
-      (<a href="https://github.com/qorelanguage/qore/issues/4400">issue 4400</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4400">issue 4400</a>)
     - allow a \c VARCHAR column to be created without a size, assume a default size
-      (<a href="https://github.com/qorelanguage/qore/issues/4399">issue 4399</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4399">issue 4399</a>)
     - fixed a bug where objects created did not always contain the actual name used to create it
-      (<a href="https://github.com/qorelanguage/qore/issues/4396">issue 4396</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4396">issue 4396</a>)
 
     @subsection sqlutilv1_7_4 SqlUtil v1.7.4
     - fixed upsert usage with unique constraints and indices when there is a non-matching PK
-      (<a href="https://github.com/qorelanguage/qore/issues/4347">issue 4347</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4347">issue 4347</a>)
     - added support for starting a transaction with @ref SqlUtil::Table "Table" and
       @ref SqlUtil::AbstractTable "AbstractTable" objects
-      (<a href="https://github.com/qorelanguage/qore/issues/4346">issue 4346</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
     @subsection sqlutilv1_7_3 SqlUtil v1.7.3
     - added APIs to enable duplicate record creation errors to be detected
-      (<a href="https://github.com/qorelanguage/qore/issues/4308">issue 4308</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
     @subsection sqlutilv1_7_2 SqlUtil v1.7.2
     - fixed a bug handling foreign constraints backed by indices on DBs that link indices and constraints
       automatically
-      (<a href="https://github.com/qorelanguage/qore/issues/4269">issue 4269</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4269">issue 4269</a>)
 
     @subsection sqlutilv1_7_1 SqlUtil v1.7.1
     - fixed a bug where pseudocolumn references were used ambiguously in joins
-      (<a href="https://github.com/qorelanguage/qore/issues/4214">issue 4214</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4214">issue 4214</a>)
 
     @subsection sqlutilv1_7 SqlUtil v1.7
     - added the @ref SqlUtil::SqlResultInfo "SqlResultInfo" hash and methods that return this hash instead of taking
       an optional output reference for SQL for use in languages that do not support lvalue references
-      (<a href="https://github.com/qorelanguage/qore/issues/3934">issue 3934</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3934">issue 3934</a>)
 
     @subsection sqlutilv1_6 SqlUtil v1.6
     - added support for the DataProvider module
-      (<a href="https://github.com/qorelanguage/qore/issues/3545">issue 3545</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
     - implemented the @ref SqlUtil::op_in_select() "op_in_select()" function for @ref where_clauses
-      (<a href="https://github.com/qorelanguage/qore/issues/3371">issue 3371</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3371">issue 3371</a>)
 
     @subsection sqlutilv1_5_2 SqlUtil v1.5.2
     - implemented the @ref SqlUtil::AbstractDatabase::getPhysicalSize() functionality
-      (<a href="https://github.com/qorelanguage/qore/issues/3385">issue 3385</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3385">issue 3385</a>)
 
     @subsection sqlutilv1_5_1 SqlUtil v1.5.1
     - fixed a bug that could lead to a deadlock when DML methods on the
       @ref SqlUtil::AbstractTable "AbstractTable" class are used with a datasource pool with connection contention
-      (<a href="https://github.com/qorelanguage/qore/issues/3352">issue 3352</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3352">issue 3352</a>)
 
     @subsection sqlutilv1_5 SqlUtil v1.5
-    - implemented the @ref SqlUtil::AbstractTable::getStatementNoExec() "AbstractTable::getStatementNoExec()" method (<a href="https://github.com/qorelanguage/qore/issues/2773">issue 2773</a>)
-    - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects (<a href="https://github.com/qorelanguage/qore/issues/2663">issue 2663</a>)
-    - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the @ref Qore::SQL::SQLStatement "SQLStatement" (<a href="https://github.com/qorelanguage/qore/issues/2326">issue 2326</a>)
-    - deprecated @ref SqlUtil::AbstractTable::getRowIterator() "AbstractTable::getRowIterator()" for @ref SqlUtil::AbstractTable::getStatement() "AbstractTable::getStatement()" (<a href="https://github.com/qorelanguage/qore/issues/2326">issue 2326</a>)
+    - implemented the @ref SqlUtil::AbstractTable::getStatementNoExec() "AbstractTable::getStatementNoExec()" method (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
+    - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
+    - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the @ref Qore::SQL::SQLStatement "SQLStatement" (<a href="https://github.com/qoretechnologies/qore/issues/2326">issue 2326</a>)
+    - deprecated @ref SqlUtil::AbstractTable::getRowIterator() "AbstractTable::getRowIterator()" for @ref SqlUtil::AbstractTable::getStatement() "AbstractTable::getStatement()" (<a href="https://github.com/qoretechnologies/qore/issues/2326">issue 2326</a>)
 
     @subsection sqlutilv1_4_4 SqlUtil v1.4.4
-    - implemented the @ref SqlUtil::AbstractTable::getRowIteratorNoExec() "AbstractTable::getRowIteratorNoExec()" method (<a href="https://github.com/qorelanguage/qore/issues/2773">issue 2773</a>)
+    - implemented the @ref SqlUtil::AbstractTable::getRowIteratorNoExec() "AbstractTable::getRowIteratorNoExec()" method (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
 
     @subsection sqlutilv1_4_3 SqlUtil v1.4.3
-    - implemented support for an optional error-handling method in SQL callbacks to allow SqlUtil to recover from error scenarios in schema creation/alignment (<a href="https://github.com/qorelanguage/qore/issues/2643">issue 2643</a>)
+    - implemented support for an optional error-handling method in SQL callbacks to allow SqlUtil to recover from error scenarios in schema creation/alignment (<a href="https://github.com/qoretechnologies/qore/issues/2643">issue 2643</a>)
 
     @subsection sqlutilv1_4_2 SqlUtil v1.4.2
-    - implemented support for literal values in column operators taking column arguments with @ref SqlUtil::cop_value() "cop_value()" (<a href="https://github.com/qorelanguage/qore/issues/2555">issue 2555</a>)
+    - implemented support for literal values in column operators taking column arguments with @ref SqlUtil::cop_value() "cop_value()" (<a href="https://github.com/qoretechnologies/qore/issues/2555">issue 2555</a>)
 
     @subsection sqlutilv1_4_1 SqlUtil v1.4.1
-    - implemented support for user custom column operators (<a href="https://github.com/qorelanguage/qore/issues/2314">issue 2314</a>)
+    - implemented support for user custom column operators (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
 
     @subsection sqlutilv1_4 SqlUtil v1.4
-    - fixed a bug in update and upsert statement generation when the given data does not have enough columns to use the unique index found, an error message is generated that contains all the columns names instead of just the column names required by the index (<a href="https://github.com/qorelanguage/qore/issues/1013">issue 1013</a>)
-    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qorelanguage/qore/issues/2032">issue 2032</a>)
-    - updated to support complex types (<a href="https://github.com/qorelanguage/qore/issues/1724">issue 1724</a>)
-    - implemented analytic/window functions: new functions [<a href="https://github.com/qorelanguage/qore/issues/2203">issue 2202</a>]
-    - implemented analytic/window functions: cop_over full support including ORDER BY [<a href="https://github.com/qorelanguage/qore/issues/2203">issue 2203</a>]
+    - fixed a bug in update and upsert statement generation when the given data does not have enough columns to use the unique index found, an error message is generated that contains all the columns names instead of just the column names required by the index (<a href="https://github.com/qoretechnologies/qore/issues/1013">issue 1013</a>)
+    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
+    - updated to support complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
+    - implemented analytic/window functions: new functions [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2202</a>]
+    - implemented analytic/window functions: cop_over full support including ORDER BY [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2203</a>]
 
     @subsection sqlutilv1_3_4 SqlUtil v1.3.4
-    - fixed a bug in with column aliases that are reserved words (<a href="https://github.com/qorelanguage/qore/issues/2163">issue 2163</a>)
+    - fixed a bug in with column aliases that are reserved words (<a href="https://github.com/qoretechnologies/qore/issues/2163">issue 2163</a>)
 
     @subsection sqlutilv1_3_3 SqlUtil v1.3.3
-    - fixed a bug in the \c offset query hash argument in SQL operation methods (<a href="https://github.com/qorelanguage/qore/issues/1880">issue 1880</a>)
-    - implemented the @ref select_option_alias "alias" select option to fix a bug that prohibited only columns from the main query to be selected when joins are used (<a href="https://github.com/qorelanguage/qore/issues/1909">issue 1909</a>)
+    - fixed a bug in the \c offset query hash argument in SQL operation methods (<a href="https://github.com/qoretechnologies/qore/issues/1880">issue 1880</a>)
+    - implemented the @ref select_option_alias "alias" select option to fix a bug that prohibited only columns from the main query to be selected when joins are used (<a href="https://github.com/qoretechnologies/qore/issues/1909">issue 1909</a>)
 
     @subsection sqlutilv1_3_2 SqlUtil v1.3.2
-    - fixed schema alignment skips column with name "driver" (<a href="https://github.com/qorelanguage/qore/issues/1684">issue 1684</a>)
-    - fixed sqlutil schema management: functional indexes are rejected without () in name (<a href="https://github.com/qorelanguage/qore/issues/1610">issue 1610</a>)
+    - fixed schema alignment skips column with name "driver" (<a href="https://github.com/qoretechnologies/qore/issues/1684">issue 1684</a>)
+    - fixed sqlutil schema management: functional indexes are rejected without () in name (<a href="https://github.com/qoretechnologies/qore/issues/1610">issue 1610</a>)
 
     @subsection sqlutilv1_3_1 SqlUtil v1.3.1
-    - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
-    - fixed the ignored character_semantics column option in schema alignmed (<a href="https://github.com/qorelanguage/qore/issues/1379">issue 1379</a>)
-    - implemented the @ref SqlUtil::cop_length() column function (<a href="https://github.com/qorelanguage/qore/issues/1395">issue 1395</a>)
+    - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
+    - fixed the ignored character_semantics column option in schema alignmed (<a href="https://github.com/qoretechnologies/qore/issues/1379">issue 1379</a>)
+    - implemented the @ref SqlUtil::cop_length() column function (<a href="https://github.com/qoretechnologies/qore/issues/1395">issue 1395</a>)
 
     @subsection sqlutilv1_3 SqlUtil v1.3
     - implemented insert option support (see @ref SqlUtil::AbstractTable::InsertOptions "AbstractTable::InsertOptions") with the \c "returning" clause in supported drivers
@@ -243,15 +253,15 @@ module SqlUtil {
     - implemented the @ref SqlUtil::cop_sum() aggregate operator for returning sum of column values
     - implemented update operators @ref SqlUtil::uop_plus(), @ref SqlUtil::uop_minus(), @ref SqlUtil::uop_multiply(), @ref SqlUtil::uop_divide()
     - implemented support for numeric column arguments for the @ref select_option_orderby "orderby" and @ref select_option_groupby "groupby" options
-    - implemented the @ref SqlUtil::cop_coalesce() column operator functions for the \c "COALESCE" operator returning the first non-NULL value in a list of columns (<a href="https://github.com/qorelanguage/qore/issues/671">issue 671</a>)
+    - implemented the @ref SqlUtil::cop_coalesce() column operator functions for the \c "COALESCE" operator returning the first non-NULL value in a list of columns (<a href="https://github.com/qoretechnologies/qore/issues/671">issue 671</a>)
     - column aliases (defined with @ref SqlUtil::cop_as()) can now be used in the @ref where_clauses "where hash argument" and in join criteria
-    - removed all APIs that handle implicit transactions; APIs must commit transactions explicitly (<a href="https://github.com/qorelanguage/qore/issues/533">issue 533</a>)
-    - @ref sql_cop_funcs "column operator functions" can be used in @ref where_clauses "where hashes" (<a href="https://github.com/qorelanguage/qore/issues/529">issue 529</a>)
-    - implemented @ref SqlUtil::AbstractTable::bindEmptyStringsAsNull() (<a href="https://github.com/qorelanguage/qore/issues/776">issue 776</a>)
-    - implemented the \c "omit_update" @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" for asymmetrical upserts (updates only update a subset of the columns inserted) (<a href="https://github.com/qorelanguage/qore/issues/791">issue 791</a>)
-    - implemented the @ref SqlUtil::AbstractTable::UpsertUpdateOnly upsert option (<a href="https://github.com/qorelanguage/qore/issues/793">issue 793</a>)
-    - implemented @ref SqlUtil::cop_substr() and @ref SqlUtil::uop_substr() operators (<a href="https://github.com/qorelanguage/qore/issues/801">issue 801</a>)
-    - implemented @ref SqlUtil::op_substr() where operator (<a href="https://github.com/qorelanguage/qore/issues/883">issue 883</a>)
+    - removed all APIs that handle implicit transactions; APIs must commit transactions explicitly (<a href="https://github.com/qoretechnologies/qore/issues/533">issue 533</a>)
+    - @ref sql_cop_funcs "column operator functions" can be used in @ref where_clauses "where hashes" (<a href="https://github.com/qoretechnologies/qore/issues/529">issue 529</a>)
+    - implemented @ref SqlUtil::AbstractTable::bindEmptyStringsAsNull() (<a href="https://github.com/qoretechnologies/qore/issues/776">issue 776</a>)
+    - implemented the \c "omit_update" @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" for asymmetrical upserts (updates only update a subset of the columns inserted) (<a href="https://github.com/qoretechnologies/qore/issues/791">issue 791</a>)
+    - implemented the @ref SqlUtil::AbstractTable::UpsertUpdateOnly upsert option (<a href="https://github.com/qoretechnologies/qore/issues/793">issue 793</a>)
+    - implemented @ref SqlUtil::cop_substr() and @ref SqlUtil::uop_substr() operators (<a href="https://github.com/qoretechnologies/qore/issues/801">issue 801</a>)
+    - implemented @ref SqlUtil::op_substr() where operator (<a href="https://github.com/qoretechnologies/qore/issues/883">issue 883</a>)
     - fixed a bug with queries using a \a desc argument with the @ref select_option_orderby "orderby" query option with multiple sort columns; the \c "desc" string was added only to the last column but should have been added to all columns
     - fixed a bug where foreign key constraints with supporting indexes were not tracked and therefore schema alignment on DBs that automatically create indexes for foreign key constraints would fail
     - fixed a bug where driver-specific objects were not included when dropping a schema
@@ -259,18 +269,18 @@ module SqlUtil {
     - fixed a bug in the partition by/over operator where column names as given in the query argument hash were not properly recognized
     - fixed a bug in schema alignment; when aligning a schema and an index supporting a PK constraint is introduced in the new schema, the alignment would fail when a constraint is attempted to be disabled that doesn't exist
     - fixed a bug generating select statements for tables accessed through a synonym when used with join clauses; previously inconsistent schema prefixes could be used which could cause errors parsing the SQL statements generated
-    - fixed a bug where the @ref SqlUtil::AbstractTable "AbstractTable" lock was held while executing SQL to determine the upsert strategy to use with @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto" (<a href="https://github.com/qorelanguage/qore/issues/408">issue 409</a>)
-    - fixed a bug where complex bind values as hashes (such as used by the pgsql and oracle drivers) were rejected by SqlUtil (<a href="https://github.com/qorelanguage/qore/issues/494">issue 494</a>) when updating
-    - fixed a bug where wildcard columns in join tables were not working (<a href="https://github.com/qorelanguage/qore/issues/499">issue 499</a>)
-    - fixed a bug in @ref SqlUtil::op_in() where invalid SQL was generated with an argument of 0 (<a href="https://github.com/qorelanguage/qore/issues/500">issue 500</a>)
-    - fixed a bug in @ref SqlUtil::cop_value() where an exception was thrown with an argument of 0 (<a href="https://github.com/qorelanguage/qore/issues/511">issue 511</a>)
-    - fixed @ref SqlUtil::cop_count() operator to allow other operators as its argument (<a href="https://github.com/qorelanguage/qore/issues/517">issue 517</a>)
-    - fixed bugs in @ref SqlUtil::cop_seq() and @ref SqlUtil::cop_seq_currval() (<a href="https://github.com/qorelanguage/qore/issues/624">issue 624</a>)
-    - fixed a bug in @ref SqlUtil::join_inner() where the \a cond argument was ignored (<a href="https://github.com/qorelanguage/qore/issues/645">issue 645</a>)
-    - fixed @ref SqlUtil::uop_lower() and @ref SqlUtil::uop_upper() operators to allow nesting (<a href="https://github.com/qorelanguage/qore/issues/657">issue 657</a>)
-    - fixed a bug where SqlUtil was generating invalid SQL for some DBs where a wilcard was used with explicit column names (<a href="https://github.com/qorelanguage/qore/issues/708">issue 708</a>)
-    - fixed a bug where updating an index without any source constraints caused an invalid exception to be raised (<a href="https://github.com/qorelanguage/qore/issues/768">issue 768</a>)
-    - fixed a bug in @ref SqlUtil::AbstractTable::update() "AbstractTable::update()" with sequence operators (<a href="https://github.com/qorelanguage/qore/issues/942">issue 942</a>)
+    - fixed a bug where the @ref SqlUtil::AbstractTable "AbstractTable" lock was held while executing SQL to determine the upsert strategy to use with @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto" (<a href="https://github.com/qoretechnologies/qore/issues/408">issue 409</a>)
+    - fixed a bug where complex bind values as hashes (such as used by the pgsql and oracle drivers) were rejected by SqlUtil (<a href="https://github.com/qoretechnologies/qore/issues/494">issue 494</a>) when updating
+    - fixed a bug where wildcard columns in join tables were not working (<a href="https://github.com/qoretechnologies/qore/issues/499">issue 499</a>)
+    - fixed a bug in @ref SqlUtil::op_in() where invalid SQL was generated with an argument of 0 (<a href="https://github.com/qoretechnologies/qore/issues/500">issue 500</a>)
+    - fixed a bug in @ref SqlUtil::cop_value() where an exception was thrown with an argument of 0 (<a href="https://github.com/qoretechnologies/qore/issues/511">issue 511</a>)
+    - fixed @ref SqlUtil::cop_count() operator to allow other operators as its argument (<a href="https://github.com/qoretechnologies/qore/issues/517">issue 517</a>)
+    - fixed bugs in @ref SqlUtil::cop_seq() and @ref SqlUtil::cop_seq_currval() (<a href="https://github.com/qoretechnologies/qore/issues/624">issue 624</a>)
+    - fixed a bug in @ref SqlUtil::join_inner() where the \a cond argument was ignored (<a href="https://github.com/qoretechnologies/qore/issues/645">issue 645</a>)
+    - fixed @ref SqlUtil::uop_lower() and @ref SqlUtil::uop_upper() operators to allow nesting (<a href="https://github.com/qoretechnologies/qore/issues/657">issue 657</a>)
+    - fixed a bug where SqlUtil was generating invalid SQL for some DBs where a wilcard was used with explicit column names (<a href="https://github.com/qoretechnologies/qore/issues/708">issue 708</a>)
+    - fixed a bug where updating an index without any source constraints caused an invalid exception to be raised (<a href="https://github.com/qoretechnologies/qore/issues/768">issue 768</a>)
+    - fixed a bug in @ref SqlUtil::AbstractTable::update() "AbstractTable::update()" with sequence operators (<a href="https://github.com/qoretechnologies/qore/issues/942">issue 942</a>)
 
     @subsection sqlutilv1_2 SqlUtil v1.2
     - added insert operator support; for example, for inserting with values from sequences
@@ -977,7 +987,7 @@ list<auto> rows = mytable.selectRows(select_hash);
 
     The where condition hash has the following format:
     - each key gives a column name or a table/alias with column name in dot notation
-    - the values are either direct values, meaning that the equality operator (\c "=") is used, or a
+    - the values are either direct values, meaning that the equality operator (\c "==") is used, or a
       @ref sql_op_funcs "SQL operator function" for operators in the where clause
 
     @note To reference a column more than once in a simple where clause, prefix the column specification with a unique
@@ -4434,7 +4444,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! the SQL equals operator (=) for use in @ref where_clauses
     /** @see op_eq()
     */
-    public const OP_EQ = "=";
+    public const OP_EQ = "==";
 
     #! the SQL less than (<) operator for use in @ref where_clauses when comparing two columns
     /** @see op_clt()
@@ -4479,7 +4489,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! the SQL \c "not" operator for use in @ref where_clauses
     /** @see op_not()
     */
-    public const OP_NOT = "not";
+    public const OP_NOT = "!";
 
     #! the SQL \c "substr" operator for use in @ref where_clauses
     /** @see op_substr()
@@ -4525,6 +4535,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "The value to bind as the 'like' value (ex: '%some string%')",
                 "desc": "The value to bind as the 'like' value (ex: '%some string%')",
                 "symbol": "like",
+                "groups": "Comparison",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringValueType,
@@ -4644,6 +4655,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns a substring from a string; args: string, int start char, [int length]",
                 "desc": "returns a substring from a string; args: string, int start char, [int length]",
                 "symbol": "substr",
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureIntValueType,
@@ -4671,6 +4683,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "check if a value is in a sub-select; args: value, table name for the subselect, subselect "
                     "query hash",
                 "symbol": "in_select",
+                "groups": "Comparison",
                 "args": (
                     DataProviderSignatureAnyType,         # any value, expression, or field reference
                     DataProviderSignatureStringValueType, # table name
@@ -4695,6 +4708,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "aliases a result; args: expression or value, string label",
                 "desc": "aliases a result; args: expression or value, string label",
                 "symbol": "as",
+                "groups": "Alias",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4719,6 +4733,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "prepends a string to another string; args: string to be prepended, string to prepend to the "
                     "first string",
                 "symbol": COP_PREPEND,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringType,
@@ -4741,6 +4756,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "appends or catenates a string to another string; args: string to be appended, string to "
                     "append or concatenate to the first string",
                 "symbol": COP_APPEND,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                     DataProviderSignatureStringType,
@@ -4761,6 +4777,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "converts a string to all upper case; arg: string",
                 "desc": "converts a string to all upper case; arg: string",
                 "symbol": COP_UPPER,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                 ),
@@ -4779,6 +4796,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "converts a string to all lower case; arg: string",
                 "desc": "converts a string to all lower case; arg: string",
                 "symbol": COP_LOWER,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureStringType,
                 ),
@@ -4797,6 +4815,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "indicates that only records with distinct values of the given field should be returned",
                 "desc": "indicates that only records with distinct values of the given field should be returned",
                 "symbol": COP_DISTINCT,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4816,6 +4835,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the minimum value in the group",
                 "desc": "Returns the minimum value in the group",
                 "symbol": COP_MIN,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4836,6 +4856,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the maximum value in the group",
                 "desc": "Returns the maximum value in the group",
                 "symbol": COP_MAX,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4856,6 +4877,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the average of the given values in the group",
                 "desc": "Returns the average of the given values in the group",
                 "symbol": COP_AVG,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4876,6 +4898,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the sum of the given values",
                 "desc": "Returns the sum of the given values",
                 "symbol": COP_SUM,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4896,6 +4919,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Count the number of rows in the group",
                 "desc": "Count the number of rows in the group",
                 "symbol": COP_COUNT,
+                "groups": "Aggregate",
                 "role": ER_Field,
                 "args": (
                     DataProviderSignatureAnyType,
@@ -4918,6 +4942,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Subtracts one number from another",
                 "desc": "Subtracts one number from another",
                 "symbol": COP_MINUS,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4938,6 +4963,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Adds two numbers",
                 "desc": "Adds two numbers",
                 "symbol": COP_PLUS,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4958,6 +4984,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Divides one number by another",
                 "desc": "Divides one number by another",
                 "symbol": COP_DIVIDE,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4978,6 +5005,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Multiplies two numbers",
                 "desc": "Multiplies two numbers",
                 "symbol": COP_MULTIPLY,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                     DataProviderSignatureAnyType,
@@ -4998,6 +5026,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the value of the first expression with a value",
                 "desc": "Returns the value of the first expression with a value",
                 "symbol": COP_COALESCE,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                 ),
@@ -5017,6 +5046,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the length of the argument",
                 "desc": "Returns the length of the argument",
                 "symbol": COP_LENGTH,
+                "groups": "Data Manipulation",
                 "args": (
                     DataProviderSignatureAnyType,
                 ),
@@ -5035,6 +5065,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns the next value in the given sequence; args: sequence name",
                 "desc": "returns the next value in the given sequence; args: sequence name",
                 "symbol": COP_SEQ,
+                "groups": "Sequence",
                 "args": (
                     DataProviderSignatureStringValueType,
                 ),
@@ -5053,6 +5084,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "returns the current value in the given sequence; args: sequence name",
                 "desc": "returns the current value in the given sequence; args: sequence name",
                 "symbol": COP_SEQ_CURRVAL,
+                "groups": "Sequence",
                 "args": (
                     DataProviderSignatureStringValueType,
                 ),
@@ -5073,6 +5105,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "desc": "returns the output of the SQL window given by the arguments; args: *string partiion by, "
                     "*string order by",
                 "symbol": COP_OVER,
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                     DataProviderSignatureOptionalStringValueType,
@@ -5125,6 +5158,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the rank of a row in an ordered group of rows as a number",
                 "desc": "Returns the rank of a row in an ordered group of rows as a number",
                 "symbol": COP_DENSE_RANK,
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."any",
@@ -5141,6 +5175,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the first value in an ordered group of rows",
                 "desc": "Returns the first value in an ordered group of rows",
                 "symbol": COP_FIRST_VALUE,
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                 ),
@@ -5159,6 +5194,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the last value in an ordered group of rows",
                 "desc": "Returns the last value in an ordered group of rows",
                 "symbol": COP_LAST_VALUE,
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureFieldType,
                 ),
@@ -5177,6 +5213,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the group number of an ordered group of rows",
                 "desc": "Returns the group number of an ordered group of rows",
                 "symbol": COP_NTILE,
+                "groups": "Window",
                 "args": (
                     DataProviderSignatureIntValueType,
                 ),
@@ -5195,6 +5232,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the percent rank of a row in an ordered group of rows",
                 "desc": "Returns the percent rank of a row in an ordered group of rows",
                 "symbol": COP_PERCENT_RANK,
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",
@@ -5211,6 +5249,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the row number of a row in an ordered group of rows",
                 "desc": "Returns the row number of a row in an ordered group of rows",
                 "symbol": COP_PERCENT_RANK,
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",
@@ -5227,6 +5266,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "short_desc": "Returns the row number of a result set",
                 "desc": "Returns the row number of a result set",
                 "symbol": COP_ROW_NUMBER,
+                "groups": "Window",
                 "args": (),
                 "role": ER_Field,
                 "return_type": AbstractDataProviderTypeMap."int",
@@ -5416,14 +5456,14 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         - op_le(): for the \c "<=" operator when comparing column values to immediate values
         - op_lt(): for the \c "<" operator when comparing column values to immediate values
         - op_ne(): for the \c "!=" or \c "<>" operator when comparing column values to immediate values
-        - op_eq(): for the \c "=" operator when comparing column values to immediate values
+        - op_eq(): for the \c "==" operator when comparing column values to immediate values
         - op_not(): for negating other operators
         - op_cge(): for the \c ">=" operator when comparing the values of two columns
         - op_cgt(): for the \c ">" operator when comparing the values of two columns
         - op_cle(): for the \c "<=" operator when comparing the values of two columns
         - op_clt(): for the \c "<" operator when comparingthe values of two columns
         - op_cne(): for the \c "!=" or \c "<>" operator when comparing the values of two columns
-        - op_ceq(): for the \c "=" operator when comparing the values of two columns
+        - op_ceq(): for the \c "==" operator when comparing the values of two columns
         - wop_or(): for combining SQL expressions with \c "or"
      */
     #/@{
@@ -5528,7 +5568,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return make_op(OP_NE, arg);
     }
 
-    #! returns an @ref OperatorInfo hash for the \c "=" operator with the given argument for use in @ref where_clauses "where clauses" when comparing column values to immediate values
+    #! returns an @ref OperatorInfo hash for the \c "==" operator with the given argument for use in @ref where_clauses "where clauses" when comparing column values to immediate values
     /** @par Example:
         @code{.py}
 *list<auto> rows = table.selectRows(("where": ("name": op_eq("Smith"))));
@@ -5736,7 +5776,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return make_op(OP_CNE, arg);
     }
 
-    #! returns an @ref OperatorInfo hash for the \c "=" operator with the given argument for use in @ref where_clauses "where clauses" when comparing the values of two columns
+    #! returns an @ref OperatorInfo hash for the \c "==" operator with the given argument for use in @ref where_clauses "where clauses" when comparing the values of two columns
     /** @par Example:
         @code{.py}
 *list<auto> rows = table.selectRows(("where": ("name": op_ceq("other_name"))));
@@ -6068,13 +6108,15 @@ bool b = c.partialMatchKeys(h);
 
             @return @ref True "True" if the hash argument has at least the same keys (in any order, can have more keys), @ref False "False" if not
         */
-        bool partialMatchKeys(hash h1) {
-            if (h.size() > h1.size())
+        bool partialMatchKeys(hash<auto> h1) {
+            if (h.size() > h1.size()) {
                 return False;
+            }
 
             foreach string k in (keys h) {
-                if (!h1.hasKey(k))
+                if (!h1.hasKey(k)) {
                     return False;
+                }
             }
 
             return True;

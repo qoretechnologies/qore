@@ -78,6 +78,16 @@ public:
         return data ? data->refSelf() : QoreValue();
     }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) {
+        if (set_non_block) {
+            set_non_block = false;
+            AutoLocker al(file->priv->m);
+            file->priv->clearNonBlock(xsink);
+            file->priv->close_intern();
+            state = FPS_NONE;
+        }
+    }
+
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
         - SOCK_POLLOUT = wait for write and call this again

@@ -3513,13 +3513,13 @@ string decrypt_to_string(string alg, data data, data key, data iv = Qore::Defaul
     return size ? new QoreStringNode((char*)vh->get<BinaryNode>()->giveBuffer(), size, size, enc) : new QoreStringNode(enc);
 }
 
-//! Returns a hash of information about each cryptographic algorithmn supported by the current build of %Qore
+//! Returns a hash of information about each cryptographic algorithm supported by the current build of %Qore
 /** @par Example:
     @code{.py}
 hash<auto> h = get_crypto_info();
     @endcode
 
-    @return a hash of information about each cryptographic algorithmn supported by the current build of %Qore; keys
+    @return a hash of information about each cryptographic algorithm supported by the current build of %Qore; keys
     are algorithm names, values are hashes with the following keys:
     - \c key_len: the minimum required length of the cryptographic key; if 0 it means that the cipher takes a variable
       key length

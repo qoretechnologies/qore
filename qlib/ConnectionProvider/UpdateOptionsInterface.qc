@@ -34,6 +34,15 @@ public class UpdateOptionsInterface inherits Qore::Serializable {
             <tt><update_options(hash<auto> options) /tt>
         */
         transient *code update_options;
+
+        #! Logger when postponing update options calls
+        transient LoggerInterface postpone_update_options_logger;
+
+        #! Flag to postpone update options calls
+        transient bool postpone_update_options;
+
+        #! Storage for postponed options to update
+        transient *hash<auto> pending_options;
     }
 
     #! Can be called to set or clear a closure or call reference to be called when options are automatically updated
@@ -44,13 +53,45 @@ public class UpdateOptionsInterface inherits Qore::Serializable {
         self.update_options = update_options;
     }
 
+    #! Set update options calls to be postponed
+    /** Must be coupled with a single call to flushOptionUpdates()
+    */
+    postponeUpdateOptions(*LoggerInterface logger) {
+        if (postpone_update_options) {
+            throw "POSTPONE-UPDATE-OPTIONS-ERROR", "Option updates are already postponed";
+        }
+        postpone_update_options = True;
+        if (logger) {
+            postpone_update_options_logger = logger;
+        }
+    }
+
+    #! Set update options calls to no longer be postponed
+    flushOptionUpdates() {
+        if (!remove postpone_update_options) {
+            throw "FLUSH-OPTION-UPDATES-ERROR", "Option updates are not postponed";
+        }
+        *LoggerInterface logger = remove postpone_update_options_logger;
+        if (*hash<auto> h = remove pending_options) {
+            doUpdateOptions(logger, h);
+        }
+    }
+
     #! Performs the option update in the external system
-    private doUpdateOptions(LoggerInterface logger, hash<auto> new_opts) {
+    private doUpdateOptions(*LoggerInterface logger, hash<auto> new_opts) {
         if (*code update_options = self.update_options) {
+            if (postpone_update_options) {
+                pending_options += new_opts;
+                return;
+            }
             try {
                 update_options(new_opts);
             } catch (hash<ExceptionInfo> ex) {
-                logger.error("error updating options: %s", get_exception_string(ex));
+                if (logger) {
+                    logger.error("Error updating options: %s", get_exception_string(ex));
+                } else {
+                    stderr.printf("Error updating options: %s", get_exception_string(ex));
+                }
             }
         }
     }

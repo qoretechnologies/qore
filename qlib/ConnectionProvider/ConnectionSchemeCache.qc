@@ -43,8 +43,20 @@ public hashdecl ConnectionOptionInfo {
     #! Is the value sensitive? (password or other authentication info)
     bool sensitive = False;
 
+    #! Should the option be preselected in UIs?
+    bool preselected = False;
+
     #! List of allowed values (enum)
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    *bool allowed_values_creatable;
+
+    #! List of allowed values for elements of list types (enum)
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept element values not defined in element_allowed_values too?
+    *bool element_allowed_values_creatable;
 
     #! Any default value
     auto default_value;
@@ -57,6 +69,21 @@ public hashdecl ConnectionOptionInfo {
 
     #! Optional example option value
     auto example_value;
+
+    #! Ignore types for backwards compatibility when an option changes type
+    *hash<string, bool> ignore_types;
+
+    #! Free-form metadata for the option
+    *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
 }
 
 #! Connection provider information
@@ -84,6 +111,9 @@ public hashdecl ConnectionSchemeInfo {
     #! Connection options: name -> option info
     *hash<string, hash<ConnectionOptionInfo>> options;
 
+    #! Set of sensitive options: name -> True
+    *hash<string, bool> sensitive_options;
+
     #! URL provided automatically?
     bool auto_url = False;
 
@@ -94,6 +124,18 @@ public hashdecl ConnectionSchemeInfo {
         All strings must be valid option names in \a options
     */
     *string required_options;
+
+    #! Free-form metadata for the connection
+    *hash<auto> metadata;
+
+    #! Messages to be displayed when creating a connection
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the connection
+    *string icon;
+
+    #! Any image info for the connection
+    *string image;
 }
 
 #! Connection provider type cache class
@@ -116,6 +158,9 @@ public class ConnectionSchemeCache {
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
+
+            "ds": "DataStreamClient",
+            "dss": "DataStreamClient",
 
             "ebrests": "EmpathicBuildingDataProvider",
 
@@ -180,6 +225,9 @@ public class ConnectionSchemeCache {
             "esmtps": "SmtpClient",
             "esmtptls": "SmtpClient",
 
+            "sse": "ServerSentEventClient",
+            "sses": "ServerSentEventClient",
+
             "telnet": "TelnetClient",
 
             "ws": "WebSocketClient",
@@ -196,6 +244,13 @@ public class ConnectionSchemeCache {
             "zeyosrest": "ZeyosRestClient",
             "zeyosrests": "ZeyosRestClient",
         };
+
+        #! Type alias map
+        const TypeMap = {
+            "int": Type::Int,
+            "boolean": Type::Boolean,
+            "file-as-string": Type::String,
+        };
     }
 
     private {
@@ -211,11 +266,37 @@ public class ConnectionSchemeCache {
             "https": HttpConnection::ConnectionScheme,
         };
 
+        #! Pending connection provider init handler map: scheme -> init handler
+        static hash<string, code> initmap;
+
         #! Connection provider cache lock
         static Mutex lck();
 
         #! Load all flag
         static bool load_all;
+    }
+
+    #! Registers a scheme for deferred initialization / initialization on demand
+    /** @param scheme the scheme to register
+        @param init the initialization code that will register the scheme
+    */
+    static registerPendingScheme(string scheme, code init) {
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        if (cache{scheme}) {
+            throw "SCHEMA-ERROR", sprintf("Scheme %y is already registered", scheme);
+        }
+        if (initmap{scheme}) {
+            throw "SCHEMA-ERROR", sprintf("Scheme %y is already pending", scheme);
+        }
+
+        initmap{scheme} = init;
     }
 
     #! Register a new connection provider in the cache
@@ -237,15 +318,47 @@ public class ConnectionSchemeCache {
         if (cache{scheme}) {
             return False;
         }
+        remove initmap{scheme};
+
+        # set sensitive option map
+        entry.sensitive_options = map {$1.key: True}, entry.options.pairIterator(), $1.value.sensitive;
 
         cache{scheme} = entry;
         # sort connection options when caching
         cache{scheme}.options = cache{scheme}.options{sort(keys cache{scheme}.options)};
 
-         # deregister the scheme automatically if module initialization fails
-        ImplicitModuleTransaction::add(sub () { ConnectionSchemeCache::deregisterScheme(scheme); });
+        # deregister the scheme automatically if module initialization fails
+        ImplicitModuleTransaction::add(sub () { ConnectionSchemeCache::deregisterSchemeIntern(scheme); });
 
         return True;
+    }
+
+    #! Removes a scheme
+    /** @param scheme the scheme name
+
+        @return the scheme definition, if it was deregistered
+
+        The caller must not be restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+
+        @throw PERMISSION-DENIED Caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static *hash<ConnectionSchemeInfo> deregisterScheme(string scheme) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", sprintf("Cannot remove scheme %y from a context with restricted process control",
+                scheme);
+        }
+
+        bool needs_lock = !lck.lockOwner();
+        if (needs_lock) {
+            lck.lock();
+        }
+        on_exit if (needs_lock) {
+            lck.unlock();
+        }
+
+        remove initmap{scheme};
+
+        return remove cache{scheme};
     }
 
     #! Loads all possible schemes and returns the entire cache
@@ -264,6 +377,8 @@ public class ConnectionSchemeCache {
         if (needs_lock && load_all) {
             return cache;
         }
+        # load all pending schemes
+        map $1(), initmap.iterator();
         map ConnectionSchemeCache::getSchemeImpl($1, False), keys SchemeMap, !cache{$1};
         return cache;
     }
@@ -297,7 +412,7 @@ public class ConnectionSchemeCache {
         registered
     */
     static *hash<ConnectionSchemeInfo> getScheme(string scheme) {
-        return ConnectionSchemeCache::getSchemeImpl(scheme, False);
+        return getSchemeImpl(scheme, False);
     }
 
     #! Returns info for the given connection scheme or throws an exception if not present
@@ -308,7 +423,7 @@ public class ConnectionSchemeCache {
         @throw SCHEME-ERROR the scheme is unknown
     */
     static hash<ConnectionSchemeInfo> getSchemeEx(string scheme) {
-        return ConnectionSchemeCache::getSchemeImpl(scheme, True);
+        return getSchemeImpl(scheme, True);
     }
 
     #! Returns info for the given connection scheme; either throws an exception if not present or returns @ref NOTHING
@@ -332,23 +447,27 @@ public class ConnectionSchemeCache {
         on_exit if (needs_lock) {
             lck.unlock();
         }
+        if (*code init = remove initmap{scheme}) {
+            init();
+        }
 
         *hash<ConnectionSchemeInfo> rv = cache{scheme};
-        if (!rv) {
-            if (*string mod = SchemeMap{scheme}) {
-                if (ConnectionSchemeCache::tryLoadModule(mod, throw_exception)) {
-                    rv = cache{scheme};
-                }
-            }
-            if (!rv && scheme_loader) {
-                rv = cache{scheme} = scheme_loader(scheme);
-            }
+        if (rv) {
+            return rv;
         }
-
-        if (!rv && throw_exception) {
-            throw "SCHEME-ERROR", sprintf("connection provider scheme %y is not registered", scheme);
+        if (ProviderIndexUtil::checkSchemeModule(scheme) && (rv = cache{scheme})) {
+            return rv;
         }
-        return rv;
+        if ((*string mod = SchemeMap{scheme}) && ConnectionSchemeCache::tryLoadModule(mod, throw_exception)
+            && (rv = cache{scheme})) {
+            return rv;
+        }
+        if (scheme_loader && (rv = cache{scheme} = scheme_loader(scheme))) {
+            return rv;
+        }
+        if (throw_exception) {
+            throw "SCHEME-ERROR", sprintf("Connection provider scheme %y is not registered", scheme);
+        }
     }
 
     #! Returns default option values for the given connection scheme
@@ -361,7 +480,7 @@ public class ConnectionSchemeCache {
         @since ConnectionProvider 2.0
     */
     static *hash<auto> getDefaultOptionValues(string scheme) {
-        return ConnectionSchemeCache::getDefaultOptionValues(ConnectionSchemeCache::getSchemeEx(scheme));
+        return getDefaultOptionValues(ConnectionSchemeCache::getSchemeEx(scheme));
     }
 
     #! Returns default option values for the given connection scheme
@@ -414,7 +533,7 @@ public class ConnectionSchemeCache {
             # check for unknown options
             *hash<auto> unknown_opts = options - (keys scheme_info.options);
             if (unknown_opts) {
-                throw "CONNECTION-OPTION-ERROR", sprintf("connection %y (type %y) has unknown option%s %y (known "
+                throw "CONNECTION-OPTION-ERROR", sprintf("Connection %y (type %y) has unknown option%s %y (known "
                     "options: %y)", conn_name, scheme_info.display_name, unknown_opts.size() == 1 ? "" : "s",
                     unknown_opts, keys scheme_info.options);
             }
@@ -427,10 +546,8 @@ public class ConnectionSchemeCache {
                     continue;
                 }
                 string type = info.type;
-                if (type == "int") {
-                    type = Type::Int;
-                } else if (type == "file-as-string") {
-                    type = Type::String;
+                if (*string nt = TypeMap{type}) {
+                    type = nt;
                 }
                 string vtype = i.value.type();
                 if (type != "any" && type != "auto" && vtype != type) {
@@ -442,27 +559,53 @@ public class ConnectionSchemeCache {
                         options{i.key} = parse_boolean(i.value);
                         continue;
                     }
+                    if (type == "date" && vtype == "string") {
+                        options{i.key} = date(i.value);
+                        continue;
+                    }
+                    if (info.ignore_types{vtype}) {
+                        delete options{i.key};
+                        continue;
+                    }
                     throw "CONNECTION-OPTION-ERROR",
-                        sprintf("connection %y (type %y) option %y was passed with type %s (%y); expecting %y",
+                        sprintf("Connection %y (type %y) option %y was passed with type %s (%y); expecting %y",
                             conn_name, scheme_info.display_name, i.key, i.value.fullType(), i.value, type);
                 }
                 if (info.subst_env_vars) {
                     options{i.key} = substitute_env_vars(i.value);
                 }
                 # verify against allowed values
-                if (info.allowed_values) {
+                if (info.allowed_values && !info.allowed_values_creatable) {
                     bool ok;
                     foreach hash<AllowedValueInfo> v in (info.allowed_values) {
-                        if (v.value == options{i.key}) {
+                        if (v.value == i.value) {
                             ok = True;
                             break;
                         }
                     }
                     if (!ok) {
                         throw "CONNECTION-OPTION-ERROR",
-                            sprintf("connection %y (type %y) option %y was passed with value %y, but allowed "
+                            sprintf("Connection %y (type %y) option %y was passed with value %y, but allowed "
                                 "values are: %y", conn_name, scheme_info.display_name, i.key, i.value,
                                 (map $1.value, info.allowed_values));
+                    }
+                }
+                # verify against element allowed values
+                if (info.element_allowed_values && !info.element_allowed_values_creatable) {
+                    foreach auto val in (i.value) {
+                        bool ok;
+                        foreach hash<AllowedValueInfo> v in (info.element_allowed_values) {
+                            if (v == val) {
+                                ok = True;
+                                break;
+                            }
+                        }
+                        if (!ok) {
+                            throw "CONNECTION-OPTION-ERROR",
+                                sprintf("Connection %y (type %y) option %y was passed with element value %y, but "
+                                    "allowed element values are: %y", conn_name, scheme_info.display_name, i.key, val,
+                                    (map $1.value, info.element_allowed_values));
+                        }
                     }
                 }
             }
@@ -474,6 +617,13 @@ public class ConnectionSchemeCache {
             list<string> missing;
             foreach string req in (req_list) {
                 list<string> req_opt = req.split(",");
+                # ignore "url" if present, as this is not an option
+                if (req =~ /\burl\b/) {
+                    req_opt = map $1, req_opt, $1 != "url";
+                    if (!req_opt) {
+                        continue;
+                    }
+                }
                 # check which options are missing
                 *hash<auto> have = options{req_opt};
                 if (have.size() == req_opt.size()) {
@@ -514,7 +664,7 @@ public class ConnectionSchemeCache {
     #! Deregisters a scheme in case module intiialization fails for the module that registered it
     /** @param scheme the scheme for the connection provider
     */
-    private static deregisterScheme(string scheme) {
+    private:internal static deregisterSchemeIntern(string scheme) {
         lck.lock();
         on_exit lck.unlock();
 

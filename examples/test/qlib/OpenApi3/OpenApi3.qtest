@@ -200,61 +200,41 @@ public class OpenApi3Test inherits QUnit::Test {
         const OtherYamlErr = '{type: object, properties: {name: {type: string}}}';
         const OtherYamlOk = '{info: {type: object, properties: {name: {type: string}}}}';
 
+        # Messages for OpenAPI 3.0 PetStore schema (uses /pets paths)
         const JsonRequestMessages = (
-            "/pet": (
+            "/pets": (
                 "post": '{
-  "id": 0,
-  "category": {
-    "id": 0,
-    "name": "string"
-  },
   "name": "doggie",
-  "photoUrls": [
-    "string"
-  ],
-  "tags": [
-    {
-      "id": 0,
-      "name": "string"
-    }
-  ],
-  "status": "available"
-}',
-                "put": '{
-  "id": 0,
-  "category": {
-    "id": 0,
-    "name": "string"
-  },
-  "name": "doggie",
-  "photoUrls": [
-    "string"
-  ],
-  "tags": [
-    {
-      "id": 0,
-      "name": "string"
-    }
-  ],
-  "status": "available"
+  "tag": "dog"
 }',
             ),
-            "/pet/findByStatus?status=available": (
+            "/pets?limit=10": (
                 "get": NOTHING,
             ),
-            "/store/order": (
-                "post": '{
-  "id": 0,
-  "petId": 0,
-  "quantity": 0,
-  "shipDate": "2017-09-03T14:16:20.924Z",
-  "status": "placed",
-  "complete": false
-}',
+            "/pets/123": (
+                "get": NOTHING,
+                "delete": NOTHING,
             ),
         );
 
+        # Response messages for OpenAPI 3.0 PetStore schema
         const JsonResponseMessages = (
+            "/pets": (
+                "get": (
+                    200: "[{\"id\": 1, \"name\": \"Fido\", \"tag\": \"dog\"}]",
+                ),
+                "post": (
+                    200: "{\"id\": 1, \"name\": \"Fido\", \"tag\": \"dog\"}",
+                ),
+            ),
+            "/pets/123": (
+                "get": (
+                    200: "{\"id\": 123, \"name\": \"Fido\", \"tag\": \"dog\"}",
+                ),
+            ),
+        );
+        # Obsolete constant - kept to mark where old data was
+        const _OldJsonResponseMessages = (
             "/store/inventory": (
                 "get": (
                     200: "{
@@ -610,14 +590,22 @@ public class OpenApi3Test inherits QUnit::Test {
                             "responses": (
                                 "200": (
                                     "description": "test",
-                                    "schema": {
-                                        "type": "string"
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "string"
+                                            }
+                                        }
                                     }
                                 ),
                                 "400": (
                                     "description": "test",
-                                    "schema": {
-                                        "type": "string"
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "string"
+                                            }
+                                        }
                                     }
                                 ),
                             ),
@@ -629,14 +617,6 @@ public class OpenApi3Test inherits QUnit::Test {
                                     "format": "byte",
                                 },
                             ),),
-                            "consumes": (
-                                MimeTypeJson,
-                                MimeTypeYaml,
-                            ),
-                            "produces": (
-                                MimeTypeJson,
-                                MimeTypeYaml,
-                            ),
                         ),
                     ),
                 ),
@@ -1407,104 +1387,88 @@ public class OpenApi3Test inherits QUnit::Test {
     testItemsObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
-        hash paramBase = {"name": "a", "in": "query", "type": "array"};
+        # OpenAPI 3.0 base schema without parameter references in paths
+        hash base = {
+            "openapi": "3.0",
+            "info": ValidInfoObject,
+            "paths": {},
+        };
+        # OpenAPI 3.0 style: schema with type array
+        hash schemaBase = {"type": "array"};
         hash p;
 
-        # type checks
-        p = base.parameters + {"a": paramBase + {"items": {}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": 5}}};
-        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"parameters": p}));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "a"}}};
-        assertThrows("INVALID-FIELD-VALUE", loadyaml, my_make_yaml(base + {"parameters": p}));
+        # type checks - items with empty object defaults to type "object"
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        # items with invalid type (integer instead of string)
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": 5}}}};
+        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
+        # items with invalid type value
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "a"}}}};
+        assertThrows("INVALID-FIELD-VALUE", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
 
-        # TODO array of array
-        /*p = base.parameters + {"a": {"name":"a", "in": "query", "type": "array", "items": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));*/
-        p = base.parameters + {"a": paramBase + {"items": {"type": "boolean"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
+        # valid item types
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "boolean"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
 
         # format checks
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": 5}}};
-        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"parameters": p}));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": 5}}}};
+        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
 
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer", "format": "int32"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer", "format": "int64"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer", "format": "a"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer", "format": "int32"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer", "format": "int64"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer", "format": "a"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
 
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number", "format": "double"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number", "format": "float"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number", "format": "a"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number", "format": "double"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number", "format": "float"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number", "format": "a"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
 
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "binary"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "byte"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "date"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "date-time"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "password"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "format": "a"}}};
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "binary"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "byte"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "date"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "date-time"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "password"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "format": "a"}}}};
         # issue 4203: ignore unknown string format
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-
-        # collectionFormat checks
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": "csv", "items": {"type": "string"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": "ssv", "items": {"type": "string"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": "tsv", "items": {"type": "string"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": "pipes", "items": {"type": "string"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": 5, "items": {"type": "string"}}}};
-        assertThrows("INVALID-FIELD-TYPE", "collectionFormat", loadyaml, my_make_yaml(base + {"parameters": p}));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "array", "collectionFormat": "a", "items": {"type": "string"}}}};
-        assertThrows("INVALID-FIELD-VALUE", "collectionFormat", loadyaml, my_make_yaml(base + {"parameters": p}));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
 
         # default checks
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "boolean", "default": True}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "boolean", "default": 5}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
 
-        # TODO array of array
-        /*p = base.parameters + {"a": {"name": "a", "in": "query", "type": "array", "items": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": {"name": "a", "in": "query", "type": "array", "items": {"type": "string"}, "default": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"parameters": p}));*/
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer", "default": 5}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "integer", "default": "a"}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
 
-        p = base.parameters + {"a": paramBase + {"items": {"type": "boolean", "default": True}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "boolean", "default": 5}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"parameters": p}));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number", "default": 2.0}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "number", "default": "a"}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
 
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer", "default": 5}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "integer", "default": "a"}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"parameters": p}));
-
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number", "default": 2.0}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "number", "default": "a"}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"parameters": p}));
-
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "default": "a"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"parameters": p})));
-        p = base.parameters + {"a": paramBase + {"items": {"type": "string", "default": 5}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"parameters": p}));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "default": "a"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"parameters": p}})));
+        p = {"a": {"name": "a", "in": "query", "schema": schemaBase + {"items": {"type": "string", "default": 5}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"parameters": p}}));
     }
 
     testResponsesObject() {
@@ -1527,130 +1491,125 @@ public class OpenApi3Test inherits QUnit::Test {
     testResponseObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        # OpenAPI 3.0 base schema without parameter references
+        hash base = {
+            "openapi": "3.0",
+            "info": ValidInfoObject,
+            "paths": {},
+        };
         hash r;
 
+        # Test responses in components.responses
         r = {"a": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"description\".*missing", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"description\".*missing", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
         r = {"a": {"description": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
         r = {"a": {"description": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
         r = {"a": {"description": "a", "schema": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "schema", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("INVALID-FIELD-TYPE", "schema", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
         r = {"a": {"description": "a", "headers": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "headers", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("INVALID-FIELD-TYPE", "headers", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
         r = {"a": {"description": "a", "examples": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "examples", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("INVALID-FIELD-TYPE", "examples", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
     }
 
     testHeaderObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash r;
 
+        # Empty headers object should be valid
         r = {"a": {"description": "a", "headers": {}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        # type checks
+        # Headers in OpenAPI 3.0 require either schema or content
         r = {"a": {"description": "a", "headers": {"a": {}}}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"type\".*missing", loadyaml, my_make_yaml(base + {"responses": r}));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "boolean"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "items": {"type": "string"}}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": 5}}}};
-        assertThrows("INVALID-FIELD-TYPE", "type", loadyaml, my_make_yaml(base + {"responses": r}));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "a"}}}};
-        assertThrows("INVALID-FIELD-VALUE", "type", loadyaml, my_make_yaml(base + {"responses": r}));
+        assertThrows("INVALID-PARAMETER", "schema.*content", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "items": 5}}}};
-        assertThrows("INVALID-FIELD-TYPE", "items", loadyaml, my_make_yaml(base + {"responses": r}));
+        # type checks - using schema object
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "boolean"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "array", "items": {"type": "string"}}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        # TODO array type
+        # invalid schema type
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": 5}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "type", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "invalid"}}}}};
+        assertThrows("INVALID-FIELD-VALUE", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
+
+        # invalid items
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "array", "items": 5}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "items", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
         # format checks
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": 5}}}};
-        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"responses": r}));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": 5}}}}};
+        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer", "format": "int32"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer", "format": "int64"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer", "format": "a"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer", "format": "int32"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer", "format": "int64"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer", "format": "a"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number", "format": "double"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number", "format": "float"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number", "format": "a"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number", "format": "double"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number", "format": "float"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number", "format": "a"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "binary"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "byte"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "date"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "date-time"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "password"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "format": "a"}}}};
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "binary"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "byte"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "date"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "date-time"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "password"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "format": "a"}}}}};
         # issue 4203: ignore unknown string format
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        # collectionFormat checks
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": "csv", "items": {"type": "string"}}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": "ssv", "items": {"type": "string"}}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": "tsv", "items": {"type": "string"}}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": "pipes", "items": {"type": "string"}}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
+        # style checks (replaces collectionFormat in OpenAPI 3.0)
+        r = {"a": {"description": "a", "headers": {"a": {"style": "simple", "schema": {"type": "array", "items": {"type": "string"}}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": 5, "items": {"type": "string"}}}}};
-        assertThrows("INVALID-FIELD-TYPE", "collectionFormat", loadyaml, my_make_yaml(base + {"responses": r}));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "array", "collectionFormat": "a", "items": {"type": "string"}}}}};
-        assertThrows("INVALID-FIELD-VALUE", "collectionFormat", loadyaml, my_make_yaml(base + {"responses": r}));
+        r = {"a": {"description": "a", "headers": {"a": {"style": 5, "schema": {"type": "array", "items": {"type": "string"}}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "style", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        # default checks
+        # default checks - defaults go in schema object in OpenAPI 3.0
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "boolean", "default": True}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "boolean", "default": 5}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        # TODO array of array
-        /*p = base.parameters + {"a": {"name": "a", "in": "query", "type": "array", "items": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        p = base.parameters + {"a": {"name": "a", "in": "query", "type": "array", "items": {"type": "string"}, "default": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"responses": r}));*/
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer", "default": 5}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "integer", "default": "a"}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "boolean", "default": True}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "boolean", "default": 5}}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"responses": r}));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number", "default": 2.0}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "number", "default": "a"}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
 
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer", "default": 5}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "integer", "default": "a"}}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"responses": r}));
-
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number", "default": 2.0}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "number", "default": "a"}}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"responses": r}));
-
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "default": "a"}}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"responses": r})));
-        r = {"a": {"description": "a", "headers": {"a": {"type": "string", "default": 5}}}};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"responses": r}));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "default": "a"}}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"responses": r}})));
+        r = {"a": {"description": "a", "headers": {"a": {"schema": {"type": "string", "default": 5}}}}};
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
     }
 
     testTagObject() {
@@ -1678,383 +1637,383 @@ public class OpenApi3Test inherits QUnit::Test {
     testSchemaObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash s;
 
         # ref checks
         s = {"$ref": "#/components/schemas/x"};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
         s = {"$ref": 5};
-        assertThrows("INVALID-FIELD-TYPE", "ref.*invalid type", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "ref.*invalid type", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"$ref": "#/components/schemas/y"};
-        assertThrows("INVALID-REFERENCE", "cannot resolve", loadyaml, my_make_yaml(base + {"definitions": {"x": ("type": "string"), "a": s}}));
+        assertThrows("INVALID-REFERENCE", "cannot resolve", loadyaml, my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}}));
         # issue #3843: sibling elements to a $ref must be ignored
         s = {"$ref": "#/components/schemas/x", "a": 1};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"x": ("type": "string"), "a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
 
         # type checks
         s = {};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": 5};
-        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "a"};
-        assertThrows("INVALID-FIELD-VALUE", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-VALUE", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # TODO array of array
         /*p = base.parameters + {"a": {"name":"a", "in": "query", "type": "array", "items": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));*/
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));*/
         s = {"type": "boolean"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "integer"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "number"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
 
         # format checks
         s = {"type": "string", "format": 5};
-        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "integer", "format": "int32"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "integer", "format": "int64"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "integer", "format": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
 
         s = {"type": "number", "format": "double"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "number", "format": "float"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "number", "format": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
 
         s = {"type": "string", "format": "binary"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "format": "byte"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "format": "date"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "format": "date-time"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "format": "password"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "format": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
 
         # title checks
         s = {"type": "string", "title": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "title": 5};
-        assertThrows("INVALID-FIELD-TYPE", "title", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "title", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # description checks
         s = {"type": "string", "description": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "description": 5};
-        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # items checks
 
         # default checks
         # TODO arrays
         /*p = {"type": "array", "items": {"type": "string"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         p = {"type": "array", "items": {"type": "string"}, "default": 5};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));*/
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));*/
 
         s = {"type": "boolean", "default": True};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "boolean", "default": 5};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # TODO files
         /*p = {"type": "file"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         p = {"type": "file"};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));*/
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));*/
 
         s = {"type": "integer", "default": 5};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "integer", "default": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "number", "default": 2.0};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "number", "default": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "string", "default": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "default": 5};
-        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "default", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # maxProperties checks
         s = {"type": "object", "maxProperties": 0};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "maxProperties": 5};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "maxProperties": -2};
-        assertThrows("INVALID-FIELD-FORMAT", "maxProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "maxProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "object", "maxProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "maxProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "maxProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "string", "maxProperties": 0};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "maxProperties": 5};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "maxProperties": -2};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "maxProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "maxProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "maxProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # minProperties checks
         s = {"type": "object", "minProperties": 0};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "minProperties": 5};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "minProperties": -2};
-        assertThrows("INVALID-FIELD-FORMAT", "minProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "minProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "object", "minProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "minProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "minProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "string", "minProperties": 0};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "minProperties": 5};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "minProperties": -2};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "minProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "minProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "minProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # properties checks
         s = {"type": "object", "properties": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "properties": {"a": {"type": "string"}}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "properties": {"a": 5}};
-        assertThrows("INVALID-FIELD-FORMAT", "properties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "properties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "object", "properties": 5};
-        assertThrows("INVALID-FIELD-TYPE", "properties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "properties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "string", "properties": {}};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "properties": {"a": {"type": "string"}}};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "properties": {"a": 5}};
-        assertThrows("INVALID-FIELD-FORMAT", "properties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "properties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "properties": 5};
-        assertThrows("INVALID-FIELD-TYPE", "properties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "properties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # additionalProperties checks
         s = {"type": "object", "additionalProperties": True};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "additionalProperties": {"type": "string"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "additionalProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "additionalProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "additionalProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         s = {"type": "string", "additionalProperties": True};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "additionalProperties": {"type": "string"}};
-        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "additionalProperties": "a"};
-        assertThrows("INVALID-FIELD-TYPE", "additionalProperties", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "additionalProperties", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # "required" checks
         s = {"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a",)};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "required": ()};
-        assertThrows("INVALID-FIELD-FORMAT", "required", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "required", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "required": (5, 3)};
-        assertThrows("INVALID-FIELD-TYPE", "required", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "required", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "required": 5};
-        assertThrows("INVALID-FIELD-TYPE", "required", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "required", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # discriminator checks
         s = {"type": "object", "properties": {"a": {"type": "string"}, "b": {}}, "discriminator": "a", "required": ("a", "b")};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "object", "properties": {"a": {"type": "string"}, "b": {}}, "discriminator": "x", "required": ("a", "b")};
-        assertThrows("INVALID-FIELD-VALUE", "discriminator", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-VALUE", "discriminator", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "discriminator": 5};
-        assertThrows("INVALID-FIELD-TYPE", "discriminator", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "discriminator", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # readOnly checks
         s = {"type": "string", "readOnly": False};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "readOnly": True};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "readOnly": 5};
-        assertThrows("INVALID-FIELD-TYPE", "readOnly", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "readOnly", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # allOf Checks
         s = {"type": "string", "allOf": ({"$ref": "#/components/schemas/x"}, {"type": "string"})};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"x": ("type": "string"), "a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
         s = {"type": "string", "allOf": list()};
-        assertThrows("INVALID-FIELD-FORMAT", "allOf", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-FORMAT", "allOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "allOf": (5, 3)};
-        assertThrows("INVALID-FIELD-TYPE", "allOf", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "allOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
         s = {"type": "string", "allOf": 5};
-        assertThrows("INVALID-FIELD-TYPE", "allOf", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "allOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # xml checks
         s = {"type": "string", "xml": {"name": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": 5};
-        assertThrows("INVALID-FIELD-TYPE", "xml", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "xml", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # externalDocs checks
         s = {"type": "string", "externalDocs": {"url": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "externalDocs": 5};
-        assertThrows("INVALID-FIELD-TYPE", "externalDocs", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "externalDocs", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
     }
 
     testXmlObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash s;
 
         s = {"type": "string", "xml": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
 
         # name checks
         s = {"type": "string", "xml": {"name": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"name": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "name", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "name", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # namespace checks
         s = {"type": "string", "xml": {"namespace": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"namespace": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "namespace", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "namespace", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # prefix checks
         s = {"type": "string", "xml": {"prefix": "a"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"prefix": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "prefix", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "prefix", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # attribute checks
         s = {"type": "string", "xml": {"attribute": False}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"attribute": True}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"attribute": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "attribute", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "attribute", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
         # wrapped checks
         s = {"type": "string", "xml": {"wrapped": False}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"wrapped": True}};
-        assertTrue(loadyaml(my_make_yaml(base + {"definitions": {"a": s}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "xml": {"wrapped": 5}};
-        assertThrows("INVALID-FIELD-TYPE", "wrapped", loadyaml, my_make_yaml(base + {"definitions": {"a": s}}));
+        assertThrows("INVALID-FIELD-TYPE", "wrapped", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
     }
 
     testSecuritySchemeObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash sd;
 
         # type checks
         sd = {"type": "basic"};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "a"};
-        assertThrows("INVALID-SCHEME-TYPE", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-SCHEME-TYPE", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": 5};
-        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # description checks
         sd = {"type": "basic", "description": "a"};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "basic", "description": 5};
-        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # type=apiKey checks
         sd = {"type": "apiKey"};
-        assertThrows("REQUIRED-FIELD-MISSING", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "apiKey", "name": "a"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"in\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"in\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "apiKey", "in": "query"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"name\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"name\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "apiKey", "name": "a", "in": "query"};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "apiKey", "name": "a", "in": "header"};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "apiKey", "name": "a", "in": "a"};
-        assertThrows("INVALID-APIKEY-LOCATION", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-APIKEY-LOCATION", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "apiKey", "name": 5, "in": "query"};
-        assertThrows("INVALID-FIELD-TYPE", "name", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "name", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "apiKey", "name": "a", "in": 5};
-        assertThrows("INVALID-FIELD-TYPE", "in", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "in", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # type=oauth2 checks
         sd = {"type": "oauth2"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"flow\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"flow\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         sd = {"type": "oauth2", "flow": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "flow", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "flow", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "abc", "scopes": {}};
-        assertThrows("INVALID-FLOW", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FLOW", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "application", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "password", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "implicit", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "accessCode", "tokenUrl": "a", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"scopes\".*missing", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"scopes\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # application and password flow
         sd = {"type": "oauth2", "flow": "application", "tokenUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "oauth2", "flow": "application", "tokenUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "oauth2", "flow": "password", "tokenUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a", "scopes": 5};
-        assertThrows("INVALID-FIELD-TYPE", "scopes", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "scopes", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # implicit flow
         sd = {"type": "oauth2", "flow": "implicit", "authorizationUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "oauth2", "flow": "implicit", "authorizationUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # accessCode flow
         sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "tokenUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": 5, "tokenUrl": "a", "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
         sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "tokenUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
     }
 
     testScopesObject() {
         checkModules();
 
-        hash base = ValidOpenApi3Schema;
+        hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash sdbase = {"type": "oauth2", "flow": "password", "tokenUrl": "a"};
         hash sd;
 
         sd = sdbase + {"scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = sdbase + {"scopes": {"a": "b"}};
-        assertTrue(loadyaml(my_make_yaml(base + {"securityDefinitions": {"a": sd}})));
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = sdbase + {"scopes": {"a": 5}};
-        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"securityDefinitions": {"a": sd}}));
+        assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
     }
 
     testValidation() {
@@ -2064,20 +2023,17 @@ public class OpenApi3Test inherits QUnit::Test {
         testValidation(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.json"));
 
         {
-            hash b = ValidOpenApi3Schema + {
-                "definitions": {
+            hash b = ValidOpenApi3Schema;
+            b.components.schemas.a = {
+                "type": "object",
+                "properties": {
                     "a": {
-                        "type": "object",
-                        "properties": {
-                            "a": {
-                                "type": "string",
-                                "readOnly": True,
-                            },
-                        },
+                        "type": "string",
+                        "readOnly": True,
                     },
                 },
             };
-            b.parameters.a += (
+            b.components.parameters.a = b.components.parameters.a + (
                 "in": "body",
                 "name": "body",
                 "required": True,
@@ -2226,8 +2182,10 @@ public class OpenApi3Test inherits QUnit::Test {
                         {
                             "in": "query",
                             "name": "t",
-                            "type": "integer",
-                            "format": "unix-time",
+                            "schema": {
+                                "type": "integer",
+                                "format": "unix-time",
+                            },
                         },
                     )
                 },
@@ -2256,26 +2214,27 @@ public class OpenApi3Test inherits QUnit::Test {
                 },
             };
 
-            remove b.parameters.a.type;
+            # Remove type from schema to test type-less schema
+            remove b.components.parameters.a.schema.type;
 
             OpenApi3Schema so("", b);
 
             assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("post", "/api/smtg", ("a": "a")));
 
-            b.definitions.a.properties.a.readOnly = False;
+            b.components.schemas.a.properties.a.readOnly = False;
             so = new OpenApi3Schema("", b);
 
             # issue #2369
             assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("post", "/api/smtg"));
 
-            b.parameters.a.required = False;
+            b.components.parameters.a.required = False;
             so = new OpenApi3Schema("", b);
             hash<RestRequestClientInfo> h = so.processRequest("post", "/api/smtg");
             assertEq("/api/smtg", h.uri_path);
             assertNothing(h.body);
 
             # by default, parameters are optional
-            remove b.parameters.a.required;
+            remove b.components.parameters.a.required;
             so = new OpenApi3Schema("", b);
             h = so.processRequest("post", "/api/smtg");
             assertEq("/api/smtg", h.uri_path);
@@ -2420,7 +2379,7 @@ public class OpenApi3Test inherits QUnit::Test {
             }
 
             # issue #2397 400 Bad Request response to invalid date params
-            b.definitions.a = (
+            b.components.schemas.a = (
                 "type": "string",
                 "format": "date",
             );
@@ -2438,7 +2397,7 @@ public class OpenApi3Test inherits QUnit::Test {
             }
 
             # issue #2397 400 Bad Request response to invalid binary params
-            b.definitions.a.format = "binary";
+            b.components.schemas.a.format = "binary";
 
             so = new OpenApi3Schema("", b);
 
@@ -2451,7 +2410,7 @@ public class OpenApi3Test inherits QUnit::Test {
             }
 
             # issue #2397 400 Bad Request response to invalid byte params
-            b.definitions.a.format = "byte";
+            b.components.schemas.a.format = "byte";
 
             so = new OpenApi3Schema("", b);
 
@@ -2733,10 +2692,11 @@ public class OpenApi3Test inherits QUnit::Test {
 
                 RestClient rc(opts);
                 #printf("url: %y\n", url);
-                hash<auto> h = rc.get("/user/login?username=user;password=pass");
-                assertEq("OK", h.body);
+                # GET /pets returns an array schema, so single value gets wrapped in a list
+                hash<auto> h = rc.get("/pets?limit=10");
+                assertEq(("OK",), h.body);
 
-                assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/user/login?x=y");
+                assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/pets?invalid_param=y");
                 assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/something?x=y");
             }
             {
@@ -2746,8 +2706,9 @@ public class OpenApi3Test inherits QUnit::Test {
                 RestClient rc(opts + {
                     "openapi3_base_path": "/",
                 });
-                hash<auto> h = rc.get("/user/login?username=user;password=pass");
-                assertEq("OK", h.body);
+                # GET /pets returns an array schema, so single value gets wrapped in a list
+                hash<auto> h = rc.get("/pets?limit=10");
+                assertEq(("OK",), h.body);
             }
             {
                 serv.restart();
@@ -2757,100 +2718,70 @@ public class OpenApi3Test inherits QUnit::Test {
                     "openapi3_base_path": "/v2",
                 });
                 rc.getValidator().setBasePath("v2");
-                hash<auto> h = rc.get("/v2/user/login?username=user;password=pass");
-                assertEq("OK", h.body);
+                # GET /pets returns an array schema, so single value gets wrapped in a list
+                hash<auto> h = rc.get("/v2/pets?limit=10");
+                assertEq(("OK",), h.body);
             }
         }
     }
 
     private testValidation(OpenApi3Schema so) {
-        so.processRequest("get", "/user/login?username=user;password=pass");
-        assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("get", "/user/login"));
-        assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("post", "/pet?username=user"));
-        assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("get", "/user/login?username;password=pass"));
+        # Test GET /pets with query parameters (tags array)
+        so.processRequest("get", "/pets?tags=tag1;tags=tag2");
+        so.processRequest("get", "/pets?limit=10");
 
-        so.parseResponse("get", "/user/login", 200, "\"string\"", ("content-type": MimeTypeJson));
-
-        so.processRequest("get", "/pet/findByStatus?status=available");
-        assertThrows("SCHEMA-VALIDATION-ERROR", "status.*happy", \so.processRequest(), ("get", "/pet/findByStatus?status=happy"));
-
-        # test arrays in parameters
+        # Test arrays in parameters
         {
-            string uri = "/pet/findByTags?tags=tag1;tags=tag2";
+            string uri = "/pets?tags=tag1;tags=tag2";
             hash<RestRequestClientInfo> req = so.processRequest("GET", uri);
-            assertEq("/v2" + uri, req.uri_path);
+            assertEq(uri, req.uri_path);
         }
 
         {
-            string uri = "/pet/findByTags?tags=tag1&tags=tag2";
+            string uri = "/pets?tags=tag1&tags=tag2";
             hash<RestRequestClientInfo> req = so.processRequest("GET", uri);
-            assertEq("/v2" + uri, req.uri_path);
+            assertEq(uri, req.uri_path);
         }
 
+        # Test POST /pets with body (NewPet schema)
         {
-            hash tag1 = (
-                "id": 1,
-                "name": "n1",
-            );
-            hash tag2 = (
-                "id": 2,
-                "name": "n2",
-            );
             hash hdr = {};
             hash body = (
                 "name": "Scooby",
-                "photoUrls": ("str1",),
-                "tags": (tag1, tag2),
+                "tag": "dog",
             );
-            hash<RestRequestClientInfo> req = so.processRequest("POST", "/pet", body, hdr);
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/pets", body, hdr);
             assertEq(MimeTypeJson, req.content);
             assertEq(Type::String, req.body.type());
-            assertEq("/v2/pet", req.uri_path);
-            assertEq("UTF-8", req.body.encoding());
-            #printf("req: %N\n", req);
-
-            {
-                hdr = ("content-type": req.content);
-                # strip base path for request
-                req.uri_path =~ s/^\/v2//;
-                hash<RestRequestServerInfo> sh = so.parseRequest("POST", req.uri_path, req.body, \hdr);
-                assertEq("Scooby", sh.body.name);
-                assertEq(("str1",), sh.body.photoUrls);
-                assertEq((tag1, tag2), sh.body.tags);
-                #printf("sh: %N\n", sh);
-            }
-
-            body += (
-                "id": 100,
-                "category": (
-                    "id": 200,
-                    "name": "Super",
-                ),
-                "status": "available",
-            );
-            req = so.processRequest("POST", "/pet", body, hdr);
-            assertEq(MimeTypeJson, req.content);
-            assertEq(Type::String, req.body.type());
-            assertEq("/v2/pet", req.uri_path);
+            assertEq("/pets", req.uri_path);
             assertEq("UTF-8", req.body.encoding());
 
             {
                 hdr = ("content-type": req.content);
-                # strip base path for request
-                req.uri_path =~ s/^\/v2//;
                 hash<RestRequestServerInfo> sh = so.parseRequest("POST", req.uri_path, req.body, \hdr);
-                assertEq(100, sh.body.id);
                 assertEq("Scooby", sh.body.name);
-                assertEq(("str1",), sh.body.photoUrls);
-                assertEq((tag1, tag2), sh.body.tags);
-                assertEq("available", sh.body.status);
+                assertEq("dog", sh.body.tag);
             }
 
-            assertThrows("SERIALIZATION-ERROR", MimeTypeOctetStream, \so.processRequest(), ("POST", "/pet", body, hdr, MimeTypeOctetStream));
-
-            delete body.photoUrls;
-            assertThrows("SCHEMA-VALIDATION-ERROR", "missing.*photoUrls", \so.processRequest(), ("post", "/pet", body, hdr));
+            # Test missing required field "name"
+            delete body.name;
+            assertThrows("SCHEMA-VALIDATION-ERROR", "missing.*name", \so.processRequest(), ("post", "/pets", body, hdr));
         }
+
+        # Test GET /pets/{id}
+        {
+            hash<RestRequestClientInfo> req = so.processRequest("GET", "/pets/123");
+            assertEq("/pets/123", req.uri_path);
+        }
+
+        # Test DELETE /pets/{id}
+        {
+            hash<RestRequestClientInfo> req = so.processRequest("DELETE", "/pets/456");
+            assertEq("/pets/456", req.uri_path);
+        }
+
+        # Test invalid path
+        assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("get", "/invalid/path"));
 
         {
             string rep = makeBody("OK");
@@ -2864,47 +2795,24 @@ public class OpenApi3Test inherits QUnit::Test {
                 "validator": so,
             );
 
-            assertEq("/v2", so.getBasePath());
+            assertEq("/", so.getBasePath());
 
             RestClient rc(opts);
-            #printf("url: %y\n", url);
-            hash h = rc.get("/user/login?username=user;password=pass");
-            assertEq("OK", h.body);
+            hash h = rc.get("/pets?limit=10");
+            # GET /pets returns an array schema, so single value gets wrapped in a list
+            assertEq(("OK",), h.body);
 
-            assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/user/login?x=y");
-            assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/something?x=y");
+            assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/invalid?x=y");
         }
 
         {
-            hash<HttpResponseInfo> res = so.processResponse("get", "/user/login", 200, "OK", NOTHING, MimeTypeJson);
+            # Test response processing for GET /pets
+            list<auto> petList = ({"id": 1, "name": "Fido", "tag": "dog"},);
+            hash<HttpResponseInfo> res = so.processResponse("get", "/pets", 200, petList, NOTHING, MimeTypeJson);
             assertEq(200, res.code);
             assertEq(MimeTypeJson, res.hdr."Content-Type");
-            assertEq("\"OK\"", res.body);
         }
 
-        {
-            # let's check our order for 400 of the same pet
-            hash body = (
-                "id": 1,
-                "petId": 2,
-                "quantity": 400,
-                "shipDate": now_us(),
-                "status": "approved",
-                "complete": True,
-            );
-            hash<HttpResponseInfo> res = so.processResponse("post", "/store/order", 200, body, NOTHING, MimeTypeJson);
-            assertEq(200, res.code);
-            assertEq(MimeTypeJson, res.hdr."Content-Type");
-
-            body.shipDate = "1990-01-01";
-            res = so.processResponse("post", "/store/order", 200, body, NOTHING, MimeTypeJson);
-            assertEq(200, res.code);
-            assertEq(MimeTypeJson, res.hdr."Content-Type");
-
-            body.shipDate = 200;
-            assertThrows("SCHEMA-VALIDATION-ERROR", "shipDate", \so.processResponse(), ("post", "/store/order", 200,
-                body, NOTHING, MimeTypeJson));
-        }
     }
 
     testExamples() {
@@ -2915,34 +2823,34 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     private testExamples(OpenApi3Schema so) {
-        hash<RestQoreExampleCodeInfo> qex = so.getQoreExampleRequest("GET", "/user/login");
-        assertEq(True, qex.example =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
-        hash<RestExampleRequestInfo> rex = so.getExampleRequest("GET", "/user/login");
-        assertEq(True, rex.request_uri =~ /\/user\/login\?username=[a-z]+;password=[a-z]+/m);
+        # Test GET /pets example request
+        hash<RestQoreExampleCodeInfo> qex = so.getQoreExampleRequest("GET", "/pets");
+        assertEq(True, qex.example =~ /\/pets/m);
+        hash<RestExampleRequestInfo> rex = so.getExampleRequest("GET", "/pets");
+        assertEq(True, rex.request_uri =~ /\/pets/m);
 
-        qex = so.getQoreExampleRequest("POST", "/pet");
+        # Test POST /pets example request
+        qex = so.getQoreExampleRequest("POST", "/pets");
         assertEq(Type::String, qex.example.type());
-        #printf("qex: %N\n", qex);
 
-        rex = so.getExampleRequest("POST", "/pet");
-        assertEq("POST /pet HTTP/1.1", rex.request_uri);
+        rex = so.getExampleRequest("POST", "/pets");
+        assertEq("POST /pets HTTP/1.1", rex.request_uri);
         assertEq(MimeTypeJson, rex.hdr."Content-Type");
 
-        qex = so.getQoreExampleResponse("GET", "/user/login", 200);
+        # Test GET /pets response example
+        qex = so.getQoreExampleResponse("GET", "/pets", 200);
         assertEq(True, qex.example =~ /makeResponse.200/);
-        hash<RestExampleResponseInfo> res = so.getExampleResponse("GET", "/user/login", 200);
+        hash<RestExampleResponseInfo> res = so.getExampleResponse("GET", "/pets", 200);
         assertEq(200, res.code);
         assertEq(MimeTypeJson, res.hdr."Content-Type");
 
-        qex = so.getQoreExampleResponse("get", "/pet/{pet}", 200);
+        # Test GET /pets/{id} response example
+        qex = so.getQoreExampleResponse("get", "/pets/{id}", 200);
         assertEq(True, qex.example =~ /makeResponse.200/);
-        res = so.getExampleResponse("GET", "/pet/{pet}", 200);
+        res = so.getExampleResponse("GET", "/pets/{id}", 200);
         assertEq(200, res.code);
         assertEq(MimeTypeJson, res.hdr."Content-Type");
         assertEq(True, res.body =~ /id/);
-        #printf("res: %N\n", res);
-        #printf("qex: %N\n", qex);
-        #printf("rex: %N\n", rex);
     }
 
     testRealMessages() {

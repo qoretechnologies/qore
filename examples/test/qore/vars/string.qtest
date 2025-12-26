@@ -440,6 +440,9 @@ class StringTest inherits QUnit::Test {
         assertThrows("UNSUPPORTED-ENCODING", \encode_uri_request(), a);
         assertThrows("UNSUPPORTED-ENCODING", sub (string str) { str.equalPartialPath(str); }, a);
         assertThrows("UNSUPPORTED-ENCODING", sub (string str) { str.toInt(16); }, a);
+
+        assertEq("%22hello%22", encode_url("\"hello\""));
+        assertEq("%22hello%22", encode_uri_request("\"hello\""));
     }
 
     testASCIIUTF8Equality() {

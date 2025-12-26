@@ -42,6 +42,8 @@ ModuleName/
     <b>Modules Provided With %Qore</b>
     |!Type|!Module|!Description
     |binary|<a href="../../modules/astparser/html/index.html">astparser</a>|Provides a language parser API to %Qore
+    |user|<a href="../../modules/AsyncSocketIo/html/index.html">AsyncSocketIo</a>|Provides an API for asynchronous \
+        (polling-based) socket I/O
     |user|<a href="../../modules/AwsRestClient/html/index.html">AwsRestClient</a>|Provides a REST API for AWS services
     |user|<a href="../../modules/AwsRestClientDataProvider/html/index.html">AwsRestClientDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html">data provider</a> API for AWS REST servers
@@ -68,7 +70,7 @@ ModuleName/
         line debugger clients
     |user|<a href="../../modules/DebugLinenoiseCmdLine/html/index.html">DebugLinenoiseCmdLine</a>|Provides an API \
         for command line debugger clients based on the \
-        <a href="https://github.com/qorelanguage/module-linenoise">linenoise</a> module
+        <a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a> module
     |user|<a href="../../modules/DebugProgramControl/html/index.html">DebugProgramControl</a>|Provides an API to \
         develop debug server
     |user|<a href="../../modules/DebugHandler/html/index.html">DebugHandler</a>|Provides a websocket for debug server
@@ -95,7 +97,7 @@ ModuleName/
     |user|<a href="../../modules/FreetdsSqlUtil/html/index.html">FreetdsSqlUtil</a>|Provides a high-level \
         DB-independent API for working with MS SQL Server and Sybase database objects; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module when working with the \
-        <a href="https://github.com/qorelanguage/module-sybase">freetds DBI driver</a> for automated schema \
+        <a href="https://github.com/qoretechnologies/module-sybase">freetds DBI driver</a> for automated schema \
         management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/FsUtil/html/index.html">FsUtil</a>|Provides a high level API for working with the \
         filesystem
@@ -124,7 +126,7 @@ ModuleName/
     |user|<a href="../../modules/JdbcFirebirdSqlUtil/html/index.html">JdbcFirebirdSqlUtil</a>|Provides a high-level \
         DB-independent API for working with Firebird database objects using \
         <a href="../../modules/XdbcFirebirdSqlUtilBase/html/index.html">XdbcFirebirdSqlUtilBase</a> and the binary \
-        <a href="https://github.com/qorelanguage/module-jni">jni</a> module providing the \c jdbc DBI driver; loaded \
+        <a href="https://github.com/qoretechnologies/module-jni">jni</a> module providing the \c jdbc DBI driver; loaded \
         automatically by the <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module when working with \
         Firebird databases for automated schema management, programmatic DB access, schema and data synchronization, \
         and more
@@ -174,7 +176,7 @@ ModuleName/
     |user|<a href="../../modules/OdbcFirebirdSqlUtil/html/index.html">OdbcFirebirdSqlUtil</a>|Provides a high-level \
         DB-independent API for working with Firebird database objects using \
         <a href="../../modules/XdbcFirebirdSqlUtilBase/html/index.html">XdbcFirebirdSqlUtilBase</a> and the binary \
-        <a href="https://github.com/qorelanguage/module-odbc">odbc</a> module; loaded automatically by the \
+        <a href="https://github.com/qoretechnologies/module-odbc">odbc</a> module; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module when working with Firebird databases \
         for automated schema management, programmatic DB access, schema and data synchronization, and more
     |user|<a href="../../modules/OpenAiDataProvider/html/index.html">OpenAiDataProvider</a>|Provides a \
@@ -209,6 +211,10 @@ ModuleName/
         API for working with PostgreSQL database objects; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module when working with PostgreSQL databases \
         for automated schema management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/ProviderIndex/html/index.html">ProviderIndex</a>|Provides indexing APIs for data \
+        providers
+    |user|<a href="../../modules/ProviderIndexUtil/html/index.html">ProviderIndexUtil</a>|Provides utility APIs for \
+        indexing APIs for data providers
     |user|<a href="../../modules/Qdx/html/index.html">Qdx</a>|Provides support for documentation generation with \
         doxygen from %Qore sources
     |user|<a href="../../modules/Qorize/html/index.html">Qorize</a>|Provides basic support for \
@@ -237,6 +243,10 @@ ModuleName/
     |user|<a href="../../modules/Schema/html/index.html">Schema</a>|Provides automatic schema management \
         functionality as a meta-layer for <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a>'s medium and \
         low-level schema management functionality
+    |user|<a href="../../modules/ServerSentEventClient/html/index.html">ServerSentEventClient</a>|Provides \
+        client-side support for Server Sent Events (SSE)
+    |user|<a href="../../modules/ServerSentEventHandler/html/index.html">ServerSentEventHandler</a>|Provides \
+        server-side support for Server Sent Events (SSE)
     |user|<a href="../../modules/ServiceNowRestClient/html/index.html">ServiceNowRestClient</a>|providing APIs for \
         communicating with the ServiceNow REST API
     |user|<a href="../../modules/ServiceNowRestDataProvider/html/index.html">ServiceNowRestDataProvider</a>|Provides a \
@@ -288,31 +298,35 @@ ModuleName/
 
     <b>Modules Provided Separately</b>
     |!Type|!Module|!Description
-    |binary|<a href="https://github.com/qorelanguage/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
-    |binary|<a href="https://github.com/qorelanguage/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API
-    |binary|<a href="https://github.com/qorelanguage/module-jni">jni</a>|Provides access to Java APIs in %Qore as \
-        well as the following user module:\n\
+    |binary|<a href="https://github.com/qoretechnologies/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
+    |binary|<a href="https://github.com/qoretechnologies/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API
+    |binary|<a href="https://github.com/qoretechnologies/module-jni">jni</a>|Provides access to Java APIs in %Qore as \
+        well as the following user modules\n\
+        - <a href="https://qoretechnologies.com/manual/qorus/current/jni/ExcelDataProvider/html/index.html">ExcelDataProvider</a>: \
+            a data provider API for working with Excel spreadsheet data\n\
+        - <a href="https://qoretechnologies.com/manual/qorus/current/jni/KafkaDataProvider/html/index.html">KafkaDataProvider</a>: \
+            a data provider API for Kafka messaging\n\
         - <a href="https://qoretechnologies.com/manual/qorus/current/jni/MqttDataProvider/html/index.html">MqttDataProvider</a>: \
             a data provider API for MQTT messaging\n
-    |binary|<a href="https://github.com/qorelanguage/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n- <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>: provides infrastructure for implementing JSON-RPC server-side services using the <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
-    |binary|<a href="https://github.com/qorelanguage/module-linenoise">linenoise</a>|Provides a readline-like API to %Qore under a permissive license
-    |binary|<a href="https://github.com/qorelanguage/module-msgpack">msgpack</a>|Provides APIs for efficient data serialization in %Qore using the <a href="https://msgpack.org/index.html">MessagePack</a> format
-    |binary|<a href="https://github.com/qorelanguage/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
-    |binary|<a href="https://github.com/qorelanguage/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore
-    |binary|<a href="https://github.com/qorelanguage/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
-    |binary|<a href="https://github.com/qorelanguage/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore
-    |binary|<a href="https://github.com/qorelanguage/module-pgsql">pgsql</a>|Provides a PostgreSQL DBI driver
-    |binary|<a href="https://github.com/qorelanguage/module-process">process</a>|Provides an API for controlling external processes
-    |binary|<a href="https://github.com/qorelanguage/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
-    |binary|<a href="https://github.com/qorelanguage/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also provides the following user module:\n- <a href="http://docs.qore.org/modules/ssh2/current/SftpPoller/html/index.html">SftpPoller</a>: provides event-driven support for polling an SFTP server for new data
-    |binary|<a href="https://github.com/qorelanguage/module-sybase">sybase</a>|Provides a Sybase DBI driver
-    |binary|<a href="https://github.com/qorelanguage/module-sysconf">sysconf</a>|Provides sysconf, pathconf, and confstr APIs
-    |binary|<a href="https://github.com/qorelanguage/module-tibae">tibae</a>|Provides TIBCO ActiveEnterprise(TM) (TIBCO, Inc) functionality
-    |binary|<a href="https://github.com/qorelanguage/module-tibrv">tibrv</a>|Provides TIBCO Rendezvous(R) (TIBCO, Inc) functionality
-    |binary|<a href="https://github.com/qorelanguage/module-uuid">uuid</a>|Provices an API for generating UUIDs
+    |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n- <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>: provides infrastructure for implementing JSON-RPC server-side services using the <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
+    |binary|<a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a>|Provides a readline-like API to %Qore under a permissive license
+    |binary|<a href="https://github.com/qoretechnologies/module-msgpack">msgpack</a>|Provides APIs for efficient data serialization in %Qore using the <a href="https://msgpack.org/index.html">MessagePack</a> format
+    |binary|<a href="https://github.com/qoretechnologies/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
+    |binary|<a href="https://github.com/qoretechnologies/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore
+    |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
+    |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore
+    |binary|<a href="https://github.com/qoretechnologies/module-pgsql">pgsql</a>|Provides a PostgreSQL DBI driver
+    |binary|<a href="https://github.com/qoretechnologies/module-process">process</a>|Provides an API for controlling external processes
+    |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
+    |binary|<a href="https://github.com/qoretechnologies/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also provides the following user module:\n- <a href="http://docs.qore.org/modules/ssh2/current/SftpPoller/html/index.html">SftpPoller</a>: provides event-driven support for polling an SFTP server for new data
+    |binary|<a href="https://github.com/qoretechnologies/module-sybase">sybase</a>|Provides a Sybase DBI driver
+    |binary|<a href="https://github.com/qoretechnologies/module-sysconf">sysconf</a>|Provides sysconf, pathconf, and confstr APIs
+    |binary|<a href="https://github.com/qoretechnologies/module-tibae">tibae</a>|Provides TIBCO ActiveEnterprise(TM) (TIBCO, Inc) functionality
+    |binary|<a href="https://github.com/qoretechnologies/module-tibrv">tibrv</a>|Provides TIBCO Rendezvous(R) (TIBCO, Inc) functionality
+    |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
     |binary|<a href="https://qoretechnologies.com/manual/qorus/current/v8/v8/html">v8</a>|Provides the ability to \
         embed, compile, and execute JavaScript code
-    |binary|<a href="https://github.com/qorelanguage/module-xml">xml</a>|Provides XML (SAX and DOM parsers), XPath, \
+    |binary|<a href="https://github.com/qoretechnologies/module-xml">xml</a>|Provides XML (SAX and DOM parsers), XPath, \
         XML-RPC, SOAP client and server, etc functionality, also provides the following user modules:\n\
         - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SalesforceSoapClient/html/index.html">SalesforceSoapClient</a>: \
             provides an easy to use API for making requests to Salesforce.com SOAP servers\n\
@@ -333,8 +347,8 @@ ModuleName/
         - <a href="https://qoretechnologies.com/manual/qorus/current/xml/XmlRpcHandler/html/index.html">XmlRpcHandler</a>: \
             provides infrastructure for implementing XML-RPC server-side services using the \
             <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
-    |binary|<a href="https://github.com/qorelanguage/module-xmlsec">xmlsec</a>|Provides \c xmldsig and \c xmlenc functionality
-    |binary|<a href="https://github.com/qorelanguage/module-yaml">yaml</a>|Provides YAML functionality, also \
+    |binary|<a href="https://github.com/qoretechnologies/module-xmlsec">xmlsec</a>|Provides \c xmldsig and \c xmlenc functionality
+    |binary|<a href="https://github.com/qoretechnologies/module-yaml">yaml</a>|Provides YAML functionality, also \
         provides the following user modules:\n\
         - <a href="http://docs.qore.org/modules/yaml/current/DataStreamClient/html/index.html">DataStreamClient</a>: \
             provides a DataStream client API extending the RestClient\n\
@@ -347,7 +361,7 @@ ModuleName/
         - <a href="http://docs.qore.org/modules/yaml/current/YamlRpcHandler/html/index.html">YamlRpcHandler</a>: \
             provides infrastructure for implementing YAML-RPC server-side services using the \
             <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
-    |binary|<a href="https://github.com/qorelanguage/module-zmq">zmq</a>|Provides <a href="https://zeromq.org/">ZeroMQ</a> \
+    |binary|<a href="https://github.com/qoretechnologies/module-zmq">zmq</a>|Provides <a href="https://zeromq.org/">ZeroMQ</a> \
         distributed queue and clustering API support
 
     @section binary_modules Binary Modules

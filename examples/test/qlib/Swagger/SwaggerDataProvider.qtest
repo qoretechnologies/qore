@@ -132,6 +132,16 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
             assertThrows("SCHEMA-VALIDATION-ERROR", "enumerated values.*x", \p0.doRequest(),
                 {"query": {"status": ("x",)}});
 
+            SwaggerDataProvider prov0 = Serializable::deserialize(provider.serialize());
+            p0 = prov0.getChildProviderPath("pet/findByStatus/GET");
+            req = p0.getRequestType();
+            assertEq(NT_HASH, req.getField("query").getType().getBaseTypeCode());
+            resp = p0.getResponseType();
+            type = resp.getField("body").getType().getElementType();
+            assertEq("*softint", type.getFieldType("id").getName());
+            assertEq("softstring", type.getFieldType("name").getName());
+            assertEq(("id", "category", "name", "photoUrls", "tags", "status"), keys type.getFields());
+
             # the following call depends on the public "pet shop" example Swagger server
             #assertEq(Type::List, p0.doRequest({"query": {"status": ("pending")}}).body.type());
         }

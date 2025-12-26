@@ -293,11 +293,21 @@ sub main() {
     if (!exists url)
     	usage();
 
+    AbstractConnection conn;
+    string uri_path;
     {
         string orig_url = url;
-        url = get_connection_url(url);
-        if (url != orig_url)
-            printf("using connection: %y url: %y\n", orig_url, url);
+        if (url !~ /^[^:\/]+:\/\/.+/) {
+            try {
+                conn = get_connection(url);
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("Can't find any connection %y: %s\n", url, ex.desc);
+                exit(1);
+            }
+            url = conn.getRealUrl(conn.url, conn.getConnectionSchemeInfo(), "");
+            uri_path = shift ARGV ?? "/";
+            printf("Using connection: %y (%s) %y\n", orig_url, url, uri_path);
+        }
     }
 
     hash<auto> u = parse_url(url);
@@ -312,10 +322,18 @@ sub main() {
             case "https":
             case "http": {
                 hash<auto> opts += {"url": url};
-                if (o.proxy) {
-                    opts.proxy = o.proxy;
+                HTTPClient hc;
+                if (conn) {
+                    hc = conn.get(False);
+                } else {
+                    hc = new HTTPClient(opts);
                 }
-                opts.headers.Accept = "*/*";
+
+                if (o.proxy) {
+                    hc.setProxyURL(o.proxy);
+                }
+                hash<auto> hdr;
+                hdr.Accept = "*/*";
                 foreach string h in (o.headers) {
                     (*string k, *string v) = (h =~ x/([^:]+):(.+)$/);
                     trim k;
@@ -324,14 +342,13 @@ sub main() {
                         stderr.printf("invalid header %y; expecting \"key: value\" format\n", h);
                         exit(1);
                     }
-                    opts.headers{k} = v;
+                    hdr{k} = v;
                 }
-                HTTPClient hc(opts);
 
                 cb = new QueueCallBack(hc, url);
 
                 hash<auto> info;
-                x = hc.get(exists u.path ? u.path : "/", NOTHING, \info);
+                x = hc.get(uri_path ?? u.path ?? "/", hdr, \info);
                 if (exists
                     (*string filename = (info."response-headers"."content-disposition" =~ x/filename="(.*)"/)[0])) {
                     fn = filename;
@@ -342,11 +359,16 @@ sub main() {
             case "ftp": {
                 string file = basename(u.path);
                 if (!exists file) {
-                    printf("missing file name in url %n\n", url);
+                    stderr.printf("missing file name in url %n\n", url);
                     exit(1);
                 }
 
-                FtpClient f(url);
+                FtpClient f;
+                if (conn) {
+                    f = conn.get();
+                } else {
+                    f = new FtpClient(url);
+                }
                 cb = new QueueCallBack(f, url);
                 f.connect();
 
@@ -360,6 +382,10 @@ sub main() {
                 x = f.getAsBinary(file);
                 fn = file;
             }
+
+            default:
+                stderr.printf("Don't know how to handle scheme %y\n", u.protocol);
+                exit(1);
         }
     } catch (hash<ExceptionInfo> ex) {
         if (o.fullex) {

@@ -237,7 +237,7 @@ class WebSocketClientTest inherits QUnit::Test {
             "logger": logger,
         };
         WebSocketClient wsc(cb, opts);
-        wsc.connect({"hdr": {"Send-Data": 1}});
+        wsc.connect({"hdr": {"Send-Data": "1"}});
         c.waitForZero();
         assertEq(Data, l);
         c.inc();

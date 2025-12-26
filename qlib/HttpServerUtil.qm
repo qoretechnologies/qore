@@ -34,7 +34,7 @@
 %enable-all-warnings
 
 module HttpServerUtil {
-    version = "1.2";
+    version = "1.3";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -92,14 +92,52 @@ module HttpServerUtil {
     - <a href="http://www.qore.org/manual/modules/xml/current/SoapHandler/html/index.html">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
+    @section httpserverutil_definitions HttpServerUtil Definitions
+
+    @subsection httpserverutil_request_context HttpServerUtil Request Context
+
+    The HTTP listener and server set the context hash as follows when handling HTTP requests
+
+    |!Key|!Type|!Description
+    |\c auth|*string|the original \c Authorization header value, if any
+    |\c char_encoding|string|the character encoding of the Socket object handling the request
+    |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request
+    |\c close|*bool|set to @ref True "True" if the connection should be closed after responding (as derived from request headers)
+    |\c debug|*bool|@ref True "True" if the debug flag is enabled on the HTTP server
+    |\c handler_name|string|the name of the handler serving the request
+    |\c hdr|hash|the header information as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
+    |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
+    |\c handler_name|string|the name of the handler serving the request
+    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
+    |\c listener-id|int|a unique ID for the listener serving the request
+    |\c listener-name|string|a unique name for the listener serving the request
+    |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
+    |\c masked_path|string|the URI path after URL decoding and masking for sensitive information
+    |\c orig_path|string|the URI path in the request after URL decoding
+    |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
+    |\c raw_path|string|the raw URI request path in the request
+    |\c response-encoding|*string|any value given by any \c "Accept-Charset" in the request
+    |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
+    |\c socket|string|the bind address used to bind the listener (\c "socket-info" provides more detailed information)
+    |\c socket-info|hash|information about the listening socket as returned by @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()"
+    |\c ssl|*bool|@ref True "True" if the request was encrypted with HTTPS
+    |\c url|hash|a hash with a \c path key giving the URI path in the request
+    |\c user|*string|set by the authenticator if the request was authenticated to a specific user
+    |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
+
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+
+    @subsection httputil1_3 HttpServerUtil 1.3
+    - allow authentication methods to set the call context
+      (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
+    - added utility functionality for cookies
 
     @subsection httputil1_2 HttpServerUtil 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
 
     @subsection httputil1_1 HttpServerUtil 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
-      (<a href="https://github.com/qorelanguage/qore/issues/4574">issue 4574</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4574">issue 4574</a>)
 
     @subsection httputil1_0_12 HttpServerUtil 1.0.12
     - updated version to match %Qore and server version
@@ -107,37 +145,37 @@ module HttpServerUtil {
     @subsection httputil1_0 HttpServerUtil 1.0
     - fixed a bug handling wildcard address binds in
       @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4266">issue 4266</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4266">issue 4266</a>)
     - added a definition for the <tt>308 Permanent Redirect</tt> response
-      (<a href="https://github.com/qorelanguage/qore/issues/4169">issue 4169</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4169">issue 4169</a>)
     - added support for the Logger module for logging
-      (<a href="https://github.com/qorelanguage/qore/issues/4157">issue 4157</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4157">issue 4157</a>)
 
     @subsection httputil0911 HttpServerUtil 0.9.11
     - fixed a bug where it was not possible to include CORS headers or any context-sensitive information in a 401
       response
-      (<a href="https://github.com/qorelanguage/qore/issues/4136">issue 4136</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4136">issue 4136</a>)
     - fixed a bug that left hanging threads in HTTP operations with I/O callbacks with \c HEAD requests and a
       <tt>Transfer-Encoding: chunked</tt> header in the response
-      (<a href="https://github.com/qorelanguage/qore/issues/4109">issue 4109</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4109">issue 4109</a>)
 
     @subsection httputil095 HttpServerUtil 0.9.5
     - aligned version with the HttpServer module version
 
     @subsection httputil094 HttpServerUtil 0.9.4
     - added support for sending chunked replies from an @ref Qore::InputStream "InputStream"
-      (<a href="https://github.com/qorelanguage/qore/issues/3702">issue 3702</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3702">issue 3702</a>)
 
     @subsection httputil03121 HttpServerUtil 0.3.12.1
     - improved sensitive data masking in log messages
-      (<a href="https://github.com/qorelanguage/qore/issues/2621">issue 2621</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2621">issue 2621</a>)
 
     @subsection httputil0312 HttpServerUtil 0.3.12
     - fixed a bug in AbstractAuthenticator::do401() where the \a msg argument was ignored
-      (<a href="https://github.com/qorelanguage/qore/issues/1047">issue 1047</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1047">issue 1047</a>)
     - added logic to allow sensitive data to be masked in log messages
-      (<a href="https://github.com/qorelanguage/qore/issues/1086">issue 1086</a>)
-    - updated for complex types (<a href="https://github.com/qorelanguage/qore/issues/1724">issue 1724</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
+    - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - moved @ref HttpServer::parse_uri_query() to the @ref utilintro "Util" module
 
     @subsection httputil03112 HttpServerUtil 0.3.11.2
@@ -152,11 +190,11 @@ module HttpServerUtil {
       connection is in place
     - removed unused AbstractStreamRequestHandler class
     - fixed @ref HttpServer::parse_uri_query() to always return \a params as a hash
-      (<a href="https://github.com/qorelanguage/qore/issues/569">issue 569</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/569">issue 569</a>)
     - added \c root_path to the context hash if the path was matched by a URL path prefix
-      (<a href="https://github.com/qorelanguage/qore/issues/570">issue 570</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/570">issue 570</a>)
     - implemented support for custom timeout values in stream handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/719">issue 719</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
  */
 
 #! the main namespace for the HttpServer and HttpServerUtil modules
@@ -464,6 +502,9 @@ public hashdecl HttpListenerOptionInfo {
 
     #! Additional info added to the notification callback when listeners are started
     hash<auto> ext_info;
+
+    #! Free-form information to be used by custom listener startup code
+    hash<auto> additional_info;
 }
 
 #! hash providing HTTP handler configuration info
@@ -482,6 +523,76 @@ public hashdecl HttpHandlerConfigInfo {
 
     #! a list of headers that indicate that a request should be handled by the handler (optional)
     softlist<softstring> headers;
+}
+
+#! Cookie configuration info
+public hashdecl CookieInfo {
+    #! the cookie name
+    string name;
+
+    #! the cookie value
+    *string value;
+
+    #! the maximum age of the cookie in seconds
+    int max_age;
+
+    #! the domain for which the cookie is valid
+    *string domain;
+
+    #! the path for which the cookie is valid
+    string path = "/";
+
+    #! whether the cookie is secure (ie only sent over HTTPS)
+    bool secure = True;
+
+    #! Whether the cookie is HTTP-only (ie not accessible to JavaScript in browsers)
+    bool http_only = True;
+
+    #! Whether the cookie is SameSite (Lax, Strict, or None)
+    string same_site = "Lax";
+}
+
+#! Class with cookie helper methods
+public class CookieHelper {
+    #! Set cookie info in response headers
+    /** @param hdr the response header hash
+        @param cookie the cookie info hash
+        @param set_cache_control if @ref True "True", then a \c Cache-Control header is set to
+        \c "no-cache, no-store, must-revalidate, max-age=0" if no \c Cache-Control header is already present
+
+        @note https://datatracker.ietf.org/doc/html/rfc6265
+    */
+    static set(reference<hash<auto>> hdr, hash<CookieInfo> cookie, bool set_cache_control = True) {
+        if (!cookie.name.val()) {
+            throw "COOKIE-ERROR", sprintf("Cookie name is required (cookie params: %y)", cookie);
+        }
+        if (cookie.value.val()) {
+            if (exists cookie.max_age && !cookie.max_age) {
+                throw "COOKIE-ERROR", sprintf("Cookie set with value %y but max age = %y", cookie.value, cookie.max_age);
+            }
+        } else if (cookie.max_age) {
+            throw "COOKIE-ERROR", sprintf("Cookie set with max age %d but no value", cookie.max_age);
+        }
+        string cookiestr = sprintf(
+            "%s=%s; SameSite=%s; Path=%s%s%s%s%s", cookie.name, cookie.value,
+            cookie.same_site, cookie.path,
+            (cookie.secure ? "; Secure" : ""),
+            (cookie.domain.val() ? sprintf("; Domain=%s", cookie.domain) : ""),
+            (cookie.http_only ? "; HttpOnly" : ""),
+            (exists cookie.max_age ? sprintf("; Max-Age=%d", cookie.max_age) : "")
+        );
+        if (auto cookieval = hdr."Set-Cookie") {
+            if (cookieval.typeCode() != NT_LIST) {
+                hdr."Set-Cookie" = (cookieval,);
+            }
+            hdr."Set-Cookie" += cookiestr;
+        } else {
+            hdr."Set-Cookie" = cookiestr;
+        }
+        if (set_cache_control && !hdr."Cache-Control") {
+            hdr."Cache-Control" = "no-cache, no-store, must-revalidate, max-age=0";
+        }
+    }
 }
 
 #! returns a complete URL from a bind address
@@ -551,35 +662,41 @@ public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
 #! helper function for setting HTTP response headers
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
     if (!rv.hdr.Connection) {
-        if (rv.close) # RFC 2616 section 14.10 is "close" in all lower-case
+        if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
             rv.hdr.Connection = "close";
-        else
+        } else {
             rv.hdr.Connection = "Keep-Alive";
+        }
     }
 
-    if (!rv.hdr.Date) # RFC 2616 sec 14.18 date format
+    if (!rv.hdr.Date) {
+        # RFC 2616 sec 14.18 date format
         rv.hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
 
-    if (!rv.hdr.Server)
+    if (!rv.hdr.Server) {
         rv.hdr.Server = server_string ?? HttpServerString;
-
-    string old_encoding = s.getEncoding();
-
-    on_exit if (s.getEncoding() != cx."response-encoding")
-        s.setEncoding(cx."response-encoding");
-
-    if (!cx."response-encoding")
-        cx."response-encoding" = old_encoding.lwr();
-    else if (cx."response-encoding".lwr() != old_encoding.lwr())
-        s.setEncoding(cx."response-encoding");
+    }
 
     # "rv" may be a HttpHandlerResponseInfo hashdecl, so we can't access "chunked_body" directly in that case
-    if (rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked") {
-        if (!rv.hdr."Content-Type") {
-            rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + cx."response-encoding";
-        } else if (rv.hdr."Content-Type" !~ /charset=/
-            && ((rv.body.typeCode() == NT_STRING)
-                || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream)))) {
+    # https://datatracker.ietf.org/doc/html/rfc2616#section-7.2.1: HTTP messages with a body SHOULD include A
+    # Content-Type (so it's optional); here we add a "charset=" parameter to the Content-Type header if it is not
+    # already included and the message body is a string not in ISO-8859-1 encoding (the default for HTTP)
+    if ((rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked")
+        && (rv.hdr."Content-Type" && (rv.hdr."Content-Type" !~ /charset=/i)
+        && ((rv.body.typeCode() == NT_STRING)
+            || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream))))) {
+        string old_encoding = s.getEncoding().lwr();
+        string re;
+        if (!cx."response-encoding") {
+            re = cx."response-encoding" = old_encoding;
+        } else {
+            re = cx."response-encoding".lwr();
+            if (re != old_encoding) {
+                s.setEncoding(re);
+            }
+        }
+        if (re != "iso-8859-1" && re != "latin1" && re != "latin-1") {
             rv.hdr."Content-Type" += ";charset=" + cx."response-encoding";
         }
     }
@@ -821,7 +938,7 @@ public class AbstractLogger {
 #! this abstract class defines the public interface of the private HttpListener class defined in the HttpServer module
 public class HttpListenerInterface inherits AbstractLogger {
     #! method to log a response message
-    /** @param cx the call context
+    /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param rv the response hash
     */
     logResponse(hash<auto> cx, hash<auto> rv) {
@@ -831,6 +948,11 @@ public class HttpListenerInterface inherits AbstractLogger {
     #! Removes a dedicated socket handler from the listener
     removeExternalDedicatedSocket(softstring id) {
         throw "UNIMPLEMENTED";
+    }
+
+    #! Returns a hash of extra headers to be added to all responses from this listener
+    *hash<auto> getDefaultResponseHeaders() {
+        # no implementation in the base class
     }
 
     #! adds user-defined data to be returned in the \c "uctx" context key when serving requests from this listener
@@ -845,6 +967,9 @@ public class HttpListenerInterface inherits AbstractLogger {
     */
     abstract auto removeUserThreadContext(*string k);
 }
+
+# for backwared compatibility, calls to deprecated methods are made below
+%disable-warning deprecated
 
 #! abstract base class for external authentication
 /** This class should be inherited by a class providing real authentication
@@ -867,6 +992,8 @@ public class AbstractAuthenticator {
 
     #! called to authenticate a user for a connection
     /** This method will only be called if requiresAuthentication() returns @ref True "True"
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
         @param user the username to authenticate
         @param pass the password for the user
 
@@ -874,7 +1001,37 @@ public class AbstractAuthenticator {
         be overridden in child classes; this parent method will never throw any exceptions; all connections are
         accepted by default)
     */
-    authenticate(string user, string pass = "") {
+    authenticate(reference<hash<auto>> cx, string user, string pass = "") {
+        authenticate(user, pass);
+    }
+
+    #! Called to try to authenticate the connection based on the source IP address
+    /** This method will only be called if requiresAuthentication() returns @ref True "True" and no authentication
+        credentials are supplied with the request
+
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
+        request can be authenticated based on the source IP address
+        @param ip the IP address of the source connection
+        @param authenticated set to True if the connection was authenticated based on the source IP address
+    */
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        authenticateByIP(ip, \cx.user);
+        authenticated = True;
+    }
+
+    #! called to authenticate a user for a connection
+    /** This method will only be called if requiresAuthentication() returns @ref True "True"
+        @param user the username to authenticate
+        @param pass the password for the user
+
+        @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated (must
+        be overridden in child classes; this parent method will never throw any exceptions; all connections are
+        accepted by default)
+
+        @note Do not use this method; use authenticate(reference<hash<auto>> cx, string user, string pass) instead
+    */
+    deprecated authenticate(string user, string pass = "") {
     }
 
     #! called when the connection requires authentication, but no authentication credentials were supplied, to try to authenticate the connection based on the source IP address
@@ -885,9 +1042,11 @@ public class AbstractAuthenticator {
         authenticated based on the source IP address (this method returns the string \c "admin")
 
         @throw AUTHENTICATION-ERROR subclasses should throw this exception if the user cannot be authenticated
-        (however this base class method as implemented here will never throw any exceptions
+
+        @note Do not use this method; use authenticateByIP(reference<hash<auto>> cx, reference<string> ip) instead
     */
-    authenticateByIP(string ip, reference<string> user) {
+    deprecated authenticateByIP(string ip, reference<string> user) {
+        throw "AUTHENTICATION-ERROR", "cannot authenticate by IP address";
     }
 
     #! returns a hash with one item - \c WWW-Authenticate header set to correct realm
@@ -900,7 +1059,7 @@ public class AbstractAuthenticator {
     }
 
     #! returns a hash with one item - \c WWW-Authenticate header set to correct realm
-    /** @param cx the call context
+    /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
     hash<auto> getAuthHeader(hash<auto> cx) {
         return {
@@ -908,49 +1067,35 @@ public class AbstractAuthenticator {
         };
     }
 
-    #! returns a 401 repsonse with the given string argument as the message body
+    #! returns a 401 response with the given string argument as the message body
     /** @param msg message body to return
-        @param cx the call context
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
     */
     hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server", *hash<auto> cx) {
+        return do401(msg, NOTHING, NOTHING, cx);
+    }
+
+    #! returns a 401 response with the given string argument as the message body
+    /** @param msg message body to return
+        @param content_type the Content-Type header value to return
+        @param hdr additional headers to return
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
+    */
+    hash<HttpResponseInfo> do401(string msg = "Authentication is required to access this server",
+            string content_type = MimeTypeHtml, *hash<auto> hdr, *hash<auto> cx) {
+        hdr."Content-Type" = content_type;
+        hdr += getAuthHeader(cx);
         return <HttpResponseInfo>{
             "code": 401,
             "body": msg,
-            "hdr": getAuthHeader(cx),
+            "hdr": hdr,
         };
     }
-
-    #! primary method called to authenticate each request
+    #! Primary method called to authenticate each request
     /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
         @param hdr a hash of request headers
         @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
-        identified and authorized; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
 
         @return returns @ref nothing if there were no errors, otherwise returns a hash with the following keys to
         indicate an authentication or authorization error:
@@ -961,50 +1106,133 @@ public class AbstractAuthenticator {
     *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx) {
         #printf("HTTP DEBUG %s::authenticateRequest() called\n", self.className());
-        if (!requiresAuthentication())
-            return;
-
-        if (hdr.authorization) {
-            if (hdr.authorization !~ /basic /i)
-                return do401("Only basic authentication is supported", cx);
-
-            *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
-            if (!bstr)
-                return do401(NOTHING, cx);
-
-            string str = parse_base64_string_to_string(bstr);
-            int i = str.find(":");
-            if (i < 1 || i == (str.size() -1))
-                return do401(NOTHING, cx);
-
-            string user = str.substr(0, i);
-            *string pass = str.substr(i + 1);
-
-            try
-                authenticate(user, pass);
-            catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "AUTHENTICATION-ERROR")
-                    return do401(NOTHING, cx);
-                else
-                    rethrow;
-            }
-
-            cx.user = user;
+        if (!requiresAuthentication()) {
             return;
         }
 
-        string user;
+        bool authenticated;
+        if (*hash<HttpResponseInfo> rv = authenticateRequestIntern(listener, hdr, \cx, \authenticated)) {
+            return rv;
+        }
+
+        if (!authenticated) {
+            return do401(NOTHING, cx);
+        }
+    }
+
+    #! Primary method called to authenticate each request
+    /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
+        @param hdr a hash of request headers
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
+        @param authenticated set to True if the request was authenticated; this output value is ignored if the method
+        returns a response info hash
+
+        @return returns @ref nothing if there were no errors, otherwise a hash can be returned which will be sent to
+        the requester as the response
+    */
+    private *hash<HttpResponseInfo> authenticateRequestIntern(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        if (hdr.authorization) {
+            try {
+                if (hdr.authorization =~ /^Basic .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processBasicAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else if (hdr.authorization =~ /^Digest .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processDigestAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else if (hdr.authorization =~ /^Bearer .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processBearerAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else {
+                    listener.logError("Unsupported 'Authorization' header: %y (from %s)", hdr.authorization,
+                        cx."peer-info".address_desc);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "AUTHENTICATION-ERROR") {
+                    listener.logError("Error processing 'Authorization' header: %s (from %s)",
+                        get_exception_string(ex), cx."peer-info".address_desc);
+                } else {
+                    rethrow;
+                }
+            }
+            if (authenticated) {
+                return;
+            }
+        }
+
+        if (hdr.cookie) {
+            if (*hash<HttpResponseInfo> rv = processCookieHeader(listener, hdr, \cx, \authenticated)) {
+                return rv;
+            }
+            if (authenticated) {
+                return;
+            }
+        }
+
         # only try ip-based authentication if the connection is not already authenticated
         try {
-            authenticateByIP(cx."peer-info".address, \user);
-            cx.user = user;
-            return;
+            authenticateByIP(\cx, cx."peer-info".address, \authenticated);
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string str = sprintf("%s: %s: %s: received from %s", get_ex_pos(ex), ex.err, ex.desc, cx."peer-info".address_desc);
-            listener.logError(str);
+            string str;
+            if (ex.err == "AUTHENTICATION-ERROR") {
+                str = sprintf("Failed IP authentication from %y: %s: %s", cx."peer-info".address_desc, ex.err,
+                    ex.desc);
+            } else {
+                str = sprintf("Error in IP authentication: %s (from %s)", get_exception_string(ex),
+                    cx."peer-info".address_desc);
+            }
+            listener.logError("%s", str);
         }
-        return do401(NOTHING, cx);
+    }
+
+    private *hash<HttpResponseInfo> processBasicAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
+        if (!bstr) {
+            listener.logError("Invalid Basic Authorization header %y received from %s", bstr,
+                cx."peer-info".address_desc);
+            return;
+        }
+
+        string str = parse_base64_string_to_string(bstr);
+        int i = str.find(":");
+        if (i < 1 || i == (str.size() -1)) {
+            listener.logError("Invalid Basic Authorization header (decoded to %y) received from %s", str,
+                cx."peer-info".address_desc);
+            return;
+        }
+
+        string user = str.substr(0, i);
+        *string pass = str.substr(i + 1);
+
+        authenticate(\cx, user, pass);
+        if (!cx.user.val()) {
+            cx.user = user;
+        }
+        authenticated = True;
+    }
+
+    private *hash<HttpResponseInfo> processDigestAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
+    }
+
+    private *hash<HttpResponseInfo> processBearerAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
+    }
+
+    private *hash<HttpResponseInfo> processCookieHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
     }
 
     #! Called after a request has been handled to allow the authenticator to remove any thread-local auth information
@@ -1023,37 +1251,11 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
     /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
         @param hdr a hash of request headers
         @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
-        identified and authorized; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
 
         @return returns @ref nothing indicating that the request is authenticated
     */
     *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr, reference<hash> cx) {
-        return;
     }
 }
 
@@ -1098,7 +1300,7 @@ public class AbstractStreamRequest {
     /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
         @param handler the handler serving the request
         @param s the Socket for serving the request
-        @param cx a call context hash
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -1153,11 +1355,12 @@ public class AbstractStreamRequest {
     */
     private hash<HttpHandlerResponseInfo> sendResponse() {
         hash<HttpHandlerResponseInfo> rv = getResponseHeaderMessage();
-        # issue #4109: do not start async I/O with a HEAD request
-        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD")
-            return rv;
-
         http_set_reply_headers(s, cx, \rv);
+
+        # issue #4109: do not start async I/O with a HEAD request
+        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD") {
+            return rv;
+        }
 
         # send chunked response
         s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
@@ -1180,7 +1383,11 @@ public class AbstractStreamRequest {
         @note this method is called after the message body has been received
     */
     private hash<HttpHandlerResponseInfo> getResponseHeaderMessage() {
-        return cast<hash<HttpHandlerResponseInfo>>(getResponseHeaderMessageImpl());
+        hash<HttpHandlerResponseInfo> rv = cast<hash<HttpHandlerResponseInfo>>(getResponseHeaderMessageImpl());
+        if (*hash<auto> hdr = listener.getDefaultResponseHeaders()) {
+            rv.hdr = hdr + rv.hdr;
+        }
+        return rv;
     }
 
     #! this is the primary callback for receiving chunked data; data will be logged, and then recvImpl() is called
@@ -1351,6 +1558,44 @@ public class AbstractHttpRequestHandler {
         }
     }
 
+    #! Preproecsses a request before authentication
+    /** @param listener
+        @param hdr a reference to request headers
+        @param cx a reference to the call context hash
+
+        @return a return value indicates an authentication error and will be returned to the caller immediately, and
+        the connection will be closed; returning no value indicates that request processing should continue
+    */
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        # intentionally empty
+    }
+
+    #! Authenticates the request if possible
+    /** @param listener
+        @param hdr a hash of request headers
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
+
+        @return a return value indicates an authentication error and will be returned to the caller immediately, and
+        the connection will be closed; returning no value indicates the request was authenticated
+    */
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        if (!auth) {
+            listener.log("Handler %y: no authentication required", cx.handler_name);
+            return;
+        }
+        if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
+            return ah;
+        }
+        if (exists cx.user) {
+            listener.log("Handler %y: authenticated request with user %y", cx.handler_name, cx.user);
+        } else {
+            listener.log("Handler %y: authenticated request without a user context", cx.handler_name);
+        }
+    }
+
     #! this method can be used to mask data in debug messages
     /** @param msg the log message to be subjected to masking
 
@@ -1393,34 +1638,7 @@ public class AbstractHttpRequestHandler {
 
     #! Called if the request contains an \c "Expect: 100-continue" header
     /**
-        @param cx call context hash; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the
-            client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -1445,33 +1663,7 @@ public class AbstractHttpRequestHandler {
 
     #! will be called when a request is received that should be directed to the handler
     /**
-        @param cx call context hash; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -1576,33 +1768,7 @@ public class AbstractHttpRequestHandler {
     }
 
     #! helper method for handling log messages
-    /** @param cx the call context hash; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+    /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param api the API description hash
         @param params a reference to the call parameters; the call context hash will be added as the first argument
         @param args an optional reference to a string describing the arguments
@@ -1807,8 +1973,11 @@ public class AbstractUrlHandler inherits HttpServer::AbstractHttpRequestHandler 
         query arguments removed
     */
     string getRelativePath(string path) {
-        if (url_root && path.equalPartialPath(url_root))
+        if (url_root && path.equalPartialPath(url_root)) {
             path = path.substr(url_root.size() + 1);
+        }
+        # combine multiple forward slashes
+        path =~ s/\/+/\//g;
         # strip URI query args from path
         path =~ s/\?.*$//;
         return path;
@@ -1867,32 +2036,7 @@ public class AbstractHttpSocketHandlerInterface {
     /** This method should not return until the connection is closed or the stop() method is called
 
         @param lid the listener ID
-        @param cx call context hash; this hash will have the following keys:
-        - \c header-info: a hash of information about the request header with the following keys:
-          - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if
-            any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will
-            be set to the first requested character encoding in the list
-          - \c accept-encoding: a hash where keys are values from any \c "Accept-Encoding" header and the values are
-            @ref True
-          - \c body-content-type: this is the \c "Content-Type" header without any charset declaration
-          - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in
-            this key
-          - \c client-cert: if the server is configured to capture remote client certificates, and the client supplied
-            a certificate, this key will be populated with the @ref Qore::SSLCertificate "SSLCertificate" for the client
-          - \c close: set to @ref True "True" if the connection should be closed after responding,
-            @ref False "False" if not (as derived from the request header)
-          - \c headers-raw: a hash of raw request headers without any case conversions or other processing
-          - \c request-uri: gives the request URI in an HTTP request
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param hdr a hash of headers in the request
         @param s the @ref Qore::Socket "Socket" object for the dedicated connection
 
@@ -1956,18 +2100,7 @@ public class AbstractHttpSocketHandlerInterface {
         is called
 
         @param lid the listener ID
-        @param cx call context hash; this hash will have the following keys:
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          @ref Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          @ref Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from @ref Qore::parse_url())
-        - \c id: the unique HTTP connection ID
-        - \c ssl: @ref True "True" if the request was encrypted with HTTPS, @ref False "False" if not
-        - \c listener-id: the HTTP server listener ID (see HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
-        - \c root_path: the root URL path matched if the request was matched by a URL prefix
+        @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param hdr a hash of headers in the request
         @param s the @ref Qore::Socket "Socket" object for the dedicated connection
 

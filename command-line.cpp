@@ -7,7 +7,7 @@
 
     it should offer POSIX style command-line handling on any platform...
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -509,86 +509,86 @@ static void show_build_options(const char* arg) {
 }
 
 static void do_version(const char* arg) {
-   printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2024 David Nichols\n", qore_target_os, qore_target_arch,
-       qore_target_bits);
+    printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2025 David Nichols\n", qore_target_os,
+        qore_target_arch, qore_target_bits);
 
-   printf("version %s", qore_version_string);
-   FeatureList::iterator i = qoreFeatureList.begin();
-   if (i != qoreFeatureList.end()) {
-      printf(" (builtin features: ");
-      while (i != qoreFeatureList.end()) {
-         fputs((*i).c_str(), stdout);
-         i++;
-         if (i != qoreFeatureList.end())
-            printf(", ");
-      }
-      putchar(')');
-   }
+    printf("version %s", qore_version_string);
+    FeatureList::iterator i = qoreFeatureList.begin();
+    if (i != qoreFeatureList.end()) {
+        printf(" (builtin features: ");
+        while (i != qoreFeatureList.end()) {
+            fputs((*i).c_str(), stdout);
+            i++;
+            if (i != qoreFeatureList.end())
+                printf(", ");
+        }
+        putchar(')');
+    }
 
-   // show git hash
-   printf("\n  git hash: %s", qore_git_hash);
+    // show git hash
+    printf("\n  git hash: %s", qore_git_hash);
 
-   // show module api and compatible module apis
-   printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
-   if (qore_mod_api_list_len == 1)
-       printf("\n");
-   else {
-       printf(" (");
-       for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
-           printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
-           if (j != (qore_mod_api_list_len - 1))
-               printf(", ");
-       }
-       printf(")\n");
-   }
+    // show module api and compatible module apis
+    printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
+    if (qore_mod_api_list_len == 1)
+        printf("\n");
+    else {
+        printf(" (");
+        for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
+            printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
+            if (j != (qore_mod_api_list_len - 1))
+                printf(", ");
+        }
+        printf(")\n");
+    }
 
-   printf("  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
-          qore_build_host, qore_cplusplus_compiler, qore_cflags, qore_ldflags, mpfrInfo.getBuffer());
+    printf("  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
+            qore_build_host, qore_cplusplus_compiler, qore_cflags, qore_ldflags, mpfrInfo.getBuffer());
 
-   printf("use -B to show build options\n");
+    printf("use -B to show build options\n");
 
-   exit(0);
+    exit(0);
 }
 
 static void set_charset(const char* arg) {
-   def_charset = arg;
+    def_charset = arg;
 }
 
 static void show_charsets(const char* arg) {
-   QEM.showEncodings();
-   exit(0);
+    QEM.showEncodings();
+    exit(0);
 }
 
 static void show_charset_aliases(const char* arg) {
-   QEM.showAliases();
-   exit(0);
+    QEM.showAliases();
+    exit(0);
 }
 
 static void set_exec(const char* arg) {
-   cl_pgm = arg;
+    cl_pgm = arg;
 }
 
 static void disable_gc(const char* arg) {
-   qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
+    qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
 
 static void show_module_errors(const char* arg) {
-   show_mod_errs = true;
+    show_mod_errs = true;
 }
 
 static void do_exec_class(const char* arg) {
-   //printf("do_exec_class(%s)\n", arg);
-   exec_class = true;
-   exec_class_name = arg;
-   parse_options |= PO_NO_TOP_LEVEL_STATEMENTS;
+    //printf("do_exec_class(%s)\n", arg);
+    exec_class = true;
+    exec_class_name = arg;
+    parse_options |= PO_NO_TOP_LEVEL_STATEMENTS;
 }
 
 static void set_lgpl(const char* arg) {
-   license = QL_LGPL;
+    license = QL_LGPL;
 }
 
 static void set_mit(const char* arg) {
-   license = QL_MIT;
+    license = QL_MIT;
 }
 
 #define ARG_NONE 0

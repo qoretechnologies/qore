@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Logger.qm Logger library
 
-/*  Logger.qm Copyright 2018 - 2024 Qore Technologies, s.r.o.
+/*  Logger.qm Copyright 2018 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -218,36 +218,37 @@ module Logger {
 
     @subsection logger_v1_0 v1.0
     - Split classes into the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance reasons
-      (<a href="https://github.com/qorelanguage/qore/issues/4884">issue 4884</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4884">issue 4884</a>)
+    - Added a reopen event for rotatable appenders
 
     @subsection logger_v0_6 v0.6
     - Fixed a bug where file rotate could result in logging exceptions; removed explicit atomic lock operations and
       implemented low-level atomic file handling instead
-      (<a href="https://github.com/qorelanguage/qore/issues/4842">issue 4842</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4842">issue 4842</a>)
 
     @subsection logger_v0_5 v0.5
     - added \c LoggerInterface "LoggerInterface" and @ref Logger::LoggerWrapper "LoggerWrapper" classes
-      (<a href="https://github.com/qorelanguage/qore/issues/4776">issue 4776</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4776">issue 4776</a>)
 
     @subsection logger_v0_4 v0.4
     - added the @ref Logger::StdoutAppender "StdoutAppender" class
 
     @subsection logger_v0_3 v0.3
     - fixed a race condition handling log file rotation with active logs
-      (<a href="https://github.com/qorelanguage/qore/issues/4583">issue 4583</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4583">issue 4583</a>)
 
     @subsection logger_v0_2 v0.2
     - added support for the \c %%h and \c %%P patterns for hostname and PID, respectively
-      (<a href="https://github.com/qorelanguage/qore/issues/4179">issue 4179</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4179">issue 4179</a>)
     - allow file appenders to be reopened
-      (<a href="https://github.com/qorelanguage/qore/issues/4171">issue 4171</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4171">issue 4171</a>)
     - enable serialization for LoggerEvent objects as well as for them to be submitted
       directly to \c Logger objects
-      (<a href="https://github.com/qorelanguage/qore/issues/4164">issue 4164</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4164">issue 4164</a>)
 
     @subsection logger_v0_1_1 v0.1.1
     - added Logger::Logger::logArgs() "Logger::logArgs()"
-      (<a href="https://github.com/qorelanguage/qore/issues/3492">issue 3492</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3492">issue 3492</a>)
 
     @subsection logger_v0_1 v0.1
     - the initial version of the Logger module
@@ -604,6 +605,8 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
     public {
         #! rotate event
         const EVENT_ROTATE = 10001;
+        #! reopen event
+        const EVENT_REOPEN = 10002;
         #! default value for rotation chain
         const DEFAULT_ROTATION_COUNT = 10;
     }
@@ -611,7 +614,7 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
     constructor(*string name, LoggerLayout layout, *string encoding)
             : LoggerAppenderFile(name, layout, "", encoding) {}
 
-    #! Pushes rotate event
+    #! Pushes a rotate event
     /**
         The current log file will be closed and opened. If the file exists, then it is ovewritten
 
@@ -623,6 +626,21 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
                 throw "LOGGER-ERROR", "Rotation is disabled";
             }
             pushEvent(EVENT_ROTATE, NOTHING);
+        }
+    }
+
+    #! Pushes a reopen event
+    /**
+        The current log file will be closed and opened. If the file exists, then it is ovewritten
+
+        @throw LOGGER-ERROR if rotation is disabled
+    */
+    public reopen() {
+        if (isOpen()) {
+            if (getCount() <= 0) {
+                throw "LOGGER-ERROR", "Rotation is disabled";
+            }
+            pushEvent(EVENT_REOPEN, NOTHING);
         }
     }
 
@@ -769,6 +787,12 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                     file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                 }
                 break;
+
+            case EVENT_REOPEN:
+                # reopen file atomically
+                file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                break;
+
             default:
                 LoggerAppenderFile::processEventImpl(type, params);
         }
@@ -1420,6 +1444,20 @@ public class LoggerWrapper inherits LoggerInterface {
         }
     }
 
+    #! Logs a message object with the DETAIL level
+    /**
+        @see @ref log()
+        @param message a string to log used as a format string for @ref Qore::vsprintf() "vsprintf()". Optional
+        arguments are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
+        @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information.
+    */
+    detail(string message, ...) {
+        *LoggerInterface logger = getLogger();
+        if (logger) {
+            logger.logArgs(Qore::Logger::LoggerLevel::LevelDetail, message, argv);
+        }
+    }
+
     #! Logs a message object with the INFO level
     /**
         @see @ref log()
@@ -1742,6 +1780,58 @@ public class StdoutAppender inherits LoggerAppenderWithLayout {
             case EVENT_LOG:
                 print(params);
                 break;
+        }
+    }
+}
+
+#! Utility class
+public class LoggerUtil {
+    public {
+        #! Maximum length of string in characters for a summary log message
+        const MaxSummaryLogStringSize = 100;
+
+        #! Maximum number of elements in a hash or list to log in a summary message
+        const MaxSummaryElements = 20;
+    }
+
+    #! Returns a summary value for debug logging purposes to avoid logging very large amounts of data
+    static auto getArgSummary(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                if (v.size() > MaxSummaryElements) {
+                    list<string> kl = keys v;
+                    return (map {
+                        getArgSummary($1.key): getArgSummary($1.value)
+                    }, (v{kl[0..MaxSummaryElements]}).pairIterator()) + {
+                        "_info_": sprintf("hash keys omitted: %y", kl[MaxSummaryElements..]),
+                    };
+                }
+                return map {getArgSummary($1.key): getArgSummary($1.value)}, v.pairIterator();
+
+            case NT_LIST:
+                if (v.size() > MaxSummaryElements) {
+                    return (map getArgSummary($1), v[0..MaxSummaryElements]) + sprintf("remaining %d elements "
+                        "omitted", v.size() - MaxSummaryElements);
+                }
+                return map getArgSummary($1), v;
+
+            case NT_OBJECT:
+                return sprintf("%s object", v.className());
+
+            case NT_BINARY:
+                if (v.size() > MaxSummaryLogStringSize) {
+                    return sprintf("binary data (%d bytes)", v.size());
+                }
+                return v;
+
+            case NT_STRING:
+                if (v.size() > MaxSummaryLogStringSize) {
+                    return v[0..MaxSummaryLogStringSize] + "...";
+                }
+                return v;
+
+            default:
+                return v;
         }
     }
 }

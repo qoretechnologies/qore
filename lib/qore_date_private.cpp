@@ -469,15 +469,12 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
 }
 
 int64 qore_absolute_time::getRelativeMicroseconds() const {
-   // find the difference between gmtime and our time
-   struct timeval tv;
-   if (gettimeofday(&tv, 0)) {
-      printd(0, "qore_absolute_time::getRelativeMicroseconds() gettimeofday() failed: %s\n", strerror(errno));
-      return 0;
-   }
-
-   int64 ds = (epoch - tv.tv_sec) * 1000000 + (us - tv.tv_usec);
-   return ds < 0 ? 0 : ds;
+    // find the difference between the current time and our time
+    int now_us;
+    int64 now_seconds = q_epoch_us(now_us);
+    // NOTE: we *must* cast "us" to int or we will get invalid results on macOS with clang++ 16 for example
+    int64 ds = ((epoch - now_seconds) * 1000000ll) + ((int)us - now_us);
+    return ds < 0 ? 0 : ds;
 }
 
 void qore_absolute_time::getAsString(QoreString &str) const {
@@ -487,102 +484,102 @@ void qore_absolute_time::getAsString(QoreString &str) const {
     str.sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d", i.year, i.month, i.day, i.hour, i.minute, i.second, i.us);
     const char *wday = days[qore_date_info::getDayOfWeek(i.year, i.month, i.day)].abbr;
     str.sprintf(" %s ", wday);
-    concatOffset(i.utcoffset, str);
+    concatOffset(i.utcoffset, str, false);
     // only concat zone name if it exists and is not the same as the offset just output
     if (*i.zname && *i.zname != '+' && *i.zname != '-')
         str.sprintf(" (%s)", i.zname);
 }
 
 qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt) {
-   int usecs;
+    int usecs;
 
-   // break down date and do day, month, and year math
-   if (dt.year || dt.month || dt.day) {
-      // get the broken-down date values for the date in local time
-      qore_simple_tm2 tm(epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch), us);
+    // break down date and do day, month, and year math
+    if (dt.year || dt.month || dt.day) {
+        // get the broken-down date values for the date in local time
+        qore_simple_tm2 tm(epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch), us);
 
 #ifdef DEBUG
-      // only needed by the debugging statement at the bottom
-      //int64 oe=epoch;
+        // only needed by the debugging statement at the bottom
+        //int64 oe=epoch;
 #endif
-      //printd(5, "absolute_time::operator+= this=%p %lld.%06d (%d) %04d-%02d-%02d %02d:%02d:%02d.%06d (+%dY %dM %dD %dh %dm %ds %dus)\n", this, epoch, us, zone ? zone->getUTCOffset(epoch) : 0, tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.us, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.us);
+        //printd(5, "absolute_time::operator+= this=%p %lld.%06d (%d) %04d-%02d-%02d %02d:%02d:%02d.%06d (+%dY %dM %dD %dh %dm %ds %dus)\n", this, epoch, us, zone ? zone->getUTCOffset(epoch) : 0, tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.us, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.us);
 
-      // add years, months, and days
-      tm.year += dt.year;
-      tm.month += dt.month;
-      // normalize to the end of the month
-      normalize_dm(tm.year, tm.month, tm.day);
+        // add years, months, and days
+        tm.year += dt.year;
+        tm.month += dt.month;
+        // normalize to the end of the month
+        normalize_dm(tm.year, tm.month, tm.day);
 
-      tm.day += dt.day;
-      // normalize to the correct day, month, and year
-      normalize_day(tm.year, tm.month, tm.day);
+        tm.day += dt.day;
+        // normalize to the correct day, month, and year
+        normalize_day(tm.year, tm.month, tm.day);
 
-      // get epoch offset for same time on the target day
-      epoch = qore_date_info::getEpochSeconds(tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second);
+        // get epoch offset for same time on the target day
+        epoch = qore_date_info::getEpochSeconds(tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second);
 
-      // adjust for new UTC offset for target day at the original time
-      epoch -= AbstractQoreZoneInfo::getUTCOffset(zone, epoch);
+        // adjust for new UTC offset for target day at the original time
+        epoch -= AbstractQoreZoneInfo::getUTCOffset(zone, epoch);
 
-      usecs = tm.us;
-   }
-   else
-      usecs = us;
+        usecs = tm.us;
+    } else {
+        usecs = us;
+    }
 
-   // get resulting microseconds
-   usecs += dt.us;
+    // get resulting microseconds
+    usecs += dt.us;
 
-   // add time component
-   epoch += (SECS_PER_HOUR * dt.hour) + (SECS_PER_MINUTE * dt.minute) + dt.second;
+    // add time component
+    epoch += (SECS_PER_HOUR * dt.hour) + (SECS_PER_MINUTE * dt.minute) + dt.second;
 
-   // normalize epoch and microseconds
-   normalize_units2<int64, int>(epoch, usecs, 1000000);
-   us = usecs;
+    // normalize epoch and microseconds
+    normalize_units2<int64, int>(epoch, usecs, 1000000);
+    us = usecs;
 
-   //printd(5, "absolute_time::operator+= new epoch=%lld.%06d (diff=%lld)\n", epoch, tm.us, epoch - oe);
-   return *this;
+    //printd(5, "absolute_time::operator+= new epoch=%lld.%06d (diff=%lld)\n", epoch, tm.us, epoch - oe);
+    return *this;
 }
 
 qore_absolute_time &qore_absolute_time::operator-=(const qore_relative_time &dt) {
-   qore_relative_time t(dt);
-   t.unaryMinus();
-   return *this += t;
+    qore_relative_time t(dt);
+    t.unaryMinus();
+    return *this += t;
 }
 
 qore_relative_time &qore_relative_time::operator+=(const qore_relative_time &dt) {
-   year += dt.year;
-   month += dt.month;
-   day += dt.day;
-   hour += dt.hour;
-   minute += dt.minute;
-   second += dt.second;
-   us += dt.us;
+    year += dt.year;
+    month += dt.month;
+    day += dt.day;
+    hour += dt.hour;
+    minute += dt.minute;
+    second += dt.second;
+    us += dt.us;
 
-   normalize();
+    normalize();
 
-   return *this;
+    return *this;
 }
 
 qore_relative_time &qore_relative_time::operator-=(const qore_relative_time &dt) {
-   year -= dt.year;
-   month -= dt.month;
-   day -= dt.day;
-   hour -= dt.hour;
-   minute -= dt.minute;
-   second -= dt.second;
-   us -= dt.us;
+    year -= dt.year;
+    month -= dt.month;
+    day -= dt.day;
+    hour -= dt.hour;
+    minute -= dt.minute;
+    second -= dt.second;
+    us -= dt.us;
 
-   normalize();
+    normalize();
 
-   return *this;
+    return *this;
 }
 
 qore_relative_time &qore_relative_time::operator-=(const qore_absolute_time &dt) {
-   second -= dt.epoch;
-   us -= dt.us;
+    second -= dt.epoch;
+    us -= dt.us;
 
-   normalize();
+    normalize();
 
-   return *this;
+    return *this;
 }
 
 void qore_relative_time::set(const QoreValue v) {
@@ -656,24 +653,31 @@ void qore_relative_time::set(const char* str) {
     setLiteral(date, us);
 }
 
-void concatOffset(int utcoffset, QoreString &str) {
-   //printd(0, "concatOffset(%d)", utcoffset);
+void concatOffset(int utcoffset, QoreString& str, bool allow_z) {
+    //printd(0, "concatOffset(%d)", utcoffset);
 
-   // issue #2684 do not concatenate a "Z" with no offset, output +00:00
-   str.concat(utcoffset < 0 ? '-' : '+');
-   if (utcoffset < 0)
-      utcoffset = -utcoffset;
-   int h = utcoffset / SECS_PER_HOUR;
-   // the remaining seconds after hours
-   int r = utcoffset % SECS_PER_HOUR;
-   // minutes
-   int m = r / SECS_PER_MINUTE;
-   // we have already output the hour sign above
-   str.sprintf("%02d:%02d", h < 0 ? -h : h, m);
-   // see if there are any seconds
-   int s = utcoffset - h * SECS_PER_HOUR - m * SECS_PER_MINUTE;
-   if (s)
-      str.sprintf(":%02d", s);
+    // issue #2684 do not concatenate a "Z" with no offset, output +00:00
+    // unless allow_z is set
+    if (allow_z && !utcoffset) {
+        str.concat('Z');
+        return;
+    }
+    str.concat(utcoffset < 0 ? '-' : '+');
+    if (utcoffset < 0) {
+        utcoffset = -utcoffset;
+    }
+    int h = utcoffset / SECS_PER_HOUR;
+    // the remaining seconds after hours
+    int r = utcoffset % SECS_PER_HOUR;
+    // minutes
+    int m = r / SECS_PER_MINUTE;
+    // we have already output the hour sign above
+    str.sprintf("%02d:%02d", h < 0 ? -h : h, m);
+    // see if there are any seconds
+    int s = utcoffset - h * SECS_PER_HOUR - m * SECS_PER_MINUTE;
+    if (s) {
+        str.sprintf(":%02d", s);
+    }
 }
 
 void qore_date_private::format(QoreString &str, const char *fmt) const {
@@ -796,9 +800,8 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {
                             // trim trailing zeros
                             str.trim_trailing("0");
                         }
-                        concatOffset(i.utcoffset, str);
-                    }
-                    else {
+                        concatOffset(i.utcoffset, str, false);
+                    } else {
                         str.concat('P');
                         size_t len = str.size();
                         if (i.year) {
@@ -923,7 +926,10 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {
                 break;
                 // add iso8601 UTC offset
             case 'Z':
-                concatOffset(i.utcoffset, str);
+                concatOffset(i.utcoffset, str, false);
+                break;
+            case '@':
+                concatOffset(i.utcoffset, str, true);
                 break;
             default:
                 str.concat(*s);

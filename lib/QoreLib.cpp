@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,6 +41,8 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 #include <atomic>
 #include <cctype>
@@ -477,6 +479,10 @@ const qore_option_s* qore_option_list = qore_option_list_l;
 
 size_t qore_option_list_size = QORE_OPTION_LIST_SIZE;
 
+int q_add_module_to_blacklist(const char* name, const char* msg) {
+    return QMM.addModuleToBlacklist(name, msg);
+}
+
 bool q_get_option_value(const char* opt) {
     for (unsigned i = 0; i < QORE_OPTION_LIST_SIZE; ++i) {
         if (!strcasecmp(opt, qore_option_list_l[i].option))
@@ -526,6 +532,10 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
 
     parse_context.typeInfo = val.getFullTypeInfo();
     return 0;
+}
+
+QoreParseContext::QoreParseContext(LocalVar* oflag, QoreProgram* pgm) : pgm(pgm), oflag(oflag),
+        class_ctx(oflag ? QoreTypeInfo::getUniqueReturnClass(oflag->getTypeInfo()) : nullptr) {
 }
 
 QoreAbstractIteratorBase::QoreAbstractIteratorBase() : tid(q_gettid()) {
@@ -1511,63 +1521,63 @@ long long q_atoll(const char* str) {
 // returns seconds since epoch
 int64 q_epoch() {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      return 0;
-   }
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        return 0;
+    }
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      return 0;
-   }
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        return 0;
+    }
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 // returns seconds since epoch and gets microseconds
 int64 q_epoch_us(int &us) {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      us = 0;
-      return 0;
-   }
-   us = ts.tv_nsec / 1000;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        us = 0;
+        return 0;
+    }
+    us = ts.tv_nsec / 1000;
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      us = 0;
-      return 0;
-   }
-   us = ts.tv_usec;
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        us = 0;
+        return 0;
+    }
+    us = ts.tv_usec;
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 // returns seconds since epoch and gets nanoseconds
 int64 q_epoch_ns(int &ns) {
 #ifdef HAVE_CLOCK_GETTIME
-   struct timespec ts;
-   if (clock_gettime(CLOCK_REALTIME, &ts)) {
-      printd(0, "clock_gettime() failed: %s\n", strerror(errno));
-      ns = 0;
-      return 0;
-   }
-   ns = ts.tv_nsec;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts)) {
+        printd(0, "clock_gettime() failed: %s\n", strerror(errno));
+        ns = 0;
+        return 0;
+    }
+    ns = ts.tv_nsec;
 #else
-   struct timeval ts;
-   if (gettimeofday(&ts, 0)) {
-      printd(0, "gettimeofday() failed: %s\n", strerror(errno));
-      ns = 0;
-      return 0;
-   }
-   ns = ts.tv_usec * 1000;
+    struct timeval ts;
+    if (gettimeofday(&ts, 0)) {
+        printd(0, "gettimeofday() failed: %s\n", strerror(errno));
+        ns = 0;
+        return 0;
+    }
+    ns = ts.tv_usec * 1000;
 #endif
-   return ts.tv_sec;
+    return ts.tv_sec;
 }
 
 QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {

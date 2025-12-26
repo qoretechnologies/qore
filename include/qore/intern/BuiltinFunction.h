@@ -89,9 +89,11 @@ public:
 };
 
 // the following defines the virtual functions that are common to all builtin variants
-#define COMMON_BUILTIN_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const { return functionality; } \
-   DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<BuiltinSignature*>(&signature); } \
-   DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.getReturnTypeInfo(); }
+#define COMMON_BUILTIN_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const {\
+        const QoreClass* cls = getClass(); return functionality | (cls ? cls->getDomain() : 0);\
+    } \
+    DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<BuiltinSignature*>(&signature); } \
+    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.getReturnTypeInfo(); }
 
 class BuiltinFunctionVariantBase {
 public:
@@ -123,9 +125,8 @@ public:
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
-        CodeContextHelper cch(xsink, CT_BUILTIN, name);
-
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+        CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
         return func(ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
     }
 };
@@ -149,9 +150,8 @@ public:
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(const char* name, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
-        CodeContextHelper cch(xsink, CT_BUILTIN, name);
-
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+        CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
         return func(ptr, ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
     }
 };

@@ -58,8 +58,8 @@ module DebugProgramControl {
     - options API
 
     @subsection dc_v0_1_1 v0.1.1
-    - fixed bug providing programId context (<a href="https://github.com/qorelanguage/qore/issues/2603">issue 2603</a>)
-    - improved breakpoint usability (<a href="https://github.com/qorelanguage/qore/issues/2604">issue 2604</a>)
+    - fixed bug providing programId context (<a href="https://github.com/qoretechnologies/qore/issues/2603">issue 2603</a>)
+    - improved breakpoint usability (<a href="https://github.com/qoretechnologies/qore/issues/2604">issue 2604</a>)
 
     @subsection dc_v0_1 v0.1
     - the initial version of the DebugProgramControl module

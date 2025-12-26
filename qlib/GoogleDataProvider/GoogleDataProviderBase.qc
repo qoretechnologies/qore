@@ -36,7 +36,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        *GoogleRestClient::GoogleRestClient rest;
+        *RestClient::RestClient rest;
 
         #! API -> URL map
         static hash<string, string> api_map;
@@ -63,7 +63,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object
-    constructor(GoogleRestClient::GoogleRestClient rest) {
+    constructor(RestClient::RestClient rest) {
         self.rest = rest;
     }
 
@@ -89,16 +89,26 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
     */
-    updateConnectionObject(object conn) {
-        if (!(conn instanceof GoogleRestClient)) {
-            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"GoogleRestClient\" object; got "
-                "%y instead", self.className(), conn.className());
+    updateConnectionObjects(object conn, object connobj) {
+        if (!(connobj instanceof RestClient)) {
+            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClient\" object; got "
+                "%y instead", self.className(), connobj.className());
         }
-        rest = cast<GoogleRestClient>(conn);
+        rest = cast<RestClient>(connobj);
         rest.setConnectionPath("/");
         rest.setLogger(logger);
+    }
+
+    #! Override REST client
+    setRestClient(RestClient rest) {
+        self.rest = rest;
+    }
+
+    RestClient getRestClient() {
+        return rest;
     }
 
     #! If the request body should be populated with missing values
@@ -184,7 +194,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns a GoogleRestClient connection from the options
-    static GoogleRestClient::GoogleRestClient getRestConnection(*hash<auto> options) {
+    static RestClient::RestClient getRestConnection(*hash<auto> options) {
         GoogleRestClient rest;
         if (options.restclient) {
             rest = options.restclient;
@@ -272,7 +282,8 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         }
         return map {$1.key: True}, h{resource_path.last()}.methods.pairIterator(),
             ($1.value.response."$ref" != "Channel") && (!path_args
-                || ($1.value.parameterOrder && ((keys path_args) == $1.value.parameterOrder[0..path_args.size() - 1])));
+                || ($1.value.parameterOrder && ((keys path_args) ==
+                    $1.value.parameterOrder[0..path_args.size() - 1])));
     }
 
     #! Returns a data type for the given request
@@ -305,6 +316,16 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         }
         throw "SCHEMA-ERROR", sprintf("Unknown schema %y requested from Google API %y; known schemas: %y", schema,
             api, keys api_schemas);
+    }
+
+    #! Returns an input / inbound data type for the given Google schema
+    static DataProvider::AbstractDataProviderType getInputTypeForSchema(string api, string schema) {
+        hash<string, AbstractDataProviderType> input_schemas = GoogleDataProviderBase::getInputSchemasForApi(api);
+        if (*AbstractDataProviderType rv = input_schemas{schema}) {
+            return rv;
+        }
+        throw "SCHEMA-ERROR", sprintf("Unknown schema %y requested from Google API %y; known schemas: %y", schema,
+            api, keys input_schemas);
     }
 
     #! Returns all request types for the given API
@@ -375,7 +396,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         };
     }
 
-    #! Returns all schemas for the given API
+    #! Returns all output schemas for the given API
     static hash<string, AbstractDataProviderType> getApi(string api) {
         *hash<string, AbstractDataProviderType> rv;
         if (rv = output_schema_map{api}) {
@@ -390,6 +411,23 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
         hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         return GoogleDataProviderBase::getOutputSchemaMap(api, api_info);
+    }
+
+    #! Returns all input schemas for the given API
+    static hash<string, AbstractDataProviderType> getInputSchemasForApi(string api) {
+        *hash<string, AbstractDataProviderType> rv;
+        if (rv = input_schema_map{api}) {
+            return rv;
+        }
+
+        AutoLock al(m);
+        # check again in the lock
+        if (rv = input_schema_map{api}) {
+            return rv;
+        }
+
+        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
+        return GoogleDataProviderBase::getInputSchemaMap(api, api_info);
     }
 
     #! Creates the input schema map for the given API
@@ -452,7 +490,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         if (*string ref = info."$ref") {
             return unresolved.addReference(type, ref, info.required);
         }
-        return GoogleDataProviderBase::makeTypeFromSchemaInfo("Additional Properties", info, unresolved);
+        return GoogleDataProviderBase::makeTypeFromSchemaInfo("Additional Properties", info, unresolved, for_input);
     }
 
     #! Returns a type from a Google schema description
@@ -568,7 +606,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     static HashDataType makeHashFromSchemaInfo(string key, hash<auto> info, TypeResolverHelper unresolved,
             *bool for_input) {
         HashDataType rv(!info.required ? AutoHashOrNothingType : AutoHashType, key);
-        map rv.addField(GoogleDataProviderBase::makeFieldFromProperty(rv, $1.key, $1.value, unresolved)),
+        map rv.addField(GoogleDataProviderBase::makeFieldFromProperty(rv, $1.key, $1.value, unresolved, for_input)),
             info.properties.pairIterator(), !$1.value."deprecated";
         if (info.additionalProperties) {
             rv.setDefaultOtherFieldType(GoogleDataProviderBase::makeTypeFromSchemaInfo(rv, info.additionalProperties,

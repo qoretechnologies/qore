@@ -101,7 +101,7 @@ struct con_info {
             }
         }
 
-        const QoreString *tmp = url.getPath();
+        const QoreString* tmp = url.getPath();
         path = tmp ? tmp->c_str() : "";
         tmp = url.getUserName();
         username = tmp ? tmp->c_str() : "";
@@ -135,31 +135,33 @@ struct con_info {
         return 0;
     }
 
-    DLLLOCAL QoreStringNode* get_url(bool mask_password = false) const {
+    DLLLOCAL QoreStringNode* get_url(int opts = URL_NORMAL) const {
         QoreStringNode *pstr = new QoreStringNode("http");
         if (ssl) {
             pstr->concat("s://");
         } else {
             pstr->concat("://");
         }
-        bool has_username_or_password = false;
-        if (!username.empty()) {
-            pstr->concat(username);
-            has_username_or_password = true;
-        }
-        if (!password.empty()) {
-            pstr->concat(':');
-            if (mask_password) {
-                pstr->concat("<masked>");
-            } else {
-                pstr->concat(password);
-            }
-            if (!has_username_or_password) {
+        if (opts & (UC_USERNAME | UC_PASSWORD)) {
+            bool has_username_or_password = false;
+            if (!username.empty() && (opts & UC_USERNAME)) {
+                pstr->concat(username);
                 has_username_or_password = true;
             }
-        }
-        if (has_username_or_password) {
-            pstr->concat('@');
+            if (!password.empty() && (opts & UC_PASSWORD)) {
+                pstr->concat(':');
+                if (opts & UC_MASK_PASSWORD) {
+                    pstr->concat("<masked>");
+                } else {
+                    pstr->concat(password);
+                }
+                if (!has_username_or_password) {
+                    has_username_or_password = true;
+                }
+            }
+            if (has_username_or_password) {
+                pstr->concat('@');
+            }
         }
 
         if (!port) {
@@ -179,9 +181,10 @@ struct con_info {
         if (port && ((!ssl && port != 80) || (ssl && port != 443))) {
             pstr->sprintf(":%d", port);
         }
-        if (!path.empty()) {
-            if (path[0] != '/')
+        if (!path.empty() && (opts & UC_PATH)) {
+            if (path[0] != '/') {
                 pstr->concat('/');
+            }
             pstr->concat(path.c_str());
         }
         return pstr;

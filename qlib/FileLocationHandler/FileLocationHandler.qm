@@ -101,25 +101,25 @@ module FileLocationHandler {
 
     @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
     - implemented support for non-blocking I/O from file handlers
-      (<a href="https://github.com/qorelanguage/qore/issues/4764">issue 4764</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 
     @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned
-      (<a href="https://github.com/qorelanguage/qore/issues/4726">issue 4726</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4726">issue 4726</a>)
 
     @subsection filelocationhandler_v2_2 FileLocationHandler v2.2
     - added support for \c rest:// and \c rests:// locations
-      (<a href="https://github.com/qorelanguage/qore/issues/4669">issue 4669</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4669">issue 4669</a>)
     - added support for runtime extensibility from environment variables
-      (<a href="https://github.com/qorelanguage/qore/issues/4667">issue 4667</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4667">issue 4667</a>)
 
     @subsection filelocationhandler_v2_1 FileLocationHandler v2.1
     - added support for immediate <tt>data://</tt> locations
-      (<a href="https://github.com/qorelanguage/qore/issues/4626">issue 4626</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4626">issue 4626</a>)
 
     @subsection filelocationhandler_v2_0 FileLocationHandler v2.0
     - updated for read/write operations and added streaming APIs
-      (<a href="https://github.com/qorelanguage/qore/issues/4424">issue 4424</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4424">issue 4424</a>)
 
     @subsection filelocationhandler_v1_0 FileLocationHandler v1.0
     - initial release of the module

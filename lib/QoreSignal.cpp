@@ -39,28 +39,11 @@
 
 QoreSignalManager QSM;
 
+// SIGINT handler
+struct sigaction sa_int;
+
 static int qore_sigmask(int how, const sigset_t* set, sigset_t* oset) {
-    int rc = pthread_sigmask(how, set, oset);
-#ifdef __APPLE__X
-    /* why do we call sigprocmask on Darwin?
-        it seems that Darwin has a bug in handling per-thread signal masks.
-        Even though we explicitly set this thread's signal mask to unblock all signals
-        we are not explicitly catching (including QORE_STATUS_SIGNAL, currently set to
-        SIGSYS), no signal is delivered that is not in our list.  For example (on
-        Darwin only), if we are catching SIGUSR1 with a Qore signal handler (therefore
-        it's included in c_mask and blocked in this thread, because it will be also
-        included in sigwait below) and have no handler for SIGUSR2, if we send a
-        SIGUSR2 to the process, unless we call sigprocmask here and below after
-        pthread_sigmask, the SIGUSR2 will also be blocked (even through the signal
-        thread's signal mask explicitly allows for it to be delivered to this thread),
-        instead of being delivered to the process and triggering the default action -
-        terminate the process.  The workaround (discovered with trial and error) is to
-        call sigprocmask after every call to pthread_sigmask in the signal handler
-        thread
-    */
-    sigprocmask(how, set, oset);
-#endif
-    return rc;
+    return pthread_sigmask(how, set, oset);
 }
 
 void QoreSignalHandler::init() {
@@ -117,7 +100,11 @@ void QoreSignalManager::init(bool disable_signal_mask) {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     // ignore SIGPIPE signals
-    sigaction(SIGPIPE, &sa, 0);
+    sigaction(SIGPIPE, &sa, nullptr);
+
+    // get SIGINT handler
+    sigaction(SIGINT, &sa, &sa_int);
+    sigaction(SIGINT, &sa_int, nullptr);
 
     if (!disable_signal_mask) {
         setMask(mask);
@@ -259,13 +246,15 @@ void QoreSignalManager::preFork() {
 }
 
 void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
-    if (!enabled())
+    if (!enabled()) {
         return;
+    }
 
     block = false;
     assert(!waiting);
 
     // set new default signal mask for new process
+#if !defined(__linux__) && !defined(__APPLE__)
     if (new_process) {
         // do not start signal thread after a fork(), pthread_create() is not async-signal safe
         is_enabled = false;
@@ -275,6 +264,7 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
         sigprocmask(SIG_SETMASK, &new_mask, 0);
         return;
     }
+#endif
 
     printd(5, "QoreSignalManager::postFork() pid: %d, new_process: %d, starting signal thread\n", getpid(),
         new_process);
@@ -336,7 +326,26 @@ void QoreSignalManager::signal_handler_thread() {
 
             //printd(5, "signal %d received (handler: %d)\n", sig, handlers[sig].isSet());
             if (!handlers[sig].isSet()) {
-                if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP) {
+                if (sig == SIGINT) {
+                    if (sa_int.sa_handler == SIG_IGN) {
+                        continue;
+                    }
+                    if (sa_int.sa_handler == SIG_DFL) {
+                        // run the default action by raising the signal with the default setup
+                        struct sigaction sa;
+                        sa.sa_handler = SIG_DFL;
+                        sigemptyset(&sa.sa_mask);
+                        sa.sa_flags = SA_RESTART;
+                        sigaction(SIGINT, &sa, nullptr);
+                        // remove from the signal mask for sigwait
+                        sigdelset(&c_mask, SIGINT);
+                        qore_sigmask(SIG_SETMASK, &c_mask, 0);
+                        raise(sig);
+                    } else {
+                        assert(sa_int.sa_handler);
+                        (*sa_int.sa_handler)(SIGINT);
+                    }
+                } else if (sig == SIGTERM /*|| sig == SIGHUP*/) {
                     qore_exit_process(128 + sig);
                 }
                 continue;

@@ -134,8 +134,24 @@ public class HashDeclDataType inherits QoreDataType {
     /** @return an "or nothing" type equivalent to the current type
     */
     AbstractDataProviderType getOrNothingType() {
-        HashDataType rv(getName(), options);
+        HashDataType rv("*" + getName(), options);
         map rv.addField($1.getOrNothingType()), getFields().iterator();
+        return rv;
+    }
+
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory type
+
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+    */
+    AbstractDataProviderType getMandatoryType() {
+        string name = getName();
+        if (name =~ /^\*/) {
+            name = name[1..];
+        }
+        HashDataType rv(name, options);
+        map rv.addField($1.getMandatoryType()), getFields().iterator();
         return rv;
     }
 }

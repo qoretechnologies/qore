@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProvider class definition
 
-/** AbstractDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -21,8 +21,6 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 */
-
-%requires(reexport) Logger
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
@@ -66,6 +64,15 @@ public hashdecl DataProviderOptionInfo {
     */
     bool required = False;
 
+    #! Is the option part of a required group?
+    /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
+        string that is used to mark membership in the group by different options
+    */
+    *softlist<string> required_groups;
+
+    #! Is the option exclusive with other options?
+    *softlist<string> exclusive_with;
+
     #! Any default value
     auto default_value;
 
@@ -73,9 +80,18 @@ public hashdecl DataProviderOptionInfo {
     bool sensitive = False;
 
     #! List of allowed values (enum)
+    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    bool allowed_values_creatable;
+
+    #! List of allowed values for elements of list types (enum)
     /* In case the option type is a list, then this will provide the discrete values that can appear in the list
     */
-    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable;
 
     #! Any optional example value for the option
     /** This value must be in the one of the types in the \c type list
@@ -89,8 +105,33 @@ public hashdecl DataProviderOptionInfo {
     */
     *string ref_data;
 
+    #! A tag allowing element allowed values to be returned dynamically as reference data
+    /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
+        @ref DataProvider::AbstractDataProvider::getElementReferenceData() "AbstractDataProvider::getElementReferenceData()"
+        in the available DataProvider when resolving application actions if this attribute is set
+    */
+    *string element_ref_data;
+
+    #! A tag allowing the default value for the option to be returned dynamically
+    *string default_ref_data;
+
     #! Should this option be preselected?
     *bool preselected;
+
+    #! Any information about how to react to changes
+    *softlist<softstring> on_change;
+
+    #! Free-form metadata on options
+    *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
 }
 
 #! Data provider summary info
@@ -158,7 +199,7 @@ public hashdecl DataProviderSummaryInfo {
     #! Does the data provider provide a record?
     bool has_record = False;
 
-    #! Does this data provide support advanced search experssions?
+    #! Does this data provide support advanced search expressions?
     bool supports_search_expressions = False;
 
     #! Does this data provider support the event API / observer pattern?
@@ -301,6 +342,8 @@ public const ER_All = ER_Search | ER_Field;
 #! Role map from codes to descriptions
 public const RoleCodeMap = {
     ER_Search: "search",
+    ER_Field: "field",
+    ER_All: "all",
 };
 
 #! Role map from descriptions to codes
@@ -345,18 +388,6 @@ public const DataProviderSignatureFieldType = <DataProviderSignatureTypeInfo>{
     "type_code": ST_Field,
 };
 
-#! Data provider signature any type
-public const DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."any",
-    "type_code": ST_Any,
-};
-
-#! Data provider signature list type
-public const DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."list",
-    "type_code": ST_Any,
-};
-
 #! Data provider signature string value type
 public const DataProviderSignatureStringValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
@@ -381,9 +412,33 @@ public const DataProviderSignatureOptionalIntValueType = <DataProviderSignatureT
     "type_code": ST_Value,
 };
 
+#! Data provider signature bool value type
+public const DataProviderSignatureBoolValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."bool",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature *int value type
+public const DataProviderSignatureOptionalBoolValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*bool",
+    "type_code": ST_Value,
+};
+
 #! Data provider signature list value type
 public const DataProviderSignatureListValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."list",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature optional list value type
+public const DataProviderSignatureOptionalListValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*list",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature optional string list value type
+public const DataProviderSignatureOptionalStringListValueType = <DataProviderSignatureTypeInfo>{
+    "type": new ListDataType("*list<string>", StringType, True),
     "type_code": ST_Value,
 };
 
@@ -393,9 +448,45 @@ public const DataProviderSignatureHashValueType = <DataProviderSignatureTypeInfo
     "type_code": ST_Value,
 };
 
+#! Data provider signature optional hash value type
+public const DataProviderSignatureOptionalHashValueType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*hash",
+    "type_code": ST_Value,
+};
+
+#! Data provider signature any type
+public const DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature list type
+public const DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."list",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature bool type
 public const DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."bool",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional bool type
+public const DataProviderSignatureOptionalBoolType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*bool",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature int type
+public const DataProviderSignatureIntType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."int",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional int type
+public const DataProviderSignatureOptionalIntType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*int",
     "type_code": ST_Any,
 };
 
@@ -405,9 +496,21 @@ public const DataProviderSignatureStringType = <DataProviderSignatureTypeInfo>{
     "type_code": ST_Any,
 };
 
+#! Data provider signature optional string type
+public const DataProviderSignatureOptionalStringType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*string",
+    "type_code": ST_Any,
+};
+
 #! Data provider signature date type
 public const DataProviderSignatureDateType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."date",
+    "type_code": ST_Any,
+};
+
+#! Data provider signature optional date type
+public const DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."*date",
     "type_code": ST_Any,
 };
 
@@ -475,10 +578,27 @@ public hashdecl DataProviderArgInfo {
     */
     *softlist<hash<Util::AllowedValueInfo>> allowed_values;
 
+    #! Does the option accept values not defined in allowed_values too?
+    *bool allowed_values_creatable;
+
+    #! List of allowed values for elements of list types (enum)
+    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
+    */
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable;
+
     #! Any optional example value for the argument
     /** The value must be acceptable by the argument's type
     */
     auto example_value;
+
+    #! A label hint for display before the argument
+    *string label_before;
+
+    #! A label hint for display after the argument
+    *string label_after;
 }
 
 #! Data provider signature info
@@ -510,10 +630,22 @@ public hashdecl DataProviderExpressionInfo {
     #! The symbol to use when rendering expressions
     string symbol;
 
+    #! The groups that the expression belongs to
+    softlist<string> groups = ("Miscellaneous",);
+
     #! The expression role code / bitfield
     /** @see @ref expression_role_codes
     */
     int role = ER_All;
+
+    #! Any template to render the expression
+    /** Placeholders are:
+        - $symbol: the expression symbol
+        - $arg[n]: the nth argument (0-based index), followed optionally by a dot and attribute name to access attributes of
+          argument hashes
+        - $args: all arguments as a comma-separated list
+    */
+    *string render_template;
 
     #! Argument types
     softlist<hash<DataProviderSignatureTypeInfo>> args;
@@ -526,6 +658,35 @@ public hashdecl DataProviderExpressionInfo {
 
     #! The last argument can be repeated indefinitely
     bool varargs = False;
+
+    #! Minimum arguments when varargs is set
+    *int min_args;
+
+    #! Return type argument priority list
+    /** A list of types that indicate the priority order when determining the final return type
+        based on argument types; to determine the final return type, the first type in this list that matches
+        any of the argument types is used as the return type; i.e. the earlier the type appears in this list, the
+        higher its priority
+
+        If there are no matches, the declared \a return_type is used; normally \c "any"
+
+        This is useful for expressions that take multiple argument types and return different types depending on the
+        argument types
+
+        @note It is an error to set both this and \c return_type_first_arg to @ref True
+
+        @since DataProvider 3.3
+    */
+    *list<string> return_type_arg_priority;
+
+    #! Use the first argument's type as the return type
+    /** If set to @ref True, the type of the first argument is used as the return type
+
+        @note It is an error to set both this and \c return_type_arg_priority
+
+        @since DataProvider 3.3
+    */
+    *bool return_type_first_arg;
 }
 
 #! Data provider field reference
@@ -906,8 +1067,79 @@ public hashdecl DataProviderConnectionInfo {
     *hash<auto> info;
 }
 
+#! Data provider generic expression map
+public const DataProviderGenericExpressions = cast<hash<string, hash<DataProviderExpressionInfo>>>(
+    map {$1.key: $1.value."exp"}, AbstractDataProvider::GenericExpressionImplementations.pairIterator()
+);
+
+#! Regular expression options
+public const RegexOpts = {
+    "RE_Caseless": RE_Caseless,
+    "RE_DotAll": RE_DotAll,
+    "RE_Extended": RE_Extended,
+    "RE_MultiLine": RE_MultiLine,
+    "RE_Unicode": RE_Unicode,
+    "RE_Global": RE_Global,
+};
+
+#! Regular expression argument info
+public const RegularExpressionArgInfo = (
+    <DataProviderArgInfo>{
+        "display_name": "String Value",
+        "short_desc": "The string value to be matched to the next argument",
+        "desc": "The string value to be matched to the next argument",
+        "label_after": "~= /",
+    },
+    <DataProviderArgInfo>{
+        "display_name": "Regular Expression",
+        "short_desc": "The regular expression to use to match with the first argument",
+        "desc": "The regular expression to use to match with the first argument",
+        "example_value": "^[A-Z][0-9]+$",
+        "label_after": "/",
+    },
+    <DataProviderArgInfo>{
+        "display_name": "Regex Options",
+        "short_desc": "The regular expression options to use when performing the match",
+        "desc": "The regular expression options to use when performing the match",
+        "allowed_values": (
+            <AllowedValueInfo>{
+                "display_name": "Dot Matches Newline?",
+                "short_desc": "The dot '.' character matches also a newline",
+                "desc": "The dot `.` character matches also a newline",
+                "value": "RE_DotAll",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Extended Regex?",
+                "short_desc": "Ignores whitespace characters and enables comments prefixed by '#'",
+                "desc": "Ignores whitespace characters and enables comments prefixed by `#`",
+                "value": "RE_Extended",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Full Unicode?",
+                "short_desc": "Character matches match the full Unicode character set",
+                "desc": "Character matches match the full Unicode character set",
+                "value": "RE_Unicode",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Ignore Case?",
+                "short_desc": "Ignore case when matching",
+                "desc": "Ignore case when matching",
+                "value": "RE_Caseless",
+            },
+            <AllowedValueInfo>{
+                "display_name": "Multiline?",
+                "short_desc": "Makes start-of-line '^' or end-of-line '$' match after or before any "
+                    "newline in the subject string",
+                "desc": "Makes start-of-line `^` or end-of-line `$` match after or before any "
+                    "newline in the subject string",
+                "value": "RE_MultiLine",
+            },
+        ),
+    },
+);
+
 #! The AbstractDataProvider class
-public class AbstractDataProvider inherits Logger::LoggerWrapper {
+public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
     public {
         #! Generic expression implementations for data providers without native search functionality
         const GenericExpressionImplementations = {
@@ -920,7 +1152,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "short_desc": "Returns True if all arguments are True with logic short-circuiting",
                     "desc": "Returns `True` if all arguments are `True`; supports logic short-circuiting",
                     "symbol": "&&",
+                    "groups": "Logical",
                     "args": (DataProviderSignatureBoolType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; all conditions must be `True` for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -942,7 +1183,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "short_desc": "Returns True if at least one argument is True with logic short-circuiting",
                     "desc": "Returns `True` if at least one argument is `True`; supports logic short-circuiting",
                     "symbol": "||",
+                    "groups": "Logical",
                     "args": (DataProviderSignatureBoolType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; at least one condition must be `True` for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -955,17 +1205,57 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     return False;
                 },
             },
+            DP_SEARCH_OP_NOT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_SEARCH_OP_NOT,
+                    "display_name": "logical not (!)",
+                    "short_desc": "This operator reverses the logcal value of the argument",
+                    "desc": "This operator reverses the logcal value of the argument",
+                    "symbol": "!",
+                    "groups": "Logical",
+                    "args": (DataProviderSignatureBoolType,),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Boolean",
+                            "short_desc": "A boolean expression or value",
+                            "desc": "A boolean expression or value; the operator will negate the value of the "
+                                "expression",
+                        },
+                    ),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]));
+                },
+            },
             DP_SEARCH_OP_EQ: {
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
                     "name": DP_SEARCH_OP_EQ,
-                    "display_name": "equals (=)",
+                    "display_name": "equals (==)",
                     "short_desc": "Returs True if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "desc": "Returs `True` if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "symbol": "==",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must be equal for the "
+                                "overall expression to return `True`",
+                            "label_after": "==",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must be equal for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -984,7 +1274,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "short_desc": "Returns True if the arguments are not equal",
                     "desc": "Returns `True` if the arguments are not equal; type conversions are performed",
                     "symbol": "!=",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must not be equal for the "
+                                "overall expression to return `True`",
+                            "label_after": "!=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; both values must not be equal for the "
+                                "overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1001,7 +1307,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "desc": "Returns `True` if the first argument is strictly less than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly less than the second value "
+                                "for the overall expression to return `True`",
+                            "label_after": "<",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly less than the second value "
+                                "for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1018,7 +1340,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "desc": "Returns `True` if the first argument is less than or equal to the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": "<=",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be less than or equal to the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": "<=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be less than or equal to the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1035,7 +1373,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "desc": "Returns `True` if the first argument is strictly greater than the second argument; type "
                         "conversions are performed if necessary",
                     "symbol": ">",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly greater than the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": ">",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be strictly greater than the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1052,7 +1406,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "desc": "Returns `True` if the first argument is greater than or equal to the second argument; "
                         "type conversions are performed if necessary",
                     "symbol": ">=",
+                    "groups": "Comparison",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be greater than or equal to the second "
+                                "value for the overall expression to return `True`",
+                            "label_after": ">=",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; the first value must be greater than or equal to the second "
+                                "value for the overall expression to return `True`",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
@@ -1069,17 +1439,39 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                         "third",
                     "desc": "Returns `True` if the first argument is greater than the second and less than the third",
                     "symbol": "between",
+                    "groups": "Comparison",
+                    "render_template": "$arg[0] between $arg[1] and $arg[2]",
                     "args": (
                         DataProviderSignatureAnyType,
-                        DataProviderSignatureListType,
+                        DataProviderSignatureAnyType,
+                        DataProviderSignatureAnyType,
+                    ),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to compare",
+                            "desc": "A value to compare; first value must be greater than the second and less than "
+                                "the third for the overall expression to return `True`",
+                            "label_after": "between",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Lower Bound",
+                            "short_desc": "The lower bound for the first argument",
+                            "desc": "The lower bound for the first argument",
+                            "label_after": "and",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Upper Bound",
+                            "short_desc": "The upper bound for the first argument",
+                            "desc": "The upper bound for the first argument",
+                        },
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
                     auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1][0])
-                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1][1]);
-
+                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1])
+                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2]);
                 },
             },
             DP_SEARCH_OP_IN: {
@@ -1090,27 +1482,28 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "short_desc": "Returns True if the first argument is found in the second argument",
                     "desc": "Returns `True` if the first argument is found in the second argument",
                     "symbol": "in",
+                    "groups": "Comparison",
+                    "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "arg_info": (
+                        <DataProviderArgInfo>{
+                            "display_name": "Value",
+                            "short_desc": "A value to look for (needle)",
+                            "desc": "A value to look for; first value must be found in the second for the overall "
+                                "expression to return `True`",
+                            "label_after": "in",
+                        },
+                        <DataProviderArgInfo>{
+                            "display_name": "Search Source",
+                            "short_desc": "The value to look for the value in (haystack)",
+                            "desc": "The value to look for the value in (haystack)",
+                        },
+                    ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
                     return inlist(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]),
                         AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]));
-                },
-            },
-            DP_SEARCH_OP_NOT: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_SEARCH_OP_NOT,
-                    "display_name": "logical not (!)",
-                    "short_desc": "This operator reverses the logcal value of the argument",
-                    "desc": "This operator reverses the logcal value of the argument",
-                    "symbol": "!",
-                    "args": (DataProviderSignatureBoolType,),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]));
                 },
             },
             DP_SEARCH_OP_REGEX: {
@@ -1121,22 +1514,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                     "desc": "regular expression operator; the first argument will be processed with the second as a "
                         "regular expression pattern",
                     "symbol": "regex",
+                    "groups": "Comparison",
+                    "render_template": "$arg[0] =~ /$arg[1]/$arg[2]",
                     "args": (
                         DataProviderSignatureStringType,
-                        <DataProviderSignatureTypeInfo>{
-                            "type": (new HashDataType())
-                                .addField(new QoreDataField("pattern", "the regular expression pattern",
-                                    AbstractDataProviderTypeMap."string"))
-                                .addField(new QoreDataField("options", "regular expression options",
-                                    AbstractDataProviderTypeMap."*int")),
-                        },
+                        DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType,
                     ),
+                    "arg_info": RegularExpressionArgInfo,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto arg1 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
-                    return regex(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]).toString(),
-                        arg1.pattern, arg1.options);
+                    string str = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    string pattern = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                    int opts;
+                    if (*list<auto> options = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2])) {
+                        opts = foldl $1 | $2, (map RegexOpts{$1}, options);
+                    }
+                    return regex(str, pattern, opts);
                 },
             },
         };
@@ -1152,6 +1547,58 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         #! A list of members names of the DataProviderSummaryInfoKeys hashdecl
         const DataProviderSummaryInfoKeys = map $1.getName(),
             TypedHash::forName("DataProviderSummaryInfo").getMembers();
+
+        #! 'Requires Result' option info
+        const RequiresResultOption = <DataProviderOptionInfo>{
+            "display_name": "Requires Result",
+            "short_desc": "If True, the operation requires a result or affected records",
+            "desc": "If `True`, then an operation that returns no result or affects no records results in an error",
+            "type": AbstractDataProviderTypeMap."bool",
+        };
+
+        #! Generic record search options; see details below
+        /** Each record-based data provider should support the following search options:
+            - \c columns: a list of one or more field names; allows a subset of fields to be output in searches
+            - \c limit: the maximum number of records to return
+            - \c max_records: the maximum number of records to return or to affect; if more records are returned
+              or affected, the operation results in an error; for data provider supporting transactions; this will
+              normally result in a transaction rollback if a transaction is in progress
+            - \c offset: the offset number in records to return
+            - \c requires_result: if \c True, then an operation that returns no result or affects no records
+              results in an error
+        */
+        const GenericRecordSearchOptions = {
+            "columns": <DataProviderOptionInfo>{
+                "display_name": "Columns",
+                "short_desc": "Columns to include in output",
+                "desc": "Allows a subset of fields to be output in searches",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+            "limit": <DataProviderOptionInfo>{
+                "display_name": "Limit",
+                "short_desc": "The limit on the number of records to return from the data provider",
+                "desc": "The limit on the number of records to return from the data provider; additional "
+                    "records are silently ignored. This option is normally enforced by the server interfaced by the "
+                    "data provider",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "max_records": <DataProviderOptionInfo>{
+                "display_name": "Max Records",
+                "short_desc": "The maximum number of records to return or to affect",
+                "desc": "The maximum number of records to return or to affect; if more records are returned or "
+                    "affected, the operation results in an error; for data provider supporting transactions; this "
+                    "will normally result in a transaction rollback if a transaction is in progress. This option is "
+                    "noormally enforced externally from the server interfaced by the data provider",
+                "type": AbstractDataProviderTypeMap."int",
+            },
+            "offset": <DataProviderOptionInfo>{
+                "display_name": "Offset",
+                "short_desc": "The offset in the record list for records to return",
+                "desc": "The offset in the record list for records to return",
+                "type": AbstractDataProviderType::get(IntType),
+            },
+            "requires_result": RequiresResultOption,
+        };
     }
 
     private {
@@ -1163,41 +1610,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         #! static callback for dynamic value resolution
         static code cb_resolve_value;
-
-        #! Generic record search options; see details below
-        /** Each record-based data provider should support the following search options:
-            - \c columns: a list of one or more field names; allows a subset of fields to be output in searches
-            - \c limit: the maximum number of records to return
-            - \c offset: the offset number in records to return
-        */
-        const GenericRecordSearchOptions = {
-            "columns": <DataProviderOptionInfo>{
-                "display_name": "Columns",
-                "short_desc": "Columns to include in output",
-                "type": AbstractDataProviderTypeMap."any",
-                "desc": "Allows a subset of fields to be output in searches",
-            },
-            "limit": <DataProviderOptionInfo>{
-                "display_name": "Limit",
-                "short_desc": "The maximum number of records to return",
-                "type": AbstractDataProviderType::get(IntType),
-                "desc": "The maximum number of records to return",
-            },
-            "offset": <DataProviderOptionInfo>{
-                "display_name": "Offset",
-                "short_desc": "The offset in the record list for records to return",
-                "type": AbstractDataProviderType::get(IntType),
-                "desc": "The offset in the record list for records to return",
-            },
-        };
     }
 
     #! Creates the data provider
     constructor() {
+        DataProvider::checkStaticInit();
     }
 
     #! Creates the data provider with the given Logger
     constructor(LoggerInterface logger) : LoggerWrapper(logger) {
+        DataProvider::checkStaticInit();
     }
 
     #! Returns static provider information as data; no objects are returned
@@ -1287,6 +1709,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     *hash<auto> getAdditionalInfo() {
     }
 
+    #! Creates the given record in the data provider from create action options
+    /** @param options create action options
+
+        @return the data written to the data provider
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+        @throw CREATE-RECORD-ERROR the data provider raised an exception in the record creation operation
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordWithOptions(*hash<auto> options) {
+        return createRecord(options.rec, options - "rec");
+    }
+
     #! Creates the given record in the data provider
     /** @param rec a hash representing a single input record
         @param create_options the create options; will be processed by validateCreateOptions()
@@ -1308,6 +1746,146 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return createRecordImpl(rec, validateCreateOptions(create_options));
     }
 
+    #! Creates the given records in the data provider from create action options
+    /** @param options create action options
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordsBulkWithOptions(*hash<auto> options) {
+        return createRecordsBulk(options.recs, options - "recs");
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+    */
+    *hash<auto> createRecordsBulk(hash<auto> recs, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        return createRecordsBulkIntern(recs, create_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a list of hashes representing input records, where the keys are field names and values are field
+        values
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+    */
+    *hash<auto> createRecordsBulk(list<auto> recs, *hash<auto> create_options) {
+        hash<auto> h;
+        foreach auto rec in (recs) {
+            if (rec.typeCode() != NT_HASH) {
+                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+            }
+            if (!h) {
+                h = map {$1: ()}, keys rec;
+            }
+            map h{$1.key} += $1.value, rec.pairIterator();
+        }
+        return createRecordsBulk(h, create_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param stream a record stream for insert
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordsBulk(AbstractDataProviderBulkRecordInterface stream, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        hash<auto> rv;
+        while (*hash<auto> recs = stream.getValue()) {
+            *hash<auto> r = createRecordsBulkIntern(recs, create_options);
+            if (!rv) {
+                rv = r;
+            } else {
+                map rv{$1.key} += $1.value, r.pairIterator();
+            }
+        }
+        return rv;
+    }
+
+    #! Creates the given records in the data provider
+    /** @param i a record iterator for insert
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+
+        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
+        duplicate record
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> createRecordsBulk(HashListIterator i, *hash<auto> create_options) {
+        checkCreate();
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        create_options = validateCreateOptions(create_options);
+        hash<auto> rv;
+        while (i.next()) {
+            hash<auto> recs = i.getValue();
+            *hash<auto> r = createRecordsBulkIntern(recs, create_options);
+            if (!rv) {
+                rv = r;
+            } else {
+                map rv{$1.key} += $1.value, r.pairIterator();
+            }
+        }
+        return rv;
+    }
+
+    #! Upserts the given record in the data provider from upsert action options
+    /** @param options upsert action options
+
+        @return see @ref db_provider_upsert_results for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    string upsertRecordWithOptions(*hash<auto> options) {
+        return upsertRecord(options.rec, options - "rec");
+    }
+
     #! Upserts the given record in the data provider
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
@@ -1321,18 +1899,148 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return upsertRecordImpl(rec, validateUpsertOptions(upsert_options));
     }
 
+    #! Upserts the given records in the data provider from upsert action options
+    /** @param options upsert action options
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulkWithOptions(*hash<auto> options) {
+        return upsertRecordsBulk(options.recs, options - "recs");
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+    */
+    *list<string> upsertRecordsBulk(hash<auto> recs, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        if (!supportsBulkUpsert()) {
+            return map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+        }
+        return upsertRecordsBulkImpl(recs, upsert_options);
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a list of hashes representing input records, where the keys are field names and values are field
+        values
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+    */
+    *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
+        on_error {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
+                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
+        hash<auto> h;
+        foreach auto rec in (recs) {
+            if (rec.typeCode() != NT_HASH) {
+                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+            }
+            if (!h) {
+                h = map {$1: ()}, keys rec;
+            }
+            map h{$1.key} += $1.value, rec.pairIterator();
+        }
+        return upsertRecordsBulk(h, upsert_options);
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param stream a record stream for upserting records
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulk(AbstractDataProviderBulkRecordInterface stream, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        list<string> rv;
+        while (*hash<auto> recs = stream.getValue()) {
+            if (!supportsBulkUpsert()) {
+                rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+            } else {
+                rv += upsertRecordsBulkImpl(recs, upsert_options);
+            }
+        }
+        return rv;
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param i a record iterator for upserting records
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+
+        @throw INVALID-OPERATION the data provider does not support upsert operations
+
+        @since DataProvider 3.3
+    */
+    *list<string> upsertRecordsBulk(HashListIterator i, *hash<auto> upsert_options) {
+        checkUpsert();
+        upsert_options = validateUpsertOptions(upsert_options);
+        list<string> rv;
+        while (i.next()) {
+            hash<auto> recs = i.getValue();
+            if (!supportsBulkUpsert()) {
+                rv += map upsertRecordImpl($1, upsert_options), recs.contextIterator();
+            } else {
+                rv += upsertRecordsBulkImpl(recs, upsert_options);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the first record matching the search action options
+    /** @param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchFirstRecordWithOptions(*hash<auto> options) {
+        return searchFirstRecord(options.where_cond, options - "where_cond");
+    }
+
     #! Returns the first record matching the search options
     /** @param where_cond the search criteria; will be processed by processSearchParameters()
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
 
         @since DataProvider 2.3
     */
     *hash<auto> searchFirstRecord(hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchFirstRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        *hash<auto> rv = searchFirstRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns the first record matching the search options
@@ -1340,11 +2048,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
     */
     *hash<auto> searchFirstRecord(hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchFirstRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        *hash<auto> rv = searchFirstRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
+    }
+
+    #! Returns a single record matching the search action options
+    /** @param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchSingleRecordWithOptions(*hash<auto> options) {
+        return searchSingleRecord(options.where_cond, options - "where_cond");
     }
 
     #! Returns a single record matching the search options
@@ -1353,13 +2079,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @throw INVALID-OPERATION the data provider does not support reading
         @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
 
         @since DataProvider 2.3
     */
     *hash<auto> searchSingleRecord(hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchSingleRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        *hash<auto> rv = searchSingleRecordImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns a single record matching the search options
@@ -1368,11 +2099,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @throw INVALID-OPERATION the data provider does not support reading
         @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
     */
-    *hash<auto> searchSingleRecord(hash<auto> where_cond, *hash<auto> search_options) {
+    *hash<auto> searchSingleRecord(*hash<auto> where_cond, *hash<auto> search_options) {
         checkRead();
         search_options = validateSearchOptions(search_options);
-        return searchSingleRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        *hash<auto> rv = searchSingleRecordImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rv && search_options.requires_result) {
+            error("NO-DATA", "No record found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns an iterator iterating all records
@@ -1398,6 +2134,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
             *hash<auto> search_options) {
         checkRead();
         return searchRecordsBulk(block_size, NOTHING, validateSearchOptions(search_options));
+    }
+
+    #! Returns an iterator for zero or more records matching the search action options
+    /** @param options search action options
+
+        @return a bulk record interface object that will return the records in bulk format
+
+        @throw INVALID-BLOCK-SIZE the block size must be a positive number
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderBulkRecordInterface searchRecordsBulkWithOptions(*hash<auto> options) {
+        return searchRecordsBulk(options.block_size, options.where_cond, options - ("block_size", "where_cond"));
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -1443,6 +2193,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         }
         search_options = validateSearchOptions(search_options);
         return searchRecordsBulkImpl(block_size, getSearchExpression(where_cond, search_options), search_options);
+    }
+
+    #! Returns an iterator for zero or more records matching the search action options
+    /** param options search action options
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderRecordIterator searchRecordsWithOptions(*hash<auto> options) {
+        return searchRecords(options.where_cond, options - "where_cond");
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -1506,6 +2267,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return requestSearchRecordsImpl(req, getSearchExpression(where_cond, search_options), search_options);
     }
 
+    #! Updates a single record using update action options
+    /** @param options update action options
+
+        @returns @ref True if the record was updated, @ref False if not (no record found)
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.3
+    */
+    bool updateSingleRecordWithOptions(*hash<auto> options) {
+        return updateSingleRecord(options.set, options.where_cond, options - ("set", "where_cond"));
+    }
+
     #! Updates a single record matching the search options
     /** @param set the hash of field data to set; will be processed by processFieldValues()
         @param where_cond the search criteria; will be processed by processSearchParameters()
@@ -1552,6 +2327,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
             getSearchExpression(where_cond, search_options), search_options);
     }
 
+    #! Updates zero or more records matching the update action options
+    /** @param options update action options
+
+        @return the number of records updated
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.3
+    */
+    int updateRecordsWithOptions(*hash<auto> options) {
+        return updateRecords(options.set, options.where_cond, options - ("set", "where_cond"));
+    }
+
     #! Updates zero or more records matching the search options
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record(s) to be updated; will be processed by
@@ -1573,8 +2362,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             processSearchParameters(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Updates zero or more records matching the search options
@@ -1596,8 +2389,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
+        }
+        return rc;
+    }
+
+    #! Deletes zero or more records from delete action options
+    /** @param options action options
+        @return the number of records deleted
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+        @throw DELETE-RECORDS-ERROR error deleting records
+
+        @since DataProvider 3.3
+    */
+    int deleteRecordsWithOptions(*hash<auto> options) {
+        return deleteRecords(options.where_cond, options - "where_cond");
     }
 
     #! Deletes zero or more records
@@ -1621,7 +2431,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Deletes zero or more records
@@ -1643,7 +2457,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        return deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        if (!rc && search_options.requires_result) {
+            throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
+        }
+        return rc;
     }
 
     #! Makes a request and returns the response
@@ -1657,7 +2475,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     auto doRequest(auto req, *hash<auto> request_options) {
         checkRequest();
-        *AbstractDataProviderType request_type = getRequestType();
+        *AbstractDataProviderType request_type = getRequestTypeWithData(req);
         if (request_type) {
             try {
                 req = request_type.acceptsValue(req);
@@ -1833,6 +2651,53 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return getRequestTypeWithDataImpl(req);
     }
 
+    #! Returns the description of a successful request message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the request type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getRequestTypeWithOptions(*hash<auto> options) {
+        checkRequest();
+        return getRequestTypeWithOptionsImpl(options);
+    }
+
+    #! Returns action options corresponding to the request type with the given request data, if possible
+    /** @param req sample request data that can be used to determine the final type
+
+        @return action options corresponding to the request type
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsFromRequestTypeWithData(auto req) {
+        try {
+            checkRequest();
+            *AbstractDataProviderType rt;
+            try {
+                rt = getRequestTypeWithData(req);
+            } catch (hash<ExceptionInfo> ex) {
+                LoggerWrapper::error("Failed to request arg type with data, options: %y, ignoring options: %s",
+                    req, get_exception_string(ex));
+                rt = getRequestType();
+            }
+            if (rt && (*hash<auto> fields = rt.getFields())) {
+                return DataProviderActionCatalog::getActionOptionFromFields(fields);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get request arg type with data (%y), cannot return options: %s", req,
+                get_exception_string(ex));
+        }
+    }
+
     #! Returns the description of a response message, if this object represents a response message
     /** @return the response type for this response message
 
@@ -1841,6 +2706,38 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     *AbstractDataProviderType getResponseType() {
         checkRequest();
         return getResponseTypeImpl();
+    }
+
+    #! Returns the description of a successful response message with call data, if any
+    /** @param req sample request data that can be used to determine the final type
+
+        @return the response type for this provider according to any call data passed
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    *AbstractDataProviderType getResponseTypeWithData(auto req) {
+        checkRequest();
+        return getResponseTypeWithDataImpl(req);
+    }
+
+    #! Returns the description of a successful response message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the response type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getResponseTypeWithOptions(*hash<auto> options) {
+        checkRequest();
+        return getResponseTypeWithOptionsImpl(options);
     }
 
     #! Returns a hash of error responses, if any
@@ -1881,6 +2778,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return getEventInfoImpl(event_id);
     }
 
+    #! Returns the description of an observable event, if any with option data, if any
+    /** @param event_id the event ID of the event
+        @param options example option data that can be used to determine the final type
+
+        @return the event type for this provider according to any call data passed
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @note This API is meant to provide information about event data types that can depend on option data
+
+        @since DataProvider 3.0
+    */
+    hash<DataProviderMessageInfo> getEventInfoWithOptions(string event_id, *hash<auto> options) {
+        checkObservable();
+        return getEventInfoWithOptionsImpl(event_id, options);
+    }
+
     #! Returns a hash of all supported event types
     /** @return a hash of all supported event types
 
@@ -1891,6 +2806,214 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     hash<string, hash<DataProviderMessageInfo>> getEventTypes() {
         checkObservable();
         return getEventTypesImpl();
+    }
+
+    #! Returns a hash of all supported event types in the context of the given options
+    /** @return a hash of all supported event types in the context of the given options
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @since DataProvider 3.3
+    */
+    hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptions(*hash<auto> options) {
+        checkObservable();
+        return getEventTypesWithOptionsImpl(options);
+    }
+
+    #! Returns action options corresponding to the given option data
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.1
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptions(hash<DataProviderActionInfo> action,
+            *hash<auto> options) {
+        if (!action.data_dependent_options) {
+            return action.options;
+        }
+        try {
+            return tryGetActionOptionsWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for an event action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an event action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForEventWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkObservable();
+            return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for event with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a request action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a request action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkRequest();
+            return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for request with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a send message action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a send message action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForMessageWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkMessages();
+            return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for message with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a search action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a search action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkRead();
+            return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for search with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a create action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a create action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record creation
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkCreate();
+            return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for create with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for an upsert action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an upsert action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record upserting
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkUpsert();
+            return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for upsert with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for an update action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an update action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkUpdate();
+            return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for update with options (%y): %s", options,
+                get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a delete action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a delete action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkDelete();
+            return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for delete with options (%y): %s", options,
+                get_exception_string(ex));
+        }
     }
 
     #! Returns the description of an outbound message, if any
@@ -1920,6 +3043,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return getMessageTypesImpl();
     }
 
+    #! Returns a hash of all supported outbound messages with options
+    /** @param options any action options that can affect the message types returned
+
+        @return a hash of all supported outbound messages
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @since DataProvider 3.3
+    */
+    hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptions(*hash<auto> options) {
+        checkMessages();
+        return getMessageTypesWithOptionsImpl(options);
+    }
+
     #! Returns example data for a request message
     /** @return example data for a request message
 
@@ -1929,7 +3066,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     auto getExampleRequestData() {
         checkRequest();
-        return getExampleRequestDataImpl();
+        if (exists (auto v = getExampleRequestDataImpl())) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getRequestTypeImpl()) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for a successful request message
@@ -1941,7 +3083,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     auto getExampleResponseData() {
         checkRequest();
-        return getExampleResponseDataImpl();
+        if (exists (auto v = getExampleResponseDataImpl())) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getResponseTypeImpl()) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the error message with the given error code
@@ -1956,7 +3103,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     auto getExampleErrorResponseData(string error_code) {
         checkRequest();
-        return getExampleErrorResponseDataImpl(error_code);
+        if (exists (auto v = getExampleErrorResponseDataImpl(error_code))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getErrorResponseTypeImpl(error_code)) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the given observable event
@@ -1971,7 +3123,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     auto getExampleEventData(string event_id) {
         checkObservable();
-        return getExampleEventDataImpl(event_id);
+        if (exists (auto v = getExampleEventDataImpl(event_id))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getEventInfoImpl(event_id).type) {
+            return rt.getExampleValue();
+        }
     }
 
     #! Returns example data for the record type
@@ -1981,7 +3138,110 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     hash<auto> getExampleRecordData() {
         checkRead();
-        return getExampleRecordDataImpl();
+        if (exists (auto v = getExampleRecordDataImpl())) {
+            return v;
+        }
+        if (*hash<string, AbstractDataField> rt = getRecordTypeImpl()) {
+            return generateExampleData(rt);
+        }
+        return {};
+    }
+
+    #! Returns example data for a request message in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for a request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    auto getExampleRequestDataWithOptions(*hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleRequestDataWithOptionsImpl(options))) {
+            return v;
+        }
+        return getExampleRequestDataWithOptionsImpl(options)
+            ?? getRequestTypeWithOptionsImpl(options).getExampleValue();
+    }
+
+    #! Returns example data for a successful request message in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for a successful request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    auto getExampleResponseDataWithOptions(*hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleResponseDataWithOptionsImpl(options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getResponseTypeWithOptionsImpl(options)) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the error message with the given error code in the context of the given option data
+    /** @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @param options option data that can be used to determine the final type
+        @return example data for the error message with the given error code in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    auto getExampleErrorResponseDataWithOptions(string error_code, *hash<auto> options) {
+        checkRequest();
+        if (exists (auto v = getExampleErrorResponseDataWithOptionsImpl(error_code, options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getErrorResponseTypeWithOptionsImpl(error_code, options)) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the given observable event in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+        @param event_id the event ID of the event
+
+        @return example data for the given observable event in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @since DataProvider 3.3
+    */
+    auto getExampleEventDataWithOptions(string event_id, *hash<auto> options) {
+        checkObservable();
+        if (exists (auto v = getExampleEventDataWithOptionsImpl(event_id, options))) {
+            return v;
+        }
+        if (*AbstractDataProviderType rt = getEventInfoWithOptionsImpl(event_id, options).type) {
+            return rt.getExampleValue();
+        }
+    }
+
+    #! Returns example data for the record type in the context of the given option data
+    /** @param options option data that can be used to determine the final type
+
+        @return example data for the record type in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    hash<auto> getExampleRecordDataWithOptions(*hash<auto> options) {
+        checkRead();
+        if (exists (auto v = getExampleRecordDataWithOptionsImpl(options))) {
+            return v;
+        }
+        if (*hash<string, AbstractDataField> rt = getRecordTypeWithOptionsImpl(options)) {
+            return generateExampleData(rt);
+        }
+        return {};
     }
 
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING
@@ -2065,6 +3325,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     AbstractDataProvider getChildProviderPath(string path) {
         AbstractDataProvider provider = self;
+        if (path =~ /^\//) {
+            path =~ s/^\/+//;
+        }
         map provider = provider.getChildProviderEx($1), path.split("/");
         if (logger && !provider.logger) {
             provider.setLogger(logger);
@@ -2074,7 +3337,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
     #! Returns @ref True if the data provider requires transaction management
     /** @return @ref True if the data provider requires transaction management, in which case commit() or rollback()
-        must be called to flush or discard data written to the data provider
+        must be called to flush or discard pending changes to the data provider
     */
     bool requiresTransactionManagement() {
         return getStaticInfoImpl().transaction_management;
@@ -2112,24 +3375,45 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     rollback() {
     }
 
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+
+        @throw INVALID-OPERATION the data provider does not support transaction management
+
+        @since DataProvider 3.3
+    */
+    bool currentThreadInTransaction() {
+        if (!requiresTransactionManagement()) {
+            throw "INVALID-OPERATION", sprintf("data provider %y (type %y) does not support transaction management",
+                getName(), self.className());
+        }
+        return currentThreadInTransactionImpl();
+    }
+
     #! Returns a bulk insert operation object for the data provider
-    /** @return a bulk insert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size for the data
+        provider is used (normally 1000 records)
+
+        @return a bulk insert operation object for the data provider
 
         @throw INVALID-OPERATION the data provider does not support create operations
     */
-    AbstractDataProviderBulkOperation getBulkInserter() {
+    AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
         checkCreate();
-        return new DefaultBulkInserter(self);
+        return new DefaultBulkInserter(self, block_size);
     }
 
     #! Returns a bulk upsert operation object for the data provider
-    /** @return a bulk upsert operation object for the data provider
+    /** @param block_size the block size for the bulk operation; if not given, the default block size for the data
+        provider is used (normally 1000 records)
+
+        @return a bulk upsert operation object for the data provider
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
     */
-    AbstractDataProviderBulkOperation getBulkUpserter() {
+    AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
         checkUpsert();
-        return new DefaultBulkUpserter(self);
+        return new DefaultBulkUpserter(self, block_size);
     }
 
     #! Returns custom data mapper runtime keys
@@ -2346,11 +3630,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         where_cond = processFieldValues(where_cond, search_options);
         hash<DataProviderInfo> info = getInfo();
         hash<DataProviderExpressionInfo> expinfo = getExpression(ER_Search, DP_OP_AND, info.expressions);
-        hash<DataProviderExpression> rv = <DataProviderExpression>{
-            "exp": DP_OP_AND,
-            "args": map getSimpleArgumentIntern(ER_Search, info, expinfo, $1.key, $1.value),
-                where_cond.pairIterator(),
-        };
+        hash<DataProviderExpression> rv;
+        if (where_cond.size() != 1) {
+            rv = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": map getSimpleArgumentIntern(ER_Search, info, expinfo, $1.key, $1.value),
+                    where_cond.pairIterator(),
+            };
+        } else {
+            rv = getSimpleArgumentIntern(ER_Search, info, expinfo, where_cond.firstKey(), where_cond.firstValue());
+        }
         return rv;
     }
 
@@ -2362,6 +3651,49 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     *hash<string, bool> getSupportedReferenceData() {
         # intentionally empty
+    }
+
+    #! Returns reference data of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getReferenceDataSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getReferenceDataSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedReferenceData()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data type %y is unsupported; supported "
+                "reference data types: %y", type, rd);
+        }
     }
 
     #! Returns reference data of the given kind if available
@@ -2401,8 +3733,188 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         }
     }
 
+    #! Returns information on supported element reference data
+    /** @return a hash of supported element reference data; keys in the hash returned are supported in calls to
+        @ref getElementReferenceData()
+
+        @since DataProvider 3.0
+    */
+    *hash<string, bool> getSupportedElementReferenceData() {
+        # intentionally empty
+    }
+
+    #! Returns element reference data of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the element
+        reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getElementReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the element
+        reference data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-ELEMENT-REFERENCE-DATA thrown if \a type is not supported as element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getElementReferenceData(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedElementReferenceData()){type}) {
+            throw "UNSUPPORTED-ELEMENT-REFERENCE-DATA", sprintf("Element reference data type %y is unsupported; "
+                "supported element reference data types: %y", type, rd);
+        }
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data
+
+        @throw ELEMENT-REFERENCE-DATA-ERROR thrown if there is an error retrieving the element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceData(string type, *hash<auto> action_opts) {
+        on_error rethrow "ELEMENT-REFERENCE-DATA-ERROR", sprintf("Failed to retrieve element reference data of "
+            "type %y: %s: %s", type, $1.err, $1.desc);
+        return getElementReferenceDataImpl(type, action_opts);
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data
+
+        @throw ELEMENT-REFERENCE-DATA-ERROR thrown if there is an error retrieving the element reference data
+        @throw UNSUPPORTED-ELEMENT-REFERENCE-DATA thrown if \a type is not supported as element reference data
+
+        @since DataProvider 3.0
+    */
+    *list<hash<AllowedValueInfo>> getElementReferenceDataEx(string type, *hash<auto> action_opts) {
+        if (*list<hash<AllowedValueInfo>> rv = getElementReferenceData(type, action_opts)) {
+            return rv;
+        }
+        if (!(*hash<string, bool> rd = getSupportedElementReferenceData()){type}) {
+            throw "UNSUPPORTED-ELEMENT-REFERENCE-DATA", sprintf("Element reference data type %y is unsupported; "
+                "supported element reference data types: %y", type, rd);
+        }
+    }
+
+    #! Returns information on supported reference data values
+    /** @return a hash of supported reference data values; keys in the hash returned are supported in calls to
+        @ref getReferenceDataValue()
+
+        @since DataProvider 3.0
+    */
+    *hash<string, bool> getSupportedReferenceDataValues() {
+        # intentionally empty
+    }
+
+    #! Returns a reference data value of the given kind if available; logs but ignores exceptions retrieving the data
+    /** @param type the unique type name of the reference data value
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the reference data value or nothing if an exception occured retrieving the reference data value
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValueSafe(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceDataValue(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data or nothing if an exception occured retrieving the reference
+        data
+
+        Logs but ignores exceptions retrieving the data; throws an exception if the data type is unsupported
+
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValueSafeEx(string type, *hash<auto> action_opts) {
+        try {
+            return getReferenceDataValue(type, action_opts);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::debug("%s", get_exception_string(ex));
+        }
+
+        if (!(*hash<string, bool> rd = getSupportedReferenceDataValues()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data value type %y is unsupported; supported "
+                "reference data value types: %y", type, rd);
+        }
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @throw REFERENCE-DATA-ERROR thrown if there is an error retrieving the reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValue(string type, *hash<auto> action_opts) {
+        on_error rethrow "REFERENCE-DATA-ERROR", sprintf("Failed to retrieve reference data value of type %y: %s: %s",
+            type, $1.err, $1.desc);
+        return getReferenceDataValueImpl(type, action_opts);
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @throw REFERENCE-DATA-ERROR thrown if there is an error retrieving the reference data
+        @throw UNSUPPORTED-REFERENCE-DATA thrown if \a type is not supported as reference data
+
+        @since DataProvider 3.0
+    */
+    auto getReferenceDataValueEx(string type, *hash<auto> action_opts) {
+        if (exists (auto rv = getReferenceDataValue(type, action_opts))) {
+            return rv;
+        }
+        if (!(*hash<string, bool> rd = getSupportedReferenceDataValues()){type}) {
+            throw "UNSUPPORTED-REFERENCE-DATA", sprintf("Reference data value type %y is unsupported; supported "
+                "reference data value types: %y", type, rd);
+        }
+    }
+
     #! Update any connection used by the data provider
-    /** @param conn the new connection object
+    /** @param conn the new AbstractConnection object
+        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
 
         This is useful for event-driven providers that require a connection object to generate events.
 
@@ -2410,8 +3922,311 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @since DataProvider 3.0
     */
-    updateConnectionObject(object conn) {
+    updateConnectionObjects(object conn, object connobj) {
         # intentially blank
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+    */
+    private *hash<auto> createRecordsBulkIntern(hash<auto> recs, *hash<auto> create_options) {
+        if (!supportsBulkCreate()) {
+            hash<auto> rv;
+            foreach hash<auto> row in (recs.contextIterator()) {
+                hash<auto> out = createRecordImpl(row, create_options);
+                if (!rv) {
+                    rv = map {$1: ()}, keys out;
+                }
+                map rv{$1.key} += $1.value, out.pairIterator();
+            }
+            return rv;
+        }
+        return createRecordsBulkImpl(recs, create_options);
+    }
+
+    #! Returns create options as action options
+    private *hash<string, hash<ActionOptionInfo>> getCreateOptionsAsActionOptions() {
+        return getOptionsAsActionOptions(getCreateOptions());
+    }
+
+    #! Returns search options as action options
+    private hash<string, hash<ActionOptionInfo>> getSearchOptionsAsActionOptions() {
+        return cast<hash<string, hash<ActionOptionInfo>>>({
+            "block_size": <ActionOptionInfo>{
+                "display_name": "Block Size",
+                "desc": "The maximum number of records to return in a single block when opening a record stream",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+        } + getOptionsAsActionOptions(getSearchOptions()));
+    }
+
+    #! Returns upsert options as action options
+    private *hash<string, hash<ActionOptionInfo>> getUpsertOptionsAsActionOptions() {
+        return getOptionsAsActionOptions(getUpsertOptions());
+    }
+
+    #! Returns search options as action options
+    private *hash<string, hash<ActionOptionInfo>> getOptionsAsActionOptions(
+                *hash<string, hash<DataProviderOptionInfo>> options) {
+        return cast<*hash<string, hash<ActionOptionInfo>>>(map {$1.key: cast<hash<ActionOptionInfo>>($1.value - "type" + {
+            "type": $1.value.type[0],
+        })}, options.pairIterator());
+    }
+
+    #! Returns action options corresponding to the given option data for an event action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an event action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForEventWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "event_id": <ActionOptionInfo>{
+                "display_name": "Event",
+                "desc": "The event to subscribe to",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": (map <AllowedValueInfo>{
+                    "value": $1.key,
+                    "desc": $1.value.desc,
+                }, getEventTypesWithOptions(options).pairIterator()) ?? (),
+            },
+        };
+        return action.options + rv;
+    }
+
+    #! Returns action options corresponding to the given option data for a request action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a request action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = action.options;
+        if ((*AbstractDataProviderType type = getRequestTypeWithOptions(options))) {
+            if (*hash<auto> fields = type.getFields()) {
+                rv += DataProviderActionCatalog::getActionOptionFromFields(fields);
+            } else {
+                rv.request_data = <ActionOptionInfo>{
+                    "display_name": "API Request Data",
+                    "desc": "The request data",
+                    "type": type,
+                };
+            }
+        }
+        return rv + getOptionsAsActionOptions(getRequestOptions());
+    }
+
+    #! Returns action options corresponding to the given option data for a send message action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return request options for a send message action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForMessageWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv = {
+            "message_id": <ActionOptionInfo>{
+                "display_name": "Message",
+                "desc": "The message to send",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "allowed_values": (map <AllowedValueInfo>{
+                    "value": $1.key,
+                    "desc": $1.value.desc,
+                }, getMessageTypesWithOptions(options).pairIterator()) ?? (),
+            },
+        };
+        return action.options + rv + getOptionsAsActionOptions(getSendMessageOptions());
+    }
+
+    #! Returns action options corresponding to the given option data for a search action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a search action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data for a create action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a create action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForCreateWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        return addCreateRecordOption(action, options) + getCreateOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data for an upsert action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an upsert action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpsertWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        return addCreateRecordOption(action, options) + getUpsertOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data for an update action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for an update action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForUpdateWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        hash<string, hash<ActionOptionInfo>> rv;
+        if (*hash<string, AbstractDataField> rt = getUpdateRecordTypeWithOptionsImpl(options)) {
+            rv.set = <ActionOptionInfo>{
+                "display_name": "Set",
+                "desc": "The field data to set on the records matched",
+                "type": new HashDataType(AutoHashType, "RecordInfo", rt),
+            };
+        }
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + rv + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data for a delete action
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options for a delete action according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
+        return action.options + {
+            "where_cond": getWhereCondActionOption(expressions),
+        } + getSearchOptionsAsActionOptions();
+    }
+
+    #! Returns action options corresponding to the given option data
+    /** @param options sample option data that can be used to determine the final type
+
+        @return action options according to the available option data
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.1
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        switch (action.action_code) {
+            case DPAT_EVENT:
+                return tryGetActionOptionsForEventWithOptionsImpl(action, options);
+            case DPAT_API:
+                return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
+            case DPAT_SEND_MESSAGE:
+                return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
+            case DPAT_FIND:
+            case DPAT_FIND_SINGLE:
+                return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
+            case DPAT_CREATE:
+                return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
+            case DPAT_UPSERT:
+                return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
+            case DPAT_UPDATE:
+                return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
+            case DPAT_DELETE:
+                return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+        }
+        return action.options;
+    }
+
+    #! Adds a record option to the given action options based on the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> addCreateRecordOption(hash<DataProviderActionInfo> action,
+            *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = action.options;
+        *HashDataType record_type;
+        if (*hash<string, AbstractDataField> rt = getCreateRecordTypeWithOptionsImpl(options)) {
+            record_type = new HashDataType(AutoHashType, "RecordInfo", rt);
+        }
+        if (!rv.recs) {
+            rv.recs = <ActionOptionInfo>{
+                "display_name": "Record Data",
+                "desc": "The records to create",
+                "type": new SoftListDataType("RecordSet", record_type),
+            };
+        } else if (record_type) {
+            rv.recs.type = new SoftListDataType("RecordSet", record_type);
+        }
+        return rv;
+    }
+
+    #! Returns an action where condition option in the context of the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    private hash<ActionOptionInfo> getWhereCondActionOption(
+            *hash<string, hash<DataProviderExpressionInfo>> expressions
+    ) {
+        return <ActionOptionInfo>{
+            "display_name": "Search Expression",
+            "desc": "A boolean expression to be applied to each record to determine if it will be "
+                "processed by the current operation",
+            "type": AbstractDataProviderTypeMap."*bool",
+            "supports_templates": False,
+            "supports_custom_values": False,
+            "supports_expressions": True,
+            "server_expression_handling": (expressions && expressions != DataProviderGenericExpressions)
+                ? True
+                : False,
+            "preselected": True,
+        };
+    }
+
+    #! Returns supported expression in the context of the given option data
+    /**
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> getExpressionsWithOptions(*hash<auto> options) {
+        return getStaticInfoImpl().expressions;
     }
 
     #! Returns an argument for an expression
@@ -2425,14 +4240,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         hash<DataProviderExpression> rv;
         if (value.typeCode() == NT_HASH && value.op && value.hasKey("arg")) {
             hash<DataProviderExpressionInfo> expinfo = getExpression(role, value.op, info.expressions);
+            auto args;
+            args[0] = <DataProviderFieldReference>{"field": key};
+            if (value.arg.op && value.arg.arg) {
+                if (exists value.arg.arg) {
+                    if (value.op_args && (value.op_args != 1)) {
+                        args += value.arg.arg;
+                    } else {
+                        push args, value.arg.arg;
+                    }
+                }
+                args = <DataProviderExpression>{
+                    "exp": getExpression(role, value.arg.op, info.expressions).name,
+                    "args": args,
+                };
+            } else {
+                if (exists value.arg) {
+                    if (value.op_args && (value.op_args != 1)) {
+                        args += value.arg;
+                    } else {
+                        push args, value.arg;
+                    }
+                }
+            }
             rv = <DataProviderExpression>{
                 "exp": expinfo.name,
-                "args": value.arg.op && value.arg.arg
-                    ? <DataProviderExpression>{
-                        "exp": getExpression(role, value.arg.op, info.expressions).name,
-                        "args": (<DataProviderFieldReference>{"field": key}, value.arg.arg),
-                    }
-                    : (<DataProviderFieldReference>{"field": key}, value.arg),
+                "args": args,
             };
         } else {
             rv = getEqualityComparisonExpression(role, info, key, value);
@@ -2450,12 +4283,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     private hash<DataProviderExpression> getEqualityComparisonExpression(int role, hash<DataProviderInfo> info,
             string key, auto value) {
-        if (!info.expressions."=") {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("data provider %s (type %y) provides no '=' operator; "
+        if (!info.expressions."==") {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("data provider %s (type %y) provides no '==' operator; "
                 "operators provided: %y", getName(), self.className(), keys info.expressions);
         }
         return <DataProviderExpression>{
-            "exp": "=",
+            "exp": "==",
             "args": (<DataProviderFieldReference>{"field": key}, value),
         };
     }
@@ -2466,7 +4299,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     static private hash<DataProviderExpressionInfo> getExpression(int role, string exp,
             *hash<string, hash<DataProviderExpressionInfo>> expmap) {
-        *hash<DataProviderExpressionInfo> expinfo = expmap{exp};
+        *hash<DataProviderExpressionInfo> expinfo = expmap{exp} ?? expmap{OperatorAliasMap{exp}};
         if (!expinfo) {
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is invalid; known expressions: %y", exp,
                 keys expmap);
@@ -2531,7 +4364,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @since DataProvider 2.3
     */
     static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp) {
-        *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp};
+        *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
+            ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
         if (!expinfo) {
             throw "INVALID-OPERATION", sprintf("operator %y is unknown; supported "
                 "operators: %y", exp.exp, keys GenericExpressionImplementations);
@@ -2589,8 +4423,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
         # check arguments
         if (exp.args.lsize() > expinfo.args.size() && !expinfo.varargs) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("value provided for expression %y has too many values "
-                "(%d); only max %d are accepted", expinfo.name, exp.args.lsize(), expinfo.args.size());
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value provided for expression %y has too many values "
+                "(%d); only max %d are accepted (%y)", expinfo.name, exp.args.lsize(), expinfo.args.size(), exp.args);
         }
         map AbstractDataProvider::verifyExpressionArgValue(role, caps, expinfo, exp.args, $#), expinfo.args;
         if (exp.args.lsize() > expinfo.args.size()) {
@@ -2804,7 +4638,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
-            if (i.value.allowed_values) {
+            if (i.value.allowed_values && !i.value.allowed_values_creatable) {
                 bool ok = False;
                 foreach auto v in (i.value.allowed_values) {
                     if (options{i.key} === v.value) {
@@ -2815,6 +4649,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
                 if (!ok) {
                     error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
                         i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
+                }
+            }
+            if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
+                foreach auto opt in (options{i.key}) {
+                    bool ok = False;
+                    foreach auto v in (i.value.element_allowed_values) {
+                        if (opt === v.value) {
+                            ok = True;
+                            break;
+                        }
+                    }
+                    if (!ok) {
+                        error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
+                            "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
+                    }
                 }
             }
         }
@@ -2923,13 +4772,46 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
         is ignored
 
-        @return the record type or @ref NOTHING if the datas provider does not support a record type
+        @return the record type or @ref NOTHING if the data provider does not support a record type
     */
     *hash<string, AbstractDataField> getRecordType(*hash<auto> search_options) {
         if (!hasRecord()) {
             return;
         }
         return getRecordTypeImpl(recordRequiresSearchOptions() ? validateSearchOptions(search_options) : NOTHING);
+    }
+
+    #! Returns the description of the record type for creating records, if any
+    /** @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.0
+    */
+    *hash<string, AbstractDataField> getCreateRecordType(*hash<auto> create_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        return getCreateRecordTypeImpl(validateCreateOptions(create_options));
+    }
+
+    #! Returns the description of the record type for updating records, if any
+    /** @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.0
+    */
+    *hash<string, AbstractDataField> getUpdateRecordType(*hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        return getUpdateRecordTypeImpl(recordRequiresSearchOptions() ? validateSearchOptions(search_options) :
+            NOTHING);
     }
 
     #! Returns the description of the record type with soft types, if any
@@ -2942,8 +4824,85 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     #! Returns the description of the record type with "or nothing" types, if any
     *hash<string, AbstractDataField> getOrNothingRecordType(*hash<auto> search_options) {
         return map {
-            $1.key: $1.value.getOrNothingType(True)
+            $1.key: $1.value.getOrNothingType()
         }, getRecordType(search_options).pairIterator();
+    }
+
+    #! Returns the description of the record type in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type or @ref NOTHING if the data provider does not support a record type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        if (recordRequiresSearchOptions()) {
+            search_options = validateSearchOptions(search_options);
+        } else {
+            remove search_options;
+        }
+        return getRecordTypeWithOptionsImpl(options, search_options);
+    }
+
+    #! Returns the description of the record type for creating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getCreateRecordTypeWithOptions(*hash<auto> options, *hash<auto> create_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        create_options = validateCreateOptions(create_options);
+        return getCreateRecordTypeWithOptionsImpl(options, create_options);
+    }
+
+    #! Returns the description of the record type for updating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    *hash<string, AbstractDataField> getUpdateRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        if (!hasRecord()) {
+            return;
+        }
+        if (recordRequiresSearchOptions()) {
+            search_options = validateSearchOptions(search_options);
+        } else {
+            remove search_options;
+        }
+        return getUpdateRecordTypeWithOptionsImpl(options, search_options);
+    }
+
+    #! Returns the description of the record type with soft types, if any
+    *hash<string, AbstractDataField> getSoftRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        return map {
+            $1.key: $1.value.getSoftType()
+        }, getRecordTypeWithOptions(options, search_options).pairIterator();
+    }
+
+    #! Returns the description of the record type with "or nothing" types, if any
+    *hash<string, AbstractDataField> getOrNothingRecordTypeWithOptions(*hash<auto> options,
+            *hash<auto> search_options) {
+        return map {
+            $1.key: $1.value.getOrNothingType()
+        }, getRecordTypeWithOptions(options, search_options).pairIterator();
     }
 
     #! Returns options that can be used for searching
@@ -3219,6 +5178,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return getStaticInfoImpl().children_identical;
     }
 
+    #! Registers a child data provider if the data provider supports children and is extensible
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+
+        @throw UNSUPPORTED-ERROR this exception is thrown by default, to support adding children, override this method
+
+        @since DataProvider 3.0
+    */
+    static registerChild(string name, code generator) {
+        throw "UNSUPPORTED-ERROR", "This data provider does not support dynamically adding child providers";
+    }
+
     #! thrown an exception
     private error(string err, string fmt, ...) {
         string desc_name;
@@ -3257,8 +5228,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @note This default methods searches the entire data set for a matching record
     */
-    private *hash<auto> searchSingleRecordImpl(hash<auto> where_cond,
-            *hash<auto> search_options) {
+    private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         # scans the whole data set to find a single record
         *list<*hash<auto>> records = map $1, searchRecordsImpl(where_cond, search_options);
         if (records.lsize() > 1) {
@@ -3304,12 +5274,69 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     }
 
     #! Returns the description of the record type, if any
-    /** @param search_options to be included and processed by validateSearchOptions() if
-        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
-        is ignored
+    /** @param search_options any search options
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         throwUnimplementedException();
+    }
+
+    #! Returns the description of the record type for updates, if any
+    /** @param search_options any search options
+    */
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return getRecordTypeImpl(search_options);
+    }
+
+    #! Returns the description of the record type for creating records, if any
+    /** @param create_options the create options
+    */
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+        return getRecordTypeImpl();
+    }
+
+    #! Returns the description of the record type in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type or @ref NOTHING if the data provider does not support a record type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> search_options) {
+        return getRecordTypeImpl(search_options);
+    }
+
+    #! Returns the description of the record type for creating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param create_options the create options; will be processed by validateCreateOptions()
+
+        @return the record type for creating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getCreateRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> create_options) {
+        return getCreateRecordTypeImpl(create_options);
+    }
+
+    #! Returns the description of the record type for updating records in the context of the given options
+    /** @param options action options that may influence the record type
+        @param search_options to be included and processed by validateSearchOptions() if
+        \a recordRequiresSearchOptions() is @ref True for this provider, otherwise any value provided in this argument
+        is ignored
+
+        @return the record type for updating records or @ref NOTHING if the data provider does not support a record
+        type
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, AbstractDataField> getUpdateRecordTypeWithOptionsImpl(*hash<auto> options,
+            *hash<auto> search_options) {
+        return getUpdateRecordTypeImpl(search_options);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -3322,7 +5349,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
             *hash<auto> where_cond, *hash<auto> search_options) {
-        return new DefaultBulkRecordIterface(block_size, searchRecordsImpl(where_cond, search_options));
+        return new DefaultBulkRecordInterface(block_size, searchRecordsImpl(where_cond, search_options),
+            search_options.requires_result, search_options.max_records, search_options.limit);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -3331,8 +5359,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @see requestSearchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
-            *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         throwUnimplementedException();
     }
 
@@ -3345,21 +5372,30 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
 
         @see searchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
-            *hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
+            *hash<auto> search_options) {
         throwUnimplementedException();
     }
 
-    #! Creates the given record to the data provider
+    #! Creates the given record in the data provider
     /** @param rec a hash representing a single input record
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider
-
-        @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
-        duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        throwUnimplementedException();
+    }
+
+    #! Creates the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records
+        @param create_options the create options after processing by validateCreateOptions()
+
+        @return the data written to the data provider for each record in bulk format (keys are field names, values
+        are lists of field values)
+    */
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
         throwUnimplementedException();
     }
 
@@ -3370,6 +5406,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @return see @ref db_provider_upsert_results for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        throwUnimplementedException();
+    }
+
+    #! Upserts the given records in the data provider
+    /** @param recs a hash representing multiple input records, where the keys are field names and values are either
+        lists of field values or a single value that applies to all records to be upserted
+        @param upsert_options the upsert options; will be processed by validateUpsertOptions()
+
+        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        for possible values
+    */
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
         throwUnimplementedException();
     }
 
@@ -3516,10 +5564,31 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
         # the default is to return the standard request data and verify the request data against it
         *AbstractDataProviderType rv = getRequestTypeImpl();
-        if (rv) {
-            rv.acceptsValue(req);
+        if (rv && exists req) {
+            try {
+                rv.acceptsValue(req);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "MISSING-VALUE-ERROR") {
+                    rethrow;
+                }
+            }
         }
         return rv;
+    }
+
+    #! Returns the description of a successful request message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the request type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @note This API is meant to provide information about request data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
+        return getRequestTypeImpl();
     }
 
     #! Returns the description of a response message, if this object represents a response message
@@ -3531,6 +5600,37 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         throwUnimplementedException();
     }
 
+    #! Returns the description of a successful response message with call data, if any
+    /** @param req sample request data that can be used to determine the final type
+
+        @return the response type for this provider according to any call data passed
+
+        @note
+        - Only called if the provider supports the request / response API
+        - This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.0
+    */
+    private *AbstractDataProviderType getResponseTypeWithDataImpl(auto req) {
+        # the default is to return the standard response data and verify the request data against it
+        return getResponseTypeImpl();
+    }
+
+    #! Returns the description of a successful response message in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the response type for this provider in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request / response API
+
+        @note This API is meant to provide information about response data types that can depend on the call data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getResponseTypeWithOptionsImpl(*hash<auto> options) {
+        return getResponseTypeImpl();
+    }
+
     #! Returns a hash of error responses, if any
     /** @return a hash of error responses, if any, keyed by response code or string
 
@@ -3538,6 +5638,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     private *hash<string, AbstractDataProviderType> getErrorResponseTypesImpl() {
         throwUnimplementedException();
+    }
+
+    #! Returns a hash of error responses, if any, in the context of the given option data
+    /** @return a hash of error responses, if any, keyed by response code or string, in the context of the given
+        option data
+
+        @note only called if the provider supports the request / response API
+    */
+    private *hash<string, AbstractDataProviderType> getErrorResponseTypesWithOptionsImpl(*hash<auto> options) {
+        return getErrorResponseTypesImpl();
     }
 
     #! Returns the type for the given error code
@@ -3551,6 +5661,26 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         # note: this should be reimplemented with a more efficient implementation if creating the error type hash on
         # demand is expensive
         *hash<string, AbstractDataProviderType> err_map = getErrorResponseTypesImpl();
+        *AbstractDataProviderType type = err_map{error_code};
+        if (!type) {
+            throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
+                keys err_map);
+        }
+        return type;
+    }
+
+    #! Returns the type for the given error code in the context of the given option data
+    /** @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @param options option data that can be used to determine the final type
+        @return the type for the given error code in the context of the given option data
+
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    private AbstractDataProviderType getErrorResponseTypeWithOptionsImpl(string error_code, *hash<auto> options) {
+        *hash<string, AbstractDataProviderType> err_map = getErrorResponseTypesWithOptionsImpl(options);
         *AbstractDataProviderType type = err_map{error_code};
         if (!type) {
             throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
@@ -3579,6 +5709,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return h{event_id};
     }
 
+    #! Returns the description of an observable event, if any with option data, if any
+    /** @param event_id the event ID of the event
+        @param options example option data that can be used to determine the final type
+
+        @return the event type for this provider according to any call data passed
+
+        @throw INVALID-EVENT the event_id is not valid
+
+        @note This API is meant to provide information about event data types that can depend on option data
+
+        @since DataProvider 3.0
+    */
+    private hash<DataProviderMessageInfo> getEventInfoWithOptionsImpl(string event_id, *hash<auto> options) {
+        return getEventInfoImpl(event_id);
+    }
+
     #! Returns a hash of all supported event types
     /** @return a hash of all supported event types
 
@@ -3588,6 +5734,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         throwUnimplementedException();
+    }
+
+    #! Returns a hash of all supported event types in the context of the given options
+    /** @param options option data that can be used to determine the final type
+
+        @return a hash of all supported event types in the context of the given options
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+
+        @since DataProvider 3.3
+    */
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesWithOptionsImpl(*hash<auto> options) {
+        return getEventTypesImpl();
     }
 
     #! Returns the type of an outbound message, if any
@@ -3619,12 +5778,25 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         throwUnimplementedException();
     }
 
+    #! Returns a hash of all supported outbound messages with options
+    /** @param options any action options that can affect the message types returned
+
+        @return a hash of all supported outbound messages
+
+        @throw INVALID-OPERATION the data provider does not support sending messages
+
+        @since DataProvider 3.3
+    */
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesWithOptionsImpl(*hash<auto> options) {
+        return getMessageTypesImpl();
+    }
+
     #! Throws an \c INVALID-OPERATION exception
     /** @throw INVALID-OPERATION this exception is thrown unconditionally by this method
     */
     private throwUnimplementedException() {
         # should never be called
-        throw "UNIMPLEMENTED", sprintf("data provider %y of class %y has an error; the operation is not supported; "
+        throw "UNIMPLEMENTED", sprintf("Data provider %y of class %y has an error; the operation is not supported; "
             "this indicates a bug in the implementation of the data provider; please report this bug to the author "
             "of the data provider",
             getName(), self.className());
@@ -3639,6 +5811,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         return getRequestTypeImpl().getExampleValue();
     }
 
+    #! Returns example data for a request message in the context of the given option data
+    /** @param options action option data for the request
+
+        @return example data for a request message in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleRequestDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleRequestDataImpl();
+    }
+
     #! Returns example data for a successful request message
     /** @return example data for a successful request message
 
@@ -3647,7 +5830,21 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @since DataProvider 3.0
     */
     private auto getExampleResponseDataImpl() {
-        return getResponseTypeImpl().getExampleValue();
+        *AbstractDataProviderType t = getResponseTypeImpl();
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for a successful request message in the context of the given option data
+    /** @param options action option data for the request
+
+        @return example data for a successful request message in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleResponseDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleResponseDataImpl();
     }
 
     #! Returns example data for the error message with the given error code
@@ -3661,7 +5858,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @since DataProvider 3.0
     */
     private auto getExampleErrorResponseDataImpl(string error_code) {
-        return getErrorResponseTypeImpl(error_code).getExampleValue();
+        *AbstractDataProviderType t = getErrorResponseTypeImpl(error_code);
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for the error message with the given error code in the context of the given option data
+    /** @param options action option data for the request
+        @param error_code the error code for the response; must be a known error code, or an \c UNKNOWN-ERROR-RESPONSE
+        exception is thrown
+        @return example data for the error message with the given error code in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw UNKNOWN-ERROR-RESPONSE the error response given is not known
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleErrorResponseDataWithOptionsImpl(string error_code, *hash<auto> options) {
+        return getExampleErrorResponseDataImpl(error_code);
     }
 
     #! Returns example data for the given observable event
@@ -3675,7 +5888,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         @since DataProvider 3.0
     */
     private auto getExampleEventDataImpl(string event_id) {
-        return getEventInfoImpl(event_id).type.getExampleValue();
+        *AbstractDataProviderType t = getEventInfoImpl(event_id).type;
+        return t ? t.getExampleValue() : NOTHING;
+    }
+
+    #! Returns example data for the given observable event in the context of the given option data
+    /** @param event_id the event ID of the event
+        @param options action option data
+
+        @return example data for the given observable event in the context of the given option data
+
+        @throw INVALID-OPERATION the data provider does not support the observer pattern / event API
+        @throw INVALID-EVENT the event_id is not valid
+
+        @since DataProvider 3.3
+    */
+    private auto getExampleEventDataWithOptionsImpl(string event_id, *hash<auto> options) {
+        return getExampleEventDataImpl(event_id);
     }
 
     #! Returns example data for the record type
@@ -3687,10 +5916,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
         try {
             return searchFirstRecord({});
         } catch (hash<ExceptionInfo> ex) {
-            error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row: %s: %s; returning generated data", ex.err,
-                ex.desc);
+            error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row; returning generated data: %s",
+                get_exception_string(ex));
         }
-        return generateExampleData(getRecordTypeImpl());
+        *hash<string, AbstractDataField> rec = getRecordTypeImpl();
+        return rec ? generateExampleData(rec) : {};
+    }
+
+    #! Returns example data for the record type in the context of the given option data
+    /** @param options action option data
+
+        @return example data for the record type in the context of the given option data
+
+        @since DataProvider 3.3
+    */
+    private hash<auto> getExampleRecordDataWithOptionsImpl(*hash<auto> options) {
+        return getExampleRecordDataImpl();
     }
 
     #! Returns reference data of the given kind if available
@@ -3703,6 +5944,37 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper {
     */
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         # intentionally empty
+    }
+
+    #! Returns element reference data of the given kind if available
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed element values for list types for this data
+
+        @since DataProvider 3.0
+    */
+    private *list<hash<AllowedValueInfo>> getElementReferenceDataImpl(string type, *hash<auto> action_opts) {
+        # intentionally empty
+    }
+
+    #! Returns a reference data value of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return the value of the reference data
+
+        @since DataProvider 3.0
+    */
+    private auto getReferenceDataValueImpl(string type, *hash<auto> action_opts) {
+        # intentionally empty
+    }
+
+    #! Returns @ref True if the current thread is in a transaction
+    /** @return @ref True if the current thread is in a transaction
+    */
+    private bool currentThreadInTransactionImpl() {
+        throwUnimplementedException();
     }
 
     #! Returns the data provider name

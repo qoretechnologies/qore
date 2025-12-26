@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -460,7 +460,7 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     return err;
 }
 
-int StatementBlock::parseInit(UserVariantBase* uvb) {
+int StatementBlock::parseInit(UserVariantBase* uvb, const QoreClass* class_ctx) {
     QORE_TRACE("StatementBlock::parseInit");
 
     VariableBlockHelper vbh;
@@ -468,7 +468,7 @@ int StatementBlock::parseInit(UserVariantBase* uvb) {
     UserParamListLocalVarHelper ph(uvb);
 
     // initialize code block
-    QoreParseContext parse_context;
+    QoreParseContext parse_context(class_ctx);
     int err = parseInitImpl(parse_context);
     if (parseCheckReturn() && !err) {
         err = -1;

@@ -98,11 +98,11 @@ printf("%N\n", ans.body);
 
     @subsection awsrestclientv2_0 AwsRestClient v1.2
     - added support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4564">issue 4564</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
 
     @subsection awsrestclientv1_1 AwsRestClient v1.1
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection awsrestclientv1_0 AwsRestClient v1.0
     - the initial version of the %AwsRestClient module
@@ -119,9 +119,6 @@ public namespace AwsRestClient {
 */
 public class AwsRestClient inherits RestClient::RestClient {
     public {
-        #! default send encoding
-        const DefaultSendEncoding = "gzip";
-
         #! required options
         const RequiredOptions = (
             "aws_keyid",
@@ -271,7 +268,7 @@ AwsRestClient rest({
     }
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
-            *softbool decode_errors) {
+            *softbool decode_errors, *string assume_content_type, *string shdr, *code signer) {
         # get request time
         date gmtime = Qore::gmtime();
         # get credential scope
@@ -290,11 +287,12 @@ AwsRestClient rest({
         hdr.Authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
             AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
 
-        return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors);
+        return RestClient::sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr,
+            signer);
     }
 
     string getSignature(string http_method, string path, reference<hash<auto>> hdr, *data body, date gmtime,
-        string scope, reference<string> signed_headers) {
+            string scope, reference<string> signed_headers) {
         string req_string = getRequestString(http_method, path, \hdr, body, gmtime, scope, \signed_headers);
 
         # calculate a signature

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -260,7 +260,8 @@ tmap_t ch_map,          // complex hash map
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
 
-static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
+static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInfo,
+        const QoreTypeInfo* orNothingTypeInfo) {
    str_typeinfo_map[name]                     = typeInfo;
    str_ornothingtypeinfo_map[name]            = orNothingTypeInfo;
    type_typeinfo_map[t]                       = typeInfo;
@@ -270,56 +271,65 @@ static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInf
    typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
 }
 
+static void do_maps(const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
+   typeinfo_map[typeInfo]                     = orNothingTypeInfo;
+   typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
+}
+
 // at least the NullString must be created after the default character encoding is set
 void init_qore_types() {
-   // initialize global default values
-   NullString     = new QoreStringNode;
-   ZeroDate       = DateTimeNode::makeAbsolute(0, 0, 0);
-   OneDate        = DateTimeNode::makeAbsolute(0, 0, 0, 0, 0, 1);
-   ZeroNumber     = new QoreNumberNode;
-   NaNumber       = qore_number_private::getNaNumber();
-   InfinityNumber = qore_number_private::getInfinity();
-   piNumber       = qore_number_private::getPi();
+    // initialize global default values
+    NullString     = new QoreStringNode;
+    ZeroDate       = DateTimeNode::makeAbsolute(0, 0, 0);
+    OneDate        = DateTimeNode::makeAbsolute(0, 0, 0, 0, 0, 1);
+    ZeroNumber     = new QoreNumberNode;
+    NaNumber       = qore_number_private::getNaNumber();
+    InfinityNumber = qore_number_private::getInfinity();
+    piNumber       = qore_number_private::getPi();
 
-   emptyList      = new QoreListNode;
-   emptyHash      = new QoreHashNode;
+    emptyList      = new QoreListNode;
+    emptyHash      = new QoreHashNode;
 
-   do_maps(NT_INT,             "int", bigIntTypeInfo, bigIntOrNothingTypeInfo);
-   do_maps(NT_STRING,          "string", stringTypeInfo, stringOrNothingTypeInfo);
-   do_maps(NT_BOOLEAN,         "bool", boolTypeInfo, boolOrNothingTypeInfo);
-   do_maps(NT_FLOAT,           "float", floatTypeInfo, floatOrNothingTypeInfo);
-   do_maps(NT_NUMBER,          "number", numberTypeInfo, numberOrNothingTypeInfo);
-   do_maps(NT_BINARY,          "binary", binaryTypeInfo, binaryOrNothingTypeInfo);
-   do_maps(NT_LIST,            "list", listTypeInfo, listOrNothingTypeInfo);
-   do_maps(NT_HASH,            "hash", hashTypeInfo, hashOrNothingTypeInfo);
-   do_maps(NT_OBJECT,          "object", objectTypeInfo, objectOrNothingTypeInfo);
-   do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
-   do_maps(NT_ALL,             "auto", autoTypeInfo, autoTypeInfo);
-   do_maps(NT_DATE,            "date", dateTypeInfo, dateOrNothingTypeInfo);
-   do_maps(NT_CODE,            "code", codeTypeInfo, codeOrNothingTypeInfo);
-   do_maps(NT_DATA,            "data", dataTypeInfo, dataOrNothingTypeInfo);
-   do_maps(NT_REFERENCE,       "reference", referenceTypeInfo, referenceOrNothingTypeInfo);
-   do_maps(NT_NULL,            "null", nullTypeInfo, nullOrNothingTypeInfo);
-   do_maps(NT_NOTHING,         "nothing", nothingTypeInfo, nothingTypeInfo);
+    do_maps(NT_INT,             "int", bigIntTypeInfo, bigIntOrNothingTypeInfo);
+    do_maps(NT_STRING,          "string", stringTypeInfo, stringOrNothingTypeInfo);
+    do_maps(NT_BOOLEAN,         "bool", boolTypeInfo, boolOrNothingTypeInfo);
+    do_maps(NT_FLOAT,           "float", floatTypeInfo, floatOrNothingTypeInfo);
+    do_maps(NT_NUMBER,          "number", numberTypeInfo, numberOrNothingTypeInfo);
+    do_maps(NT_BINARY,          "binary", binaryTypeInfo, binaryOrNothingTypeInfo);
+    do_maps(NT_LIST,            "list", listTypeInfo, listOrNothingTypeInfo);
+    do_maps(NT_HASH,            "hash", hashTypeInfo, hashOrNothingTypeInfo);
+    do_maps(NT_OBJECT,          "object", objectTypeInfo, objectOrNothingTypeInfo);
+    do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
+    do_maps(NT_ALL,             "auto", autoTypeInfo, autoTypeInfo);
+    do_maps(NT_DATE,            "date", dateTypeInfo, dateOrNothingTypeInfo);
+    do_maps(NT_CODE,            "code", codeTypeInfo, codeOrNothingTypeInfo);
+    do_maps(NT_DATA,            "data", dataTypeInfo, dataOrNothingTypeInfo);
+    do_maps(NT_REFERENCE,       "reference", referenceTypeInfo, referenceOrNothingTypeInfo);
+    do_maps(NT_NULL,            "null", nullTypeInfo, nullOrNothingTypeInfo);
+    do_maps(NT_NOTHING,         "nothing", nothingTypeInfo, nothingTypeInfo);
 
-   do_maps(NT_SOFTINT,         "softint", softBigIntTypeInfo, softBigIntOrNothingTypeInfo);
-   do_maps(NT_SOFTFLOAT,       "softfloat", softFloatTypeInfo, softFloatOrNothingTypeInfo);
-   do_maps(NT_SOFTNUMBER,      "softnumber", softNumberTypeInfo, softNumberOrNothingTypeInfo);
-   do_maps(NT_SOFTBOOLEAN,     "softbool", softBoolTypeInfo, softBoolOrNothingTypeInfo);
-   do_maps(NT_SOFTSTRING,      "softstring", softStringTypeInfo, softStringOrNothingTypeInfo);
-   do_maps(NT_SOFTDATE,        "softdate", softDateTypeInfo, softDateOrNothingTypeInfo);
-   do_maps(NT_SOFTLIST,        "softlist", softListTypeInfo, softListOrNothingTypeInfo);
-   do_maps(NT_SOFTBINARY,      "softbinary", softBinaryTypeInfo, softBinaryOrNothingTypeInfo);
-   do_maps(NT_HEXBINARY,       "hexbinary", hexBinaryTypeInfo, hexBinaryOrNothingTypeInfo);
-   do_maps(NT_BASE64BINARY,    "base64binary", base64BinaryTypeInfo, base64BinaryOrNothingTypeInfo);
-   do_maps(NT_BASE64URLBINARY, "base64urlbinary", base64UrlBinaryTypeInfo, base64UrlBinaryOrNothingTypeInfo);
+    do_maps(NT_SOFTINT,         "softint", softBigIntTypeInfo, softBigIntOrNothingTypeInfo);
+    do_maps(NT_SOFTFLOAT,       "softfloat", softFloatTypeInfo, softFloatOrNothingTypeInfo);
+    do_maps(NT_SOFTNUMBER,      "softnumber", softNumberTypeInfo, softNumberOrNothingTypeInfo);
+    do_maps(NT_SOFTBOOLEAN,     "softbool", softBoolTypeInfo, softBoolOrNothingTypeInfo);
+    do_maps(NT_SOFTSTRING,      "softstring", softStringTypeInfo, softStringOrNothingTypeInfo);
+    do_maps(NT_SOFTDATE,        "softdate", softDateTypeInfo, softDateOrNothingTypeInfo);
+    do_maps(NT_SOFTLIST,        "softlist", softListTypeInfo, softListOrNothingTypeInfo);
+    do_maps(NT_SOFTBINARY,      "softbinary", softBinaryTypeInfo, softBinaryOrNothingTypeInfo);
+    do_maps(NT_HEXBINARY,       "hexbinary", hexBinaryTypeInfo, hexBinaryOrNothingTypeInfo);
+    do_maps(NT_BASE64BINARY,    "base64binary", base64BinaryTypeInfo, base64BinaryOrNothingTypeInfo);
+    do_maps(NT_BASE64URLBINARY, "base64urlbinary", base64UrlBinaryTypeInfo, base64UrlBinaryOrNothingTypeInfo);
 
-   do_maps(NT_TIMEOUT,         "timeout", timeoutTypeInfo, timeoutOrNothingTypeInfo);
+    do_maps(NT_TIMEOUT,         "timeout", timeoutTypeInfo, timeoutOrNothingTypeInfo);
 
-   // map the closure and callref strings to codeTypeInfo to ensure that these
-   // types are always interchangeable
-   do_maps(NT_RUNTIME_CLOSURE, "closure", codeTypeInfo, codeOrNothingTypeInfo);
-   do_maps(NT_FUNCREF, "callref", codeTypeInfo, codeOrNothingTypeInfo);
+    // map the closure and callref strings to codeTypeInfo to ensure that these
+    // types are always interchangeable
+    do_maps(NT_RUNTIME_CLOSURE, "closure", codeTypeInfo, codeOrNothingTypeInfo);
+    do_maps(NT_FUNCREF, "callref", codeTypeInfo, codeOrNothingTypeInfo);
+
+    do_maps(autoListTypeInfo, autoListOrNothingTypeInfo);
+    do_maps(autoHashTypeInfo, autoHashOrNothingTypeInfo);
+    do_maps(softAutoListTypeInfo, softAutoListOrNothingTypeInfo);
 }
 
 void delete_qore_types() {
@@ -364,9 +374,10 @@ void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
 static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
     assert(QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
 
-    typeinfo_map_t::iterator i = typeinfo_map.find(typeInfo);
-    if (i != typeinfo_map.end())
+    typeinfo_map_t::iterator i = typeinfo_or_nothing_map.find(typeInfo);
+    if (i != typeinfo_or_nothing_map.end()) {
         return i->second;
+    }
 
     // see if we have a complex type
     {
@@ -1374,11 +1385,24 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
-        case QTS_TYPE:
+        case QTS_TYPE: {
+            qore_type_t t = n.getType();
+            // special handling for objects; check for object validity; if it's already been deleted,
+            // then we use NT_NOTHING
+            if (t == NT_OBJECT && !n.get<QoreObject>()->isValid()) {
+                t = NT_NOTHING;
+            }
+            if (u.t == NT_ALL || u.t == t) {
+                ok = true;
+            }
+            break;
+        }
+
         case QTS_EMPTYLIST:
         case QTS_EMPTYHASH:
-            if (u.t == NT_ALL || u.t == n.getType())
+            if (u.t == NT_ALL || u.t == n.getType()) {
                 ok = true;
+            }
             break;
     }
 

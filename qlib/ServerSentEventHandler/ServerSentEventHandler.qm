@@ -1,0 +1,88 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ServerSentEventHandler.qm Qore handler definition for the HttpServer module for providing SSE connections
+
+/*  ServerSentEventHandler.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+%strict-args
+%new-style
+%allow-weak-references
+
+%requires HttpServerUtil
+%requires Util
+%requires(reexport) Logger
+%requires Mime
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+module ServerSentEventHandler {
+    version = "1.0.2";
+    desc = "User module for handling SSE connections";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ServerSentEventHandler Module
+
+    @tableofcontents
+
+    @section serversenteventhandlerintro Introduction to the ServerSentEventHandler Module
+
+    The %ServerSentEventHandler module provides a handler to be used with the
+    <a href="../../HttpServer/html/index.html">HttpServer module</a> to provide
+    <a href="ç">Server-Sent Event</a> connections.
+
+    To use this module, use \c "%requires ServerSentEventHandler" and \c "%requires HttpServer" in your code.
+
+    All the public symbols in the module are defined in the ServerSentEventHandler namespace.
+
+    The main classes provided in this module are:
+    - @ref ServerSentEventHandler::ServerSentEventConnection
+    - @ref ServerSentEventHandler::ServerSentEventHandler
+
+    @section serversenteventhandler_relnotes ServerSentEventHandler Release History
+
+    @subsection serversenteventhandler_v1_0_2 Version 1.0.2
+    - added supoprt for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP
+      server handlers
+     (<a href="https://github.com/qoretechnologies/qore/issues/4958">issue 4958</a>)
+
+    @subsection serversenteventhandler_v1_0_1 Version 1.0.1
+    - More flexible SSE handler support
+
+    @subsection serversenteventhandler_v1_0 Version 1.0
+    - the initial version of the ServerSentEventHandler module
+*/
+
+#! the ServerSentEventHandler namespace contains all the objects in the ServerSentEventHandler module
+public namespace ServerSentEventHandler {
+}

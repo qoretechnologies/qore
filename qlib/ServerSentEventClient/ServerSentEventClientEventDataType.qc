@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore ImpliedArgumentHelper class definition
+#! @file ServerSentEventClientEventDataType.qc SSE connection client
 
-/** ImpliedArgumentHelper.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  ServerSentEventClientEventDataType.qc Copyright 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,32 +22,15 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires(reexport) Logger
-
-#! contains all public definitions in the DataProvider module
-public namespace DataProvider {
-#! Implied argument storage
-thread_local *hash<auto> implied_args;
-
-#! Data provider implied argument helper
-public class ImpliedArgumentHelper {
-    public {}
-
-    private {
-        *hash<auto> old_args;
-    }
-
-    constructor(*hash<auto> new_args) {
-        old_args = implied_args;
-        implied_args = new_args;
-    }
-
-    destructor() {
-        implied_args = old_args;
-    }
-
-    static *hash<auto> get() {
-        return implied_args;
+#! the ServerSentEventClient namespace contains all the objects in the ServerSentEventClient module
+public namespace ServerSentEventClient {
+#! ServerSentEvent event data description
+public class ServerSentEventClientEventDataType inherits HashDataType {
+    #! Creates the type
+    constructor() : HashDataType(TypedHash::forName("SseMessageInfo")) {
     }
 }
+
+#! ServerSentEvent event data type constant
+public const ServerSentEventClientEventDataType = new ServerSentEventClientEventDataType();
 }

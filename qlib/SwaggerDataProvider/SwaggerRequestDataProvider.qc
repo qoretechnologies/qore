@@ -55,6 +55,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         *hash<string, AbstractDataField> record_type;
     }
 
+    private {
+        #! Disable checking the request type
+        bool disable_request_type_check;
+    }
+
     #! Creates the object from the arguments
     constructor(SwaggerSchema schema, *RestClient rest, string uri_path, PathItemObject pio, OperationObject op)
             : SwaggerDataProviderBase(rest) {
@@ -71,7 +76,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         foreach hash<auto> i in (op.responses.responses.pairIterator()) {
             if (i.key =~ /^2/ && i.value) {
                 success_response = i.key;
-                record_type = getRecordTypeIntern();
+                break;
             }
         }
     }
@@ -97,18 +102,41 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         return rv;
     }
 
+    #! Disable the request type check
+    disableRequestTypeCheck() {
+        disable_request_type_check = True;
+    }
+
+    #! Makes a request and returns the response
+    /** @param req the request to serialize and make according to the request type
+        @param request_options the request options; will be processed by validateRequestOptions()
+
+        @return the response to the request
+
+        @throw INVALID-OPERATION the data provider does not support the request API
+        @throw INVALID-REQUEST the request argument provided do not match the expected request type
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        if (!disable_request_type_check) {
+            return AbstractDataProvider::doRequest(req, request_options);
+        }
+        return doRequestImpl(req, validateRequestOptions(request_options));
+    }
+
     #! Returns the description of the record type, if any
     /** Returns the record type description for any successful response
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        if (!record_type) {
+            record_type = getRecordTypeIntern();
+        }
         return record_type;
     }
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
         *ResponseObject response = getSuccessResponse();
         if (response.schema) {
-            RecursiveSearchHelper rsh();
-            AbstractDataField response_field = getFieldFromSchema("body", "REST response body argument",
+            AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
                 response.schema);
             AbstractDataProviderType type = response_field.getType();
             *hash<string, AbstractDataField> rv = type.getFields();
@@ -130,12 +158,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         bool required = False;
         *hash<string, AbstractParameterObject> params = pio.parameters + op.parameters;
         if (params) {
-            addFieldsFromParameters(rv, params, \required);
+            schema.addFieldsFromParameters(rv, params, \required);
         }
         *AbstractParameterObject body = op.body ?? pio.body;
         if (body) {
-            RecursiveSearchHelper rsh();
-            AbstractDataField body_field = getFieldFromSchema("body", "REST request body argument",
+            AbstractDataField body_field = schema.getFieldFromSchema("body", "REST request body argument",
                 cast<BodyParameter>(body).schema, body.required ?? False, rest);
             rv.addField(body_field);
             if (!required && body.required) {
@@ -145,9 +172,9 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         if (op.formData) {
             HashDataType formData(getName() + ": request formData");
             foreach hash<auto> i in (op.formData.pairIterator()) {
-                TypedParameter formData = cast<TypedParameter>(i.value);
-                rv.addField(new QoreDataField(i.key, "formData." + i.key, getType("/request/" + i.key,
-                    i.value.type, i.value.format, i.value.items, i.value.required)));
+                TypedParameter formDataParam = cast<TypedParameter>(i.value);
+                formData.addField(new QoreDataField(i.key, "formData." + i.key, schema.getType("/request/" + i.key,
+                    i.value.type, i.value.format, i.value.items, i.value.required ?? False)));
                 if (!required && i.value.required) {
                     required = True;
                 }
@@ -204,12 +231,10 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         label += " response";
         HashDataType rv();
         if (response.schema) {
-            RecursiveSearchHelper rsh();
-            rv.addField(getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
+            rv.addField(schema.getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
         }
         if (response.headers) {
-            RecursiveSearchHelper rsh();
-            rv.addField(getFieldForHeaders("headers", response.headers));
+            rv.addField(schema.getFieldForHeaders("headers", response.headers));
             response_headers = keys response.headers;
         }
         return rv;
@@ -239,7 +264,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
         This will execute the request and perform a default search on any record(s) returned
 
-        @throw SWAGGER-SEARCH-ERROR the response type is not list or hash and does not support searching
+        @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
+        searching
     */
     private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
             *hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
@@ -248,6 +274,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         AbstractIterator i;
         switch (resp.body.typeCode()) {
             case NT_HASH:
+            case NT_NOTHING:
                 i = new SingleValueIterator(resp.body);
                 break;
             case NT_LIST:
@@ -258,7 +285,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     resp.body.type());
                 break;
         }
-        return new DefaultRecordIterator(i, where_cond, NOTHING, record_type);
+        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -268,7 +295,8 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
         This will execute the request and perform a default search on any record(s) returned
 
-        @throw SWAGGER-SEARCH-ERROR the response type is not list or hash and does not support searching
+        @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
+        searching
     */
     private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
             *hash<auto> search_options) {
@@ -277,6 +305,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         AbstractIterator i;
         switch (resp.body.typeCode()) {
             case NT_HASH:
+            case NT_NOTHING:
                 i = new SingleValueIterator(resp.body);
                 break;
             case NT_LIST:
@@ -287,7 +316,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     resp.body.type());
                 break;
         }
-        return new DefaultRecordIterator(i, where_cond, NOTHING, record_type);
+        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
     }
 
     #! Makes a REST request and returns the response
@@ -313,12 +342,13 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         # perform validation
         hash<string, bool> mime_types;
         hash<UriQueryInfo> uri_info = parse_uri_query(uri_path);
-        op.validateRequest(True, pio, \uri_info, \req.body, \hdr, \mime_types);
+        auto req_body = req.body ?? req.formData;
+        op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
 
         # make the call
         hash<auto> info;
         try {
-            *data body = op.getRequestBody(pio, req.body, \hdr);
+            *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
 
             # ensure we specify JSON for the response if possible
             if (!hdr.Accept && op.produces{MimeTypeJson}) {
@@ -338,12 +368,17 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
             if (resp.body.val()) {
                 rv.body = resp.body;
             }
-            if (response_headers) {
+            if (options.include_response_headers) {
+                rv += {
+                    "headers": info."response-headers",
+                    "headers-raw": info."response-headers-raw",
+                };
+            } else if (response_headers) {
                 rv.headers = map {$1: info."response-headers"{$1.lwr()}}, response_headers;
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
-            error("SWAGGER-REQUEST-ERROR", "%s info: %y", get_exception_string(ex), info);
+            LoggerWrapper::error("%s info: %y", get_exception_string(ex), info);
             rethrow ex.err, ex.desc, info;
         }
     }
@@ -355,6 +390,16 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                 return v ? "true" : "false";
             case NT_LIST:
                 return foldl $1 + "," + $2, (map getUriValue($1), v);
+            case NT_DATE: {
+                if (schema.getUtcDates()) {
+                    TimeZone utc(0);
+                    v = utc.date(v);
+                }
+                if (exists (*string fmt = schema.getQueryDateFormat())) {
+                    return v.format(fmt);
+                }
+                return v.format("IF");
+            }
             default:
                 return v.toString();
         }
@@ -408,6 +453,13 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                     "type": AbstractDataProviderTypeMap."hash",
                     "required": False,
                     "desc": "URI path variables for generic paths",
+                },
+                "include_response_headers": hash<DataProviderOptionInfo>{
+                    "display_name": "Always Include Response Headers",
+                    "short_desc": "Always returns all response headers",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "required": False,
+                    "desc": "Always returns all response headers",
                 },
             },
             "search_options": {

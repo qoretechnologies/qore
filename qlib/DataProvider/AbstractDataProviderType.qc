@@ -109,6 +109,7 @@ public const DataTypeMap = {
     "softfloat": SoftFloatType,
     "softnumber": SoftNumberType,
     "softdate": SoftDateType,
+    "softlist": SoftListType,
 
     "*softint": SoftIntOrNothingType,
     "*softstring": SoftStringOrNothingType,
@@ -116,6 +117,7 @@ public const DataTypeMap = {
     "*softfloat": SoftFloatOrNothingType,
     "*softnumber": SoftNumberOrNothingType,
     "*softdate": SoftDateOrNothingType,
+    "*softlist": SoftListOrNothingType,
 
     "all": AbstractDataProviderType::anyType,
     "any": AbstractDataProviderType::anyType,
@@ -134,10 +136,10 @@ public const DataTypeMap = {
     "*hash": AutoHashOrNothingType,
     "*object": ObjectOrNothingType,
     "*date": DateOrNothingType,
-    "*data": DataOrNothingType,
     "*base64binary": Base64BinaryOrNothingType,
     "*base64urlbinary": Base64UrlBinaryOrNothingType,
     "*hexbinary": HexBinaryOrNothingType,
+    "*data": DataOrNothingType,
 };
 
 #! Maps Qore type name constant values to AbstractDataProviderType values
@@ -148,10 +150,28 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "softbyte": new QoreSoftSignedByteDataType(),
     "*softbyte": new QoreSoftSignedByteOrNothingDataType(),
 
-    "ubyte": new QoreUnsignedByteDataType(),
+    "file": FileDataType,
+    "*file": FileOrNothingDataType,
+
+    "unixts": UnixTimestampType,
+    "*unixts": UnixTimestampOrNothingType,
+
+    "unixtsms": UnixTimestampMsType,
+    "*unixtsms": UnixTimestampMsOrNothingType,
+
+    "epoch": EpochIntToDateType,
+    "*epoch": EpochIntToDateOrNothingType,
+
+    "supersoftstring": SuperSoftStringDataType,
+    "*supersoftstring": SuperSoftStringOrNothingDataType,
+
+    "ubyte": QoreUnsignedByteDataType,
     "*ubyte": new QoreUnsignedByteOrNothingDataType(),
     "softubyte": new QoreSoftUnsignedByteDataType(),
     "*softubyte": new QoreSoftUnsignedByteOrNothingDataType(),
+
+    "rgbcolor": RgbColorDataType,
+    "*rgbcolor": RgbColorOrNothingDataType,
 };
 
 #! describes type options
@@ -161,6 +181,9 @@ public hashdecl DataProviderTypeOptionInfo {
 
     #! the description of the option
     string desc;
+
+    #! Flag to publish the option as a `type_option`
+    bool publish;
 }
 
 #! describes a data type
@@ -198,17 +221,38 @@ public hashdecl DataTypeInfo {
     #! Input: list of types returned
     list<string> types_returned;
 
-    #! Any fields supported by the type
-    hash<string, hash<DataFieldInfo>> fields;
+    #! Any fields supported by the type; will be NOTHING when \a recursive is @ref True
+    *hash<string, hash<DataFieldInfo>> fields;
+
+    #! A type description of any element type
+    *hash<DataTypeInfo> element_type;
 
     #! The default value for the type
     auto default_value;
+
+    #! for enum types; allowed values
+    *list<hash<AllowedValueInfo>> allowed_values;
+
+    #! Does the type accept values not defined in allowed_values too?
+    bool allowed_values_creatable = False;
+
+    #! for enum types; allowed values for elements for list types
+    *list<hash<AllowedValueInfo>> element_allowed_values;
+
+    #! Do elements of the list accept values not defined in element_allowed_values too?
+    bool element_allowed_values_creatable = False;
 
     #! If fields can be added dynamically to the type and if the type will accept any field at runtime
     bool can_manage_fields = False;
 
     #! Default type for fields not listed in \a fields
     *hash<DataTypeInfo> default_field_type_info;
+
+    #! Unique type identifier
+    string unique_key;
+
+    #! Recursive flag
+    bool recursive;
 
     #! Any tags set on the type
     *hash<auto> tags;
@@ -263,6 +307,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! creates the type and sets options
     /** @param options a hash of options, if any options match supported options for this type, they are set
         @param tags any user-defined tags to set on the type
+        @param path the registered type path, if any
 
         @throw TYPE-OPTION-ERROR option value has an invalid type
     */
@@ -274,6 +319,32 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         if (path.val()) {
             self.path = path;
         }
+    }
+
+    #! creates the type and sets options
+    /** @param options a hash of options, if any options match supported options for this type, they are set
+        @param tags any user-defined tags to set on the type
+        @param path the registered type path, if any
+
+        @throw TYPE-OPTION-ERROR option value has an invalid type
+    */
+    constructor(*hash<auto> options, hash<auto> tags, *string path) {
+        if (options) {
+            setOptions(options);
+        }
+        if (tags) {
+            self.tags = tags;
+        }
+        if (path.val()) {
+            self.path = path;
+        }
+    }
+
+    #! Copy and set new tags to the copy
+    AbstractDataProviderType copyWithTags(*hash<auto> new_tags) {
+        AbstractDataProviderType t = self.copy();
+        t.tags = new_tags;
+        return t;
     }
 
     #! Returns the description
@@ -315,16 +386,38 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         - \c base_type
     */
     hash<DataTypeInfo> getInputInfo(*bool simple) {
+        # to catch recursive fields
+        string uh = self.uniqueHash();
+        bool recursive = rimap{uh} ?? False;
+        if (!recursive) {
+            rimap{uh} = True;
+        }
+        on_exit if (!recursive) {
+            remove rimap{uh};
+        }
         return <DataTypeInfo>{
             "name": getName(),
             "types_returned": keys getReturnTypeHash(simple),
-            "fields": getFieldInfo(),
+            "fields": !recursive ? getFieldInfo() : NOTHING,
+            "recursive": recursive,
+            "unique_key": uh,
             "base_type": getBaseTypeName(),
         };
     }
 
     #! Returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
+        # to catch recursive fields
+        string uh = self.uniqueHash();
+        bool recursive = rimap{uh} ?? False;
+        if (!recursive) {
+            rimap{uh} = True;
+        }
+        on_exit if (!recursive) {
+            remove rimap{uh};
+        }
+        on_error rethrow $1.err, sprintf("%s (while reading type %s %s recursive: %y rimap: %y)", $1.desc, getName(),
+            uh, recursive, rimap.size());
         hash<DataTypeInfo> rv = <DataTypeInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -333,16 +426,23 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "supported_options": getSupportedOptions(),
             "options": options
                 ? (map {
-                    $1.key: $1.value.typeCode() == NT_OBJECT || $1.value.callp() ? "<" + $1.value.fullType() + ">" : $1.value,
+                    $1.key: ($1.value.typeCode() == NT_OBJECT || $1.value.callp())
+                        ? "<" + $1.value.fullType() + ">"
+                        : $1.value,
                 }, options.pairIterator())
                 : NOTHING,
             "base_type": getBaseTypeName(),
             "mandatory": getDirectTypeHash(){NT_NOTHING} ? False : True,
             "types_accepted": keys getAcceptTypeHash(simple),
             "types_returned": keys getReturnTypeHash(simple),
-            "fields": getFieldInfo(),
+            "fields": !recursive ? getFieldInfo() : NOTHING,
+            "recursive": recursive,
+            "unique_key": uh,
             "tags": tags,
         };
+        if (*AbstractDataProviderType etype = getElementType()) {
+            rv.element_type = etype.getInfo(simple);
+        }
         if (exists (auto v = getDefaultValue())) {
             rv.default_value = v;
         }
@@ -404,6 +504,32 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @since DataProvider 3.0
     */
     auto getDefaultValue() {
+    }
+
+    #! Get allowed values
+    *list<hash<AllowedValueInfo>> getAllowedValues() {
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getAllowedValueMap() {
+    }
+
+    #! Get the "allowed values creatable" flag
+    bool getAllowedValuesCreatable() {
+        return False;
+    }
+
+    #! Get element allowed values
+    *list<hash<AllowedValueInfo>> getElementAllowedValues() {
+    }
+
+    #! Get allowed values
+    *hash<string, bool> getElementAllowedValueMap() {
+    }
+
+    #! Get the "element allowed values creatable" flag
+    bool getElementAllowedValuesCreatable() {
+        return False;
     }
 
     #! Returns True if this type is a list
@@ -486,6 +612,13 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return options;
     }
 
+    #! Returns options with the publish flag set on the type
+    /** @since DataProvider 3.0
+    */
+    *hash<auto> getPublicOptions() {
+        return map {$1.key: $1.value}, options.pairIterator(), $1.value.publish;
+    }
+
     #! sets the given option on the type
     /** @param opt the option to set
         @param value the value to set
@@ -521,7 +654,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 if (value_type == "object") {
                     value_type = value.fullType();
                 }
-                if (i.value.type != value_type) {
+                if (i.value.type == "list" && value_type != "list") {
+                    value = (value,);
+                } else if (i.value.type != value_type) {
                     throw "TYPE-OPTION-ERROR", sprintf("type %y expects type %y for option %y; got type %y instead "
                         "(value: %y)", getName(), i.value.type, i.key, value.type());
                 }
@@ -538,6 +673,11 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns tags set on the type
     *hash<auto> getTags() {
         return tags;
+    }
+
+    #! Sets the dynamic tag on the type
+    setDynamicTag() {
+        tags.dynamic = True;
     }
 
     #! Returns a "soft" type equivalent to the current type
@@ -562,45 +702,70 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return self;
     }
 
-    #! Returns any example value for type, if any
-    /** @since DataProvider 3.0
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** The base class method returns the same type; this method must be overridden in child classes to return a
+        usable mandatory type
+
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+
+        @since DataProvider 3.0
     */
-    auto getExampleValue() {
-        if (*hash<string, AbstractDataField> fields = getFields()) {
-            return map {$1.key: $1.value.getExampleValue()}, fields.pairIterator();
-        }
-        int t = getBaseTypeCode();
-        if (t != NT_ALL && isOrNothingType()) {
+    AbstractDataProviderType getMandatoryType() {
+        return self;
+    }
+
+    #! Returns any example value for type, if any
+    /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+
+        @since DataProvider 3.0
+    */
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+        string u = self.uniqueHash();
+        if (emap{u}) {
             return;
         }
+        emap{u} = True;
+
+        if (*hash<string, AbstractDataField> fields = getFields()) {
+            # do not return example values for complex "or nothing" types
+            if (isOrNothingType()) {
+                return;
+            }
+            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, fields.pairIterator();
+        }
+        int t = getBaseTypeCode();
         switch (getBaseTypeCode()) {
             case NT_INT: return 100;
-            case NT_STRING: return "example string";
+            case NT_STRING: return fname.val() ? sprintf("Example %s", fname) : "example string";
             case NT_BOOLEAN: return True;
             case NT_FLOAT: return 3.1415927;
             case NT_NUMBER: return 3.1415927n;
             case NT_DATE: return now_us();
             case NT_BINARY: return <abcd>;
             case NT_LIST: {
-                if (self.hasCallableMethod("getElementType")) {
-                    *AbstractDataProviderType etype = cast<object>(self).getElementType();
-                    if (etype) {
-                        return map etype.getExampleValue(), xrange(3);
-                    }
+                # do not return example values for complex "or nothing" types
+                if (isOrNothingType()) {
+                    return;
                 }
-                return (1, 2, 3);
+                if (*AbstractDataProviderType etype = getElementType()) {
+                    return map etype.getExampleValue(emap, fname), xrange(1);
+                }
+                return (1, 2);
             }
             case NT_HASH: {
-                *AbstractDataProviderType etype;
-                if (self.hasCallableMethod("getElementType")) {
-                    etype = cast<object>(self).getElementType();
-                } else if (self.hasCallableMethod("getDefaultOtherElementType")) {
+                # do not return example values for complex "or nothing" types
+                if (isOrNothingType()) {
+                    return;
+                }
+                *AbstractDataProviderType etype = getElementType();
+                if (!etype && self.hasCallableMethod("getDefaultOtherElementType")) {
                     etype = cast<object>(self).getDefaultOtherElementType();
                 }
                 if (etype) {
-                    return map {$1: etype.getExampleValue()}, ("one", "two");
+                    return map {$1: etype.getExampleValue(emap, fname ? fname + "." + $1 : $1)}, ("a", "b");
                 }
-                return {"a": 1, "b": 2};
+                return {"a": 1, "b": "two"};
             }
             case NT_ALL: return "any value";
             case NT_NOTHING: return;
@@ -707,4 +872,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         options{opt} = value;
     }
 }
+}
+
+namespace Priv {
+#! Recursive info map: unique key -> True
+thread_local hash<string, bool> rimap;
 }

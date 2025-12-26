@@ -14,6 +14,7 @@
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestSchemaValidator.qm
 %requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/FsUtil.qm
@@ -149,6 +150,7 @@ public class Main inherits QUnit::Test {
     }
 
     constructor() : Test("RestClientTest", "1.0") {
+        addTestCase("serialization", \serializationTest());
         addTestCase("invalid connection option", \invalidConnectionOptionTest());
         addTestCase("poll test", \pollTest());
         addTestCase("issue 3472", \issue3472());
@@ -185,6 +187,30 @@ public class Main inherits QUnit::Test {
 
     tearDown() {
         delete m_http;
+    }
+
+    serializationTest() {
+%ifndef NoYaml
+        TmpFile tmp();
+        tmp.file.write(getSwaggerSchema());
+        tmp.file.close();
+%endif
+
+        RestClient rest({
+            "url": "https://user:pass@localhost:1080/some/path",
+            "data": "url",
+%ifndef NoYaml
+            "validator": SwaggerLoader::fromUrl("file://" + tmp.path),
+%endif
+        }, True);
+%ifndef NoYaml
+        assertEq("https://user:pass@localhost:1080", rest.getURL());
+%else
+        assertEq("https://user:pass@localhost:1080/some/path", rest.getURL());
+%endif
+        RestClient rest2 = Serializable::deserialize(rest.serialize());
+        assertEq(rest.getURL(), rest2.getURL());
+        assertEq(rest.getSerialization(), rest2.getSerialization());
     }
 
     invalidConnectionOptionTest() {
@@ -565,6 +591,11 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
 
     hash<auto> waitForResult() {
         return msgq.get();
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {

@@ -44,6 +44,16 @@
 
 #define HTTPCLIENT_DEFAULT_MAX_REDIRECTS 5         //!< maximum number of HTTP redirects allowed
 
+constexpr int64 UC_TARGET          = (1 << 0);
+constexpr int64 UC_USERNAME        = (1 << 1);
+constexpr int64 UC_PASSWORD        = (1 << 2);
+constexpr int64 UC_MASK_PASSWORD   = (1 << 3);
+constexpr int64 UC_PATH            = (1 << 4);
+
+constexpr int64 URL_NO_AUTH        = UC_TARGET | UC_PATH;
+constexpr int64 URL_NORMAL         = UC_TARGET | UC_USERNAME | UC_PASSWORD | UC_PATH;
+constexpr int64 URL_MASK_PASSWORD  = URL_NORMAL | UC_MASK_PASSWORD;
+
 class Queue;
 
 //! provides a way to communicate with HTTP servers using Qore data structures
@@ -168,19 +178,15 @@ public:
     */
     DLLEXPORT int setURL(const char* url, ExceptionSink* xsink);
 
-    //! returns the connection parameters as a URL
-    /**
-        @return the connection parameters as a URL, caller owns the reference count returned
-    */
-    DLLEXPORT QoreStringNode* getURL();
+    //! returns the connection parameters as a URL according to the parameters passed
+    /** @param code URL codes as a bitfield
 
-    //! returns the connection parameters as a URL without any password
-    /**
-        @return the connection parameters as a URL without any password, caller owns the reference count returned
+        @return the connection parameters as a URL according to the parameters passed, caller owns the reference count
+        returned
 
-        @since %Qore 1.6.0
+        @since %Qore 2.0
     */
-    DLLEXPORT QoreStringNode* getSafeURL();
+    DLLEXPORT QoreStringNode* getUrl(int64 code = URL_NORMAL);
 
     //! sets the username and password for the connection
     /** @param user the username to set
@@ -537,13 +543,18 @@ public:
 
     //! sets the new and returns the old pre_encoded_urls flag
     /** @since %Qore 1.13.0
-     */
+    */
     DLLEXPORT bool setPreEncodedUrls(bool set);
 
     //! returns the current pre_encoded_urls flag
     /** @since %Qore 1.13.0
-     */
+    */
     DLLEXPORT bool getPreEncodedUrls() const;
+
+    //! Returns a configuration hash for the object
+    /** @since %Qore 2.0
+    */
+    DLLEXPORT QoreHashNode* getConfig() const;
 
     DLLLOCAL static void static_init();
 

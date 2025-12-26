@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the FileDataProvider module
 public namespace FileDataProvider {
-#! Generic app name for the local filesystem
+#! Generic app name for the server filesystem
 public const AppName = "Filesystem";
 
 #! The main data provider class, provides API classes as children
@@ -65,7 +65,7 @@ public class FileDataProvider inherits FileDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Data provider for the local filesystem";
+        return "Data provider for the server filesystem";
     }
 
     #! Return data provider summary info

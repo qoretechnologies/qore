@@ -173,7 +173,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
                     "desc": "If `true`, the destination must be an index alias",
                 },
             },
-            "search_options": {
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "if_seq_no": <DataProviderOptionInfo>{
                     "display_name": "Only If Sequence",
                     "short_desc": "Only perform the operation if the document has this sequence number",

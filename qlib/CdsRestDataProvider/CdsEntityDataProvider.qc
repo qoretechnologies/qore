@@ -50,54 +50,20 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
         #! metadata description
         hash<auto> meta;
-    }
 
-    private {
-        #! Record info for the entity
-        hash<CdsRestRecordInfo> record_info();
-    }
-
-    #! Creates the object from the arguments
-    constructor(CdsRestClient rest, string name, hash<auto> meta) : CdsRestDataProviderBase(rest) {
-        self.name = name;
-        self.meta = meta;
-        getRecordInfoIntern();
-    }
-
-    #! Returns the data provider name
-    string getName() {
-        return name;
-    }
-
-    private *hash<string, DataProvider::AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return record_info.record_type;
-    }
-
-    #! Returns an iterator for zero or more records matching the search options
-    /** @param where_cond the search criteria
-        @param search_options the search options after processing by validateSearchOptions()
-
-        @see requestSearchRecordsImpl()
-    */
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
-            *hash<auto> search_options) {
-       return new CdsRestRecordIterator(rest, name, record_info, where_cond, search_options);
-    }
-
-    #! Returns data provider static info
-    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
-        hash<DataProviderInfo> rv = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
-            "search_options": {
+        #! Static provider info
+        const ProviderInfo = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
                     "short_desc": "Columns to include in the output of the query",
-                    "type": AbstractDataProviderType::get(AbstractDataProviderType::anyType),
+                    "type": AbstractDataProviderTypeMap."auto",
                     "desc": "Columns to include in the output of the query; `select` argument for the query expression",
                 },
                 "limit": <DataProviderOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "The maximum number of records to return",
-                    "type": AbstractDataProviderType::get(IntType),
+                    "type": AbstractDataProviderTypeMap."int",
                     "desc": "The maximum number of records to return; `top` argument for the query expression",
                 },
                 "groupby": <DataProviderOptionInfo>{
@@ -113,9 +79,59 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
                     "type": new QoreListDataType(new Type("softlist<string>")),
                     "desc": "Fields to order the query result by; `orderby` argument for the query expression",
                 },
+                "orderby_desc": <DataProviderOptionInfo>{
+                    "display_name": "Order By Descending",
+                    "short_desc": "Set this flag to use descending sort order for the 'orderby' option",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "desc": "Set this flag to use descending sort order for the `orderby` option",
+                },
             },
         };
-        if (record_info.record_type) {
+    }
+
+    private {
+        #! Record info for the entity
+        hash<CdsRestRecordInfo> record_info();
+    }
+
+    #! Creates the object from the arguments
+    constructor(CdsRestClient rest, string name, hash<auto> meta) : CdsRestDataProviderBase(rest) {
+        self.name = name;
+        self.meta = meta;
+    }
+
+    #! Returns the data provider name
+    string getName() {
+        return name;
+    }
+
+    private *hash<string, DataProvider::AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        checkRecord();
+        return record_info.record_type;
+    }
+
+    private checkRecord() {
+        if (!record_info.record_type) {
+            getRecordInfoIntern();
+        }
+    }
+
+    #! Returns an iterator for zero or more records matching the search options
+    /** @param where_cond the search criteria
+        @param search_options the search options after processing by validateSearchOptions()
+
+        @see requestSearchRecordsImpl()
+    */
+    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        checkRecord();
+        return new CdsRestRecordIterator(rest, name, record_info, where_cond, search_options);
+    }
+
+    #! Returns data provider static info
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        hash<DataProviderInfo> rv = ProviderInfo;
+        if (meta.Key.PropertyRef."^attributes^".Name) {
             rv += {
                 "has_record": True,
                 "supports_read": True,
@@ -139,6 +155,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        checkRecord();
         string url = record_info.entity_set_name;
         hash<auto> info;
         # the id is returned in the "id" field in the response
@@ -171,6 +188,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return see @ref db_provider_upsert_results for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        checkRecord();
         *softstring id_value = remove rec{record_info.key};
         if (!id_value.val()) {
             throw "UPSERT-ERROR", sprintf("upsert request requires a value for the %y key field, but none was given",
@@ -203,6 +221,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return the number of records updated
     */
     private int updateRecordsImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
+        checkRecord();
         if (where_cond{record_info.key} && where_cond.size() == 1) {
             updateSingleRecord(where_cond{record_info.key}, set);
             return 1;
@@ -221,6 +240,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
         @return the number of records deleted
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        checkRecord();
         if (where_cond{record_info.key} && where_cond.size() == 1) {
             deleteSingleRecord(where_cond{record_info.key});
             return 1;
@@ -233,6 +253,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
     #! updates a single record
     private updateSingleRecord(string id, hash<auto> set) {
+        checkRecord();
         string url = sprintf("%s(%s)", record_info.entity_set_name, id);
         hash<auto> info;
         hash<auto> resp;
@@ -247,6 +268,7 @@ public class CdsEntityDataProvider inherits CdsRestDataProviderBase {
 
     #! deletes a single record
     private deleteSingleRecord(string id) {
+        checkRecord();
         string url = sprintf("%s(%s)", record_info.entity_set_name, id);
         hash<auto> info;
         hash<auto> resp;

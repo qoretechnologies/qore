@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProvider.qm module for data access and introspection
 
-/*  DataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  DataProvider.qm Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,10 +37,16 @@
 %requires(reexport) Util
 %requires(reexport) MapperUtil
 %requires(reexport) Mime
+%requires(reexport) Logger
+%requires(reexport) ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
 
 module DataProvider {
-    version = "3.0";
-    desc = "user module for data access and introspection";
+    version = "3.3.0";
+    desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
@@ -88,7 +94,7 @@ module DataProvider {
     - @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
     - @ref DataProvider::DefaultBulkInserter "DefaultBulkInserter"
     - @ref DataProvider::DefaultBulkUpserter "DefaultBulkUpserter"
-    - @ref DataProvider::DefaultBulkRecordIterface "DefaultBulkRecordIterface"
+    - @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface"
     - @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator"
     - @ref DataProvider::QoreDataField "QoreDataField"
 
@@ -160,30 +166,58 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
 
     @section dataprovider_relnotes Release Notes
 
+    @subsection dataprovider_v3_3 DataProvider v3.3
+    - added methods to return data provider types in the context of option dataprovider_message_support
+
+    @subsection dataprovider_v3_2_2 DataProvider v3.2.2
+    - fixed setting the mandatory flag for hashes with dynamic fields
+      (<a href="https://github.com/qoretechnologies/qore/issues/4992">issue 4992</a>)
+    - fixed returning dynamic options for data-dependent action options
+      (<a href="https://github.com/qoretechnologies/qore/issues/4985">issue 4985</a>)
+    - default values are no longer generated for optional hash types based on their fields
+      (<a href="https://github.com/qoretechnologies/qore/issues/4972">issue 4972</a>)
+    - fixed typos in @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions()
+      "DataProviderActionCatalog::getTypeForActionOptions()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/4971">issue 4971</a>)
+
+    @subsection dataprovider_v3_2_1 DataProvider v3.2.1
+    - improved logic handling locked types in the type cache
+
+    @subsection dataprovider_v3_2 DataProvider v3.2
+    - added the SuperSoftStringDataType and SuperSoftStringOrNothingDataType types to support
+      "soft" string types that accept almost any type and convert it to a string
+
+    @subsection dataprovider_v3_1 DataProvider v3.1
+    - added an API to retrieve event data in the context of specific option values
+    - fixed handling element allowed values in fields
+      (<a href="https://github.com/qoretechnologies/qore/issues/4951">issue 4951</a>)
+    - fixed handling implicit default values in @ref HashDataType "HashDataType"
+      (<a href="https://github.com/qoretechnologies/qore/issues/4941">issue 4941</a>)
+
     @subsection dataprovider_v3_0 DataProvider v3.0
     - added support for a data provider action catalog
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - added support for automatically deregistering factories, applications, and actions if an error occurs during
       foreign module initialization
-      (<a href="https://github.com/qorelanguage/qore/issues/4816">issue 4816</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4816">issue 4816</a>)
 
     @subsection dataprovider_v2_7_5 DataProvider v2.7.5
     - fixed conversion of soft binary, bool, float, int, and number "or nothing" types from an empty string to
       @ref NOTHING
-      (<a href="https://github.com/qorelanguage/qore/issues/4836">issue 4836</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4836">issue 4836</a>)
 
     @subsection dataprovider_v2_7_4 DataProvider v2.7.4
     - added \c allowed_values to field data info
-      (<a href="https://github.com/qorelanguage/qore/issues/4762">issue 4762</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4762">issue 4762</a>)
 
     @subsection dataprovider_v2_7_3 DataProvider v2.7.3
     - added missing \c base64binary and \c hexbinary type support
-      (<a href="https://github.com/qorelanguage/qore/issues/4732">issue 4732</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4732">issue 4732</a>)
 
     @subsection dataprovider_v2_7_2 DataProvider v2.7.2
     - fixed bugs handling null hash assignments with fields with default values in
       @ref DataProvider::HashDataType "HashDataType"
-      (<a href="https://github.com/qorelanguage/qore/issues/4715">issue 4715</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4715">issue 4715</a>)
 
     @subsection dataprovider_v2_7_1 DataProvider v2.7.1
     - added
@@ -191,108 +225,108 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
       and
       @ref DataProvider::AbstractDataProviderFactory::createWithTemplate() "AbstractDataProviderFactory::createWithTemplate()"
       to allow data providers to be created from factories with template arguments
-      (<a href="https://github.com/qorelanguage/qore/issues/4624">issue 4624</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4624">issue 4624</a>)
     - \c AbstractDataProvider::search*() fails with record-based data providers that do not provide a record
       definition
-      (<a href="https://github.com/qorelanguage/qore/issues/4624">issue 4624</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4624">issue 4624</a>)
     - \c AbstractDataProvider::search*() methods fail with an empty \c where hash argument
-      (<a href="https://github.com/qorelanguage/qore/issues/4622">issue 4622</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4622">issue 4622</a>)
 
     @subsection dataprovider_v2_7 DataProvider v2.7
     - fixed a bug accepting the element type in @ref DataProvider::SoftListDataType "SoftListDataType"
-      (<a href="https://github.com/qorelanguage/qore/issues/4603">issue 4603</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4603">issue 4603</a>)
     - added child capability support to data provider summary info
-      (<a href="https://github.com/qorelanguage/qore/issues/4576">issue 4576</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4576">issue 4576</a>)
 
     @subsection dataprovider_v2_6 DataProvider v2.6
     - added child capability support to data provider info
-      (<a href="https://github.com/qorelanguage/qore/issues/4572">issue 4572</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4572">issue 4572</a>)
 
     @subsection dataprovider_v2_5 DataProvider v2.5
     - implemented support for the observer pattern / event API
-      (<a href="https://github.com/qorelanguage/qore/issues/4557">issue 4557</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
     @subsection dataprovider_v2_4 DataProvider v2.4
     - allow data providers to be introspected with additional information about children
-      (<a href="https://github.com/qorelanguage/qore/issues/4543">issue 4543</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4543">issue 4543</a>)
 
     @subsection dataprovider_v2_3 DataProvider v2.3
     - updated to use new generic expression support for searches
-      (<a href="https://github.com/qorelanguage/qore/issues/4538">issue 4538</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
     - addded support for data provider options to support default values
-      (<a href="https://github.com/qorelanguage/qore/issues/4532">issue 4532</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4532">issue 4532</a>)
     - addded \c search_operators to the data provider response to report supported search operators
-      (<a href="https://github.com/qorelanguage/qore/issues/4528">issue 4528</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4528">issue 4528</a>)
     - fixed a type error in \c DataProvider::search*() calls with an empty \c where hash argument
-      (<a href="https://github.com/qorelanguage/qore/issues/4511">issue 4511</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4511">issue 4511</a>)
 
     @subsection dataprovider_v2_2_1 DataProvider v2.2.1
     - made it possible to determine the default field type in @ref DataProvider::HashDataType "HashDataType"
-      (<a href="https://github.com/qorelanguage/qore/issues/4491">issue 4491</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4491">issue 4491</a>)
 
     @subsection dataprovider_v2_2 DataProvider v2.2
     - added an attribute to factories to indicate if any children can support the request-response pattern
-      (<a href="https://github.com/qorelanguage/qore/issues/4486">issue 4486</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4486">issue 4486</a>)
     - added the @ref DataProvider::DTT_ClientOnly "DTT_ClientOnly" type tag constant
-      (<a href="https://github.com/qorelanguage/qore/issues/4477">issue 4477</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4477">issue 4477</a>)
 
     @subsection dataprovider_v2_1_2 DataProvider v2.1.2
     - fixed a bug where %DataProvider types based on string that accept multiple input types with conversions but are
       not soft types threw spurious errors at runtime with non-string types
-      (<a href="https://github.com/qorelanguage/qore/issues/4471">issue 4471</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4471">issue 4471</a>)
     - added the \c desc key supporting a markdown description to data provider info
-      (<a href="https://github.com/qorelanguage/qore/issues/4465">issue 4465</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4465">issue 4465</a>)
     - fixed a bug where hash types incorrectly claimed compatibility with incompatible hashes
-      (<a href="https://github.com/qorelanguage/qore/issues/4463">issue 4463</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4463">issue 4463</a>)
 
     @subsection dataprovider_v2_1_1 DataProvider v2.1.1
-    - fixed a type error iterating data in @ref DataProvider::DefaultBulkRecordIterface "DefaultBulkRecordIterface"
-      (<a href="https://github.com/qorelanguage/qore/issues/4457">issue 4457</a>)
+    - fixed a type error iterating data in @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface"
+      (<a href="https://github.com/qoretechnologies/qore/issues/4457">issue 4457</a>)
 
     @subsection dataprovider_v2_1 DataProvider v2.1
     - added support for tags on data provider types (i.e.
       @ref DataProvider::AbstractDataProviderType "AbstractDataProviderType")
-      (<a href="https://github.com/qorelanguage/qore/issues/4442">issue 4442</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4442">issue 4442</a>)
     - fixed data provider factory info to provide info about the actual data provider factory instead of only provider
       info
-      (<a href="https://github.com/qorelanguage/qore/issues/4438">issue 4438</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4438">issue 4438</a>)
     - added "from example" APIs to data provider factories:
       - @ref DataProvider::AbstractDataProviderFactory::getProviderFromExample() "AbstractDataProviderFactory::getProviderFromExample()"
       - @ref DataProvider::AbstractDataProviderFactory::getExampleProviderRecordOutput() "AbstractDataProviderFactory::getExampleProviderRecordOutput()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4430">issue 4430</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
     - added generic search capabilities to data providers with no native search capabilities
-      (<a href="https://github.com/qorelanguage/qore/issues/4430">issue 4430</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
 
     @subsection dataprovider_v2_0 DataProvider v2.0
     - added a logger to the @ref DataProvider::AbstractDataProvider "AbstractDataProvider" class to enable logging
-      (<a href="https://github.com/qorelanguage/qore/issues/4409">issue 4409</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4409">issue 4409</a>)
     - added support for creating, reading, updating, and modifying data providers
-      (<a href="https://github.com/qorelanguage/qore/issues/4395">issue 4395</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 
     @subsection dataprovider_v1_2_3 DataProvider v1.3
     - added @ref DataProvider::DataProviderTypeCache::listParentTypes() "DataProviderTypeCache::listParentTypes()" to
       allow a list of parent types to be returned
-      (<a href="https://github.com/qorelanguage/qore/issues/4385">issue 4385</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4385">issue 4385</a>)
 
     @subsection dataprovider_v1_2_2 DataProvider v1.2.2
     - added support for starting a transaction with DataProviders that support transaction management
-      (<a href="https://github.com/qorelanguage/qore/issues/4346">issue 4346</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
     @subsection dataprovider_v1_2_1 DataProvider v1.2.1
     - return the \c base_type key in input type info in
       @ref DataProvider::AbstractDataProviderType::getInputInfo() "getInputInfo"
-      (<a href="https://github.com/qorelanguage/qore/issues/4311">issue 4311</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4311">issue 4311</a>)
 
     @subsection dataprovider_v1_2 DataProvider v1.2
     - greatly improved dataprovider and type acquisition speed from clients requiring initialization from the environment
-      (<a href="https://github.com/qorelanguage/qore/issues/4305">issue 4305</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4305">issue 4305</a>)
 
     @subsection dataprovider_v1_1 DataProvider v1.1
     - the @ref DataProvider::DefaultRecordIterator class supports the \c limit search option
 
     @subsection dataprovider_v1_0_6 DataProvider v1.0.6
     - fixed a bug where the @ref data_type "data" type was not supported correctly as a data provider type
-      (<a href="https://github.com/qorelanguage/qore/issues/4232">issue 4232</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4232">issue 4232</a>)
 
     @subsection dataprovider_v1_0_5 DataProvider v1.0.5
     - fixed an issue where it was not possible for pipeline to flush any pending data or to perform reset or purge
@@ -300,43 +334,43 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
       @ref DataProvider::AbstractDataProcessor::flush() "AbstractDataProcessor::flush()" and
       @ref DataProvider::AbstractDataProcessor::flushImpl() "AbstractDataProcessor::flushImpl()" methods were
       implemented
-      (<a href="https://github.com/qorelanguage/qore/issues/4107">issue 4107</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4107">issue 4107</a>)
 
     @subsection dataprovider_v1_0_4 DataProvider v1.0.4
     - fixed type-handling bugs handling data provider options
-      (<a href="https://github.com/qorelanguage/qore/issues/4062">issue 4062</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4062">issue 4062</a>)
 
     @subsection dataprovider_v1_0_3 DataProvider v1.0.3
     - fixed bugs in the default return value for
       @ref DataProvider::AbstractDataProcessor::getExpectedType() "AbstractDataProcessor::getExpectedType()" and
       @ref DataProvider::AbstractDataProcessor::getReturnType() "AbstractDataProcessor::getReturnType()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4043">issue 4043</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4043">issue 4043</a>)
 
     @subsection dataprovider_v1_0_2 DataProvider v1.0.2
     - fixed a bug where @ref DataProvider::HashDataType "HashDataType" would not enforce fields or field types when
       checking for type and value compatibility
-      (<a href="https://github.com/qorelanguage/qore/issues/4037">issue 4037</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4037">issue 4037</a>)
     - added new %Qore base types to the data type hierarchy
     - implemented the following classes:
       - @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor"
       - @ref DataProvider::DataProviderBulkRecordIterator "DataProviderBulkRecordIterator"
       - @ref DataProvider::DataProviderPipeline "DataProviderPipeline"\n
-      (<a href="https://github.com/qorelanguage/qore/issues/3876">issue 3876</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3876">issue 3876</a>)
     - added \c DUPLICATE-RECORD exception documentation for
       @ref DataProvider::AbstractDataProvider::createRecord() "AbstractDataProvider::createRecord()"
     - updated to allow data provider type attributes to appear as children in the type hierarchy
-      (<a href="https://github.com/qorelanguage/qore/issues/4015">issue 4015</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4015">issue 4015</a>)
 
     @subsection dataprovider_v1_0_1 DataProvider v1.0.1
     - implemented callbacks to allow for dynamic elements of request-response data providers (such as URI paths) to be
       resolved at runtime
-      (<a href="https://github.com/qorelanguage/qore/issues/3838">issue 3838</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3838">issue 3838</a>)
     - @ref DataProvider::AbstractDataProviderType "AbstractDataProviderType" and
       @ref DataProvider::AbstractDataField "AbstractDataField" classes made serializable
-      (<a href="https://github.com/qorelanguage/qore/issues/3809">issue 3809</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3809">issue 3809</a>)
     - implemented the @ref DataProvider::DataProviderTypeCache "DataProviderTypeCache" class to encapsulate reusable
       type caching logic
-      (<a href="https://github.com/qorelanguage/qore/issues/3810">issue 3810</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3810">issue 3810</a>)
 
     @subsection dataprovider_v1_0 DataProvider v1.0
     - initial release of the module

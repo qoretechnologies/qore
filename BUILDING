@@ -21,19 +21,19 @@ qore requires bison 1.85+ to be able to interface properly with the scanner prod
 OS-level POSIX thread support is required to build qore.
 
 *) PCRE 6 or higher (earlier versions will probably work as well)
-for Perl-Compatible Regular Expressions, Qore now uses the pcre library for regular expression support instead of relying on POSIX regex functions.  tested with pcre 6.3 & 6.6
+for Perl-Compatible Regular Expressions, Qore now uses the PCRE2 library instead of PCRE functions.
 	http://www.pcre.org
-if you have the PCRE headers and libraries in a location the configure script cannot find, then you can either use the --with-pcre-libs and --with-pcre-libraries options, or set the PCRE_DIR environment variable before running configure
+if you have the PCRE2 headers and libraries in a location the configure script cannot find, then you can either use the --with-pcre2-libs and --with-pcre2-libraries options, or set the PCRE_DIR environment variable before running configure
 
-*) openssl 0.9.7 or higher (0.9.8 or better recommended)
+*) openssl 0.9.7 or higher (3.0 or better recommended)
 	http://www.openssl.org
 if you have the open headers and libraries in a location the configure script cannot find, then you can either use the --with-openssl-libs and --with-openssl-libraries options, or set the OPENSSL_DIR environment variable before running configure
 
-*) bzlib 1.0.4 or higher (earlier versions may work as well)
+*) bzlib 1.0.4 or higher
 
-*) zlib 1.1.3 or higher (some earlier versions will work as well)
+*) zlib 1.1.3 or higher
 
-*) mpfr 2.4.1 or higher (some eariler versions may work but have not been tested) - version 3.1+ recommended + note that the gmp library is also required to build mpfr
+*) mpfr 2.4.1 or higher - version 3.1+ recommended + note that the gmp library is also required to build mpfr
    	http://www.mpfr.org/
 	http://gmplib.org/
 This is for the arbitrary-precision numeric type introduced with Qore 0.8.6
@@ -63,7 +63,7 @@ future release.
 --disable-debug                     : to disable debugging code - if you are not planning on debugging the qore language itself then it is highly advised to include this flag, as enabling debugging in qore slows down the language a great deal
 --prefix=<dir>                      : default=/usr/local = qore in /usr/local/bin, libraries in /usr/local/lib, modules in /usr/local/lib/qore-module-api-<ver>/
 --with-openssl-dir=<dir>            : directory of openssl installation
---with-pcre-dir=<dir>               : directory of pcre installation
+--with-pcre2-dir=<dir>              : directory of pcre2 installation
 --with-zlib-dir=<dir>               : directory of zlib installation
 --with-mpfr-dir=<dir>               : directory of mpfr installation
 --with-gmp-dir=<dir>                : directory of gmp installation

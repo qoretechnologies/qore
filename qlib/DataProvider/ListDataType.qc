@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ListDataType class definition
 
-/** ListDataType.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ListDataType.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,26 +32,45 @@ public class ListDataType inherits QoreDataType {
     }
 
     #! creates the object
+    constructor(hash<QoreTypeInfo> info, Type element_type = AutoType) : QoreDataType(ListDataType::checkInfo(info)) {
+        self.element_type = AbstractDataProviderType::get(element_type);
+    }
+
+    #! creates the object
+    constructor(hash<QoreTypeInfo> info, AbstractDataProviderType element_type)
+            : QoreDataType(ListDataType::checkInfo(info)) {
+        self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
+    }
+
+    #! creates the object
     private constructor(string name, Type qelement_type, AbstractDataProviderType element_type, bool or_nothing,
-            *hash<auto> options, *hash<auto> tags)
-            : QoreDataType(qelement_type, options, tags) {
+            *hash<auto> options, *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(qelement_type, options, tags, default_value, attr) {
         self.name = name;
         self.element_type = element_type;
     }
 
     #! creates the object
     constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
-            *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags) {
+            *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+                default_value, attr) {
         if (!name) {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
         self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
     }
 
     #! creates the object
-    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags) {
+    constructor(Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags, default_value, attr) {
         if (!name) {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
@@ -60,22 +79,37 @@ public class ListDataType inherits QoreDataType {
 
     #! creates the object
     constructor(string name, AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
-            *hash<auto> tags)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags) {
+            *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+                default_value, attr) {
         self.name = name;
         self.element_type = element_type;
+        if (element_type.getTags().dynamic) {
+            setDynamicTag();
+        }
     }
 
     #! creates the object
-    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags)
+    constructor(string name, Type element_type, bool or_nothing = False, *hash<auto> options, *hash<auto> tags,
+            *list<auto> default_value, *hash<NameDescInfo> attr)
             : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags) {
         self.name = name;
         self.element_type = AbstractDataProviderType::get(element_type);
     }
 
+    #! Copies the object and assigns a new element type to the copy
+    ListDataType copyWithElementType(AbstractDataProviderType element_type) {
+        ListDataType rv = copy();
+        rv.element_type = element_type;
+        if (rv.element_type.getTags().dynamic) {
+            rv.setDynamicTag();
+        }
+        return rv;
+    }
+
     #! Returns the description
     string getDesc() {
-        return desc ?? sprintf("Qore type %slist<%s>", accept_type_hash{Type::NothingType} ? "*" : "",
+        return desc ?? sprintf("Qore type %slist<%s>", accept_type_hash."nothing" ? "*" : "",
             element_type ? element_type.getName() : "auto");
     }
 
@@ -112,6 +146,20 @@ public class ListDataType inherits QoreDataType {
     #! Updates the element type
     updateElementType(AbstractDataProviderType element_type) {
         self.element_type = element_type;
+    }
+
+    #! Checks the info hash for required fields
+    private static hash<QoreTypeInfo> checkInfo(hash<QoreTypeInfo> info) {
+        if (!info.type) {
+            info.type = AutoListType;
+        } else if (info.type.getBaseTypeCode() != NT_LIST) {
+            throw "DATA-PROVIDER-ERROR", sprintf("ListDataType cannot be created from type %y not compatible with "
+                "'list'", info.type.getName());
+        }
+        if (!info.name) {
+            info.name = info.type.getName();
+        }
+        return info;
     }
 
     #! Returns the underlying %Qore type for this type

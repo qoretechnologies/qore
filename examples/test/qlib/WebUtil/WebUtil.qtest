@@ -84,7 +84,7 @@ public class WebUtilTest inherits QUnit::Test {
 
         on_exit delete server;
 
-        HTTPClient client = new HTTPClient(("url": "http://localhost:" + port));
+        HTTPClient client({"url": "http://localhost:" + port});
         client.connect();
         on_exit client.disconnect();
 
@@ -96,11 +96,12 @@ public class WebUtilTest inherits QUnit::Test {
 
         fh.addHeaders = True;
         result = client.get("/test_file.txt", NOTHING, \info);
+        on_error printf("info: %N\n", info);
         respHdr = info."response-headers";
         assertEq("abc", trim(result));
         # remove the "charset" from the content-type
         respHdr."content-type" =~ s/;.*//;
-        assertEq(MimeTypeHtml, respHdr."content-type");
+        assertEq(MimeTypeText, respHdr."content-type");
         assertTrue(respHdr.hasKey("Cache-Control") || respHdr.hasKey("cache-control"));
     }
 }

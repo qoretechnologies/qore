@@ -456,14 +456,32 @@ public class OpenAiChatCompletionRequestType inherits HashDataType {
             "tool_choice": {
                 "display_name": "Tool Choice",
                 "short_desc": "",
-                "desc": "Controls which (if any) tool is called by the model. `none` means the model will not call "
-                    "any tool and instead generates a message. `auto` means the model can pick between generating a "
-                    "message or calling one or more tools. `required` means the model must call one or more tools. "
+                "desc": "Controls which (if any) tool is called by the model.\n"
                     "Specifying a particular tool via "
                     "`{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` forces the model to call "
                     "that tool.\n\n"
                     "`none` is the default when no tools are present. `auto` is the default if tools are present",
                 "type": AbstractDataProviderTypeMap."any",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "None",
+                        "short_desc": "The model will not call any tool and instead generates a message",
+                        "desc": "The model will not call any tool and instead generates a message",
+                        "value": "none",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "short_desc": "The model can pick between generating a message or calling one or more tools",
+                        "desc": "The model can pick between generating a message or calling one or more tools",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Required",
+                        "short_desc": "The model must call one or more tools",
+                        "desc": "The model must call one or more tools",
+                        "value": "required",
+                    },
+                ),
             },
             "user": {
                 "display_name": "User",
@@ -601,6 +619,58 @@ public class OpenAiChatCompletionUsageDataType inherits HashDataType {
                 "short_desc": "Total number of tokens used in the request (prompt + completion).",
                 "desc": "Total number of tokens used in the request (prompt + completion).",
                 "type": AbstractDataProviderTypeMap."int",
+            },
+            "prompt_tokens_details": {
+                "display_name": "Prompt Tokens Details",
+                "short_desc": "Detailed breakdown of the number of tokens in the prompt",
+                "desc": "Detailed breakdown of the number of tokens in the prompt",
+                "type": new HashDataType(AutoHashOrNothingType, "PromptTokensDetails", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "audio_tokens": {
+                            "display_name": "Audio Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Audio input tokens present in the prompt",
+                        },
+                        "cached_tokens": {
+                            "display_name": "Cached Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Cached tokens tokens present in the prompt",
+                        },
+                    }.pairIterator()
+                )),
+            },
+            "completion_tokens_details": {
+                "display_name": "Completion Tokens Details",
+                "short_desc": "Detailed breakdown of the number of tokens in the completion",
+                "desc": "Detailed breakdown of the number of tokens in the completion",
+                "type": new HashDataType(AutoHashOrNothingType, "CompletionTokensDetails", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "accepted_prediction_tokens": {
+                            "display_name": "Accepted Prediction Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "When using Predicted Outputs, the number of tokens in the prediction that "
+                                "appeared in the completion",
+                        },
+                        "audio_tokens": {
+                            "display_name": "Audio Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Audio input tokens present in the prompt",
+                        },
+                        "reasoning_tokens": {
+                            "display_name": "Reasoning Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "Tokens generated by the model for reasoning",
+                        },
+                        "rejected_prediction_tokens": {
+                            "display_name": "Rejected Reasoning Tokens",
+                            "type": AbstractDataProviderTypeMap."int",
+                            "desc": "When using Predicted Outputs, the number of tokens in the prediction that did "
+                                "not appear in the completion. However, like reasoning tokens, these tokens are still "
+                                "counted in the total completion tokens for purposes of billing, output, and context "
+                                "window limits",
+                        },
+                    }.pairIterator()
+                )),
             },
         };
     }

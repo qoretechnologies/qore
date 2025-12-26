@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -100,6 +100,11 @@ public:
 protected:
     //! The owning object
     QoreObject* self;
+    //! Method objects for faster calls
+    const QoreMethod* serializeImplMeth = nullptr,
+        * pushEventMeth = nullptr,
+        * ensureAtomicOperationsMeth = nullptr,
+        * processEventImplMeth = nullptr;
 
     //! Is pushEvent() native?
     bool direct_push_event;
@@ -136,6 +141,9 @@ protected:
     DLLLOCAL bool pushQueueLocked(ExceptionSink* xsink, int64 type, const QoreValue params);
 
     DLLLOCAL virtual void derefIntern(ExceptionSink* xsink);
+
+    //! Setup methods
+    DLLLOCAL void setupMethods();
 };
 
 #endif

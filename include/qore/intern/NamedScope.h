@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     NamedScopes are children of a program object.  there is a parse
     lock per program object to ensure that objects are added (or backed out)
@@ -57,12 +57,12 @@ protected:
 public:
     char* ostr;
 
-    DLLLOCAL NamedScope(char *str) : del(true), ostr(str) {
+    DLLLOCAL NamedScope(char* str) : del(true), ostr(str) {
         assert(str);
         init();
     }
 
-    DLLLOCAL NamedScope(const char *str) : del(false), ostr((char *)str) {
+    DLLLOCAL NamedScope(const char* str) : del(false), ostr((char *)str) {
         assert(str);
         init();
     }
@@ -77,8 +77,7 @@ public:
     DLLLOCAL NamedScope(const NamedScope& old) : del(true), ostr(strdup(old.ostr)) {
         if (old.strlist) {
             strlist = new nslist_t(*old.strlist);
-        }
-        else {
+        } else {
             strlist = nullptr;
         }
     }

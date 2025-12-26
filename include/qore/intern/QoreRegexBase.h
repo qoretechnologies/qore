@@ -35,10 +35,12 @@
 
 #define _QORE_REGEXBASE_H
 
-// base class for regex and regex substitution classes
-#include <pcre.h>
+#define PCRE2_CODE_UNIT_WIDTH 8
 
-#define check_re_options(a) (a & ~(PCRE_CASELESS|PCRE_DOTALL|PCRE_EXTENDED|PCRE_MULTILINE|PCRE_UTF8|PCRE_UCP))
+// base class for regex and regex substitution classes
+#include <pcre2.h>
+
+#define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP))
 
 class QoreRegexBase {
 public:
@@ -48,12 +50,12 @@ public:
     DLLLOCAL QoreRegexBase(int options) : options(options) {
     }
 
-    DLLLOCAL QoreRegexBase(QoreString* str, int options = PCRE_UTF8) : str(str), options(options) {
+    DLLLOCAL QoreRegexBase(QoreString* str, int options = PCRE2_UTF) : str(str), options(options) {
     }
 
     DLLLOCAL ~QoreRegexBase() {
         if (p) {
-            pcre_free(p);
+            pcre2_code_free(p);
         }
         delete str;
     }
@@ -65,9 +67,9 @@ public:
     DLLLOCAL void setUnicode();
 
 protected:
-    pcre* p = nullptr;
+    pcre2_code* p = nullptr;
     QoreString* str = nullptr;
-    int options = PCRE_UTF8;
+    int options = PCRE2_UTF;
 };
 
 #endif

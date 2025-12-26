@@ -39,7 +39,7 @@
 %new-style
 
 module WebSocketHandler {
-    version = "2.0";
+    version = "2.1";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -66,44 +66,47 @@ module WebSocketHandler {
 
     @section websockethandler_relnotes WebSocketHandler Release History
 
+    @subsection websockethandler_v2_1 Version 2.1
+    - implemented support for a variable send timeout
+
     @subsection websockethandler_v2_0 Version 2.0
     - implemented support for @ref Logger::Logger "Logger" objects for logging
 
     @subsection websockethandler_v1_5_4 Version 1.5.4
     - fixed a bug in @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
-      (<a href="https://github.com/qorelanguage/qore/issues/4634">issue 4634</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4634">issue 4634</a>)
 
     @subsection websockethandler_v1_5_3 Version 1.5.3
     - fixed a bug handling valid empty \c PING messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4565">issue 4565</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4565">issue 4565</a>)
 
     @subsection websockethandler_v1_5_2 Version 1.5.2
     - fixed a bug handling closing server-side web sockets on demand
-      (<a href="https://github.com/qorelanguage/qore/issues/4075">issue 4075</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4075">issue 4075</a>)
     - fixed a bug where I/O could not be flushed before closing the socket
-      (<a href="https://github.com/qorelanguage/qore/issues/4074">issue 4074</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4074">issue 4074</a>)
     - added support for continuation frames
-      (<a href="https://github.com/qorelanguage/qore/issues/4073">issue 4073</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
     @subsection websockethandler_v1_5_1 Version 1.5.1
     - fixed a bug handling the case when a connection object is deleted in a callback method
-      (<a href="https://github.com/qorelanguage/qore/issues/4063">issue 4063</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4063">issue 4063</a>)
 
     @subsection websockethandler_v1_5 Version 1.5
     - allow the WebSocket handler to have connections added to it from outside the class
 
     @subsection websockethandler_v1_4_3 Version 1.4.3
     - added missing exception handling to connection registration code
-      (<a href="https://github.com/qorelanguage/qore/issues/3215">issue 3215</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3215">issue 3215</a>)
     - added @ref WebSocketHandler::WebSocketConnection::stop() and @ref WebSocketHandler::WebSocketHandler::stopOne()
 
     @subsection websockethandler_v1_4_2 Version 1.4.2
     - added support for heartbeat messages
-      (<a href="https://github.com/qorelanguage/qore/issues/2887">issue 2887</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
     @subsection websockethandler_v1_4_1 Version 1.4.1
     - fixed a bug where unsolicited \c PONG messages caused the connection to be prematurely closed
-      (<a href="https://github.com/qorelanguage/qore/issues/2566">issue 2566</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
     @subsection websockethandler_v1_4 Version 1.4
     - added support for complex types
@@ -111,11 +114,11 @@ module WebSocketHandler {
 
     @subsection websockethandler_v1_3 Version 1.3
     - added timeout values to @ref Qore::Socket "Socket" calls
-      (<a href="https://github.com/qorelanguage/qore/issues/1725">issue 1725</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
     @subsection websockethandler_v1_2 Version 1.2
     - fixed a bug parsing and generating the websocket close status code
-      (<a href="https://github.com/qorelanguage/qore/issues/1216">issue 1216</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
     @subsection websockethandler_v1_1 Version 1.1
     - bug fix: do not delete the connection object when the connection closes, remove it so it can go out of scope
@@ -359,6 +362,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! heartbeat message
         string heartbeat_msg = DefaultHeartbeatMsg;
+
+        #! Send timeout
+        date send_timeout = DefaultSocketSendTimeout;
     }
 
     private:internal {
@@ -376,6 +382,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           (default: 20 seconds)
         - \c heartbeat_msg: a string giving the payload to send in heartbeat messages (default: \c "heartbeat"); may
           be an empty string meaning no message
+        - \c logger: a @ref Logger::Logger "Logger" object to use for logging (default: no logging)
+        - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
+          (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
 
         @throw WEBSOCKETHANDLER-OPTION-ERROR unknown or invalid option
     */
@@ -385,7 +394,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             switch (h.key) {
                 case "heartbeat": {
                     if (!h.value.intp()) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y value %y cannot be converted to an "
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y cannot be converted to an "
                             "integer giving the number of seconds in the heartbeat interval", h.key, h.value);
                     }
                     setHeartbeat(h.value);
@@ -393,7 +402,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 case "heartbeat_msg": {
                     if (h.value.typeCode() != NT_STRING) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting \"string\"",
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"string\"",
                             h.key, h.value.fullType());
                     }
                     heartbeat_msg = h.value;
@@ -401,14 +410,33 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
                 case "logger": {
                     if (!(h.value instanceof LoggerInterface)) {
-                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting "
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting "
                             "\"LoggerInterface\"", h.key, h.value.fullType());
                     }
                     logger = h.value;
                     break;
                 }
+                case "send_timeout": {
+                    if (h.value.typeCode() == NT_INT) {
+                        h.value = milliseconds(h.value);
+                    }
+                    if (h.value.typeCode() != NT_DATE) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
+                            h.key, h.value.fullType());
+                    }
+                    if (h.value.absolute()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is absolute; expecting "
+                            "relative date/time value", h.key, h.value);
+                    }
+                    if (h.value < 0s) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is negative; expecting "
+                            "non-negative relative date/time value", h.key, h.value);
+                    }
+                    send_timeout = h.value;
+                    break;
+                }
                 default:
-                    throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("option %y is unknown; known options: %y", h.key,
+                    throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y is unknown; known options: %y", h.key,
                         Options);
             }
         }
@@ -454,21 +482,48 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         heartbeat_msg = msg;
     }
 
+    #! Returns the send timeout value as a relative date/time value
+    /** @return the send timeout value as a relative date/time value
+
+        @since WebSocketHandler 2.1
+    */
+    date getSendTimeout() {
+        return send_timeout;
+    }
+
+    #! Set the send timeout with a non-negative relative date/time value
+    /** @param the send timeout value as a relative date/time value
+
+        @since WebSocketHandler 2.1
+    */
+    setSendTimeout(date to) {
+        if (to.absolute()) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_timeout\" value %y is absolute; expecting "
+                "relative date/time value", to);
+        }
+        if (to < 0s) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_timeout\" value %y is negative; "
+                "expecting non-negative relative date/time value", to);
+        }
+        send_timeout = to;
+    }
+
+    #! Set the send timeout with a non-negative value in milliseconds
+    /** @param the send timeout as a non-negative value in milliseconds
+
+        @since WebSocketHandler 2.1
+    */
+    setSendTimeout(int ms) {
+        setSendTimeout(milliseconds(ms));
+    }
+
     #! called by the HTTP server to handle incoming HTTP requests
     /** To accept a dedicated connection; make sure the return value hash's \c "code" key is 101 (i.e.
         \c "Switching Protocols") and the \c "close" key is not @ref False "False"
 
-        @param cx call context hash; this hash will have the following keys:
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from parseURL())
-        - \c id: the unique HTTP connection ID; this ID is also used to identify the websocket client connection in
-          @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
-        - \c listener-id: the HTTP server listener ID (see HttpServer::HttpServer::getListenerInfo() )
-        - \c user: the current RBAC username (if any)
+        @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
+        unique HTTP connection ID; this ID is also used to identify the websocket client connection in
+        @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -522,16 +577,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     /** This method should not return until the connection is closed or the stop() method is called
 
         @param lid the unique HTTP listener ID
-        @param cx call context hash; this hash will have the following keys:
-        - \c socket: the bind address used to bind the listener (\c "socket-info" provides more detailed information)
-        - \c socket-info: a hash of socket information for the listening socket (as returned by
-          Qore::Socket::getSocketInfo())
-        - \c peer-info: a hash of socket information for the remote socket (as returned by
-          Qore::Socket::getPeerInfo())
-        - \c url: a hash of broken-down URL information (as returned from parseURL())
-        - \c id: the unique HTTP connection ID
-        - \c listener-id: the HTTP server listener ID (see HttpServer::HttpServer::getListenerInfo())
-        - \c user: the current RBAC username (if any)
+        @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
+        unique HTTP connection ID; this ID is also used to identify the websocket client connection in
+        @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
         @param hdr a hash of headers in the request
         @param sock the @ref Qore::Socket "Socket" object for the dedicated connection to the client
     */
@@ -543,6 +591,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
+        sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         try {
             # issue #3225: handle exceptions in WebSocketHandler and remove the connection
@@ -588,7 +637,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # send any and all messages on the queue
                 *binary d = wsc.pollData();
                 if (d) {
-                    sock.send2(d, DefaultSocketSendTimeout);
+                    sock.send2(d, send_timeout);
                     update = True;
                     flushIoIntern(wsc, sock, False);
                 }
@@ -600,7 +649,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     int now = clock_getmillis() / 1000;
                     if (!update) {
                         if ((now - timestamp) >= heartbeat) {
-                            sock.send2(ws_encode_message(heartbeat_msg, WSOP_Ping), DefaultSocketSendTimeout);
+                            sock.send2(ws_encode_message(heartbeat_msg, WSOP_Ping), send_timeout);
                             timestamp = now;
                         }
                     } else {
@@ -651,7 +700,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 timestamp = clock_getmillis() / 1000;
 
                 if (h.op == WSOP_Ping) {
-                    sock.send2(ws_encode_message(h.msg ?? "", WSOP_Pong), DefaultSocketSendTimeout);
+                    sock.send2(ws_encode_message(h.msg ?? "", WSOP_Pong), send_timeout);
                     continue;
                 }
 
@@ -729,8 +778,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
-            #printf("TID %d: WebSocketHandler::flushIo() sending msg %d bytes\n", gettid(), d.size());
-            sock.send2(d, DefaultSocketSendTimeout);
+            sock.send2(d, send_timeout);
             if (d && !rv) {
                 rv = True;
                 if (update_tld) {
@@ -825,7 +873,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         else
             txtmsg = WSCCMap{code};
         msg += txtmsg;
-        sock.send2(ws_encode_message(msg, WSOP_Close), DefaultSocketSendTimeout);
+        sock.send2(ws_encode_message(msg, WSOP_Close), send_timeout);
     }
 
     static string getDataString(*data d) {

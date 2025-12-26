@@ -15,15 +15,15 @@
 
 %requires reflection
 
+%try-module yaml
+%define NoYaml
+%endtry
+
 %exec-class DataProviderTest
 
 class TestRecordProvider inherits AbstractDataProviderRecordIterator {
     private {
         bool ok = False;
-    }
-
-    bool next() {
-        return ok = !ok;
     }
 
     bool valid() {
@@ -40,19 +40,23 @@ class TestRecordProvider inherits AbstractDataProviderRecordIterator {
             "b": 2,
         };
     }
+
+    private bool nextImpl() {
+        return ok = !ok;
+    }
 }
 
 class InfiniteRecordProvider inherits AbstractDataProviderRecordIterator {
-    bool next() {
-        return True;
-    }
-
     bool valid() {
         return True;
     }
 
     hash<auto> getValue() {
         return {"a": 1, "b": 2};
+    }
+
+    private bool nextImpl() {
+        return True;
     }
 }
 
@@ -161,10 +165,6 @@ class DummyRecordProcessor inherits AbstractDataProcessor {
 }
 
 class TestBulkRecordIterator inherits AbstractDataProviderRecordIterator {
-    bool next() {
-        return False;
-    }
-
     bool valid() {
         return False;
     }
@@ -179,6 +179,10 @@ class TestBulkRecordIterator inherits AbstractDataProviderRecordIterator {
 
     *AbstractDataProviderBulkRecordInterface getBulkApi() {
         return new TestBulkRecordProvider();
+    }
+
+    private bool nextImpl() {
+        return False;
     }
 }
 
@@ -251,6 +255,8 @@ public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
+        addTestCase("expression tests", \expressionTests());
+        addTestCase("get display name", \getDisplayNameTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
@@ -261,6 +267,201 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    expressionTests() {
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_EQ,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "status"},
+                        "active",
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_REGEX,
+                    "args": (
+                        <DataProviderFieldReference>{"field": "email"},
+                        "@example\\.com$",
+                    ),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_OP_OR,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_BETWEEN,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "age"},
+                                18,
+                                30,
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_IN,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "role"},
+                                ("admin", "editor", "moderator"),
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": "calculate",
+                            "args": (
+                                <DataProviderFieldReference>{"field": "score"},
+                                1000,
+                                2000,
+                            ),
+                        },
+                    ),
+                },
+            ),
+        };
+        hash<DataProviderExpressionInfo> fexp = <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "name": "calculate",
+            "display_name": "calculate()",
+            "short_desc": "Calculates a value",
+            "desc": "Calculates a value",
+            "args": (DataProviderSignatureIntType),
+            "varargs": True,
+            "return_type": AbstractDataProviderTypeMap."int",
+        };
+
+        string str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "calculate": fexp,
+        });
+        assertEq("({status} == \"active\") && ({email} =~ /\"@example\\\\.com$\"/) && (({age} between 18 and 30) || "
+            "({role} in ([\"admin\", \"editor\", \"moderator\"])) || calculate({score}, 1000, 2000))", str);
+
+        hash<DataProviderExpressionInfo> opexp = <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "startsWith",
+            "display_name": "String Starts With",
+            "short_desc": "Returns `True` if the given value starts with the given characters when converted to a "
+                "string",
+            "desc": "Returns `True` if the given value starts with the given characters when converted to a string",
+            "symbol": "startsWith",
+            "render_template": "$arg[0].startsWith($arg[1], $arg[2])",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureStringType, DataProviderSignatureBoolType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                },
+                <DataProviderArgInfo>{
+                },
+                <DataProviderArgInfo>{
+                    "default_value": False,
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        exp = <DataProviderExpression>{
+            "exp": "startsWith",
+            "args": (
+                <DataProviderFieldReference>{"field": "username"},
+                "admin",
+                True,
+            ),
+        };
+        str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "startsWith": opexp,
+        });
+        assertEq("{username}.startsWith(\"admin\", true)", str);
+        exp = <DataProviderExpression>{
+            "exp": "startsWith",
+            "args": (
+                <DataProviderFieldReference>{"field": "username"},
+                "admin",
+            ),
+        };
+        str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "startsWith": opexp,
+        });
+        assertEq("{username}.startsWith(\"admin\", false)", str);
+
+        opexp = <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "in-list",
+            "display_name": "In List",
+            "short_desc": "Returns True if the first argument is found in the second argument",
+            "desc": "Returns `True` if the first argument is found in the second argument; the optional third "
+                "argument provides the location of the value to compare if list elements are complex objects "
+                "themselves",
+            "symbol": "in",
+            "render_template": "$arg[0] in ($arg[1])${arg[2] ? [IGNORE-CASE]:}",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureListType, DataProviderSignatureBoolType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        };
+        exp = <DataProviderExpression>{
+            "exp": "in-list",
+            "args": (
+                <DataProviderFieldReference>{"field": "category"},
+                ("A", "B", "C"),
+                True,
+            ),
+        };
+        str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "in-list": opexp,
+        });
+        assertEq("{category} in ([\"A\", \"B\", \"C\"]) [IGNORE-CASE]", str);
+        exp = <DataProviderExpression>{
+            "exp": "in-list",
+            "args": (
+                <DataProviderFieldReference>{"field": "category"},
+                ("A", "B", "C"),
+            ),
+        };
+        str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "in-list": opexp,
+        });
+        assertEq("{category} in ([\"A\", \"B\", \"C\"])", str);
+
+        opexp = <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "in-list",
+            "display_name": "In List",
+            "short_desc": "Returns True if the first argument is found in the second argument",
+            "desc": "Returns `True` if the first argument is found in the second argument; the optional third "
+                "argument provides the location of the value to compare if list elements are complex objects "
+                "themselves",
+            "symbol": "in",
+            "render_template": "$arg[0] in ($arg[1])${arg[2] ? [loc $arg[2]]:}",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureListType,
+                DataProviderSignatureOptionalStringType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        };
+        exp = <DataProviderExpression>{
+            "exp": "in-list",
+            "args": (
+                <DataProviderFieldReference>{"field": "account"},
+                ("A", "B", "C"),
+                "extra.info",
+            ),
+        };
+        str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
+            "in-list": opexp,
+        });
+        assertEq("{account} in ([\"A\", \"B\", \"C\"]) [loc \"extra.info\"]", str);
+
+    }
+
+    getDisplayNameTest() {
+        assertEq("Get URL", AbstractDataField::getDisplayName("getURL"));
+        assertEq("Get URL", AbstractDataField::getDisplayName("GetURL"));
+        assertEq("Get User URL", AbstractDataField::getDisplayName("getUserURL"));
+        assertEq("Get User URL", AbstractDataField::getDisplayName("GetUserURL"));
+        assertEq("Client URLs", AbstractDataField::getDisplayName("clientURLs"));
+        assertEq("Client URLs", AbstractDataField::getDisplayName("ClientURLs"));
+        assertEq("User Id", AbstractDataField::getDisplayName("userId"));
+        assertEq("User Id", AbstractDataField::getDisplayName("UserId"));
+        assertEq("User ID", AbstractDataField::getDisplayName("userID"));
+        assertEq("User ID", AbstractDataField::getDisplayName("UserID"));
+        assertEq("Create TPS Reports", AbstractDataField::getDisplayName("createTPSReports"));
+        assertEq("Create TPS Reports", AbstractDataField::getDisplayName("CreateTPSReports"));
+        assertEq("FBI Code", AbstractDataField::getDisplayName("FBICode"));
     }
 
     actionCatalogTests() {
@@ -353,9 +554,16 @@ public class DataProviderTest inherits QUnit::Test {
             "logo": "data",
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "test.svg",
+            "dynamic": True,
         };
         DataProviderActionCatalog::registerApp(my_app);
         assertEq(my_app, DataProviderActionCatalog::getApp(app));
+
+        {
+            Program p(PO_NO_PROCESS_CONTROL);
+            p.parse("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test");
+            assertThrows("PERMISSION-DENIED", \p.callFunction(), ("test", app));
+        }
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getAppEx(), get_random_string());
 
@@ -446,8 +654,13 @@ public class DataProviderTest inherits QUnit::Test {
             "short_desc": short_desc,
             "desc": desc,
             "action_code": DPAT_API,
+            "input_data_types": {
+                DPAD_NORMAL: True,
+            },
+            "output_data_type": DPAD_NORMAL,
         };
         DataProviderActionCatalog::registerAction(action);
+        my_app.supports_apis = True;
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
@@ -538,6 +751,9 @@ public class DataProviderTest inherits QUnit::Test {
         actions = DataProviderActionCatalog::getActionsForScheme(scheme);
         assertEq(1, actions.size());
         assertEq(action, actions[0]);
+
+        assertTrue(exists DataProviderActionCatalog::deregisterDynamicApp(app));
+        assertNothing(DataProviderActionCatalog::getApp(app));
     }
 
     stringTest() {
@@ -575,7 +791,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         assertEq(NT_STRING, t1.getField("a").getType().getBaseTypeCode());
 
-        assertEq({"a": "example string"}, t1.getExampleValue());
+        assertEq({"a": "Example a"}, t1.getExampleValue());
 
         assertFalse(t1.isAssignableFrom(t2));
         assertTrue(t3.isAssignableFrom(t1));
@@ -620,8 +836,8 @@ public class DataProviderTest inherits QUnit::Test {
         h2 += {
             "b": "string",
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), h2);
-        assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), h1);
+        assertThrows("MISSING-VALUE-ERROR", \t1.acceptsValue(), h2);
+        assertThrows("MISSING-VALUE-ERROR", \t2.acceptsValue(), h1);
         assertThrows("RUNTIME-TYPE-ERROR", \t1.acceptsValue(), 1);
         assertThrows("RUNTIME-TYPE-ERROR", \t2.acceptsValue(), 1);
         assertThrows("RUNTIME-TYPE-ERROR", \t3.acceptsValue(), 1);
@@ -1701,6 +1917,162 @@ public class DataProviderTest inherits QUnit::Test {
     }
 
     dataProviderTest() {
+        {
+            AbstractDataProviderType t = EpochIntToDateType;
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            t = AbstractDataProviderTypeMap."epoch";
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            t = AbstractDataProviderTypeMap."*epoch";
+            assertEq(1970-01-01Z, t.acceptsValue(0));
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+        }
+
+        {
+            AbstractDataProviderType t = SuperSoftStringDataType;
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            t = AbstractDataProviderTypeMap."supersoftstring";
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+
+            t = AbstractDataProviderTypeMap."string";
+            FlexibleTypeHandlingHelper fthh();
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+        }
+
+        {
+            AbstractDataProviderType t = SuperSoftStringOrNothingDataType;
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            t = AbstractDataProviderTypeMap."*supersoftstring";
+            assertEq("true", t.acceptsValue(True));
+            assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
+%ifndef NoYaml
+            assertEq("{a: 1}", t.acceptsValue({"a": 1}));
+            assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
+%endif
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+        }
+
+        {
+            # test for issue #4951
+            QoreDataField f({
+                "name": "key1",
+                "desc": "desc1",
+                "type": SoftAutoListType,
+                "element_allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "one",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "two",
+                    },
+                ),
+            });
+            assertEq(("one",), f.acceptsValue("one"));
+            assertEq(("one",), f.acceptsValue(("one",)));
+            assertThrows("FIELD-VALUE-ERROR", \f.acceptsValue(), ("three",));
+        }
+        {
+            # test for issue #4951
+            QoreDataField f({
+                "name": "key1",
+                "desc": "desc1",
+                "type": AutoListType,
+                "element_allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "one",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "two",
+                    },
+                ),
+            });
+            assertEq(("one",), f.acceptsValue(("one",)));
+            assertThrows("RUNTIME-TYPE-ERROR", \f.acceptsValue(), ("three",));
+            assertThrows("FIELD-VALUE-ERROR", \f.acceptsValue(), (("three",),));
+        }
+
+        {
+            AbstractDataProviderType t = AbstractDataProviderTypeMap.unixts;
+            assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067, t.acceptsValue(1737461067));
+            assertNothing(t.getDefaultValue());
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            t = t.getOrNothingType();
+            assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067, t.acceptsValue(1737461067));
+            assertNothing(t.getDefaultValue());
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            t = AbstractDataProviderTypeMap."*unixts";
+            assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067, t.acceptsValue(1737461067));
+            assertNothing(t.getDefaultValue());
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            t = t.getMandatoryType();
+            assertEq(1737461067, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067, t.acceptsValue(1737461067));
+            assertNothing(t.getDefaultValue());
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            t = AbstractDataProviderTypeMap.unixtsms;
+            assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067123, t.acceptsValue(1737461067123));
+            assertNothing(t.getDefaultValue());
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+            t = t.getOrNothingType();
+            assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067123, t.acceptsValue(1737461067123));
+            assertNothing(t.getDefaultValue());
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            t = AbstractDataProviderTypeMap."*unixtsms";
+            assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067123, t.acceptsValue(1737461067123));
+            assertNothing(t.getDefaultValue());
+            assertNothing(t.acceptsValue(NOTHING));
+            assertNothing(t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            t = t.getMandatoryType();
+            assertEq(1737461067123, t.acceptsValue(2025-01-21T13:04:27.123456+01:00));
+            assertEq(1737461067123, t.acceptsValue(1737461067123));
+            assertNothing(t.getDefaultValue());
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), True);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
+        }
+
         {
             assertEq("hash<auto>", AbstractDataProviderType::get("hash<auto>").getName());
             assertEq("hash<string, bool>", AbstractDataProviderType::get("hash<string, bool>").getName());

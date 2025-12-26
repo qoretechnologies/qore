@@ -44,7 +44,8 @@ protected:
     const AbstractQoreFunctionVariant* variant = nullptr;
 
 public:
-    DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args), args(args) {
+    DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
+            args(args) {
     }
 
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old) :
@@ -53,7 +54,8 @@ public:
         variant(old.variant) {
     }
 
-    DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args), variant(old.variant) {
+    DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args),
+            variant(old.variant) {
     }
 
     DLLLOCAL ~FunctionCallBase() {
@@ -339,7 +341,8 @@ public:
             : AbstractFunctionCallNode(old, n_args), qc(old.qc), method(old.method) {
     }
 
-    DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
+            const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return qc;
@@ -354,12 +357,13 @@ class MethodCallNode : public AbstractMethodCallNode {
 public:
     DLLLOCAL MethodCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* n_args)
             : AbstractMethodCallNode(loc, NT_METHOD_CALL, n_args), c_str(name) {
-        //printd(0, "MethodCallNode::MethodCallNode() this=%p name='%s' args=%p (len=%d)\n", this, c_str, args,
+        //printd(5, "MethodCallNode::MethodCallNode() this: %p name: '%s' args: %p (len: %d)\n", this, c_str, args,
         //    args ? args->size() : -1);
     }
 
     DLLLOCAL MethodCallNode(const MethodCallNode& old, QoreListNode* n_args)
-            : AbstractMethodCallNode(old, n_args), c_str(old.c_str ? strdup(old.c_str) : nullptr), pseudo(old.pseudo) {
+            : AbstractMethodCallNode(old, n_args), c_str(old.c_str ? strdup(old.c_str) : nullptr),
+            pseudo(old.pseudo) {
     }
 
     DLLLOCAL virtual ~MethodCallNode() {
@@ -539,14 +543,17 @@ protected:
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const;
 
 public:
-    DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args) : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), scope(n_scope) {
+    DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args)
+            : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), scope(n_scope) {
     }
 
     // used when copying (for background expressions with processed arguments)
-    DLLLOCAL StaticMethodCallNode(const StaticMethodCallNode& old, QoreListNode* args) : AbstractFunctionCallNode(old, args), method(old.method) {
+    DLLLOCAL StaticMethodCallNode(const StaticMethodCallNode& old, QoreListNode* args)
+            : AbstractFunctionCallNode(old, args), method(old.method) {
     }
 
-    DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, const QoreMethod* m, QoreParseListNode* args) : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), method(m) {
+    DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, const QoreMethod* m, QoreParseListNode* args)
+            : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), method(m) {
     }
 
     DLLLOCAL virtual ~StaticMethodCallNode() {

@@ -1056,7 +1056,7 @@ int qore_class_private::initializeIntern() {
             // add committed members to signature
             for (auto& i : members.member_list) {
                 // check new members for conflicts in base classes
-                if (parseCheckMemberInBaseClasses(i.first, i.second.get()) && !err) {
+                if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
                     err = -1;
                 }
             }
@@ -1517,7 +1517,7 @@ void qore_class_private::addLocalMembersForInit() {
         const qore_class_private* member_class_ctx = i.second->getClassContext(this);
         // local members can only be stored in the standard object hash or in the private:internal hash for this class
         assert(!member_class_ctx || member_class_ctx == this);
-        member_init_list.push_back(member_init_entry_t(i.first, i.second.get(), member_class_ctx));
+        member_init_list.push_back(member_init_entry_t(i.first, i.second, member_class_ctx));
     }
 }
 
@@ -2134,7 +2134,7 @@ int BCNode::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
         return -1;
     }
 
-    return sclass->priv->addBaseClassesToSubclass(child, is_virtual);
+    return sclass->priv->addBaseClassesToSubclass(child, is_virtual || this->is_virtual);
 }
 
 void BCNode::initializeBuiltin() {
@@ -2142,6 +2142,11 @@ void BCNode::initializeBuiltin() {
     if (sclass->priv->sys) {
         sclass->priv->initializeBuiltin();
     }
+}
+
+const ConstantEntry* BCNode::findConstantEntry(const char* name) const {
+    assert(sclass);
+    return sclass->priv->findConstantEntry(name);
 }
 
 void BCList::parseResolveAbstract() {
@@ -2824,7 +2829,7 @@ int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
 
 void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
     assert(qc);
-    //printd(5, "adding %s as virtual base class to %s\n", qc->priv->name.c_str(), priv->name.c_str());
+    //printd(5, "adding %s as base class to %s (virt: %d)\n", qc->priv->name.c_str(), priv->name.c_str(), virt);
     if (!scl) {
         scl = new BCList;
     }
@@ -3025,6 +3030,35 @@ const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QorePro
             return m;
     }
     return nullptr;
+}
+
+QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo,
+        bool& found, const qore_class_private* class_ctx) {
+    // issue #4967: initializing all class constants here would result in recursive constant definition exceptions
+    // being raised
+    // check constant list
+    ClassAccess access = Public;
+    // NOTE: the following function call will initialize any constant found
+    QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
+
+    // check for accessibility to private constants
+    if (found) {
+        if (access == Internal) {
+            if (class_ctx == this) {
+                return rv;
+            } else {
+                cTypeInfo = nullptr;
+                found = false;
+            }
+        } else if (access == Private && !parseCheckPrivateClassAccess(class_ctx)) {
+            cTypeInfo = nullptr;
+            found = false;
+        } else {
+            return rv;
+        }
+    }
+
+    return scl ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this) : QoreValue();
 }
 
 int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
@@ -3307,7 +3341,7 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
             //    i.first->getName(), mi.first, member_class_ctx,
             //    member_class_ctx ? member_class_ctx->name.c_str() : "n/a");
             // insert this entry with the class context for saving against the object
-            member_init_list.push_back(member_init_entry_t(mi.first, mi.second.get(), member_class_ctx));
+            member_init_list.push_back(member_init_entry_t(mi.first, mi.second, member_class_ctx));
         }
         //printd(5, "BCSMList::processMemberInitializationList() done processing %p '%s'\n", i.first->priv,
         //    i.first->getName());
@@ -3345,7 +3379,7 @@ void BCSMList::align(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
 }
 
 int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual) {
-    //printd(5, "BCSMList::addBaseClassesToSubclass(this: %s, sc: %s) size: %d\n", thisclass->getName(), sc->getName());
+    //printd(5, "BCSMList::addBaseClassesToSubclass(this: %s, sc: %s)\n", thisclass->getName(), sc->getName());
     for (class_list_t::const_iterator i = begin(), e = end(); i != e; ++i) {
         //printd(5, "BCSMList::addBaseClassesToSubclass() %s sc: %s is_virt: %d\n", thisclass->getName(), sc->getName(), is_virtual);
         if (sc->priv->scl->sml.add(thisclass, (*i).first, is_virtual || (*i).second)) {
@@ -3908,21 +3942,6 @@ QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) 
     if (self_priv->copyData(xsink, *old_priv)) {
         return nullptr;
     }
-
-    /*
-    QoreHashNode* h = old->copyData(xsink);
-    if (*xsink) {
-        assert(!h);
-        return nullptr;
-    }
-
-    ReferenceHolder<QoreObject> self(new QoreObject(cls, getProgram(), h), xsink);
-    // issue #3901: perform a shallow copy of internal members when executing a copy method
-    qore_object_private* self_priv = qore_object_private::get(**self);
-    qore_object_private* old_priv = qore_object_private::get(*old);
-    self_priv->copyInternalData(*old_priv);
-    self_priv->obj_count = old_priv->obj_count;
-    */
 
     if (copyMethod) {
         copyMethod->priv->evalCopy(*self, old, xsink);
@@ -4697,6 +4716,14 @@ QoreValue qore_class_private::getReferencedKeyValue(const char* key) const {
     return i->second.refSelf();
 }
 
+const ConstantEntry* qore_class_private::findConstantEntry(const char* name) const {
+    const ConstantEntry* ce = constlist.findEntry(name);
+    if (ce) {
+        return ce;
+    }
+    return scl ? scl->findConstantEntry(name) : nullptr;
+}
+
 bool QoreClass::hasParentClass() const {
     return (bool)priv->scl;
 }
@@ -4834,7 +4861,7 @@ BinaryNode* QoreClass::getBinaryHash() const {
 }
 
 const QoreExternalConstant* QoreClass::findConstant(const char* name) const {
-    return reinterpret_cast<const QoreExternalConstant*>(priv->constlist.findEntry(name));
+    return reinterpret_cast<const QoreExternalConstant*>(priv->findConstantEntry(name));
 }
 
 const QoreNamespace* QoreClass::getNamespace() const {
@@ -5204,7 +5231,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
     assert(signature.numParams() <= 1);
 
     QoreListNode* args = new QoreListNode(autoTypeInfo);
-    args->push(self->refSelf(), nullptr);
+    args->push(old->refSelf(), nullptr);
     ceh.setArgs(args);
 
     UserVariantExecHelper uveh(this, &ceh, xsink);
@@ -5410,9 +5437,11 @@ QoreValue StaticMethodFunction::evalMethod(ExceptionSink* xsink, const AbstractQ
     const char* mname = getName();
     CodeEvaluationHelper ceh(xsink, this, variant, mname, args, nullptr, qore_class_private::get(*qc), CT_UNUSED,
         false, cctx, pgm_ctx);
-    if (*xsink)
+    if (*xsink) {
         return QoreValue();
-
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -5785,7 +5814,7 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
     int err = 0;
     for (auto& i : member_list) {
         printd(5, "QoreMemberMap::parseInit() this: %p mem: '%s' (%p) type: %s (%d)\n", this, i.first,
-            i.second.get(), i.second->exp.getTypeName(), i.second->exp.getType());
+            i.second, i.second->exp.getTypeName(), i.second->exp.getType());
         if (i.second) {
             if (i.second->parseInit(i.first, selfid) && !err) {
                 err = -1;
@@ -5801,7 +5830,8 @@ void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
         return;
     }
     for (auto& i : member_list) {
-        qore_class_private::parseAddMember(*qc, i.first, access, i.second.release());
+        qore_class_private::parseAddMember(*qc, i.first, access, i.second);
+        i.second = nullptr;
     }
     member_list.clear();
 }
@@ -5826,7 +5856,8 @@ void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
         return;
     }
     for (auto& i : member_list) {
-        qore_class_private::parseAddStaticVar(qc, i.first, access, i.second.release());
+        qore_class_private::parseAddStaticVar(qc, i.first, access, i.second);
+        i.second = nullptr;
     }
     member_list.clear();
 }

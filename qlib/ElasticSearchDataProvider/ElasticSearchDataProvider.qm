@@ -201,7 +201,7 @@ module ElasticSearchDataProvider {
 
     @subsection elasticsearchdataprovider_v1_1 ElasticSearchDataProvider v1.1
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection elasticsearchdataprovider_v1_0 ElasticSearchDataProvider v1.0
     - initial release of the module

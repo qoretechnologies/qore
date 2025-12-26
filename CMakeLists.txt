@@ -1,11 +1,15 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.5)
 
 # NOTE: Qore should always use semantic versioning: https://semver.org/
 set(VERSION_MAJOR 2)
-set(VERSION_MINOR 0)
+set(VERSION_MINOR 3)
 set(VERSION_SUB 0)
 #set(VERSION_PATCH 0)
 
+# set policy for interperting unquoted variables
+if (POLICY CMP0054)
+    cmake_policy(SET CMP0054 NEW)
+endif()
 # support <pkg>_ROOT in find_package
 if (POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
@@ -304,7 +308,7 @@ find_package(ZLIB REQUIRED)
 find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(PCRE REQUIRED libpcre)
+pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)
@@ -335,7 +339,7 @@ endif()
 
 # in case we want to the jni module, we need to link with libjsig if available
 find_package(JNI)
-if (JNI_FOUND AND DEFINED JAVA_JVM_LIBRARY)
+if (JNI_FOUND AND DEFINED JAVA_JVM_LIBRARY AND NOT DEFINED ENV{QORE_WITHOUT_JSIG})
     get_filename_component(JAVA_LIB_DIR ${JAVA_JVM_LIBRARY} DIRECTORY)
     set(LIBJSIG "${JAVA_LIB_DIR}/libjsig${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
@@ -352,7 +356,7 @@ qore_mpfr_checks()
 qore_check_headers_cxx(arpa/inet.h cxxabi.h dlfcn.h fcntl.h getopt.h glob.h grp.h iconv.h inttypes.h linux/if_packet.h memory.h netdb.h
     netinet/in.h netinet/tcp.h poll.h pwd.h stdbool.h stddef.h stdint.h stdlib.h string.h strings.h sys/select.h
     sys/socket.h sys/socket.h sys/stat.h sys/statvfs.h sys/time.h sys/types.h sys/un.h sys/wait.h termios.h umem.h
-    unistd.h vfork.h winsock2.h ws2tcpip.h
+    unistd.h vfork.h winsock2.h ws2tcpip.h openssl/engine.h
 )
 
 # net/if_dl.h is not self-contained
@@ -391,13 +395,13 @@ qore_assembler_files()
 
 # issue #2897 make build reproducible by omitting the hostname if possible
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-execute_process(COMMAND uname -smpo OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -smpo OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-execute_process(COMMAND uname -spirv OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -spirv OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-execute_process(COMMAND uname -smr OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -smr OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
-execute_process(COMMAND uname -a OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND uname -a OUTPUT_VARIABLE QORE_BUILD_HOST OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
 if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
@@ -664,6 +668,7 @@ set(LIBQORE_CPP_SRC
     lib/UnicodeCharacterIterator.cpp
     lib/QoreEllipsesNode.cpp
     lib/QoreRegexInterface.cpp
+    lib/QoreThreadLocalStorage.cpp
 )
 
 if (HAVE_SIGNAL_HANDLING)
@@ -705,9 +710,9 @@ if (WIN32 OR MINGW OR MSYS)
     target_compile_definitions(libqore PUBLIC BUILDING_DLL)
 endif (WIN32 OR MINGW OR MSYS)
 
-target_include_directories(libqore PUBLIC ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
+target_include_directories(libqore PUBLIC ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
 
-set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE_LDFLAGS} ${ZLIB_LIBRARIES})
+set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
@@ -722,9 +727,14 @@ if (APPLE)
     set_target_properties(libqore PROPERTIES SOVERSION 12)
     set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
 else (APPLE)
-    set_target_properties(libqore PROPERTIES VERSION 12.5.0)
+    set_target_properties(libqore PROPERTIES VERSION 12.7.0)
     set_target_properties(libqore PROPERTIES SOVERSION 12)
 endif (APPLE)
+
+if (ADDRESS_SANITIZER)
+    target_compile_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+    target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+endif()
 
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})
@@ -734,6 +744,15 @@ target_link_libraries(qore libqore)
 
 #set_target_properties(qore qr PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES INSTALL_RPATH_USE_LINK_PATH ${CMAKE_INSTALL_FULL_LIBDIR})
+
+if (DEFINED LIBJSIG AND APPLE)
+    add_custom_command(TARGET qore
+        POST_BUILD COMMAND
+        ${CMAKE_INSTALL_NAME_TOOL} -change @rpath/libjsig.dylib ${LIBJSIG} qore
+        POST_BUILD COMMAND
+        ${CMAKE_INSTALL_NAME_TOOL} -change @rpath/libjsig.dylib ${LIBJSIG} libqore.dylib
+    )
+endif()
 
 # configuration files
 message(STATUS "Generating unix-config.h")
@@ -879,6 +898,7 @@ qore_user_module("qlib/Qorize.qm" "")
 qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
+qore_user_module("qlib/ProviderIndexUtil" "")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")
@@ -891,14 +911,16 @@ qore_user_module("qlib/TextWrap.qm" "Util")
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
-qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler")
+qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 
 # base 4 modules
+qore_user_module("qlib/AsyncSocketIo" "HttpServerUtil;Logger")
 qore_user_module("qlib/FilePoller.qm" "Util;DataProvider")
 qore_user_module("qlib/FileDataProvider" "FsUtil;DataProvider")
 qore_user_module("qlib/FtpClientDataProvider" "DataProvider")
 qore_user_module("qlib/HttpClientDataProvider" "DataProvider;FileLocationHandler")
+qore_user_module("qlib/ServerSentEventHandler" "HttpServerUtil;Logger")
 qore_user_module("qlib/SqlUtil" "Util;DataProvider" "SqlUtil-Full.svg")
 qore_user_module("qlib/ConnectionProvider" "Util;DataProvider")
 qore_user_module("qlib/CsvUtil" "Util;DataProvider")
@@ -919,6 +941,8 @@ qore_user_module("qlib/WebSocketHandler.qm" "HttpServerUtil;WebSocketUtil")
 qore_user_module("qlib/WebUtil.qm" "HttpServerUtil;Mime;Util")
 
 # base 5 modules
+qore_user_module("qlib/ProviderIndex" "DataProvider;ConnectionProvider;ProviderIndexUtil")
+qore_user_module("qlib/ServerSentEventClient" "DataProvider;ConnectionProvider;Logger;Mime;Util")
 qore_user_module("qlib/MssqlSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/MysqlSqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/OracleSqlUtilBase.qm" "SqlUtil;Util;DataProvider")

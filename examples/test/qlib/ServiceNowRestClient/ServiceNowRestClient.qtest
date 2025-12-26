@@ -92,7 +92,7 @@ class ServiceNowTest inherits QUnit::Test {
 
     setupConnection() {
         # first try connection
-        *string conn_name = m_options.conn ?? ENV.GOOGLE_CONNECTION;
+        *string conn_name = m_options.conn ?? ENV.SERVICENOW_CONNECTION;
         if (conn_name.val()) {
             AbstractConnection conn = get_connection(conn_name);
             if (!(conn instanceof ServiceNowRestConnection)) {
@@ -107,8 +107,8 @@ class ServiceNowTest inherits QUnit::Test {
                 error("missing --url option or SERVICENOW_URL environment variable");
             if (m_options.client_id || ENV.SERVICENOW_CLIENT_ID
                 && (m_options.client_secret || ENV.SERVICENOW_CLIENT_SECRET)) {
-                snopts.client_id = m_options.client_id ?? ENV.SERVICENOW_CLIENT_ID;
-                snopts.client_secret = m_options.client_secret ?? ENV.SERVICENOW_CLIENT_SECRET;
+                snopts.oauth2_client_id = m_options.client_id ?? ENV.SERVICENOW_CLIENT_ID;
+                snopts.oauth2_client_secret = m_options.client_secret ?? ENV.SERVICENOW_CLIENT_SECRET;
             }
             snopts.username = m_options.username ?? ENV.SERVICENOW_USERNAME;
             if (!snopts.username) {
@@ -210,10 +210,10 @@ class ServiceNowTest inherits QUnit::Test {
         if (!snopts) {
             snopts = rc.getOAuth2Options();
             if (snopts.oauth2_client_id) {
-                snopts.client_id = remove snopts.oauth2_client_id;
+                snopts.oauth2_client_id = remove snopts.oauth2_client_id;
             }
             if (snopts.oauth2_client_secret) {
-                snopts.client_secret = remove snopts.oauth2_client_secret;
+                snopts.oauth2_client_secret = remove snopts.oauth2_client_secret;
             }
         }
         {
@@ -239,13 +239,13 @@ class ServiceNowTest inherits QUnit::Test {
             assertEq("OK", info.result);
         }
 
-        if (snopts.client_id && snopts.client_secret && snopts.username && snopts.password
+        if (snopts.oauth2_client_id && snopts.oauth2_client_secret && snopts.username && snopts.password
             && snopts.grant_type != "password") {
             hash<auto> auth = {
                 "username": snopts.username,
                 "password": snopts.password,
-                "client_id": snopts.client_id,
-                "client_secret": snopts.client_secret,
+                "oauth2_client_id": snopts.oauth2_client_id,
+                "oauth2_client_secret": snopts.oauth2_client_secret,
                 "oauth2_grant_type": "password",
             };
 
@@ -276,8 +276,8 @@ class ServiceNowTest inherits QUnit::Test {
         string url = "snrests://localhost:8080";
         ServiceNowRestConnection swsc("test", "test", url, {}, {
             "oauth2_grant_type": "password",
-            "client_id": "x",
-            "client_secret": "x",
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
             "username": "x",
             "password": "x",
         });
@@ -292,7 +292,7 @@ class ServiceNowTest inherits QUnit::Test {
         hash<PingInfo> ping = swsc.ping();
         assertEq("test", ping.name);
         assertFalse(ping.ok);
-        assertEq("SOCKET-CONNECT-ERROR", ping.ex.err);
+        assertTrue(ping.ex.err == "SOCKET-SSL-ERROR" || ping.ex.err == "SOCKET-CONNECT-ERROR");
 
         assertThrows("CONNECTION-OPTION-ERROR", sub () {
             ServiceNowRestConnection swsc1("test", "test", url, {"monitor": True}, {"x": 1});
@@ -308,8 +308,9 @@ class ServiceNowTest inherits QUnit::Test {
         assertEq(45000, client.getConnectTimeout());
 
         swsc = new ServiceNowRestConnection("test", "test", url, {}, {
-            "client_id": "x",
-            "client_secret": "x",
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
             "username": "x",
             "password": "x",
         });
@@ -329,6 +330,11 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
 
     hash<auto> waitForResult() {
         return msgq.get();
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
     }
 
     private handlePingSuccess(string name, date delta, *bool oldok) {

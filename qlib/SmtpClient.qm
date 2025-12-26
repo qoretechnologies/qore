@@ -177,39 +177,39 @@ smtp.sendMessage(msg);@endcode
 
     @subsection smtpclient_v2_1 SmtpClient 2.1
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection smtpclient_v2_0 SmtpClient 2.0
     - added support for the DataProvider API
-      (<a href="https://github.com/qorelanguage/qore/issues/4564">issue 4564</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
 
     @subsection smtpclient_v1_9_3 SmtpClient 1.9.3
     - fixed message serialization for SMTP handling in case of single \c "." characters on a line in serialized data
-      (issue <a href="https://github.com/qorelanguage/qore/issues/3275">issue 3275</a>)
+      (issue <a href="https://github.com/qoretechnologies/qore/issues/3275">issue 3275</a>)
 
     @subsection smtpclient_v1_9_2 SmtpClient 1.9.2
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection smtpclient_v1_9_1 SmtpClient 1.9.1
     - fixed type errors sending mails
-      (<a href="https://github.com/qorelanguage/qore/issues/3813">issue 3813</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3813">issue 3813</a>)
 
     @subsection smtpclient_v1_9 SmtpClient 1.9
     - added the \c "estmps" scheme for completeness
-      (<a href="https://github.com/qorelanguage/qore/issues/2833">issue 2833</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2833">issue 2833</a>)
 
     @subsection smtpclient_v1_8 SmtpClient 1.8
     - removed the \c SmtpConnection::getConstructorInfo() and \c SmtpConnection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
-      (<a href="https://github.com/qorelanguage/qore/issues/3425">issue 3425</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
     @subsection smtpclient_v1_7 SmtpClient 1.7
     - added the \c SmtpConnection::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in SmtpClient 1.8)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection smtpclient_v1_6 SmtpClient 1.6
     - added the @ref SmtpClient::SmtpConnection "SmtpConnection" class to support the
@@ -1262,6 +1262,12 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
         }
     }
 
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
     #! Starts the polling login state
     private startLogin() {
         state = SPS_LOGIN;
@@ -1457,7 +1463,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
 
         @since SmtpClient 2.0
     */
-    Qore::AbstractPollOperation startPollConnect() {
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         return new SmtpPingPollOperation(getImpl(False));
     }
 

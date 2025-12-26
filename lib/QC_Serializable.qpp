@@ -36,31 +36,58 @@
 #include "qore/intern/StringInputStream.h"
 #include "qore/intern/QC_TimeZone.h"
 
-static QoreHashNode* Serializable_serializer(const QoreObject& self, const TimeZoneData& z, QoreSerializationContext& context, ExceptionSink* xsink) {
+static QoreHashNode* Serializable_serializer(const QoreObject& self, const TimeZoneData& z,
+        QoreSerializationContext& context, ExceptionSink* xsink) {
     return nullptr;
 }
 
-static void Serializable_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink) {
+static void Serializable_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, ExceptionSink* xsink) {
     if (sdata) {
-        xsink->raiseException("DESERIALIZATION-ERROR", "deserialization data provided for the 'Serializable' class where none was expected");
+        xsink->raiseException("DESERIALIZATION-ERROR", "Deserialization data provided for the 'Serializable' class "
+            "where none was expected");
         return;
     }
     self.setPrivate(CID_SERIALIZABLE, new QoreSerializable);
 }
+
+/** @defgroup qore_serialization_flags Qore Serialization Flags
+
+    @since %Qore 2.0
+*/
+///@{
+//! Serialize static class vars of classes serialized
+const QSF_INCLUDE_STATIC_CLASS_VARS = QSF_INCLUDE_STATIC_CLASS_VARS;
+///@}
+
+/** @defgroup qore_deserialization_flags Qore Deserialization Flags
+
+    @since %Qore 2.0
+*/
+///@{
+//! Deserialize static class vars
+const QDF_STATIC_CLASS_VARS = QDF_STATIC_CLASS_VARS;
+
+//! Deserialize static class vars and merge hashes; implies QDF_STATIC_CLASS_VARS
+const QDF_MERGE_STATIC_CLASS_VARS = QDF_MERGE_STATIC_CLASS_VARS;
+///@}
 
 //! serialization information
 /**
     @since %Qore 0.9
 */
 hashdecl SerializationInfo {
-    //! list of modules to load to support the data
+    //! List of modules to load to support the data
     *list<string> _modules;
 
-    //! unique object index
-    *hash<string, hash<ObjectSerializationInfo>> _index;
+    //! Unique object index
+    *hash<string, hash<auto>> _index;
 
-    //! serialized data
+    //! Serialized data
     auto _data;
+
+    //! Serialized static class data
+    *hash<string, hash<auto>> _sdata;
 }
 
 //! object serialization information
@@ -82,6 +109,9 @@ hashdecl ObjectSerializationInfo {
 hashdecl IndexedObjectSerializationInfo {
     //! index value
     string _index;
+
+    //! index value that returns a weak reference
+    string _weak;
 }
 
 //! hash serialization information for @ref hashdecl "typed hashes" or untyped hashes
@@ -130,7 +160,11 @@ hashdecl ListSerializationInfo {
 
     @since %Qore 0.9
  */
-qclass Serializable [arg=QoreSerializable* s; serializer=reinterpret_cast<q_serializer_t>(Serializable_serializer); deserializer=Serializable_deserializer];
+qclass Serializable [
+    arg=QoreSerializable* s;
+    serializer=reinterpret_cast<q_serializer_t>(Serializable_serializer);
+    deserializer=Serializable_deserializer
+];
 
 //! The constructor does not perform any action; this class is just used to mark a class as serializable by inheriting this class
 /**
@@ -152,6 +186,8 @@ Serializable::copy() {
 hash<SerializationInfo> h = obj.serializeToData();
     @endcode
 
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
     @return a serialization hash representing the object
 
     All non-serializable data such as @ref closure "closures", @ref call_reference "call references",
@@ -162,8 +198,8 @@ hash<SerializationInfo> h = obj.serializeToData();
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-hash<SerializationInfo> Serializable::serializeToData() [flags=RET_VALUE_ONLY] {
-    return s->serializeToData(self, xsink);
+hash<SerializationInfo> Serializable::serializeToData(*int flags) [flags=RET_VALUE_ONLY] {
+    return s->serializeToData(self, flags, xsink);
 }
 
 //! converts the object to binary data representing the object
@@ -173,6 +209,7 @@ obj.serialize(stream);
     @endcode
 
     @param stream an output stream where the serialized data will be written
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
 
     All non-serializable data such as @ref closure "closures", @ref call_reference "call references",
     @ref lvalue_references "references", or non-serializable objects must be tagged as @ref transient
@@ -182,9 +219,9 @@ obj.serialize(stream);
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-Serializable::serialize(OutputStream[OutputStream] stream) {
+Serializable::serialize(OutputStream[OutputStream] stream, *int flags) {
     ReferenceHolder<OutputStream> holder(stream, xsink);
-    QoreSerializable::serialize(*self, *stream, xsink);
+    QoreSerializable::serialize(*self, *stream, flags, xsink);
 }
 
 //! converts the object to binary data representing the object
@@ -192,6 +229,8 @@ Serializable::serialize(OutputStream[OutputStream] stream) {
     @code{.py}
 binary b = obj.serialize();
     @endcode
+
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
 
     @return a binary object representing the object
 
@@ -203,9 +242,9 @@ binary b = obj.serialize();
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-binary Serializable::serialize() {
+binary Serializable::serialize(*int flags) {
     ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
-    QoreSerializable::serialize(*self, **stream, xsink);
+    QoreSerializable::serialize(*self, **stream, flags, xsink);
     return *xsink ? QoreValue() : stream->getData(xsink);
 }
 
@@ -304,14 +343,16 @@ hash<SerializationInfo> h = Serializable::deserializeToData(stream);
     @endcode
 
     @param stream an input stream providing serialized binary data as generated by @ref serialize()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the intermediate SerializationInfo hash value represented by the serialization stream
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
  */
-static hash<SerializationInfo> Serializable::deserializeToData(InputStream[InputStream] stream) [flags=RET_VALUE_ONLY] {
+static hash<SerializationInfo> Serializable::deserializeToData(InputStream[InputStream] stream, *int flags) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<InputStream> holder(stream, xsink);
-    return QoreSerializable::deserializeToData(*stream, xsink);
+    return QoreSerializable::deserializeToData(xsink, *stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -321,14 +362,16 @@ hash<SerializationInfo> h = Serializable::deserializeToData(b);
     @endcode
 
     @param bin binary data representing serialized data as generated by @ref serialize()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the intermediate SerializationInfo hash value represented by the input data
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
  */
-static hash<SerializationInfo> Serializable::deserializeToData(binary bin) [flags=RET_VALUE_ONLY] {
+static hash<SerializationInfo> Serializable::deserializeToData(binary bin, *int flags) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(bin), xsink);
-    return QoreSerializable::deserializeToData(**stream, xsink);
+    return QoreSerializable::deserializeToData(xsink, **stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -338,14 +381,16 @@ auto val = Serializable::deserialize(stream);
     @endcode
 
     @param stream an input stream providing serialized binary data as generated by @ref serialize()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the value represented by the serialization stream
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
  */
-static auto Serializable::deserialize(InputStream[InputStream] stream) [flags=RET_VALUE_ONLY] {
+static auto Serializable::deserialize(InputStream[InputStream] stream, *int flags) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<InputStream> holder(stream, xsink);
-    return QoreSerializable::deserialize(*stream, xsink);
+    return QoreSerializable::deserialize(xsink, *stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -354,14 +399,16 @@ static auto Serializable::deserialize(InputStream[InputStream] stream) [flags=RE
 auto val = Serializable::deserialize(bin);    @endcode
 
     @param bin binary data representing serialized data as generated by @ref serialize()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the value represented by the data
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
  */
-static auto Serializable::deserialize(binary bin) [flags=RET_VALUE_ONLY] {
+static auto Serializable::deserialize(binary bin, *int flags) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(bin), xsink);
-    return QoreSerializable::deserialize(**stream, xsink);
+    return QoreSerializable::deserialize(xsink, **stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -371,16 +418,18 @@ auto val = Serializable::deserialize(bin);
     @endcode
 
     @param bin binary data representing serialized data as generated by @ref serialize()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the value represented by the data
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
 
     @since %Qore 0.9.2
  */
-static auto Serializable::deserialize(string bin) [flags=RET_VALUE_ONLY] {
+static auto Serializable::deserialize(string bin, *int flags) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<StringInputStream> stream(new StringInputStream(bin), xsink);
-    return QoreSerializable::deserialize(**stream, xsink);
+    return QoreSerializable::deserialize(xsink, **stream, flags);
 }
 
 //! Deserializes data produced with serializeToData() and returns the value represented by the data
@@ -390,13 +439,15 @@ auto val = Serializable::deserialize(h);
     @endcode
 
     @param data the data representing the object as generated by @ref serializeToData()
+    @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
     @return the value represented by the data
 
-    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a reference to an unknown class or @ref hashdecl
+    @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
+    reference to an unknown class or @ref hashdecl
  */
-static auto Serializable::deserialize(hash<SerializationInfo> data) [flags=RET_VALUE_ONLY] {
-    return QoreSerializable::deserialize(*data, xsink);
+static auto Serializable::deserialize(hash<SerializationInfo> data, *int flags) [flags=RET_VALUE_ONLY] {
+    return QoreSerializable::deserialize(xsink, *data, flags);
 }
 
 //! converts the value to a serialization hash representing the value
@@ -406,6 +457,7 @@ hash<SerializationInfo> h = serializeToData(val);
     @endcode
 
     @param val the value to serialize to a serialization data hash
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
 
     @return a serialization hash representing the value
 
@@ -417,8 +469,8 @@ hash<SerializationInfo> h = serializeToData(val);
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-static hash<SerializationInfo> Serializable::serializeToData(auto val) [flags=RET_VALUE_ONLY] {
-    return QoreSerializable::serializeToData(val, xsink);
+static hash<SerializationInfo> Serializable::serializeToData(auto val, *int flags) [flags=RET_VALUE_ONLY] {
+    return QoreSerializable::serializeToData(val, flags, xsink);
 }
 
 //! serializes the data and writes the serialized data to the given output stream
@@ -429,6 +481,7 @@ Serializable::serialize(val, stream);
 
     @param val the data to serialize
     @param stream an output stream where the serialized data will be written
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
 
     All non-serializable data such as @ref closure "closures", @ref call_reference "call references",
     @ref lvalue_references "references", or non-serializable objects must be tagged as @ref transient
@@ -438,9 +491,9 @@ Serializable::serialize(val, stream);
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-static Serializable::serialize(auto val, OutputStream[OutputStream] stream) {
+static Serializable::serialize(auto val, OutputStream[OutputStream] stream, *int flags) {
     ReferenceHolder<OutputStream> holder(stream, xsink);
-    QoreSerializable::serialize(val, *stream, xsink);
+    QoreSerializable::serialize(val, *stream, flags, xsink);
 }
 
 //! serializes the data and returns the serialized data as a binary object
@@ -450,6 +503,7 @@ binary bin = Serializable::serialize(val);
     @endcode
 
     @param val the data to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
 
     @return serialized data representing the input data
 
@@ -461,8 +515,8 @@ binary bin = Serializable::serialize(val);
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
-static binary Serializable::serialize(auto val) {
+static binary Serializable::serialize(auto val, *int flags) {
     ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
-    QoreSerializable::serialize(val, **stream, xsink);
+    QoreSerializable::serialize(val, **stream, flags, xsink);
     return *xsink ? QoreValue() : stream->getData(xsink);
 }

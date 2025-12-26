@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderTypeCache.qc module for data access and introspection
 
-/** DataProviderTypeCache.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderTypeCache.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,6 +98,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
     /** @param path a \c "/" separated path for the type; this is the lookup index
         @param type the new data provider type
         @param id optional epheremal type ID
+        @param info optional additional free-form information related to the type
 
         @return True if the type was replaced or added
 
@@ -107,7 +108,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @note types are stored based on the path provided which may differ from their type names (which may be generic
         and therefore not suitable for indexing)
     */
-    bool registerOrReplaceType(string path, AbstractDataProviderType type, *int id) {
+    bool registerOrReplaceType(string path, AbstractDataProviderType type, *int id, *hash<auto> info) {
         list<string> type_path = DataProvider::getPathList(\path);
 
         if ((*string p = type.getPath()).val()) {
@@ -131,7 +132,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
 
         map type_entry = type_entry.getCreateChild($1), type_path;
 
-        *AbstractDataProviderType old_type = type_entry.setOrReplaceType(type, id);
+        *AbstractDataProviderType old_type = type_entry.setOrReplaceType(type, id, info);
         if (!old_type) {
             ++size;
         }
@@ -141,6 +142,39 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         return old_type != type;
     }
 
+    #! Removes a type from the type cache and returns the removed entry
+    /** @param path a \c "/" separated path for the type; this is the lookup index
+
+        @return the type removed or @ref NOTHING if no type was present or if the type or any of its parents is locked
+    */
+    *DataProviderTypeEntry removeTypeEntry(string path) {
+        return removeTypeEntryIntern(path);
+    }
+
+    #! Removes a type from the type cache and returns the removed entry
+    /** @param path a \c "/" separated path for the type; this is the lookup index
+
+        @return the type removed or @ref NOTHING if no type was present
+
+        @throw TYPE-LOCK-ERROR the given type cannot be removed, because it is locked
+
+        @since DataProvider 3.2.1
+    */
+    *DataProviderTypeEntry removeTypeEntryEx(string path) {
+        return removeTypeEntryIntern(path, True);
+    }
+
+    #! Removes a type from the type cache
+    /** @param path a \c "/" separated path for the type; this is the lookup index
+
+        @return the type removed or @ref NOTHING if the type was not present
+    */
+    *AbstractDataProviderType removeType(string path) {
+        if (*DataProviderTypeEntry entry = removeTypeEntryIntern(path)) {
+            return entry.getType();
+        }
+    }
+
     #! Removes a type from the type cache
     /** @param path a \c "/" separated path for the type; this is the lookup index
 
@@ -148,41 +182,10 @@ public class DataProviderTypeCache inherits Qore::Serializable {
 
         @throw TYPE-LOCK-ERROR the given type cannot be removed, because it is locked
     */
-    *AbstractDataProviderType removeType(string path) {
-        list<string> type_path = DataProvider::getPathList(\path);
-
-        DataProviderTypeEntry type_entry = root;
-        DataProviderTypeEntry prev;
-
-        bool needs_lock = !rwlock.writeLockOwner();
-        if (needs_lock) {
-            rwlock.writeLock();
+    *AbstractDataProviderType removeTypeEx(string path) {
+        if (*DataProviderTypeEntry entry = removeTypeEntryIntern(path, True)) {
+            return entry.getType();
         }
-        on_exit if (needs_lock) {
-            rwlock.writeUnlock();
-        }
-
-        string node;
-        foreach node in (type_path) {
-            *DataProviderTypeEntry next_entry = type_entry.getChild(node);
-            if (!next_entry) {
-                return;
-            }
-            prev = type_entry;
-            type_entry = next_entry;
-        }
-
-        *AbstractDataProviderType type = type_entry.getType();
-        if (!type || !prev) {
-            return;
-        }
-        if (type) {
-            --size;
-            remove tmap{type_entry.getEpheremalTypeId()};
-            remove trmap{type_entry.getPath()};
-        }
-        prev.removeChild(node);
-        return type;
     }
 
     #! Returns a type from its epheremal ID
@@ -596,6 +599,58 @@ public class DataProviderTypeCache inherits Qore::Serializable {
             curr = new_type;
         }
         return curr;
+    }
+
+    #! Removes a type from the type cache and returns the removed entry
+    /** @param path a \c "/" separated path for the type; this is the lookup index
+        @param throw_exception if @ref True then an exception is thrown if the type is locked
+
+        @return the type removed or @ref NOTHING if no type was present
+
+        @throw TYPE-LOCK-ERROR the given type cannot be removed, because it is locked
+    */
+    private *DataProviderTypeEntry removeTypeEntryIntern(string path, *bool throw_exception) {
+        list<string> type_path = DataProvider::getPathList(\path);
+
+        if (root.checkLocked(throw_exception)) {
+            return;
+        }
+
+        DataProviderTypeEntry type_entry = root;
+        DataProviderTypeEntry prev;
+
+        bool needs_lock = !rwlock.writeLockOwner();
+        if (needs_lock) {
+            rwlock.writeLock();
+        }
+        on_exit if (needs_lock) {
+            rwlock.writeUnlock();
+        }
+
+        string node;
+        foreach node in (type_path) {
+            *DataProviderTypeEntry next_entry = type_entry.getChild(node);
+            if (!next_entry) {
+                return;
+            }
+            prev = type_entry;
+            type_entry = next_entry;
+            if (type_entry.checkLocked(throw_exception)) {
+                return;
+            }
+        }
+
+        *AbstractDataProviderType type = type_entry.getType();
+        # cannot be locked; checked above
+        if (!type || !prev) {
+            return;
+        }
+        --size;
+        remove tmap{type_entry.getEpheremalTypeId()};
+        remove trmap{type_entry.getPath()};
+        # cannot fail due to above checks
+        prev.removeChild(node);
+        return type_entry;
     }
 
     #! Deregisters the type at the given path

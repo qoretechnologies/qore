@@ -74,35 +74,35 @@ module Schema {
 
     @subsection schema_v1_4_2 Schema Module v1.4.2
     - fixed reporting changes with negative verbose options
-      (<a href="https://github.com/qorelanguage/qore/issues/4702">issue 4702</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4702">issue 4702</a>)
 
     @subsection schema_v1_4_1 Schema Module v1.4.1
     - allow information about schema changes after alignments to be returned to the user
-      (<a href="https://github.com/qorelanguage/qore/issues/4637">issue 4637</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4637">issue 4637</a>)
 
     @subsection schema_v1_4 Schema Module v1.4
     - allow schema operations to be executed with no output (verbose < 0)
-      (<a href="https://github.com/qorelanguage/qore/issues/3996">issue 3996</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3996">issue 3996</a>)
 
     @subsection schema_v1_3_1 Schema Module v1.3.1
     - fixed a bug where too little information was passed to post schema alignment code
-      (<a href="https://github.com/qorelanguage/qore/issues/3640">issue 3640</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3640">issue 3640</a>)
 
     @subsection schema_v1_3 Schema Module v1.3
     - improved logging output when performing schema alignments
-      (<a href="https://github.com/qorelanguage/qore/issues/3114">issue 3114</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3114">issue 3114</a>)
     - fixed AbstractSchema::checkExistence()
-      (<a href="https://github.com/qorelanguage/qore/issues/3266">issue 3266</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3266">issue 3266</a>)
 
     @subsection schema_v1_2 Schema Module v1.2
-    - added the following public functions: (<a href="https://github.com/qorelanguage/qore/issues/1851">issue 1851</a>)
+    - added the following public functions: (<a href="https://github.com/qoretechnologies/qore/issues/1851">issue 1851</a>)
       - Schema::c_blob()
       - Schema::c_clob()
     - updated for complex types
 
     @subsection schema_v1_1_1 Schema Module v1.1.1
     - applied the \a force option (i.e. cascade) when aligning schemas
-      (<a href="https://github.com/qorelanguage/qore/issues/1314">issue 1314</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
 
     @subsection schema_v1_1 Schema Module v1.1
     - added the following public functions:
@@ -121,7 +121,7 @@ module Schema {
       - fixed a bug with <i>"insert-only reference data"</i> with the verbose option; the upsert strategy was changed
         to \c UpsertSelectFirst which means that insert-only reference data could also be updated
       - fixed a bug where it was not possible to provide Database options when creating schemas
-        (<a href="https://github.com/qorelanguage/qore/issues/501">bug 501</a>)
+        (<a href="https://github.com/qoretechnologies/qore/issues/501">bug 501</a>)
 
     @subsection schema_v1_0 Schema Module v1.0
     - initial release
@@ -383,6 +383,28 @@ public namespace Schema {
             "qore_type": SqlUtil::CLOB,
             "comment": comment,
         });
+    }
+
+    #! returns a column hash for a binary column
+    /** @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column. See constants
+        Schema::C_NULL and Schema::C_NOT_NULL
+        @param comment an optional comment for the column
+     */
+    public hash<GenericColumnInfo> sub c_binary(bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ) + (notnull ? ("notnull": True) : NOTHING));
+    }
+
+    #! returns a column hash for a binary column
+    /** @param comment the comment for the column
+     */
+    public hash<GenericColumnInfo> sub c_binary(string comment) {
+        return new hash<GenericColumnInfo>((
+            "qore_type": Type::Binary,
+            "comment": comment,
+        ));
     }
 
     #! Provides information on schema changes
@@ -667,7 +689,7 @@ public namespace Schema {
         #! outputs a log message without any newline
         /** the terminal I/O is flushed as well
         */
-        logProgress(string str) {
+        logProgress(string str, ...) {
             printf(str, argv);
             flush();
         }
@@ -1314,7 +1336,7 @@ public namespace Schema {
         }
 
         #! combines option hashes into a single target option hash
-        static hash combineOptions(*hash h) {
+        static hash combineOptions(*hash h, ...) {
             foreach *hash h1 in (argv) {
                 # h1 can be NOTHING which will fail with RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash', but got type 'int' instead
                 if (!h1)

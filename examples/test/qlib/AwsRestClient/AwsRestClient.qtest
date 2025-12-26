@@ -128,8 +128,15 @@ class AwsTest inherits QUnit::Test {
             2015-08-30T12:36:00Z, "20150830/us-east-1/iam/aws4_request");
         assertEq("5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7", sig);
 
-        client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
-            + (FakeAwsOptions - ("aws_service", "aws_region")));
+        try {
+            client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
+                + (FakeAwsOptions - ("aws_service", "aws_region")));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("DNS error: " + ex.err + ": " + ex.desc);
+            }
+            rethrow;
+        }
         sig = client.getSignatureTest("GET", "/?Action=ListUsers&Version=2010-05-08", hdr, NOTHING,
             2015-08-30T12:36:00Z, "20150830/us-east-1/iam/aws4_request");
         assertEq(Type::String, sig.type());

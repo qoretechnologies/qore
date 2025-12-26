@@ -570,6 +570,13 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         return True;
     }
 
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Discord";
+    }
+
     #! returns a data provider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 
@@ -579,7 +586,7 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the DiscordDataProvider and creates the data provider
         # object dynamically
         load_module("DiscordDataProvider");
-        return create_object("DiscordDataProvider", get());
+        return create_object("DiscordDataProvider", self);
     }
 
     #! Can be called to set or clear a closure or call reference to be called when options are automatically updated
@@ -616,7 +623,7 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         }
         checkSubtypeInfo();
         hash<auto> opts = getSubtypeOptions(subtype_info{subtype}, constructor_options);
-        return create_object(conf."class", opts);
+        return create_object(conf."class", self, opts);
     }
 
     #! Returns a hash of supported data provider subtypes

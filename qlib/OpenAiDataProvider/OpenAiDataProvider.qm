@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/*  OpenAiDataProvider.qm Copyright 2024 Qore Technologies, s.r.o.
+/*  OpenAiDataProvider.qm Copyright 2024 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,12 +38,18 @@
 %requires FileLocationHandler
 
 module OpenAiDataProvider {
-    version = "1.3";
+    version = "1.4";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        # fix OpenAiModelFileSearchToolCompoundFilterDataType
+        OpenAiModelFileSearchToolCompoundFilterDataType.replaceField(new QoreDataField({
+            "name": "filters",
+            "type": new ListDataType("FilterList", OpenAiModelFileSearchToolFilterDataType),
+        }));
+
         # register the data provider factory
         DataProvider::registerFactory(new OpenAiDataProviderFactory());
 
@@ -100,14 +106,14 @@ module OpenAiDataProvider {
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
-            "path": "/upload-file-from-location",
+            "path": "/upload-file",
             "action": "upload-file",
             "display_name": "Upload File",
             "short_desc": "Upload a file for an assistant, for fine tuning, or for batch processing",
             "desc": "Upload a file for an assistant, for fine tuning, or for batch processing",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                OpenAiFileUploadFromLocationRequestType.getFields(){"purpose", "location"}, {
+                OpenAiFileUploadRequestType.getFields(){"purpose", "file"}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -241,6 +247,50 @@ module OpenAiDataProvider {
             ),
             "output_type": OpenAiDeleteResponseType,
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/models/{model}/create-response",
+            "action": "create-response",
+            "display_name": "Process Request With a Model",
+            "short_desc": "Process a request with a model",
+            "desc": "Process a request with a model",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "model": <DataProviderPathVarInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The OpenAI model to use",
+                    "desc": "The OpenAI model to use",
+                    "example_value": "gpt-4o",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields - "input"
+            ),
+            "output_type": OpenAiModelCreateResponseResponseDataType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/create-image",
+            "action": "create-image",
+            "display_name": "Generate an Image",
+            "short_desc": "Generate an image from a prompt",
+            "desc": "Generate an image from a prompt",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiImageCreateRequestType::Fields{"prompt",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiImageCreateRequestType::Fields - "prompt"
+            ),
+            "output_type": OpenAiCreateImageResponseType,
+        });
     };
 }
 
@@ -253,6 +303,11 @@ module OpenAiDataProvider {
     The %OpenAiDataProvider module provides a @ref dataproviderintro "data provider" API for OpenAI services.
 
     @section openaidataprovider_relnotes Release Notes
+
+    @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
+    - missing APIs and actions to handle image analysis
+      (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
+    - added APIs to handle image generation
 
     @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0
     - initial release of the module

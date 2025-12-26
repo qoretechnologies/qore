@@ -88,6 +88,7 @@ public class MewsRestTableDataProvider inherits MewsRestDataProviderBase {
                 "desc": "a value for equality comparisons; the type of the value should correspond to the field "
                     "type",
                 "symbol": "==",
+                "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
                 "varargs": True,
                 "return_type": AbstractDataProviderTypeMap."bool",

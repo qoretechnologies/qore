@@ -40,6 +40,15 @@ hashdecl SalesforceRestRecordInfo {
 
     #! Hash of time fields for this record
     hash<string, bool> time_fields;
+
+    #! Fields that cannot be included when creating records
+    hash<string, bool> no_create;
+
+    #! Fields that cannot be included when updating records
+    hash<string, bool> no_update;
+
+    #! Fields that get a default value on create
+    hash<string, bool> defaulted_on_create;
 }
 
 #! The SalesforceRestObjectDataProvider data provider class
@@ -50,53 +59,10 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
 
         #! sobject description
         hash<auto> sobject;
-    }
 
-    private {
-        #! The description of this object type
-        hash<auto> desc;
-
-        #! Record info for this object
-        hash<SalesforceRestRecordInfo> record_info();
-    }
-
-    #! Creates the object from the arguments
-    constructor(SalesforceRestClient rest, string name, hash<auto> sobject) : SalesforceRestDataProviderBase(rest) {
-        self.name = name;
-        self.sobject = sobject;
-        getRecordInfoIntern();
-    }
-
-    #! Returns the data provider name
-    string getName() {
-        return name;
-    }
-
-    #! Returns the data provider description
-    *string getDesc() {
-        return sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
-            "interface", rest.getURL(), name);
-    }
-
-    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return record_info.record_type;
-    }
-
-    #! Returns an iterator for zero or more records matching the search options
-    /** @param where_cond the search criteria
-        @param search_options the search options after processing by validateSearchOptions()
-
-        @see requestSearchRecordsImpl()
-    */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        where_cond = fixSalesforceRecord(where_cond);
-        return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
-    }
-
-    #! Returns data provider static info
-    private hash<DataProviderInfo> getStaticInfoImpl() {
-        hash<DataProviderInfo> rv = SalesforceRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
-            "search_options": {
+        #! Static info for the data provider
+        const ProviderInfo = SalesforceRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
+            "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
                     "short_desc": "Columns to include in output",
@@ -140,6 +106,12 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     "type": new QoreListDataType(new Type("softlist<string>")),
                     "desc": "Sets the order by argument for the SOQL select expression",
                 },
+                "orderby_desc": <DataProviderOptionInfo>{
+                    "display_name": "Order By Descending",
+                    "short_desc": "Sort in descending order",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "desc": "Sort in descending order",
+                },
                 "forview": <DataProviderOptionInfo>{
                     "display_name": "Use For View",
                     "short_desc": "Uses FOR VIEW with the query",
@@ -167,6 +139,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     "display_name": "like",
                     "name": SOQL_OP_LIKE,
                     "symbol": "like",
+                    "groups": "Comparison",
                     "desc": "The value to bind as the 'like' value (ex: '%some string%')",
                     "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
@@ -182,6 +155,65 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                 },
             },
         };
+    }
+
+    private {
+        #! The description of this object type
+        hash<auto> desc;
+
+        #! Record info for this object
+        hash<SalesforceRestRecordInfo> record_info();
+    }
+
+    #! Creates the object from the arguments
+    constructor(SalesforceRestClient rest, string name, hash<auto> sobject) : SalesforceRestDataProviderBase(rest) {
+        self.name = name;
+        self.sobject = sobject;
+        getRecordInfoIntern();
+    }
+
+    #! Returns the data provider name
+    string getName() {
+        return name;
+    }
+
+    #! Returns the data provider description
+    *string getDesc() {
+        return sprintf("Salesforce data provider for URL `%s` and sobject `%s`; supports a table-like record-based "
+            "interface", rest.getURL(), name);
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return record_info.record_type;
+    }
+
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return cast<*hash<string, AbstractDataField>>(map {
+            $1.key: $1.value.getOrNothingType(),
+        }, (record_info.record_type - keys record_info.no_update).pairIterator());
+    }
+
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> create_options) {
+        *hash<string, QoreDataField> rv = record_info.record_type - keys record_info.no_create;
+        map rv{$1}.updateFieldType(rv{$1}.getType().getOrNothingType()), keys record_info.defaulted_on_create,
+            rv{$1} && rv{$1}.getType().isMandatory();
+        return rv;
+    }
+
+    #! Returns an iterator for zero or more records matching the search options
+    /** @param where_cond the search criteria
+        @param search_options the search options after processing by validateSearchOptions()
+
+        @see requestSearchRecordsImpl()
+    */
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        where_cond = fixSalesforceRecord(where_cond);
+        return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
+    }
+
+    #! Returns data provider static info
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        hash<DataProviderInfo> rv = ProviderInfo;
         if (record_info.record_type) {
             if (sobject.queryable) {
                 rv.supports_read = True;
@@ -218,6 +250,8 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        # ignore fields that are not createable
+        rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s", name);
         hash<auto> info;
@@ -238,7 +272,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
             rethrow ex.err, ex.desc, ex_arg;
         }
         if (!resp.body.success) {
-            throw "UPSERT-ERROR", sprintf("error creating record: %y", resp.errors);
+            throw "CREATE-ERROR", sprintf("error creating record: %y", resp.errors);
         }
         return rec + {"id": resp.body.id};
     }
@@ -254,9 +288,11 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         # the external ID info must be removed from the request body
         *softstring extid_value = remove rec{extid};
         if (!extid_value.val()) {
-            throw "UPSERT-ERROR", sprintf("upsert request requires a value for the %y field, but none was given",
+            throw "UPSERT-ERROR", sprintf("Upsert request requires a value for the %y field, but none was given",
             extid);
         }
+        # ignore fields that are not createable
+        rec -= keys record_info.no_create;
         rec = fixSalesforceRecord(rec);
         string url = sprintf("sobjects/%s/%s/%s", name, extid, extid_value);
         hash<auto> info;
@@ -287,12 +323,14 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         @return the number of records updated
     */
     private int updateRecordsImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
+        # ignore fields that are not updateable
+        set -= keys record_info.no_update;
         if (where_cond.Id) {
             updateSingleRecord(where_cond.Id, set);
             return 1;
         }
         where_cond = fixSalesforceRecord(where_cond);
-        AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
+        AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (updateSingleRecord(i.getValue().Id, set), ++count), i;
         return count;
@@ -311,7 +349,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
             return 1;
         }
         where_cond = fixSalesforceRecord(where_cond);
-        AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
+        AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (deleteSingleRecord(i.getValue().Id), ++count), i;
         return count;
@@ -351,7 +389,22 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     private getRecordInfoIntern() {
         desc = rest.get("sobjects/" + name + "/describe").body;
         foreach hash<auto> field in (desc.fields) {
-            AbstractDataProviderType type;
+            hash<auto> info += {
+                "name": field.name,
+                "display_name": field.label,
+                "short_desc": field.label,
+            };
+            if (field.hasKey("createable") && !field.createable) {
+                info.attr.createable = False;
+                record_info.no_create{field.name} = True;
+            }
+            if (field.hasKey("updateable") && !field.updateable) {
+                info.attr.updateable = False;
+                record_info.no_update{field.name} = True;
+            }
+            if (field.defaultedOnCreate) {
+                record_info.defaulted_on_create{field.name} = True;
+            }
             hash<auto> opts += {
                 "qore.no_null": True,
             };
@@ -367,7 +420,9 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     if (field.length) {
                         opts."string.max_size_chars" = field.length;
                     }
-                    type = AbstractDataProviderType::get(field.nillable ? SoftStringOrNothingType : SoftStringType, opts);
+                    info.type = AbstractDataProviderType::get(
+                        field.nillable ? SoftStringOrNothingType : SoftStringType, opts
+                    );
                     break;
                 }
 
@@ -376,48 +431,68 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     if (field.nillable) {
                         typename = "*" + typename;
                     }
-                    type = AbstractDataProviderType::get(typename, opts);
-                    # FIXME: add enum values when supported
+                    info.type = AbstractDataProviderType::get(typename, opts);
+                    info.allowed_values = ();
+                    foreach hash<auto> h in (field.picklistValues) {
+                        if (!h.active) {
+                            continue;
+                        }
+                        if (h.defaultValue) {
+                            info.default_value = h.value;
+                        }
+                        info.allowed_values += <AllowedValueInfo>{
+                            "display_name": h.label,
+                            "value": h.value,
+                        };
+                    }
                     break;
 
                 case "datetime":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType,
+                        opts);
                     record_info.date_time_fields{field.name} = True;
                     break;
 
                 case "date":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftDateOrNothingType : SoftDateType,
+                        opts);
                     record_info.date_fields{field.name} = True;
                     break;
 
                 case "time":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftStringOrNothingType : SoftStringType, opts);
+                    info.type = AbstractDataProviderType::get(
+                        field.nillable ? SoftStringOrNothingType : SoftStringType, opts
+                    );
                     record_info.time_fields{field.name} = True;
                     break;
 
                 case "int":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftIntOrNothingType : SoftIntType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftIntOrNothingType : SoftIntType,
+                        opts);
                     break;
 
                 case "percent":
                 case "currency":
                 case "double":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftFloatOrNothingType : SoftFloatType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftFloatOrNothingType : SoftFloatType,
+                        opts);
                     break;
 
                 case "boolean":
-                    type = AbstractDataProviderType::get(field.nillable ? SoftBoolOrNothingType : SoftBoolType, opts);
+                    info.type = AbstractDataProviderType::get(field.nillable ? SoftBoolOrNothingType : SoftBoolType,
+                        opts);
                     break;
 
                 case "address":
-                    type = new HashDataType(field.nillable ? AutoHashOrNothingType : AutoHashType, field.type, opts);
+                    info.type = new HashDataType(field.nillable ? AutoHashOrNothingType : AutoHashType, field.type,
+                        opts);
                     break;
 
                 default:
-                    type = AbstractDataProviderType::get(AbstractDataProviderType::anyType, opts);
+                    info.type = AbstractDataProviderType::get(AbstractDataProviderType::anyType, opts);
                     break;
             }
-            record_info.record_type{field.name} = new QoreDataField(field.name, field.label, type);
+            record_info.record_type{field.name} = new QoreDataField(info);
         }
     }
 

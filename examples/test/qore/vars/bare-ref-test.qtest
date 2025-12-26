@@ -136,7 +136,7 @@ public class BarerefTest inherits QUnit::Test {
 
         assertEq("a", h.a);
         # the following line should use the lvar a's value "b" to dereference the hash
-        # https://github.com/qorelanguage/qore/issues/416
+        # https://github.com/qoretechnologies/qore/issues/416
         assertEq("b", h.(a));
     }
 }

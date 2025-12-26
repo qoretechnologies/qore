@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.1
+%requires qore >= 2.1
 # assume local scope for variables, do not use "$" signs
 %new-style
 # require type definitions everywhere
@@ -43,14 +43,158 @@
 %requires(reexport) BulkSqlUtil
 
 module DbDataProvider {
-    version = "2.1.1";
-    desc = "user module providing a data provider API for databases";
+    version = "2.2";
+    desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
         # register the data provider factory
         DataProvider::registerFactory(new DbDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DbDataProvider::AppName,
+            "display_name": "DB",
+            "short_desc": "DB operations on connected datasources",
+            "desc": "DB operations on connected datasources.",
+            "scheme": "db",
+            "logo": DbLogo,
+            "logo_file_name": "db-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/",
+            "action": "select-sql",
+            "display_name": "Execute an SQL Select Statement",
+            "short_desc": "Execute an SQL select statement",
+            "desc": "Execute an SQL select statement",
+            "action_code": DPAT_FIND,
+            "data_provider_info": DbDataProvider::ProviderInfo,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/exec-sql",
+            "action": "exec-sql",
+            "display_name": "Execute an SQL Statement",
+            "short_desc": "Execute an SQL statement",
+            "desc": "Execute an SQL statement",
+            "action_code": DPAT_API,
+            "data_provider_info": DbDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "create",
+            "display_name": "Create Record",
+            "short_desc": "Create a record in the table",
+            "desc": "Create a record in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_CREATE,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "find_single",
+            "display_name": "Find Single Record",
+            "short_desc": "Find a single record in the table",
+            "desc": "Find a single record in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "find",
+            "display_name": "Find Matching Records",
+            "short_desc": "Find records in the table",
+            "desc": "Find records in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_FIND,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "update",
+            "display_name": "Update Records",
+            "short_desc": "Update records in the table",
+            "desc": "Update records in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_UPDATE,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "upsert",
+            "display_name": "Upsert Records",
+            "short_desc": "Upsert records in the table",
+            "desc": "Upsert records in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_UPSERT,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/tables/{table}",
+            "action": "delete",
+            "display_name": "Delete Records",
+            "short_desc": "Delete records in the table",
+            "desc": "Delete records in the table",
+            "path_vars": {
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the table",
+                    "desc": "The name of the table",
+                },
+            },
+            "action_code": DPAT_DELETE,
+            "data_provider_info": DbTableDataProvider::ProviderInfo,
+        });
     };
 }
 
@@ -78,28 +222,31 @@ module DbDataProvider {
 
     @section dbdataprovider_relnotes Release Notes
 
+    @subsection dbdataprovider_v2_2 DbDataProvider v2.2
+    - optimized the data provider structure, added support for app actions, made the API more AI-friendly
+
     @subsection dbdataprovider_v2_1_1 DbDataProvider v2.1.1
     - @ref DbDataProvider::DbDataProvider "DbDataProvider" was missing search options
-      (<a href="https://github.com/qorelanguage/qore/issues/4713">issue 4713</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4713">issue 4713</a>)
 
     @subsection dbdataprovider_v2_1 DbDataProvider v2.1
     - enabled browsing the data provider hierarchy according to transactional support
-      (<a href="https://github.com/qorelanguage/qore/issues/4699">issue 4699</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4699">issue 4699</a>)
 
     @subsection dbdataprovider_v2_0_1 DbDataProvider v2.0.1
     - fixed \c sequence and \c sequence_currval mapper options in
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider"
-      (<a href="https://github.com/qorelanguage/qore/issues/4628">issue 4628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4628">issue 4628</a>)
 
     @subsection dbdataprovider_v2_0 DbDataProvider v2.0
     - added the @ref DbDataProvider::DbTransactionHelper "DbTransactionHelper" class
     - added support for creating, reading, updating, and modifying data providers
-      (<a href="https://github.com/qorelanguage/qore/issues/4395">issue 4395</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 
     @subsection dbdataprovider_v1_0_1 DbDataProvider v1.0.1
     - added support for starting a transaction in @ref DbDataProvider::DbDataProvider "DbDataProvider" and
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider"
-      (<a href="https://github.com/qorelanguage/qore/issues/4346">issue 4346</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
     @subsection dbdataprovider_v1_0 DbDataProvider v1.0
     - initial release of the module
@@ -107,4 +254,6 @@ module DbDataProvider {
 
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
+public const AppName = "Db";
+public const DbLogo = File::readTextFile(get_script_dir() + "/db-logo.svg");
 }

@@ -105,17 +105,17 @@ if (!h) {
 
     @subsection pop3client_v2_0 Pop3Client 2.0
     - Added a data provider and application actions
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection pop3client_v1_9 Pop3Client 1.9
     - implemented support for a data provider scheme cache and rich option information for connections
-      (<a href="https://github.com/qorelanguage/qore/issues/4025">issue 4025</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection pop3client_v1_8 Pop3Client 1.8
     - removed the \c Pop3Connection::getConstructorInfo() and \c Pop3Connection::getConstructorInfoImpl() methods
-      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
-      (<a href="https://github.com/qorelanguage/qore/issues/3425">issue 3425</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
     @subsection pop3client_v1_7 Pop3Client 1.7
     - all connection clases have unified constructor
@@ -124,7 +124,7 @@ if (!h) {
     - added the \c Pop3Connection::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
       call (removed in Pop3Client 1.8)
-      (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection pop3client_v1_5 Pop3Client 1.5
     - added the @ref Pop3Client::Pop3Connection "Pop3Connection" class to support the <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module

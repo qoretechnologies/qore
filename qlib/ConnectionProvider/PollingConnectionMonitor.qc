@@ -167,6 +167,11 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         log(LoggerLevel::INFO, "removed all connections (%d connection%s removed)", count, count == 1 ? "" : "s");
     }
 
+    #! Waits for the monitoring thread to stop if it's running
+    waitStop() {
+        mcnt.waitForZero();
+    }
+
     #! Returns @ref True if the I/O thread is running
     bool running() {
         return mcnt.getCount() > 0;
@@ -175,14 +180,15 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     #! Adds a connection to be monitored
     /** @param conn the connection to be monitored; must support the connection polling API
         @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
 
         @throw MONITOR-CONNECTION-ERROR the connection does not support the connection polling API
         @throw MONITOR-ADD-ERROR a different connection with this name is already being monitored
     */
-    add(AbstractConnection conn, *hash<auto> other) {
+    add(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
-            throw "MONITOR-CONNECTION-ERROR", sprintf("connection %y does not support the polling API and cannot be "
+            throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
         AutoLock al(m);
@@ -192,37 +198,29 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 return;
             }
             # otherwise throw an exception
-            throw "MONITOR-ADD-ERROR", sprintf("connection %y with URL %y cannot be added, as connection %y with "
+            throw "MONITOR-ADD-ERROR", sprintf("Connection %y with URL %y cannot be added, as connection %y with "
                 "URL %y is already being monitored; update the connection if this definition should replace the "
                 "existing one", name, conn.getSafeUrl(), name, info.conn.getSafeUrl());
         }
-        cache{name} = <PollInfo>{
-            "conn": conn,
-            "other": other,
-        };
-        if (autostart && !tid) {
-            startIntern();
-        }
-        if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
-            failedToStartPing(name, ex);
-        }
-        sendCmd(IO_ADD);
+        addOrUpdateIntern(IO_ADD, conn, other, start_pending);
     }
 
     #! Adds or updates an existing connection that is already being monitored
     /** @param conn the connection to be monitored; must support the connection polling API
         @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
 
         @throw MONITOR-CONNECTION-ERROR the connection does not support the connection polling API
     */
-    addOrUpdate(AbstractConnection conn, *hash<auto> other) {
+    addOrUpdate(AbstractConnection conn, *hash<auto> other, *bool start_pending) {
         string name = conn.getName();
         if (!conn.supportsPollingApi()) {
-            throw "MONITOR-CONNECTION-ERROR", sprintf("connection %y does not support the polling API and cannot be "
+            throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
         string cmd;
-        RecursiveAutoLock al(m);
+        m.lock();
+        on_exit m.unlock();
         if (*hash<PollInfo> info = cache{name}) {
             # if the connection has already been added, then ignore
             if (info.conn == conn) {
@@ -233,12 +231,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         } else {
             cmd = IO_ADD;
         }
-        cache{name} = <PollInfo>{
-            "conn": conn,
-            "other": other,
-        };
-        restartPing(name, True);
-        sendCmd(cmd);
+        addOrUpdateIntern(cmd, conn, other, start_pending);
     }
 
     #! Removes the given connection
@@ -255,7 +248,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         bool stopped;
 
         {
-            RecursiveAutoLock al(m);
+            m.lock();
+            on_exit m.unlock();
             if (remove cache{name}) {
                 rv = True;
                 sendCmd(IO_REMOVE);
@@ -284,6 +278,29 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (!removeConnection(name)) {
             throw "MONITOR-REMOVE-ERROR", sprintf("no connection %y is being monitored", name);
         }
+    }
+
+    #! Adds or updates an existing connection that is already being monitored
+    /** @param cmd the command to send to the I/O thread
+        @param conn the connection to be monitored; must support the connection polling API
+        @param other a free-form hash to be stored alongside the connection
+        @param start_pending wait until the next cycle to poll
+    */
+    private addOrUpdateIntern(string cmd, AbstractConnection conn, *hash<auto> other, *bool start_pending) {
+        string name = conn.getName();
+        cache{name} = <PollInfo>{
+            "conn": conn,
+            "other": other,
+        };
+        if (autostart && !tid) {
+            startIntern();
+        }
+        if (start_pending) {
+            cache{name}.start = now_us();
+        } else if (*hash<ExceptionInfo> ex = restartPing(name, True)) {
+            failedToStartPing(name, ex);
+        }
+        sendCmd(cmd);
     }
 
     private startIntern() {
@@ -332,20 +349,12 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                         AbstractConnection c = value.conn;
                         if (trigger <= now) {
                             c.last_check = value.start;
-                            c.up = False;
                             handlePingTimeout(key, delta);
                             remove dmap{key};
                             continue;
                         } else if (value.spop) {
                             try {
-                                *hash<SocketPollInfo> info;
-                                {
-                                    # to avoid deadlocks with external code, such as with option update code,
-                                    # we run with this unlocked
-                                    m.unlock();
-                                    on_exit m.lock();
-                                    info = value.spop.continuePoll();
-                                }
+                                *hash<SocketPollInfo> info = value.spop.continuePoll();
                                 if (value != cache{key}) {
                                     # removed / redefined in cache, reprocess
                                     remove dmap{key};
@@ -358,9 +367,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                                             info.socket.uniqueHash()[0..8]),
                                     } : NOTHING);
                                 if (!info) {
-                                    *bool oldok = c.last_check ? c.up : NOTHING;
                                     c.last_check = value.start;
-                                    handlePingSuccess(key, now_us() - value.start, oldok);
+                                    handlePingSuccess(key, now_us() - value.start, c.up);
                                     remove dmap{key};
                                 } else {
                                     poll_list += info;
@@ -403,17 +411,18 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Handles a successful ping
     private handlePingSuccess(string name, date delta, *bool oldok) {
-        log(LoggerLevel::INFO, "%y (poll state %y): successful ping (duration: %y)", name,
-            cache{name}.spop.getState(), delta);
+        log(LoggerLevel::INFO, "%y (poll state %y was up: %y): successful ping (duration: %y)", name,
+            cache{name}.spop.getState(), oldok ?? False, delta);
         cache{name}.conn.handlePingSuccess(delta);
         restartPing(name);
     }
 
     #! Handles a failed ping
     private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
-        log(LoggerLevel::ERROR, "%y (poll state %y): error in ping (duration: %y): %s", name,
-            cache{name}.spop.getState(), delta, get_exception_string(ex));
-        cache{name}.conn.handlePingFailed(delta, ex);
+        AbstractConnection c = cache{name}.conn;
+        log(LoggerLevel::ERROR, "%y (poll state %y was up: %y): error in ping (duration: %y): %s", name,
+            cache{name}.spop.getState(), c.up, delta, get_exception_string(ex));
+        c.handlePingFailed(delta, ex);
         restartPing(name);
     }
 
@@ -431,9 +440,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Handles a ping timeout
     private handlePingTimeoutIntern(string name, date delta) {
+        AbstractConnection c = cache{name}.conn;
         string err = sprintf("(poll state %s): %s connection ping timed out after: %y", cache{name}.spop.getState(),
-            cache{name}.conn.getType(), delta);
-        cache{name}.conn.handlePingFailed(delta, err);
+            c.getType(), delta);
+        c.handlePingFailed(delta, err);
         log(LoggerLevel::ERROR, "%y %s; restarting poll", name, err);
     }
 
@@ -446,7 +456,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             delete cache{name}.spop;
         } else {
             try {
-                cache{name}.spop = cache{name}.conn.startPollConnect();
+                cache{name}.spop = cache{name}.conn.startPollConnect(getLogger());
                 log(LoggerLevel::DEBUG, "%y: starting connect ping to %y; poll state: %y", name,
                     cache{name}.conn.getUrl(), cache{name}.spop.getState());
             } catch (hash<ExceptionInfo> ex) {
@@ -518,24 +528,5 @@ hashdecl PollInfo {
 
     # other data stored alongside the connection
     *hash<auto> other;
-}
-
-class RecursiveAutoLock {
-    private {
-        Mutex m;
-    }
-
-    constructor(Mutex m) {
-        if (!m.lockOwner()) {
-            m.lock();
-            self.m = m;
-        }
-    }
-
-    destructor() {
-        if (m) {
-            m.unlock();
-        }
-    }
 }
 }

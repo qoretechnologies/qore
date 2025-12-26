@@ -108,16 +108,16 @@ list<string> AbstractLineIterator::getSplitLine(string sep, string quote, string
     if (*xsink) {
         return QoreValue();
     }
-    QoreValue v = h.getValue(xsink);
+    ValueHolder v(h.getValue(xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
-    if (v.getType() != NT_STRING) {
+    if (v->getType() != NT_STRING) {
         xsink->raiseException("SPLIT-ERROR", "expecting iterator value type 'string'; got type '%s' instead",
-            v.getTypeName());
+            v->getTypeName());
         return QoreValue();
     }
-    const QoreStringNode* str = v.get<const QoreStringNode>();
+    const QoreStringNode* str = v->get<const QoreStringNode>();
     ReferenceHolder<QoreListNode> rv(split_with_quote(xsink, sep, str, quote, trim_unquoted, &h, eol), xsink);
     if (*xsink) {
         ExceptionSink xsink2;

@@ -41,8 +41,8 @@
 #include <string>
 #include <set>
 
-// maps from index strings to objects
-typedef std::map<std::string, QoreObject*> oimap_t;
+// maps from index strings to containers
+typedef std::map<std::string, QoreValue> oimap_t;
 
 // maps from object hashes to index strings
 typedef std::map<std::string, std::string> imap_t;
@@ -74,6 +74,52 @@ enum qore_stream_type : unsigned char {
 };
 }
 
+class QoreInternalSerializationContext {
+public:
+    ReferenceHolder<QoreHashNode> index;
+    ReferenceHolder<QoreHashNode> svars;
+    imap_t imap;
+    mset_t mset;
+
+    // set of classes to serialize static vars
+    typedef std::set<const QoreClass*> cset_t;
+    cset_t cset;
+
+    int64 flags;
+
+    DLLLOCAL QoreInternalSerializationContext(ExceptionSink* xsink, int64 flags) : flags(flags), index(xsink),
+            svars(xsink) {
+    }
+
+    DLLLOCAL int serializeObject(const QoreObject& obj, std::string& index_str, ExceptionSink* xsink);
+
+    DLLLOCAL int serializeHash(const QoreHashNode& h, std::string& index_str, ExceptionSink* xsink);
+
+    DLLLOCAL int serializeList(const QoreListNode& l, std::string& index_str, ExceptionSink* xsink);
+
+    DLLLOCAL QoreValue serializeValue(const QoreValue val, ExceptionSink* xsink);
+
+    DLLLOCAL void addModule(const char* module) {
+        mset.insert(module);
+    }
+
+    DLLLOCAL void setIndex(const char* str, QoreValue v, ExceptionSink* xsink) {
+        if (!index) {
+            index = new QoreHashNode(autoTypeInfo);
+        }
+        index->setKeyValue(str, v, xsink);
+    }
+
+    DLLLOCAL void setSVars(const char* str, QoreValue v, ExceptionSink* xsink) {
+        if (!svars) {
+            svars = new QoreHashNode(autoTypeInfo);
+        }
+        svars->setKeyValue(str, v, xsink);
+    }
+
+    DLLLOCAL int serializeStaticVars(const QoreClass& cls, ExceptionSink* xsink);
+};
+
 class ObjectIndexMap : public oimap_t {
 public:
     DLLLOCAL ObjectIndexMap(ExceptionSink* xs) : xs(xs) {
@@ -85,22 +131,35 @@ protected:
     ExceptionSink* xs;
 };
 
+class QoreInternalDeserializationContext {
+public:
+    ObjectIndexMap oimap;
+    int64 flags;
+
+    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags) : oimap(xsink), flags(flags) {
+    }
+
+    DLLLOCAL QoreValue deserializeContainer(const char* index_str, ExceptionSink* xsink);
+
+    DLLLOCAL QoreValue deserializeValue(const QoreValue val, ExceptionSink* xsink);
+};
+
 class QoreSerializable : public AbstractPrivateData {
 friend class QoreInternalSerializationContext;
 friend class QoreInternalDeserializationContext;
 
 public:
-    DLLLOCAL static QoreHashNode* serializeToData(QoreValue val, ExceptionSink* xsink);
+    DLLLOCAL static QoreHashNode* serializeToData(QoreValue val, int64 flags, ExceptionSink* xsink);
 
-    DLLLOCAL static void serialize(const QoreObject& self, OutputStream& stream, ExceptionSink* xsink);
+    DLLLOCAL static void serialize(const QoreObject& self, OutputStream& stream, int64 flags, ExceptionSink* xsink);
 
-    DLLLOCAL static void serialize(const QoreValue val, OutputStream& stream, ExceptionSink* xsink);
+    DLLLOCAL static void serialize(const QoreValue val, OutputStream& stream, int64 flags, ExceptionSink* xsink);
 
-    DLLLOCAL static QoreHashNode* deserializeToData(InputStream& stream, ExceptionSink* xsink);
+    DLLLOCAL static QoreHashNode* deserializeToData(ExceptionSink* xsink, InputStream& stream, int64 flags = 0);
 
-    DLLLOCAL static QoreValue deserialize(InputStream& stream, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserialize(ExceptionSink* xsink, InputStream& stream, int64 flags = 0);
 
-    DLLLOCAL static QoreValue deserialize(const QoreHashNode& h, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserialize(ExceptionSink* xsink, const QoreHashNode& h, int64 flags = 0);
 
     DLLLOCAL static int serializeValueToStream(const QoreValue val, OutputStream& stream, ExceptionSink* xsink);
 
@@ -108,29 +167,54 @@ public:
     DLLLOCAL static int serializeValueToStream(const QoreValue val, StreamWriter& writer, ExceptionSink* xsink);
 
     // note: reads a raw value; assumes the stream header has already been read
-    DLLLOCAL static QoreValue deserializeValueFromStream(StreamReader& reader, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeValueFromStream(ExceptionSink* xsink, StreamReader& reader, int64 flags = 0);
 
 protected:
     DLLLOCAL virtual ~QoreSerializable() {}
 
-    DLLLOCAL static QoreValue serializeObjectToData(const QoreObject& obj, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue serializeObjectToData(const QoreObject& obj, bool weak,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
 
-    DLLLOCAL static imap_t::iterator serializeObjectToIndex(const QoreObject& obj, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, ExceptionSink* xsink);
+    DLLLOCAL static imap_t::iterator serializeObjectToIndex(const QoreObject& obj,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
 
-    DLLLOCAL static QoreValue serializeValue(const QoreValue val, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, ExceptionSink* xsink);
+    DLLLOCAL static imap_t::iterator serializeObjectToIndexIntern(const QoreObject& self,
+            QoreInternalSerializationContext& context, const QoreString& str,
+            imap_t::iterator hint, ExceptionSink* xsink);
 
-    DLLLOCAL static imap_t::iterator serializeObjectToIndexIntern(const QoreObject& self, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, const QoreString& str, imap_t::iterator hint, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue serializeValue(const QoreValue val, QoreInternalSerializationContext& context,
+            ExceptionSink* xsink);
 
-    DLLLOCAL static QoreHashNode* serializeHashToData(const QoreHashNode& h, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue serializeHashToData(const QoreHashNode& h, bool weak,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
 
-    DLLLOCAL static QoreHashNode* serializeListToData(const QoreListNode& l, ReferenceHolder<QoreHashNode>& index, imap_t& imap, mset_t& mset, ExceptionSink* xsink);
+    DLLLOCAL static imap_t::iterator serializeHashToIndex(const QoreHashNode& h,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
 
-    DLLLOCAL static int readStringFromStream(StreamReader& reader, QoreString& str, const char* type, ExceptionSink* xsink);
-    DLLLOCAL static int64 readIntFromStream(ExceptionSink* xsink, StreamReader& reader, const char* type, bool can_be_negative = false);
+    DLLLOCAL static imap_t::iterator serializeHashToIndexIntern(const QoreHashNode& h,
+            QoreInternalSerializationContext& context, const QoreString& str,
+            imap_t::iterator hint, ExceptionSink* xsink);
+
+    DLLLOCAL static QoreValue serializeListToData(const QoreListNode& l, bool weak,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
+
+    DLLLOCAL static imap_t::iterator serializeListToIndex(const QoreListNode& l,
+            QoreInternalSerializationContext& context, ExceptionSink* xsink);
+
+    DLLLOCAL static imap_t::iterator serializeListToIndexIntern(const QoreListNode& h,
+            QoreInternalSerializationContext& context, const QoreString& str,
+            imap_t::iterator hint, ExceptionSink* xsink);
+
+    DLLLOCAL static int readStringFromStream(StreamReader& reader, QoreString& str, const char* type,
+            ExceptionSink* xsink);
+    DLLLOCAL static int64 readIntFromStream(ExceptionSink* xsink, StreamReader& reader, const char* type,
+            bool can_be_negative = false);
 
     DLLLOCAL static int serializeHashToStream(const QoreHashNode& h, StreamWriter& writer, ExceptionSink* xsink);
-    DLLLOCAL static int serializeStringToStream(const QoreStringNode& str, StreamWriter& writer, ExceptionSink* xsink);
-    DLLLOCAL static int serializeStringToStream(StreamWriter& writer, const char* key, size_t len, const QoreEncoding* enc, ExceptionSink* xsink);
+    DLLLOCAL static int serializeStringToStream(const QoreStringNode& str, StreamWriter& writer,
+            ExceptionSink* xsink);
+    DLLLOCAL static int serializeStringToStream(StreamWriter& writer, const char* key, size_t len,
+            const QoreEncoding* enc, ExceptionSink* xsink);
     DLLLOCAL static int serializeIntToStream(int64 i, StreamWriter& writer, ExceptionSink* xsink);
     DLLLOCAL static int serializeBoolToStream(bool b, StreamWriter& writer, ExceptionSink* xsink);
     DLLLOCAL static int serializeListToStream(const QoreListNode& l, StreamWriter& writer, ExceptionSink* xsink);
@@ -141,21 +225,35 @@ protected:
 
     DLLLOCAL static void serializeToStream(const QoreHashNode& h, OutputStream& stream, ExceptionSink* xsink);
 
-    DLLLOCAL static QoreValue deserializeData(const QoreValue val, const oimap_t& oimap, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeData(const QoreValue val, QoreInternalDeserializationContext& context,
+            ExceptionSink* xsink);
 
-    DLLLOCAL static QoreValue deserializeHashData(const QoreStringNode& type, const QoreHashNode& h, const oimap_t& oimap, ExceptionSink* xsink);
+    DLLLOCAL static int deserializeStaticClassVars(ExceptionSink* xsink, const QoreHashNode& svars,
+            QoreInternalDeserializationContext& context);
 
-    DLLLOCAL static QoreValue deserializeListData(const QoreListNode& l, const oimap_t& oimap, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeHashData(const QoreStringNode& type, const QoreHashNode& h,
+            QoreInternalDeserializationContext& context, ExceptionSink* xsink, QoreHashNode* rv = nullptr);
 
-    DLLLOCAL static QoreObject* deserializeIndexedObject(const char* key, const oimap_t& oimap, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeListData(QoreValue v, const QoreHashNode& h,
+            QoreInternalDeserializationContext& context, ExceptionSink* xsink, QoreListNode* rv = nullptr);
 
-    DLLLOCAL static QoreHashNode* deserializeHashFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeListData(const QoreListNode& l, QoreInternalDeserializationContext& context,
+            ExceptionSink* xsink, QoreListNode* rv = nullptr);
 
-    DLLLOCAL static QoreStringNode* deserializeStringFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeIndexedContainer(const char* key,
+            QoreInternalDeserializationContext& context, ExceptionSink* xsink);
+    DLLLOCAL static QoreValue deserializeIndexedWeakReference(const char* key,
+            QoreInternalDeserializationContext& context, ExceptionSink* xsink);
+
+    DLLLOCAL static QoreHashNode* deserializeHashFromStream(ExceptionSink* xsink, StreamReader& reader,
+            qore_stream_type code, int64 flags);
+
+    DLLLOCAL static QoreStringNode* deserializeStringFromStream(StreamReader& reader, qore_stream_type code,
+            ExceptionSink* xsink);
 
     DLLLOCAL static int64 deserializeIntFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink);
 
-    DLLLOCAL static QoreListNode* deserializeListFromStream(StreamReader& reader, ExceptionSink* xsink);
+    DLLLOCAL static QoreListNode* deserializeListFromStream(ExceptionSink* xsink, StreamReader& reader, int64 flags);
 
     DLLLOCAL static double deserializeFloatFromStream(StreamReader& reader, ExceptionSink* xsink);
 

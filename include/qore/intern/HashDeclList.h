@@ -106,10 +106,11 @@ public:
     }
 
     DLLLOCAL bool next() {
-        if (i == hd.end())
+        if (i == hd.end()) {
             i = hd.begin();
-        else
+        } else {
             ++i;
+        }
         return i != hd.end();
     }
 
@@ -136,10 +137,11 @@ public:
     }
 
     DLLLOCAL bool next() {
-        if (i == hd.end())
+        if (i == hd.end()) {
             i = hd.begin();
-        else
+        } else {
             ++i;
+        }
         return i != hd.end();
     }
 

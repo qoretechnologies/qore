@@ -48,6 +48,7 @@
 %requires(reexport) HttpServerUtil >= 0.3.12
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires(reexport) FileLocationHandler
+%requires(reexport) DataProvider >= 3.0
 
 %allow-weak-references
 
@@ -194,15 +195,20 @@ const YamlSerialization = {
 };
 %endif
 
+%ifndef NoJson
+const JsonSerialization = {
+    "serialize": \make_json(),
+    "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
+    "deserialize": \parse_json(),
+    "module": "json",
+};
+%endif
+
 #! supported mime types for de/serializing data
 public const MimeDataTypes = {
 %ifndef NoJson
-    MimeTypeJson: (
-        "serialize": \make_json(),
-        "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
-        "deserialize": \parse_json(),
-        "module": "json",
-    ),
+    "application/vnd.oracle.resource+json": JsonSerialization,
+    MimeTypeJson: JsonSerialization,
 %endif
 %ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
@@ -212,19 +218,19 @@ public const MimeDataTypes = {
     "application/yaml": YamlSerialization,
 %endif
 %ifndef NoXml
-    MimeTypeXmlApp: (
+    MimeTypeXmlApp: {
         "serialize": \make_xml(),
         "serialize_verbose": string sub (auto val) {return make_xml(val, XGF_ADD_FORMATTING);},
         "deserialize": \parse_xml(),
         "module": "xml",
-    ),
+    },
 %endif
     # Content-Type: application/x-www-form-urlencoded
-    MimeTypeFormUrlEncoded: (
+    MimeTypeFormUrlEncoded: {
         "serialize": \mime_get_form_urlencoded_string(),
         "serialize_verbose": \mime_get_form_urlencoded_string(),
         "deserialize": \mime_parse_form_urlencoded_string(),
-    ),
+    },
     # Content-Type: multipart/form-data (handled manually)
     MimeTypeMultipartFormData: {},
 };
@@ -240,7 +246,7 @@ public const ValidSchemes = ("http", "https", "ws", "wss");
 public const ValidSchemesHash = map {$1: True}, ValidSchemes;
 
 #! Base class for the %OpenApi3 specification objects, wrapping the vendor extensions.
-class ObjectBase {
+class ObjectBase inherits Qore::Serializable {
     public {
         #! Allows extensions to the %OpenApi3 Schema.
         /**
@@ -277,13 +283,13 @@ class ObjectBase {
 }
 
 #! Base used by @ref HeaderObject and @ref SchemaObject
-class SchemaBase {
+class SchemaBase inherits Qore::Serializable {
     public {
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *float maximum;
+        *softfloat maximum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *float minimum;
+        *softfloat minimum;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
         *bool exclusiveMax;
@@ -324,8 +330,8 @@ class SchemaBase {
         @param oh deserialized hash from the source schema description
      */
     public constructor(string obj_type, hash<auto> oh) {
-        optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True), \maximum);
-        optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True), \minimum);
+        optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+        optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
         optional_field(obj_type, oh, "exclusiveMaximum", NT_BOOLEAN, \exclusiveMax);
         optional_field(obj_type, oh, "exclusiveMinimum", NT_BOOLEAN, \exclusiveMin);
         optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
@@ -346,8 +352,12 @@ class SchemaBase {
             "uniqueItems", "enum", "multipleOf"), exists other.$1;
     }
 
+    #! Private constructor
+    private constructor() {
+    }
+
     #! returns an example value for the given type
-    private auto getExampleValue(string type, *string format) {
+    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
         if (enum) {
             auto rv = enum.firstKey();
             switch (type) {
@@ -383,7 +393,7 @@ class SchemaBase {
                     case "date-time": return 1987-05-23T07:45:30Z;
                     case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
                     default:
-                        return "value";
+                        return sprintf("Example %s", fname ?? "string");
                 }
             }
             case "integer": {
@@ -991,14 +1001,14 @@ public class ParameterGroup {
 
     #! Adds a parameter to the group
     addParameter(string key, ParameterObject p) {
-        if (p.in_loc == "query" && p.schema.type == "object") {
+        if (p.in_loc == "query" && p.schema && p.schema.type == "object") {
             if (exists query_obj) {
                 throw "OPENAPI3-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
                     "\"object\"; cannot define subsequent parameter %y with the same type", query_obj, key);
             }
             query_obj = key;
         }
-        parameters{key} := p;
+        parameters{key} = p;
     }
 }
 
@@ -1007,8 +1017,8 @@ public hashdecl ComponentInfo {
     #! Schemas
     hash<string, SchemaObject> schemas;
 
-    #! Parameters
-    ParameterGroup parameters();
+    #! Parameters hash
+    hash<string, ParameterObject> parameters;
 
     #! Response definitions that can be used across operations. This property does not define global responses for all operations.
     /**
@@ -1102,15 +1112,30 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         */
         list<TagObject> tags;
 
+        #! Free-form data storage for types or other related information
+        hash<auto> store;
+
         #! Additional external documentation.
         *ExternalDocumentationObject externalDocs;
 
         #! OpenApi3Schema options
+        /** Options are as follows:
+            - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
+              strings
+            - \c def_path: (type *string) the default path to use when retrieving external schema references
+            - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
+              references, must take a string argument (the resource name) and return a string (the resource data)
+            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+            - \c utc_dates: (type *bool) send date/time values in queries in UTC format
+            - \c query_date_format: (type *string) the format string for date/time values in queries
+        */
         const OpenApi3Options = (
             "compact_serialization": True,
             "def_path": True,
             "try_import": True,
             "parse_flags": True,
+            "utc_dates": True,
+            "query_date_format": True,
         );
     }
 
@@ -1132,8 +1157,17 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         #! parse option flags
         *int opt_flags;
 
-        #! maps name -> SHA1 hash of the config -> schema objects for recursive references
+        #! Send dates in UTC format
+        *softbool utc_dates;
+
+        #! Date format for serializing dates in queries
+        *string query_date_format;
+
+        #! maps name -> SHA256 hash of the config -> schema objects for recursive references
         hash<string, hash<string, SchemaObject>> so_map;
+
+        #! type map; identifer -> {Y,N} -> type
+        hash<string, hash<string, AbstractDataProviderType>> typemap;
     }
 
     private:internal {
@@ -1192,13 +1226,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! common constructor implementation
     private constructorIntern(string schema_source, hash<auto> oh, *hash<auto> opts) {
-        hash_str = digest("sha256", schema_source).toHex();
+        hash_str = schema_source.toSHA256();
 
         # process options
         compact_serialization = remove opts.compact_serialization ?? True;
         def_path = remove opts.def_path;
         try_import = remove opts.try_import;
         opt_flags = remove opts.parse_flags;
+        utc_dates = remove opts.utc_dates;
+        query_date_format = remove opts.query_date_format;
         if (opts) {
             throw "OPENAPI3-OPTION-ERROR", sprintf("unknown options in OpenApi3Schema constructor: %y; known "
                 "options: %y", keys opts, keys OpenApi3Options);
@@ -1223,9 +1259,22 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         }
 
         optional_field(obj_type, oh, "consumes", OpenApi3ListToStringSet, \consumes);
+        foreach string mt in (keys consumes) {
+            if (mt =~ /[;,]/) {
+                remove consumes{mt};
+                mt =~ s/[;,].*$//;
+                consumes{mt} = True;
+            }
+        }
 
         optional_field(obj_type, oh, "produces", OpenApi3ListToStringSet, \produces);
-
+        foreach string mt in (keys produces) {
+            if (mt =~ /[;,]/) {
+                remove produces{mt};
+                mt =~ s/[;,].*$//;
+                produces{mt} = True;
+            }
+        }
         {
             optional_field(obj_type, oh.components, "schemas", NT_HASH, \source_definition_hash);
             map processDefinition($1.key, $1.value), source_definition_hash.pairIterator();
@@ -1237,7 +1286,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             foreach hash<auto> item in (obj.pairIterator()) {
                 if (item.value.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE", "OpenApi3 Object: invalid parameter datatype: " + item.value.type();
-                components.parameters.addParameter(item.key, ParameterObject::newParameter(item.key, item.value, self));
+                components.parameters{item.key} = ParameterObject::newParameter(item.key, item.value, self);
             }
 
             delete obj;
@@ -1245,7 +1294,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             foreach hash<auto> item in (obj.pairIterator()) {
                 if (item.value.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE", "OpenApi3 Object: invalid response datatype: " + item.value.type();
-                components.responses{item.key} := ResponseObject::newResponse(item.key, item.value, self);
+                components.responses{item.key} = ResponseObject::newResponse(item.key, item.value, self);
             }
         }
 
@@ -1312,13 +1361,21 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         return opt_flags;
     }
 
+    *bool getUtcDates() {
+        return utc_dates;
+    }
+
+    *string getQueryDateFormat() {
+        return query_date_format;
+    }
+
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {
-        hash_str = sprintf("%y", oh).toSHA1();
+        hash_str = sprintf("%y", oh).toSHA256();
         return so_map{name}{hash_str};
     }
 
     cacheSchemaObject(string name, string hash_str, SchemaObject so) {
-        so_map{name}{hash_str} = so;
+        so_map{name}{hash_str} := so;
     }
 
     #! resolves a reference to a schema object
@@ -1363,10 +1420,10 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             throw "INVALID-REFERENCE", sprintf("cannot resolve ParameterObject %y reference %y; expecting "
                 "\"#/components/parameters/...\"", name, refstr);
         string rstr = (refstr =~ x/^#\/components\/parameters\/(.*)$/)[0];
-        *ParameterObject ref = components.parameters.parameters{rstr};
+        *ParameterObject ref = components.parameters{rstr};
         if (!ref)
             throw "INVALID-REFERENCE", sprintf("cannot resolve ParameterObject %y reference %y; known parameter "
-                "references: %y", name, refstr, keys components.parameters.parameters);
+                "references: %y", name, refstr, keys components.parameters);
         int size = foldl $1 + $2, (map 1, keys oh, $1 !~ /^x-/);
         if (size > 1)
             throw "INVALID-REFERENCE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
@@ -1450,14 +1507,18 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type"))
+            if (!headers.hasKey("content-type")) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
-            if (headers."content-type" =~ /^multipart\/form-data/) {
+            }
+            string ct = headers."content-type";
+            if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(headers."content-type", http_body.toString());
+                    MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
                 body = map {$1.key: $1.value.body}, h.pairIterator();
             } else {
-                *hash<auto> conf = MimeDataTypes{headers."content-type"};
+                # remove any qualifiers from the content type
+                ct =~ s/[;,].*$//;
+                *hash<auto> conf = MimeDataTypes{ct};
                 if (!conf) {
                     body = http_body;
                 } else {
@@ -1549,7 +1610,12 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             "hdr": hdr,
         ));
 
-        *string content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = hdr."content-type" ?? hdr."Content-Type";
+        if (content.typeCode() == NT_LIST) {
+            content = content[0];
+        }
+        # remove any qualifiers from the content type
+        content =~ s/[;,].*$//;
 
         # deserialize body according to Content-Type
         if (exists response_body && content) {
@@ -1576,7 +1642,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             }
         }
 
-        hash<string, bool> mime_types;
+        hash<string, bool> mime_types = {};
         op.validateResponse(method, path, pio, code, \rv.body, \mime_types, False);
 
         if (content && !mime_types{content})
@@ -1792,6 +1858,97 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         return get_thread_tz();
     }
 
+    #! Returns the data type for the given type specification
+    AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
+            bool required = True) {
+        string id;
+        if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
+            return rv;
+        }
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+        typemap{id}{required ? "Y" : "N"} = rv;
+        return rv;
+    }
+
+    #! Checks the type cache
+    private *AbstractDataProviderType checkType(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required = True, reference<string> id) {
+        id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
+        return getCacheType(\typemap{id}, required ? "Y" : "N");
+    }
+
+    #! Returns a cached type
+    private static *AbstractDataProviderType getCacheType(reference<hash<string, AbstractDataProviderType>> h,
+            string key) {
+        if (h) {
+            if ((key == "N") && !h.N) {
+                return h.N = h.Y.getOrNothingType();
+            }
+            if ((key == "Y") && !h.Y) {
+                return h.Y = h.N.getMandatoryType();
+            }
+            return h{key};
+        }
+    }
+
+    #! Returns the data type corresponding to the values
+    private AbstractDataProviderType getTypeIntern(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required = True) {
+        hash<auto> type_options;
+        if (required) {
+            type_options += {"qore.no_null": True};
+        }
+        if (typestr == "string") {
+            switch (format) {
+                case "byte": return required
+                    ? AbstractDataProviderType::get(Base64BinaryType)
+                    : AbstractDataProviderType::get(Base64BinaryOrNothingType);
+                case "binary": return required
+                    ? AbstractDataProviderType::get(SoftBinaryType)
+                    : AbstractDataProviderType::get(SoftBinaryOrNothingType);
+                case "date":
+                case "date-time": return required
+                    ? AbstractDataProviderType::get(SoftDateType)
+                    : AbstractDataProviderType::get(SoftDateOrNothingType);
+            }
+        }
+        switch (typestr) {
+            case "boolean":
+                return required
+                    ? new QoreSoftBoolDataType(type_options)
+                    : new QoreSoftBoolOrNothingDataType(type_options);
+
+            case "array":
+                if (!arrayItems) {
+                    throw "OPENAPI3-SCHEMA-ERROR", sprintf("no item definition for array path %y", path);
+                }
+                return new SoftListDataType(arrayItems.getDataType(True), !required);
+
+            case "object":
+                return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);
+        }
+
+        if (*string newname = OptimalQoreSoftDataTypeMap{typestr}) {
+            typestr = newname;
+        }
+        if (!required && (typestr != "any" && typestr != "auto")) {
+            typestr = "*" + typestr;
+        }
+        return AbstractDataProviderType::get(new Type(typestr), type_options);
+    }
+
+    #! Returns the data type for the given schema
+    AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
+            *HTTPClient rest) {
+        return schema.getDataType(required, rest);
+    }
+
+    #! Returns a field definition from the OpenApi3 parameter
+    AbstractDataField getFieldFromSchema(string name, *string desc, SchemaObject schema,
+            bool required = True, *HTTPClient rest) {
+        return schema.getField(name, desc, required, rest);
+    }
+
     #! processes a client-side REST request and returns a hash that can be used to make the outgoing client-side HTTP request
     /** @param method the HTTP method (case-insensitive)
         @param path the URI path with any query arguments
@@ -1928,7 +2085,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         OperationObject op = pio.getOperation(method, path);
 
         # perform validation
-        hash<string, bool> mime_types;
+        hash<string, bool> mime_types = {};
         op.validateResponse(method, path, pio, code, \response_body, \mime_types);
 
         hash<HttpResponseInfo> rv((
@@ -2127,7 +2284,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         if (value.typeCode() != NT_HASH)
             throw "INVALID-FIELD-TYPE", sprintf("OpenApi3 Object: invalid definition datatype %y (val %y) for key %y",
                 value.type(), value, key);
-        return components.schemas{key} := SchemaObject::newSchemaObject(key, value, self);
+        return components.schemas{key} = SchemaObject::newSchemaObject(key, value, self);
     }
 }
 
@@ -2235,7 +2392,7 @@ public class LicenseObject inherits ObjectBase {
 
     This class stores a tree or a component of a path for path matching, supports wildcard matching
  */
-public class PathComponent {
+public class PathComponent inherits Qore::Serializable {
     private {
         #! path prefix
         string pfx;
@@ -2258,8 +2415,9 @@ public class PathComponent {
         self.pfx = pfx;
         name = "/";
         foreach hash<auto> h in (oh.pairIterator()) {
-            if (!pfx.val() && h.key !~ /^\//)
+            if (!pfx.val() && h.key !~ /^\//) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Paths Object: root path %y does not begin with a slash", h.key);
+            }
             list<string> l = h.key.split("/");
             shift l;
             add(h.key, l, 0, h.value, openapi3);
@@ -2278,18 +2436,22 @@ public class PathComponent {
     private add(string full_path, list<auto> l, int offset, hash<auto> oh, OpenApi3Schema openapi3) {
         #printf("PathComponent::add(): pfx: %y name: %y: %y l: %y offset: %y\n", pfx, name, full_path, l, offset);
         if (offset == l.size()) {
-            if (pio)
-                throw "INVALID-PATH-COMPONENT", sprintf("cannot terminate path %y twice", full_path);
-            pio = new PathItemObject(full_path, oh, openapi3);
+            if (!pio) {
+                pio = new PathItemObject(full_path, oh, openapi3);
+            } else {
+                throw "INVALID-PATH-COMPONENT", sprintf("Cannot terminate path %y twice", full_path);
+            }
+            # otherwise we merge new methods in the existing PathItemObject
             return;
         }
 
         PathComponent next;
         string key = l[offset];
-        if (key =~ /^{/)
+        if (key =~ /^{/) {
             next = wildcard ?? (wildcard = new PathComponent(full_path, l, offset + 1, oh));
-        else
+        } else {
             next = paths{key} ?? (paths{key} = new PathComponent(full_path, l, offset + 1, oh));
+        }
 
         next.add(full_path, l, offset + 1, oh, openapi3);
     }
@@ -2473,14 +2635,14 @@ public class PathItemObject inherits ObjectBase, ParameterGroup {
                     throw "INVALID-FIELD-TYPE",
                         sprintf("Path Item Object: 'parameters' list value has invalid type %y",
                             param.type());
-                ParameterObject p := ParameterObject::newParameter(
+                ParameterObject p = ParameterObject::newParameter(
                     sprintf("%d/%d", $# + 1, params.lsize()), param, openapi3
                 );
                 if (p.in_loc == "body") {
                     if (body)
                         throw "INVALID-FIELD-VALUE", sprintf("path %y: more than one \"body\" parameter provided",
                             path);
-                    body := p;
+                    body = p;
                 } else {
                     addParameter(p);
                 }
@@ -2639,10 +2801,24 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
         if (!optional_field(obj_type, oh, "consumes", OpenApi3ListToStringSet, \consumes) && openapi3.consumes) {
             consumes = openapi3.consumes;
         }
+        foreach string mt in (keys consumes) {
+            if (mt =~ /[;,]/) {
+                remove consumes{mt};
+                mt =~ s/[;,].*$//;
+                consumes{mt} = True;
+            }
+        }
 
         # use the global "produces" definition if none is defined on the operation
         if (!optional_field(obj_type, oh, "produces", OpenApi3ListToStringSet, \produces) && openapi3.produces) {
             produces = openapi3.produces;
+        }
+        foreach string mt in (keys produces) {
+            if (mt =~ /[;,]/) {
+                remove produces{mt};
+                mt =~ s/[;,].*$//;
+                produces{mt} = True;
+            }
         }
         {
             list listObj;
@@ -2652,14 +2828,45 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
                     error("INVALID-FIELD-TYPE", "invalid 'parameters' list value datatype %y; expecing \"hash\"",
                         p.fullType());
                 }
-                ParameterObject param := ParameterObject::newParameter(sprintf("%d/%d", $# + 1,
+                ParameterObject param = ParameterObject::newParameter(sprintf("%d/%d", $# + 1,
                     listObj.lsize()), p, openapi3);
                 if (param.in_loc == "body") {
-                    body := param;
+                    body = param;
                 } else if (param.in_loc == "formData") {
                     formData{param.name} = param;
                 } else {
                     addParameter(param);
+                }
+            }
+        }
+
+        # OpenAPI 3.0 style requestBody
+        {
+            *hash<auto> requestBodyObj;
+            if (optional_field(obj_type, oh, "requestBody", NT_HASH, \requestBodyObj)) {
+                # Extract schema from requestBody.content.{mediaType}.schema
+                *hash<auto> contentObj = requestBodyObj.content;
+                if (contentObj) {
+                    foreach hash<auto> item in (contentObj.pairIterator()) {
+                        if (item.value.schema) {
+                            # Create a synthetic body parameter from the requestBody
+                            hash<auto> bodyParam = {
+                                "name": "body",
+                                "in": "body",
+                                "required": requestBodyObj.required ?? False,
+                                "schema": item.value.schema,
+                            };
+                            if (requestBodyObj.description) {
+                                bodyParam.description = requestBodyObj.description;
+                            }
+                            body = ParameterObject::newParameter("requestBody", bodyParam, openapi3);
+                            # Also set consumes from the content type if not already set
+                            if (!consumes) {
+                                consumes{item.key} = True;
+                            }
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -2896,6 +3103,12 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
 
         if (produces) {
             mime_types = produces;
+        } else if (res.contentTypes) {
+            # OpenAPI 3.0: use content types from response
+            mime_types = res.contentTypes;
+        } else {
+            # Neither produces nor contentTypes defined - use defaults
+            mime_types = map {$1: True}, MimeContentTypes;
         }
     }
 
@@ -3238,17 +3451,12 @@ public class ParameterBase inherits ObjectBase {
         };
     }
 
-    private {
-        static hash<string, ParameterBase> cache;
-    }
-
     #! Creates the object
     public constructor(hash<auto> oh) : ObjectBase(oh) {
     }
 
     #! Copy the object
     copy(ParameterObject old) {
-        addToCache(self);
     }
 
     #! Parse the parameter data
@@ -3268,7 +3476,7 @@ public class ParameterBase inherits ObjectBase {
 
         hash<auto> schemaObj;
         if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj)) {
-            schema := SchemaObject::newSchemaObject(name, schemaObj, openapi3, True);
+            schema = SchemaObject::newSchemaObject(name, schemaObj, openapi3, True);
         }
 
         if (optional_field(obj_type, oh, "style", NT_STRING, \style)) {
@@ -3305,18 +3513,6 @@ public class ParameterBase inherits ObjectBase {
             throw "INVALID-PARAMETER", sprintf("%s parameter is missing both \"schema\" and \"content\"; at least "
                 "one is required", name);
         }
-
-        addToCache(self);
-    }
-
-    #! Adds an ParameterObject to the cache
-    static private addToCache(ParameterBase obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes an ParameterObject from the cache
-    static private removeFromCache(ParameterBase obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
@@ -3544,14 +3740,14 @@ public class ResponsesObject inherits ObjectBase {
         string obj_type = "Responses";
         *hash defaultObj;
         if (optional_field(obj_type, oh, "default", NT_HASH, \defaultObj))
-            defaultResp := ResponseObject::newResponse("default", defaultObj, openapi3);
+            defaultResp = ResponseObject::newResponse("default", defaultObj, openapi3);
 
         *hash r = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^[0-9]+$/;
         foreach hash resp in (r.pairIterator()) {
             if (resp.value.typeCode() != NT_HASH)
                 throw "INVALID-FIELD-TYPE", sprintf("%s %s: Responses Object: response has invalid type %y", method,
                     path, resp.value.type());
-            responses{resp.key} := ResponseObject::newResponse(resp.key, resp.value, openapi3);
+            responses{resp.key} = ResponseObject::newResponse(resp.key, resp.value, openapi3);
         }
 
         if (responses.empty() && !defaultObj)
@@ -3589,10 +3785,12 @@ public class ResponseObject inherits ObjectBase {
             of what such a response would look like.
          */
         hash examples;
-    }
 
-    private {
-        static hash<string, ResponseObject> cache;
+        #! Content types supported by this response (OpenAPI 3.0).
+        /**
+            A hash where keys are content type strings from the response content field.
+         */
+        *hash<string, bool> contentTypes;
     }
 
     #! private constructor; use newResponse() instead
@@ -3609,8 +3807,19 @@ public class ResponseObject inherits ObjectBase {
         required_field(obj_type, oh, "description", NT_STRING, \desc);
 
         *hash<auto> schemaObj;
-        if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj))
-            schema := SchemaObject::newSchemaObject("response_" + key, schemaObj, openapi3);
+        if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj)) {
+            # Swagger 2.0 style: schema directly in response
+            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, openapi3);
+        }
+        if (oh.content) {
+            # OpenAPI 3.0 style: extract content types and schema from content.{mediaType}
+            foreach hash<auto> item in (oh.content.pairIterator()) {
+                contentTypes{item.key} = True;
+                if (item.value.schema && !schema) {
+                    schema = SchemaObject::newSchemaObject("response_" + key, item.value.schema, openapi3);
+                }
+            }
+        }
 
         *hash<auto> headersObj;
         if (optional_field(obj_type, oh, "headers", NT_HASH, \headersObj))
@@ -3618,12 +3827,9 @@ public class ResponseObject inherits ObjectBase {
 
         optional_field(obj_type, oh, "examples", NT_HASH, \examples);
         # TODO keys should be Operation 'produces' values
-
-        addToCache(self);
     }
 
     copy(ResponseObject old) {
-        addToCache(self);
     }
 
     #! returns a new ResponseObject corresponding to the schema definition passed
@@ -3640,16 +3846,6 @@ public class ResponseObject inherits ObjectBase {
         if (oh.hasKey("$ref"))
             return openapi3.resolveResponse(key, oh."$ref", oh);
         return new ResponseObject(key, oh, openapi3);
-    }
-
-    #! Adds a ResponseObject to the cache
-    static private addToCache(ResponseObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a ResponseObject from the cache
-    static private removeFromCache(ResponseObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
@@ -3825,6 +4021,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         #! A free-form property to include an example of an instance for this schema.
         auto example;
 
+        #! The data type of the schema (required)
+        *AbstractDataProviderType dataType;
+
+        #! The data type of the schema (not required)
+        *AbstractDataProviderType orNothingDataType;
+
         #! valid scalar types
         const ScalarTypes = (
             "string": True,
@@ -3841,7 +4043,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     }
 
     private {
-        static hash<string, SchemaObject> cache;
+        #! Reference to the OpenApi3 schema
+        OpenApi3Schema openapi3;
+
+        #! maps fields: name -> {Y,N} -> field
+        hash<string, hash<string, AbstractDataField>> fieldmap;
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -3861,8 +4067,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     private constructor(string name, hash<auto> oh, OpenApi3Schema openapi3, *string hash_str, *bool require_items)
             : ObjectBase(oh), SchemaBase("Schema", oh) {
         self.name = name;
+        self.openapi3 := openapi3;
         # add static map reference
-        openapi3.cacheSchemaObject(name, hash_str ?? sprintf("%y", oh).toSHA1(), self);
+        if (!hash_str.val()) {
+            hash_str = sprintf("%y", oh).toSHA256();
+        }
+        openapi3.cacheSchemaObject(name, hash_str, self);
         string obj_type = "Schema";
 
         if (optional_field(obj_type, oh, "type", NT_STRING, \type)) {
@@ -3870,7 +4080,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: invalid schema type value passed: %y; "
                     "expected one of: %y", name, type, keys ReferenceTypes);
             if (type == "array" && (require_items || exists oh.items)) {
-                items := newSchemaObject("items", oh.items ?? {"type": "object"}, openapi3);
+                items = newSchemaObject("items", oh.items ?? {"type": "object"}, openapi3);
             }
 
             if (oh.hasKey("default")) {
@@ -3917,7 +4127,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
                             "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} := SchemaObject::newSchemaObject(k, val, openapi3);
+                    properties{k} = SchemaObject::newSchemaObject(k, val, openapi3);
                     if (!properties{k}.nullable && val."x-nullable") {
                         nullable_properties{k} = True;
                     }
@@ -3931,7 +4141,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             \additionalProperties)) {
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
-                additionalProperties := SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
+                additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
                     openapi3);
         }
 
@@ -3963,7 +4173,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
                             "datatype: %y", name, val.type());
-                    allOf[allOf.size()] := SchemaObject::newSchemaObject(name + "AllOf", val, openapi3);
+                    allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, openapi3);
                 }
             }
         }
@@ -3978,12 +4188,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         if (oh.hasKey("example"))
             example = oh.example;
-
-        addToCache(self);
     }
 
     copy(SchemaObject old) {
-        addToCache(self);
     }
 
     #! returns example Qore code for the object
@@ -4059,12 +4266,189 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         return str;
     }
 
+    #! Returns the data type for the schema
+    AbstractDataProviderType getDataType(bool required = True, *HTTPClient rest) {
+        if (required) {
+            if (!dataType) {
+                if (orNothingDataType) {
+                    dataType = orNothingDataType.getMandatoryType();
+                } else {
+                    # "dataType" is assigned in the call below
+                    getDataTypeIntern("/", True, rest);
+                }
+            }
+            return dataType;
+        }
+        if (!orNothingDataType) {
+            if (dataType) {
+                orNothingDataType = dataType.getOrNothingType();
+            } else {
+                # "orNothingDataType" is assigned in the call below
+                getDataTypeIntern("/", False, rest);
+            }
+        }
+        return orNothingDataType;
+    }
+
+    #! Returns the data type for the given schema
+    private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
+        if (type == "string") {
+            AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string");
+            if (required) {
+                dataType = t;
+            } else {
+                orNothingDataType = t;
+            }
+            return t;
+        }
+
+        auto def_body;
+        if (rest) {
+            def_body = cast<object>(rest).preprocessRequestBody();
+            if (exists def_body && def_body.typeCode() != NT_HASH) {
+                remove def_body;
+            }
+        }
+
+        string typename = required
+            ? name
+            : "*" + name;
+        HashDataType t(required ? AutoHashType : AutoHashOrNothingType, typename);
+        if (required) {
+            dataType = t;
+        } else {
+            orNothingDataType = t;
+        }
+        getSchemaObjectFields(t, path, def_body);
+        if (additionalProperties === True) {
+            t.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
+        } else if (additionalProperties) {
+            string new_path = path == "/"
+                ? "/" + additionalProperties.type
+                : path + "/" + additionalProperties.type;
+            t.setDefaultOtherFieldType(openapi3.getType(new_path,
+                additionalProperties.type, additionalProperties.format,
+                additionalProperties.items,
+                !additionalProperties.nullable));
+        } else {
+            # make sure that extra fields are not supported
+            t.setDefaultOtherFieldType();
+        }
+
+        return t;
+    }
+
+    #! Returns a field definition from the OpenApi3 parameter
+    AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
+        string rstr = required ? "Y" : "N";
+        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            return rv;
+        }
+        return getFieldIntern(name, name, desc, required, rest, default_value, rstr);
+    }
+
+    #! Returns a field definition from the OpenApi3 parameter
+    AbstractDataField getField(string path, string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value) {
+        string rstr = required ? "Y" : "N";
+        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            return rv;
+        }
+        return getFieldIntern(path, name, desc, required, rest, default_value, rstr);
+    }
+
+    #! Returns a field object from the given cache
+    private static *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
+        if (h) {
+            if ((key == "N") && !h.N) {
+                return h.N = h.Y.getOrNothingType();
+            }
+            if ((key == "Y") && !h.Y) {
+                return h.Y = h.N.getMandatoryType();
+            }
+            return h{key};
+        }
+    }
+
+    #! Sets fields of a schema object
+    private getSchemaObjectFields(HashDataType t, string path, auto def_body) {
+        map t.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
+            required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
+    }
+
+    #! Returns a field definition from the OpenApi3 parameter
+    private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
+            *HTTPClient rest, auto default_value, *string rstr) {
+        if (!rstr) {
+            rstr = required ? "Y" : "N";
+        }
+        if (self.desc.val()) {
+            if (desc.val()) {
+                desc += ": " + self.desc;
+            } else {
+                desc = self.desc;
+            }
+        }
+        if (!exists desc) {
+            desc = "";
+        }
+        if (type == "object") {
+            # create the field with a placeholder type
+            QoreDataField field({
+                "name": name,
+                "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+                "type": AutoType,
+                "allowed_values": keys enum,
+                "default_value": default_value,
+            } + (required ? {
+                "attr": {
+                    "preselected": True,
+                    "required": True,
+                },
+            } : NOTHING));
+            fieldmap{name}{rstr} = field;
+            field.updateFieldType(getDataType(required, rest));
+            return field;
+        }
+
+        # create the field with a placeholder type
+        QoreDataField field({
+            "name": name,
+            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
+            "type": AutoType,
+            "allowed_values": keys enum,
+            "default_value": default_value,
+        });
+        fieldmap{name}{rstr} = field;
+        field.updateFieldType(openapi3.getType(path, type, format, items, required));
+        return field;
+    }
+
     # returns an example value for a REST API call
     auto getExampleValue() {
-        if (exists example)
+        if (exists example) {
             return example;
-        if (exists defaultVal)
+        }
+        if (exists defaultVal) {
             return defaultVal;
+        }
+
+        # Handle allOf by merging properties from all schemas
+        if (allOf) {
+            hash<auto> rv = {};
+            foreach SchemaObject schema in (allOf) {
+                *hash<auto> schemaExample = schema.getExampleValue();
+                if (schemaExample) {
+                    rv += schemaExample;
+                }
+            }
+            # Also add any local properties
+            if (properties) {
+                rv += map {$1.key: $1.value.getExampleValue()}, properties.pairIterator();
+            }
+            return rv;
+        }
 
         if (type == "object") {
             return map {$1.key: $1.value.getExampleValue()}, properties.pairIterator();
@@ -4074,7 +4458,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             return (items.getExampleValue(),);
         }
 
-        return SchemaBase::getExampleValue(type, format);
+        return SchemaBase::getExampleValueWithFormat(type, format, name);
     }
 
     #! validates the value against the schema definition
@@ -4106,22 +4490,22 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
     #! validates a schema object against a value
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, hash<auto> v, reference<hash<auto>> value) {
+            string name, hash<auto> v, reference<hash<auto>> value, *bool no_check_others) {
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
 
         # check "allOf" schemas, if any
-        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value), allOf;
+        map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value, True), allOf;
 
         /*
             If additionalProperties is set to true, any number of additionalProperties may be present of any data
             type.
-            If additionalProperties is a schema, additional properties (beyond what are defined in ‘properties’) are
+            If additionalProperties is a schema, additional properties (beyond what are defined in 'properties') are
             allowed and must match the schema
         */
         # check properties in this schema definition
-        if (additionalProperties !== True && type != "any") {
+        if (additionalProperties !== True && type != "any" && !no_check_others) {
             # issue #4825: write the hash keys to another hash in case values need to change type
             hash<auto> nv;
             foreach string key in (keys value) {
@@ -4131,7 +4515,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                         prop = additionalProperties;
                     }
                     if (!prop) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("property %y is not valid for object %y "
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Property %y is not valid for object %y "
                             "(value: %y); valid properties: %y",  key, name, value, keys properties);
                     }
                 }
@@ -4198,16 +4582,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     static SchemaObject newSchemaObject(string name, auto error, OpenApi3Schema openapi3) {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
-    }
-
-    #! Adds a SchemaObject to the cache
-    static private addToCache(SchemaObject obj) {
-        cache{obj.uniqueHash()} = obj;
-    }
-
-    #! Removes a SchemaObject from the cache
-    static private removeFromCache(SchemaObject obj) {
-        remove cache{obj.uniqueHash()};
     }
 }
 
