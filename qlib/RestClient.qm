@@ -3999,6 +3999,8 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 rc.debug("RestConnection ping: set OpenApi 3 schema for %y", rc.getValidator().getTargetUrl());
                 if (rc.requiresOAuth2Token()) {
                     doStartGetToken();
+                } else if (rc.requiresRefresh()) {
+                    doStartRefresh();
                 } else {
                     doStartPing();
                 }
