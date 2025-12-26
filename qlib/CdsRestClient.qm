@@ -162,7 +162,7 @@ public class CdsRestClient inherits RestClient::RestClient {
         const DefaultBcPingMethod = "GET";
 
         #! Default BC ping path
-        const DefaultBcPingPath = "api/v2.0";
+        const DefaultBcPingPath = "api/v2.0/companies?$top=1&$select=id";
 
         #! Default BC ping headers
         const DefaultBcPingHeaders = {
@@ -264,7 +264,7 @@ CdsRestClient rest({
             api = getString(opts, "api", True) ?? DefaultBcApiVersion;
             # Build URI path prefix: /api/v2.0/
             # Note: URL already contains /{api}/{instance_type}/ from connection options
-            uri_path_pfx = "/api/" + api + "/";
+            uri_path_pfx = "/" + api + "/" + instance_type + "/api/";
         } else {
             # CDS / Dynamics profile
             api = getString(opts, "api", True, DefaultApiVersion);
@@ -713,8 +713,13 @@ public class CdsRestConnection inherits RestClient::RestConnection {
             opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
 
             if (opts.ping_path) {
-                opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
-                    (opts.api ?? CdsRestClient::DefaultApiVersion));
+                if (opts.ping_path =~ /\{api_uri_path\}/) {
+                    opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
+                        (opts.api ?? CdsRestClient::DefaultApiVersion));
+                }
+                if (opts.ping_path =~ /\{instance_type\}/ && opts.instance_type) {
+                    opts.ping_path = replace(opts.ping_path, "{instance_type}", opts.instance_type);
+                }
             }
         } else if (opts.url) {
             remove opts.url;
@@ -771,8 +776,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : CdsRestConnection(config + {"opts": CdsRestConnection::getOptions(config.url, config.opts
-                + {"api_profile": "dynamics"})}, attr) {
+            : CdsRestConnection(config + {"opts": config.opts + {"api_profile": "dynamics"}}, attr) {
     }
 
     #! returns \c "dynamics"
@@ -876,8 +880,7 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : CdsRestConnection(config + {"opts": CdsRestConnection::getOptions(config.url, config.opts
-                + {"api_profile": "dynamics-business-central"})}, attr) {
+            : CdsRestConnection(config + BusinessCentralRestConnection::getConfig(config), attr) {
     }
 
     #! Returns \c "bcrests"
@@ -888,6 +891,19 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+
+    #! returns options for @ref BusinessCentralRestConnection::constructor()
+    private static hash<auto> getConfig(*hash<auto> config) {
+        string api = config.api ?? CdsRestClient::DefaultBcApiVersion;
+        string url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + config.opts.instance_type + "/";
+        url =~ s/^https:/bcrests:/;
+        return config + {
+            "url": url,
+            "opts": config.opts + {
+                "api_profile": "dynamics-business-central",
+            },
+        };
     }
 }
 }
