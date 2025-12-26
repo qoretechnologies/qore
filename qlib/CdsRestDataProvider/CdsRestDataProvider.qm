@@ -37,14 +37,15 @@
 %requires(reexport) CdsRestClient
 
 module CdsRestDataProvider {
-    version = "2.0.0";
+    version = "2.1.0";
     desc = "user module providing a data provider API for Microsoft Common Data Service instances through a REST API";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
-        # register the data provider factory
+        # register the data provider factories
         DataProvider::registerFactory(new CdsRestDataProviderFactory());
+        DataProvider::registerFactory(new BcRestDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CdsRestDataProvider::DynamicsAppName,
@@ -153,6 +154,145 @@ module CdsRestDataProvider {
             },
             "data_provider_info": CdsEntityDataProvider::ProviderInfo,
         });
+
+        # Register Business Central app and actions
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": CdsRestDataProvider::BusinessCentralAppName,
+            "display_name": "Microsoft Dynamics 365 Business Central",
+            "short_desc": "Microsoft Dynamics 365 Business Central ERP",
+            "desc": "Microsoft Dynamics 365 Business Central is a cloud-based business management solution for small "
+                "and medium-sized organizations. Microsoft, Microsoft 365, and Microsoft Dynamics 365 are "
+                "trademarks of the Microsoft group of companies",
+            "scheme": "bcrests",
+            "logo": BusinessCentralLogo,
+            "logo_file_name": "business-central-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::BusinessCentralAppName,
+            "path": "/companies/{company}/tables/{table}",
+            "action": "create-record",
+            "display_name": "Create Record",
+            "short_desc": "Create a record in a Business Central table",
+            "desc": "Create a record in a Business Central table using the Business Central REST API",
+            "action_code": DPAT_CREATE,
+            "path_vars": {
+                "company": <DataProviderPathVarInfo>{
+                    "display_name": "Company",
+                    "short_desc": "The Business Central company ID or name",
+                    "desc": "The Business Central company ID or name",
+                    "example_value": "CRONUS USA, Inc.",
+                },
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Business Central table",
+                    "desc": "The name of the Business Central table, ex: `customers`",
+                    "example_value": "customers",
+                },
+            },
+            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::BusinessCentralAppName,
+            "path": "/companies/{company}/tables/{table}",
+            "action": "find-single-record",
+            "display_name": "Find Single Record",
+            "short_desc": "Find a specific record in Business Central",
+            "desc": "Find a specific record in a Business Central table using the Business Central REST API",
+            "action_code": DPAT_FIND_SINGLE,
+            "path_vars": {
+                "company": <DataProviderPathVarInfo>{
+                    "display_name": "Company",
+                    "short_desc": "The Business Central company ID or name",
+                    "desc": "The Business Central company ID or name",
+                    "example_value": "CRONUS USA, Inc.",
+                },
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Business Central table",
+                    "desc": "The name of the Business Central table, ex: `customers`",
+                    "example_value": "customers",
+                },
+            },
+            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::BusinessCentralAppName,
+            "path": "/companies/{company}/tables/{table}",
+            "action": "find-records",
+            "display_name": "Find Records",
+            "short_desc": "Find records in Business Central",
+            "desc": "Find records in a Business Central table using the Business Central REST API",
+            "action_code": DPAT_FIND,
+            "path_vars": {
+                "company": <DataProviderPathVarInfo>{
+                    "display_name": "Company",
+                    "short_desc": "The Business Central company ID or name",
+                    "desc": "The Business Central company ID or name",
+                    "example_value": "CRONUS USA, Inc.",
+                },
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Business Central table",
+                    "desc": "The name of the Business Central table, ex: `customers`",
+                    "example_value": "customers",
+                },
+            },
+            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::BusinessCentralAppName,
+            "path": "/companies/{company}/tables/{table}",
+            "action": "update-records",
+            "display_name": "Update Records",
+            "short_desc": "Update records in Business Central",
+            "desc": "Update records in a Business Central table using the Business Central REST API",
+            "action_code": DPAT_UPDATE,
+            "path_vars": {
+                "company": <DataProviderPathVarInfo>{
+                    "display_name": "Company",
+                    "short_desc": "The Business Central company ID or name",
+                    "desc": "The Business Central company ID or name",
+                    "example_value": "CRONUS USA, Inc.",
+                },
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Business Central table",
+                    "desc": "The name of the Business Central table, ex: `customers`",
+                    "example_value": "customers",
+                },
+            },
+            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CdsRestDataProvider::BusinessCentralAppName,
+            "path": "/companies/{company}/tables/{table}",
+            "action": "delete-records",
+            "display_name": "Delete Records",
+            "short_desc": "Delete records in Business Central",
+            "desc": "Delete records in a Business Central table using the Business Central REST API",
+            "action_code": DPAT_DELETE,
+            "path_vars": {
+                "company": <DataProviderPathVarInfo>{
+                    "display_name": "Company",
+                    "short_desc": "The Business Central company ID or name",
+                    "desc": "The Business Central company ID or name",
+                    "example_value": "CRONUS USA, Inc.",
+                },
+                "table": <DataProviderPathVarInfo>{
+                    "display_name": "Table",
+                    "short_desc": "The name of the Business Central table",
+                    "desc": "The name of the Business Central table, ex: `customers`",
+                    "example_value": "customers",
+                },
+            },
+            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+        });
     };
 }
 
@@ -177,11 +317,26 @@ module CdsRestDataProvider {
         @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider" object
         where record operations supported on the object can be executed
 
-    The following classes are provided by this module:
+    The following classes are provided by this module for Dynamics 365:
     - @ref CdsRestDataProvider::CdsRestDataProvider "CdsRestDataProvider"
     - @ref CdsRestDataProvider::CdsRestDataProviderFactory "CdsRestDataProviderFactory"
     - @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider"
     - @ref CdsRestDataProvider::CdsRestRecordIterator "CdsRestRecordIterator"
+
+    The following classes are provided for Business Central:
+    - @ref CdsRestDataProvider::BcRestDataProvider "BcRestDataProvider"
+    - @ref CdsRestDataProvider::BcRestDataProviderFactory "BcRestDataProviderFactory"
+    - @ref CdsRestDataProvider::BcCompaniesDataProvider "BcCompaniesDataProvider"
+    - @ref CdsRestDataProvider::BcCompanyDataProvider "BcCompanyDataProvider"
+    - @ref CdsRestDataProvider::BcTablesDataProvider "BcTablesDataProvider"
+    - @ref CdsRestDataProvider::BcEntityDataProvider "BcEntityDataProvider"
+    - @ref CdsRestDataProvider::BcRecordIterator "BcRecordIterator"
+
+    @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
+    - added support for Microsoft Dynamics 365 Business Central
+      - new data provider classes for Business Central CRUD operations
+      - company-scoped entity access
+      - full CRUD support (create, read, update, upsert, delete)
 
     @subsection cdsrestdataprovider_v2_0 CdsRestDataProvider v2.0
     - added support for the data provider action catalog API
@@ -195,6 +350,9 @@ module CdsRestDataProvider {
 public namespace CdsRestDataProvider {
 #! Application name for Dynamics
 public const DynamicsAppName = "Dynamics";
+
+#! Application name for Business Central
+public const BusinessCentralAppName = "BusinessCentral";
 }
 
 namespace Priv {
@@ -221,5 +379,27 @@ const DynamicsLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"
         <linearGradient id=\"_Linear2\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\" gradientUnits=\"userSpaceOnUse\" gradientTransform=\"matrix(3.5562e-15,-58.0771,58.0771,3.5562e-15,64.1377,93.4922)\"><stop offset=\"0\" style=\"stop-color:rgb(34,102,227);stop-opacity:1\"/><stop offset=\"1\" style=\"stop-color:rgb(174,127,226);stop-opacity:1\"/></linearGradient>
         <linearGradient id=\"_Linear3\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\" gradientUnits=\"userSpaceOnUse\" gradientTransform=\"matrix(-19.9236,2.43994e-15,-2.43994e-15,-19.9236,82,56.7858)\"><stop offset=\"0\" style=\"stop-color:rgb(148,185,255);stop-opacity:0.5\"/><stop offset=\"0.29\" style=\"stop-color:rgb(148,185,255);stop-opacity:0.26\"/><stop offset=\"1\" style=\"stop-color:rgb(83,143,255);stop-opacity:0\"/></linearGradient>
     </defs>
+</svg>";
+
+# Business Central logo - simplified building/chart icon based on Microsoft BC branding
+const BusinessCentralLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+<svg width=\"200\" height=\"200\" viewBox=\"0 0 200 200\" xmlns=\"http://www.w3.org/2000/svg\">
+  <defs>
+    <linearGradient id=\"bcGrad1\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">
+      <stop offset=\"0%\" style=\"stop-color:#0078D4;stop-opacity:1\" />
+      <stop offset=\"100%\" style=\"stop-color:#005A9E;stop-opacity:1\" />
+    </linearGradient>
+    <linearGradient id=\"bcGrad2\" x1=\"0%\" y1=\"100%\" x2=\"0%\" y2=\"0%\">
+      <stop offset=\"0%\" style=\"stop-color:#50E6FF;stop-opacity:0.8\" />
+      <stop offset=\"100%\" style=\"stop-color:#0078D4;stop-opacity:0.4\" />
+    </linearGradient>
+  </defs>
+  <rect x=\"20\" y=\"20\" width=\"160\" height=\"160\" rx=\"20\" fill=\"url(#bcGrad1)\"/>
+  <g transform=\"translate(40, 50)\">
+    <rect x=\"0\" y=\"60\" width=\"25\" height=\"50\" fill=\"#fff\" opacity=\"0.9\"/>
+    <rect x=\"35\" y=\"40\" width=\"25\" height=\"70\" fill=\"#fff\" opacity=\"0.9\"/>
+    <rect x=\"70\" y=\"20\" width=\"25\" height=\"90\" fill=\"#fff\" opacity=\"0.9\"/>
+    <rect x=\"105\" y=\"0\" width=\"25\" height=\"110\" fill=\"url(#bcGrad2)\"/>
+  </g>
 </svg>";
 }
