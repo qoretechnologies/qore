@@ -262,16 +262,16 @@ CdsRestClient rest({
                 raiseError("missing the required \"instance_type\" option for Business Central");
             }
             api = getString(opts, "api", True) ?? DefaultBcApiVersion;
-            # Build URI path prefix: /api/v2.0/
-            # Note: URL already contains /{api}/{instance_type}/ from getOptions()
-            uri_path_pfx = "/api/" + api;
+            # For BC, the full path is already in the URL from getOptions():
+            # https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
+            # No connection path needed
+            uri_path_pfx = "";
         } else {
             # CDS / Dynamics profile
             api = getString(opts, "api", True, DefaultApiVersion);
             uri_path_pfx = RequestUriPathPrefix + api;
+            setConnectionPath(uri_path_pfx);
         }
-
-        setConnectionPath(uri_path_pfx);
 
         if (!do_not_connect) {
             if (!token) {
@@ -325,10 +325,11 @@ CdsRestClient rest({
             # set ping options
             map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
 
-            # For Business Central, build URL with instance_type
+            # For Business Central, build the full URL with instance_type and API path
             if (prof == "dynamics-business-central" && opts.instance_type) {
                 string api = opts.api ?? DefaultBcApiVersion;
-                opts.url = DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/";
+                # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
+                opts.url = DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/api/" + api + "/";
             }
 
             # process scopes; substitute "{url}" with the real URL
@@ -893,7 +894,8 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
     #! returns options for @ref BusinessCentralRestConnection::constructor()
     private static hash<auto> getConfig(*hash<auto> config) {
         string api = config.api ?? CdsRestClient::DefaultBcApiVersion;
-        string url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + config.opts.instance_type + "/";
+        # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
+        string url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + config.opts.instance_type + "/api/" + api + "/";
         url =~ s/^https:/bcrests:/;
         return config + {
             "url": url,
