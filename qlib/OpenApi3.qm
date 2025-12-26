@@ -1949,6 +1949,63 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         return schema.getField(name, desc, required, rest);
     }
 
+    #! Adds field definitions to a hash type from OpenAPI 3.0 parameters
+    addFieldsFromParameters(HashDataType rv, hash<string, ParameterBase> parameters,
+            reference<bool> required) {
+        addFieldsFromParametersIntern(rv, parameters, \required);
+    }
+
+    #! Returns a field of header fields
+    AbstractDataField getFieldForHeaders(string name, hash<auto> headers) {
+        HashDataType recordType();
+        map recordType.addField($1.value.schema.getField($1.key, $1.value.desc, False)), headers.pairIterator();
+        return new QoreDataField(name, "HTTP headers", recordType);
+    }
+
+    #! Adds field definitions from OpenAPI 3.0 parameters
+    private addFieldsFromParametersIntern(HashDataType rv, hash<string, ParameterBase> parameters,
+            reference<bool> required) {
+        # temporary hash for fields: loc -> name -> field
+        hash<string, hash<string, AbstractDataField>> params;
+        # required flag map for type: loc -> bool
+        hash<string, bool> req_map;
+        foreach hash<auto> i in (parameters.pairIterator()) {
+            switch (i.value.in_loc) {
+                # body and formData parameters are handled directly under the operation
+                case "query": {
+                    params{i.value.in_loc}{i.value.name} =
+                        i.value.schema.getField(i.value.name, i.value.desc, i.value.required);
+                    # if at least one query argument is required, then we set "required" to True for the hash
+                    if (i.value.required && !req_map{i.value.in_loc}) {
+                        req_map{i.value.in_loc} = True;
+                    }
+                    break;
+                }
+
+                case "header": {
+                    params{i.value.in_loc}{i.value.name} =
+                        i.value.schema.getField(i.value.name, i.value.desc, i.value.required);
+                    # if at least one query argument is required, then we set "required" to True for the hash
+                    if (i.value.required) {
+                        if (!req_map{i.value.in_loc}) {
+                            req_map{i.value.in_loc} = True;
+                        }
+                        if (!required) {
+                            required = True;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        foreach hash<auto> i in (params.pairIterator()) {
+            HashDataType type(req_map{i.key} ? AutoHashType : AutoHashOrNothingType);
+            map type.addField($1), i.value.iterator();
+            rv.addField(new QoreDataField(i.key, "OpenAPI 3.0 " + i.key + " parameter", type));
+        }
+    }
+
     #! processes a client-side REST request and returns a hash that can be used to make the outgoing client-side HTTP request
     /** @param method the HTTP method (case-insensitive)
         @param path the URI path with any query arguments

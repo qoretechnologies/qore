@@ -102,6 +102,7 @@ public class DataProvider {
             "openai": "OpenAiDataProvider",
             "pop3": "Pop3ClientDataProvider",
             "restclient": "RestClientDataProvider",
+            "restschema": "RestSchemaDataProvider",
             "salesforcerest": "SalesforceRestDataProvider",
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
