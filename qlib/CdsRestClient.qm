@@ -811,6 +811,7 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
             "base_scheme_map": {
                 "https": "bcrests",
             },
+            "auto_url": True,
             "options": CdsRestConnection::ConnectionScheme.options + {
                 "api": CdsRestConnection::ConnectionScheme.options.api + <ConnectionOptionInfo>{
                     "default_value": CdsRestClient::DefaultBcApiVersion,
