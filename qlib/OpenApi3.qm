@@ -1031,6 +1031,12 @@ public hashdecl ComponentInfo {
         A hash of @ref SecuritySchemeObject objects. Keys are scheme names.
     */
     hash<string, SecuritySchemeObject> securitySchemes;
+
+    #! Request body definitions that can be used across operations.
+    /**
+        A hash of RequestBody hashes. Keys are request body names.
+    */
+    hash<string, hash<auto>> requestBodies;
 }
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
@@ -1296,6 +1302,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                     throw "INVALID-FIELD-TYPE", "OpenApi3 Object: invalid response datatype: " + item.value.type();
                 components.responses{item.key} = ResponseObject::newResponse(item.key, item.value, self);
             }
+
+            delete obj;
+            optional_field(obj_type, oh.components, "requestBodies", NT_HASH, \obj);
+            foreach hash<auto> item in (obj.pairIterator()) {
+                if (item.value.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", "OpenApi3 Object: invalid requestBody datatype: " + item.value.type();
+                components.requestBodies{item.key} = item.value;
+            }
         }
 
         {
@@ -1451,6 +1465,24 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             throw "INVALID-RESPONSE", sprintf("Invalid attribute(s) in reference: %y", (map $1, keys oh,
                 $1 !~ /^x-/));
         return res;
+    }
+
+    #! resolves a reference to a requestBody
+    /** @throw INVALID-REQUEST-BODY invalid requestBody reference
+    */
+    hash<auto> resolveRequestBody(string refstr) {
+        # resolve external reference
+        if (refstr !~ /^#\//)
+            return getExternalReference(refstr);
+        if (refstr !~ /^#\/components\/requestBodies\//)
+            throw "INVALID-REQUEST-BODY", sprintf("cannot resolve requestBody reference %y; expecting "
+                "\"#/components/requestBodies/...\"", refstr);
+        string rstr = (refstr =~ x/^#\/components\/requestBodies\/(.*)$/)[0];
+        *hash<auto> requestBody = components.requestBodies{rstr};
+        if (!requestBody)
+            throw "INVALID-REQUEST-BODY", sprintf("cannot resolve requestBody reference %y; known requestBody "
+                "references: %y", refstr, keys components.requestBodies);
+        return requestBody;
     }
 
     #! returns a unique hash for the schema that can be used to compare schemas
@@ -2901,6 +2933,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
         {
             *hash<auto> requestBodyObj;
             if (optional_field(obj_type, oh, "requestBody", NT_HASH, \requestBodyObj)) {
+                # Resolve $ref if present
+                if (requestBodyObj."$ref") {
+                    requestBodyObj = openapi3.resolveRequestBody(requestBodyObj."$ref");
+                }
                 # Extract schema from requestBody.content.{mediaType}.schema
                 *hash<auto> contentObj = requestBodyObj.content;
                 if (contentObj) {
@@ -3458,6 +3494,12 @@ public class ParameterBase inherits ObjectBase {
         */
         bool required = False;
 
+        #! Specifies that a parameter is deprecated and SHOULD be transitioned out of usage
+        /**
+            Default value is false.
+        */
+        bool deprec = False;
+
         #! Content media type, if present
         *string content;
 
@@ -3530,6 +3572,8 @@ public class ParameterBase inherits ObjectBase {
         } else {
             optional_field(obj_type, oh, "required", NT_BOOLEAN, \required);
         }
+
+        optional_field(obj_type, oh, "deprecated", NT_BOOLEAN, \deprec);
 
         hash<auto> schemaObj;
         if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj)) {
@@ -3627,6 +3671,7 @@ public class ParameterObject inherits ParameterBase {
             "path": True,
             "header": True,
             "formData": True,
+            "cookie": True,
         };
     }
 
@@ -3958,6 +4003,189 @@ public class TagObject inherits ObjectBase {
     }
 }
 
+#! A hash data type that performs OpenAPI 3.0 schema validation including composition (allOf, oneOf, anyOf, not)
+/** This type extends HashDataType to add validation for OpenAPI 3.0 schema composition features.
+    It validates data against oneOf, anyOf, not, allOf schemas as well as readOnly/writeOnly constraints.
+*/
+public class OpenApi3HashDataType inherits HashDataType {
+    private {
+        #! Reference to the schema object for validation
+        SchemaObject schema;
+
+        #! Is this type for a request (True) or response (False)?
+        bool for_request;
+    }
+
+    #! Creates the type with a reference to the schema object
+    /**
+        @param base_type the base Qore type
+        @param name the type name
+        @param schema the SchemaObject for validation
+        @param for_request True if this type is for request validation, False for response validation
+    */
+    constructor(Type base_type, string name, SchemaObject schema, bool for_request = True)
+            : HashDataType(base_type, name) {
+        self.schema = schema;
+        self.for_request = for_request;
+    }
+
+    #! Returns the schema object
+    SchemaObject getSchema() {
+        return schema;
+    }
+
+    #! Returns True if this type is for request validation
+    bool isForRequest() {
+        return for_request;
+    }
+
+    #! Validates the value against the schema including composition rules
+    /**
+        @param input_value the value to validate
+        @return the validated/converted value
+
+        @throw RUNTIME-TYPE-ERROR if the value does not match the schema
+    */
+    auto acceptsValue(auto input_value) {
+        # First perform basic HashDataType validation
+        auto value = HashDataType::acceptsValue(input_value);
+
+        # Then perform schema composition validation
+        if (value.typeCode() == NT_HASH) {
+            validateSchemaComposition(value);
+        }
+
+        return value;
+    }
+
+    #! Validates schema composition rules (oneOf, anyOf, not, readOnly, writeOnly)
+    private validateSchemaComposition(hash<auto> value) {
+        # Check oneOf - value must match exactly one schema
+        if (schema.oneOf) {
+            int matches = 0;
+            list<string> matched_schemas;
+            foreach SchemaObject s in (schema.oneOf) {
+                if (matchesSchema(s, value)) {
+                    ++matches;
+                    matched_schemas += s.name;
+                }
+            }
+            if (matches == 0) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value does not match any of the oneOf schemas",
+                    getName());
+            }
+            if (matches > 1) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value matches multiple oneOf schemas (%y); "
+                    "must match exactly one", getName(), matched_schemas);
+            }
+        }
+
+        # Check anyOf - value must match at least one schema
+        if (schema.anyOf) {
+            bool matched = False;
+            foreach SchemaObject s in (schema.anyOf) {
+                if (matchesSchema(s, value)) {
+                    matched = True;
+                    break;
+                }
+            }
+            if (!matched) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value does not match any of the anyOf schemas",
+                    getName());
+            }
+        }
+
+        # Check not - value must NOT match the schema
+        if (schema.notSchema) {
+            if (matchesSchema(schema.notSchema, value)) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: value must not match the 'not' schema", getName());
+            }
+        }
+
+        # Check readOnly fields in requests
+        if (for_request) {
+            foreach string key in (keys value) {
+                *SchemaObject prop = schema.properties{key};
+                if (prop && prop.readOnly) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
+                        "included in a request", getName(), key);
+                }
+            }
+        }
+
+        # Check writeOnly fields in responses
+        if (!for_request) {
+            foreach string key in (keys value) {
+                *SchemaObject prop = schema.properties{key};
+                if (prop && prop.writeOnly) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
+                        "included in a response", getName(), key);
+                }
+            }
+        }
+    }
+
+    #! Checks if a value matches a schema (for oneOf/anyOf/not validation)
+    private bool matchesSchema(SchemaObject s, hash<auto> value) {
+        # Check required properties
+        if (s.required) {
+            foreach string key in (keys s.required) {
+                if (!value.hasKey(key)) {
+                    return False;
+                }
+            }
+        }
+
+        # Check that all properties in the value are valid for this schema
+        # By default in OpenAPI 3.0, additionalProperties is True
+        # Only reject unknown properties if additionalProperties is explicitly False
+        if (s.properties && s.additionalProperties === False) {
+            foreach string key in (keys value) {
+                if (!s.properties{key}) {
+                    return False;
+                }
+            }
+        }
+
+        # Check property types for known properties
+        foreach hash<auto> i in (value.pairIterator()) {
+            *SchemaObject prop = s.properties{i.key};
+            if (prop) {
+                if (!matchesPropertyType(prop, i.value)) {
+                    return False;
+                }
+            }
+        }
+
+        return True;
+    }
+
+    #! Checks if a value matches a property's expected type
+    private bool matchesPropertyType(SchemaObject prop, auto value) {
+        if (!exists value) {
+            return prop.nullable;
+        }
+
+        switch (prop.type) {
+            case "string":
+                return value.typeCode() == NT_STRING;
+            case "integer":
+                return value.typeCode() == NT_INT;
+            case "number":
+                return value.typeCode() == NT_INT || value.typeCode() == NT_FLOAT;
+            case "boolean":
+                return value.typeCode() == NT_BOOLEAN;
+            case "array":
+                return value.typeCode() == NT_LIST;
+            case "object":
+                return value.typeCode() == NT_HASH;
+            case "any":
+                return True;
+        }
+        return True;
+    }
+}
+
 #! defines an object in a schema
 public class SchemaObject inherits ObjectBase, SchemaBase {
     public {
@@ -4051,6 +4279,25 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
          */
         bool readOnly = False;
 
+        #! Relevant only for Schema \c "properties" definitions. Declares the property as "write only".
+        /**
+            Declares the property as "write only". This means that it MAY be sent
+            as part of a request but MUST NOT be sent as part of the response.
+            Properties marked as \c writeOnly being \c true SHOULD NOT be in the
+            @ref SchemaObject::required "required" list of the defined schema.
+            Default value is \c false.
+         */
+        bool writeOnly = False;
+
+        #! Specifies that a schema is deprecated.
+        /**
+            Specifies that a schema is deprecated and SHOULD be transitioned out of usage.
+            Default value is \c false.
+
+            Note: stored as \c deprec because \c deprecated is a Qore keyword.
+         */
+        bool deprec = False;
+
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.3.
         /**
             List of @ref SchemaObject "SchemaObjects"; MUST have at least one element.
@@ -4061,6 +4308,30 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             independently but together compose a single object.
          */
         list<SchemaObject> allOf();
+
+        #! See https://json-schema.org/understanding-json-schema/reference/combining.html#oneof
+        /**
+            List of @ref SchemaObject "SchemaObjects"; MUST have at least one element.
+
+            The given data must be valid against exactly one of the given subschemas.
+         */
+        list<SchemaObject> oneOf();
+
+        #! See https://json-schema.org/understanding-json-schema/reference/combining.html#anyof
+        /**
+            List of @ref SchemaObject "SchemaObjects"; MUST have at least one element.
+
+            The given data must be valid against any (one or more) of the given subschemas.
+         */
+        list<SchemaObject> anyOf();
+
+        #! See https://json-schema.org/understanding-json-schema/reference/combining.html#not
+        /**
+            A single @ref SchemaObject.
+
+            The given data must not be valid against the given schema.
+         */
+        *SchemaObject notSchema;
 
         #! This MAY be used only on properties schemas. It has no effect on root schemas.
         /**
@@ -4220,6 +4491,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         }
 
         optional_field(obj_type, oh, "readOnly", NT_BOOLEAN, \readOnly);
+        optional_field(obj_type, oh, "writeOnly", NT_BOOLEAN, \writeOnly);
+        optional_field(obj_type, oh, "deprecated", NT_BOOLEAN, \deprec);
 
         {
             *list allOfList;
@@ -4232,6 +4505,41 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                             "datatype: %y", name, val.type());
                     allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, openapi3);
                 }
+            }
+        }
+
+        {
+            *list oneOfList;
+            if (optional_field(obj_type, oh, "oneOf", NT_LIST, \oneOfList)) {
+                if (oneOfList.size() < 1)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'oneOf' is an empty list", name);
+                foreach auto val in (oneOfList) {
+                    if (val.typeCode() != NT_HASH)
+                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
+                            "datatype: %y", name, val.type());
+                    oneOf[oneOf.size()] = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3);
+                }
+            }
+        }
+
+        {
+            *list anyOfList;
+            if (optional_field(obj_type, oh, "anyOf", NT_LIST, \anyOfList)) {
+                if (anyOfList.size() < 1)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'anyOf' is an empty list", name);
+                foreach auto val in (anyOfList) {
+                    if (val.typeCode() != NT_HASH)
+                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
+                            "datatype: %y", name, val.type());
+                    anyOf[anyOf.size()] = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3);
+                }
+            }
+        }
+
+        {
+            *hash notObj;
+            if (optional_field(obj_type, oh, "not", NT_HASH, \notObj)) {
+                notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3);
             }
         }
 
@@ -4347,10 +4655,37 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         return orNothingDataType;
     }
 
+    #! Returns True if this schema has composition features that require special type handling
+    /** Checks for oneOf, anyOf, not, or properties with readOnly/writeOnly attributes
+    */
+    bool hasSchemaCompositionFeatures() {
+        if (oneOf || anyOf || notSchema) {
+            return True;
+        }
+        # Check for readOnly/writeOnly properties
+        foreach SchemaObject prop in (properties.iterator()) {
+            if (prop.readOnly || prop.writeOnly) {
+                return True;
+            }
+        }
+        return False;
+    }
+
     #! Returns the data type for the given schema
     private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
         if (type == "string") {
             AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string");
+            if (required) {
+                dataType = t;
+            } else {
+                orNothingDataType = t;
+            }
+            return t;
+        }
+
+        # For "any" type schemas without properties and without composition features, return an auto type
+        if (type == "any" && !properties && !hasSchemaCompositionFeatures()) {
+            AbstractDataProviderType t = AbstractDataProviderType::get(required ? "auto" : "*auto");
             if (required) {
                 dataType = t;
             } else {
@@ -4370,7 +4705,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         string typename = required
             ? name
             : "*" + name;
-        HashDataType t(required ? AutoHashType : AutoHashOrNothingType, typename);
+
+        # Use OpenApi3HashDataType if schema composition features are present
+        HashDataType t;
+        if (hasSchemaCompositionFeatures()) {
+            t = new OpenApi3HashDataType(required ? AutoHashType : AutoHashOrNothingType, typename, self, True);
+        } else {
+            t = new HashDataType(required ? AutoHashType : AutoHashOrNothingType, typename);
+        }
+
         if (required) {
             dataType = t;
         } else {
@@ -4387,6 +4730,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
                 additionalProperties.type, additionalProperties.format,
                 additionalProperties.items,
                 !additionalProperties.nullable));
+        } else if (oneOf || anyOf || notSchema) {
+            # For schema composition, allow additional properties since
+            # the composition validation will handle checking
+            t.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
         } else {
             # make sure that extra fields are not supported
             t.setDefaultOtherFieldType();
@@ -4450,7 +4797,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (!exists desc) {
             desc = "";
         }
-        if (type == "object") {
+        if (type == "object" || hasSchemaCompositionFeatures()) {
             # create the field with a placeholder type
             QoreDataField field({
                 "name": name,
@@ -4523,6 +4870,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         if (request && readOnly)
             throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: property %y is read-only and therefore cannot be "
                 "included in a request", method.upr(), path, name);
+        if (!request && writeOnly)
+            throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: property %y is write-only and therefore cannot be "
+                "included in a response", method.upr(), path, name);
         if (!exists value && nullable) {
             return;
         }
@@ -4554,6 +4904,69 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
 
         # check "allOf" schemas, if any
         map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value, True), allOf;
+
+        # check "oneOf" schemas, if any - value must match exactly one schema
+        if (oneOf) {
+            int matches = 0;
+            list<string> matched_schemas;
+            foreach SchemaObject schema in (oneOf) {
+                try {
+                    hash<auto> test_value = value;
+                    schema.checkIntern(serialize, request, schema.type ?? type, NOTHING, path, method, name, v,
+                        \test_value, True);
+                    ++matches;
+                    matched_schemas += schema.name;
+                } catch (hash<ExceptionInfo> ex) {
+                    # schema didn't match, continue
+                }
+            }
+            if (matches == 0) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: value for %y does not match any of the oneOf "
+                    "schemas", method.upr(), path, name);
+            }
+            if (matches > 1) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: value for %y matches multiple oneOf schemas "
+                    "(%y); must match exactly one", method.upr(), path, name, matched_schemas);
+            }
+        }
+
+        # check "anyOf" schemas, if any - value must match at least one schema
+        if (anyOf) {
+            bool matched = False;
+            foreach SchemaObject schema in (anyOf) {
+                try {
+                    hash<auto> test_value = value;
+                    schema.checkIntern(serialize, request, schema.type ?? type, NOTHING, path, method, name, v,
+                        \test_value, True);
+                    matched = True;
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    # schema didn't match, continue
+                }
+            }
+            if (!matched) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: value for %y does not match any of the anyOf "
+                    "schemas", method.upr(), path, name);
+            }
+        }
+
+        # check "not" schema, if any - value must NOT match the schema
+        if (notSchema) {
+            try {
+                hash<auto> test_value = value;
+                notSchema.checkIntern(serialize, request, notSchema.type ?? type, NOTHING, path, method, name, v,
+                    \test_value, True);
+                # if we get here, the value matched the "not" schema, which is an error
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: value for %y must not match the 'not' schema",
+                    method.upr(), path, name);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SCHEMA-VALIDATION-ERROR" && ex.desc !~ /must not match/) {
+                    # good - the value didn't match the "not" schema
+                } else {
+                    rethrow;
+                }
+            }
+        }
 
         /*
             If additionalProperties is set to true, any number of additionalProperties may be present of any data
@@ -4699,94 +5112,190 @@ public class XmlObject inherits ObjectBase {
     or as a query parameter) and OAuth2's common flows (implicit, password,
     application and access code).
  */
-public class SecuritySchemeObject inherits ObjectBase {
+#! Describes a single OAuth flow configuration
+public class OAuthFlowObject inherits ObjectBase {
     public {
-        #! Required. The type of the security scheme. Valid values are \c "basic", \c "apiKey" or \c "oauth2".
-        string type;
-
-        #! A short description for security scheme.
-        *string desc;
-
-        #! The name of the header or query parameter to be used.
-        /**
-            Required when type is \c "apiKey".
-         */
-        *string name;
-
-        #! The location of the API key. Valid values are \c "query" or \c "header".
-        /**
-            Required when type is \c "apiKey".
-         */
-        *string in_loc;
-
-        #! The flow used by the OAuth2 security scheme.
-        /**
-            Required when type is \c "oauth2".
-
-            Valid values are \c "implicit", \c "password", \c "application" or \c "accessCode".
-         */
-        *string flow;
-
-        #! The authorization URL to be used for this flow. This SHOULD be in the form of a URL.
-        /**
-            Required when type is \c "oauth2" and flow is \c "implicit" or \c "accessCode".
-         */
+        #! The authorization URL to be used for this flow
+        /** Required for implicit and authorizationCode flows */
         *string authorizationUrl;
 
-        #! The token URL to be used for this flow. This SHOULD be in the form of a URL.
-        /**
-            Required when type is \c "oauth2" and flow is one of \c "password", \c "application" or \c "accessCode".
-         */
+        #! The token URL to be used for this flow
+        /** Required for password, clientCredentials, and authorizationCode flows */
         *string tokenUrl;
 
-        #! The available scopes for the OAuth2 security scheme.
-        /**
-            Required when type is \c "oauth2".
+        #! The URL to be used for obtaining refresh tokens
+        *string refreshUrl;
 
-            A hash in the form of <tt>Scopes Object</tt> mapping scope names to short descriptions of them.
-            See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#scopesObject
-            Keys are scope names. Values are short string descriptions.
-         */
-        *ScopesObject scopes;
+        #! The available scopes for the OAuth2 security scheme
+        /** Required. Maps scope names to short descriptions */
+        ScopesObject scopes;
     }
 
-    #! Constructor.
+    #! Constructor
     /**
-        @param oh deserialized hash from the source schema description describing a security schema that can be used by REST API operations
+        @param oh deserialized hash from the source schema
+        @param flow_type the type of OAuth flow (implicit, password, clientCredentials, authorizationCode)
 
         @throws INVALID-FIELD-TYPE field has invalid type
-        @throws INVALID-FLOW invalid OAuth2 flow value
-        @throws INVALID-APIKEY-LOCATION invalid 'in' (location) value
-        @throws INVALID-SCHEME-TYPE invalid security scheme type; see @ref SecuritySchemeObject::type "type"
         @throws REQUIRED-FIELD-MISSING required field is missing
-     */
+    */
+    public constructor(hash<auto> oh, string flow_type) : ObjectBase(oh) {
+        string obj_type = sprintf("OAuth Flow (%s)", flow_type);
+
+        # authorizationUrl required for implicit and authorizationCode
+        if (flow_type == "implicit" || flow_type == "authorizationCode") {
+            required_field(obj_type, oh, "authorizationUrl", NT_STRING, \authorizationUrl);
+        } else {
+            optional_field(obj_type, oh, "authorizationUrl", NT_STRING, \authorizationUrl);
+        }
+
+        # tokenUrl required for password, clientCredentials, and authorizationCode
+        if (flow_type == "password" || flow_type == "clientCredentials" || flow_type == "authorizationCode") {
+            required_field(obj_type, oh, "tokenUrl", NT_STRING, \tokenUrl);
+        } else {
+            optional_field(obj_type, oh, "tokenUrl", NT_STRING, \tokenUrl);
+        }
+
+        optional_field(obj_type, oh, "refreshUrl", NT_STRING, \refreshUrl);
+
+        hash<auto> scopesObj;
+        required_field(obj_type, oh, "scopes", NT_HASH, \scopesObj);
+        scopes = new ScopesObject(scopesObj);
+    }
+}
+
+#! Describes the OAuth flows configuration for the oauth2 security scheme
+public class OAuthFlowsObject inherits ObjectBase {
+    public {
+        #! Configuration for the OAuth Implicit flow
+        *OAuthFlowObject implicit;
+
+        #! Configuration for the OAuth Resource Owner Password flow
+        *OAuthFlowObject password;
+
+        #! Configuration for the OAuth Client Credentials flow
+        *OAuthFlowObject clientCredentials;
+
+        #! Configuration for the OAuth Authorization Code flow
+        *OAuthFlowObject authorizationCode;
+    }
+
+    #! Constructor
+    /**
+        @param oh deserialized hash from the source schema
+
+        @throws INVALID-FIELD-TYPE field has invalid type
+        @throws REQUIRED-FIELD-MISSING required field is missing
+    */
+    public constructor(hash<auto> oh) : ObjectBase(oh) {
+        string obj_type = "OAuth Flows";
+
+        *hash<auto> implicitObj;
+        if (optional_field(obj_type, oh, "implicit", NT_HASH, \implicitObj)) {
+            implicit = new OAuthFlowObject(implicitObj, "implicit");
+        }
+
+        *hash<auto> passwordObj;
+        if (optional_field(obj_type, oh, "password", NT_HASH, \passwordObj)) {
+            password = new OAuthFlowObject(passwordObj, "password");
+        }
+
+        *hash<auto> clientCredentialsObj;
+        if (optional_field(obj_type, oh, "clientCredentials", NT_HASH, \clientCredentialsObj)) {
+            clientCredentials = new OAuthFlowObject(clientCredentialsObj, "clientCredentials");
+        }
+
+        *hash<auto> authorizationCodeObj;
+        if (optional_field(obj_type, oh, "authorizationCode", NT_HASH, \authorizationCodeObj)) {
+            authorizationCode = new OAuthFlowObject(authorizationCodeObj, "authorizationCode");
+        }
+    }
+}
+
+#! Describes a security scheme that can be used by API operations
+public class SecuritySchemeObject inherits ObjectBase {
+    public {
+        #! Required. The type of the security scheme
+        /** Valid values are \c "apiKey", \c "http", \c "oauth2", or \c "openIdConnect" */
+        string type;
+
+        #! A short description for security scheme
+        *string desc;
+
+        #! The name of the header, query, or cookie parameter to be used
+        /** Required when type is \c "apiKey" */
+        *string name;
+
+        #! The location of the API key
+        /** Valid values are \c "query", \c "header", or \c "cookie".
+            Required when type is \c "apiKey" */
+        *string in_loc;
+
+        #! The name of the HTTP Authorization scheme
+        /** Required when type is \c "http".
+            Values should be registered in the IANA Authentication Scheme registry */
+        *string scheme;
+
+        #! A hint to the client to identify how the bearer token is formatted
+        /** Used when type is \c "http" and scheme is \c "bearer" */
+        *string bearerFormat;
+
+        #! The OAuth Flows configuration
+        /** Required when type is \c "oauth2" */
+        *OAuthFlowsObject flows;
+
+        #! OpenID Connect URL to discover OAuth2 configuration values
+        /** Required when type is \c "openIdConnect" */
+        *string openIdConnectUrl;
+    }
+
+    #! Constructor
+    /**
+        @param oh deserialized hash from the source schema description describing a security scheme
+
+        @throws INVALID-FIELD-TYPE field has invalid type
+        @throws INVALID-APIKEY-LOCATION invalid 'in' (location) value
+        @throws INVALID-SCHEME-TYPE invalid security scheme type
+        @throws REQUIRED-FIELD-MISSING required field is missing
+    */
     public constructor(hash<auto> oh) : ObjectBase(oh) {
         string obj_type = "Security Scheme";
         required_field(obj_type, oh, "type", NT_STRING, \type);
-        if (type == "apiKey") {
-            required_field(obj_type, oh, "name", NT_STRING, \name);
-            required_field(obj_type, oh, "in", NT_STRING, \in_loc);
-            if (in_loc != "query" && in_loc != "header")
-                throw "INVALID-APIKEY-LOCATION", "Security Scheme Object: invalid 'in' (location) value passed: " + in_loc;
-        } else if (type == "oauth2") {
-            required_field(obj_type, oh, "flow", NT_STRING, \flow);
-            if (flow == "accessCode") {
-                required_field(obj_type, oh, "authorizationUrl", NT_STRING, \authorizationUrl);
-                required_field(obj_type, oh, "tokenUrl", NT_STRING, \tokenUrl);
-            } else if (flow == "application" || flow == "password") {
-                required_field(obj_type, oh, "tokenUrl", NT_STRING, \tokenUrl);
-            } else if (flow == "implicit") {
-                required_field(obj_type, oh, "authorizationUrl", NT_STRING, \authorizationUrl);
-            } else {
-                throw "INVALID-FLOW", "Security Scheme Object: invalid OAuth2 flow value passed: " + flow;
+
+        switch (type) {
+            case "apiKey": {
+                required_field(obj_type, oh, "name", NT_STRING, \name);
+                required_field(obj_type, oh, "in", NT_STRING, \in_loc);
+                if (in_loc != "query" && in_loc != "header" && in_loc != "cookie") {
+                    throw "INVALID-APIKEY-LOCATION", sprintf("Security Scheme Object: invalid 'in' (location) "
+                        "value passed: %y; valid values are 'query', 'header', 'cookie'", in_loc);
+                }
+                break;
             }
 
-            hash scopesObj;
-            required_field(obj_type, oh, "scopes", NT_HASH, \scopesObj);
-            scopes = new ScopesObject(scopesObj);
-        } else if (type != "basic") {
-            throw "INVALID-SCHEME-TYPE", "Security Scheme Object: invalid security scheme type passed: " + type;
+            case "http": {
+                required_field(obj_type, oh, "scheme", NT_STRING, \scheme);
+                optional_field(obj_type, oh, "bearerFormat", NT_STRING, \bearerFormat);
+                break;
+            }
+
+            case "oauth2": {
+                hash<auto> flowsObj;
+                required_field(obj_type, oh, "flows", NT_HASH, \flowsObj);
+                flows = new OAuthFlowsObject(flowsObj);
+                break;
+            }
+
+            case "openIdConnect": {
+                required_field(obj_type, oh, "openIdConnectUrl", NT_STRING, \openIdConnectUrl);
+                break;
+            }
+
+            default:
+                throw "INVALID-SCHEME-TYPE", sprintf("Security Scheme Object: invalid security scheme type "
+                    "passed: %y; valid values are 'apiKey', 'http', 'oauth2', 'openIdConnect'", type);
         }
+
         optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
     }
 }

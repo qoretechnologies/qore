@@ -381,6 +381,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test HeaderObject", \testHeaderObject());
         addTestCase("Test TagObject", \testTagObject());
         addTestCase("Test SchemaObject", \testSchemaObject());
+        addTestCase("Test SchemaObject Composition Validation", \testSchemaCompositionValidation());
         addTestCase("Test XmlObject", \testXmlObject());
         addTestCase("Test SecuritySchemeObject", \testSecuritySchemeObject());
         addTestCase("Test ScopesObject", \testScopesObject());
@@ -1858,6 +1859,54 @@ public class OpenApi3Test inherits QUnit::Test {
         s = {"type": "string", "allOf": 5};
         assertThrows("INVALID-FIELD-TYPE", "allOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
 
+        # oneOf Checks
+        s = {"oneOf": ({"type": "string"}, {"type": "integer"})};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"oneOf": ({"$ref": "#/components/schemas/x"}, {"type": "integer"})};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
+        s = {"oneOf": list()};
+        assertThrows("INVALID-FIELD-FORMAT", "oneOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+        s = {"oneOf": (5, 3)};
+        assertThrows("INVALID-FIELD-TYPE", "oneOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+        s = {"oneOf": 5};
+        assertThrows("INVALID-FIELD-TYPE", "oneOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+
+        # anyOf Checks
+        s = {"anyOf": ({"type": "string"}, {"type": "integer"})};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"anyOf": ({"$ref": "#/components/schemas/x"}, {"type": "integer"})};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
+        s = {"anyOf": list()};
+        assertThrows("INVALID-FIELD-FORMAT", "anyOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+        s = {"anyOf": (5, 3)};
+        assertThrows("INVALID-FIELD-TYPE", "anyOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+        s = {"anyOf": 5};
+        assertThrows("INVALID-FIELD-TYPE", "anyOf", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+
+        # not Checks
+        s = {"not": {"type": "string"}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"not": {"$ref": "#/components/schemas/x"}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"x": ("type": "string"), "a": s}}})));
+        s = {"not": 5};
+        assertThrows("INVALID-FIELD-TYPE", "not", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+
+        # writeOnly checks
+        s = {"type": "string", "writeOnly": False};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"type": "string", "writeOnly": True};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"type": "string", "writeOnly": 5};
+        assertThrows("INVALID-FIELD-TYPE", "writeOnly", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+
+        # deprecated checks (stored as deprec since deprecated is a Qore keyword)
+        s = {"type": "string", "deprecated": False};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"type": "string", "deprecated": True};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
+        s = {"type": "string", "deprecated": 5};
+        assertThrows("INVALID-FIELD-TYPE", "deprecated", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+
         # xml checks
         s = {"type": "string", "xml": {"name": "a"}};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
@@ -1869,6 +1918,329 @@ public class OpenApi3Test inherits QUnit::Test {
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"schemas": {"a": s}}})));
         s = {"type": "string", "externalDocs": 5};
         assertThrows("INVALID-FIELD-TYPE", "externalDocs", loadyaml, my_make_yaml(base + {"components": {"schemas": {"a": s}}}));
+    }
+
+    testSchemaCompositionValidation() {
+        checkModules();
+
+        hash hdr = {"content-type": MimeTypeJson};
+
+        # Test allOf - value must match all schemas
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "AllOf Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testAllOf",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "allOf": (
+                                                {
+                                                    "type": "object",
+                                                    "properties": {"name": {"type": "string"}},
+                                                    "required": ("name",),
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {"age": {"type": "integer"}},
+                                                    "required": ("age",),
+                                                },
+                                            ),
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {"200": {"description": "Success"}},
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: has both required properties from both schemas
+            hash body = {"name": "John", "age": 30};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Invalid: missing age (required by second schema)
+            body = {"name": "John"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "missing.*age", \so.processRequest(), ("POST", "/test", body, hdr));
+
+            # Invalid: missing name (required by first schema)
+            body = {"age": 30};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "missing.*name", \so.processRequest(), ("POST", "/test", body, hdr));
+        }
+
+        # Test oneOf - value must match exactly one schema
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "OneOf Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testOneOf",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "oneOf": (
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "petType": {"type": "string"},
+                                                        "bark": {"type": "boolean"},
+                                                    },
+                                                    "required": ("petType", "bark"),
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "petType": {"type": "string"},
+                                                        "meow": {"type": "boolean"},
+                                                    },
+                                                    "required": ("petType", "meow"),
+                                                },
+                                            ),
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {"200": {"description": "Success"}},
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: matches first schema (dog)
+            hash body = {"petType": "dog", "bark": True};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Valid: matches second schema (cat)
+            body = {"petType": "cat", "meow": True};
+            req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Invalid: matches neither schema (missing required fields)
+            body = {"petType": "bird"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "does not match any.*oneOf", \so.processRequest(),
+                ("POST", "/test", body, hdr));
+
+            # Invalid: matches both schemas
+            body = {"petType": "hybrid", "bark": True, "meow": True};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "matches multiple oneOf", \so.processRequest(),
+                ("POST", "/test", body, hdr));
+        }
+
+        # Test anyOf - value must match at least one schema
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "AnyOf Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testAnyOf",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "anyOf": (
+                                                {
+                                                    "type": "object",
+                                                    "properties": {"name": {"type": "string"}},
+                                                    "required": ("name",),
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {"id": {"type": "integer"}},
+                                                    "required": ("id",),
+                                                },
+                                            ),
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {"200": {"description": "Success"}},
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: matches first schema
+            hash body = {"name": "John"};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Valid: matches second schema
+            body = {"id": 123};
+            req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Valid: matches both schemas (allowed for anyOf)
+            body = {"name": "John", "id": 123};
+            req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Invalid: matches neither schema
+            body = {"other": "value"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "does not match any.*anyOf", \so.processRequest(),
+                ("POST", "/test", body, hdr));
+        }
+
+        # Test not - value must NOT match the schema
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Not Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testNot",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {"value": {"type": "string"}},
+                                            "not": {
+                                                "type": "object",
+                                                "properties": {"forbidden": {"type": "string"}},
+                                                "required": ("forbidden",),
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {"200": {"description": "Success"}},
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: does not have forbidden property
+            hash body = {"value": "allowed"};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Invalid: has the forbidden property
+            body = {"value": "allowed", "forbidden": "not allowed"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "must not match.*'not' schema", \so.processRequest(),
+                ("POST", "/test", body, hdr));
+        }
+
+        # Test readOnly - property cannot be in request
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "ReadOnly Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testReadOnly",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {"type": "integer", "readOnly": True},
+                                                "name": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {"200": {"description": "Success"}},
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: no readOnly field in request
+            hash body = {"name": "John"};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Invalid: readOnly field in request
+            body = {"id": 123, "name": "John"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "read-only", \so.processRequest(), ("POST", "/test", body, hdr));
+        }
+
+        # Test writeOnly - property cannot be in response
+        {
+            hash spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "WriteOnly Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "post": {
+                            "operationId": "testWriteOnly",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "password": {"type": "string", "writeOnly": True},
+                                                "username": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {
+                                "200": {
+                                    "description": "Success",
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "password": {"type": "string", "writeOnly": True},
+                                                    "username": {"type": "string"},
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Valid: writeOnly field in request is allowed
+            hash body = {"password": "secret", "username": "john"};
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/test", body, hdr);
+            assertEq("/test", req.uri_path);
+
+            # Test response validation - writeOnly field should not be in response
+            hash resp_body = {"password": "exposed", "username": "john"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", "write-only", \so.processResponse(), ("POST", "/test", 200,
+                resp_body, hdr));
+
+            # Valid response without writeOnly field
+            resp_body = {"username": "john"};
+            hash<HttpResponseInfo> res = so.processResponse("POST", "/test", 200, resp_body, hdr);
+            assertEq(200, res.code);
+        }
     }
 
     testXmlObject() {
@@ -1922,7 +2294,7 @@ public class OpenApi3Test inherits QUnit::Test {
         hash sd;
 
         # type checks
-        sd = {"type": "basic"};
+        sd = {"type": "http", "scheme": "basic"};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
         sd = {"type": "a"};
         assertThrows("INVALID-SCHEME-TYPE", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
@@ -1930,9 +2302,9 @@ public class OpenApi3Test inherits QUnit::Test {
         assertThrows("INVALID-FIELD-TYPE", "\"type\"", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # description checks
-        sd = {"type": "basic", "description": "a"};
+        sd = {"type": "http", "scheme": "basic", "description": "a"};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = {"type": "basic", "description": 5};
+        sd = {"type": "http", "scheme": "basic", "description": 5};
         assertThrows("INVALID-FIELD-TYPE", "description", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
         # type=apiKey checks
@@ -1953,66 +2325,69 @@ public class OpenApi3Test inherits QUnit::Test {
         sd = {"type": "apiKey", "name": "a", "in": 5};
         assertThrows("INVALID-FIELD-TYPE", "in", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
-        # type=oauth2 checks
+        # type=oauth2 checks - requires 'flows' field
         sd = {"type": "oauth2"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"flow\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+        assertThrows("REQUIRED-FIELD-MISSING", "\"flows\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+        sd = {"type": "oauth2", "flows": 5};
+        assertThrows("INVALID-FIELD-TYPE", "flows", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
-        sd = {"type": "oauth2", "flow": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "flow", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "abc", "scopes": {}};
-        assertThrows("INVALID-FLOW", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "application", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "password", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "implicit", "scopes": {}};
+        # oauth2 implicit flow
+        sd = {"type": "oauth2", "flows": {"implicit": {"authorizationUrl": "https://example.com/auth", "scopes": {"read": "Read access"}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "oauth2", "flows": {"implicit": {"scopes": {}}}};
         assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "accessCode", "tokenUrl": "a", "scopes": {}};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a"};
-        assertThrows("REQUIRED-FIELD-MISSING", "\"scopes\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-
-        # application and password flow
-        sd = {"type": "oauth2", "flow": "application", "tokenUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = {"type": "oauth2", "flow": "application", "tokenUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = {"type": "oauth2", "flow": "password", "tokenUrl": 5, "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "password", "tokenUrl": "a", "scopes": 5};
-        assertThrows("INVALID-FIELD-TYPE", "scopes", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-
-        # implicit flow
-        sd = {"type": "oauth2", "flow": "implicit", "authorizationUrl": "a", "scopes": {}};
-        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = {"type": "oauth2", "flow": "implicit", "authorizationUrl": 5, "scopes": {}};
+        sd = {"type": "oauth2", "flows": {"implicit": {"authorizationUrl": 5, "scopes": {}}}};
         assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
 
-        # accessCode flow
-        sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "tokenUrl": "a", "scopes": {}};
+        # oauth2 password flow
+        sd = {"type": "oauth2", "flows": {"password": {"tokenUrl": "https://example.com/token", "scopes": {}}}};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": 5, "tokenUrl": "a", "scopes": {}};
-        assertThrows("INVALID-FIELD-TYPE", "authorizationUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
-        sd = {"type": "oauth2", "flow": "accessCode", "authorizationUrl": "a", "tokenUrl": 5, "scopes": {}};
+        sd = {"type": "oauth2", "flows": {"password": {"scopes": {}}}};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+        sd = {"type": "oauth2", "flows": {"password": {"tokenUrl": 5, "scopes": {}}}};
         assertThrows("INVALID-FIELD-TYPE", "tokenUrl", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+
+        # oauth2 clientCredentials flow
+        sd = {"type": "oauth2", "flows": {"clientCredentials": {"tokenUrl": "https://example.com/token", "scopes": {}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "oauth2", "flows": {"clientCredentials": {"scopes": {}}}};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+
+        # oauth2 authorizationCode flow
+        sd = {"type": "oauth2", "flows": {"authorizationCode": {"authorizationUrl": "https://example.com/auth", "tokenUrl": "https://example.com/token", "scopes": {}}}};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "oauth2", "flows": {"authorizationCode": {"tokenUrl": "https://example.com/token", "scopes": {}}}};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"authorizationUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+        sd = {"type": "oauth2", "flows": {"authorizationCode": {"authorizationUrl": "https://example.com/auth", "scopes": {}}}};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"tokenUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+
+        # type=http checks
+        sd = {"type": "http", "scheme": "bearer"};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "http"};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"scheme\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
+
+        # type=openIdConnect checks
+        sd = {"type": "openIdConnect", "openIdConnectUrl": "https://example.com/.well-known/openid-configuration"};
+        assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
+        sd = {"type": "openIdConnect"};
+        assertThrows("REQUIRED-FIELD-MISSING", "\"openIdConnectUrl\".*missing", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
     }
 
     testScopesObject() {
         checkModules();
 
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
-        hash sdbase = {"type": "oauth2", "flow": "password", "tokenUrl": "a"};
         hash sd;
 
-        sd = sdbase + {"scopes": {}};
+        # Test scopes in OAuth2 flows
+        sd = {"type": "oauth2", "flows": {"password": {"tokenUrl": "https://example.com/token", "scopes": {}}}};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = sdbase + {"scopes": {"a": "b"}};
+        sd = {"type": "oauth2", "flows": {"password": {"tokenUrl": "https://example.com/token", "scopes": {"read": "Read access"}}}};
         assertTrue(loadyaml(my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}})));
-        sd = sdbase + {"scopes": {"a": 5}};
+        sd = {"type": "oauth2", "flows": {"password": {"tokenUrl": "https://example.com/token", "scopes": {"a": 5}}}};
         assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"components": {"securitySchemes": {"a": sd}}}));
     }
 

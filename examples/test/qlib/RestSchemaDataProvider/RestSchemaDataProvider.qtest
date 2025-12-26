@@ -34,6 +34,8 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
     constructor() : Test("RestSchemaDataProviderTest", "1.0") {
         addTestCase("Swagger schema test", \testSwaggerSchema());
         addTestCase("OpenAPI 3.0 schema test", \testOpenApi3Schema());
+        addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
+        addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
         addTestCase("Factory test", \testFactory());
         set_return_value(main());
     }
@@ -128,6 +130,645 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pets/GET");
             assertEq("GET", p0.getName());
+        }
+    }
+
+    testOpenApi3SchemaComposition() {
+        checkModules();
+
+        # Test allOf - value must match all schemas
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: Schema Composition Test
+  version: '1.0'
+paths:
+  /allof-test:
+    post:
+      operationId: testAllOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    name:
+                      type: string
+                  required:
+                    - name
+                - type: object
+                  properties:
+                    age:
+                      type: integer
+                  required:
+                    - age
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("allof-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test oneOf - value must match exactly one schema
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: OneOf Test
+  version: '1.0'
+paths:
+  /oneof-test:
+    post:
+      operationId: testOneOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    bark:
+                      type: boolean
+                  required:
+                    - petType
+                    - bark
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    meow:
+                      type: boolean
+                  required:
+                    - petType
+                    - meow
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("oneof-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test anyOf - value must match at least one schema
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: AnyOf Test
+  version: '1.0'
+paths:
+  /anyof-test:
+    post:
+      operationId: testAnyOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: object
+                  properties:
+                    name:
+                      type: string
+                  required:
+                    - name
+                - type: object
+                  properties:
+                    id:
+                      type: integer
+                  required:
+                    - id
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("anyof-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test not - value must NOT match the schema
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: Not Test
+  version: '1.0'
+paths:
+  /not-test:
+    post:
+      operationId: testNot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+              not:
+                type: object
+                properties:
+                  forbidden:
+                    type: string
+                required:
+                  - forbidden
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("not-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test readOnly - property cannot be in request
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: ReadOnly Test
+  version: '1.0'
+paths:
+  /readonly-test:
+    post:
+      operationId: testReadOnly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  readOnly: true
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    readOnly: true
+                  name:
+                    type: string
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("readonly-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test writeOnly - property cannot be in response
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: WriteOnly Test
+  version: '1.0'
+paths:
+  /writeonly-test:
+    post:
+      operationId: testWriteOnly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  writeOnly: true
+                username:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  password:
+                    type: string
+                    writeOnly: true
+                  username:
+                    type: string
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("writeonly-test/POST");
+            assertEq("POST", p0.getName());
+        }
+
+        # Test deprecated schema
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: Deprecated Test
+  version: '1.0'
+paths:
+  /deprecated-test:
+    post:
+      operationId: testDeprecated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                oldField:
+                  type: string
+                  deprecated: true
+                newField:
+                  type: string
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("deprecated-test/POST");
+            assertEq("POST", p0.getName());
+        }
+    }
+
+    testOpenApi3TypeValidation() {
+        checkModules();
+
+        # Test basic type validation with simple schema
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: Simple Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testSimple
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+              required:
+                - name
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - should pass
+            hash validData = {"name": "John", "age": 30};
+            auto result = bodyType.acceptsValue(validData);
+            assertEq("John", result.name);
+            assertEq(30, result.age);
+
+            # Valid data with only required fields
+            validData = {"name": "Jane"};
+            result = bodyType.acceptsValue(validData);
+            assertEq("Jane", result.name);
+
+            # Invalid data - missing required field
+            hash invalidData = {"age": 25};
+            assertThrows("MISSING-VALUE-ERROR", "name", \bodyType.acceptsValue(), invalidData);
+        }
+
+        # Test oneOf type validation
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: OneOf Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testOneOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    bark:
+                      type: boolean
+                  required:
+                    - petType
+                    - bark
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    meow:
+                      type: boolean
+                  required:
+                    - petType
+                    - meow
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - matches first schema (dog)
+            hash dogData = {"petType": "dog", "bark": True};
+            auto result = bodyType.acceptsValue(dogData);
+            assertEq("dog", result.petType);
+            assertTrue(result.bark);
+
+            # Valid data - matches second schema (cat)
+            hash catData = {"petType": "cat", "meow": True};
+            result = bodyType.acceptsValue(catData);
+            assertEq("cat", result.petType);
+            assertTrue(result.meow);
+
+            # Invalid data - matches neither (missing required fields)
+            hash birdData = {"petType": "bird"};
+            assertThrows("RUNTIME-TYPE-ERROR", "oneOf", \bodyType.acceptsValue(), birdData);
+
+            # Invalid data - matches both schemas
+            hash hybridData = {"petType": "hybrid", "bark": True, "meow": True};
+            assertThrows("RUNTIME-TYPE-ERROR", "multiple oneOf", \bodyType.acceptsValue(), hybridData);
+        }
+
+        # Test anyOf type validation
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: AnyOf Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testAnyOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: object
+                  properties:
+                    name:
+                      type: string
+                  required:
+                    - name
+                - type: object
+                  properties:
+                    id:
+                      type: integer
+                  required:
+                    - id
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - matches first schema
+            hash nameData = {"name": "John"};
+            auto result = bodyType.acceptsValue(nameData);
+            assertEq("John", result.name);
+
+            # Valid data - matches second schema
+            hash idData = {"id": 123};
+            result = bodyType.acceptsValue(idData);
+            assertEq(123, result.id);
+
+            # Valid data - matches both (allowed for anyOf)
+            hash bothData = {"name": "John", "id": 123};
+            result = bodyType.acceptsValue(bothData);
+            assertEq("John", result.name);
+            assertEq(123, result.id);
+
+            # Invalid data - matches neither
+            hash neitherData = {"other": "value"};
+            assertThrows("RUNTIME-TYPE-ERROR", "anyOf", \bodyType.acceptsValue(), neitherData);
+        }
+
+        # Test not type validation
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: Not Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testNot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+              not:
+                type: object
+                properties:
+                  forbidden:
+                    type: string
+                required:
+                  - forbidden
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - does not have forbidden property
+            hash validData = {"value": "allowed"};
+            auto result = bodyType.acceptsValue(validData);
+            assertEq("allowed", result.value);
+
+            # Invalid data - has the forbidden property
+            hash forbiddenData = {"value": "allowed", "forbidden": "not allowed"};
+            assertThrows("RUNTIME-TYPE-ERROR", "'not' schema", \bodyType.acceptsValue(), forbiddenData);
+        }
+
+        # Test readOnly type validation
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: ReadOnly Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testReadOnly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  readOnly: true
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - no readOnly field in request
+            hash validData = {"name": "John"};
+            auto result = bodyType.acceptsValue(validData);
+            assertEq("John", result.name);
+
+            # Invalid data - readOnly field in request
+            hash invalidData = {"id": 123, "name": "John"};
+            assertThrows("RUNTIME-TYPE-ERROR", "read-only", \bodyType.acceptsValue(), invalidData);
+        }
+
+        # Test writeOnly type validation
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: WriteOnly Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testWriteOnly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  writeOnly: true
+                username:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  password:
+                    type: string
+                    writeOnly: true
+                  username:
+                    type: string
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+
+            # Request type - writeOnly fields are allowed
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType reqBodyType = bodyField.getType();
+
+            hash reqData = {"password": "secret", "username": "john"};
+            auto result = reqBodyType.acceptsValue(reqData);
+            assertEq("secret", result.password);
+            assertEq("john", result.username);
+        }
+
+        # Test allOf type validation (properties from multiple schemas)
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: AllOf Type Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testAllOf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+              required:
+                - name
+                - age
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # Valid data - has all required properties
+            hash validData = {"name": "John", "age": 30};
+            auto result = bodyType.acceptsValue(validData);
+            assertEq("John", result.name);
+            assertEq(30, result.age);
+
+            # Invalid data - missing required property
+            hash missingName = {"age": 30};
+            assertThrows("MISSING-VALUE-ERROR", "name", \bodyType.acceptsValue(), missingName);
+
+            hash missingAge = {"name": "John"};
+            assertThrows("MISSING-VALUE-ERROR", "age", \bodyType.acceptsValue(), missingAge);
         }
     }
 
