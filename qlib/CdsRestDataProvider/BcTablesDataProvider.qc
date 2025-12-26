@@ -148,27 +148,10 @@ public class BcTablesDataProvider inherits BcRestDataProviderBase {
             return entities;
         }
 
-        # Start with standard entities
+        # Use standard Business Central entities
+        # Note: BC does not expose $metadata at the company level, so we use
+        # the predefined list of standard entities
         entities = map {$1: True}, StandardEntities;
-
-        # Try to discover additional entities from $metadata if available
-        try {
-            string uri = sprintf("companies(%s)/$metadata", companyId);
-            hash<auto> info;
-            hash<auto> resp = rest.get(uri, NOTHING, \info);
-            # Parse metadata if available
-            if (resp.body."edmx:Edmx"."edmx:DataServices".Schema.EntityType) {
-                foreach auto entity in (resp.body."edmx:Edmx"."edmx:DataServices".Schema.EntityType) {
-                    *string name = entity."^attributes^".Name;
-                    if (name) {
-                        entities{name} = True;
-                    }
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # If metadata is not available, use standard entities only
-            # This is not an error - BC may not expose $metadata
-        }
 
         return entities;
     }
