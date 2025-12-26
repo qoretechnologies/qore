@@ -33,18 +33,6 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         #! The URI needs dynamic resolution
         bool resolve_uri;
 
-        #! The path item object for the operation (Swagger)
-        *Swagger::PathItemObject swagger_pio;
-
-        #! The path item object for the operation (OpenAPI 3.0)
-        *OpenApi3::PathItemObject openapi3_pio;
-
-        #! The operation object (Swagger)
-        *Swagger::OperationObject swagger_op;
-
-        #! The operation object (OpenAPI 3.0)
-        *OpenApi3::OperationObject openapi3_op;
-
         #! The request type
         AbstractDataProviderType request_type;
 
@@ -62,6 +50,18 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     private {
+        #! The path item object for the operation (Swagger)
+        *Swagger::PathItemObject swagger_pio;
+
+        #! The path item object for the operation (OpenAPI 3.0)
+        *OpenApi3::PathItemObject openapi3_pio;
+
+        #! The operation object (Swagger)
+        *Swagger::OperationObject swagger_op;
+
+        #! The operation object (OpenAPI 3.0)
+        *OpenApi3::OperationObject openapi3_op;
+
         #! Disable checking the request type
         bool disable_request_type_check;
     }
@@ -115,9 +115,23 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         return getMethod().upr();
     }
 
-    #! Returns the HTTP method
-    private string getMethod() {
+    #! Returns the HTTP method (in lower case)
+    string getMethod() {
         return swagger_op ? swagger_op.method : openapi3_op.method;
+    }
+
+    #! Returns the consumes hash for the operation
+    *hash<string, bool> getConsumes() {
+        return swagger_op ? swagger_op.consumes : openapi3_op.consumes;
+    }
+
+    #! Sets a mime type in the consumes hash for the operation
+    setConsumes(string mime_type) {
+        if (swagger_op) {
+            swagger_op.consumes{mime_type} = True;
+        } else {
+            openapi3_op.consumes{mime_type} = True;
+        }
     }
 
     #! Returns the data provider description
