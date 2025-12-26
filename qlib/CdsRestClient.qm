@@ -314,9 +314,6 @@ CdsRestClient rest({
 
     #! returns options for the @ref CdsRestClient::CdsRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
-        if (opts.url !~ /\/$/) {
-            opts.url += "/";
-        }
         if (*string prof = opts.api_profile) {
             *hash<auto> conf = ApiProfiles{prof};
             if (!exists conf) {
@@ -326,8 +323,17 @@ CdsRestClient rest({
             # set ping options
             map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
 
+            # For Business Central, build URL with instance_type
+            if (prof == "dynamics-business-central" && opts.instance_type) {
+                string api = opts.api ?? DefaultBcApiVersion;
+                opts.url = DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/";
+            }
+
             # process scopes; substitute "{url}" with the real URL
             opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
+        }
+        if (opts.url !~ /\/$/) {
+            opts.url += "/";
         }
         return opts + {
             "data": "json",
@@ -705,12 +711,6 @@ public class CdsRestConnection inherits RestClient::RestConnection {
             }
             # process scopes; substitute "{url}" with the connection URL
             opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
-
-            # For Business Central, build URL with instance_type
-            if (prof == "dynamics-business-central" && opts.instance_type) {
-                string api = opts.api ?? CdsRestClient::DefaultBcApiVersion;
-                url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/";
-            }
 
             if (opts.ping_path) {
                 opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
