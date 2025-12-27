@@ -125,26 +125,10 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
                     "desc": "Uses `FOR REFERENCE` with the query to update the reference date",
                 },
             },
-            "expressions": AbstractDataProvider::GenericExpressions{
-                DP_SEARCH_OP_EQ,
-                DP_SEARCH_OP_LT,
-                DP_SEARCH_OP_LE,
-                DP_SEARCH_OP_GT,
-                DP_SEARCH_OP_GE,
-                DP_SEARCH_OP_IN,
-                DP_SEARCH_OP_NOT,
-            } + {
-                SOQL_OP_LIKE: <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "display_name": "like",
-                    "name": SOQL_OP_LIKE,
-                    "symbol": "like",
-                    "groups": "Comparison",
-                    "desc": "The value to bind as the 'like' value (ex: '%some string%')",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
-            },
+            "expressions": cast<hash<string, hash<DataProviderExpressionInfo>>>(
+                map {$1.key: $1.value.exp}, SoqlExpressions.pairIterator()
+            ),
+            "supports_search_expressions": True,
             "upsert_options": {
                 "extidfield": <DataProviderOptionInfo>{
                     "display_name": "External ID Field",
@@ -325,11 +309,14 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     private int updateRecordsImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
         # ignore fields that are not updateable
         set -= keys record_info.no_update;
-        if (where_cond.Id) {
+        # Check if where_cond is a simple hash with Id (not an expression)
+        if (!where_cond.exp && where_cond.Id) {
             updateSingleRecord(where_cond.Id, set);
             return 1;
         }
-        where_cond = fixSalesforceRecord(where_cond);
+        if (!where_cond.exp) {
+            where_cond = fixSalesforceRecord(where_cond);
+        }
         AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (updateSingleRecord(i.getValue().Id, set), ++count), i;
@@ -344,11 +331,14 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
         @return the number of records deleted
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        if (where_cond.Id) {
+        # Check if where_cond is a simple hash with Id (not an expression)
+        if (!where_cond.exp && where_cond.Id) {
             deleteSingleRecord(where_cond.Id);
             return 1;
         }
-        where_cond = fixSalesforceRecord(where_cond);
+        if (!where_cond.exp) {
+            where_cond = fixSalesforceRecord(where_cond);
+        }
         AbstractDataProviderRecordIterator i = searchRecordsImpl(where_cond, search_options);
         int count = 0;
         map (deleteSingleRecord(i.getValue().Id), ++count), i;

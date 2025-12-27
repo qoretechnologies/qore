@@ -58,6 +58,7 @@ class SalesforceTest inherits QUnit::Test {
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("ping tests", \pingTests());
         addTestCase("Salesforce.com DataProvider test", \salesForceDataProviderTests());
+        addTestCase("AND/OR expression tests", \andOrExpressionTests());
         addTestCase("Salesforce.com REST", \salesForceRestTests());
         addTestCase("connection tests", \connectionTest());
 
@@ -198,12 +199,315 @@ class SalesforceTest inherits QUnit::Test {
             assertEq(1, recs.size());
             assertEq(id, recs[0].Id);
 
-            recs = map $1, account.searchRecords({"Type": soql_op_in("test-delete", get_random_string())});
+            # Test IN operator - also filter by Id to avoid matching leftover test data
+            recs = map $1, account.searchRecords({
+                "Id": id,
+                "Type": soql_op_in("test-delete", get_random_string()),
+            });
             assertEq(1, recs.size());
             assertEq(id, recs[0].Id);
 
+            # NOTE: Date literal tests (soql_op_date, soql_op_last_n_days, etc.) cannot be used
+            # with the expression-enabled data provider. Use them with direct SOQL queries instead.
+            # See salesForceRestTests() for date literal usage examples.
+
             # update the record
             assertEq(1, account.updateRecords({"Type": "Prospect"}, {"Id": id}));
+        }
+    }
+
+    #! Test AND/OR expression support
+    andOrExpressionTests() {
+        if (!rc) testSkip("no Salesforce.com connection");
+
+        SalesforceRestTablesDataProvider dp(rc);
+        AbstractDataProvider account = dp.getChildProvider("Account");
+
+        string id;
+        {
+            # create test account for expression tests
+            hash<auto> rec = {
+                "Name": "deleteme_expr_test",
+                "Type": "test-delete",
+            };
+            id = account.createRecord(rec).id;
+        }
+        on_exit {
+            # clean up test record
+            account.deleteRecords({"Id": id});
+        }
+
+        # Test simple OR expression
+        {
+            hash<DataProviderExpression> or_expr = <DataProviderExpression>{
+                "exp": DP_OP_OR,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            "001000000000000AAA",  # valid 18-char ID format that doesn't exist
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(or_expr, {"limit": 10});
+            assertEq(1, recs.size(), "OR expression should find 1 record");
+            assertEq(id, recs[0].Id);
+        }
+
+        # Test simple AND expression
+        {
+            hash<DataProviderExpression> and_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Name"},
+                            "deleteme_expr_test",
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(and_expr, {"limit": 10});
+            assertEq(1, recs.size(), "AND expression should find 1 record");
+            assertEq(id, recs[0].Id);
+        }
+
+        # Test AND expression with no match
+        {
+            hash<DataProviderExpression> and_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Name"},
+                            "this-name-does-not-exist",
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(and_expr, {"limit": 10});
+            assertEq(0, recs.size(), "AND expression with mismatched name should find 0 records");
+        }
+
+        # Test nested AND/OR expression: (Id = id) AND ((Type = 'test-delete') OR (Type = 'other'))
+        {
+            hash<DataProviderExpression> nested_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_OP_OR,
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "Type"},
+                                    "test-delete",
+                                ),
+                            },
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "Type"},
+                                    "other-type",
+                                ),
+                            },
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(nested_expr, {"limit": 10});
+            assertEq(1, recs.size(), "Nested AND/OR expression should find 1 record");
+            assertEq(id, recs[0].Id);
+        }
+
+        # NOTE: NOT operator is not supported in SOQL after AND/OR
+        # SOQL's NOT syntax is limited - it can only be used at the start of a WHERE clause
+        # Use NE (!=) operator instead for negation in most cases
+
+        # Negative test: unknown operator
+        {
+            hash<DataProviderExpression> bad_expr = <DataProviderExpression>{
+                "exp": "unknown_operator",
+                "args": (),
+            };
+            # DataProvider validates expressions first and throws DATA-PROVIDER-EXPRESSION-ERROR
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", \account.searchRecords(), (bad_expr, {"limit": 1}));
+        }
+
+        # Negative test: comparison operator without field reference
+        {
+            hash<DataProviderExpression> bad_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    "not-a-field-reference",  # Should be DataProviderFieldReference
+                    "value",
+                ),
+            };
+            assertThrows("WHERE-ERROR", \account.searchRecords(), (bad_expr, {"limit": 1}));
+        }
+
+        # Test comparison operators: LT, LE, GT, GE, NE
+        {
+            # Test NE (not equals)
+            hash<DataProviderExpression> ne_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_NE,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Name"},
+                            "wrong-name",
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(ne_expr, {"limit": 10});
+            assertEq(1, recs.size(), "NE expression should find 1 record");
+        }
+
+        # Test LIKE operator
+        {
+            hash<DataProviderExpression> like_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": SOQL_OP_LIKE,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Name"},
+                            "deleteme%",
+                        ),
+                    },
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(like_expr, {"limit": 10});
+            assertEq(1, recs.size(), "LIKE expression should find 1 record");
+        }
+
+        # Test UPDATE with AND expression
+        {
+            hash<DataProviderExpression> update_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": SOQL_OP_LIKE,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Name"},
+                            "deleteme%",
+                        ),
+                    },
+                ),
+            };
+            # Update the record using expression-based where clause
+            int updated = account.updateRecords({"Description": "Updated via expression"}, update_expr);
+            assertEq(1, updated, "UPDATE with AND expression should update 1 record");
+
+            # Verify the update
+            list<hash<auto>> recs = map $1, account.searchRecords({"Id": id}, {"limit": 1});
+            assertEq("Updated via expression", recs[0].Description, "Record should have updated description");
+        }
+
+        # Test DELETE with expression (create a second record to delete)
+        {
+            # Create a second test record for delete test
+            hash<auto> rec2 = {
+                "Name": "deleteme_expr_delete_test",
+                "Type": "test-delete-expr",
+            };
+            string id2 = account.createRecord(rec2).id;
+
+            # Delete using OR expression that matches only the second record
+            hash<DataProviderExpression> delete_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Id"},
+                            id2,
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "Type"},
+                            "test-delete-expr",
+                        ),
+                    },
+                ),
+            };
+            int deleted = account.deleteRecords(delete_expr);
+            assertEq(1, deleted, "DELETE with AND expression should delete 1 record");
+
+            # Verify the record is deleted
+            list<hash<auto>> recs = map $1, account.searchRecords({"Id": id2}, {"limit": 1});
+            assertEq(0, recs.size(), "Deleted record should not be found");
+
+            # Verify original record still exists
+            recs = map $1, account.searchRecords({"Id": id}, {"limit": 1});
+            assertEq(1, recs.size(), "Original record should still exist");
+        }
+
+        # Test expressions list in provider info includes all operators
+        {
+            hash<DataProviderInfo> info = account.getInfo();
+            assertTrue(info.expressions.hasKey(DP_OP_AND), "expressions should include DP_OP_AND");
+            assertTrue(info.expressions.hasKey(DP_OP_OR), "expressions should include DP_OP_OR");
+            assertTrue(info.expressions.hasKey(SOQL_OP_LIKE), "expressions should include SOQL_OP_LIKE");
+            assertTrue(info.expressions.hasKey(SOQL_OP_INCLUDES), "expressions should include SOQL_OP_INCLUDES");
+            assertTrue(info.expressions.hasKey(SOQL_OP_EXCLUDES), "expressions should include SOQL_OP_EXCLUDES");
         }
     }
 
