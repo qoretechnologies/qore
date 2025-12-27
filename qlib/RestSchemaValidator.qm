@@ -39,8 +39,14 @@
 # supports using the DataProvider module to describe input and output records
 %requires(reexport) DataProvider
 
+# supports loading files from URLs
+%requires(reexport) FileLocationHandler
+
 # supports logging with the Logger module
 %requires(reexport) Logger
+
+# supports reflection for dynamic schema loading
+%requires reflection
 
 %try-module yaml >= 0.5
 %define NoYaml
@@ -77,6 +83,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
+    - added @ref RestSchemaValidator::RestSchemaLoader "RestSchemaLoader" class for auto-detecting and loading
+      Swagger 2.0 or OpenAPI 3.x schemas without needing to know the format in advance
+      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
     - added abstract methods to enable polymorphic access for data providers:
       - @ref RestSchemaValidator::AbstractSchemaObject::getField() "AbstractSchemaObject::getField()"
       - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldFromSchema() "AbstractRestSchemaValidator::getFieldFromSchema()"
@@ -1508,6 +1517,253 @@ public namespace RestSchemaValidator {
         */
         AbstractDataField getFieldForHeaders(string name, hash<auto> headers) {
             throw "UNSUPPORTED-OPERATION", "the NullRestSchemaValidator class does not support schema operations";
+        }
+    }
+
+    #! Generic REST schema loader that auto-detects Swagger 2.0 vs OpenAPI 3.x schemas
+    /** This class provides a unified interface for loading REST API schemas without needing
+        to know the schema format in advance. It automatically detects the schema type and
+        loads the appropriate module (Swagger or OpenApi3) dynamically.
+
+        @since RestSchemaValidator 2.4
+    */
+    public class RestSchemaLoader {
+        #! Load a REST schema definition from a string, auto-detecting the format
+        /**
+            @param schemaSource the REST API schema specification (JSON or YAML)
+            @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
+            detected automatically
+            @param opts options passed to the schema constructor
+
+            @return the loaded schema object
+
+            @throws JSON-MODULE-MISSING trying to parse a JSON schema with JSON module unavailable
+            @throws YAML-MODULE-MISSING trying to parse a YAML schema with YAML module unavailable
+            @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
+        */
+        static AbstractRestSchemaValidator fromString(string schemaSource, *bool json, *hash<auto> opts) {
+            string ser;
+            if (!exists json) {
+                ser = RestSchemaLoader::detectSourceEncoding(schemaSource);
+            } else {
+                ser = json ? "json" : "yaml";
+            }
+            hash<auto> parsed = RestSchemaLoader::parseSchemaSource(schemaSource, ser);
+            string schemaType = RestSchemaLoader::detectSchemaType(parsed);
+            return RestSchemaLoader::loadSchema(schemaType, schemaSource, json, opts);
+        }
+
+        #! Load a REST schema definition from a file, auto-detecting the format
+        /**
+            @param filepath path to the REST schema file
+            @param opts options passed to the schema constructor
+
+            @return the loaded schema object
+
+            @throws EMPTY-SCHEMA-FILE schema file is empty
+            @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
+            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
+            @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
+            @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
+        */
+        static AbstractRestSchemaValidator fromFile(string filepath, *hash<auto> opts) {
+            string file_data = ReadOnlyFile::readTextFile(filepath);
+            if (!file_data) {
+                throw "EMPTY-SCHEMA-FILE", sprintf("%y: file is empty", filepath);
+            }
+            hash<auto> parsed = RestSchemaLoader::parseSchemaContent(filepath, file_data);
+            string schemaType = RestSchemaLoader::detectSchemaType(parsed);
+            return RestSchemaLoader::loadSchemaFromFile(schemaType, filepath, opts);
+        }
+
+        #! Load a REST schema definition from a URL or file path, auto-detecting the format
+        /**
+            @param url URL to the REST schema file; uses the FileLocationHandler to load the file
+            @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
+            detected automatically
+            @param opts options passed to the schema constructor
+
+            @return the loaded schema object
+
+            @throws EMPTY-SCHEMA-FILE schema file is empty
+            @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
+            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
+            @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
+            @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
+        */
+        static AbstractRestSchemaValidator fromUrl(string url, *bool json, *hash<auto> opts) {
+            if (!exists json) {
+                if (url =~ /\.yaml$/i) {
+                    json = False;
+                } else if (url =~ /\.json$/i) {
+                    json = True;
+                }
+            }
+            on_error {
+                rethrow $1.err, sprintf("%s (from URL %y)", $1.desc, get_safe_url(url));
+            }
+            return RestSchemaLoader::fromString(FileLocationHandler::getTextFileFromLocation(url), json, opts);
+        }
+
+        #! Detects whether the source is JSON, YAML, or XML
+        /** @param str the schema source string
+
+            @return either "json", "yaml", or "xml"
+        */
+        static string detectSourceEncoding(string str) {
+            # strip leading whitespace
+            str =~ s/^[\s\n]+//;
+            # check for XML declaration or root element
+            if (str =~ /^<(\?xml|[a-zA-Z])/) {
+                return "xml";
+            }
+            # check for JSON (starts with '{')
+            if (str =~ /^\{/) {
+                return "json";
+            }
+            # default to YAML
+            return "yaml";
+        }
+
+        #! Parses schema source from a string
+        /** @param str the schema source string
+            @param ser the serialization type ("json", "yaml", or "xml")
+
+            @return the parsed schema as a hash
+
+            @throws JSON-MODULE-MISSING trying to parse a JSON schema with json module unavailable
+            @throws YAML-MODULE-MISSING trying to parse a YAML schema with yaml module unavailable
+            @throws XML-MODULE-MISSING trying to parse an XML schema with xml module unavailable
+        */
+        static hash<auto> parseSchemaSource(string str, string ser) {
+            auto rv;
+            switch (ser) {
+                case "json": {
+%ifdef NoJson
+                    throw "JSON-MODULE-MISSING", "Trying to parse a JSON schema, but the json module is unavailable";
+%else
+                    rv = parse_json(str);
+                    break;
+%endif
+                }
+                case "yaml": {
+%ifdef NoYaml
+                    throw "YAML-MODULE-MISSING", "Trying to parse a YAML schema, but the yaml module is unavailable";
+%else
+                    rv = parse_yaml(str);
+                    break;
+%endif
+                }
+                case "xml": {
+%ifdef NoXml
+                    throw "XML-MODULE-MISSING", "Trying to parse an XML schema, but the xml module is unavailable";
+%else
+                    rv = parse_xml(str);
+                    break;
+%endif
+                }
+            }
+            if (rv.typeCode() != NT_HASH) {
+                throw "INVALID-SCHEMA", sprintf("REST schema must be a hash; parsed %s document has top-level type %y",
+                    ser.upr(), rv.type());
+            }
+            return rv;
+        }
+
+        #! Parses schema content from a file
+        /** @param filepath path to the schema file
+            @param str the file content to parse
+
+            @return the parsed schema as a hash
+
+            @throws EMPTY-SCHEMA-FILE schema file is empty
+            @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
+            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
+            @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
+        */
+        static hash<auto> parseSchemaContent(string filepath, string str) {
+            if (!str) {
+                throw "EMPTY-SCHEMA-FILE", sprintf("%y: file is empty", filepath);
+            }
+
+            string ser;
+            string filename = basename(filepath);
+            if (filename =~ /.*\.json$/i) {
+                ser = "json";
+            } else if (filename =~ /.*\.yaml$/i) {
+                ser = "yaml";
+            } else if (filename =~ /.*\.xml$/i) {
+                ser = "xml";
+            } else {
+                ser = RestSchemaLoader::detectSourceEncoding(str);
+            }
+
+            if (ser == "xml") {
+%ifdef NoXml
+                throw "XML-MODULE-MISSING", "Trying to parse an XML schema, but the xml module is unavailable";
+%else
+                auto rv = parse_xml(str);
+                if (rv.typeCode() != NT_HASH) {
+                    throw "INVALID-SCHEMA", sprintf("REST schema must be a hash; parsed XML document has top-level "
+                        "type %y", rv.type());
+                }
+                return rv;
+%endif
+            }
+            return RestSchemaLoader::parseSchemaSource(str, ser);
+        }
+
+        #! Detects the schema type from parsed content
+        /** @param parsed the parsed schema hash
+
+            @return either "swagger" or "openapi3"
+
+            @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
+        */
+        static string detectSchemaType(hash<auto> parsed) {
+            # Check for Swagger 2.0: has "swagger" key with value "2.0"
+            if (parsed.swagger.typeCode() == NT_STRING && parsed.swagger == "2.0") {
+                return "swagger";
+            }
+            # Check for OpenAPI 3.x: has "openapi" key starting with "3."
+            if (parsed.openapi.typeCode() == NT_STRING && parsed.openapi =~ /^3\./) {
+                return "openapi3";
+            }
+            # Provide more specific error messages for malformed version values
+            if (parsed.hasKey("swagger")) {
+                throw "UNKNOWN-SCHEMA-TYPE", sprintf("unsupported Swagger version %y; only version \"2.0\" is "
+                    "supported", parsed.swagger);
+            }
+            if (parsed.hasKey("openapi")) {
+                throw "UNKNOWN-SCHEMA-TYPE", sprintf("unsupported OpenAPI version %y; only versions \"3.x.x\" are "
+                    "supported", parsed.openapi);
+            }
+            throw "UNKNOWN-SCHEMA-TYPE", sprintf("unable to detect REST schema type; expected 'swagger: \"2.0\"' or "
+                "'openapi: \"3.x.x\"' key; got keys: %y", keys parsed);
+        }
+
+        #! Loads the appropriate schema module and creates a schema object from a string
+        private static AbstractRestSchemaValidator loadSchema(string schemaType, string schemaSource, *bool json,
+                *hash<auto> opts) {
+            string className = schemaType == "swagger"
+                ? "Swagger::SwaggerLoader"
+                : "OpenApi3::OpenApi3Loader";
+            load_module(schemaType == "swagger" ? "Swagger" : "OpenApi3");
+            Reflection::Class cls = Reflection::Class::forName(className);
+            Reflection::StaticMethod method = cls.getMethod("fromString");
+            return method.call(schemaSource, json, opts);
+        }
+
+        #! Loads the appropriate schema module and creates a schema object from a file
+        private static AbstractRestSchemaValidator loadSchemaFromFile(string schemaType, string filepath,
+                *hash<auto> opts) {
+            string className = schemaType == "swagger"
+                ? "Swagger::SwaggerLoader"
+                : "OpenApi3::OpenApi3Loader";
+            load_module(schemaType == "swagger" ? "Swagger" : "OpenApi3");
+            Reflection::Class cls = Reflection::Class::forName(className);
+            Reflection::StaticMethod method = cls.getMethod("fromFile");
+            return method.call(filepath, opts);
         }
     }
 }
