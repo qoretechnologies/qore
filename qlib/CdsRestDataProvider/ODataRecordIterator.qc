@@ -77,8 +77,9 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
                 nextLink = resp.body."@odata.nextLink";
                 return i.next();
             } catch (hash<ExceptionInfo> ex) {
-                # Handle pagination errors gracefully
+                # Clear pagination state and rethrow - caller should be aware of the error
                 nextLink = NOTHING;
+                rethrow;
             }
         }
 

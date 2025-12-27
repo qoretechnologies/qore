@@ -197,7 +197,8 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
                     return UpsertResultUpdated;
                 }
             }
-            return UpsertResultUpdated;
+            # Record was just created (systemCreatedAt >= now or not set)
+            return UpsertResultInserted;
         }
         # Dynamics CDS - check createdon field
         if ((*string createdon = resp.body.createdon) && date(createdon) < now) {
