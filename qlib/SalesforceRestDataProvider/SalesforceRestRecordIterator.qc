@@ -179,7 +179,7 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
                 break;
         }
 
-        return sprintf("'%s'", value);
+        return sprintf("'%s'", soql_escape_string(value));
     }
 
     private string getOrderBy(softlist<string> coll) {
@@ -318,6 +318,14 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
                 exp.exp);
         }
         string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+
+        # Validate argument count for comparison operators (need at least field + value)
+        if (exp.exp != DP_SEARCH_OP_IN && exp.exp != SOQL_OP_INCLUDES && exp.exp != SOQL_OP_EXCLUDES) {
+            if (exp.args.size() < 2) {
+                throw "WHERE-ERROR", sprintf("expression %y requires at least 2 arguments (field reference + value), "
+                    "but got %d", exp.exp, exp.args.size());
+            }
+        }
 
         # For IN, INCLUDES, EXCLUDES operators, collect all values into a single list
         if (exp.exp == DP_SEARCH_OP_IN || exp.exp == SOQL_OP_INCLUDES || exp.exp == SOQL_OP_EXCLUDES) {

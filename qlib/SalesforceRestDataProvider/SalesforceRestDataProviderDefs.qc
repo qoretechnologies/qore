@@ -26,9 +26,13 @@
 public namespace SalesforceRestDataProvider {
  #! SOQL operator info hash as returned by all @ref soql_op_funcs "operator functions"
 public hashdecl SoqlOperatorInfo {
-    string op;   #!< the operator string code
-    auto arg;    #!< optional argument
-    int op_args = 1; #!< the number of arguments for the operator
+    string op;   #!< the operator string code (e.g., "=", "<", ">=", "like", "in")
+    auto arg;    #!< optional argument; type depends on the operator (e.g., scalar, list, or hash)
+    #! Number of SOQL operands expected by the operator; used by DataProvider implementations
+    #! to validate argument counts.
+    #! - 1 for single-operand operators (default; e.g., "=", ">", "<=", "like")
+    #! - 0 or more for list operators (e.g., "in", "includes", "excludes")
+    int op_args = 1;
 }
 
 #! column operator info hash as returned by all @ref soql_soql_cop_funcs "column operator functions"
@@ -730,6 +734,14 @@ public hash<SoqlColumnOperatorInfo> sub soql_cop_week_in_year(auto column) {
     - soql_wop_or(): for combining SOQL expressions with \c "or"
 */
 #/@{
+#! Escapes a string value for use in SOQL queries by escaping single quotes
+/** @param value the string value to escape
+    @return the escaped string value safe for use in SOQL
+*/
+public string sub soql_escape_string(string value) {
+    return replace(value, "'", "\\'");
+}
+
 #! returns an @ref SoqlOperatorInfo hash
 public hash<SoqlOperatorInfo> sub soql_make_op(string op, auto arg) {
     return new hash<SoqlOperatorInfo>({"op": op, "arg": arg});
@@ -1163,14 +1175,22 @@ public const DefaultSoqlOpMap = {
     SOQL_OP_INCLUDES: (
         "no_process_arg": True,
         "code": string sub (object i, string cn, auto arg) {
-            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", $1), arg));
+            if (!arg) {
+                # Empty list for includes means no match possible
+                return "1=0";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), arg));
             return sprintf("%s includes (%s)", cn, vals);
         },
     ),
     SOQL_OP_EXCLUDES: (
         "no_process_arg": True,
         "code": string sub (object i, string cn, auto arg) {
-            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", $1), arg));
+            if (!arg) {
+                # Empty list for excludes means all values pass
+                return "1=1";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), arg));
             return sprintf("%s excludes (%s)", cn, vals);
         },
     ),
@@ -1192,6 +1212,10 @@ public const SoqlExpressions = {
     DP_OP_AND: {
         "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
         "impl": string sub (object iter, list<auto> args) {
+            if (!args) {
+                # Empty AND is always true
+                return "1=1";
+            }
             # Recursively process arguments and join with " and "
             list<string> clauses = map iter.processExpressionArg($1), args;
             return "(" + (foldl $1 + " and " + $2, clauses) + ")";
@@ -1200,6 +1224,10 @@ public const SoqlExpressions = {
     DP_OP_OR: {
         "exp": AbstractDataProvider::GenericExpressions{DP_OP_OR},
         "impl": string sub (object iter, list<auto> args) {
+            if (!args) {
+                # Empty OR is always false
+                return "1=0";
+            }
             # Recursively process arguments and join with " or "
             list<string> clauses = map iter.processExpressionArg($1), args;
             return "(" + (foldl $1 + " or " + $2, clauses) + ")";
@@ -1246,12 +1274,18 @@ public const SoqlExpressions = {
     DP_SEARCH_OP_IN: {
         "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
         "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty IN list means no match possible
+                return "1=0";
+            }
             *string ins = (foldl $1 + "," + $2, (map iter.getArgValue(field, $1), values));
             return sprintf("%s in (%s)", field, ins);
         },
     },
-    # NOTE: NOT operator is not fully supported in SOQL - it can only be used at the start of WHERE
-    # For negation, use != (NE) operator instead
+    # NOTE: Standard SOQL does not support a standalone logical NOT operator in WHERE clauses.
+    #       NOT is only allowed in certain constructs (e.g., NOT IN), so a generic
+    #       DP_SEARCH_OP_NOT is intentionally not mapped here.
+    #       For simple negation of equality, use != (NE) instead.
 
     SOQL_OP_LIKE: {
         "exp": <DataProviderExpressionInfo>{
@@ -1280,7 +1314,11 @@ public const SoqlExpressions = {
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": string sub (object iter, string field, softlist<auto> values) {
-            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", $1), values));
+            if (!values) {
+                # Empty includes list means no match possible
+                return "1=0";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), values));
             return sprintf("%s includes (%s)", field, vals);
         },
     },
@@ -1296,7 +1334,11 @@ public const SoqlExpressions = {
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": string sub (object iter, string field, softlist<auto> values) {
-            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", $1), values));
+            if (!values) {
+                # Empty excludes list means all values pass
+                return "1=1";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), values));
             return sprintf("%s excludes (%s)", field, vals);
         },
     },
