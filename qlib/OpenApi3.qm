@@ -3101,22 +3101,24 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                 if (contentObj) {
                     foreach hash<auto> item in (contentObj.pairIterator()) {
                         if (item.value.schema) {
-                            # Create a synthetic body parameter from the requestBody
-                            hash<auto> bodyParam = {
-                                "name": "body",
-                                "in": "body",
-                                "required": requestBodyObj.required ?? False,
-                                "schema": item.value.schema,
-                            };
-                            if (requestBodyObj.description) {
-                                bodyParam.description = requestBodyObj.description;
+                            # Create a synthetic body parameter from the requestBody (only once)
+                            if (!body) {
+                                hash<auto> bodyParam = {
+                                    "name": "body",
+                                    "in": "body",
+                                    "required": requestBodyObj.required ?? False,
+                                    "schema": item.value.schema,
+                                };
+                                if (requestBodyObj.description) {
+                                    bodyParam.description = requestBodyObj.description;
+                                }
+                                body = ParameterObject::newParameter("requestBody", bodyParam, openapi3);
                             }
-                            body = ParameterObject::newParameter("requestBody", bodyParam, openapi3);
-                            # Also set consumes from the content type if not already set
+                            # Add all content types to consumes
                             if (!consumes) {
-                                consumes{item.key} = True;
+                                consumes = {};
                             }
-                            break;
+                            consumes{item.key} = True;
                         }
                     }
                 }

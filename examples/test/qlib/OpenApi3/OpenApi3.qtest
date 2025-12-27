@@ -400,6 +400,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test common extensions", \testCommonExtensions());
         addTestCase("Test OpenAPI 3.1 negative cases", \testOpenApi31NegativeCases());
         addTestCase("Test OpenAPI 3.1 type validation", \testOpenApi31TypeValidation());
+        addTestCase("Test multiple content types in requestBody", \testMultipleContentTypes());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -4042,6 +4043,134 @@ public class OpenApi3Test inherits QUnit::Test {
             # First non-null type should be used
             assertEq("string", multiSchema.type);
             assertFalse(multiSchema.nullable);
+        }
+    }
+
+    #! Test that multiple content types in requestBody are all accepted
+    testMultipleContentTypes() {
+        checkModules();
+
+        # Test schema with requestBody supporting multiple content types
+        # This tests that all content types from requestBody.content are added to consumes,
+        # not just the first one (which was the bug fixed in this commit)
+        hash<auto> spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Multiple Content Types Test", "version": "1.0"},
+            "paths": {
+                "/data": {
+                    "post": {
+                        "operationId": "postData",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                        },
+                                    },
+                                },
+                                "application/xml": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                        },
+                                    },
+                                },
+                                "text/x-yaml": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": {
+                            "200": {"description": "Success"},
+                        },
+                    },
+                },
+            },
+        };
+        OpenApi3Schema so("", spec);
+
+        hash<auto> body = {"name": "test"};
+
+        # Test that JSON content type is accepted (default, first in list)
+        {
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/data", body);
+            assertEq("/data", req.uri_path);
+            assertEq(MimeTypeJson, req.content);
+        }
+
+        # Test that XML content type is accepted when explicitly requested via content_types
+        # Before the fix, only the first content type (JSON) would be in consumes,
+        # so requesting XML would fail
+        {
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/data", body, NOTHING,
+                (MimeTypeXmlApp,));
+            assertEq("/data", req.uri_path);
+            assertEq(MimeTypeXmlApp, req.content);
+        }
+
+        # Test that YAML content type is accepted when explicitly requested
+        # This also verifies that all content types from requestBody.content are in consumes
+        {
+            hash<RestRequestClientInfo> req = so.processRequest("POST", "/data", body, NOTHING,
+                (MimeTypeYaml,));
+            assertEq("/data", req.uri_path);
+            assertEq(MimeTypeYaml, req.content);
+        }
+
+        # Negative test: unsupported content type should be rejected
+        {
+            assertThrows("SERIALIZATION-ERROR", "application/octet-stream",
+                \so.processRequest(), ("POST", "/data", body, NOTHING, ("application/octet-stream",)));
+        }
+
+        # Negative test: schema with only unsupported content type should fail default serialization
+        {
+            hash<auto> spec2 = {
+                "openapi": "3.0.0",
+                "info": {"title": "Limited Content Types Test", "version": "1.0"},
+                "paths": {
+                    "/limited": {
+                        "post": {
+                            "operationId": "postLimited",
+                            "requestBody": {
+                                "required": True,
+                                "content": {
+                                    "image/png": {
+                                        "schema": {
+                                            "type": "string",
+                                            "format": "binary",
+                                        },
+                                    },
+                                },
+                            },
+                            "responses": {
+                                "200": {"description": "Success"},
+                            },
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so2("", spec2);
+            # With no matching serialization module for image/png, this should fail
+            assertThrows("SERIALIZATION-ERROR", "image/png",
+                \so2.processRequest(), ("POST", "/limited", <abcd>));
+        }
+
+        # Test that body parameter is created only once (not duplicated for each content type)
+        {
+            OpenApi3::PathItemObject pio = so.paths.match("/data");
+            OpenApi3::OperationObject op = pio.getOperation("post", "/data");
+            assertTrue(exists op.body);
+            assertEq("body", op.body.name);
         }
     }
 }
