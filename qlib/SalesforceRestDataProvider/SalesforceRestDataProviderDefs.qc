@@ -1282,6 +1282,26 @@ public const SoqlExpressions = {
             return sprintf("%s in (%s)", field, ins);
         },
     },
+    SOQL_OP_NOT_IN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "display_name": "not in",
+            "name": SOQL_OP_NOT_IN,
+            "symbol": "not in",
+            "groups": "Comparison",
+            "desc": "Value is not in the specified list",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureListValueType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty NOT IN list means all values match
+                return "1=1";
+            }
+            *string ins = (foldl $1 + "," + $2, (map iter.getArgValue(field, $1), values));
+            return sprintf("%s not in (%s)", field, ins);
+        },
+    },
     # NOTE: Standard SOQL does not support a standalone logical NOT operator in WHERE clauses.
     #       NOT is only allowed in certain constructs (e.g., NOT IN), so a generic
     #       DP_SEARCH_OP_NOT is intentionally not mapped here.

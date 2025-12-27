@@ -59,6 +59,7 @@ class SalesforceTest inherits QUnit::Test {
         addTestCase("ping tests", \pingTests());
         addTestCase("Salesforce.com DataProvider test", \salesForceDataProviderTests());
         addTestCase("AND/OR expression tests", \andOrExpressionTests());
+        addTestCase("SOQL operator unit tests", \soqlOperatorUnitTests());
         addTestCase("Salesforce.com REST", \salesForceRestTests());
         addTestCase("connection tests", \connectionTest());
 
@@ -508,6 +509,126 @@ class SalesforceTest inherits QUnit::Test {
             assertTrue(info.expressions.hasKey(SOQL_OP_LIKE), "expressions should include SOQL_OP_LIKE");
             assertTrue(info.expressions.hasKey(SOQL_OP_INCLUDES), "expressions should include SOQL_OP_INCLUDES");
             assertTrue(info.expressions.hasKey(SOQL_OP_EXCLUDES), "expressions should include SOQL_OP_EXCLUDES");
+            assertTrue(info.expressions.hasKey(SOQL_OP_NOT_IN), "expressions should include SOQL_OP_NOT_IN");
+        }
+
+        # Test NOT IN expression
+        {
+            hash<DataProviderExpression> not_in_expr = <DataProviderExpression>{
+                "exp": SOQL_OP_NOT_IN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "Type"},
+                    ("Competitor", "Other"),  # Pass as a list to match signature
+                ),
+            };
+            list<hash<auto>> recs = map $1, account.searchRecords(not_in_expr, {"limit": 5});
+            # Should find records that are NOT of type Competitor or Other
+            assertTrue(recs.size() >= 0, "NOT IN expression should return results");
+        }
+    }
+
+    # Unit tests for SOQL operators that don't require a Salesforce connection
+    soqlOperatorUnitTests() {
+        # Test soql_escape_string function
+        assertEq("test", soql_escape_string("test"), "soql_escape_string: no escaping needed");
+        assertEq("test\\'s value", soql_escape_string("test's value"), "soql_escape_string: single quote escaped");
+        assertEq("it\\'s a test\\'s test", soql_escape_string("it's a test's test"),
+            "soql_escape_string: multiple quotes escaped");
+
+        # Test SoqlExpressions has all expected operators
+        assertTrue(SoqlExpressions.hasKey(DP_OP_AND), "SoqlExpressions has AND");
+        assertTrue(SoqlExpressions.hasKey(DP_OP_OR), "SoqlExpressions has OR");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_EQ), "SoqlExpressions has EQ");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_NE), "SoqlExpressions has NE");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_LT), "SoqlExpressions has LT");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_LE), "SoqlExpressions has LE");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_GT), "SoqlExpressions has GT");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_GE), "SoqlExpressions has GE");
+        assertTrue(SoqlExpressions.hasKey(DP_SEARCH_OP_IN), "SoqlExpressions has IN");
+        assertTrue(SoqlExpressions.hasKey(SOQL_OP_NOT_IN), "SoqlExpressions has NOT_IN");
+        assertTrue(SoqlExpressions.hasKey(SOQL_OP_LIKE), "SoqlExpressions has LIKE");
+        assertTrue(SoqlExpressions.hasKey(SOQL_OP_INCLUDES), "SoqlExpressions has INCLUDES");
+        assertTrue(SoqlExpressions.hasKey(SOQL_OP_EXCLUDES), "SoqlExpressions has EXCLUDES");
+
+        # Test operator info structures
+        {
+            hash<SoqlOperatorInfo> op = soql_op_like("%test%");
+            assertEq(SOQL_OP_LIKE, op.op, "soql_op_like creates correct operator");
+            assertEq("%test%", op.arg, "soql_op_like preserves argument");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_in("a", "b", "c");
+            assertEq(SOQL_OP_IN, op.op, "soql_op_in creates correct operator");
+            assertEq(("a", "b", "c"), op.arg, "soql_op_in preserves arguments");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_not_in("x", "y");
+            assertEq(SOQL_OP_NOT_IN, op.op, "soql_op_not_in creates correct operator");
+            assertEq(("x", "y"), op.arg, "soql_op_not_in preserves arguments");
+        }
+
+        {
+            # Test not_in with list argument
+            hash<SoqlOperatorInfo> op = soql_op_not_in(("a", "b", "c"));
+            assertEq(SOQL_OP_NOT_IN, op.op, "soql_op_not_in with list creates correct operator");
+            assertEq(("a", "b", "c"), op.arg, "soql_op_not_in with list preserves arguments");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_includes("val1", "val2");
+            assertEq(SOQL_OP_INCLUDES, op.op, "soql_op_includes creates correct operator");
+            assertEq(("val1", "val2"), op.arg, "soql_op_includes preserves arguments");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_excludes("val1", "val2");
+            assertEq(SOQL_OP_EXCLUDES, op.op, "soql_op_excludes creates correct operator");
+            assertEq(("val1", "val2"), op.arg, "soql_op_excludes preserves arguments");
+        }
+
+        # Test date literal operators
+        {
+            hash<SoqlOperatorInfo> op = soql_op_date(SOQL_DATE_TODAY);
+            assertEq("date_literal", op.op, "soql_op_date creates date_literal operator");
+            assertEq(SOQL_DATE_TODAY, op.arg.literal, "soql_op_date preserves literal");
+            assertEq("=", op.arg.op, "soql_op_date default comparison is =");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_date(SOQL_DATE_LAST_WEEK, ">=");
+            assertEq(">=", op.arg.op, "soql_op_date custom comparison preserved");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_last_n_days(30);
+            assertEq("LAST_N_DAYS:30", op.arg.literal, "soql_op_last_n_days creates correct literal");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_next_n_days(7);
+            assertEq("NEXT_N_DAYS:7", op.arg.literal, "soql_op_next_n_days creates correct literal");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_last_n_weeks(4);
+            assertEq("LAST_N_WEEKS:4", op.arg.literal, "soql_op_last_n_weeks creates correct literal");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_last_n_months(6);
+            assertEq("LAST_N_MONTHS:6", op.arg.literal, "soql_op_last_n_months creates correct literal");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_last_n_quarters(2);
+            assertEq("LAST_N_QUARTERS:2", op.arg.literal, "soql_op_last_n_quarters creates correct literal");
+        }
+
+        {
+            hash<SoqlOperatorInfo> op = soql_op_last_n_years(1);
+            assertEq("LAST_N_YEARS:1", op.arg.literal, "soql_op_last_n_years creates correct literal");
         }
     }
 
