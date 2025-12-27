@@ -253,6 +253,7 @@ class SocketTest inherits QUnit::Test {
         }
         {
             Queue q();
+            int BinarySize = 128 * 1024;
             background sub () {
                 Socket s0();
 
@@ -267,11 +268,15 @@ class SocketTest inherits QUnit::Test {
                 q.push(port);
 
                 Socket s2 = s0.acceptSSL(100ms);
-                assertTrue(s2.isDataAvailable(2s));
-                binary b0 = s2.recvBinary(-1, 1s);
+                # Receive all data - loop until we get the expected size
+                binary b0;
+                while (b0.size() < BinarySize) {
+                    assertTrue(s2.isDataAvailable(5s));
+                    b0 += s2.recvBinary(-1, 1s);
+                }
                 q.push(b0);
 
-                b0 = get_random_bytes(128 * 1024);
+                b0 = get_random_bytes(BinarySize);
                 s2.send(b0, 5s);
                 assertEq(b0, q.get(5s));
             }();
@@ -280,13 +285,17 @@ class SocketTest inherits QUnit::Test {
 
             s1.connectSSL("127.0.0.1:" + q.get(2s));
 
-            binary b = get_random_bytes(128 * 1024);
+            binary b = get_random_bytes(BinarySize);
             s1.send(b, 5s);
-            assertEq(b, q.get(2s));
+            assertEq(b, q.get(5s));
 
-            assertTrue(s1.isDataAvailable(2s));
-            b = s1.recvBinary(-1, 1s);
-            q.push(b);
+            # Receive all data - loop until we get the expected size
+            binary b1;
+            while (b1.size() < BinarySize) {
+                assertTrue(s1.isDataAvailable(5s));
+                b1 += s1.recvBinary(-1, 1s);
+            }
+            q.push(b1);
         }
     }
 
@@ -1129,7 +1138,8 @@ class SocketTest inherits QUnit::Test {
         m = s.readHTTPHeader(-1, \info);
         assertEq(Type::Hash, info."headers-raw".type());
         assertEq("GET", m.method, who + " HTTP header method");
-        assertEq("0", m."content-length");
+        # GET requests without a body may not have Content-Length header
+        assertTrue(!m."content-length" || m."content-length" == "0");
 
         StringInputStream input_stream("OK");
         s.sendHTTPResponse(200, "OK", "1.1", http_headers + {"Transfer-Encoding": "chunked"}, input_stream, NOTHING, \info);
