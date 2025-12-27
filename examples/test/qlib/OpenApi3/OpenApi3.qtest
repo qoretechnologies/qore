@@ -1527,6 +1527,102 @@ public class OpenApi3Test inherits QUnit::Test {
         assertThrows("INVALID-FIELD-TYPE", "headers", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
         r = {"a": {"description": "a", "examples": 5}};
         assertThrows("INVALID-FIELD-TYPE", "examples", loadyaml, my_make_yaml(base + {"components": {"responses": r}}));
+
+        # Test OpenAPI 3.0 content-style response with empty schema object {} (means "any type")
+        # This tests the fix for handling falsy but valid empty schema objects
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Empty Schema Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "get": {
+                            "operationId": "testEmptySchema",
+                            "responses": {
+                                "200": {
+                                    "description": "Success with any response body",
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {},  # Empty schema means "any type"
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            # Verify the response was parsed correctly
+            OpenApi3::PathItemObject pio = so.paths.match("/test");
+            OpenApi3::OperationObject op = pio.getOperation("get", "/test");
+            assertTrue(exists op.responses);
+
+            # Get the 200 response and verify schema exists (even though empty)
+            *OpenApi3::ResponseObject resp = op.responses.responses."200";
+            assertTrue(exists resp);
+            # The schema should exist because we used "exists" check
+            assertTrue(exists resp.schema);
+        }
+
+        # Test that response without schema in content works (no schema key at all)
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "No Schema Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "get": {
+                            "operationId": "testNoSchema",
+                            "responses": {
+                                "204": {
+                                    "description": "No content response",
+                                    "content": {
+                                        "application/json": {},  # No schema key
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            OpenApi3Schema so("", spec);
+
+            OpenApi3::PathItemObject pio = so.paths.match("/test");
+            OpenApi3::OperationObject op = pio.getOperation("get", "/test");
+            *OpenApi3::ResponseObject resp = op.responses.responses."204";
+            assertTrue(exists resp);
+            # Schema should NOT exist when the schema key is completely absent
+            assertFalse(exists resp.schema);
+        }
+
+        # Negative test: schema with invalid type should still throw error
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Invalid Schema Test", "version": "1.0"},
+                "paths": {
+                    "/test": {
+                        "get": {
+                            "operationId": "testInvalidSchema",
+                            "responses": {
+                                "200": {
+                                    "description": "Response with invalid schema type",
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {"type": "invalid_type"},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            assertThrows("INVALID-FIELD-VALUE", "invalid_type",
+                sub () { new OpenApi3Schema("", spec); });
+        }
     }
 
     testHeaderObject() {

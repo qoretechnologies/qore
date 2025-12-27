@@ -4098,7 +4098,8 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
             # OpenAPI 3.0 style: extract content types and schema from content.{mediaType}
             foreach hash<auto> item in (oh.content.pairIterator()) {
                 contentTypes{item.key} = True;
-                if (item.value.schema && !schema) {
+                # Use "exists" to handle empty schema objects {} which are falsy but valid (means "any type")
+                if (exists item.value.schema && !schema) {
                     schema = SchemaObject::newSchemaObject("response_" + key, item.value.schema, openapi3);
                 }
             }
