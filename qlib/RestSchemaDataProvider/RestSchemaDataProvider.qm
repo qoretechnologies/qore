@@ -42,7 +42,7 @@
 %requires(reexport) OpenApi3
 
 module RestSchemaDataProvider {
-    version = "1.0";
+    version = "2.3";
     desc = "user module providing a data provider API for REST schemas (Swagger 2.0 and OpenAPI 3.0)";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -81,8 +81,11 @@ module RestSchemaDataProvider {
 
     @section restschemamdataprovider_relnotes Release Notes
 
-    @subsection restschemamdataprovider_v1_0 RestSchemaDataProvider v1.0
+    @subsection restschemamdataprovider_v2_3 RestSchemaDataProvider v2.3
     - initial release of the module supporting both Swagger 2.0 and OpenAPI 3.0 schemas
+    - uses abstract base classes from RestSchemaValidator module for polymorphic access to
+      operation and path item objects
+      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
 */
 
 #! contains all public definitions in the RestSchemaDataProvider module

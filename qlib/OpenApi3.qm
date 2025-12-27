@@ -53,7 +53,7 @@
 %allow-weak-references
 
 module OpenApi3 {
-    version = "1.0";
+    version = "2.3";
     desc = "OpenApi3 module providing functionality for OpenApi 3 schema definitions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -157,8 +157,24 @@ RestHandler handler(NOTHING, openapi3);
 
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
-    @subsection openapi3_1_0 OpenApi3 v1.0
+    @subsection openapi3_2_3 OpenApi3 v2.3
     - initial release of the %OpenApi3 module
+    - classes inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
+      - @ref OpenApi3::SchemaBase "SchemaBase": inherits
+        @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"
+      - @ref OpenApi3::SchemaObject "SchemaObject": inherits
+        @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
+      - @ref OpenApi3::ParameterBase "ParameterBase": inherits
+        @ref RestSchemaValidator::AbstractParameterObject "AbstractParameterObject"
+      - @ref OpenApi3::ResponseObject "ResponseObject": inherits
+        @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject"
+      - @ref OpenApi3::ResponsesObject "ResponsesObject": inherits
+        @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject"
+      - @ref OpenApi3::PathItemObject "PathItemObject": inherits
+        @ref RestSchemaValidator::AbstractPathItemObject "AbstractPathItemObject"
+      - @ref OpenApi3::OperationObject "OperationObject": inherits
+        @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject"
+      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -307,26 +323,11 @@ class ObjectBase inherits Qore::Serializable {
 }
 
 #! Base used by @ref HeaderObject and @ref SchemaObject
-class SchemaBase inherits Qore::Serializable {
+/** Inherits common validation constraint members from
+    @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase".
+*/
+class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
     public {
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *softfloat maximum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *softfloat minimum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        /** In OpenAPI 3.0, this is a boolean modifier for maximum.
-            In OpenAPI 3.1, exclusiveMaximum is a numeric value directly.
-        */
-        *bool exclusiveMax;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        /** In OpenAPI 3.0, this is a boolean modifier for minimum.
-            In OpenAPI 3.1, exclusiveMinimum is a numeric value directly.
-        */
-        *bool exclusiveMin;
-
         #! OpenAPI 3.1 numeric exclusiveMaximum value
         /** In OpenAPI 3.1, exclusiveMaximum is a direct numeric value (not a boolean modifier)
         */
@@ -336,33 +337,6 @@ class SchemaBase inherits Qore::Serializable {
         /** In OpenAPI 3.1, exclusiveMinimum is a direct numeric value (not a boolean modifier)
         */
         *softfloat exclusiveMinValue;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.1.
-        *int maxLength;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.2.
-        *int minLength;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.3.
-        *string pattern;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.2.
-        *int maxItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.3.
-        *int minItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.4.
-        *bool uniqueItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.1.
-        /** @note OpenApi3 enums can be of any type, but we only support enums of simple types that can be converted
-            to a string for fast lookups in a hash
-        */
-        hash<string, bool> enum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.1.
-        *float multipleOf;
     }
 
     #! Constructor.
@@ -1108,7 +1082,7 @@ public class ParameterGroup {
 
     #! Adds a parameter to the group
     addParameter(string key, ParameterObject p) {
-        if (p.in_loc == "query" && p.schema && p.schema.type == "object") {
+        if (p.inLoc == "query" && p.schema && p.schema.type == "object") {
             if (exists query_obj) {
                 throw "OPENAPI3-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
                     "\"object\"; cannot define subsequent parameter %y with the same type", query_obj, key);
@@ -2147,6 +2121,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         return schema.getField(name, desc, required, rest);
     }
 
+    #! Returns a field definition from an abstract schema object
+    /** This method provides polymorphic access to getFieldFromSchema()
+        @since OpenApi3 1.2
+    */
+    AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
+            bool required = True, *HTTPClient rest) {
+        return cast<SchemaObject>(schema).getField(name, desc, required, rest);
+    }
+
     #! Adds field definitions to a hash type from OpenAPI 3.0 parameters
     addFieldsFromParameters(HashDataType rv, hash<string, ParameterBase> parameters,
             reference<bool> required) {
@@ -2168,25 +2151,25 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         # required flag map for type: loc -> bool
         hash<string, bool> req_map;
         foreach hash<auto> i in (parameters.pairIterator()) {
-            switch (i.value.in_loc) {
+            switch (i.value.inLoc) {
                 # body and formData parameters are handled directly under the operation
                 case "query": {
-                    params{i.value.in_loc}{i.value.name} =
+                    params{i.value.inLoc}{i.value.name} =
                         i.value.schema.getField(i.value.name, i.value.desc, i.value.required);
                     # if at least one query argument is required, then we set "required" to True for the hash
-                    if (i.value.required && !req_map{i.value.in_loc}) {
-                        req_map{i.value.in_loc} = True;
+                    if (i.value.required && !req_map{i.value.inLoc}) {
+                        req_map{i.value.inLoc} = True;
                     }
                     break;
                 }
 
                 case "header": {
-                    params{i.value.in_loc}{i.value.name} =
+                    params{i.value.inLoc}{i.value.name} =
                         i.value.schema.getField(i.value.name, i.value.desc, i.value.required);
                     # if at least one query argument is required, then we set "required" to True for the hash
                     if (i.value.required) {
-                        if (!req_map{i.value.in_loc}) {
-                            req_map{i.value.in_loc} = True;
+                        if (!req_map{i.value.inLoc}) {
+                            req_map{i.value.inLoc} = True;
                         }
                         if (!required) {
                             required = True;
@@ -2836,7 +2819,7 @@ public class PathsObject inherits ObjectBase {
     exposed to the documentation viewer but they will not know which operations
     and parameters are available.
  */
-public class PathItemObject inherits ObjectBase, ParameterGroup {
+public class PathItemObject inherits ObjectBase, ParameterGroup, RestSchemaValidator::AbstractPathItemObject {
     public {
         #! Allows for an external definition of this path item.
         /**
@@ -2917,7 +2900,7 @@ public class PathItemObject inherits ObjectBase, ParameterGroup {
                 ParameterObject p = ParameterObject::newParameter(
                     sprintf("%d/%d", $# + 1, params.lsize()), param, openapi3
                 );
-                if (p.in_loc == "body") {
+                if (p.inLoc == "body") {
                     if (body)
                         throw "INVALID-FIELD-VALUE", sprintf("path %y: more than one \"body\" parameter provided",
                             path);
@@ -2951,28 +2934,30 @@ public class PathItemObject inherits ObjectBase, ParameterGroup {
     softlist getMethods() {
         return keys operations;
     }
+
+    #! Returns the body parameter, if any
+    *RestSchemaValidator::AbstractParameterObject getBody() {
+        return body;
+    }
+
+    #! Returns the parameters hash
+    hash<string, RestSchemaValidator::AbstractParameterObject> getParameters() {
+        return cast<hash<string, RestSchemaValidator::AbstractParameterObject>>(parameters);
+    }
 }
 
 #! Describes a single API operation on a path.
-public class OperationObject inherits ObjectBase, ParameterGroup {
+/** Inherits common operation members from
+    @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject":
+    - path, method, summary, desc, consumes, produces
+*/
+public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaValidator::AbstractOperationObject {
     public {
-        #! the URI path for the operation
-        string path;
-
-        #! the HTTP method for the operation
-        string method;
-
         #! A list of tags (strings or @ref TagObject "TagObjects") for API documentation control.
         /**
             Tags can be used for logical grouping of operations by resources or any other qualifier.
          */
         list tags;
-
-        #! A short summary of what the operation does.
-        *string summary;
-
-        #! A verbose explanation of the operation behavior. GFM syntax can be used for rich text representation.
-        *string desc;
 
         #! Declares this operation to be deprecated.
         /**
@@ -2992,22 +2977,6 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
             programming naming conventions.
          */
         *string operationId;
-
-        #! A list of MIME types (strings) the operation can consume.
-        /**
-            This overrides the @ref OpenApi3Schema::consumes "consumes" definition
-            at the %OpenApi3 Object. An empty value MAY be used to clear the global definition.
-            Key values MUST be Mime Types.
-         */
-        hash<string, bool> consumes;
-
-        #! A hash of MIME types (strings) the operation can produce.
-        /**
-            This overrides the @ref OpenApi3Schema::produces "produces" definition
-            at the %OpenApi3 Object. An empty value MAY be used to clear the global definition.
-            Key values MUST be Mime Types.
-         */
-        hash<string, bool> produces;
 
         #! formData parameter; if defined for this operation, body parameter will be excluded
         hash<string, ParameterObject> formData;
@@ -3109,9 +3078,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
                 }
                 ParameterObject param = ParameterObject::newParameter(sprintf("%d/%d", $# + 1,
                     listObj.lsize()), p, openapi3);
-                if (param.in_loc == "body") {
+                if (param.inLoc == "body") {
                     body = param;
-                } else if (param.in_loc == "formData") {
+                } else if (param.inLoc == "formData") {
                     formData{param.name} = param;
                 } else {
                     addParameter(param);
@@ -3187,8 +3156,17 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
     }
 
     #! Processes a generated request
-    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers) {
-        *ParameterObject body_po = self.body ?? pio.body;
+    /** @param pio the path item object
+        @param body the request body
+        @param headers reference to headers
+        @param freeform if \c True, allow freeform validation (optional)
+
+        @return the serialized request body data
+    */
+    *data getRequestBody(RestSchemaValidator::AbstractPathItemObject pio, auto body, reference<hash<auto>> headers,
+            *bool freeform) {
+        PathItemObject real_pio = cast<PathItemObject>(pio);
+        *ParameterObject body_po = self.body ?? real_pio.body;
         if (body_po) {
             body_po.check(True, True, path, method, "body", \body);
         } else if (formData) {
@@ -3239,32 +3217,37 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
         @param body a reference to the deserialized HTTP message body data
         @param headers a reference to a hash of HTTP headers
         @param mime_types a reference to a hash of valid mime types for the operation
+        @param freeform if \c True, allow freeform validation (optional, Swagger-specific)
 
         @throws SCHEMA-VALIDATION-ERROR invalid parameter name or location, missing parameter and parameter has no
         default value
     */
-    validateRequest(bool serialize, PathItemObject pio, reference<hash<UriQueryInfo>> h, reference<auto> body,
-            reference<hash> headers, *reference<hash<string, bool>> mime_types) {
+    validateRequest(bool serialize, RestSchemaValidator::AbstractPathItemObject pio, reference<hash<UriQueryInfo>> h,
+            reference<auto> body, reference<hash> headers, *reference<hash<string, bool>> mime_types,
+            *bool freeform) {
+        PathItemObject real_pio = cast<PathItemObject>(pio);
+
         # check query parameters
-        *string query_obj = self.query_obj ?? pio.query_obj;
+        *string query_obj = self.query_obj ?? real_pio.query_obj;
         if (exists query_obj) {
-            h.params{query_obj} = map {$1: remove h.params{$1}}, keys h.params, !parameters{$1} && !pio.parameters{$1};
+            h.params{query_obj} = map {$1: remove h.params{$1}}, keys h.params,
+                !parameters{$1} && !real_pio.parameters{$1};
         }
 
         foreach string key in (keys h.params) {
             # find URI parameter object
-            *ParameterObject po = parameters{key} ?? pio.parameters{key};
+            *ParameterObject po = parameters{key} ?? real_pio.parameters{key};
             if (!po) {
-                if (exists (*string op = (query_obj ?? pio.query_obj))) {
+                if (exists (*string op = (query_obj ?? real_pio.query_obj))) {
                     h.params{op}{key} = remove h.params{key};
                 } else {
                     error("SCHEMA-VALIDATION-ERROR", "No query parameter named %y defined for this path and method; "
-                        "known query parameters: %y", key, keys (parameters + pio.parameters));
+                        "known query parameters: %y", key, keys (parameters + real_pio.parameters));
                 }
             }
-            if (po.in_loc != "query") {
+            if (po.inLoc != "query") {
                 error("SCHEMA-VALIDATION-ERROR", "invalid parameter %y given in the URI query; expected location %y",
-                    key, po.in_loc);
+                    key, po.inLoc);
             }
 
             po.check(serialize, True, path, method, key, \h.params{key});
@@ -3278,9 +3261,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
         # check header parameters
         foreach string key in (keys headers) {
             # find URI parameter object
-            *ParameterObject po = parameters{key} ?? pio.parameters{key};
+            *ParameterObject po = parameters{key} ?? real_pio.parameters{key};
             # extra headers are OK
-            if (!po || po.in_loc != "header") {
+            if (!po || po.inLoc != "header") {
                 continue;
             }
 
@@ -3289,7 +3272,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
 
         # check body parameters
         {
-            *ParameterObject body_po = self.body ?? pio.body;
+            *ParameterObject body_po = self.body ?? real_pio.body;
             if (body_po) {
                 body_po.check(serialize, True, path, method, "body", \body);
             } else if (formData) {
@@ -3303,10 +3286,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
 
         # check path parameters
         foreach string param in (path =~ x/{([^}]+)}/g) {
-            *ParameterObject po = parameters{param} ?? pio.parameters{param};
+            *ParameterObject po = parameters{param} ?? real_pio.parameters{param};
             if (!po) {
                 error("SCHEMA-VALIDATION-ERROR", "No path parameter named %y defined for this path and method; "
-                    "known parameters: %y", param, keys (parameters + pio.parameters));
+                    "known parameters: %y", param, keys (parameters + real_pio.parameters));
             }
 
             string pattern = replace(path, "{" + param + "}", "(.*)");
@@ -3334,7 +3317,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
 
         # check for missing required parameters
         checkMissingParams(h, headers, body, parameters);
-        checkMissingParams(h, headers, body, pio.parameters, parameters);
+        checkMissingParams(h, headers, body, real_pio.parameters, parameters);
 
         if (consumes) {
             mime_types = consumes;
@@ -3519,9 +3502,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
             hash<string, ParameterObject> parameters, *hash<string, ParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked or if it's the single message body param
-            if (child_params{ph.key} || ph.value.in_loc == "body" || ph.value.in_loc == "formData")
+            if (child_params{ph.key} || ph.value.inLoc == "body" || ph.value.inLoc == "formData")
                 continue;
-            switch (ph.value.in_loc) {
+            switch (ph.value.inLoc) {
                 case "query":
                     query{ph.key} = ph.value.getExampleValue();
                     break;
@@ -3537,10 +3520,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
             hash<string, ParameterObject> parameters, *hash<string, ParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked or if it's the single message body param
-            if (child_params{ph.key} || ph.value.in_loc == "body")
+            if (child_params{ph.key} || ph.value.inLoc == "body")
                 continue;
             if (exists (auto val = ph.value.getDefaultValue())) {
-                switch (ph.value.in_loc) {
+                switch (ph.value.inLoc) {
                     case "query":
                         if (!exists h.params{ph.key})
                             h.params{ph.key} = val;
@@ -3564,10 +3547,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
             hash<string, ParameterObject> parameters, *hash<string, ParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked
-            if (child_params{ph.key} || ph.value.in_loc == "body")
+            if (child_params{ph.key} || ph.value.inLoc == "body")
                 continue;
             if (ph.value.required) {
-                switch (ph.value.in_loc) {
+                switch (ph.value.inLoc) {
                     case "query":
                         if (!exists h.params{ph.key})
                             error("SCHEMA-VALIDATION-ERROR", "request is missing required query parameter %y",
@@ -3619,6 +3602,21 @@ public class OperationObject inherits ObjectBase, ParameterGroup {
     *string getXSummary() {
         return vendorExtensions."x-summary";
     }
+
+    #! Returns the responses object
+    RestSchemaValidator::AbstractResponsesObject getResponses() {
+        return responses;
+    }
+
+    #! Returns the body parameter, if any
+    *RestSchemaValidator::AbstractParameterObject getBody() {
+        return body;
+    }
+
+    #! Returns the parameters hash
+    hash<string, RestSchemaValidator::AbstractParameterObject> getParameters() {
+        return cast<hash<string, RestSchemaValidator::AbstractParameterObject>>(parameters);
+    }
 }
 
 #! Allows referencing an external resource for extended documentation.
@@ -3646,31 +3644,11 @@ public class ExternalDocumentationObject inherits ObjectBase {
 }
 
 #! Base class for ParameterObject and HeaderObject
-public class ParameterBase inherits ObjectBase {
+/** Inherits common parameter members from
+    @ref RestSchemaValidator::AbstractParameterObject "AbstractParameterObject".
+*/
+public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractParameterObject {
     public {
-        #! Required. The name of the parameter. Parameter names are case sensitive
-        /**
-            - If @ref ParameterObject::in_loc "in_loc" is \c "path", the \c name
-                field MUST correspond to the associated path segment from the
-                \c "path" field in the @ref OpenApi3::PathsObject.
-            - For all other cases, the name corresponds to the parameter name
-                used based on the @ref ParameterObject::in_loc "in_loc" property.
-        */
-        string name;
-
-        #! Required. The location of the parameter
-        /**
-            Possible values are \c "query", \c "header", \c "path", \c "formData" or \c "body".
-        */
-        string in_loc;
-
-        #! A brief description of the parameter
-        /** This could contain examples of use
-
-            CommonMark syntax MAY be used for rich text representation
-        */
-        *string desc;
-
         #! Describes how the parameter value will be serialized depending on the type of the parameter value
         /** Default values (based on value of in):
             - for query - form
@@ -3693,14 +3671,6 @@ public class ParameterBase inherits ObjectBase {
             an in value of query. The default value is false.
         */
         bool allowReserved;
-
-        #! Determines whether this parameter is mandatory
-        /**
-            If the parameter is @ref ParameterObject::in_loc "in" "path",
-            this property is \b required and its value MUST be \c true.
-            Otherwise, the property MAY be included and its default value is \c false.
-        */
-        bool required = False;
 
         #! Specifies that a parameter is deprecated and SHOULD be transitioned out of usage
         /**
@@ -3768,11 +3738,11 @@ public class ParameterBase inherits ObjectBase {
 
     #! Parse the parameter data
     private parseData(hash<auto> oh, OpenApi3Schema openapi3) {
-        string obj_type = sprintf("%s parameter", in_loc);
+        string obj_type = sprintf("%s parameter", inLoc);
         on_error rethrow $1.err, sprintf("%s (%s %y)", $1.desc, obj_type, name);
 
         optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
-        if (in_loc == "path") {
+        if (inLoc == "path") {
             required_field(obj_type, oh, "required", NT_BOOLEAN, \required);
             if (!required) {
                 throw "INVALID-PARAMETER", sprintf("Path parameter %y has 'required: false'", name);
@@ -3792,11 +3762,11 @@ public class ParameterBase inherits ObjectBase {
             if (!StyleMap{style}) {
                 throw "INVALID-STYLE", sprintf("Style %y is invalid; known styles: %y", style, keys StyleMap);
             }
-            if (!LocStyleMap{in_loc}{style}) {
+            if (!LocStyleMap{inLoc}{style}) {
                 throw "INVALID-STYLE", sprintf("Style %y is invalid for location %y; valid styles for this "
-                    "location: %y", style, in_loc, keys LocStyleMap{in_loc});
+                    "location: %y", style, inLoc, keys LocStyleMap{inLoc});
             }
-        } else if (exists (*string s = DefaultStyles{in_loc})) {
+        } else if (exists (*string s = DefaultStyles{inLoc})) {
             style = s;
         }
 
@@ -3804,7 +3774,7 @@ public class ParameterBase inherits ObjectBase {
             explode = True;
         }
 
-        if (in_loc == "query") {
+        if (inLoc == "query") {
             optional_field(obj_type, oh, "allowReserved", NT_BOOLEAN, \allowReserved);
         }
 
@@ -3828,7 +3798,7 @@ public class ParameterBase inherits ObjectBase {
 #! Describes a single operation parameter
 /**
     A unique parameter is defined by a combination of a @ref ParameterObject::name "name"
-    and @ref ParameterObject::in_loc "location".
+    and @ref ParameterObject::inLoc "location".
 
     There are five possible parameter types:
     - Path: Used together with Path Templating, where the parameter value is
@@ -3893,12 +3863,12 @@ public class ParameterObject inherits ParameterBase {
     */
     public constructor(hash<auto> oh, OpenApi3Schema openapi3) : ParameterBase(oh) {
         required_field("parameter", oh, "name", NT_STRING, \name);
-        required_field("parameter", oh, "in", NT_STRING, \in_loc);
-        if (!ParameterLocations{in_loc}) {
+        required_field("parameter", oh, "in", NT_STRING, \inLoc);
+        if (!ParameterLocations{inLoc}) {
             throw "INVALID-FIELD-VALUE", sprintf("parameter %y: invalid location (\"in\") value: %y", name, oh."in");
         }
-        if (in_loc == "query") {
-            optional_field(in_loc + " parameter", oh, "allowEmptyValue", NT_BOOLEAN, \allowEmptyValue);
+        if (inLoc == "query") {
+            optional_field(inLoc + " parameter", oh, "allowEmptyValue", NT_BOOLEAN, \allowEmptyValue);
         }
         parseData(oh, openapi3);
     }
@@ -3913,7 +3883,7 @@ public class ParameterObject inherits ParameterBase {
         on_error rethrow $1.err, sprintf("%s (while checking %s parameter)", $1.desc, self.name);
 
         # issue #2388 ensure that query parameters are converted to their target type first
-        if (in_loc == "query") {
+        if (inLoc == "query") {
             switch (schema.type) {
                 case "integer": {
                     if (value.typeCode() == NT_STRING) {
@@ -3982,7 +3952,7 @@ public class ParameterObject inherits ParameterBase {
                     }
                     break;
             }
-        } else if (in_loc == "path" && !value && path) {
+        } else if (inLoc == "path" && !value && path) {
             # if we have a path and a missing value then ignore the missing value
             return;
         }
@@ -4016,10 +3986,17 @@ public class ParameterObject inherits ParameterBase {
         }
         return new ParameterObject(oh, openapi3);
     }
+
+    #! Returns the schema for this parameter
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return schema;
+    }
 }
 
 #! contains the possible responses for an operation
-public class ResponsesObject inherits ObjectBase {
+/** Inherits from @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject".
+*/
+public class ResponsesObject inherits ObjectBase, RestSchemaValidator::AbstractResponsesObject {
     public {
         # The documentation of responses other than the ones declared for specific HTTP response codes.
         /**
@@ -4063,14 +4040,24 @@ public class ResponsesObject inherits ObjectBase {
         if (responses.empty() && !defaultObj)
             throw "EMPTY-RESPONSES", sprintf("%s %s: no valid responses provided for operation", method, path);
     }
+
+    #! Returns the default response, if any
+    *RestSchemaValidator::AbstractResponseObject getDefaultResponse() {
+        return defaultResp;
+    }
+
+    #! Returns the hash of responses by HTTP status code
+    *hash<string, RestSchemaValidator::AbstractResponseObject> getResponses() {
+        return cast<*hash<string, RestSchemaValidator::AbstractResponseObject>>(responses);
+    }
 }
 
 #! Describes a single response from an API Operation.
-public class ResponseObject inherits ObjectBase {
+/** Inherits common response members from
+    @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject".
+*/
+public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractResponseObject {
     public {
-        #! Required. A short description of the response. GFM syntax can be used for rich text representation.
-        string desc;
-
         #! A definition of the response structure.
         /**
             It can be a primitive, an array or an object. If this field does not exist,
@@ -4079,22 +4066,6 @@ public class ResponseObject inherits ObjectBase {
             be \c "file". This SHOULD be accompanied by a relevant \c produces mime-type.
          */
         *SchemaObject schema;
-
-        #! A hash of headers that are (can be) sent with the response.
-        /**
-            A hash of @ref HeaderObject objects. Keys are header names.
-         */
-        hash<auto> headers;
-
-        #! A hash of example response messages.
-        /**
-            A hash of example responses in the form of <tt>Example Object</tt>.
-            See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#exampleObject
-            Keys MUST be one of the Operation @ref OperationObject::produces "produces"
-            values (either implicit or inherited). The value SHOULD be an example
-            of what such a response would look like.
-         */
-        hash examples;
 
         #! Content types supported by this response (OpenAPI 3.0).
         /**
@@ -4157,6 +4128,11 @@ public class ResponseObject inherits ObjectBase {
             return openapi3.resolveResponse(key, oh."$ref", oh);
         return new ResponseObject(key, oh, openapi3);
     }
+
+    #! Returns the response schema, if any
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return schema;
+    }
 }
 
 #! describes a single HTTP header
@@ -4172,11 +4148,26 @@ public class HeaderObject inherits ParameterBase {
      */
     public constructor(string name, hash<auto> oh, OpenApi3Schema openapi3) : ParameterBase(oh) {
         self.name = name;
-        in_loc = "header";
+        inLoc = "header";
         if (oh.hasKey("in")) {
             throw "HEADER-ERROR", sprintf("Header %y must not specify the 'in' keyword (%y)", name, oh."in");
         }
         parseData(oh, openapi3);
+    }
+
+    #! Validates the header value
+    check(bool serialize, bool request, string path, string method, string name, reference<auto> value) {
+        if (!exists value && !required) {
+            return;
+        }
+        if (schema) {
+            schema.check(serialize, request, path, method, name, \value);
+        }
+    }
+
+    #! Returns the schema for this header
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return schema;
     }
 }
 
@@ -4395,43 +4386,13 @@ public class OpenApi3HashDataType inherits HashDataType {
 }
 
 #! defines an object in a schema
-public class SchemaObject inherits ObjectBase, SchemaBase {
+/** Inherits common schema members from
+    @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
+*/
+public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractSchemaObject {
     public {
-        #! the name of this object for documentation and example purposes
-        string name;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.2.
-        /**
-            MUST be either a string or an array (list). If it's an array,
-            it's elements MUST be strings and MUST be unique.
-         */
-        string type;
-
-        #! The extending format for the previously mentioned \c type. See Data Type Formats for further details.
-        *string format;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1.
-        *string title;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1.
-        *string desc;
-
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.1.
         *SchemaObject items;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.2.
-        auto defaultVal;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.1.
-        *int maxProperties;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.2.
-        *int minProperties;
-
-        #! extension that allows types to be nullable
-        /** the OpenAPI specification 2.0 otherwise does not allow for nullable types
-        */
-        bool nullable = False;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.4.
         /**
@@ -4449,43 +4410,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             a valid JSON Schema (@ref SchemaObject).
          */
         auto additionalProperties;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.3.
-        /**
-            Set of strings. Must have at least one element.
-         */
-        hash<string, bool> required;
-
-        #! Adds support for polymorphism.
-        /**
-            The discriminator is the schema property name that is used to
-            differentiate between other schemas that inherit this schema.
-            The property name used MUST be defined at this schema and it MUST
-            be in the @ref SchemaObject::required "required" property list.
-            When used, the value MUST be the name of this schema or any schema
-            that inherits it.
-
-            While composition offers model extensibility, it does not imply
-            a hierarchy between the models. To support polymorphism, OpenApi3
-            adds the support of the \c discriminator field. When used,
-            the \c discriminator will be the name of the property used to decide
-            which schema definition is used to validate the structure of the model.
-            As such, the \c discriminator field MUST be a required field.
-            The value of the chosen property has to be the friendly name given to
-            the model under the \c definitions property. As such, inline schema
-            definitions, which do not have a given id, \e cannot be used in polymorphism.
-         */
-        *string discriminator;
-
-        #! Relevant only for Schema \c "properties" definitions. Declares the property as "read only".
-        /**
-            Declares the property as "read only". This means that it MAY be sent
-            as part of a response but MUST NOT be sent as part of the request.
-            Properties marked as \c readOnly being \c true SHOULD NOT be in the
-            @ref SchemaObject::required "required" list of the defined schema.
-            Default value is \c false.
-         */
-        bool readOnly = False;
 
         #! Relevant only for Schema \c "properties" definitions. Declares the property as "write only".
         /**
@@ -5365,6 +5289,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
     *string getClassName() {
         return vendorExtensions."x-class-name";
     }
+
+    #! Returns the items schema for arrays
+    *RestSchemaValidator::AbstractSchemaObject getItems() {
+        return items;
+    }
+
+    #! Returns a hash of property schemas for objects
+    *hash<string, RestSchemaValidator::AbstractSchemaObject> getProperties() {
+        return cast<*hash<string, RestSchemaValidator::AbstractSchemaObject>>(properties);
+    }
 }
 
 #! A metadata object that allows for more fine-tuned XML model definitions.
@@ -5541,7 +5475,7 @@ public class SecuritySchemeObject inherits ObjectBase {
         #! The location of the API key
         /** Valid values are \c "query", \c "header", or \c "cookie".
             Required when type is \c "apiKey" */
-        *string in_loc;
+        *string inLoc;
 
         #! The name of the HTTP Authorization scheme
         /** Required when type is \c "http".
@@ -5577,10 +5511,10 @@ public class SecuritySchemeObject inherits ObjectBase {
         switch (type) {
             case "apiKey": {
                 required_field(obj_type, oh, "name", NT_STRING, \name);
-                required_field(obj_type, oh, "in", NT_STRING, \in_loc);
-                if (in_loc != "query" && in_loc != "header" && in_loc != "cookie") {
+                required_field(obj_type, oh, "in", NT_STRING, \inLoc);
+                if (inLoc != "query" && inLoc != "header" && inLoc != "cookie") {
                     throw "INVALID-APIKEY-LOCATION", sprintf("Security Scheme Object: invalid 'in' (location) "
-                        "value passed: %y; valid values are 'query', 'header', 'cookie'", in_loc);
+                        "value passed: %y; valid values are 'query', 'header', 'cookie'", inLoc);
                 }
                 break;
             }

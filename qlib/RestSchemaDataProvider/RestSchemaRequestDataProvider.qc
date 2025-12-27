@@ -50,17 +50,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     private {
-        #! The path item object for the operation (Swagger)
-        *Swagger::PathItemObject swagger_pio;
+        #! The path item object for the operation
+        RestSchemaValidator::AbstractPathItemObject pio;
 
-        #! The path item object for the operation (OpenAPI 3.0)
-        *OpenApi3::PathItemObject openapi3_pio;
-
-        #! The operation object (Swagger)
-        *Swagger::OperationObject swagger_op;
-
-        #! The operation object (OpenAPI 3.0)
-        *OpenApi3::OperationObject openapi3_op;
+        #! The operation object
+        RestSchemaValidator::AbstractOperationObject op;
 
         #! Disable checking the request type
         bool disable_request_type_check;
@@ -72,15 +66,16 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
         self.uri_path = uri_path;
-        self.swagger_pio := pio;
-        self.swagger_op := op;
+        self.pio := pio;
+        self.op := op;
 
         if (cb_value_needs_resolution) {
             resolve_uri = cb_value_needs_resolution(uri_path);
         }
 
         # check for any successful response data structure
-        foreach hash<auto> i in (op.responses.responses.pairIterator()) {
+        RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
+        foreach hash<auto> i in (responses.getResponses().pairIterator()) {
             if (i.key =~ /^2/ && i.value) {
                 success_response = i.key;
                 break;
@@ -94,15 +89,16 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
         self.uri_path = uri_path;
-        self.openapi3_pio := pio;
-        self.openapi3_op := op;
+        self.pio := pio;
+        self.op := op;
 
         if (cb_value_needs_resolution) {
             resolve_uri = cb_value_needs_resolution(uri_path);
         }
 
         # check for any successful response data structure
-        foreach hash<auto> i in (op.responses.responses.pairIterator()) {
+        RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
+        foreach hash<auto> i in (responses.getResponses().pairIterator()) {
             if (i.key =~ /^2/ && i.value) {
                 success_response = i.key;
                 break;
@@ -115,37 +111,26 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         return getMethod().upr();
     }
 
-    #! Returns the HTTP method (in lower case)
+    #! Returns the HTTP method (in UPPER case)
     string getMethod() {
-        return swagger_op ? swagger_op.method : openapi3_op.method;
+        return op.method;
     }
 
     #! Returns the consumes hash for the operation
     *hash<string, bool> getConsumes() {
-        return swagger_op ? swagger_op.consumes : openapi3_op.consumes;
+        return op.consumes;
     }
 
     #! Sets a mime type in the consumes hash for the operation
     setConsumes(string mime_type) {
-        if (swagger_op) {
-            swagger_op.consumes{mime_type} = True;
-        } else {
-            openapi3_op.consumes{mime_type} = True;
-        }
+        op.consumes{mime_type} = True;
     }
 
     #! Returns the data provider description
     *string getDesc() {
         string method = getMethod();
-        string summary;
-        string desc;
-        if (swagger_op) {
-            summary = swagger_op.summary ?? "";
-            desc = swagger_op.desc ?? "";
-        } else {
-            summary = openapi3_op.summary ?? "";
-            desc = openapi3_op.desc ?? "";
-        }
+        string summary = op.summary ?? "";
+        string desc = op.desc ?? "";
         string type = isSwagger() ? "Swagger/OpenAPI 2.0" : "OpenAPI 3.0";
         return sprintf("%s data provider for URL `%s`, URI path `%s`, and HTTP method `%s`.\n\n"
             "## Summary\n\n%s\n\n## Description\n\n%s",
@@ -193,34 +178,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
-        if (swagger_op) {
-            return getSwaggerRecordType();
-        }
-        return getOpenApi3RecordType();
-    }
-
-    private *hash<string, AbstractDataField> getSwaggerRecordType() {
-        *Swagger::ResponseObject response = getSwaggerSuccessResponse();
-        if (response.schema) {
-            SwaggerSchema swagger = cast<SwaggerSchema>(schema);
-            AbstractDataField response_field = swagger.getFieldFromSchema("body", "REST response body argument",
-                response.schema);
-            AbstractDataProviderType type = response_field.getType();
-            *hash<string, AbstractDataField> rv = type.getFields();
-            # if we have a list of hashes, then return the list element type
-            if (type.getBaseTypeCode() == NT_LIST) {
-                rv = type.getElementType().getFields();
-            }
-            return rv;
-        }
-    }
-
-    private *hash<string, AbstractDataField> getOpenApi3RecordType() {
-        *OpenApi3::ResponseObject response = getOpenApi3SuccessResponse();
-        if (response.schema) {
-            OpenApi3Schema openapi3 = cast<OpenApi3Schema>(schema);
-            AbstractDataField response_field = openapi3.getFieldFromSchema("body", "REST response body argument",
-                response.schema);
+        *RestSchemaValidator::AbstractResponseObject response = getSuccessResponse();
+        *RestSchemaValidator::AbstractSchemaObject response_schema = response.getSchema();
+        if (response_schema) {
+            AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
+                response_schema);
             AbstractDataProviderType type = response_field.getType();
             *hash<string, AbstractDataField> rv = type.getFields();
             # if we have a list of hashes, then return the list element type
@@ -237,7 +199,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             return request_type;
         }
 
-        if (swagger_op) {
+        if (isSwagger()) {
             return request_type = getSwaggerRequestType();
         }
         return request_type = getOpenApi3RequestType();
@@ -245,13 +207,15 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     private AbstractDataProviderType getSwaggerRequestType() {
         SwaggerSchema swagger = cast<SwaggerSchema>(schema);
+        Swagger::PathItemObject swagger_pio = cast<Swagger::PathItemObject>(pio);
+        Swagger::OperationObject swagger_op = cast<Swagger::OperationObject>(op);
         HashDataType rv(getName() + ": request");
         bool required = False;
-        *hash<string, Swagger::AbstractParameterObject> params = swagger_pio.parameters + swagger_op.parameters;
+        *hash<string, Swagger::AbstractSwaggerParameterObject> params = swagger_pio.parameters + swagger_op.parameters;
         if (params) {
             swagger.addFieldsFromParameters(rv, params, \required);
         }
-        *Swagger::AbstractParameterObject body = swagger_op.body ?? swagger_pio.body;
+        *Swagger::AbstractSwaggerParameterObject body = swagger_op.body ?? swagger_pio.body;
         if (body) {
             AbstractDataField body_field = swagger.getFieldFromSchema("body", "REST request body argument",
                 cast<Swagger::BodyParameter>(body).schema, body.required ?? False, rest);
@@ -276,6 +240,8 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     private AbstractDataProviderType getOpenApi3RequestType() {
         OpenApi3Schema openapi3 = cast<OpenApi3Schema>(schema);
+        OpenApi3::PathItemObject openapi3_pio = cast<OpenApi3::PathItemObject>(pio);
+        OpenApi3::OperationObject openapi3_op = cast<OpenApi3::OperationObject>(op);
         HashDataType rv(getName() + ": request");
         bool required = False;
         *hash<string, OpenApi3::ParameterBase> params = openapi3_pio.parameters + openapi3_op.parameters;
@@ -301,107 +267,65 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             return response_type;
         }
 
-        if (swagger_op) {
-            *Swagger::ResponseObject response = getSwaggerSuccessResponse();
-            if (response) {
-                return response_type = getSwaggerResponseType(response, "success");
-            }
-        } else {
-            *OpenApi3::ResponseObject response = getOpenApi3SuccessResponse();
-            if (response) {
-                return response_type = getOpenApi3ResponseType(response, "success");
-            }
+        *RestSchemaValidator::AbstractResponseObject response = getSuccessResponse();
+        if (response) {
+            return response_type = getResponseTypeFromResponse(response, "success");
         }
     }
 
     #! Returns a hash of error responses, if any
     private *hash<string, AbstractDataProviderType> getErrorResponseTypesImpl() {
-        if (swagger_op) {
-            *hash<string, AbstractDataProviderType> rv = map {$1.key: getSwaggerResponseType($1.value,
-                ($1.key =~ /^2/ ? "success" : "error") + sprintf(" (%s)", $1.key))},
-                swagger_op.responses.responses.pairIterator(), $1.key != success_response;
-            if (swagger_op.responses.defaultResp) {
-                rv."default" = getSwaggerResponseType(swagger_op.responses.defaultResp, "default");
-            }
-            return rv;
-        }
-
-        *hash<string, AbstractDataProviderType> rv = map {$1.key: getOpenApi3ResponseType($1.value,
+        RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
+        *hash<string, RestSchemaValidator::AbstractResponseObject> resp_hash = responses.getResponses();
+        *hash<string, AbstractDataProviderType> rv = map {$1.key: getResponseTypeFromResponse($1.value,
             ($1.key =~ /^2/ ? "success" : "error") + sprintf(" (%s)", $1.key))},
-            openapi3_op.responses.responses.pairIterator(), $1.key != success_response;
-        if (openapi3_op.responses.defaultResp) {
-            rv."default" = getOpenApi3ResponseType(openapi3_op.responses.defaultResp, "default");
+            resp_hash.pairIterator(), $1.key != success_response;
+        *RestSchemaValidator::AbstractResponseObject default_resp = responses.getDefaultResponse();
+        if (default_resp) {
+            rv."default" = getResponseTypeFromResponse(default_resp, "default");
         }
         return rv;
     }
 
     #! Returns the type for the given error code
     private AbstractDataProviderType getErrorResponseTypeImpl(string error_code) {
-        if (swagger_op) {
-            *Swagger::ResponseObject resp = swagger_op.responses.responses{error_code};
-            if (!resp && error_code == "default" && swagger_op.responses.defaultResp) {
-                resp = swagger_op.responses.defaultResp;
-            }
-            if (!resp) {
-                throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
-                    keys swagger_op.responses.responses + (swagger_op.responses.defaultResp ? ("default",) : ()));
-            }
-            return getSwaggerResponseType(resp, error_code);
-        }
-
-        *OpenApi3::ResponseObject resp = openapi3_op.responses.responses{error_code};
-        if (!resp && error_code == "default" && openapi3_op.responses.defaultResp) {
-            resp = openapi3_op.responses.defaultResp;
+        RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
+        *hash<string, RestSchemaValidator::AbstractResponseObject> resp_hash = responses.getResponses();
+        *RestSchemaValidator::AbstractResponseObject resp = resp_hash{error_code};
+        if (!resp && error_code == "default") {
+            resp = responses.getDefaultResponse();
         }
         if (!resp) {
             throw "UNKNOWN-ERROR-RESPONSE", sprintf("error code %y is unknown; known error codes: %y", error_code,
-                keys openapi3_op.responses.responses + (openapi3_op.responses.defaultResp ? ("default",) : ()));
+                keys resp_hash + (responses.getDefaultResponse() ? ("default",) : ()));
         }
-        return getOpenApi3ResponseType(resp, error_code);
+        return getResponseTypeFromResponse(resp, error_code);
     }
 
-    #! Returns a data provider type object for a Swagger response
-    private AbstractDataProviderType getSwaggerResponseType(Swagger::ResponseObject response, string label) {
-        SwaggerSchema swagger = cast<SwaggerSchema>(schema);
+    #! Returns a data provider type object for a response using abstract types
+    private AbstractDataProviderType getResponseTypeFromResponse(RestSchemaValidator::AbstractResponseObject response,
+            string label) {
         label += " response";
         HashDataType rv();
-        if (response.schema) {
-            rv.addField(swagger.getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
+        *RestSchemaValidator::AbstractSchemaObject response_schema = response.getSchema();
+        if (response_schema) {
+            rv.addField(schema.getFieldFromSchema("body", "REST " + label + " body argument", response_schema));
         }
         if (response.headers) {
-            rv.addField(swagger.getFieldForHeaders("headers", response.headers));
+            rv.addField(schema.getFieldForHeaders("headers", response.headers));
             response_headers = keys response.headers;
         }
         return rv;
     }
 
-    #! Returns a data provider type object for an OpenAPI 3.0 response
-    private AbstractDataProviderType getOpenApi3ResponseType(OpenApi3::ResponseObject response, string label) {
-        OpenApi3Schema openapi3 = cast<OpenApi3Schema>(schema);
-        label += " response";
-        HashDataType rv();
-        if (response.schema) {
-            rv.addField(openapi3.getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
+    #! Returns the success response using abstract types
+    private *RestSchemaValidator::AbstractResponseObject getSuccessResponse() {
+        RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
+        if (success_response) {
+            *hash<string, RestSchemaValidator::AbstractResponseObject> resp_hash = responses.getResponses();
+            return resp_hash{success_response};
         }
-        if (response.headers) {
-            rv.addField(openapi3.getFieldForHeaders("headers", response.headers));
-            response_headers = keys response.headers;
-        }
-        return rv;
-    }
-
-    #! Returns the Swagger success response
-    private *Swagger::ResponseObject getSwaggerSuccessResponse() {
-        return success_response
-            ? swagger_op.responses.responses{success_response}
-            : swagger_op.responses.defaultResp;
-    }
-
-    #! Returns the OpenAPI 3.0 success response
-    private *OpenApi3::ResponseObject getOpenApi3SuccessResponse() {
-        return success_response
-            ? openapi3_op.responses.responses{success_response}
-            : openapi3_op.responses.defaultResp;
+        return responses.getDefaultResponse();
     }
 
     #! Makes a request and returned the response
@@ -478,26 +402,14 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         hash<UriQueryInfo> uri_info = parse_uri_query(uri_path);
         auto req_body = req.body ?? req.formData;
 
-        if (swagger_op) {
-            Swagger::PathItemObject pio = cast<SwaggerSchema>(schema).paths.match(uri_path);
-            swagger_op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
-        } else {
-            OpenApi3::PathItemObject pio = cast<OpenApi3Schema>(schema).paths.match(uri_path);
-            openapi3_op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
-        }
+        # validate the request using abstract types
+        op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
 
         # make the call
         hash<auto> info;
         try {
-            *data body;
-            *hash<string, bool> produces;
-            if (swagger_op) {
-                body = swagger_op.getRequestBody(swagger_pio, req_body, \hdr, disable_request_type_check);
-                produces = swagger_op.produces;
-            } else {
-                body = openapi3_op.getRequestBody(openapi3_pio, req_body, \hdr, disable_request_type_check);
-                produces = openapi3_op.produces;
-            }
+            *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
+            *hash<string, bool> produces = op.produces;
 
             # ensure we specify JSON for the response if possible
             if (!hdr.Accept && produces{MimeTypeJson}) {
@@ -540,24 +452,12 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             case NT_LIST:
                 return foldl $1 + "," + $2, (map getUriValue($1), v);
             case NT_DATE: {
-                if (swagger_op) {
-                    SwaggerSchema swagger = cast<SwaggerSchema>(schema);
-                    if (swagger.getUtcDates()) {
-                        TimeZone utc(0);
-                        v = utc.date(v);
-                    }
-                    if (exists (*string fmt = swagger.getQueryDateFormat())) {
-                        return v.format(fmt);
-                    }
-                } else {
-                    OpenApi3Schema openapi3 = cast<OpenApi3Schema>(schema);
-                    if (openapi3.getUtcDates()) {
-                        TimeZone utc(0);
-                        v = utc.date(v);
-                    }
-                    if (exists (*string fmt = openapi3.getQueryDateFormat())) {
-                        return v.format(fmt);
-                    }
+                if (schema.getUtcDates()) {
+                    TimeZone utc(0);
+                    v = utc.date(v);
+                }
+                if (exists (*string fmt = schema.getQueryDateFormat())) {
+                    return v.format(fmt);
                 }
                 return v.format("IF");
             }
