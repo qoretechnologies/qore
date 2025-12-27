@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore BcRecordIterator class definition
+#! Qore AbstractODataRecordIterator class definition
 
-/** BcRecordIterator.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AbstractODataRecordIterator.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,90 +24,36 @@
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! contains Business Central object record information
-hashdecl BcRecordInfo {
-    #! The record type for the object
-    hash<string, AbstractDataField> record_type;
-
-    #! The original field type names
-    hash<string, string> field_types;
-
-    #! Hash of date/time fields for this record
-    hash<string, bool> date_time_fields;
-
-    #! Key field name (usually "id" for BC)
-    string key = "id";
-
-    #! Entity name
-    string entity_name;
-}
-
-#! Defines the record iterator class for Business Central entity iterators
-public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
-    public {
-    }
-
-    private:internal {
+#! Abstract base class for OData record iterators
+/** Provides common OData query building logic used by both CDS and Business Central
+*/
+public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIterator {
+    private {
         #! The REST client object for API calls
         CdsRestClient::CdsRestClient rest;
 
-        #! The company ID
-        string companyId;
-
-        #! Current entity name
-        string name;
-
         #! Record info for the entity
-        hash<BcRecordInfo> record_info;
+        hash<ODataRecordInfo> record_info;
 
         #! Record iterator
         Qore::ListHashIterator i;
 
-        #! Next page URL for pagination
+        #! Next page URL for pagination (used by BC)
         *string nextLink;
     }
 
-    #! creates the iterator
+    #! Creates the iterator
     /** @param rest the REST client connection
-        @param companyId the company ID
-        @param name the name of the entity
         @param record_info record information describing the entity
-        @param where_cond the where clause for the query, if any
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(CdsRestClient::CdsRestClient rest, string companyId, string name,
-            hash<BcRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options)
+    constructor(CdsRestClient::CdsRestClient rest, hash<ODataRecordInfo> record_info, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
-        self.companyId = companyId;
-        self.name = name;
         self.record_info = record_info;
-
-        # make query
-        *string query = makeQuery(where_cond, search_options);
-        hash<auto> info;
-        try {
-            string uri = sprintf("companies(%s)/%s", companyId, name);
-            if (query) {
-                uri += sprintf("?%s", query);
-            }
-            hash<auto> resp = rest.get(uri, NOTHING, \info);
-            i = new ListHashIterator(resp.body.value ?? ());
-            # Save next link for pagination
-            nextLink = resp.body."@odata.nextLink";
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = {
-                "query": query,
-            } + info{"response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
-        }
     }
 
     #! Returns @ref True if the iterator is valid
-    /**
-        @return @ref True if the iterator is valid
-    */
     bool valid() {
         return i.valid();
     }
@@ -139,13 +85,17 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
         return rv;
     }
 
-    #! Returns "or" clauses
+    #! Returns "or" clauses (legacy support)
     string getOrClause(list<auto> arglist) {
-        list<auto> l = map $1, (map doWhereExpression($1), arglist), $1;
+        list<auto> l = map $1, (map doWhereExpressionLegacy($1), arglist), $1;
         return l ? ("(" + (foldl $1 + " or " + $2, l) + ")") : "";
     }
 
     #! Returns the filter for a request
+    /** @param where_cond the where condition (can be legacy hash format or DataProviderExpression)
+        @param search_options search options
+        @return the query string for the OData request
+    */
     *string makeQuery(*hash<auto> where_cond, *hash<auto> search_options) {
         string filter;
         if (search_options.columns) {
@@ -155,7 +105,13 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
             if (filter) {
                 filter += "&";
             }
-            filter += "$filter=" + doWhereExpression(where_cond, search_options);
+            # Check if this is a DataProviderExpression or legacy format
+            if (where_cond.exp) {
+                filter += "$filter=" + processExpressionArg(cast<hash<DataProviderExpression>>(where_cond));
+            } else {
+                # Legacy hash format
+                filter += "$filter=" + doWhereExpressionLegacy(where_cond, search_options);
+            }
         }
         if (search_options.groupby) {
             if (filter) {
@@ -182,6 +138,85 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
         return filter;
     }
 
+    #! Processes an expression argument recursively
+    /** @param exp the DataProviderExpression to process
+        @return the OData filter string for the expression
+    */
+    string processExpressionArg(hash<DataProviderExpression> exp) {
+        *hash<auto> expinfo = ODataExpressions{exp.exp};
+        if (!expinfo) {
+            throw "WHERE-ERROR", sprintf("expression references unknown operator %y; known operators: %y",
+                exp.exp, keys ODataExpressions);
+        }
+
+        # Handle logical operators (AND, OR) - pass all args to impl
+        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR) {
+            return call_function_args(expinfo.impl, (self, exp.args));
+        }
+
+        # Handle NOT operator - pass the inner expression
+        if (exp.exp == DP_SEARCH_OP_NOT) {
+            if (exp.args.size() < 1 || !(exp.args[0] instanceof hash<DataProviderExpression>)) {
+                throw "WHERE-ERROR", "NOT operator requires a single expression argument";
+            }
+            return call_function_args(expinfo.impl, (self, exp.args[0]));
+        }
+
+        # For comparison operators, first argument must be a field reference
+        if (exp.args.size() < 1 || !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
+            throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
+                exp.exp);
+        }
+        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+
+        # Build args list: (self, field, value1, value2, ...)
+        list<auto> impl_args = (self, field);
+        for (int i = 1; i < exp.args.size(); ++i) {
+            impl_args += exp.args[i];
+        }
+
+        return call_function_args(expinfo.impl, impl_args);
+    }
+
+    #! Formats a value for use in OData filter expressions
+    /** @param field the field name (used to look up type information)
+        @param value the value to format
+        @return the OData-formatted value string
+    */
+    string formatODataValue(string field, auto value) {
+        switch (record_info.field_types{field}) {
+            case "int":
+            case "integer":
+                return sprintf("%d", value);
+
+            case "double":
+            case "decimal":
+                return sprintf("%g", value);
+
+            case "bool":
+            case "boolean":
+                return value ? "true" : "false";
+
+            case "guid":
+                # GUIDs don't need quotes in OData
+                return value.toString();
+
+            case "datetime":
+            case "date":
+                # ISO 8601 format for dates
+                if (value.typeCode() == NT_DATE) {
+                    return value.format("YYYY-MM-DDTHH:mm:SS");
+                }
+                return sprintf("'%s'", value);
+
+            default:
+                break;
+        }
+
+        # Strings need single quotes, escape internal quotes
+        return sprintf("'%s'", replace(value.toString(), "'", "''"));
+    }
+
     #! Returns the record description, if available
     /** @return the record type of the iterator
     */
@@ -189,12 +224,14 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
         return record_info.record_type;
     }
 
+    #! Formats a value for use in OData query
     string getArgValue(string key, auto value) {
         switch (record_info.field_types{key}) {
             case "int":
                 return sprintf("%d", value);
 
             case "double":
+            case "decimal":
                 return sprintf("%g", value);
 
             case "bool":
@@ -243,15 +280,17 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
         return "*";
     }
 
-    private string doWhereExpression(hash<auto> where_cond, *hash<auto> search_options) {
+    #! Legacy where expression handler for backward compatibility
+    private string doWhereExpressionLegacy(hash<auto> where_cond, *hash<auto> search_options) {
         list<string> clauses;
         foreach hash<auto> i in (where_cond.pairIterator()) {
-            clauses += doWhereExpressionIntern(i.key, i.value);
+            clauses += doWhereExpressionInternLegacy(i.key, i.value);
         }
         return foldl $1 + " and " + $2, clauses;
     }
 
-    private string doWhereExpressionIntern(string key, auto value) {
+    #! Legacy where expression handler for backward compatibility
+    private string doWhereExpressionInternLegacy(string key, auto value) {
         if (value.typeCode() == NT_HASH && value.op) {
             *hash<auto> op = DefaultQueryOpMap{value.op};
             if (!op) {
@@ -261,7 +300,7 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
             }
             string column_name;
             if (op.recursive) {
-                column_name = doWhereExpressionIntern(key, value.arg);
+                column_name = doWhereExpressionInternLegacy(key, value.arg);
             } else {
                 column_name = key;
             }
@@ -275,29 +314,11 @@ public class BcRecordIterator inherits AbstractDataProviderRecordIterator {
     }
 
     #! Increments the row pointer when retrieving rows from a select statement
-    /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+    /** Subclasses can override to add pagination support
+        @return @ref True if there is a row to retrieve, @ref False if not
     */
     private bool nextImpl() {
-        if (i.next()) {
-            return True;
-        }
-
-        # Check for next page
-        if (nextLink) {
-            hash<auto> info;
-            try {
-                hash<auto> resp = rest.get(nextLink, NOTHING, \info);
-                i = new ListHashIterator(resp.body.value ?? ());
-                nextLink = resp.body."@odata.nextLink";
-                return i.next();
-            } catch (hash<ExceptionInfo> ex) {
-                # Handle pagination errors gracefully
-                nextLink = NOTHING;
-            }
-        }
-
-        return False;
+        return i.next();
     }
 }
 }

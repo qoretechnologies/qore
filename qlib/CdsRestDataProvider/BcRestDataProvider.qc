@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcRestDataProvider class definition
 
-/** BcRestDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** BcRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,8 +25,26 @@
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
 #! The Business Central REST data provider class
-public class BcRestDataProvider inherits BcRestDataProviderBase {
+public class BcRestDataProvider inherits CdsRestDataProviderBase {
     public {
+        #! Business Central-specific constructor options
+        const ConstructorOptions = BaseConstructorOptions + {
+            "api": <DataProviderOptionInfo>{
+                "display_name": "API Version",
+                "short_desc": "Sets the API version to use",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "Sets the Business Central API version to use",
+                "default_value": CdsRestClient::BusinessCentralProfile.default_api_version,
+            },
+            "instance_type": <DataProviderOptionInfo>{
+                "display_name": "Instance Type",
+                "short_desc": "Business Central instance type",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
+                "required": True,
+            },
+        };
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "type": "BcRestDataProvider",
@@ -47,11 +65,11 @@ public class BcRestDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::BusinessCentralRestConnection conn) : BcRestDataProviderBase(conn) {
+    constructor(CdsRestClient::BusinessCentralRestConnection conn) : CdsRestDataProviderBase(conn) {
     }
 
     #! Creates the object from constructor options
@@ -67,7 +85,9 @@ public class BcRestDataProvider inherits BcRestDataProviderBase {
         }
 
         if (!rest) {
-            rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {"api_profile": "dynamics-business-central"});
+            rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
+                "api_profile": CdsRestClient::BusinessCentralProfile.name,
+            });
         }
     }
 

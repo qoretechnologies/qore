@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcTablesDataProvider class definition
 
-/** BcTablesDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** BcTablesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,14 +27,14 @@ public namespace CdsRestDataProvider {
 #! The Business Central tables data provider class
 /** Lists available entity tables for a company
 */
-public class BcTablesDataProvider inherits BcRestDataProviderBase {
+public class BcTablesDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "tables",
             "type": "BcTablesDataProvider",
             "supports_children": True,
-            "constructor_options": ConstructorOptions,
+            "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
             "children_can_support_observers": False,
@@ -106,7 +106,7 @@ public class BcTablesDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest, string companyId) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest, string companyId) : CdsRestDataProviderBase(rest) {
         self.companyId = companyId;
     }
 
@@ -130,7 +130,7 @@ public class BcTablesDataProvider inherits BcRestDataProviderBase {
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         # For BC, we use standard entities or try to access the entity directly
         if (getEntities(){name}) {
-            return new BcEntityDataProvider(rest, companyId, name);
+            return new ODataEntityDataProvider(rest, companyId, name);
         }
     }
 

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcCompaniesDataProvider class definition
 
-/** BcCompaniesDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** BcCompaniesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,14 +27,14 @@ public namespace CdsRestDataProvider {
 #! The Business Central companies data provider class
 /** Lists available companies and provides access to company-scoped data
 */
-public class BcCompaniesDataProvider inherits BcRestDataProviderBase {
+public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "companies",
             "type": "BcCompaniesDataProvider",
             "supports_children": True,
-            "constructor_options": ConstructorOptions,
+            "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
             "children_can_support_observers": False,
@@ -58,7 +58,7 @@ public class BcCompaniesDataProvider inherits BcRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest) : BcRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
     }
 
     #! Creates the object from constructor options
@@ -68,8 +68,10 @@ public class BcCompaniesDataProvider inherits BcRestDataProviderBase {
             map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
                 exists ENV{$1.value} && !exists options{$1.key};
         }
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {"api_profile": "dynamics-business-central"});
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
+        rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
+            "api_profile": CdsRestClient::BusinessCentralProfile.name,
+        });
     }
 
     #! Returns the data provider name

@@ -57,7 +57,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             "timeout":            "t,timeout=i",
         };
 
-        const OptionColumn = 22;
+        const OptionColumn = 28;
     }
 
     constructor() : Test("CdsRestDataProviderTest", "1.0", \ARGV, MyOpts) {
@@ -68,11 +68,13 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         addTestCase("Business Central data provider class tests", \bcDataProviderClassTests());
         addTestCase("Factory tests", \factoryTests());
         addTestCase("App registration tests", \appRegistrationTests());
+        addTestCase("Expression support tests", \expressionSupportTests());
 
         # Integration tests (require credentials)
         addTestCase("Dynamics DataProvider integration tests", \dynamicsDataProviderIntegrationTests());
         addTestCase("Business Central DataProvider integration tests", \bcDataProviderIntegrationTests());
         addTestCase("Business Central poll tests", \bcPollTests());
+        addTestCase("Expression CRUD tests", \expressionCrudTests());
 
         try {
             setupDynamicsConnection();
@@ -332,11 +334,11 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             assertTrue(info.children_can_support_records);
         }
 
-        # Test CdsEntityDataProvider has correct static info
+        # Test ODataEntityDataProvider has correct static info for CDS
         # Note: supports_read, supports_create, etc. are set dynamically in getStaticInfoImpl()
         # based on entity metadata, so we check that search_options are defined
         {
-            hash<DataProviderInfo> info = CdsEntityDataProvider::ProviderInfo;
+            hash<DataProviderInfo> info = ODataEntityDataProvider::CdsProviderInfo;
             assertTrue(info.search_options.hasKey("columns"));
             assertTrue(info.search_options.hasKey("limit"));
             assertTrue(info.search_options.hasKey("orderby"));
@@ -361,11 +363,11 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             assertTrue(info.children_can_support_records);
         }
 
-        # Test BcEntityDataProvider has correct static info
-        # The ProviderInfo constant has static flags set (unlike CdsEntityDataProvider)
+        # Test ODataEntityDataProvider has correct static info for BC
+        # The BcProviderInfo constant has static flags set
         {
-            hash<DataProviderInfo> info = BcEntityDataProvider::ProviderInfo;
-            assertEq("BcEntityDataProvider", info.type);
+            hash<DataProviderInfo> info = ODataEntityDataProvider::BcProviderInfo;
+            assertEq("ODataEntityDataProvider", info.type);
             assertTrue(info.has_record);
             assertTrue(info.supports_read);
             assertTrue(info.supports_create);
@@ -416,6 +418,184 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         # Test that app names are defined
         assertEq("Dynamics", CdsRestDataProvider::DynamicsAppName);
         assertEq("BusinessCentral", CdsRestDataProvider::BusinessCentralAppName);
+    }
+
+    #! Test DataProvider expression support
+    expressionSupportTests() {
+        # Test that ODataExpressions constant is defined with expected operators
+        {
+            assertTrue(ODataExpressions.hasKey(DP_OP_AND));
+            assertTrue(ODataExpressions.hasKey(DP_OP_OR));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_EQ));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_NE));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_LT));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_LE));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_GT));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_GE));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_NOT));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_BETWEEN));
+            assertTrue(ODataExpressions.hasKey(DP_SEARCH_OP_IN));
+            assertTrue(ODataExpressions.hasKey(ODATA_OP_CONTAINS));
+            assertTrue(ODataExpressions.hasKey(ODATA_OP_STARTSWITH));
+            assertTrue(ODataExpressions.hasKey(ODATA_OP_ENDSWITH));
+            assertTrue(ODataExpressions.hasKey(ODATA_OP_NULL));
+            assertTrue(ODataExpressions.hasKey(ODATA_OP_NOT_NULL));
+        }
+
+        # Test that each expression has both "exp" and "impl" keys
+        {
+            foreach hash<auto> i in (ODataExpressions.pairIterator()) {
+                assertTrue(i.value.hasKey("exp"), sprintf("expression %y missing 'exp' key", i.key));
+                assertTrue(i.value.hasKey("impl"), sprintf("expression %y missing 'impl' key", i.key));
+            }
+        }
+
+        # Test expression constants
+        {
+            assertEq("contains", ODATA_OP_CONTAINS);
+            assertEq("startsWith", ODATA_OP_STARTSWITH);
+            assertEq("endsWith", ODATA_OP_ENDSWITH);
+            assertEq("null", ODATA_OP_NULL);
+            assertEq("notNull", ODATA_OP_NOT_NULL);
+        }
+
+        # Test OData expression info structure for contains
+        {
+            hash<DataProviderExpressionInfo> contains_exp = ODataExpressions{ODATA_OP_CONTAINS}.exp;
+            assertEq(DET_Operator, contains_exp.type);
+            assertEq("contains", contains_exp.name);
+            assertEq("contains", contains_exp.symbol);
+            assertTrue(contains_exp.groups[0] == "String");
+            assertEq(2, contains_exp.args.size());
+            # Test that arg_info is present
+            assertEq(2, contains_exp.arg_info.size());
+            assertEq("Field", contains_exp.arg_info[0].display_name);
+            assertEq("Substring", contains_exp.arg_info[1].display_name);
+            assertEq("smith", contains_exp.arg_info[1].example_value);
+        }
+
+        # Test startsWith expression structure
+        {
+            hash<DataProviderExpressionInfo> exp = ODataExpressions{ODATA_OP_STARTSWITH}.exp;
+            assertEq(DET_Operator, exp.type);
+            assertEq("startsWith", exp.name);
+            assertEq("startsWith", exp.symbol);
+            assertTrue(exp.groups[0] == "String");
+            assertEq(2, exp.args.size());
+            assertEq(2, exp.arg_info.size());
+            assertEq("A", exp.arg_info[1].example_value);
+        }
+
+        # Test endsWith expression structure
+        {
+            hash<DataProviderExpressionInfo> exp = ODataExpressions{ODATA_OP_ENDSWITH}.exp;
+            assertEq(DET_Operator, exp.type);
+            assertEq("endsWith", exp.name);
+            assertEq("endsWith", exp.symbol);
+            assertTrue(exp.groups[0] == "String");
+            assertEq(2, exp.args.size());
+            assertEq(2, exp.arg_info.size());
+            assertEq(".com", exp.arg_info[1].example_value);
+        }
+
+        # Test null expression structure
+        {
+            hash<DataProviderExpressionInfo> exp = ODataExpressions{ODATA_OP_NULL}.exp;
+            assertEq(DET_Operator, exp.type);
+            assertEq("null", exp.name);
+            assertEq("null", exp.symbol);
+            assertTrue(exp.groups[0] == "Comparison");
+            assertEq(1, exp.args.size());
+            assertEq(1, exp.arg_info.size());
+            assertEq("eq null", exp.arg_info[0].label_after);
+        }
+
+        # Test notNull expression structure
+        {
+            hash<DataProviderExpressionInfo> exp = ODataExpressions{ODATA_OP_NOT_NULL}.exp;
+            assertEq(DET_Operator, exp.type);
+            assertEq("notNull", exp.name);
+            assertEq("notNull", exp.symbol);
+            assertTrue(exp.groups[0] == "Comparison");
+            assertEq(1, exp.args.size());
+            assertEq(1, exp.arg_info.size());
+            assertEq("ne null", exp.arg_info[0].label_after);
+        }
+
+        # Test comparison operators have proper arg_info with example values
+        {
+            hash<DataProviderExpressionInfo> eq_exp = ODataExpressions{DP_SEARCH_OP_EQ}.exp;
+            assertEq(2, eq_exp.arg_info.size());
+            assertEq("Smith", eq_exp.arg_info[1].example_value);
+
+            hash<DataProviderExpressionInfo> between_exp = ODataExpressions{DP_SEARCH_OP_BETWEEN}.exp;
+            assertEq(3, between_exp.arg_info.size());
+            assertEq(100, between_exp.arg_info[1].example_value);
+            assertEq(1000, between_exp.arg_info[2].example_value);
+
+            hash<DataProviderExpressionInfo> in_exp = ODataExpressions{DP_SEARCH_OP_IN}.exp;
+            assertEq(2, in_exp.arg_info.size());
+            assertEq(("active", "pending"), in_exp.arg_info[1].example_value);
+        }
+
+        # Test that expression-to-filter conversion works correctly
+        # We verify the expression structures are valid
+        {
+            # Test simple equality expression
+            hash<DataProviderExpression> eq_exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "name"}, "Smith"),
+            };
+
+            # We can't directly test the iterator without a REST client,
+            # but we can verify the expression structure is valid
+            assertEq(DP_SEARCH_OP_EQ, eq_exp.exp);
+            assertEq("name", cast<hash<DataProviderFieldReference>>(eq_exp.args[0]).field);
+            assertEq("Smith", eq_exp.args[1]);
+
+            # Test AND expression structure
+            hash<DataProviderExpression> and_exp = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (<DataProviderFieldReference>{"field": "active"}, True),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (<DataProviderFieldReference>{"field": "balance"}, 1000),
+                    },
+                ),
+            };
+            assertEq(DP_OP_AND, and_exp.exp);
+            assertEq(2, and_exp.args.size());
+
+            # Test nested OR inside AND expression structure
+            hash<DataProviderExpression> nested_exp = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_OP_OR,
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (<DataProviderFieldReference>{"field": "name"}, "A"),
+                            },
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (<DataProviderFieldReference>{"field": "name"}, "B"),
+                            },
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (<DataProviderFieldReference>{"field": "balance"}, 0),
+                    },
+                ),
+            };
+            assertEq(DP_OP_AND, nested_exp.exp);
+            assertEq(DP_OP_OR, cast<hash<DataProviderExpression>>(nested_exp.args[0]).exp);
+        }
     }
 
     #! Dynamics data provider integration tests
@@ -478,11 +658,11 @@ class CdsRestDataProviderTest inherits QUnit::Test {
                 # Test that we can get a customer entity provider
                 if (inlist("customers", table_names)) {
                     AbstractDataProvider customers = tables.getChildProvider("customers");
-                    assertEq(True, customers instanceof BcEntityDataProvider);
+                    assertEq(True, customers instanceof ODataEntityDataProvider);
 
                     # Test search records
                     AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {"limit": 1});
-                    assertTrue(iter instanceof BcRecordIterator);
+                    assertTrue(iter instanceof ODataRecordIterator);
                 }
             }
         }
@@ -508,6 +688,180 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             printf("%s\n", get_exception_string(info.ex));
         }
         assertEq("OK", info.result);
+    }
+
+    #! Test update and delete operations with expressions
+    expressionCrudTests() {
+        if (!bc_client) {
+            testSkip("no Business Central connection");
+        }
+
+        BcRestDataProvider dp(bc_client);
+
+        # Navigate to companies and get the first one
+        AbstractDataProvider companies = dp.getChildProvider("companies");
+        list<string> company_names = companies.getChildProviderNames();
+        if (!company_names) {
+            testSkip("no companies available");
+        }
+
+        AbstractDataProvider company = companies.getChildProvider(company_names[0]);
+        AbstractDataProvider tables = company.getChildProvider("tables");
+
+        # Get vendors table for testing
+        AbstractDataProvider vendors = tables.getChildProvider("vendors");
+        assertEq(True, vendors instanceof ODataEntityDataProvider);
+
+        # Generate a unique test vendor name
+        string test_name = "QoreTestVendor_" + get_random_string(8);
+        string test_city = "TestCity_" + get_random_string(4);
+        *hash<auto> created_record;
+
+        # Use on_exit to ensure cleanup even if test fails
+        on_exit {
+            if (created_record.id) {
+                try {
+                    vendors.deleteRecords({"id": created_record.id});
+                } catch (hash<ExceptionInfo> ex) {
+                    # Ignore cleanup errors - record may have been deleted by test
+                }
+            }
+        }
+
+        # Create a test vendor record
+        {
+            hash<auto> new_vendor = {
+                "displayName": test_name,
+                "addressLine1": "123 Test Street",
+                "city": test_city,
+            };
+            created_record = vendors.createRecord(new_vendor);
+            assertTrue(created_record.id.val());
+            assertEq(test_name, created_record.displayName);
+            assertEq(test_city, created_record.city);
+        }
+
+        # Test 1: Update with expression - update city using displayName match
+        {
+            string new_city = "UpdatedCity_" + get_random_string(4);
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, test_name),
+            };
+
+            int updated = vendors.updateRecords({"city": new_city}, where_exp);
+            assertEq(1, updated, "should update exactly one record");
+
+            # Verify the update
+            AbstractDataProviderRecordIterator iter = vendors.searchRecords({"id": created_record.id});
+            assertTrue(iter.next());
+            hash<auto> record = iter.getValue();
+            assertEq(new_city, record.city, "city should be updated");
+        }
+
+        # Test 2: Update with contains expression
+        {
+            string new_city = "ContainsCity_" + get_random_string(4);
+            # Use contains to match part of the test name
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": ODATA_OP_CONTAINS,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, "QoreTestVendor_"),
+            };
+
+            int updated = vendors.updateRecords({"city": new_city}, where_exp);
+            assertGe(updated, 1, "should update at least one record with contains");
+
+            # Verify the update
+            AbstractDataProviderRecordIterator iter = vendors.searchRecords({"id": created_record.id});
+            assertTrue(iter.next());
+            hash<auto> record = iter.getValue();
+            assertEq(new_city, record.city, "city should be updated via contains expression");
+        }
+
+        # Test 3: Update with startsWith expression
+        {
+            string new_city = "StartsWithCity_" + get_random_string(4);
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": ODATA_OP_STARTSWITH,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, "QoreTest"),
+            };
+
+            int updated = vendors.updateRecords({"city": new_city}, where_exp);
+            assertGe(updated, 1, "should update at least one record with startsWith");
+
+            # Verify the update
+            AbstractDataProviderRecordIterator iter = vendors.searchRecords({"id": created_record.id});
+            assertTrue(iter.next());
+            hash<auto> record = iter.getValue();
+            assertEq(new_city, record.city, "city should be updated via startsWith expression");
+        }
+
+        # Test 4: Update with AND expression
+        {
+            string new_city = "AndExprCity_" + get_random_string(4);
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": ODATA_OP_STARTSWITH,
+                        "args": (<DataProviderFieldReference>{"field": "displayName"}, "QoreTest"),
+                    },
+                    <DataProviderExpression>{
+                        "exp": ODATA_OP_CONTAINS,
+                        "args": (<DataProviderFieldReference>{"field": "displayName"}, "Vendor_"),
+                    },
+                ),
+            };
+
+            int updated = vendors.updateRecords({"city": new_city}, where_exp);
+            assertGe(updated, 1, "should update at least one record with AND expression");
+
+            # Verify the update
+            AbstractDataProviderRecordIterator iter = vendors.searchRecords({"id": created_record.id});
+            assertTrue(iter.next());
+            hash<auto> record = iter.getValue();
+            assertEq(new_city, record.city, "city should be updated via AND expression");
+        }
+
+        # Test 5: Negative test - update with expression matching nothing
+        {
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, "NonExistentVendor_XYZ_12345"),
+            };
+
+            int updated = vendors.updateRecords({"city": "ShouldNotUpdate"}, where_exp);
+            assertEq(0, updated, "should update zero records when expression matches nothing");
+        }
+
+        # Test 6: Negative test - delete with expression matching nothing
+        {
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, "NonExistentVendor_XYZ_12345"),
+            };
+
+            int deleted = vendors.deleteRecords(where_exp);
+            assertEq(0, deleted, "should delete zero records when expression matches nothing");
+        }
+
+        # Test 7: Delete with expression - delete the test record
+        {
+            hash<DataProviderExpression> where_exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "displayName"}, test_name),
+            };
+
+            int deleted = vendors.deleteRecords(where_exp);
+            assertEq(1, deleted, "should delete exactly one record");
+
+            # Verify the delete
+            AbstractDataProviderRecordIterator iter = vendors.searchRecords({"id": created_record.id});
+            assertFalse(iter.next(), "record should be deleted");
+
+            # Clear created_record so on_exit doesn't try to delete again
+            delete created_record;
+        }
     }
 }
 

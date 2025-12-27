@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/*  CdsRestDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  CdsRestDataProvider.qm Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -76,7 +76,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
-            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -95,7 +95,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
-            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -114,7 +114,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
-            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -133,7 +133,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
-            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -152,7 +152,7 @@ module CdsRestDataProvider {
                     "example_value": "account",
                 },
             },
-            "data_provider_info": CdsEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::CdsProviderInfo,
         });
 
         # Register Business Central app and actions
@@ -191,7 +191,7 @@ module CdsRestDataProvider {
                     "example_value": "customers",
                 },
             },
-            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::BcProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -216,7 +216,7 @@ module CdsRestDataProvider {
                     "example_value": "customers",
                 },
             },
-            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::BcProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -241,7 +241,7 @@ module CdsRestDataProvider {
                     "example_value": "customers",
                 },
             },
-            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::BcProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -266,7 +266,7 @@ module CdsRestDataProvider {
                     "example_value": "customers",
                 },
             },
-            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::BcProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -291,7 +291,7 @@ module CdsRestDataProvider {
                     "example_value": "customers",
                 },
             },
-            "data_provider_info": BcEntityDataProvider::ProviderInfo,
+            "data_provider_info": ODataEntityDataProvider::BcProviderInfo,
         });
     };
 }
@@ -306,7 +306,7 @@ module CdsRestDataProvider {
     Common Data Service REST services.  The
     @ref CdsRestDataProvider::CdsRestDataProvider "CdsRestDataProvider" class allows for
     introspecting a Microsoft Common Data Service application instance (such as Dynamics 365, for example), while the
-    @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider" class
+    @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider" class
     supports the @ref dataproviderintro "data provider" record-based API for querying and manipulating entity data in
     the application.
 
@@ -314,7 +314,7 @@ module CdsRestDataProvider {
     - REST operation path: <tt><i>uri_path</i></tt>
       - ex: <tt><b>account</b></tt>
       - results in a
-        @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider" object
+        @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider" object
         where record operations supported on the object can be executed
 
     The following classes are provided by this module for Dynamics 365:
@@ -337,6 +337,11 @@ module CdsRestDataProvider {
       - new data provider classes for Business Central CRUD operations
       - company-scoped entity access
       - full CRUD support (create, read, update, upsert, delete)
+    - added support for the DataProvider expression framework for OData queries
+      - supports logical operators: AND, OR, NOT
+      - supports comparison operators: eq, ne, lt, le, gt, ge, between, in
+      - added OData-specific string operators: contains, startsWith, endsWith
+      - added null/notNull comparison operators
 
     @subsection cdsrestdataprovider_v2_0 CdsRestDataProvider v2.0
     - added support for the data provider action catalog API

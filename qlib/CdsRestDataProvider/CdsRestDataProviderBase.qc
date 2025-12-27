@@ -27,15 +27,8 @@ public namespace CdsRestDataProvider {
 #! The CdsRest data provider class
 public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
-        #! Constructor options
-        const ConstructorOptions = {
-            "api": <DataProviderOptionInfo>{
-                "display_name": "API Version",
-                "short_desc": "Sets the API version to use",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "Sets the CDS API version to use",
-                "default_value": CdsRestClient::DefaultApiVersion,
-            },
+        #! Base constructor options (without app-specific options like "api")
+        const BaseConstructorOptions = {
             "cdsrestclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client to use",
@@ -117,8 +110,14 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
         self.rest = rest;
     }
 
-    #! Creates the object
+    #! Creates the object from a CDS connection
     constructor(CdsRestClient::CdsRestConnection conn) {
+        self.conn = conn;
+        self.rest = conn.get();
+    }
+
+    #! Creates the object from a Business Central connection
+    constructor(CdsRestClient::BusinessCentralRestConnection conn) {
         self.conn = conn;
         self.rest = conn.get();
     }

@@ -32,7 +32,7 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
             "name": "tables",
             "type": "CdsRestDataProviderTables",
             "supports_children": True,
-            "constructor_options": ConstructorOptions,
+            "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
             "children_can_support_observers": False,
@@ -63,7 +63,7 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
             map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
                 exists ENV{$1.value} && !exists options{$1.key};
         }
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
         rest = new CdsRestClient(getClientOptions(copts));
     }
 
@@ -93,7 +93,7 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         *hash<auto> obj_meta = getMetadata(){name};
         if (obj_meta) {
-            return new CdsEntityDataProvider(rest, name, obj_meta);
+            return new ODataEntityDataProvider(rest, name, obj_meta);
         }
     }
 

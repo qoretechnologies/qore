@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcCompanyDataProvider class definition
 
-/** BcCompanyDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** BcCompanyDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,13 +27,13 @@ public namespace CdsRestDataProvider {
 #! The Business Central company data provider class
 /** Provides access to data within a specific company
 */
-public class BcCompanyDataProvider inherits BcRestDataProviderBase {
+public class BcCompanyDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "type": "BcCompanyDataProvider",
             "supports_children": True,
-            "constructor_options": ConstructorOptions,
+            "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
             "children_can_support_records": True,
             "children_can_support_observers": False,
@@ -54,7 +54,7 @@ public class BcCompanyDataProvider inherits BcRestDataProviderBase {
 
     #! Creates the object from the arguments
     constructor(CdsRestClient::CdsRestClient rest, string companyId, string companyName)
-            : BcRestDataProviderBase(rest) {
+            : CdsRestDataProviderBase(rest) {
         self.companyId = companyId;
         self.companyName = companyName;
     }

@@ -27,6 +27,17 @@ public namespace CdsRestDataProvider {
 #! The CdsRest data provider class
 public class CdsRestDataProvider inherits CdsRestDataProviderBase {
     public {
+        #! Dynamics-specific constructor options
+        const ConstructorOptions = BaseConstructorOptions + {
+            "api": <DataProviderOptionInfo>{
+                "display_name": "API Version",
+                "short_desc": "Sets the API version to use",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "Sets the Dynamics 365 API version to use",
+                "default_value": CdsRestClient::DynamicsProfile.default_api_version,
+            },
+        };
+
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "type": "CdsRestDataProvider",

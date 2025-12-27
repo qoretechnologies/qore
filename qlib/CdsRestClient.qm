@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file CdsRestClient.qm Qore user module for calling Microsoft Common Data Service REST services
 
-/*  CdsRestClient.qm Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+/*  CdsRestClient.qm Copyright (C) 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,6 +98,12 @@ printf("%N\n", ans.body);
 
     @section cdsrestclientrelnotes Release Notes
 
+    @subsection cdsrestclientv2_1 CdsRestClient v2.1
+    - added support for Microsoft Dynamics 365 Business Central
+      - new \c BusinessCentralRestConnection class for BC connections
+      - API profile support for BC-specific URL construction and OAuth2 scopes
+      - new \c bcrests connection scheme
+
     @subsection cdsrestclientv2_0 CdsRestClient v2.0
     - updated to use the OAuth2 infrastructure
 
@@ -107,6 +113,95 @@ printf("%N\n", ans.body);
 
 #! the CdsRestClient namespace contains all the objects in the CdsRestClient module
 public namespace CdsRestClient {
+#! API profile definition for Microsoft Dynamics platforms
+/** Contains all platform-specific configuration values for Dynamics 365 and Business Central
+*/
+public hashdecl CdsApiProfile {
+    #! Profile identifier (e.g., "dynamics", "dynamics-business-central")
+    string name;
+
+    #! Display name for the platform
+    string display_name;
+
+    #! Default API version for this platform
+    string default_api_version;
+
+    #! Default base URI (NOTHING for Dynamics where user provides URL, fixed for BC)
+    *string default_base_uri;
+
+    #! URI path prefix format (e.g., "/api/data/v" for Dynamics, "" for BC where path is in URL)
+    string uri_path_prefix;
+
+    #! Whether instance_type option is required
+    bool requires_instance_type;
+
+    #! OAuth2 scopes (may contain {url} placeholder for dynamic substitution)
+    list<string> oauth2_scopes;
+
+    #! Ping method for connection testing
+    string ping_method;
+
+    #! Ping path for connection testing (may contain {api_uri_path} placeholder)
+    string ping_path;
+
+    #! Ping headers for connection testing
+    hash<auto> ping_headers;
+
+    #! Connection scheme identifier
+    string connection_scheme;
+
+    #! Application name for data provider action catalog
+    string app_name;
+}
+
+#! Microsoft Dynamics 365 CRM/CDS API profile
+public const DynamicsProfile = <CdsApiProfile>{
+    "name": "dynamics",
+    "display_name": "Microsoft Dynamics 365",
+    "default_api_version": "9.2",
+    "uri_path_prefix": "/api/data/v",
+    "requires_instance_type": False,
+    "oauth2_scopes": (
+        "offline_access",
+        "{url}user_impersonation",
+    ),
+    "ping_method": "GET",
+    "ping_path": "{api_uri_path}/WhoAmI",
+    "ping_headers": {
+        "Accept": MimeTypeJson,
+    },
+    "connection_scheme": "cdsrests",
+    "app_name": "Dynamics",
+};
+
+#! Microsoft Dynamics 365 Business Central API profile
+public const BusinessCentralProfile = <CdsApiProfile>{
+    "name": "dynamics-business-central",
+    "display_name": "Microsoft Dynamics 365 Business Central",
+    "default_api_version": "v2.0",
+    "default_base_uri": "https://api.businesscentral.dynamics.com/",
+    "uri_path_prefix": "",
+    "requires_instance_type": True,
+    "oauth2_scopes": (
+        "https://api.businesscentral.dynamics.com/user_impersonation",
+        "https://api.businesscentral.dynamics.com/Financials.ReadWrite.All",
+        "offline_access",
+    ),
+    "ping_method": "GET",
+    "ping_path": "companies?$top=1&$select=id",
+    "ping_headers": {
+        "Accept": MimeTypeJson,
+    },
+    "connection_scheme": "bcrests",
+    "app_name": "BusinessCentral",
+};
+
+#! Map of profile names to profile definitions
+public const ApiProfileMap = {
+    "dynamics": DynamicsProfile,
+    "dynamics-business-central": BusinessCentralProfile,
+};
+
 #! this class provides the REST client API for communication with Microsoft Dynamics 365 Common Data Service servers
 /** This class requires the following options for Microsoft Dynamics 365 Common Data Service authentication and
     authorization to the target server:
@@ -120,7 +215,7 @@ public namespace CdsRestClient {
 */
 public class CdsRestClient inherits RestClient::RestClient {
     public {
-        #! OAuth2 auth URL
+        #! OAuth2 base URL for Microsoft identity platform
         const OAuth2BaseUrl = "https://login.microsoftonline.com/";
 
         #! OAuth2 auth URI path suffix
@@ -129,68 +224,29 @@ public class CdsRestClient inherits RestClient::RestClient {
         #! OAuth2 token URI path suffix
         const OAuth2TokenUriPathSuffix = "/oauth2/v2.0/token";
 
-        #! OAuth2 auth URL
-        const OAuth2AuthUrl= sprintf("%scommon%s", OAuth2BaseUrl, OAuth2AuthUriPathSuffix);
+        #! Default OAuth2 auth URL (using "common" tenant)
+        const OAuth2AuthUrl = sprintf("%scommon%s", OAuth2BaseUrl, OAuth2AuthUriPathSuffix);
 
-        #! OAuth2 token URL
+        #! Default OAuth2 token URL (using "common" tenant)
         const OAuth2TokenUrl = sprintf("%scommon%s", OAuth2BaseUrl, OAuth2TokenUriPathSuffix);
 
-        #! Default API version for Dynamics CDS
-        const DefaultApiVersion = "9.2";
-
-        #! Default API version for Business Central
-        const DefaultBcApiVersion = "v2.0";
-
-        #! Request URI path prefix for Dynamics CDS
-        const RequestUriPathPrefix = "/api/data/v";
-
-        #! Default Dynamics 365 Business Central base URI
-        const DefaultBusinessCentralBaseUri = "https://api.businesscentral.dynamics.com/";
-
-        #! Default Dynamics ping method
-        const DefaultDynamicsPingMethod = "GET";
-
-        #! Default Dynamics ping path
-        const DefaultDynamicsPingPath = "{api_uri_path}/WhoAmI";
-
-        #! Default Dynamics ping headers
-        const DefaultDynamicsPingHeaders = {
-            "Accept": MimeTypeJson,
-        };
-
-        #! Default BC ping method
-        const DefaultBcPingMethod = "GET";
-
-        #! Default BC ping path
-        const DefaultBcPingPath = "companies?$top=1&$select=id";
-
-        #! Default BC ping headers
-        const DefaultBcPingHeaders = {
-            "Accept": MimeTypeJson,
-        };
-
-        #! API profiles
+        #! API profiles for backward compatibility
+        /** @deprecated Use ApiProfileMap instead
+        */
         const ApiProfiles = {
             "none": {},
             "dynamics": {
-                "oauth2_scopes": (
-                    "offline_access",
-                    "{url}user_impersonation",
-                ),
-                "ping_method": DefaultDynamicsPingMethod,
-                "ping_path": DefaultDynamicsPingPath,
-                "ping_headers": DefaultDynamicsPingHeaders,
+                "oauth2_scopes": DynamicsProfile.oauth2_scopes,
+                "ping_method": DynamicsProfile.ping_method,
+                "ping_path": DynamicsProfile.ping_path,
+                "ping_headers": DynamicsProfile.ping_headers,
             },
             "dynamics-business-central": {
-                "url": DefaultBusinessCentralBaseUri,
-                "oauth2_scopes": (
-                    "https://api.businesscentral.dynamics.com/user_impersonation",
-                    "https://api.businesscentral.dynamics.com/Financials.ReadWrite.All",
-                    "offline_access",
-                ),
-                "ping_method": DefaultBcPingMethod,
-                "ping_path": DefaultBcPingPath,
-                "ping_headers": DefaultBcPingHeaders,
+                "url": BusinessCentralProfile.default_base_uri,
+                "oauth2_scopes": BusinessCentralProfile.oauth2_scopes,
+                "ping_method": BusinessCentralProfile.ping_method,
+                "ping_path": BusinessCentralProfile.ping_path,
+                "ping_headers": BusinessCentralProfile.ping_headers,
             },
         };
     }
@@ -202,6 +258,8 @@ public class CdsRestClient inherits RestClient::RestClient {
         string uri_path_pfx;
         #! API profile
         *string api_profile;
+        #! API profile definition
+        *hash<CdsApiProfile> profile;
         #! Instance type for Business Central (sandbox, production, or GUID)
         *string instance_type;
         #! Tenant ID for Business Central
@@ -246,7 +304,8 @@ CdsRestClient rest({
         }
 
         api_profile = opts.api_profile;
-        tenant = getString(opts, "tenant", True) ?? "common";
+        profile = ApiProfileMap{api_profile};
+        tenant = getString(opts, "tenant") ?? "common";
 
         if (oauth2_token_url == "auto") {
             oauth2_token_url = OAuth2BaseUrl + tenant + OAuth2TokenUriPathSuffix;
@@ -255,22 +314,25 @@ CdsRestClient rest({
             oauth2_auth_url = OAuth2BaseUrl + tenant + OAuth2AuthUriPathSuffix;
         }
 
-        if (api_profile == "dynamics-business-central") {
-            # Business Central profile
-            instance_type = getString(opts, "instance_type", True);
-            if (!instance_type) {
-                raiseError("missing the required \"instance_type\" option for Business Central");
+        if (profile) {
+            api = getString(opts, "api") ?? profile.default_api_version;
+            if (profile.requires_instance_type) {
+                instance_type = getString(opts, "instance_type");
+                if (!instance_type) {
+                    raiseError("missing the required \"instance_type\" option for %s", profile.display_name);
+                }
             }
-            api = getString(opts, "api", True) ?? DefaultBcApiVersion;
-            # For BC, the full path is already in the URL from getOptions():
-            # https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
-            # No connection path needed
-            uri_path_pfx = "";
+            uri_path_pfx = profile.uri_path_prefix;
+            if (uri_path_pfx) {
+                setConnectionPath(uri_path_pfx + api);
+            }
+        } else if (api_profile && api_profile != "none") {
+            raiseError("unknown api_profile %y; known profiles: %y", api_profile, keys ApiProfileMap);
         } else {
-            # CDS / Dynamics profile
-            api = getString(opts, "api", True, DefaultApiVersion);
-            uri_path_pfx = RequestUriPathPrefix + api;
-            setConnectionPath(uri_path_pfx);
+            # No profile - use Dynamics defaults for backward compatibility
+            api = getString(opts, "api") ?? DynamicsProfile.default_api_version;
+            uri_path_pfx = DynamicsProfile.uri_path_prefix;
+            setConnectionPath(uri_path_pfx + api);
         }
 
         if (!do_not_connect) {
@@ -287,9 +349,14 @@ CdsRestClient rest({
         return api;
     }
 
-    #! Returns the API profile in use
+    #! Returns the API profile name in use
     *string getApiProfile() {
         return api_profile;
+    }
+
+    #! Returns the API profile definition in use
+    *hash<CdsApiProfile> getProfile() {
+        return profile;
     }
 
     #! Returns the Business Central instance type (only set for BC profile)
@@ -317,23 +384,35 @@ CdsRestClient rest({
         # create an untyped hash to avoid type constraints from the input hash
         hash<auto> opts += opts0;
         if (*string prof = opts.api_profile) {
-            *hash<auto> conf = ApiProfiles{prof};
-            if (!exists conf) {
+            *hash<CdsApiProfile> profile = ApiProfileMap{prof};
+            if (profile) {
+                # set ping options from profile if not already set
+                if (!opts.hasKey("ping_method")) {
+                    opts.ping_method = profile.ping_method;
+                }
+                if (!opts.hasKey("ping_path")) {
+                    opts.ping_path = profile.ping_path;
+                }
+                if (!opts.hasKey("ping_headers")) {
+                    opts.ping_headers = profile.ping_headers;
+                }
+                if (!opts.hasKey("oauth2_scopes")) {
+                    opts.oauth2_scopes = profile.oauth2_scopes;
+                }
+
+                # For Business Central, build the full URL with instance_type and API path
+                if (profile.default_base_uri && opts.instance_type) {
+                    string api = opts.api ?? profile.default_api_version;
+                    # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
+                    opts.url = profile.default_base_uri + api + "/" + opts.instance_type + "/api/" + api + "/";
+                }
+
+                # process scopes; substitute "{url}" with the real URL
+                opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
+            } else if (prof != "none") {
                 throw "CDS-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
-                    keys ApiProfiles);
+                    keys ApiProfileMap);
             }
-            # set ping options
-            map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
-
-            # For Business Central, build the full URL with instance_type and API path
-            if (prof == "dynamics-business-central" && opts.instance_type) {
-                string api = opts.api ?? DefaultBcApiVersion;
-                # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
-                opts.url = DefaultBusinessCentralBaseUri + api + "/" + opts.instance_type + "/api/" + api + "/";
-            }
-
-            # process scopes; substitute "{url}" with the real URL
-            opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
         }
         if (opts.url !~ /\/$/) {
             opts.url += "/";
@@ -404,7 +483,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "Sets the API version for CDS",
                     "type": "string",
                     "desc": "Sets the API version for CDS",
-                    "default_value": CdsRestClient::DefaultApiVersion,
+                    "default_value": DynamicsProfile.default_api_version,
                 },
                 "api_profile": <ConnectionOptionInfo>{
                     "display_name": "API Profile",
@@ -544,12 +623,9 @@ public class CdsRestConnection inherits RestClient::RestConnection {
     /** @return the data provider application name this connection serves, if any
     */
     *string getAppName() {
-        switch (opts.api_profile) {
-            case "dynamics":
-                return "Dynamics";
-            case "dynamics-business-central":
-                return "BusinessCentral";
-        };
+        if (*hash<CdsApiProfile> profile = ApiProfileMap{opts.api_profile}) {
+            return profile.app_name;
+        }
     }
 
     #! returns a data provider object for this connection
@@ -561,7 +637,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the CdsRestDataProvider and creates the data provider
         # object dynamically
         load_module("CdsRestDataProvider");
-        if (opts.api_profile == "dynamics-business-central") {
+        if (opts.api_profile == BusinessCentralProfile.name) {
             return create_object("BcRestDataProvider", self);
         }
         return create_object("CdsRestDataProvider", self);
@@ -691,33 +767,45 @@ public class CdsRestConnection inherits RestClient::RestConnection {
 
     #! returns options for @ref CdsRestConnection::constructor()
     private static hash<auto> getOptions(string url, *hash<auto> orig_opts) {
-        # to enusure opts are hash<auto>
+        # to ensure opts are hash<auto>
         hash<auto> opts += orig_opts;
 
         if (*string prof = opts.api_profile) {
-            *hash<auto> conf = (CdsRestClient::ApiProfiles{prof} - ("encode_chars",));
-            if (!exists conf) {
+            *hash<CdsApiProfile> profile = ApiProfileMap{prof};
+            if (profile) {
+                # set ping options from profile if not already set
+                if (!opts.hasKey("ping_method")) {
+                    opts.ping_method = profile.ping_method;
+                }
+                if (!opts.hasKey("ping_path")) {
+                    opts.ping_path = profile.ping_path;
+                }
+                if (!opts.hasKey("ping_headers")) {
+                    opts.ping_headers = profile.ping_headers;
+                }
+                if (!opts.hasKey("oauth2_scopes")) {
+                    opts.oauth2_scopes = profile.oauth2_scopes;
+                }
+
+                if (opts.url) {
+                    url = remove opts.url;
+                }
+                if (url !~ /^https:\/\//) {
+                    url =~ s/^[a-z]+:\/\//https:\/\//;
+                }
+                if (url !~ /\/$/) {
+                    url += "/";
+                }
+                # process scopes; substitute "{url}" with the connection URL
+                opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
+
+                if (opts.ping_path =~ /\{api_uri_path\}/) {
+                    opts.ping_path = replace(opts.ping_path, "{api_uri_path}",
+                        profile.uri_path_prefix + (opts.api ?? profile.default_api_version));
+                }
+            } else if (prof != "none") {
                 throw "CDS-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
-                    keys CdsRestClient::ApiProfiles);
-            }
-            # set ping options
-            map opts{$1.key} = $1.value, conf.pairIterator(), !opts.hasKey($1.key);
-
-            if (opts.url) {
-                url = remove opts.url;
-            }
-            if (url !~ /^https:\/\//) {
-                url =~ s/^[a-z]+:\/\//https:\/\//;
-            }
-            if (url !~ /\/$/) {
-                url += "/";
-            }
-            # process scopes; substitute "{url}" with the connection URL
-            opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
-
-            if (opts.ping_path =~ /\{api_uri_path\}/) {
-                opts.ping_path = replace(opts.ping_path, "{api_uri_path}", CdsRestClient::RequestUriPathPrefix +
-                    (opts.api ?? CdsRestClient::DefaultApiVersion));
+                    keys ApiProfileMap);
             }
         } else if (opts.url) {
             remove opts.url;
@@ -774,7 +862,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : CdsRestConnection(config + {"opts": config.opts + {"api_profile": "dynamics"}}, attr) {
+            : CdsRestConnection(config + {"opts": config.opts + {"api_profile": DynamicsProfile.name}}, attr) {
     }
 
     #! returns \c "dynamics"
@@ -816,16 +904,16 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
             "auto_url": True,
             "options": CdsRestConnection::ConnectionScheme.options + {
                 "api": CdsRestConnection::ConnectionScheme.options.api + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::DefaultBcApiVersion,
+                    "default_value": BusinessCentralProfile.default_api_version,
                 },
                 "api_profile": CdsRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "desc": "Set REST client options for the Dynamics 365 Business Central API",
-                            "value": "dynamics-business-central",
+                            "value": BusinessCentralProfile.name,
                         },
                     ),
-                    "default_value": "dynamics-business-central",
+                    "default_value": BusinessCentralProfile.name,
                 },
                 "instance_type": CdsRestConnection::ConnectionScheme.options.instance_type + <ConnectionOptionInfo>{
                     "allowed_values": (
@@ -846,13 +934,13 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
                     "default_value": "auto",
                 },
                 "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::DefaultBcPingMethod,
+                    "default_value": BusinessCentralProfile.ping_method,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::DefaultBcPingPath,
+                    "default_value": BusinessCentralProfile.ping_path,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClient::DefaultBcPingHeaders,
+                    "default_value": BusinessCentralProfile.ping_headers,
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret,instance_type",
@@ -893,14 +981,14 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
 
     #! returns options for @ref BusinessCentralRestConnection::constructor()
     private static hash<auto> getConfig(*hash<auto> config) {
-        string api = config.api ?? CdsRestClient::DefaultBcApiVersion;
+        string api = config.api ?? BusinessCentralProfile.default_api_version;
         # Full URL: https://api.businesscentral.dynamics.com/v2.0/{instance_type}/api/v2.0/
-        string url = CdsRestClient::DefaultBusinessCentralBaseUri + api + "/" + config.opts.instance_type + "/api/" + api + "/";
+        string url = BusinessCentralProfile.default_base_uri + api + "/" + config.opts.instance_type + "/api/" + api + "/";
         url =~ s/^https:/bcrests:/;
         return config + {
             "url": url,
             "opts": config.opts + {
-                "api_profile": "dynamics-business-central",
+                "api_profile": BusinessCentralProfile.name,
             },
         };
     }
