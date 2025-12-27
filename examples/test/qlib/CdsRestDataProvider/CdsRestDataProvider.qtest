@@ -69,6 +69,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         addTestCase("Factory tests", \factoryTests());
         addTestCase("App registration tests", \appRegistrationTests());
         addTestCase("Expression support tests", \expressionSupportTests());
+        addTestCase("Child provider summary info tests", \childProviderSummaryInfoTests());
 
         # Integration tests (require credentials)
         addTestCase("Dynamics DataProvider integration tests", \dynamicsDataProviderIntegrationTests());
@@ -598,6 +599,139 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Test getChildProviderSummaryInfo() for Business Central data providers
+    childProviderSummaryInfoTests() {
+        # Test BcCompaniesDataProvider.getChildProviderSummaryInfo() with mock data
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "comp-1", "name": "Company One", "displayName": "Company One Display"},
+                {"id": "comp-2", "name": "Company Two"},
+                {"id": "comp-3", "name": "Company Three", "displayName": "Third Company"},
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+
+            # Test getChildProviderSummaryInfo returns info for each company
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(3, summary.size(), "should return 3 company summaries");
+
+            # Check first company uses displayName
+            assertEq("Company One Display", summary[0].name);
+            assertEq("BcCompanyDataProvider", summary[0].type);
+            assertTrue(summary[0].supports_children);
+            assertTrue(summary[0].children_can_support_records);
+
+            # Check second company falls back to name when displayName is missing
+            assertEq("Company Two", summary[1].name);
+            assertEq("BcCompanyDataProvider", summary[1].type);
+
+            # Check third company uses displayName
+            assertEq("Third Company", summary[2].name);
+            assertEq("BcCompanyDataProvider", summary[2].type);
+        }
+
+        # Test BcRestDataProvider.getChildProviderSummaryInfo() delegates to BcCompaniesDataProvider
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "test-company-id", "name": "Test Company", "displayName": "Test Co"},
+            )});
+
+            BcRestDataProvider dp(mock_client);
+
+            # Test getChildProviderSummaryInfo returns company info, not static class info
+            *list<hash<DataProviderSummaryInfo>> summary = dp.getChildProviderSummaryInfo();
+            assertEq(1, summary.size(), "should return 1 company summary");
+
+            # Verify it returns actual company info, not BcCompaniesDataProvider class info
+            assertEq("Test Co", summary[0].name, "should return company displayName, not 'companies'");
+            assertEq("BcCompanyDataProvider", summary[0].type);
+            assertTrue(summary[0].supports_children);
+            assertTrue(summary[0].children_can_support_records);
+        }
+
+        # Negative test: empty companies list
+        {
+            MockCdsRestClient mock_client({"companies": ()});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(0, summary.size(), "should return empty list when no companies");
+
+            BcRestDataProvider dp(mock_client);
+            summary = dp.getChildProviderSummaryInfo();
+            assertEq(0, summary.size(), "BcRestDataProvider should return empty list when no companies");
+        }
+
+        # Negative test: companies with missing name/displayName fields - should fall back to ID
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "no-name-company"},  # Missing both name and displayName
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(1, summary.size());
+            # Should fall back to company ID when name/displayName are missing
+            assertEq("no-name-company", summary[0].name);
+            assertEq("BcCompanyDataProvider", summary[0].type);
+        }
+
+        # Test that getChildProviderNames matches getChildProviderSummaryInfo
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "comp-a", "name": "Alpha", "displayName": "Alpha Corp"},
+                {"id": "comp-b", "name": "Beta"},
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+
+            list<string> names = companies_dp.getChildProviderNames();
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+
+            assertEq(names.size(), summary.size(), "names and summary should have same count");
+        }
+
+        # Test multiple calls return consistent results (caching)
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "cached-id", "name": "Cached Company"},
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+
+            # First call
+            *list<hash<DataProviderSummaryInfo>> summary1 = companies_dp.getChildProviderSummaryInfo();
+            # Second call should return same data
+            *list<hash<DataProviderSummaryInfo>> summary2 = companies_dp.getChildProviderSummaryInfo();
+
+            assertEq(summary1.size(), summary2.size());
+            assertEq(summary1[0].name, summary2[0].name);
+        }
+
+        # Negative test: API error should propagate
+        {
+            MockCdsRestClientWithError mock_client("API-ERROR", "Mock API error");
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            assertThrows("API-ERROR", \companies_dp.getChildProviderSummaryInfo());
+        }
+
+        # Test with many companies
+        {
+            list<hash<auto>> many_companies = ();
+            for (int i = 0; i < 100; i++) {
+                many_companies += {"id": sprintf("company-%d", i), "name": sprintf("Company %d", i)};
+            }
+            MockCdsRestClient mock_client({"companies": many_companies});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(100, summary.size(), "should return 100 company summaries");
+            assertEq("Company 0", summary[0].name);
+            assertEq("Company 99", summary[99].name);
+        }
+    }
+
     #! Dynamics data provider integration tests
     dynamicsDataProviderIntegrationTests() {
         if (!dyn_client) {
@@ -896,5 +1030,64 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     private handlePingTimeout(string name, date delta) {
         PollingConnectionMonitor::handlePingTimeout(name, delta);
         msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
+#! Mock CdsRestClient for unit testing without actual API credentials
+class MockCdsRestClient inherits CdsRestClient {
+    private {
+        #! Mock data for API responses
+        hash<auto> mock_data;
+    }
+
+    #! Creates a mock client with predefined response data
+    /** @param data hash with mock data:
+        - companies: list of company hashes to return from GET companies
+    */
+    constructor(hash<auto> data) : CdsRestClient({
+        "url": "https://mock.example.com",
+        "oauth2_client_id": "mock-client-id",
+        "oauth2_client_secret": "mock-client-secret",
+    }, True) {  # do_not_connect = True
+        mock_data = data;
+    }
+
+    #! Override get() to return mock data
+    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        if (path == "companies") {
+            return {
+                "body": {
+                    "value": mock_data.companies ?? (),
+                },
+            };
+        }
+        throw "MOCK-ERROR", sprintf("Unexpected GET request to path: %y", path);
+    }
+}
+
+#! Mock CdsRestClient that throws an error on any request
+class MockCdsRestClientWithError inherits CdsRestClient {
+    private {
+        string error_code;
+        string error_desc;
+    }
+
+    constructor(string err, string desc) : CdsRestClient({
+        "url": "https://mock.example.com",
+        "oauth2_client_id": "mock-client-id",
+        "oauth2_client_secret": "mock-client-secret",
+    }, True) {
+        error_code = err;
+        error_desc = desc;
+    }
+
+    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        # Populate info like the real client would before throwing
+        info = {
+            "request-uri": "https://mock.example.com/" + path,
+            "response-code": 500,
+            "response-body": "Mock error",
+        };
+        throw error_code, error_desc;
     }
 }

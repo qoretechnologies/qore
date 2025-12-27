@@ -105,19 +105,15 @@ public class BcRestDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Return data provider summary info
+    /** Returns summary info for each company, which are the children of the companies provider
+    */
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        *list<hash<DataProvider::DataProviderSummaryInfo>> rv;
-        foreach Class cls in (ChildMap.iterator()) {
-            try {
-                rv += cls.getConstant("ProviderSummaryInfo").getValue();
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "UNKNOWN-CONSTANT") {
-                    rethrow;
-                }
-            }
-            rv += cls.getStaticMember("ProviderSummaryInfo").getValue();
-        }
-        if (conn) {
+        # Get summary info for each company from the companies provider
+        BcCompaniesDataProvider companies_provider(rest);
+        *list<hash<DataProvider::DataProviderSummaryInfo>> rv = companies_provider.getChildProviderSummaryInfo();
+
+        # Add dynamic children if connection is available
+        if (conn && dynamic_children) {
             map rv += $1.value($1.key, conn).getSummaryInfo(), dynamic_children.pairIterator();
         }
         return rv;

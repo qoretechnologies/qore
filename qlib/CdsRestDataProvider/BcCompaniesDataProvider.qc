@@ -86,6 +86,20 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
         return keys getCompanies();
     }
 
+    #! Return data provider summary info
+    /** Returns summary info for each company
+    */
+    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
+        *hash<string, hash<auto>> company_list = getCompanies();
+        return map <DataProviderSummaryInfo>{
+            # Use displayName, fall back to name, then to id
+            "name": $1.value.displayName ?? $1.value.name ?? $1.key,
+            "type": "BcCompanyDataProvider",
+            "supports_children": True,
+            "children_can_support_records": True,
+        }, company_list.pairIterator();
+    }
+
     #! Returns the given child provider or @ref nothing if the given child is unknown
     /** @return the given child provider or @ref nothing if the given child is unknown
 
