@@ -53,7 +53,7 @@
 %allow-weak-references
 
 module Swagger {
-    version = "2.2.3";
+    version = "2.4";
     desc = "Swagger module providing functionality for Swagger 2.0 schema definitions";
     author = "Ondrej Musil <ondrej.musil@qoretechnologies.com>, David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -152,6 +152,31 @@ RestHandler handler(NOTHING, swagger);
     @endcode
 
     @section swagger_relnotes Swagger Module Release Notes
+
+    @subsection swagger_2_4 Swagger v2.4
+    - renamed @ref Swagger::AbstractSwaggerParameterObject "AbstractSwaggerParameterObject" from
+      \c AbstractParameterObject to avoid confusion with
+      @ref RestSchemaValidator::AbstractParameterObject "RestSchemaValidator::AbstractParameterObject"
+    - added overloaded @ref Swagger::SwaggerSchema::getFieldFromSchema() "getFieldFromSchema()" method
+      that accepts @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject" for polymorphic access
+      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
+
+    @subsection swagger_2_3 Swagger v2.3
+    - updated classes to inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
+      - @ref Swagger::SchemaBase "SchemaBase" now inherits from
+        @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"
+      - @ref Swagger::SchemaObject "SchemaObject" now inherits from
+        @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
+      - @ref Swagger::AbstractSwaggerParameterObject "AbstractSwaggerParameterObject" now inherits from
+        @ref RestSchemaValidator::AbstractParameterObject "RestSchemaValidator::AbstractParameterObject"
+      - @ref Swagger::ResponseObject "ResponseObject" now inherits from
+        @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject"
+      - @ref Swagger::ResponsesObject "ResponsesObject" now inherits from
+        @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject"
+      - @ref Swagger::PathItemObject "PathItemObject" now inherits from
+        @ref RestSchemaValidator::AbstractPathItemObject "AbstractPathItemObject"
+      - @ref Swagger::OperationObject "OperationObject" now inherits from
+        @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject"
 
     @subsection swagger_2_2_3 Swagger v2.2.3
     - improved parsing Swagger schemas with type errors
@@ -449,48 +474,10 @@ class ObjectBase inherits Qore::Serializable {
 }
 
 #! Base used by @ref OtherParameter, @ref HeaderObject and @ref SchemaObject.
-class SchemaBase inherits Qore::Serializable {
-    public {
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *softfloat maximum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *softfloat minimum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2.
-        *bool exclusiveMax;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3.
-        *bool exclusiveMin;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.1.
-        *int maxLength;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.2.
-        *int minLength;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.3.
-        *string pattern;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.2.
-        *int maxItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.3.
-        *int minItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.4.
-        *bool uniqueItems;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.1.
-        /** @note Swagger enums can be of any type, but we only support enums of simple types that can be converted
-            to a string for fast lookups in a hash
-        */
-        hash<string, bool> enum;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.1.
-        *float multipleOf;
-    }
-
+/** Inherits common validation constraint members from
+    @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase".
+*/
+class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
     #! Constructor.
     /** @param objType the type of object
         @param oh deserialized hash from the source schema description
@@ -1131,9 +1118,9 @@ public class ParameterGroup inherits ObjectBase {
     public {
         #! A hash of parameters for this object
         /**
-            Hash values are @ref AbstractParameterObject "AbstractParameterObjects"
+            Hash values are @ref AbstractSwaggerParameterObject "AbstractSwaggerParameterObjects"
         */
-        hash<string, AbstractParameterObject> parameters();
+        hash<string, AbstractSwaggerParameterObject> parameters();
 
         #! Any query param with type "object"? (OpenAPI 3 compatible)
         string query_obj;
@@ -1144,12 +1131,12 @@ public class ParameterGroup inherits ObjectBase {
     }
 
     #! Adds a parameter to the group
-    addParameter(AbstractParameterObject p) {
+    addParameter(AbstractSwaggerParameterObject p) {
         addParameter(p.name, p);
     }
 
     #! Adds a parameter to the group
-    addParameter(string key, AbstractParameterObject p) {
+    addParameter(string key, AbstractSwaggerParameterObject p) {
         if (p.inLoc == "query" && cast<OtherParameter>(p).type == "object") {
             if (exists query_obj) {
                 throw "SWAGGER-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
@@ -1416,7 +1403,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             foreach hash<auto> item in (obj.pairIterator()) {
                 if (item.value.typeCode() != NT_HASH)
                     throw "INVALID-FIELD-TYPE", "Swagger Object: invalid parameter datatype: " + item.value.type();
-                addParameter(item.key, AbstractParameterObject::newParameter(item.key, item.value, self));
+                addParameter(item.key, AbstractSwaggerParameterObject::newParameter(item.key, item.value, self));
                 if (opt_flags & LM_AUTO_FORM_DATA && parameters{item.key}.inLoc.formData
                     && !consumes{MimeTypeFormUrlEncoded}) {
                     consumes{MimeTypeFormUrlEncoded} = True;
@@ -1580,15 +1567,15 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! resolves a reference to a parameter
     /** @throw INVALID-REFERENCE invalid reference
     */
-    AbstractParameterObject resolveParameter(string name, string refstr, hash<auto> oh) {
+    AbstractSwaggerParameterObject resolveParameter(string name, string refstr, hash<auto> oh) {
         # resolve external reference
         if (refstr !~ /^#\//)
-            return AbstractParameterObject::newParameter(name, getExternalReference(refstr), self);
+            return AbstractSwaggerParameterObject::newParameter(name, getExternalReference(refstr), self);
         if (refstr !~ /^#\/parameters\//)
             throw "INVALID-REFERENCE", sprintf("cannot resolve ParameterObject %y reference %y; expecting "
                 "\"#/parameters/...\"", name, refstr);
         string rstr = (refstr =~ x/^#\/parameters\/(.*)$/)[0];
-        *AbstractParameterObject ref = parameters{rstr};
+        *AbstractSwaggerParameterObject ref = parameters{rstr};
         if (!ref)
             throw "INVALID-REFERENCE", sprintf("cannot resolve ParameterObject %y reference %y; known parameter "
                 "references: %y", name, refstr, keys parameters);
@@ -1719,8 +1706,17 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         return schema.getField(name, desc, required, rest);
     }
 
+    #! Returns a field definition from an abstract schema object
+    /** This method provides polymorphic access to getFieldFromSchema()
+        @since Swagger 2.4
+    */
+    AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
+            bool required = True, *HTTPClient rest) {
+        return cast<SchemaObject>(schema).getField(name, desc, required, rest);
+    }
+
     #! Adds field definitions to a hash type from Swagger parameters
-    addFieldsFromParameters(HashDataType rv, hash<string, AbstractParameterObject> parameters,
+    addFieldsFromParameters(HashDataType rv, hash<string, AbstractSwaggerParameterObject> parameters,
             reference<bool> required) {
         addFieldsFromParametersIntern(rv, parameters, \required);
     }
@@ -1759,7 +1755,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     #! Adds field definitions from Swagger parameters
-    private addFieldsFromParametersIntern(HashDataType rv, hash<string, AbstractParameterObject> parameters,
+    private addFieldsFromParametersIntern(HashDataType rv, hash<string, AbstractSwaggerParameterObject> parameters,
             reference<bool> required) {
         # temporary hash for fields: loc -> name -> field
         hash<string, hash<string, AbstractDataField>> params;
@@ -2832,7 +2828,9 @@ public class PathsObject inherits ObjectBase {
     exposed to the documentation viewer but they will not know which operations
     and parameters are available.
  */
-public class PathItemObject inherits ParameterGroup {
+/** Inherits from @ref RestSchemaValidator::AbstractPathItemObject "AbstractPathItemObject".
+*/
+public class PathItemObject inherits ParameterGroup, RestSchemaValidator::AbstractPathItemObject {
     public {
         #! Allows for an external definition of this path item.
         /**
@@ -2843,7 +2841,7 @@ public class PathItemObject inherits ParameterGroup {
         *string ref;
 
         #! The body parameter, if defined
-        AbstractParameterObject body;
+        AbstractSwaggerParameterObject body;
     }
 
     private {
@@ -2891,7 +2889,7 @@ public class PathItemObject inherits ParameterGroup {
                     throw "INVALID-FIELD-TYPE",
                         sprintf("Path Item Object: 'parameters' list value has invalid type %y",
                             param.type());
-                AbstractParameterObject p = AbstractParameterObject::newParameter(
+                AbstractSwaggerParameterObject p = AbstractSwaggerParameterObject::newParameter(
                     sprintf("%d/%d", $# + 1, params.lsize()), param, swagger
                 );
                 if (p.inLoc == "body") {
@@ -2941,28 +2939,29 @@ public class PathItemObject inherits ParameterGroup {
     softlist getMethods() {
         return keys operations;
     }
+
+    #! Returns the body parameter defined at the path level, if any
+    *RestSchemaValidator::AbstractParameterObject getBody() {
+        return body;
+    }
+
+    #! Returns a hash of parameters defined at the path level
+    *hash<string, RestSchemaValidator::AbstractParameterObject> getParameters() {
+        return cast<*hash<string, RestSchemaValidator::AbstractParameterObject>>(parameters);
+    }
 }
 
 #! Describes a single API operation on a path.
-public class OperationObject inherits ParameterGroup {
+/** Inherits common operation members from
+    @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject".
+*/
+public class OperationObject inherits ParameterGroup, RestSchemaValidator::AbstractOperationObject {
     public {
-        #! the URI path for the operation
-        string path;
-
-        #! the HTTP method for the operation
-        string method;
-
         #! A list of tags (strings or @ref TagObject "TagObjects") for API documentation control.
         /**
             Tags can be used for logical grouping of operations by resources or any other qualifier.
          */
         list tags;
-
-        #! A short summary of what the operation does.
-        *string summary;
-
-        #! A verbose explanation of the operation behavior. GFM syntax can be used for rich text representation.
-        *string desc;
 
         #! Declares this operation to be deprecated.
         /**
@@ -2983,27 +2982,11 @@ public class OperationObject inherits ParameterGroup {
          */
         *string operationId;
 
-        #! A list of MIME types (strings) the operation can consume.
-        /**
-            This overrides the @ref SwaggerSchema::consumes "consumes" definition
-            at the %Swagger Object. An empty value MAY be used to clear the global definition.
-            Key values MUST be Mime Types.
-         */
-        hash<string, bool> consumes;
-
-        #! A hash of MIME types (strings) the operation can produce.
-        /**
-            This overrides the @ref SwaggerSchema::produces "produces" definition
-            at the %Swagger Object. An empty value MAY be used to clear the global definition.
-            Key values MUST be Mime Types.
-         */
-        hash<string, bool> produces;
-
         #! formData parameter; if defined for this operation, body parameter will be excluded
-        hash<string, AbstractParameterObject> formData;
+        hash<string, AbstractSwaggerParameterObject> formData;
 
         #! The body parameter, if defined
-        AbstractParameterObject body;
+        AbstractSwaggerParameterObject body;
 
         #! Required. The list of possible responses as they are returned from executing this operation.
         ResponsesObject responses;
@@ -3144,7 +3127,7 @@ public class OperationObject inherits ParameterGroup {
                     error("INVALID-FIELD-TYPE", "invalid 'parameters' list value datatype %y; expecing \"hash\"",
                         p.fullType());
                 }
-                AbstractParameterObject param = AbstractParameterObject::newParameter(sprintf("%d/%d", $# + 1,
+                AbstractSwaggerParameterObject param = AbstractSwaggerParameterObject::newParameter(sprintf("%d/%d", $# + 1,
                     listObj.lsize()), p, swagger);
                 if (param.inLoc == "body") {
                     body = param;
@@ -3211,8 +3194,10 @@ public class OperationObject inherits ParameterGroup {
     }
 
     #! Processes a generated request
-    *data getRequestBody(PathItemObject pio, auto body, reference<hash<auto>> headers, *bool freeform) {
-        *AbstractParameterObject body_po = self.body ?? pio.body;
+    *data getRequestBody(RestSchemaValidator::AbstractPathItemObject abstract_pio, auto body,
+            reference<hash<auto>> headers, *bool freeform) {
+        PathItemObject pio = cast<PathItemObject>(abstract_pio);
+        *AbstractSwaggerParameterObject body_po = self.body ?? pio.body;
         if (body_po) {
             if (!freeform) {
                 body_po.check(True, True, path, method, "body", \body);
@@ -3271,8 +3256,10 @@ public class OperationObject inherits ParameterGroup {
         @throws SCHEMA-VALIDATION-ERROR invalid parameter name or location, missing parameter and parameter has no
         default value
     */
-    validateRequest(bool serialize, PathItemObject pio, reference<hash<UriQueryInfo>> h, reference<auto> body,
+    validateRequest(bool serialize, RestSchemaValidator::AbstractPathItemObject abstract_pio,
+            reference<hash<UriQueryInfo>> h, reference<auto> body,
             reference<hash> headers, *reference<hash<string, bool>> mime_types, *bool freeform) {
+        PathItemObject pio = cast<PathItemObject>(abstract_pio);
         # check query parameters
         *string query_obj = self.query_obj ?? pio.query_obj;
         if (exists query_obj) {
@@ -3281,7 +3268,7 @@ public class OperationObject inherits ParameterGroup {
 
         foreach string key in (keys h.params) {
             # find URI parameter object
-            *AbstractParameterObject po = parameters{key} ?? pio.parameters{key};
+            *AbstractSwaggerParameterObject po = parameters{key} ?? pio.parameters{key};
             if (!po) {
                 if (exists (*string op = (query_obj ?? pio.query_obj))) {
                     h.params{op}{key} = remove h.params{key};
@@ -3306,7 +3293,7 @@ public class OperationObject inherits ParameterGroup {
         # check header parameters
         foreach string key in (keys headers) {
             # find URI parameter object
-            *AbstractParameterObject po = parameters{key} ?? pio.parameters{key};
+            *AbstractSwaggerParameterObject po = parameters{key} ?? pio.parameters{key};
             # extra headers are OK
             if (!po || po.inLoc != "header") {
                 continue;
@@ -3317,7 +3304,7 @@ public class OperationObject inherits ParameterGroup {
 
         # check body parameters
         {
-            *AbstractParameterObject body_po = self.body ?? pio.body;
+            *AbstractSwaggerParameterObject body_po = self.body ?? pio.body;
             if (body_po) {
                 if (!freeform) {
                     body_po.check(serialize, True, path, method, "body", \body);
@@ -3544,7 +3531,7 @@ public class OperationObject inherits ParameterGroup {
     }
 
     private getQoreExampleParams(reference<hash<auto>> query, reference<hash<auto>> headers,
-            hash<string, AbstractParameterObject> parameters, *hash<string, AbstractParameterObject> child_params) {
+            hash<string, AbstractSwaggerParameterObject> parameters, *hash<string, AbstractSwaggerParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked or if it's the single message body param
             if (child_params{ph.key} || ph.value.inLoc == "body" || ph.value.inLoc == "formData")
@@ -3562,7 +3549,7 @@ public class OperationObject inherits ParameterGroup {
 
     #! add default parameters
     private doDefaultParams(reference<hash<UriQueryInfo>> h, reference<hash> headers, reference<auto> body,
-            hash<string, AbstractParameterObject> parameters, *hash<string, AbstractParameterObject> child_params) {
+            hash<string, AbstractSwaggerParameterObject> parameters, *hash<string, AbstractSwaggerParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked or if it's the single message body param
             if (child_params{ph.key} || ph.value.inLoc == "body")
@@ -3589,7 +3576,7 @@ public class OperationObject inherits ParameterGroup {
 
     #! checks for missing params
     private checkMissingParams(hash<UriQueryInfo> h, *hash<auto> headers, auto body,
-            hash<string, AbstractParameterObject> parameters, *hash<string, AbstractParameterObject> child_params) {
+            hash<string, AbstractSwaggerParameterObject> parameters, *hash<string, AbstractSwaggerParameterObject> child_params) {
         foreach hash<auto> ph in (parameters.pairIterator()) {
             # don't check if child params already checked
             if (child_params{ph.key} || ph.value.inLoc == "body")
@@ -3629,6 +3616,21 @@ public class OperationObject inherits ParameterGroup {
     private error(string err, string fmt, ...) {
         throw err, sprintf("%s %s Operation Object: %s", method.upr(), path, vsprintf(fmt, argv));
     }
+
+    #! Returns the responses object for this operation
+    RestSchemaValidator::AbstractResponsesObject getResponses() {
+        return responses;
+    }
+
+    #! Returns the body parameter, if any
+    *RestSchemaValidator::AbstractParameterObject getBody() {
+        return body;
+    }
+
+    #! Returns a hash of parameters for this operation
+    *hash<string, RestSchemaValidator::AbstractParameterObject> getParameters() {
+        return cast<*hash<string, RestSchemaValidator::AbstractParameterObject>>(parameters);
+    }
 }
 
 #! Allows referencing an external resource for extended documentation.
@@ -3657,8 +3659,8 @@ public class ExternalDocumentationObject inherits ObjectBase {
 
 #! Describes a single operation parameter.
 /**
-    A unique parameter is defined by a combination of a @ref AbstractParameterObject::name "name"
-    and @ref AbstractParameterObject::inLoc "location".
+    A unique parameter is defined by a combination of a @ref AbstractSwaggerParameterObject::name "name"
+    and @ref AbstractSwaggerParameterObject::inLoc "location".
 
     There are five possible parameter types:
     - Path: Used together with Path Templating, where the parameter value is
@@ -3692,36 +3694,10 @@ public class ExternalDocumentationObject inherits ObjectBase {
                 of the parameter is \c submit-name. This type of form parameters
                 is more commonly used for file transfers.
  */
-public class AbstractParameterObject inherits ObjectBase {
-    public {
-        #! Required. The name of the parameter. Parameter names are case sensitive.
-        /**
-            - If @ref AbstractParameterObject::inLoc "inLoc" is \c "path", the \c name
-                field MUST correspond to the associated path segment from the
-                \c "path" field in the @ref Swagger::PathsObject.
-            - For all other cases, the name corresponds to the parameter name
-                used based on the @ref AbstractParameterObject::inLoc "inLoc" property.
-        */
-        string name;
-
-        #! Required. The location of the parameter.
-        /**
-            Possible values are \c "query", \c "header", \c "path", \c "formData" or \c "body".
-        */
-        string inLoc;
-
-        #! A brief description of the parameter. This could contain examples of use. GFM syntax can be used for rich text representation.
-        *string desc;
-
-        #! Determines whether this parameter is mandatory.
-        /**
-            If the parameter is @ref AbstractParameterObject::inLoc "in" "path",
-            this property is \b required and its value MUST be \c true.
-            Otherwise, the property MAY be included and its default value is \c false.
-        */
-        bool required = False;
-    }
-
+/** Inherits common parameter members from
+    @ref RestSchemaValidator::AbstractParameterObject "AbstractParameterObject".
+*/
+public class AbstractSwaggerParameterObject inherits ObjectBase, RestSchemaValidator::AbstractParameterObject {
     private {
         const OtherParameterMap = (
             "query": True,
@@ -3754,12 +3730,15 @@ public class AbstractParameterObject inherits ObjectBase {
     #! verifies the parameter in an actual REST API call
     abstract check(bool serialize, bool request, string path, string method, string name, reference value);
 
+    #! Returns the schema for this parameter, if any
+    abstract *RestSchemaValidator::AbstractSchemaObject getSchema();
+
     #! returns the default value of the parameter (default: @ref nothing)
     auto getDefaultValue() {
     }
 
-    #! gets a concrete instance of an AbstractParameterObject
-    static AbstractParameterObject newParameter(string name, hash<auto> oh, SwaggerSchema swagger) {
+    #! gets a concrete instance of an AbstractSwaggerParameterObject
+    static AbstractSwaggerParameterObject newParameter(string name, hash<auto> oh, SwaggerSchema swagger) {
         on_error rethrow $1.err, sprintf("%s (while processing parameter %y in %y)", $1.desc, name, oh."in");
         if (oh.hasKey("$ref"))
             return swagger.resolveParameter(name, oh."$ref", oh);
@@ -3778,8 +3757,8 @@ public class AbstractParameterObject inherits ObjectBase {
     }
 }
 
-#! @ref AbstractParameterObject specialization for \c "body" parameters.
-public class BodyParameter inherits AbstractParameterObject {
+#! @ref AbstractSwaggerParameterObject specialization for \c "body" parameters.
+public class BodyParameter inherits AbstractSwaggerParameterObject {
     public {
         #! Required. The schema defining the type used for the body parameter.
         SchemaObject schema;
@@ -3793,7 +3772,8 @@ public class BodyParameter inherits AbstractParameterObject {
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws REQUIRED-FIELD-MISSING required field is missing
      */
-    public constructor(hash<auto> oh, SwaggerSchema swagger) : AbstractParameterObject(oh, swagger.getParseFlags()) {
+    public constructor(hash<auto> oh, SwaggerSchema swagger)
+            : AbstractSwaggerParameterObject(oh, swagger.getParseFlags()) {
         hash schemaObj;
         required_field("Body Parameter", oh, "schema", NT_HASH, \schemaObj);
         schema = SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
@@ -3822,10 +3802,15 @@ public class BodyParameter inherits AbstractParameterObject {
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
         return schema.getExampleValue(emap, fname);
     }
+
+    #! Returns the schema for this parameter
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return schema;
+    }
 }
 
-#! @ref AbstractParameterObject specialization for parameters other than \c "body"
-public class TypedParameter inherits AbstractParameterObject, SchemaBase {
+#! @ref AbstractSwaggerParameterObject specialization for parameters other than \c "body"
+public class TypedParameter inherits AbstractSwaggerParameterObject, SchemaBase {
     public {
         #! Required. The type of the parameter.
         /**
@@ -3836,7 +3821,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
             \c "boolean", \c "array" or \c "file". If \c type is \c "file",
             the @ref OperationObject::consumes "consumes" MUST be either
             \c "multipart/form-data", \c " application/x-www-form-urlencoded" or
-            both and the parameter MUST be @ref AbstractParameterObject::inLoc "in" \c "formData".
+            both and the parameter MUST be @ref AbstractSwaggerParameterObject::inLoc "in" \c "formData".
         */
         string type;
 
@@ -3863,7 +3848,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
             - \c "pipes": pipe separated values; ex: foo|bar
             - \c "multi": corresponds to multiple parameter instances instead of
                 multiple values for a single instance <tt>foo=bar&foo=baz</tt>.
-                This is valid only for parameters @ref AbstractParameterObject::inLoc "in"
+                This is valid only for parameters @ref AbstractSwaggerParameterObject::inLoc "in"
                 \c "query" or \c "formData".
 
             Default value is \c "csv".
@@ -3883,7 +3868,7 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
 
     #! Creates the object
     public constructor(string name, hash<auto> oh, SwaggerSchema swagger)
-            : AbstractParameterObject(oh, swagger.getParseFlags()), SchemaBase("Parameter", oh) {
+            : AbstractSwaggerParameterObject(oh, swagger.getParseFlags()), SchemaBase("Parameter", oh) {
         string objType = "Parameter";
         optional_field(objType, oh, "type", NT_STRING, \type);
         setType(swagger);
@@ -4053,9 +4038,16 @@ public class TypedParameter inherits AbstractParameterObject, SchemaBase {
 
     #! Sets the parameter type
     abstract private setType(SwaggerSchema swagger);
+
+    #! Returns the schema for this parameter
+    /** TypedParameter doesn't have a schema object; returns NOTHING
+    */
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return NOTHING;
+    }
 }
 
-#! @ref AbstractParameterObject specialization for formData parameters
+#! @ref AbstractSwaggerParameterObject specialization for formData parameters
 public class FormDataParameter inherits TypedParameter {
     public {
         #! valid parameter types
@@ -4079,7 +4071,7 @@ public class FormDataParameter inherits TypedParameter {
     }
 }
 
-#! @ref AbstractParameterObject specialization for parameters other than \c "body" and \c "formData"
+#! @ref AbstractSwaggerParameterObject specialization for parameters other than \c "body" and \c "formData"
 public class OtherParameter inherits TypedParameter {
     public {
         #! valid parameter types
@@ -4112,7 +4104,9 @@ public class OtherParameter inherits TypedParameter {
 }
 
 #! contains the possible responses for an operation
-public class ResponsesObject inherits ObjectBase {
+/** Inherits from @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject".
+*/
+public class ResponsesObject inherits ObjectBase, RestSchemaValidator::AbstractResponsesObject {
     public {
         # The documentation of responses other than the ones declared for specific HTTP response codes.
         /**
@@ -4156,14 +4150,24 @@ public class ResponsesObject inherits ObjectBase {
         if (responses.empty() && !defaultObj)
             throw "EMPTY-RESPONSES", sprintf("%s %s: no valid responses provided for operation", method, path);
     }
+
+    #! Returns the default response, if any
+    *RestSchemaValidator::AbstractResponseObject getDefaultResponse() {
+        return defaultResp;
+    }
+
+    #! Returns the hash of responses by HTTP status code
+    *hash<string, RestSchemaValidator::AbstractResponseObject> getResponses() {
+        return cast<*hash<string, RestSchemaValidator::AbstractResponseObject>>(responses);
+    }
 }
 
 #! Describes a single response from an API Operation.
-public class ResponseObject inherits ObjectBase {
+/** Inherits common response members from
+    @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject".
+*/
+public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractResponseObject {
     public {
-        #! Required. A short description of the response. GFM syntax can be used for rich text representation.
-        string desc;
-
         #! A definition of the response structure.
         /**
             It can be a primitive, an array or an object. If this field does not exist,
@@ -4172,22 +4176,6 @@ public class ResponseObject inherits ObjectBase {
             be \c "file". This SHOULD be accompanied by a relevant \c produces mime-type.
          */
         *SchemaObject schema;
-
-        #! A hash of headers that are (can be) sent with the response.
-        /**
-            A hash of @ref HeaderObject objects. Keys are header names.
-         */
-        hash<auto> headers;
-
-        #! A hash of example response messages.
-        /**
-            A hash of example responses in the form of <tt>Example Object</tt>.
-            See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#exampleObject
-            Keys MUST be one of the Operation @ref OperationObject::produces "produces"
-            values (either implicit or inherited). The value SHOULD be an example
-            of what such a response would look like.
-         */
-        hash examples;
     }
 
     #! private constructor; use newResponse() instead
@@ -4229,6 +4217,11 @@ public class ResponseObject inherits ObjectBase {
         if (oh.hasKey("$ref"))
             return swagger.resolveResponse(key, oh."$ref", oh);
         return new ResponseObject(key, oh, swagger);
+    }
+
+    #! Returns the response schema, if any
+    *RestSchemaValidator::AbstractSchemaObject getSchema() {
+        return schema;
     }
 }
 
@@ -4367,43 +4360,13 @@ public class TagObject inherits ObjectBase {
 }
 
 #! defines an object in a schema
-public class SchemaObject inherits ObjectBase, SchemaBase {
+/** Inherits common schema members from
+    @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
+*/
+public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractSchemaObject {
     public {
-        #! the name of this object for documentation and example purposes
-        string name;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.2.
-        /**
-            MUST be either a string or an array (list). If it's an array,
-            it's elements MUST be strings and MUST be unique.
-         */
-        string type;
-
-        #! The extending format for the previously mentioned \c type. See Data Type Formats for further details.
-        *string format;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1.
-        *string title;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1.
-        *string desc;
-
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.1.
         *SchemaObject items;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.2.
-        auto defaultVal;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.1.
-        *int maxProperties;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.2.
-        *int minProperties;
-
-        #! extension that allows types to be nullable
-        /** the OpenAPI specification 2.0 otherwise does not allow for nullable types
-        */
-        bool nullable = False;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.4.
         /**
@@ -4421,43 +4384,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
             a valid JSON Schema (@ref SchemaObject).
          */
         auto additionalProperties;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.3.
-        /**
-            Set of strings. Must have at least one element.
-         */
-        hash<string, bool> required;
-
-        #! Adds support for polymorphism.
-        /**
-            The discriminator is the schema property name that is used to
-            differentiate between other schemas that inherit this schema.
-            The property name used MUST be defined at this schema and it MUST
-            be in the @ref SchemaObject::required "required" property list.
-            When used, the value MUST be the name of this schema or any schema
-            that inherits it.
-
-            While composition offers model extensibility, it does not imply
-            a hierarchy between the models. To support polymorphism, Swagger
-            adds the support of the \c discriminator field. When used,
-            the \c discriminator will be the name of the property used to decide
-            which schema definition is used to validate the structure of the model.
-            As such, the \c discriminator field MUST be a required field.
-            The value of the chosen property has to be the friendly name given to
-            the model under the \c definitions property. As such, inline schema
-            definitions, which do not have a given id, \e cannot be used in polymorphism.
-         */
-        *string discriminator;
-
-        #! Relevant only for Schema \c "properties" definitions. Declares the property as "read only".
-        /**
-            Declares the property as "read only". This means that it MAY be sent
-            as part of a response but MUST NOT be sent as part of the request.
-            Properties marked as \c readOnly being \c true SHOULD NOT be in the
-            @ref SchemaObject::required "required" list of the defined schema.
-            Default value is \c false.
-         */
-        bool readOnly = False;
 
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.3.
         /**
@@ -5100,6 +5026,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
     }
+
+    #! Returns the items schema for arrays
+    *RestSchemaValidator::AbstractSchemaObject getItems() {
+        return items;
+    }
+
+    #! Returns a hash of property schemas for objects
+    *hash<string, RestSchemaValidator::AbstractSchemaObject> getProperties() {
+        return cast<*hash<string, RestSchemaValidator::AbstractSchemaObject>>(properties);
+    }
 }
 
 #! items schema object for non-body parameters
@@ -5114,7 +5050,7 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
             - \c "pipes": pipe separated values; ex: foo|bar
             - \c "multi": corresponds to multiple parameter instances instead of
                 multiple values for a single instance <tt>foo=bar&foo=baz</tt>.
-                This is valid only for parameters @ref AbstractParameterObject::inLoc "in"
+                This is valid only for parameters @ref AbstractSwaggerParameterObject::inLoc "in"
                 \c "query" or \c "formData".
 
             Default value is \c "csv".

@@ -55,7 +55,7 @@
 %endtry
 
 module RestSchemaValidator {
-    version = "2.2.1";
+    version = "2.4";
     desc = "RestSchemaValidator module providing an abstract REST schema validation API";
     author = "David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -75,6 +75,23 @@ module RestSchemaValidator {
     - @ref RestSchemaValidator::NullRestSchemaValidator "NullRestSchemaValidator"
 
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
+
+    @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
+    - added abstract methods to enable polymorphic access for data providers:
+      - @ref RestSchemaValidator::AbstractSchemaObject::getField() "AbstractSchemaObject::getField()"
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldFromSchema() "AbstractRestSchemaValidator::getFieldFromSchema()"
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldForHeaders() "AbstractRestSchemaValidator::getFieldForHeaders()"
+      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
+
+    @subsection restschemavalidator_2_3 RestSchemaValidator v2.3
+    - added abstract base classes for REST schema objects to enable polymorphic usage:
+      - @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase": base class for schema validation constraints
+      - @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject": base class for JSON schema objects
+      - @ref RestSchemaValidator::AbstractParameterObject "AbstractParameterObject": base class for parameter objects
+      - @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject": base class for response objects
+      - @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject": base class for responses container
+      - @ref RestSchemaValidator::AbstractPathItemObject "AbstractPathItemObject": base class for path item objects
+      - @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject": base class for operation objects
 
     @subsection restschemavalidator_2_2_1 RestSchemaValidator v2.2.1
     - assume UTF-8 encoding for JSON and YAML payloads, as otherwise deserialization errors occur
@@ -206,6 +223,340 @@ public namespace RestSchemaValidator {
 
         #! a string giving the example code generation
         string example;
+    }
+
+    #! Abstract base class for schema validation constraints (JSON Schema)
+    /** This class provides common validation constraint members shared by both
+        Swagger 2.0 and OpenAPI 3.0 schema definitions.
+    */
+    public class AbstractSchemaBase inherits Qore::Serializable {
+        public {
+            #! Maximum value constraint
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
+            */
+            *softfloat maximum;
+
+            #! Minimum value constraint
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3
+            */
+            *softfloat minimum;
+
+            #! Exclusive maximum flag
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
+            */
+            *bool exclusiveMax;
+
+            #! Exclusive minimum flag
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3
+            */
+            *bool exclusiveMin;
+
+            #! Maximum string length
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.1
+            */
+            *int maxLength;
+
+            #! Minimum string length
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.2
+            */
+            *int minLength;
+
+            #! Regex pattern constraint
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.2.3
+            */
+            *string pattern;
+
+            #! Maximum array items
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.2
+            */
+            *int maxItems;
+
+            #! Minimum array items
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.3
+            */
+            *int minItems;
+
+            #! Unique items constraint
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.4
+            */
+            *bool uniqueItems;
+
+            #! Enum values as a hash for fast lookup
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.1
+
+                @note enums can be of any type, but we only support enums of simple types that can be
+                converted to a string for fast lookups in a hash
+            */
+            hash<string, bool> enum;
+
+            #! Multiple-of constraint
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.1
+            */
+            *float multipleOf;
+        }
+    }
+
+    #! Abstract base class for schema objects (JSON Schema)
+    /** This class provides the common interface for schema objects shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractSchemaObject inherits AbstractSchemaBase {
+        public {
+            #! The name of this object for documentation and example purposes
+            string name;
+
+            #! The data type (string, integer, boolean, object, array, etc.)
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.2
+
+                MUST be either a string or an array (list). If it's an array,
+                its elements MUST be strings and MUST be unique.
+            */
+            string type;
+
+            #! The extending format for the type (date-time, int64, etc.)
+            /** See Data Type Formats for further details.
+            */
+            *string format;
+
+            #! Title for documentation
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1
+            */
+            *string title;
+
+            #! Description
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.1
+            */
+            *string desc;
+
+            #! Default value
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-6.2
+            */
+            auto defaultVal;
+
+            #! Maximum number of properties (for objects)
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.1
+            */
+            *int maxProperties;
+
+            #! Minimum number of properties (for objects)
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.2
+            */
+            *int minProperties;
+
+            #! Whether the value can be null
+            /** Extension that allows types to be nullable; the OpenAPI specification 2.0
+                otherwise does not allow for nullable types.
+            */
+            bool nullable = False;
+
+            #! Required properties (for objects)
+            /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.3
+
+                Set of strings. Must have at least one element.
+            */
+            hash<string, bool> required;
+
+            #! Discriminator for polymorphism
+            /** The discriminator is the schema property name that is used to
+                differentiate between other schemas that inherit this schema.
+            */
+            *string discriminator;
+
+            #! Read-only flag
+            /** Declares the property as "read only". This means that it MAY be sent
+                as part of a response but MUST NOT be sent as part of the request.
+            */
+            bool readOnly = False;
+        }
+
+        #! Returns the items schema for arrays
+        abstract *AbstractSchemaObject getItems();
+
+        #! Returns a hash of property schemas for objects
+        abstract *hash<string, AbstractSchemaObject> getProperties();
+
+        #! Returns a data field definition from this schema
+        /** @param name the name of the field
+            @param desc optional description for the field
+            @param required if the field is required
+            @param rest optional REST client for URL resolution
+            @param default_value optional default value
+
+            @return the data field definition
+        */
+        abstract AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+            auto default_value);
+    }
+
+    #! Abstract base class for parameter objects
+    /** This class provides the common interface for parameter objects shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractParameterObject inherits Qore::Serializable {
+        public {
+            #! The name of the parameter (case sensitive)
+            /** - If @ref inLoc is \c "path", the \c name field MUST correspond to the
+                  associated path segment from the path field in the Paths Object.
+                - For all other cases, the name corresponds to the parameter name
+                  used based on the @ref inLoc property.
+            */
+            string name;
+
+            #! The location of the parameter
+            /** Possible values are \c "query", \c "header", \c "path", \c "formData" or \c "body".
+            */
+            string inLoc;
+
+            #! Description of the parameter
+            /** This could contain examples of use. GFM/CommonMark syntax can be used for
+                rich text representation.
+            */
+            *string desc;
+
+            #! Whether the parameter is required
+            /** If the parameter is in "path", this property is required and its value
+                MUST be \c True. Otherwise, the property MAY be included and its default
+                value is \c False.
+            */
+            bool required = False;
+        }
+
+        #! Validates the parameter value
+        /** @param serialize if serializing the value
+            @param request if processing a request (vs response)
+            @param path the URI path
+            @param method the HTTP method
+            @param name the parameter name
+            @param value reference to the value to validate/transform
+        */
+        abstract check(bool serialize, bool request, string path, string method,
+            string name, reference value);
+
+        #! Returns the schema for this parameter, if any
+        abstract *AbstractSchemaObject getSchema();
+    }
+
+    #! Abstract base class for response objects
+    /** This class provides the common interface for response objects shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractResponseObject inherits Qore::Serializable {
+        public {
+            #! A short description of the response
+            /** GFM/CommonMark syntax can be used for rich text representation.
+            */
+            string desc;
+
+            #! A hash of headers that can be sent with the response
+            /** Keys are header names.
+            */
+            hash<auto> headers;
+
+            #! A hash of example response messages
+            hash examples;
+        }
+
+        #! Returns the response schema, if any
+        abstract *AbstractSchemaObject getSchema();
+    }
+
+    #! Abstract base class for responses container
+    /** This class provides the common interface for the responses object shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractResponsesObject inherits Qore::Serializable {
+        #! Returns the default response, if any
+        abstract *AbstractResponseObject getDefaultResponse();
+
+        #! Returns the hash of responses by HTTP status code
+        abstract *hash<string, AbstractResponseObject> getResponses();
+    }
+
+    #! Abstract base class for path item objects
+    /** This class provides the common interface for path item objects shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractPathItemObject inherits Qore::Serializable {
+        #! Returns the operation for the given HTTP method
+        /** @param method the HTTP method name (case insensitive)
+            @param path the path for error reporting
+
+            @return the operation object for the given method
+
+            @throws INVALID-METHOD the given path does not have any operation defined for the given method
+        */
+        abstract AbstractOperationObject getOperation(string method, string path);
+
+        #! Returns a list of HTTP methods supported by this path
+        abstract softlist getMethods();
+
+        #! Returns the body parameter defined at the path level, if any
+        abstract *AbstractParameterObject getBody();
+
+        #! Returns a hash of parameters defined at the path level
+        abstract *hash<string, AbstractParameterObject> getParameters();
+    }
+
+    #! Abstract base class for operation objects
+    /** This class provides the common interface for operation objects shared by both
+        Swagger 2.0 and OpenAPI 3.0 specifications.
+    */
+    public class AbstractOperationObject inherits Qore::Serializable {
+        public {
+            #! The URI path for the operation
+            string path;
+
+            #! The HTTP method (uppercase)
+            string method;
+
+            #! A short summary of what the operation does
+            *string summary;
+
+            #! A verbose explanation of the operation behavior
+            /** GFM/CommonMark syntax can be used for rich text representation.
+            */
+            *string desc;
+
+            #! MIME types the operation can consume
+            hash<string, bool> consumes;
+
+            #! MIME types the operation can produce
+            hash<string, bool> produces;
+        }
+
+        #! Returns the responses object for this operation
+        abstract AbstractResponsesObject getResponses();
+
+        #! Returns the body parameter, if any
+        abstract *AbstractParameterObject getBody();
+
+        #! Returns a hash of parameters for this operation
+        abstract *hash<string, AbstractParameterObject> getParameters();
+
+        #! Validates the request against the schema
+        /** @param serialize if \c True, serialize the body
+            @param pio the path item object
+            @param h reference to URI query info
+            @param body reference to the request body
+            @param headers reference to headers
+            @param mime_types reference to accepted MIME types
+            @param freeform if \c True, allow freeform validation (optional, Swagger-specific)
+        */
+        abstract validateRequest(bool serialize, AbstractPathItemObject pio,
+            reference<hash<UriQueryInfo>> h, reference<auto> body,
+            reference<hash> headers, *reference<hash<string, bool>> mime_types,
+            *bool freeform);
+
+        #! Returns the serialized request body
+        /** @param pio the path item object
+            @param body the request body
+            @param headers reference to headers
+            @param freeform if \c True, allow freeform validation (optional)
+
+            @return the serialized request body data
+        */
+        abstract *data getRequestBody(AbstractPathItemObject pio, auto body,
+            reference<hash<auto>> headers, *bool freeform);
     }
 
     #! abstract REST schema validation classes
@@ -583,6 +934,30 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.1.3
         */
         private abstract *TimeZone getTimeZoneLocaleImpl();
+
+        #! Returns a field definition from a schema object
+        /** @param name the name of the field
+            @param desc optional description for the field
+            @param schema the schema object
+            @param required if the field is required
+            @param rest optional REST client for URL resolution
+
+            @return the data field definition
+
+            @since RestSchemaValidator 2.4
+        */
+        abstract AbstractDataField getFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
+            bool required = True, *HTTPClient rest);
+
+        #! Returns a field for header fields
+        /** @param name the name of the field
+            @param headers a hash of header definitions
+
+            @return a data field for the headers
+
+            @since RestSchemaValidator 2.4
+        */
+        abstract AbstractDataField getFieldForHeaders(string name, hash<auto> headers);
     }
 
     #! null REST validator; no schema is used but default serialization and deserialization is performed
@@ -1101,6 +1476,38 @@ public namespace RestSchemaValidator {
         */
         private *TimeZone getTimeZoneLocaleImpl() {
             return get_thread_tz();
+        }
+
+        #! Returns a field definition from a schema object
+        /** @param name the name of the field
+            @param desc optional description for the field
+            @param schema the schema object
+            @param required if the field is required
+            @param rest optional REST client for URL resolution
+
+            @return the data field definition
+
+            @since RestSchemaValidator 2.4
+
+            @throws UNSUPPORTED-OPERATION the NullRestSchemaValidator does not support schema operations
+        */
+        AbstractDataField getFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
+                bool required = True, *HTTPClient rest) {
+            throw "UNSUPPORTED-OPERATION", "the NullRestSchemaValidator class does not support schema operations";
+        }
+
+        #! Returns a field for header fields
+        /** @param name the name of the field
+            @param headers a hash of header definitions
+
+            @return a data field for the headers
+
+            @since RestSchemaValidator 2.4
+
+            @throws UNSUPPORTED-OPERATION the NullRestSchemaValidator does not support schema operations
+        */
+        AbstractDataField getFieldForHeaders(string name, hash<auto> headers) {
+            throw "UNSUPPORTED-OPERATION", "the NullRestSchemaValidator class does not support schema operations";
         }
     }
 }
