@@ -1451,6 +1451,31 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             }
         }
 
+        # OpenAPI 3.0.x: parse servers array and extract basePath from the first server URL if not set
+        {
+            *list<auto> serversObj;
+            if (optional_field(obj_type, oh, "servers", NT_LIST, \serversObj) && serversObj) {
+                # Extract host and basePath from the first server URL if not already set
+                hash<auto> firstServer = serversObj[0];
+                if (firstServer.url.typeCode() == NT_STRING) {
+                    hash<UrlInfo> urlInfo = parse_url(firstServer.url);
+                    if (!host && urlInfo.host) {
+                        host = urlInfo.host;
+                        if (urlInfo.port) {
+                            host += ":" + urlInfo.port;
+                        }
+                    }
+                    if (!basePath && urlInfo.path) {
+                        basePath = urlInfo.path;
+                        # make sure basePath never ends in a slash
+                        if (basePath =~ /\/$/) {
+                            splice basePath, -1;
+                        }
+                    }
+                }
+            }
+        }
+
         {
             hash<auto> obj;
             optional_field(obj_type, oh.components, "securitySchemes", NT_HASH, \obj);

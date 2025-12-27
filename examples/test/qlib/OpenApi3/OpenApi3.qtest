@@ -79,8 +79,8 @@ class HttpTestServer {
     }
 
     private startListener(Socket s) {
-        Socket s1 = s.accept();
-        hash h = s1.readHTTPHeader();
+        Socket s1 = s.accept(2s);
+        hash<auto> h = s1.readHTTPHeader(2s);
         if (h."content-length")
             body = s1.recv(h."content-length");
         else if (h."transfer-encoding" == "chunked")
@@ -423,13 +423,15 @@ public class OpenApi3Test inherits QUnit::Test {
             string basePath = normalize_dir(dirname(get_script_path())) + DirSep;
 
             # Should not throw.
+            # PetStore files have servers: [{url: "https://petstore.swagger.io/v2"}]
+            # so basePath is extracted as "/v2"
             so = OpenApi3::OpenApi3Loader::fromFile(basePath + "PetStore.openapi3.json");
             assertTrue(exists so);
-            assertEq("/", so.getBasePath());
+            assertEq("/v2", so.getBasePath());
             delete so;
             so = OpenApi3::OpenApi3Loader::fromFile(basePath + "PetStore.openapi3.yaml");
             assertTrue(exists so);
-            assertEq("/", so.getBasePath());
+            assertEq("/v2", so.getBasePath());
 
             assertThrows("EMPTY-SCHEMA-FILE", sub() {so = OpenApi3::OpenApi3Loader::fromFile(basePath + "EmptyOpenApi3.yaml");});
             assertThrows("EMPTY-SCHEMA-FILE", sub() {so = OpenApi3::OpenApi3Loader::fromFile(basePath + "EmptyOpenApi3.json");});
@@ -503,6 +505,114 @@ public class OpenApi3Test inherits QUnit::Test {
             "invalid basePath format");
         assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"basePath": 2.0}),
             "invalid basePath field type");
+
+        # Test OpenAPI 3.0 servers array parsing
+        # servers array should set host and basePath from the first server URL
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Servers Test", "version": "1.0"},
+                "servers": (
+                    {"url": "https://api.example.com:8080/v1/api"},
+                ),
+                "paths": {},
+            };
+            OpenApi3Schema so("", spec);
+            assertEq("api.example.com:8080", so.host);
+            assertEq("/v1/api", so.basePath);
+        }
+
+        # Test servers array with just a path (relative URL)
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Servers Path Test", "version": "1.0"},
+                "servers": (
+                    {"url": "/api/v2"},
+                ),
+                "paths": {},
+            };
+            OpenApi3Schema so("", spec);
+            assertEq("/api/v2", so.basePath);
+        }
+
+        # Test that trailing slash is removed from basePath
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Trailing Slash Test", "version": "1.0"},
+                "servers": (
+                    {"url": "https://api.example.com/v1/"},
+                ),
+                "paths": {},
+            };
+            OpenApi3Schema so("", spec);
+            assertEq("/v1", so.basePath);
+        }
+
+        # Test that explicit host/basePath are not overwritten by servers
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Explicit Override Test", "version": "1.0"},
+                "host": "explicit.example.com",
+                "basePath": "/explicit",
+                "servers": (
+                    {"url": "https://api.example.com/v1"},
+                ),
+                "paths": {},
+            };
+            OpenApi3Schema so("", spec);
+            # Explicit values should be preserved
+            assertEq("explicit.example.com", so.host);
+            assertEq("/explicit", so.basePath);
+        }
+
+        # Test multiple servers - only first one is used
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Multiple Servers Test", "version": "1.0"},
+                "servers": (
+                    {"url": "https://prod.example.com/api"},
+                    {"url": "https://staging.example.com/api"},
+                ),
+                "paths": {},
+            };
+            OpenApi3Schema so("", spec);
+            assertEq("prod.example.com", so.host);
+            assertEq("/api", so.basePath);
+        }
+
+        # Negative test: servers with invalid url type should be handled gracefully
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Invalid Server URL Test", "version": "1.0"},
+                "servers": (
+                    {"url": 12345},  # Invalid URL type (integer instead of string)
+                ),
+                "paths": {},
+            };
+            # Should not throw - invalid URL type is silently ignored
+            OpenApi3Schema so("", spec);
+            assertNothing(so.host);
+        }
+
+        # Negative test: servers array with empty object
+        {
+            hash<auto> spec = {
+                "openapi": "3.0.0",
+                "info": {"title": "Empty Server Test", "version": "1.0"},
+                "servers": (
+                    {},  # Empty server object (missing url)
+                ),
+                "paths": {},
+            };
+            # Should not throw - missing URL is silently ignored
+            OpenApi3Schema so("", spec);
+            assertNothing(so.host);
+        }
 
         assertTrue(loadyaml(my_make_yaml(base + {"consumes": ("test", "lalala")})));
         assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"consumes": "2.0"}),
@@ -3210,6 +3320,9 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     private testValidation(OpenApi3Schema so) {
+        # PetStore has servers: [{url: "https://petstore.swagger.io/v2"}] so basePath is "/v2"
+        string bp = so.getBasePath();
+
         # Test GET /pets with query parameters (tags array)
         so.processRequest("get", "/pets?tags=tag1;tags=tag2");
         so.processRequest("get", "/pets?limit=10");
@@ -3218,13 +3331,13 @@ public class OpenApi3Test inherits QUnit::Test {
         {
             string uri = "/pets?tags=tag1;tags=tag2";
             hash<RestRequestClientInfo> req = so.processRequest("GET", uri);
-            assertEq(uri, req.uri_path);
+            assertEq(bp + uri, req.uri_path);
         }
 
         {
             string uri = "/pets?tags=tag1&tags=tag2";
             hash<RestRequestClientInfo> req = so.processRequest("GET", uri);
-            assertEq(uri, req.uri_path);
+            assertEq(bp + uri, req.uri_path);
         }
 
         # Test POST /pets with body (NewPet schema)
@@ -3237,7 +3350,7 @@ public class OpenApi3Test inherits QUnit::Test {
             hash<RestRequestClientInfo> req = so.processRequest("POST", "/pets", body, hdr);
             assertEq(MimeTypeJson, req.content);
             assertEq(Type::String, req.body.type());
-            assertEq("/pets", req.uri_path);
+            assertEq(bp + "/pets", req.uri_path);
             assertEq("UTF-8", req.body.encoding());
 
             {
@@ -3255,13 +3368,13 @@ public class OpenApi3Test inherits QUnit::Test {
         # Test GET /pets/{id}
         {
             hash<RestRequestClientInfo> req = so.processRequest("GET", "/pets/123");
-            assertEq("/pets/123", req.uri_path);
+            assertEq(bp + "/pets/123", req.uri_path);
         }
 
         # Test DELETE /pets/{id}
         {
             hash<RestRequestClientInfo> req = so.processRequest("DELETE", "/pets/456");
-            assertEq("/pets/456", req.uri_path);
+            assertEq(bp + "/pets/456", req.uri_path);
         }
 
         # Test invalid path
@@ -3279,7 +3392,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 "validator": so,
             );
 
-            assertEq("/", so.getBasePath());
+            assertEq(bp, so.getBasePath());
 
             RestClient rc(opts);
             hash h = rc.get("/pets?limit=10");
