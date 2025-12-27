@@ -2123,7 +2123,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Returns a field definition from an abstract schema object
     /** This method provides polymorphic access to getFieldFromSchema()
-        @since OpenApi3 1.2
+        @since OpenApi3 2.3
     */
     AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
             bool required = True, *HTTPClient rest) {

@@ -179,6 +179,9 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
         *RestSchemaValidator::AbstractResponseObject response = getSuccessResponse();
+        if (!response) {
+            return;
+        }
         *RestSchemaValidator::AbstractSchemaObject response_schema = response.getSchema();
         if (response_schema) {
             AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
