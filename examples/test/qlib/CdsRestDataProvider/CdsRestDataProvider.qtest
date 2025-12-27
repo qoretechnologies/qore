@@ -676,6 +676,32 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             assertEq("BcCompanyDataProvider", summary[0].type);
         }
 
+        # Negative test: empty displayName should fall back to name
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "empty-displayname", "name": "Real Name", "displayName": ""},
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(1, summary.size());
+            # Should skip empty displayName and use name
+            assertEq("Real Name", summary[0].name);
+        }
+
+        # Negative test: empty displayName and name should fall back to ID
+        {
+            MockCdsRestClient mock_client({"companies": (
+                {"id": "all-empty", "name": "", "displayName": ""},
+            )});
+
+            BcCompaniesDataProvider companies_dp(mock_client);
+            *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
+            assertEq(1, summary.size());
+            # Should skip empty strings and fall back to ID
+            assertEq("all-empty", summary[0].name);
+        }
+
         # Test that getChildProviderNames matches getChildProviderSummaryInfo
         {
             MockCdsRestClient mock_client({"companies": (
