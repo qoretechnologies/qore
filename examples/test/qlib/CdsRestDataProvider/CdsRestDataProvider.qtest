@@ -615,18 +615,21 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
             assertEq(3, summary.size(), "should return 3 company summaries");
 
-            # Check first company uses displayName
-            assertEq("Company One Display", summary[0].name);
+            # Check first company: name is ID, display_name uses displayName
+            assertEq("comp-1", summary[0].name);
+            assertEq("Company One Display", summary[0].display_name);
             assertEq("BcCompanyDataProvider", summary[0].type);
             assertTrue(summary[0].supports_children);
             assertTrue(summary[0].children_can_support_records);
 
-            # Check second company falls back to name when displayName is missing
-            assertEq("Company Two", summary[1].name);
+            # Check second company: display_name falls back to name when displayName is missing
+            assertEq("comp-2", summary[1].name);
+            assertEq("Company Two", summary[1].display_name);
             assertEq("BcCompanyDataProvider", summary[1].type);
 
-            # Check third company uses displayName
-            assertEq("Third Company", summary[2].name);
+            # Check third company: display_name uses displayName
+            assertEq("comp-3", summary[2].name);
+            assertEq("Third Company", summary[2].display_name);
             assertEq("BcCompanyDataProvider", summary[2].type);
         }
 
@@ -643,7 +646,8 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             assertEq(1, summary.size(), "should return 1 company summary");
 
             # Verify it returns actual company info, not BcCompaniesDataProvider class info
-            assertEq("Test Co", summary[0].name, "should return company displayName, not 'companies'");
+            assertEq("test-company-id", summary[0].name, "name should be company ID");
+            assertEq("Test Co", summary[0].display_name, "display_name should be human-readable name");
             assertEq("BcCompanyDataProvider", summary[0].type);
             assertTrue(summary[0].supports_children);
             assertTrue(summary[0].children_can_support_records);
@@ -662,7 +666,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             assertEq(0, summary.size(), "BcRestDataProvider should return empty list when no companies");
         }
 
-        # Negative test: companies with missing name/displayName fields - should fall back to ID
+        # Negative test: companies with missing name/displayName fields - display_name should fall back to ID
         {
             MockCdsRestClient mock_client({"companies": (
                 {"id": "no-name-company"},  # Missing both name and displayName
@@ -671,12 +675,14 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             BcCompaniesDataProvider companies_dp(mock_client);
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
             assertEq(1, summary.size());
-            # Should fall back to company ID when name/displayName are missing
+            # name is always the ID
             assertEq("no-name-company", summary[0].name);
+            # display_name should fall back to ID when name/displayName are missing
+            assertEq("no-name-company", summary[0].display_name);
             assertEq("BcCompanyDataProvider", summary[0].type);
         }
 
-        # Negative test: empty displayName should fall back to name
+        # Negative test: empty displayName should fall back to name for display_name
         {
             MockCdsRestClient mock_client({"companies": (
                 {"id": "empty-displayname", "name": "Real Name", "displayName": ""},
@@ -685,11 +691,12 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             BcCompaniesDataProvider companies_dp(mock_client);
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
             assertEq(1, summary.size());
-            # Should skip empty displayName and use name
-            assertEq("Real Name", summary[0].name);
+            assertEq("empty-displayname", summary[0].name);
+            # Should skip empty displayName and use name for display_name
+            assertEq("Real Name", summary[0].display_name);
         }
 
-        # Negative test: empty displayName and name should fall back to ID
+        # Negative test: empty displayName and name should fall back to ID for display_name
         {
             MockCdsRestClient mock_client({"companies": (
                 {"id": "all-empty", "name": "", "displayName": ""},
@@ -698,8 +705,9 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             BcCompaniesDataProvider companies_dp(mock_client);
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
             assertEq(1, summary.size());
-            # Should skip empty strings and fall back to ID
             assertEq("all-empty", summary[0].name);
+            # Should skip empty strings and fall back to ID for display_name
+            assertEq("all-empty", summary[0].display_name);
         }
 
         # Test that getChildProviderNames matches getChildProviderSummaryInfo
@@ -732,6 +740,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
             assertEq(summary1.size(), summary2.size());
             assertEq(summary1[0].name, summary2[0].name);
+            assertEq(summary1[0].display_name, summary2[0].display_name);
         }
 
         # Negative test: API error should propagate
@@ -753,8 +762,12 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             BcCompaniesDataProvider companies_dp(mock_client);
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
             assertEq(100, summary.size(), "should return 100 company summaries");
-            assertEq("Company 0", summary[0].name);
-            assertEq("Company 99", summary[99].name);
+            # name is the ID
+            assertEq("company-0", summary[0].name);
+            assertEq("company-99", summary[99].name);
+            # display_name is the human-readable name
+            assertEq("Company 0", summary[0].display_name);
+            assertEq("Company 99", summary[99].display_name);
         }
     }
 

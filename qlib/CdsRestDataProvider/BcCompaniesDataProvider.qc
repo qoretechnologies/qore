@@ -92,8 +92,10 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
         *hash<string, hash<auto>> company_list = getCompanies();
         return map <DataProviderSummaryInfo>{
-            # Use displayName, fall back to name, then to id (use ?* to skip empty strings)
-            "name": $1.value.displayName ?* $1.value.name ?* $1.key,
+            # name must match getChildProviderNames() - the company ID
+            "name": $1.key,
+            # display_name is the human-readable name (use ?* to skip empty strings)
+            "display_name": $1.value.displayName ?* $1.value.name ?* $1.key,
             "type": "BcCompanyDataProvider",
             "supports_children": True,
             "children_can_support_records": True,
