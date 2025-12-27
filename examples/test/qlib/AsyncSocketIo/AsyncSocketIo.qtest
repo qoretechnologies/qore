@@ -121,6 +121,7 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
         static Mutex m();
         static Condition c();
         static bool waitflag;
+        static bool sleeping;
     }
 
     constructor(string mime, *string str) {
@@ -144,15 +145,23 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
 
     static interruptibleSleep() {
         AutoLock al(m);
+        sleeping = True;
+        c.broadcast();  # Signal that we're now sleeping
         waitflag = True;
         while (waitflag) {
             c.wait(m, 99999999);
         }
+        sleeping = False;
     }
 
     static interruptSleep() {
         AutoLock al(m);
+        # Wait until handler has entered interruptibleSleep to avoid race condition
+        while (!sleeping) {
+            c.wait(m, 100ms);
+        }
         waitflag = False;
+        sleeping = False;
         c.broadcast();
     }
 }
