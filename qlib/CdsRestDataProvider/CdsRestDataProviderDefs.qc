@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CDSRestDataProviderDefs definitions
 
-/** CDSRestDataProviderDefs.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** CDSRestDataProviderDefs.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,7 +24,25 @@
 
 #! contains all public definitions in the CDSRestDataProvider module
 public namespace CDSRestDataProvider {
- #! Query operator info hash as returned by all @ref query_op_funcs "operator functions"
+#! Common OData record information used by both CDS and Business Central
+public hashdecl ODataRecordInfo {
+    #! The record type for the object
+    hash<string, AbstractDataField> record_type;
+
+    #! The original field type names
+    hash<string, string> field_types;
+
+    #! Hash of date/time fields for this record
+    hash<string, bool> date_time_fields;
+
+    #! Key field name (e.g., "id" for BC, or entity-specific for CDS)
+    string key;
+
+    #! Entity set/table name for API calls
+    string entity_name;
+}
+
+#! Query operator info hash as returned by all @ref query_op_funcs "operator functions"
 public hashdecl QueryOperatorInfo {
     string op;   #!< the operator string code
     auto arg;    #!< optional argument
@@ -308,6 +326,400 @@ public const DefaultQueryOpMap = {
             return i.getOrClause(arg);
         },
     ),
+};
+#/@}
+
+/** @defgroup odata_expression_ops OData Expression Operators
+    These are the operator constants for OData expression support
+*/
+#/@{
+#! OData contains operator
+public const ODATA_OP_CONTAINS = "contains";
+
+#! OData startsWith operator
+public const ODATA_OP_STARTSWITH = "startsWith";
+
+#! OData endsWith operator
+public const ODATA_OP_ENDSWITH = "endsWith";
+
+#! OData null check operator
+public const ODATA_OP_NULL = "null";
+
+#! OData notNull check operator
+public const ODATA_OP_NOT_NULL = "notNull";
+#/@}
+
+#! OData expression definitions for use with DataProvider search expressions
+/** These expressions are used by both Dynamics 365 CDS and Business Central since they share
+    standard OData 4.0 query syntax.
+*/
+public const ODataExpressions = {
+    # Logical operators with nesting support
+    DP_OP_AND: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
+        "impl": string sub (object iter, list<auto> args) {
+            # Recursively process arguments and join with " and "
+            list<string> clauses = map iter.processExpressionArg($1), args;
+            return "(" + (foldl $1 + " and " + $2, clauses) + ")";
+        },
+    },
+    DP_OP_OR: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_OR},
+        "impl": string sub (object iter, list<auto> args) {
+            # Recursively process arguments and join with " or "
+            list<string> clauses = map iter.processExpressionArg($1), args;
+            return "(" + (foldl $1 + " or " + $2, clauses) + ")";
+        },
+    },
+
+    # Comparison operators - reuse generic expressions and add OData-specific arg_info with example values
+    DP_SEARCH_OP_EQ: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_EQ} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": "==",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The value to compare against",
+                    "desc": "The value to compare against; the field must equal this value for the expression to "
+                        "return `True`",
+                    "example_value": "Smith",
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s eq %s", field, iter.formatODataValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_NE: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_NE} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": "!=",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The value to compare against",
+                    "desc": "The value to compare against; the field must not equal this value for the expression to "
+                        "return `True`",
+                    "example_value": "closed",
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s ne %s", field, iter.formatODataValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_LT: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LT} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": "<",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The upper bound value",
+                    "desc": "The upper bound value; the field must be strictly less than this value for the "
+                        "expression to return `True`",
+                    "example_value": 1000,
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s lt %s", field, iter.formatODataValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_LE: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LE} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": "<=",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The upper bound value (inclusive)",
+                    "desc": "The upper bound value; the field must be less than or equal to this value for the "
+                        "expression to return `True`",
+                    "example_value": 1000,
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s le %s", field, iter.formatODataValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_GT: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_GT} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": ">",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The lower bound value",
+                    "desc": "The lower bound value; the field must be strictly greater than this value for the "
+                        "expression to return `True`",
+                    "example_value": 100,
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s gt %s", field, iter.formatODataValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_GE: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_GE} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare against the value",
+                    "label_after": ">=",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The lower bound value (inclusive)",
+                    "desc": "The lower bound value; the field must be greater than or equal to this value for the "
+                        "expression to return `True`",
+                    "example_value": 100,
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s ge %s", field, iter.formatODataValue(field, value));
+        },
+    },
+
+    # NOT operator (wraps another expression)
+    DP_SEARCH_OP_NOT: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_NOT},
+        "impl": string sub (object iter, hash<DataProviderExpression> inner_exp) {
+            return sprintf("not (%s)", iter.processExpressionArg(inner_exp));
+        },
+    },
+
+    # BETWEEN operator - reuse generic expression and add OData-specific arg_info with example values
+    DP_SEARCH_OP_BETWEEN: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_BETWEEN} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to compare",
+                    "desc": "The field to compare; must be between the lower and upper bounds for the expression to "
+                        "return `True`",
+                    "label_after": "between",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Lower Bound",
+                    "short_desc": "The lower bound (inclusive)",
+                    "desc": "The lower bound for the field value (inclusive)",
+                    "example_value": 100,
+                    "label_after": "and",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Upper Bound",
+                    "short_desc": "The upper bound (inclusive)",
+                    "desc": "The upper bound for the field value (inclusive)",
+                    "example_value": 1000,
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, auto lower, auto upper) {
+            return sprintf("(%s ge %s and %s le %s)",
+                field, iter.formatODataValue(field, lower),
+                field, iter.formatODataValue(field, upper));
+        },
+    },
+
+    # IN operator - reuse generic expression and add OData-specific arg_info with example values
+    DP_SEARCH_OP_IN: {
+        "exp": cast<hash<DataProviderExpressionInfo>>(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN} + {
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to check",
+                    "desc": "The field whose value will be checked against the list",
+                    "label_after": "in",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Values",
+                    "short_desc": "The list of values to match against",
+                    "desc": "A list of values; the field must match one of these values for the expression to "
+                        "return `True`",
+                    "example_value": ("active", "pending"),
+                },
+            ),
+        }),
+        "impl": string sub (object iter, string field, list<auto> values) {
+            # Use OData 4.0 in() syntax
+            string value_list = foldl $1 + "," + $2,
+                (map iter.formatODataValue(field, $1), values);
+            return sprintf("%s in (%s)", field, value_list);
+        },
+    },
+
+    # String operators
+    ODATA_OP_CONTAINS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "contains",
+            "display_name": "contains",
+            "short_desc": "Returns True if the field contains the substring",
+            "desc": "Returns `True` if the field value contains the specified substring; uses OData `contains()` "
+                "function",
+            "symbol": "contains",
+            "groups": "String",
+            "render_template": "contains($arg[0], $arg[1])",
+            "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The string field to search in",
+                    "desc": "The string field to search for the substring",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Substring",
+                    "short_desc": "The substring to search for",
+                    "desc": "The substring to search for in the field value",
+                    "example_value": "smith",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, string value) {
+            return sprintf("contains(%s,%s)", field, iter.formatODataValue(field, value));
+        },
+    },
+    ODATA_OP_STARTSWITH: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "startsWith",
+            "display_name": "starts with",
+            "short_desc": "Returns True if the field starts with the prefix",
+            "desc": "Returns `True` if the field value starts with the specified prefix; uses OData `startswith()` "
+                "function",
+            "symbol": "startsWith",
+            "groups": "String",
+            "render_template": "startswith($arg[0], $arg[1])",
+            "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The string field to check",
+                    "desc": "The string field to check for the prefix",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Prefix",
+                    "short_desc": "The prefix to match",
+                    "desc": "The prefix that the field value must start with",
+                    "example_value": "A",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, string value) {
+            return sprintf("startswith(%s,%s)", field, iter.formatODataValue(field, value));
+        },
+    },
+    ODATA_OP_ENDSWITH: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "endsWith",
+            "display_name": "ends with",
+            "short_desc": "Returns True if the field ends with the suffix",
+            "desc": "Returns `True` if the field value ends with the specified suffix; uses OData `endswith()` "
+                "function",
+            "symbol": "endsWith",
+            "groups": "String",
+            "render_template": "endswith($arg[0], $arg[1])",
+            "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The string field to check",
+                    "desc": "The string field to check for the suffix",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Suffix",
+                    "short_desc": "The suffix to match",
+                    "desc": "The suffix that the field value must end with",
+                    "example_value": ".com",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, string value) {
+            return sprintf("endswith(%s,%s)", field, iter.formatODataValue(field, value));
+        },
+    },
+
+    # NULL checks
+    ODATA_OP_NULL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "null",
+            "display_name": "is null",
+            "short_desc": "Returns True if the field is null",
+            "desc": "Returns `True` if the field value is null; translates to OData `field eq null`",
+            "symbol": "null",
+            "groups": "Comparison",
+            "render_template": "$arg[0] eq null",
+            "args": (DataProviderSignatureFieldType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to check for null",
+                    "desc": "The field to check; returns `True` if the field value is null",
+                    "label_after": "eq null",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field) {
+            return sprintf("%s eq null", field);
+        },
+    },
+    ODATA_OP_NOT_NULL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "notNull",
+            "display_name": "is not null",
+            "short_desc": "Returns True if the field is not null",
+            "desc": "Returns `True` if the field value is not null; translates to OData `field ne null`",
+            "symbol": "notNull",
+            "groups": "Comparison",
+            "render_template": "$arg[0] ne null",
+            "args": (DataProviderSignatureFieldType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to check for not null",
+                    "desc": "The field to check; returns `True` if the field value is not null",
+                    "label_after": "ne null",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field) {
+            return sprintf("%s ne null", field);
+        },
+    },
 };
 #/@}
 }

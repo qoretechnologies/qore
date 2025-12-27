@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore CdsRestDataProvider module definition
+#! Qore BcTablesDataProvider class definition
 
-/** CdsRestDataProviderTables.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcTablesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,13 +24,15 @@
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! The CdsRest data provider class
-public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
+#! The Business Central tables data provider class
+/** Lists available entity tables for a company
+*/
+public class BcTablesDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "tables",
-            "type": "CdsRestDataProviderTables",
+            "type": "BcTablesDataProvider",
             "supports_children": True,
             "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
@@ -42,29 +44,70 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
         static hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
+
+        #! Standard Business Central entities
+        const StandardEntities = (
+            "accounts",
+            "agedAccountsPayable",
+            "agedAccountsReceivable",
+            "balanceSheet",
+            "bankAccounts",
+            "cashFlowStatement",
+            "companies",
+            "companyInformation",
+            "countriesRegions",
+            "currencies",
+            "customerPaymentJournals",
+            "customerPayments",
+            "customers",
+            "defaultDimensions",
+            "dimensionLines",
+            "dimensions",
+            "dimensionValues",
+            "employees",
+            "generalLedgerEntries",
+            "incomeStatement",
+            "itemCategories",
+            "items",
+            "journalLines",
+            "journals",
+            "paymentMethods",
+            "paymentTerms",
+            "picture",
+            "purchaseInvoiceLines",
+            "purchaseInvoices",
+            "retainedEarningsStatement",
+            "salesCreditMemoLines",
+            "salesCreditMemos",
+            "salesInvoiceLines",
+            "salesInvoices",
+            "salesOrderLines",
+            "salesOrders",
+            "salesQuoteLines",
+            "salesQuotes",
+            "shipmentMethods",
+            "taxAreas",
+            "taxGroups",
+            "timeRegistrationEntries",
+            "unitsOfMeasure",
+            "vendors",
+        );
     }
 
     private {
-        #! Metadata keyed by entity type
-        *hash<auto> meta;
+        #! The company ID
+        string companyId;
+
+        #! Entity metadata keyed by name
+        *hash<string, bool> entities;
 
         #! Metadata mutex
         Qore::Thread::Mutex lck();
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
-    }
-
-    #! Creates the object from constructor options
-    constructor(*hash<auto> options) {
-        bool auto_config = DataProvider::getAutoConfig();
-        if (auto_config) {
-            map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
-                exists ENV{$1.value} && !exists options{$1.key};
-        }
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
-        rest = new CdsRestClient(getClientOptions(copts));
+    constructor(CdsRestClient::CdsRestClient rest, string companyId) : CdsRestDataProviderBase(rest) {
+        self.companyId = companyId;
     }
 
     #! Returns the data provider name
@@ -72,17 +115,11 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
         return "tables";
     }
 
-    #! Accepts a LoggerInterface object for logging (or clears it)
-    setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
-        LoggerWrapper::setLogger(logger);
-    }
-
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys getMetadata();
+        return keys getEntities();
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -91,50 +128,37 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        *hash<auto> obj_meta = getMetadata(){name};
-        if (obj_meta) {
-            return new ODataEntityDataProvider(rest, name, obj_meta);
+        # For BC, we use standard entities or try to access the entity directly
+        if (getEntities(){name}) {
+            return new ODataEntityDataProvider(rest, companyId, name);
         }
     }
 
-    #! Returns metadata
-    private *hash<auto> getMetadata() {
-        if (meta) {
-            return meta;
+    #! Returns available entities
+    private hash<string, bool> getEntities() {
+        if (entities) {
+            return entities;
         }
 
         lck.lock();
         on_exit lck.unlock();
 
         # check again in the lock
-        if (meta) {
-            return meta;
+        if (entities) {
+            return entities;
         }
 
-        hash<auto> resp;
-        hash<auto> info;
-        try {
-            resp = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"."edmx:DataServices".Schema;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
-        #printf("%N\n", resp.EntityType);
+        # Use standard Business Central entities
+        # Note: BC does not expose $metadata at the company level, so we use
+        # the predefined list of standard entities
+        entities = map {$1: True}, StandardEntities;
 
-        meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
-        return meta;
+        return entities;
     }
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
-    }
-
-    #! Returns options for the CdsRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("cdsrestclient_options", "cdsrestclient")
-            + copts.cdsrestclient_options;
     }
 }
 }

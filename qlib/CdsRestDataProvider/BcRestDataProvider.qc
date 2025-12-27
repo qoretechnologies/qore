@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore CdsRestDataProvider module definition
+#! Qore BcRestDataProvider class definition
 
-/** CdsRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,23 +24,30 @@
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! The CdsRest data provider class
-public class CdsRestDataProvider inherits CdsRestDataProviderBase {
+#! The Business Central REST data provider class
+public class BcRestDataProvider inherits CdsRestDataProviderBase {
     public {
-        #! Dynamics-specific constructor options
+        #! Business Central-specific constructor options
         const ConstructorOptions = BaseConstructorOptions + {
             "api": <DataProviderOptionInfo>{
                 "display_name": "API Version",
                 "short_desc": "Sets the API version to use",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Sets the Dynamics 365 API version to use",
-                "default_value": CdsRestClient::DynamicsProfile.default_api_version,
+                "desc": "Sets the Business Central API version to use",
+                "default_value": CdsRestClient::BusinessCentralProfile.default_api_version,
+            },
+            "instance_type": <DataProviderOptionInfo>{
+                "display_name": "Instance Type",
+                "short_desc": "Business Central instance type",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID)",
+                "required": True,
             },
         };
 
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "CdsRestDataProvider",
+            "type": "BcRestDataProvider",
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "children_can_support_apis": False,
@@ -53,7 +60,7 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
         static hash<string, code> dynamic_children;
 
         const ChildMap = {
-            "tables": Class::forName("CdsRestDataProvider::CdsRestTablesDataProvider"),
+            "companies": Class::forName("CdsRestDataProvider::BcCompaniesDataProvider"),
         };
     }
 
@@ -62,7 +69,7 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestConnection conn) : CdsRestDataProviderBase(conn) {
+    constructor(CdsRestClient::BusinessCentralRestConnection conn) : CdsRestDataProviderBase(conn) {
     }
 
     #! Creates the object from constructor options
@@ -73,13 +80,14 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        if (copts.cdsrestclient) {
-            copts.cdsrestclient.checkClientOptions(copts);
-            rest = copts.cdsrestclient;
+        if (copts.bcrestclient) {
+            rest = copts.bcrestclient;
         }
 
         if (!rest) {
-            rest = new CdsRestClient(getClientOptions(copts));
+            rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
+                "api_profile": CdsRestClient::BusinessCentralProfile.name,
+            });
         }
     }
 

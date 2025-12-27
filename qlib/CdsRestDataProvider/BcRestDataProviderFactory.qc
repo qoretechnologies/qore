@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore CdsRestDataProviderFactory class definition
+#! Qore BcRestDataProviderFactory class definition
 
-/** CdsRestDataProviderFactory.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcRestDataProviderFactory.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,16 +24,16 @@
 
 #! Contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! The CdsRest data provider factory
-public class CdsRestDataProviderFactory inherits DataProvider::AbstractDataProviderFactory {
+#! The Business Central REST data provider factory
+public class BcRestDataProviderFactory inherits DataProvider::AbstractDataProviderFactory {
     private {
         #! Data provider type info
-        static Class cls = new Class("CdsRestDataProvider");
+        static Class cls = new Class("BcRestDataProvider");
 
         #! Factory info
         const FactoryInfo = <DataProviderFactoryInfo>{
-            "name": "cdsrest",
-            "desc": "Microsoft CDS REST data provider factory",
+            "name": "bcrest",
+            "desc": "Microsoft Business Central REST data provider factory",
             "children_can_support_records": True,
         };
     }
@@ -49,7 +49,7 @@ public class CdsRestDataProviderFactory inherits DataProvider::AbstractDataProvi
     /** @note The \c name and \c children attributes are not returned as they are dynamic attributes
     */
     private hash<DataProvider::DataProviderInfo> getProviderInfoImpl() {
-        return CdsRestDataProvider::ProviderInfo;
+        return BcRestDataProvider::ProviderInfo;
     }
 
     #! Returns the class for the data provider object

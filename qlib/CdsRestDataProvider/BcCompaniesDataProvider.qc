@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore CdsRestDataProvider module definition
+#! Qore BcCompaniesDataProvider class definition
 
-/** CdsRestDataProviderTables.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcCompaniesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,13 +24,15 @@
 
 #! contains all public definitions in the CdsRestDataProvider module
 public namespace CdsRestDataProvider {
-#! The CdsRest data provider class
-public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
+#! The Business Central companies data provider class
+/** Lists available companies and provides access to company-scoped data
+*/
+public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "tables",
-            "type": "CdsRestDataProviderTables",
+            "name": "companies",
+            "type": "BcCompaniesDataProvider",
             "supports_children": True,
             "constructor_options": BaseConstructorOptions,
             "children_can_support_apis": False,
@@ -45,8 +47,11 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
     }
 
     private {
-        #! Metadata keyed by entity type
-        *hash<auto> meta;
+        #! Companies list keyed by ID
+        *hash<string, hash<auto>> companies;
+
+        #! Companies list keyed by name
+        *hash<string, hash<auto>> companies_by_name;
 
         #! Metadata mutex
         Qore::Thread::Mutex lck();
@@ -64,25 +69,21 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
-        rest = new CdsRestClient(getClientOptions(copts));
+        rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
+            "api_profile": CdsRestClient::BusinessCentralProfile.name,
+        });
     }
 
     #! Returns the data provider name
     string getName() {
-        return "tables";
-    }
-
-    #! Accepts a LoggerInterface object for logging (or clears it)
-    setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
-        LoggerWrapper::setLogger(logger);
+        return "companies";
     }
 
     #! Returns a list of child data provider names, if any
     /** @return a list of child data provider names, if any
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys getMetadata();
+        return keys getCompanies();
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -91,50 +92,53 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        *hash<auto> obj_meta = getMetadata(){name};
-        if (obj_meta) {
-            return new ODataEntityDataProvider(rest, name, obj_meta);
+        # Get companies list
+        *hash<string, hash<auto>> company_list = getCompanies();
+
+        # Try to find by ID first
+        *hash<auto> company = company_list{name};
+        if (!company) {
+            # Try to find by name
+            company = companies_by_name{name};
+        }
+
+        if (company) {
+            return new BcCompanyDataProvider(rest, company.id, company.displayName ?? company.name);
         }
     }
 
-    #! Returns metadata
-    private *hash<auto> getMetadata() {
-        if (meta) {
-            return meta;
+    #! Returns companies from the API
+    private *hash<string, hash<auto>> getCompanies() {
+        if (companies) {
+            return companies;
         }
 
         lck.lock();
         on_exit lck.unlock();
 
         # check again in the lock
-        if (meta) {
-            return meta;
+        if (companies) {
+            return companies;
         }
 
-        hash<auto> resp;
         hash<auto> info;
         try {
-            resp = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"."edmx:DataServices".Schema;
+            hash<auto> resp = rest.get("companies", NOTHING, \info);
+            list<hash<auto>> company_list = resp.body.value ?? ();
+            companies = map {$1.id: $1}, company_list;
+            companies_by_name = map {($1.displayName ?? $1.name): $1}, company_list;
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
             hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
             rethrow ex.err, ex.desc, ex.arg + ex_arg;
         }
-        #printf("%N\n", resp.EntityType);
 
-        meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
-        return meta;
+        return companies;
     }
 
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
-    }
-
-    #! Returns options for the CdsRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("cdsrestclient_options", "cdsrestclient")
-            + copts.cdsrestclient_options;
     }
 }
 }
