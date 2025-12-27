@@ -179,7 +179,7 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
                 break;
         }
 
-        return sprintf("'%s'", value);
+        return sprintf("'%s'", soql_escape_string(value));
     }
 
     private string getOrderBy(softlist<string> coll) {
@@ -284,11 +284,72 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
     }
 
     private string doWhereExpression(hash<auto> where_cond, *hash<auto> search_options) {
+        # Check if this is a DataProvider expression
+        if (where_cond.exp) {
+            return processExpressionArg(cast<hash<DataProviderExpression>>(where_cond));
+        }
+
         list<string> clauses;
         foreach hash<auto> i in (where_cond.pairIterator()) {
             clauses += doWhereExpressionIntern(i.key, i.value);
         }
         return foldl $1 + " and " + $2, clauses;
+    }
+
+    #! Processes a DataProvider expression argument and returns the SOQL string
+    /** @param exp the expression to process
+        @return the SOQL string for the expression
+    */
+    string processExpressionArg(hash<DataProviderExpression> exp) {
+        *hash<auto> expinfo = SoqlExpressions{exp.exp};
+        if (!expinfo) {
+            throw "WHERE-ERROR", sprintf("expression references unknown operator %y; known operators: %y",
+                exp.exp, keys SoqlExpressions);
+        }
+
+        # Handle logical operators (AND, OR) - pass all args to impl
+        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR) {
+            return call_function_args(expinfo.impl, (self, exp.args));
+        }
+
+        # For comparison operators, first argument must be a field reference
+        if (exp.args.size() < 1 || !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
+            throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
+                exp.exp);
+        }
+        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+
+        # Validate argument count for comparison operators (need at least field + value)
+        if (exp.exp != DP_SEARCH_OP_IN && exp.exp != SOQL_OP_NOT_IN && exp.exp != SOQL_OP_INCLUDES
+                && exp.exp != SOQL_OP_EXCLUDES) {
+            if (exp.args.size() < 2) {
+                throw "WHERE-ERROR", sprintf("expression %y requires at least 2 arguments (field reference + value), "
+                    "but got %d", exp.exp, exp.args.size());
+            }
+        }
+
+        # For IN, NOT IN, INCLUDES, EXCLUDES operators, collect all values into a single list
+        if (exp.exp == DP_SEARCH_OP_IN || exp.exp == SOQL_OP_NOT_IN || exp.exp == SOQL_OP_INCLUDES
+                || exp.exp == SOQL_OP_EXCLUDES) {
+            list<auto> values = ();
+            for (int j = 1; j < exp.args.size(); ++j) {
+                # If the argument is already a list, flatten it into values
+                if (exp.args[j].typeCode() == NT_LIST) {
+                    values += exp.args[j];
+                } else {
+                    push values, exp.args[j];
+                }
+            }
+            return call_function_args(expinfo.impl, (self, field, values));
+        }
+
+        # Build args list: (self, field, value1, value2, ...)
+        list<auto> impl_args = (self, field);
+        for (int j = 1; j < exp.args.size(); ++j) {
+            push impl_args, exp.args[j];
+        }
+
+        return call_function_args(expinfo.impl, impl_args);
     }
 
     private string doWhereExpressionIntern(string key, auto value) {

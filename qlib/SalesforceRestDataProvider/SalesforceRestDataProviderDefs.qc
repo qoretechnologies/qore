@@ -26,8 +26,13 @@
 public namespace SalesforceRestDataProvider {
  #! SOQL operator info hash as returned by all @ref soql_op_funcs "operator functions"
 public hashdecl SoqlOperatorInfo {
-    string op;   #!< the operator string code
-    auto arg;    #!< optional argument
+    string op;   #!< the operator string code (e.g., "=", "<", ">=", "like", "in")
+    auto arg;    #!< optional argument; type depends on the operator (e.g., scalar, list, or hash)
+    #! Number of SOQL operands expected by the operator; used by DataProvider implementations
+    #! to validate argument counts.
+    #! - 1 for single-operand operators (default; e.g., "=", ">", "<=", "like")
+    #! - 0 or more for list operators (e.g., "in", "includes", "excludes")
+    int op_args = 1;
 }
 
 #! column operator info hash as returned by all @ref soql_soql_cop_funcs "column operator functions"
@@ -266,7 +271,7 @@ public const DefaultSoqlCopMap = {
 */
 #/@{
 #! like operator
-const SOQL_OP_LIKE = "like";
+public const SOQL_OP_LIKE = "like";
 
 #! the SOQL in operator for use in where clauses
 /** @see soql_op_in()
@@ -317,6 +322,68 @@ public const SOQL_OP_NOT = "!";
 /** @see soql_wsoql_op_or()
 */
 public const SOQL_OP_OR = "||";
+
+#! the SOQL includes operator for multi-select picklist fields
+/** @see soql_op_includes()
+*/
+public const SOQL_OP_INCLUDES = "includes";
+
+#! the SOQL excludes operator for multi-select picklist fields
+/** @see soql_op_excludes()
+*/
+public const SOQL_OP_EXCLUDES = "excludes";
+#/@}
+
+/** @defgroup soql_date_literals SOQL Date Literals
+    These are the date literals that can be used in where clauses for relative date filtering
+*/
+#/@{
+#! Date literal: today
+public const SOQL_DATE_TODAY = "TODAY";
+#! Date literal: yesterday
+public const SOQL_DATE_YESTERDAY = "YESTERDAY";
+#! Date literal: tomorrow
+public const SOQL_DATE_TOMORROW = "TOMORROW";
+#! Date literal: last week
+public const SOQL_DATE_LAST_WEEK = "LAST_WEEK";
+#! Date literal: this week
+public const SOQL_DATE_THIS_WEEK = "THIS_WEEK";
+#! Date literal: next week
+public const SOQL_DATE_NEXT_WEEK = "NEXT_WEEK";
+#! Date literal: last month
+public const SOQL_DATE_LAST_MONTH = "LAST_MONTH";
+#! Date literal: this month
+public const SOQL_DATE_THIS_MONTH = "THIS_MONTH";
+#! Date literal: next month
+public const SOQL_DATE_NEXT_MONTH = "NEXT_MONTH";
+#! Date literal: last 90 days
+public const SOQL_DATE_LAST_90_DAYS = "LAST_90_DAYS";
+#! Date literal: next 90 days
+public const SOQL_DATE_NEXT_90_DAYS = "NEXT_90_DAYS";
+#! Date literal: last quarter
+public const SOQL_DATE_LAST_QUARTER = "LAST_QUARTER";
+#! Date literal: this quarter
+public const SOQL_DATE_THIS_QUARTER = "THIS_QUARTER";
+#! Date literal: next quarter
+public const SOQL_DATE_NEXT_QUARTER = "NEXT_QUARTER";
+#! Date literal: last year
+public const SOQL_DATE_LAST_YEAR = "LAST_YEAR";
+#! Date literal: this year
+public const SOQL_DATE_THIS_YEAR = "THIS_YEAR";
+#! Date literal: next year
+public const SOQL_DATE_NEXT_YEAR = "NEXT_YEAR";
+#! Date literal: last fiscal quarter
+public const SOQL_DATE_LAST_FISCAL_QUARTER = "LAST_FISCAL_QUARTER";
+#! Date literal: this fiscal quarter
+public const SOQL_DATE_THIS_FISCAL_QUARTER = "THIS_FISCAL_QUARTER";
+#! Date literal: next fiscal quarter
+public const SOQL_DATE_NEXT_FISCAL_QUARTER = "NEXT_FISCAL_QUARTER";
+#! Date literal: last fiscal year
+public const SOQL_DATE_LAST_FISCAL_YEAR = "LAST_FISCAL_YEAR";
+#! Date literal: this fiscal year
+public const SOQL_DATE_THIS_FISCAL_YEAR = "THIS_FISCAL_YEAR";
+#! Date literal: next fiscal year
+public const SOQL_DATE_NEXT_FISCAL_YEAR = "NEXT_FISCAL_YEAR";
 #/@}
 
 /** @defgroup soql_soql_cop_funcs SOQL Column Operator Functions
@@ -667,6 +734,14 @@ public hash<SoqlColumnOperatorInfo> sub soql_cop_week_in_year(auto column) {
     - soql_wop_or(): for combining SOQL expressions with \c "or"
 */
 #/@{
+#! Escapes a string value for use in SOQL queries by escaping single quotes
+/** @param value the string value to escape
+    @return the escaped string value safe for use in SOQL
+*/
+public string sub soql_escape_string(string value) {
+    return replace(value, "'", "\\'");
+}
+
 #! returns an @ref SoqlOperatorInfo hash
 public hash<SoqlOperatorInfo> sub soql_make_op(string op, auto arg) {
     return new hash<SoqlOperatorInfo>({"op": op, "arg": arg});
@@ -867,6 +942,172 @@ public hash<string, hash<SoqlOperatorInfo>> sub soql_wop_or(hash<auto> h1, hash<
         l += argv;
     return new hash<string, hash<SoqlOperatorInfo>>((sprintf("%d:_OR_", rand() % 10000000): soql_make_op(SOQL_OP_OR, l)));
 }
+
+#! returns an @ref SoqlOperatorInfo hash for the \c "includes" operator for multi-select picklist fields
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"Industries": soql_op_includes("Technology", "Finance")});
+    @endcode
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_includes() {
+    return soql_make_op(SOQL_OP_INCLUDES, argv);
+}
+
+#! returns an @ref SoqlOperatorInfo hash for the \c "includes" operator with a list argument
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"Industries": soql_op_includes(industries_list)});
+    @endcode
+
+    @param args the list of values to check for inclusion
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_includes(list<auto> args) {
+    return soql_make_op(SOQL_OP_INCLUDES, args);
+}
+
+#! returns an @ref SoqlOperatorInfo hash for the \c "excludes" operator for multi-select picklist fields
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"Industries": soql_op_excludes("Closed", "Inactive")});
+    @endcode
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_excludes() {
+    return soql_make_op(SOQL_OP_EXCLUDES, argv);
+}
+
+#! returns an @ref SoqlOperatorInfo hash for the \c "excludes" operator with a list argument
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"Industries": soql_op_excludes(excluded_list)});
+    @endcode
+
+    @param args the list of values to check for exclusion
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_excludes(list<auto> args) {
+    return soql_make_op(SOQL_OP_EXCLUDES, args);
+}
+
+#! returns an @ref SoqlOperatorInfo hash for a date literal comparison
+/** @par Example:
+    @code{.py}
+# Find records created today
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_date(SOQL_DATE_TODAY)});
+# Find records created in the last 90 days
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_date(SOQL_DATE_LAST_90_DAYS, ">")});
+    @endcode
+
+    @param date_literal a SOQL date literal constant (e.g., SOQL_DATE_TODAY, SOQL_DATE_LAST_WEEK)
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_date(string date_literal, string op = "=") {
+    return soql_make_op("date_literal", {"literal": date_literal, "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for LAST_N_DAYS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records created in the last 30 days
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_last_n_days(30)});
+    @endcode
+
+    @param n the number of days
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_last_n_days(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("LAST_N_DAYS:%d", n), "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for NEXT_N_DAYS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records with close date in the next 30 days
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CloseDate": soql_op_next_n_days(30)});
+    @endcode
+
+    @param n the number of days
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_next_n_days(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("NEXT_N_DAYS:%d", n), "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for LAST_N_WEEKS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records created in the last 4 weeks
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_last_n_weeks(4)});
+    @endcode
+
+    @param n the number of weeks
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_last_n_weeks(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("LAST_N_WEEKS:%d", n), "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for LAST_N_MONTHS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records created in the last 6 months
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_last_n_months(6)});
+    @endcode
+
+    @param n the number of months
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_last_n_months(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("LAST_N_MONTHS:%d", n), "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for LAST_N_QUARTERS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records created in the last 2 quarters
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_last_n_quarters(2)});
+    @endcode
+
+    @param n the number of quarters
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_last_n_quarters(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("LAST_N_QUARTERS:%d", n), "op": op});
+}
+
+#! returns an @ref SoqlOperatorInfo hash for LAST_N_YEARS:n date literal
+/** @par Example:
+    @code{.py}
+# Find records created in the last 2 years
+AbstractDataProviderRecordIterator i = provider.searchRecords({"CreatedDate": soql_op_last_n_years(2)});
+    @endcode
+
+    @param n the number of years
+    @param op the comparison operator to use (default: "=")
+
+    @return an @ref SoqlOperatorInfo hash for use in salesforce where clauses
+*/
+public hash<SoqlOperatorInfo> sub soql_op_last_n_years(int n, string op = "=") {
+    return soql_make_op("date_literal", {"literal": sprintf("LAST_N_YEARS:%d", n), "op": op});
+}
 #/@}
 
 #! a hash of valid operators for use in where clauses
@@ -931,6 +1172,195 @@ public const DefaultSoqlOpMap = {
             return i.getOrClause(arg);
         },
     ),
+    SOQL_OP_INCLUDES: (
+        "no_process_arg": True,
+        "code": string sub (object i, string cn, auto arg) {
+            if (!arg) {
+                # Empty list for includes means no match possible
+                return "1=0";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), arg));
+            return sprintf("%s includes (%s)", cn, vals);
+        },
+    ),
+    SOQL_OP_EXCLUDES: (
+        "no_process_arg": True,
+        "code": string sub (object i, string cn, auto arg) {
+            if (!arg) {
+                # Empty list for excludes means all values pass
+                return "1=1";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), arg));
+            return sprintf("%s excludes (%s)", cn, vals);
+        },
+    ),
+    "date_literal": (
+        "no_process_arg": True,
+        "code": string sub (object i, string cn, auto arg) {
+            return sprintf("%s %s %s", cn, arg.op, arg.literal);
+        },
+    ),
 };
 #/@}
+
+#! SOQL expression definitions for use with DataProvider search expressions
+/** These expressions enable advanced search functionality with AND/OR/NOT operators
+    and comparison operators that work with the DataProvider expression interface.
+*/
+public const SoqlExpressions = {
+    # Logical operators with nesting support
+    DP_OP_AND: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
+        "impl": string sub (object iter, list<auto> args) {
+            if (!args) {
+                # Empty AND is always true
+                return "1=1";
+            }
+            # Recursively process arguments and join with " and "
+            list<string> clauses = map iter.processExpressionArg($1), args;
+            return "(" + (foldl $1 + " and " + $2, clauses) + ")";
+        },
+    },
+    DP_OP_OR: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_OR},
+        "impl": string sub (object iter, list<auto> args) {
+            if (!args) {
+                # Empty OR is always false
+                return "1=0";
+            }
+            # Recursively process arguments and join with " or "
+            list<string> clauses = map iter.processExpressionArg($1), args;
+            return "(" + (foldl $1 + " or " + $2, clauses) + ")";
+        },
+    },
+
+    # Comparison operators
+    DP_SEARCH_OP_EQ: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_EQ},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s = %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_NE: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_NE},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s != %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_LT: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LT},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s < %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_LE: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LE},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s <= %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_GT: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_GT},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s > %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_GE: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_GE},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s >= %s", field, iter.getArgValue(field, value));
+        },
+    },
+    DP_SEARCH_OP_IN: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
+        "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty IN list means no match possible
+                return "1=0";
+            }
+            *string ins = (foldl $1 + "," + $2, (map iter.getArgValue(field, $1), values));
+            return sprintf("%s in (%s)", field, ins);
+        },
+    },
+    SOQL_OP_NOT_IN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "display_name": "not in",
+            "name": SOQL_OP_NOT_IN,
+            "symbol": "not in",
+            "groups": "Comparison",
+            "desc": "Value is not in the specified list",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureListValueType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty NOT IN list means all values match
+                return "1=1";
+            }
+            *string ins = (foldl $1 + "," + $2, (map iter.getArgValue(field, $1), values));
+            return sprintf("%s not in (%s)", field, ins);
+        },
+    },
+    # NOTE: Standard SOQL does not support a standalone logical NOT operator in WHERE clauses.
+    #       NOT is only allowed in certain constructs (e.g., NOT IN), so a generic
+    #       DP_SEARCH_OP_NOT is intentionally not mapped here.
+    #       For simple negation of equality, use != (NE) instead.
+
+    SOQL_OP_LIKE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "display_name": "like",
+            "name": SOQL_OP_LIKE,
+            "symbol": "like",
+            "groups": "Comparison",
+            "desc": "The value to bind as the 'like' value (ex: '%some string%')",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s like %s", field, iter.getArgValue(field, value));
+        },
+    },
+    SOQL_OP_INCLUDES: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "display_name": "includes",
+            "name": SOQL_OP_INCLUDES,
+            "symbol": "includes",
+            "groups": "Comparison",
+            "desc": "Multi-select picklist includes any of the specified values",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureListValueType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty includes list means no match possible
+                return "1=0";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), values));
+            return sprintf("%s includes (%s)", field, vals);
+        },
+    },
+    SOQL_OP_EXCLUDES: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "display_name": "excludes",
+            "name": SOQL_OP_EXCLUDES,
+            "symbol": "excludes",
+            "groups": "Comparison",
+            "desc": "Multi-select picklist excludes all of the specified values",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureListValueType),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": string sub (object iter, string field, softlist<auto> values) {
+            if (!values) {
+                # Empty excludes list means all values pass
+                return "1=1";
+            }
+            *string vals = (foldl $1 + ";" + $2, (map sprintf("'%s'", soql_escape_string($1)), values));
+            return sprintf("%s excludes (%s)", field, vals);
+        },
+    },
+};
 }
