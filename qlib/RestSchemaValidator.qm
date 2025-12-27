@@ -1605,25 +1605,35 @@ public namespace RestSchemaValidator {
             return RestSchemaLoader::fromString(FileLocationHandler::getTextFileFromLocation(url), json, opts);
         }
 
-        #! Detects whether the source is JSON or YAML
+        #! Detects whether the source is JSON, YAML, or XML
         /** @param str the schema source string
 
-            @return either "json" or "yaml"
+            @return either "json", "yaml", or "xml"
         */
         static string detectSourceEncoding(string str) {
-            # check for json or yaml
+            # strip leading whitespace
             str =~ s/^[\s\n]+//;
-            return str =~ /^\{/ ? "json" : "yaml";
+            # check for XML declaration or root element
+            if (str =~ /^<(\?xml|[a-zA-Z])/) {
+                return "xml";
+            }
+            # check for JSON (starts with '{')
+            if (str =~ /^\{/) {
+                return "json";
+            }
+            # default to YAML
+            return "yaml";
         }
 
         #! Parses schema source from a string
         /** @param str the schema source string
-            @param ser the serialization type ("json" or "yaml")
+            @param ser the serialization type ("json", "yaml", or "xml")
 
             @return the parsed schema as a hash
 
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with json module unavailable
             @throws YAML-MODULE-MISSING trying to parse a YAML schema with yaml module unavailable
+            @throws XML-MODULE-MISSING trying to parse an XML schema with xml module unavailable
         */
         static hash<auto> parseSchemaSource(string str, string ser) {
             auto rv;
@@ -1644,8 +1654,18 @@ public namespace RestSchemaValidator {
                     break;
 %endif
                 }
-                default:
-                    throw "UNSUPPORTED-SERIALIZATION", sprintf("serialization type %y is not supported", ser);
+                case "xml": {
+%ifdef NoXml
+                    throw "XML-MODULE-MISSING", "Trying to parse an XML schema, but the xml module is unavailable";
+%else
+                    rv = parse_xml(str);
+                    break;
+%endif
+                }
+            }
+            if (rv.typeCode() != NT_HASH) {
+                throw "INVALID-SCHEMA", sprintf("REST schema must be a hash; parsed %s document has top-level type %y",
+                    ser.upr(), rv.type());
             }
             return rv;
         }
@@ -1682,7 +1702,12 @@ public namespace RestSchemaValidator {
 %ifdef NoXml
                 throw "XML-MODULE-MISSING", "Trying to parse an XML schema, but the xml module is unavailable";
 %else
-                return parse_xml(str);
+                auto rv = parse_xml(str);
+                if (rv.typeCode() != NT_HASH) {
+                    throw "INVALID-SCHEMA", sprintf("REST schema must be a hash; parsed XML document has top-level "
+                        "type %y", rv.type());
+                }
+                return rv;
 %endif
             }
             return RestSchemaLoader::parseSchemaSource(str, ser);
@@ -1697,12 +1722,21 @@ public namespace RestSchemaValidator {
         */
         static string detectSchemaType(hash<auto> parsed) {
             # Check for Swagger 2.0: has "swagger" key with value "2.0"
-            if (parsed.swagger == "2.0") {
+            if (parsed.swagger.typeCode() == NT_STRING && parsed.swagger == "2.0") {
                 return "swagger";
             }
             # Check for OpenAPI 3.x: has "openapi" key starting with "3."
             if (parsed.openapi.typeCode() == NT_STRING && parsed.openapi =~ /^3\./) {
                 return "openapi3";
+            }
+            # Provide more specific error messages for malformed version values
+            if (parsed.hasKey("swagger")) {
+                throw "UNKNOWN-SCHEMA-TYPE", sprintf("unsupported Swagger version %y; only version \"2.0\" is "
+                    "supported", parsed.swagger);
+            }
+            if (parsed.hasKey("openapi")) {
+                throw "UNKNOWN-SCHEMA-TYPE", sprintf("unsupported OpenAPI version %y; only versions \"3.x.x\" are "
+                    "supported", parsed.openapi);
             }
             throw "UNKNOWN-SCHEMA-TYPE", sprintf("unable to detect REST schema type; expected 'swagger: \"2.0\"' or "
                 "'openapi: \"3.x.x\"' key; got keys: %y", keys parsed);
