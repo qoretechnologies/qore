@@ -1,0 +1,289 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore MemcachedDataProvider module definition
+
+/*  MemcachedDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+
+module MemcachedDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Memcached servers";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the connection scheme
+        ConnectionSchemeCache::registerScheme("memcached", MemcachedConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("memcacheds", MemcachedConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new MemcachedDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": MemcachedDataProvider::AppName,
+            "display_name": "Memcached Server",
+            "short_desc": "Memcached caching server",
+            "desc": "Memcached distributed memory object caching system",
+            "scheme": "memcached",
+            "logo": MemcachedLogo,
+            "logo_file_name": "memcached-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register storage actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/storage/set",
+            "action": "set",
+            "display_name": "Set Value",
+            "short_desc": "Store a value in the cache",
+            "desc": "Store a key-value pair in memcached, overwriting any existing value",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/storage/add",
+            "action": "add",
+            "display_name": "Add Value",
+            "short_desc": "Store a value only if key doesn't exist",
+            "desc": "Store a key-value pair in memcached only if the key doesn't already exist",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/storage/replace",
+            "action": "replace",
+            "display_name": "Replace Value",
+            "short_desc": "Replace an existing value",
+            "desc": "Replace a value in memcached only if the key already exists",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/storage/cas",
+            "action": "cas",
+            "display_name": "Compare and Swap",
+            "short_desc": "Update value with optimistic locking",
+            "desc": "Update a value only if its CAS token matches (optimistic locking)",
+            "action_code": DPAT_API,
+        });
+
+        # register retrieval actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/retrieval/get",
+            "action": "get",
+            "display_name": "Get Value",
+            "short_desc": "Retrieve a value from the cache",
+            "desc": "Retrieve a cached value by key",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/retrieval/gets",
+            "action": "gets",
+            "display_name": "Get with CAS",
+            "short_desc": "Retrieve a value with CAS token",
+            "desc": "Retrieve a cached value with its CAS token for optimistic locking",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/retrieval/multi-get",
+            "action": "multi-get",
+            "display_name": "Multi-Get",
+            "short_desc": "Retrieve multiple values",
+            "desc": "Retrieve multiple cached values in a single batch request",
+            "action_code": DPAT_API,
+        });
+
+        # register delete action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/delete",
+            "action": "delete",
+            "display_name": "Delete",
+            "short_desc": "Delete a key from the cache",
+            "desc": "Remove a key and its value from the cache",
+            "action_code": DPAT_API,
+        });
+
+        # register numeric actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/numeric/incr",
+            "action": "incr",
+            "display_name": "Increment",
+            "short_desc": "Increment a numeric value",
+            "desc": "Atomically increment a numeric value in the cache",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/numeric/decr",
+            "action": "decr",
+            "display_name": "Decrement",
+            "short_desc": "Decrement a numeric value",
+            "desc": "Atomically decrement a numeric value in the cache",
+            "action_code": DPAT_API,
+        });
+
+        # register touch action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/touch",
+            "action": "touch",
+            "display_name": "Touch",
+            "short_desc": "Update expiration time",
+            "desc": "Update the expiration time of an existing key",
+            "action_code": DPAT_API,
+        });
+
+        # register stats actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/stats/general",
+            "action": "stats",
+            "display_name": "Statistics",
+            "short_desc": "Get server statistics",
+            "desc": "Retrieve general server statistics and metrics",
+            "action_code": DPAT_API,
+        });
+
+        # register admin actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/admin/version",
+            "action": "version",
+            "display_name": "Version",
+            "short_desc": "Get server version",
+            "desc": "Retrieve the memcached server version",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MemcachedDataProvider::AppName,
+            "path": "/admin/flush-all",
+            "action": "flush-all",
+            "display_name": "Flush All",
+            "short_desc": "Clear all cached data",
+            "desc": "Invalidate all items in the cache",
+            "action_code": DPAT_API,
+        });
+    };
+}
+
+/** @mainpage MemcachedDataProvider Module
+
+    @tableofcontents
+
+    @section memcacheddataproviderintro Introduction to the MemcachedDataProvider Module
+
+    @htmlonly
+    <div class="image">
+      <img src="memcached-logo.svg" alt="Memcached Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
+    The %MemcachedDataProvider module provides a @ref dataproviderintro "data provider" API for
+    Memcached servers. It implements the memcached binary protocol for efficient communication
+    and provides a complete set of operations for cache management.
+
+    This data provider provides Memcached API access to:
+    - storage: <b><tt>storage/{@ref MemcachedDataProvider::MemcachedSetDataProvider "set",
+      @ref MemcachedDataProvider::MemcachedAddDataProvider "add",
+      @ref MemcachedDataProvider::MemcachedReplaceDataProvider "replace",
+      @ref MemcachedDataProvider::MemcachedAppendDataProvider "append",
+      @ref MemcachedDataProvider::MemcachedPrependDataProvider "prepend",
+      @ref MemcachedDataProvider::MemcachedCasDataProvider "cas"}</tt></b>
+    - retrieval: <b><tt>retrieval/{@ref MemcachedDataProvider::MemcachedGetDataProvider "get",
+      @ref MemcachedDataProvider::MemcachedGetsDataProvider "gets",
+      @ref MemcachedDataProvider::MemcachedGatDataProvider "gat",
+      @ref MemcachedDataProvider::MemcachedGatsDataProvider "gats",
+      @ref MemcachedDataProvider::MemcachedMultiGetDataProvider "multi-get"}</tt></b>
+    - deletion: <b><tt>{@ref MemcachedDataProvider::MemcachedDeleteDataProvider "delete"}</tt></b>
+    - touch: <b><tt>{@ref MemcachedDataProvider::MemcachedTouchDataProvider "touch"}</tt></b>
+    - numeric: <b><tt>numeric/{@ref MemcachedDataProvider::MemcachedIncrDataProvider "incr",
+      @ref MemcachedDataProvider::MemcachedDecrDataProvider "decr"}</tt></b>
+    - stats: <b><tt>stats/{@ref MemcachedDataProvider::MemcachedStatsGeneralDataProvider "general",
+      @ref MemcachedDataProvider::MemcachedStatsItemsDataProvider "items",
+      @ref MemcachedDataProvider::MemcachedStatsSlabsDataProvider "slabs",
+      @ref MemcachedDataProvider::MemcachedStatsSizesDataProvider "sizes"}</tt></b>
+    - admin: <b><tt>admin/{@ref MemcachedDataProvider::MemcachedVersionDataProvider "version",
+      @ref MemcachedDataProvider::MemcachedFlushAllDataProvider "flush-all",
+      @ref MemcachedDataProvider::MemcachedVerbosityDataProvider "verbosity"}</tt></b>
+
+    @section memcacheddataprovider_factory Memcached Data Provider Factory
+
+    The name of the Memcached data provider factory is <b><tt>memcached</tt></b>.
+
+    @section memcacheddataprovider_examples Memcached Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: Set a Value
+    @verbatim qdp 'memcached{url=memcached://localhost:11211}/storage/set' key=mykey,value="hello world",exptime=3600
+    @endverbatim
+
+    @par API Example: Get a Value
+    @verbatim qdp 'memcached{url=memcached://localhost:11211}/retrieval/get' key=mykey
+    @endverbatim
+
+    @par API Example: Increment Counter
+    @verbatim qdp 'memcached{url=memcached://localhost:11211}/numeric/incr' key=counter,delta=1
+    @endverbatim
+
+    @par API Example: Get Stats
+    @verbatim qdp 'memcached{url=memcached://localhost:11211}/stats/general'
+    @endverbatim
+
+    @section memcacheddataprovider_relnotes Release Notes
+
+    @subsection memcacheddataprovider_v1_0 MemcachedDataProvider v1.0
+    - Initial release of the module
+*/
+
+public namespace MemcachedDataProvider {
+}
+
+namespace Priv {
+    const MemcachedLogo = File::readTextFile(get_script_dir() + "/memcached-logo.svg");
+}

@@ -252,7 +252,9 @@ class SocketTest inherits QUnit::Test {
             assertEq(b, b0);
         }
         {
-            Queue q();
+            # Use two queues to avoid race conditions - one for each direction
+            Queue serverToClient();
+            Queue clientToServer();
             int BinarySize = 128 * 1024;
             background sub () {
                 Socket s0();
@@ -265,7 +267,7 @@ class SocketTest inherits QUnit::Test {
 
                 s0.setCertificate(TestCert);
                 s0.setPrivateKey(TestCert);
-                q.push(port);
+                serverToClient.push(port);
 
                 Socket s2 = s0.acceptSSL(15s);
                 # Receive all data - loop until we get the expected size
@@ -274,20 +276,29 @@ class SocketTest inherits QUnit::Test {
                     assertTrue(s2.isDataAvailable(5s));
                     b0 += s2.recvBinary(-1, 1s);
                 }
-                q.push(b0);
+                # Push received data for client to verify
+                serverToClient.push(b0);
 
+                # Generate and send new data
                 b0 = get_random_bytes(BinarySize);
+                serverToClient.push(b0);
                 s2.send(b0, 5s);
-                assertEq(b0, q.get(5s));
+
+                # Wait for client verification result
+                assertEq(True, clientToServer.get(10s));
             }();
 
             Socket s1();
 
-            s1.connectSSL("127.0.0.1:" + q.get(2s));
+            s1.connectSSL("127.0.0.1:" + serverToClient.get(2s));
 
             binary b = get_random_bytes(BinarySize);
             s1.send(b, 5s);
-            assertEq(b, q.get(5s));
+            # Verify server received what we sent
+            assertEq(b, serverToClient.get(5s));
+
+            # Get what server will send
+            binary expected = serverToClient.get(10s);
 
             # Receive all data - loop until we get the expected size
             binary b1;
@@ -295,7 +306,10 @@ class SocketTest inherits QUnit::Test {
                 assertTrue(s1.isDataAvailable(5s));
                 b1 += s1.recvBinary(-1, 1s);
             }
-            q.push(b1);
+            # Verify received data matches what server sent
+            assertEq(expected, b1);
+            # Signal success to server
+            clientToServer.push(True);
         }
     }
 
