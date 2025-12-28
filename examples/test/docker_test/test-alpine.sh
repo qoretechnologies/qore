@@ -32,6 +32,10 @@ if [ -z "${QORE_DB_CONNSTR_ORACLE}" ]; then
     . examples/test/docker_test/init_oracle.sh
     . ${ENV_FILE}
 fi
+if [ -z "${REDIS_URL}" ]; then
+    . examples/test/docker_test/redis_lib.sh
+    setup_redis_on_host
+fi
 
 find / -name "libqore.so*" -exec rm -f {} \;
 

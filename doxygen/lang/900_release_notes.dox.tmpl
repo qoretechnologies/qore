@@ -47,6 +47,8 @@
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
     - new function:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+    - new @ref string_formatting "printf format specifier":
+      - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
     - new zero-cost assertion and debug statements
       - \c @@assert(condition) and \c @@assert(condition, message) throw \c ASSERTION-ERROR when condition is false
       - \c @@assert supports sprintf-style formatting: \c @@assert(condition, "format", arg1, arg2, ...)

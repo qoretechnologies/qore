@@ -765,8 +765,11 @@ class Test inherits QUnit::Test {
 
         string fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
         unlink(fn);
-        la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn);
-        assertEq(bindex(la.getArchiveFileName()+DirSep, fn), 0);
+        # Use a fixed archive pattern (without date) to test "Target file already exists" error
+        # The default pattern "%p%f.%d" includes a timestamp which changes between calls
+        la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn, "%p%f.bak");
+        string expected_afn = la.getArchiveFileName();
+        assertEq(fn + ".bak", expected_afn);
         assertFalse(la.getFile().isOpen());
         assertEq(fn, la.getFileName());
         la.open();
@@ -774,6 +777,7 @@ class Test inherits QUnit::Test {
         LoggerEvent lle = new LoggerEvent("Logger", "a", LoggerLevel::getLevelError(), "ARCHIVE");
         la.post(lle);
         string afn = la.archive();
+        assertEq(expected_afn, afn);
         assertTrue(la.getFile().isOpen());
         assertTrue(is_file(afn));
         assertThrows("LOGGER-ERROR", "Target file already exists", \la.archive());

@@ -41,6 +41,7 @@
 
 #include <cassert>
 
+#define FMT_YAML_LONG  -3
 #define FMT_YAML_SHORT -2
 #define FMT_NONE       -1
 #define FMT_NORMAL      0

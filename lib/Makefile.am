@@ -152,6 +152,8 @@ libqore_la_SOURCES = \
 	GlobalVariableList.cpp \
 	FunctionList.cpp \
 	AbstractStatement.cpp \
+	AssertStatement.cpp \
+	DebugStatement.cpp \
 	OnBlockExitStatement.cpp \
 	ExpressionStatement.cpp \
 	ReturnStatement.cpp \

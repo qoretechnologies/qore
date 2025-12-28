@@ -9,6 +9,8 @@ default:
       alias: pgsql
     - name: memcached:latest
       alias: memcached
+    - name: redis:latest
+      alias: redis
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -27,6 +29,7 @@ variables:
   MYSQL_ROOT_PASSWORD: omq
   QORE_DB_CONNSTR_MYSQL: 'mysql:root/omq@omq(UTF8)%mysql'
   MEMCACHED_URL: 'memcached://memcached:11211'
+  REDIS_URL: 'redis://redis:6379'
   QORE_TEST_OPTS: '-penable-debug'
 
 test-ubuntu-amd64:

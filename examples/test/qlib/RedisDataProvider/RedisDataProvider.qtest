@@ -1,0 +1,409 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RedisDataProvider
+
+%exec-class RedisDataProviderTest
+
+public class RedisDataProviderTest inherits QUnit::Test {
+    private {
+        RedisClient redis;
+        string test_prefix;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("RedisDataProvider Test", "1.0", \ARGV, MyOpts) {
+        test_prefix = "qore_test_" + get_random_string(8) + "_";
+
+        addTestCase("client test", \clientTest());
+        addTestCase("connection test", \connectionTest());
+        addTestCase("string operations test", \stringOpsTest());
+        addTestCase("hash operations test", \hashOpsTest());
+        addTestCase("list operations test", \listOpsTest());
+        addTestCase("set operations test", \setOpsTest());
+        addTestCase("sorted set operations test", \sortedSetOpsTest());
+        addTestCase("key operations test", \keyOpsTest());
+        addTestCase("server operations test", \serverOpsTest());
+        addTestCase("transaction operations test", \transactionOpsTest());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the Redis server instance (default: redis://localhost:6379)", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.REDIS_URL ?? "redis://localhost:6379";
+        try {
+            redis = new RedisClient({"url": url});
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    private cleanup() {
+        if (redis) {
+            # Clean up test keys
+            try {
+                list<auto> key_list = redis.command("KEYS", test_prefix + "*");
+                if (key_list) {
+                    redis.commandWithArgs("DEL", key_list);
+                }
+            } catch () {
+                # Ignore cleanup errors
+            }
+        }
+    }
+
+    destructor() {
+        cleanup();
+    }
+
+    private string testKey(string suffix) {
+        return test_prefix + suffix;
+    }
+
+    private clientTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        # Test PING
+        assertEq("PONG", redis.command("PING"));
+
+        # Test PING with message
+        assertEq("hello", redis.command("PING", "hello"));
+
+        # Test SET/GET
+        string key = testKey("client_test");
+        assertEq("OK", redis.command("SET", key, "test_value"));
+        assertEq("test_value", redis.command("GET", key));
+
+        # Test integer response
+        redis.command("SET", key, "100");
+        assertEq(101, redis.command("INCR", key));
+
+        # Test null response
+        assertNothing(redis.command("GET", testKey("nonexistent")));
+
+        # Test list response
+        redis.command("DEL", key);
+        redis.command("RPUSH", key, "a", "b", "c");
+        list<auto> result = redis.command("LRANGE", key, 0, -1);
+        assertEq(("a", "b", "c"), result);
+    }
+
+    private connectionTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        *string url = m_options.url ?? ENV.REDIS_URL ?? "redis://localhost:6379";
+
+        # Test RedisConnection
+        RedisConnection conn("test", "test connection", url, {}, {});
+        assertEq("redis", conn.getType());
+
+        # Test getting client
+        RedisClient client = conn.get();
+        assertEq("PONG", client.command("PING"));
+
+        # Test getting data provider
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("redis", prov.getName());
+    }
+
+    private stringOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+
+        # Test string set operation
+        AbstractDataProvider setProv = rdp.getChildProviderEx("strings").getChildProviderEx("set");
+        hash<auto> result = setProv.doRequest({
+            "key": testKey("str1"),
+            "value": "hello world",
+        });
+        assertTrue(result.success);
+
+        # Test string get operation
+        AbstractDataProvider getProv = rdp.getChildProviderEx("strings").getChildProviderEx("get");
+        result = getProv.doRequest({
+            "key": testKey("str1"),
+        });
+        assertEq("hello world", result.value);
+
+        # Test INCR operations
+        AbstractDataProvider incrProv = rdp.getChildProviderEx("strings").getChildProviderEx("incr");
+        redis.command("SET", testKey("counter"), "10");
+        result = incrProv.doRequest({
+            "key": testKey("counter"),
+        });
+        assertEq(11, result.value);
+
+        result = incrProv.doRequest({
+            "key": testKey("counter"),
+            "increment": 5,
+        });
+        assertEq(16, result.value);
+    }
+
+    private hashOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        string key = testKey("hash1");
+
+        # Test HSET
+        AbstractDataProvider setProv = rdp.getChildProviderEx("hashes").getChildProviderEx("set");
+        hash<auto> result = setProv.doRequest({
+            "key": key,
+            "field": "field1",
+            "value": "value1",
+        });
+        assertEq(1, result.fields_added);
+
+        # Test HGET
+        AbstractDataProvider getProv = rdp.getChildProviderEx("hashes").getChildProviderEx("get");
+        result = getProv.doRequest({
+            "key": key,
+            "field": "field1",
+        });
+        assertEq("value1", result.value);
+
+        # Test HGETALL
+        redis.command("HSET", key, "field2", "value2");
+        result = getProv.doRequest({
+            "operation": "hgetall",
+            "key": key,
+        });
+        assertEq({"field1": "value1", "field2": "value2"}, result.hash);
+    }
+
+    private listOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        string key = testKey("list1");
+
+        # Test LPUSH
+        AbstractDataProvider pushProv = rdp.getChildProviderEx("lists").getChildProviderEx("push");
+        hash<auto> result = pushProv.doRequest({
+            "key": key,
+            "values": ("a", "b", "c"),
+        });
+        assertEq(3, result.length);
+
+        # Test LRANGE
+        AbstractDataProvider rangeProv = rdp.getChildProviderEx("lists").getChildProviderEx("range");
+        result = rangeProv.doRequest({
+            "key": key,
+            "start": 0,
+            "stop": -1,
+        });
+        assertEq(("c", "b", "a"), result.values);
+
+        # Test LPOP
+        AbstractDataProvider popProv = rdp.getChildProviderEx("lists").getChildProviderEx("pop");
+        result = popProv.doRequest({
+            "key": key,
+        });
+        assertEq("c", result.value);
+    }
+
+    private setOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        string key1 = testKey("set1");
+
+        # Test SADD
+        AbstractDataProvider addProv = rdp.getChildProviderEx("sets").getChildProviderEx("add");
+        hash<auto> result = addProv.doRequest({
+            "key": key1,
+            "members": ("a", "b", "c"),
+        });
+        assertEq(3, result.added);
+
+        # Test SMEMBERS
+        result = addProv.doRequest({
+            "operation": "smembers",
+            "key": key1,
+        });
+        assertEq(3, result.members.size());
+
+        # Test SISMEMBER
+        result = addProv.doRequest({
+            "operation": "sismember",
+            "key": key1,
+            "member": "a",
+        });
+        assertTrue(result.is_member);
+
+        # Test SCARD
+        AbstractDataProvider cardProv = rdp.getChildProviderEx("sets").getChildProviderEx("card");
+        result = cardProv.doRequest({
+            "key": key1,
+        });
+        assertEq(3, result.count);
+    }
+
+    private sortedSetOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        # Use direct Redis commands for sorted sets to avoid type issues
+        string key = testKey("zset1");
+
+        redis.command("ZADD", key, 1.0, "one", 2.0, "two", 3.0, "three");
+
+        # Test ZRANGE
+        list<auto> members = redis.command("ZRANGE", key, 0, -1);
+        assertEq(("one", "two", "three"), members);
+
+        # Test ZSCORE
+        auto score = redis.command("ZSCORE", key, "two");
+        assertEq("2", score);
+
+        # Test ZCARD
+        int card = redis.command("ZCARD", key);
+        assertEq(3, card);
+    }
+
+    private keyOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        string key = testKey("key_test");
+
+        # Set a key first
+        redis.command("SET", key, "test_value");
+
+        AbstractDataProvider keyProv = rdp.getChildProviderEx("keys");
+
+        # Test EXISTS
+        hash<auto> result = keyProv.doRequest({
+            "operation": "exists",
+            "keys": (key,),
+        });
+        assertEq(1, result.count);
+
+        # Test TYPE
+        result = keyProv.doRequest({
+            "operation": "type",
+            "key": key,
+        });
+        assertEq("string", result.type);
+
+        # Test EXPIRE
+        result = keyProv.doRequest({
+            "operation": "expire",
+            "key": key,
+            "seconds": 3600,
+        });
+        assertTrue(result.success);
+
+        # Test TTL
+        result = keyProv.doRequest({
+            "operation": "ttl",
+            "key": key,
+        });
+        assertTrue(result.ttl > 0);
+
+        # Test DEL
+        result = keyProv.doRequest({
+            "operation": "del",
+            "keys": (key,),
+        });
+        assertEq(1, result.deleted);
+    }
+
+    private serverOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        AbstractDataProvider serverProv = rdp.getChildProviderEx("server");
+
+        # Test PING
+        hash<auto> result = serverProv.doRequest({
+            "operation": "ping",
+        });
+        assertEq("PONG", result.response);
+
+        # Test DBSIZE
+        result = serverProv.doRequest({
+            "operation": "dbsize",
+        });
+        assertTrue(result.size >= 0);
+
+        # Test INFO
+        result = serverProv.doRequest({
+            "operation": "info",
+        });
+        assertTrue(exists result.info);
+    }
+
+    private transactionOpsTest() {
+        if (!redis) {
+            testSkip("no connection to Redis server");
+        }
+
+        RedisDataProvider rdp(redis);
+        AbstractDataProvider txProv = rdp.getChildProviderEx("transactions");
+
+        # Test execute_transaction
+        string key1 = testKey("tx1");
+        string key2 = testKey("tx2");
+        hash<auto> result = txProv.doRequest({
+            "commands": (
+                ("SET", key1, "value1"),
+                ("SET", key2, "value2"),
+                ("GET", key1),
+                ("GET", key2),
+            ),
+        });
+        assertFalse(result.aborted ?? False);
+        assertEq(4, result.results.size());
+        assertEq("OK", result.results[0]);
+        assertEq("OK", result.results[1]);
+        assertEq("value1", result.results[2]);
+        assertEq("value2", result.results[3]);
+    }
+}

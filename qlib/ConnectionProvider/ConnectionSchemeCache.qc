@@ -193,6 +193,9 @@ public class ConnectionSchemeCache {
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",
 
+            "redis": "RedisDataProvider",
+            "rediss": "RedisDataProvider",
+
             "rest": "RestClient",
             "rests": "RestClient",
 
