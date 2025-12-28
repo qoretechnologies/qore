@@ -128,9 +128,13 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
         const Expressions = {
             DP_OP_AND: {
                 "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
-                "impl": string sub (*string ignored, auto arg) {
-                    throw "WHERE-ERROR", "ServiceNow does not support nested boolean logic in queries";
-                },
+                # AND is handled specially in the iterator - this impl is for nested AND which is supported
+                "impl": "and",
+            },
+            DP_OP_OR: {
+                "exp": AbstractDataProvider::GenericExpressions{DP_OP_OR},
+                # OR is handled specially in the iterator using ^OR syntax
+                "impl": "or",
             },
             QUERY_OP_EQ: {
                 "exp": sym(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_EQ}, QUERY_OP_EQ),
@@ -171,6 +175,10 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
             QUERY_OP_IN: {
                 "exp": sym(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN}, QUERY_OP_IN),
                 "impl": string sub (string cn, auto arg) {
+                    if (arg.typeCode() == NT_LIST && !arg.size()) {
+                        # Empty IN list means no match possible
+                        return "sys_id=NULL";
+                    }
                     return sprintf("%sIN%s", cn, (foldl $1 + "," + $2, arg));
                 },
             },
@@ -183,10 +191,14 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "desc": "An expression with the ServiceNow 'notin' operator",
                     "symbol": "NOTIN",
                     "groups": "Comparison",
-                    "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+                    "args": (DataProviderSignatureFieldType, DataProviderSignatureListValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": string sub (string cn, auto arg) {
+                    if (arg.typeCode() == NT_LIST && !arg.size()) {
+                        # Empty NOTIN list means all values match
+                        return "sys_id!=NULL";
+                    }
                     return sprintf("%sNOTIN%s", cn, (foldl $1 + "," + $2, arg));
                 },
             },
@@ -242,12 +254,28 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
                     "name": QUERY_OP_ENDSWITH,
-                    "display_name": "like",
+                    "display_name": "endswith",
                     "short_desc": "An expression with the ServiceNow 'endswith' operator",
                     "desc": "An expression with the ServiceNow 'endswith' operator",
                     "symbol": "ENDSWITH",
                     "groups": "Comparison",
                     "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "impl": string sub (string cn, auto arg) {
+                    return sprintf("%sENDSWITH%s", cn, arg);
+                },
+            },
+            QUERY_OP_ISEMPTY: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": QUERY_OP_ISEMPTY,
+                    "display_name": "isempty",
+                    "short_desc": "An expression with the ServiceNow 'isempty' operator",
+                    "desc": "An expression with the ServiceNow 'isempty' operator",
+                    "symbol": "ISEMPTY",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureFieldType,),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": string sub (string cn, auto arg) {
@@ -258,7 +286,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
                     "name": QUERY_OP_ISNOTEMPTY,
-                    "display_name": "notlike",
+                    "display_name": "isnotempty",
                     "short_desc": "An expression with the ServiceNow 'isnotempty' operator",
                     "desc": "An expression with the ServiceNow 'isnotempty' operator",
                     "symbol": "ISNOTEMPTY",
