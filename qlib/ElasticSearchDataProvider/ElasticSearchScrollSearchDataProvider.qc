@@ -203,7 +203,7 @@ public class ElasticSearchScrollSearchRequestDataType inherits DataProvider::Has
                 "default_value": 1000,
             },
             "clear": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling "
                     "to free up resources.",
             },
@@ -220,7 +220,7 @@ public class ElasticSearchScrollSearchRequestDataType inherits DataProvider::Has
                 "desc": "Specifies which shard replicas to execute the search request on (for initial scroll only)",
             },
             "request_cache": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "Whether to cache the request (for initial scroll only)",
             },
         };

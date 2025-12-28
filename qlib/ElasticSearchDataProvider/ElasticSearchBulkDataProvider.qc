@@ -217,7 +217,7 @@ public class ElasticSearchBulkOperationItemDataType inherits DataProvider::HashD
                 "desc": "The document body for index/create operations, or the partial document for update operations",
             },
             "doc_as_upsert": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "For update: if true, use the doc as the upsert document if the document does not exist",
             },
             "script": {
@@ -284,7 +284,7 @@ public class ElasticSearchBulkRequestDataType inherits DataProvider::HashDataTyp
                 "desc": "Number of shard copies that must be active before proceeding",
             },
             "require_alias": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "If true, the destination must be an index alias",
             },
         };

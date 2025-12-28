@@ -36,6 +36,7 @@
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
+%requires json
 
 module ElasticSearchDataProvider {
     version = "1.2";

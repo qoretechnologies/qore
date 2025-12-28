@@ -219,15 +219,15 @@ public class ElasticSearchAggregationRequestDataType inherits DataProvider::Hash
                 "desc": "Search timeout (e.g., '10s' for 10 seconds)",
             },
             "request_cache": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "Whether to cache the request",
             },
             "ignore_unavailable": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "Whether to ignore unavailable indices",
             },
             "allow_no_indices": {
-                "type": SoftBoolStringOrNothingType,
+                "type": SoftBoolStringType,
                 "desc": "Whether to allow wildcards that match no indices",
             },
             "expand_wildcards": {

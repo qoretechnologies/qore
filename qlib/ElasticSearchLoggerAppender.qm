@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) add-module-classpath $module:oracle-jdbc.jar
-
 # minimum qore version
 %requires qore >= 2.0
 
@@ -32,6 +30,9 @@
 
 # requires the RestClient module
 %requires RestClient
+
+# requires json module for make_json()
+%requires json
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %new-style
@@ -212,7 +213,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'index'";
         }
 
-        # Create REST client
+        # Create REST client (connection is delayed until first use)
         hash<auto> rest_opts = {
             "url": options.url,
         };
@@ -222,7 +223,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         if (options.timeout) {
             rest_opts.timeout = options.timeout;
         }
-        rest = new RestClient::RestClient(rest_opts);
+        rest = new RestClient::RestClient(rest_opts, True);
 
         indexPattern = options.index;
         batchSize = options.batch_size ?? DefaultBatchSize;
@@ -304,13 +305,13 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     */
     public processEventImpl(int type, auto params) {
         switch (type) {
-            case Logger::EVENT_OPEN:
+            case LoggerAppender::EVENT_OPEN:
                 openImpl();
                 break;
-            case Logger::EVENT_LOG:
+            case LoggerAppender::EVENT_LOG:
                 addToBuffer(params);
                 break;
-            case Logger::EVENT_CLOSE:
+            case LoggerAppender::EVENT_CLOSE:
                 closeImpl();
                 break;
         }
@@ -444,8 +445,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         }
 
         try {
-            hash<auto> response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
-            handleBulkResponse(response.body, batch.size());
+            auto raw_response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
+            hash<auto> response = raw_response.body ?? {};
+            handleBulkResponse(response, batch.size());
         } catch (hash<ExceptionInfo> ex) {
             handleError(ex, batch);
         }
