@@ -75,6 +75,8 @@
 #include "ForEachStatement.cpp"
 #include "TryStatement.cpp"
 #include "ThrowStatement.cpp"
+#include "AssertStatement.cpp"
+#include "DebugStatement.cpp"
 #include "RethrowStatement.cpp"
 #include "SwitchStatement.cpp"
 #include "Variable.cpp"

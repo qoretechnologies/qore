@@ -47,6 +47,13 @@
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
     - new function:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+    - new zero-cost assertion and debug statements
+      - \c @@assert(condition) and \c @@assert(condition, message) throw \c ASSERTION-ERROR when condition is false
+      - \c @@debug(expression) evaluates an expression for its side effects (e.g., logging)
+      - both statements are completely skipped at parse time when \c %%enable-debug is not set, providing
+        zero runtime overhead
+      - use \c %%enable-debug / \c %%disable-debug parse directives or \c PO_ENABLE_DEBUG parse option
+        (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
     - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
