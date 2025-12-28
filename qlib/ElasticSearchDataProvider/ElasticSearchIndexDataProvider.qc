@@ -53,6 +53,8 @@ public class ElasticSearchIndexDataProvider inherits ElasticSearchDataProviderBa
 
             "read-all": Class::forName("ElasticSearchDataProvider::ElasticSearchIndexReadAllDataProvider"),
             "search": Class::forName("ElasticSearchDataProvider::ElasticSearchIndexSearchDataProvider"),
+            "scroll-search": Class::forName("ElasticSearchDataProvider::ElasticSearchScrollSearchDataProvider"),
+            "aggregate": Class::forName("ElasticSearchDataProvider::ElasticSearchAggregationDataProvider"),
         };
     }
 

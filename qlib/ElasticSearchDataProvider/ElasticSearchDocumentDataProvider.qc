@@ -51,6 +51,7 @@ public class ElasticSearchDocumentDataProvider inherits ElasticSearchDataProvide
             "read": Class::forName("ElasticSearchDataProvider::ElasticSearchDocumentReadDataProvider"),
             "update": Class::forName("ElasticSearchDataProvider::ElasticSearchDocumentUpdateDataProvider"),
             "delete": Class::forName("ElasticSearchDataProvider::ElasticSearchDocumentDeleteDataProvider"),
+            "bulk": Class::forName("ElasticSearchDataProvider::ElasticSearchBulkDataProvider"),
         };
     }
 
