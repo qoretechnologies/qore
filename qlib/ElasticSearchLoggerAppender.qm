@@ -231,6 +231,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         #! Mutex for thread-safe buffer access
         Mutex bufferMutex();
 
+        #! Mutex for timer thread synchronization
+        Mutex timerMutex();
+
         #! Timer thread ID for periodic flushing
         *int timerTid;
 
@@ -431,27 +434,37 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
 
     #! Starts the background flush timer
     private startFlushTimer() {
-        stopTimer = False;
-        timerTid = background timerLoop();
+        {
+            AutoLock al(timerMutex);
+            stopTimer = False;
+            timerTid = background timerLoop();
+        }
     }
 
     #! Stops the background flush timer
     private stopFlushTimer() {
-        stopTimer = True;
-        # Give the timer a chance to notice stopTimer
-        if (timerTid) {
-            # Wait a bit for the timer to exit
-            int waited = 0;
-            while (timerTid && waited < flushIntervalMs + 1000) {
-                usleep(100000);  # 100ms
-                waited += 100;
+        {
+            AutoLock al(timerMutex);
+            stopTimer = True;
+        }
+        # Wait for the timer thread to exit
+        int waited = 0;
+        while (waited < flushIntervalMs + 1000) {
+            {
+                AutoLock al(timerMutex);
+                if (!timerTid) {
+                    break;
+                }
             }
+            usleep(100000);  # 100ms
+            waited += 100;
         }
     }
 
     #! Background timer loop for periodic flushing
     private timerLoop() {
         on_exit {
+            AutoLock al(timerMutex);
             delete timerTid;
         }
 
