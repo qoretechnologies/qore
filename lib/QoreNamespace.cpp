@@ -50,6 +50,9 @@
 #include "qore/intern/QC_DebugProgram.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_Expression.h"
+#include "qore/intern/QC_Regex.h"
+#include "qore/intern/QC_RegexSubst.h"
+#include "qore/intern/QC_RegexExtract.h"
 #include "qore/intern/QC_File.h"
 #include "qore/intern/QC_Dir.h"
 #include "qore/intern/QC_GetOpt.h"
@@ -1166,6 +1169,10 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initProgramClass(qns));
     qns.addSystemClass(initDebugProgramClass(qns));
     qns.addSystemClass(initBreakpointClass(qns));
+
+    qns.addSystemClass(initRegexClass(qns));
+    qns.addSystemClass(initRegexSubstClass(qns));
+    qns.addSystemClass(initRegexExtractClass(qns));
 
     qns.addSystemClass(initTermIOSClass(qns));
     qns.addSystemClass(initReadOnlyFileClass(qns));

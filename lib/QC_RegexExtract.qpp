@@ -1,0 +1,172 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_RegexExtract.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_RegexExtract.h"
+
+//! The RegexExtract class provides compiled regular expression extraction that can be applied to multiple strings
+/** The class allows for pre-compilation of an extraction pattern once, and then efficiently extracting
+    captured groups from multiple strings.
+
+    @par Global Extraction
+    When the \c RE_Global option is used, all matches are found and all captured groups from all matches
+    are returned in a single list.
+
+    @par Example:
+    @code{.py}
+# Extract parts of email addresses
+RegexExtract email_parts("(\\w+)@(\\w+)\\.(\\w+)");
+
+list<string> addresses = ("user@example.com", "test@domain.org");
+foreach string addr in (addresses) {
+    *list<*string> parts = email_parts.extractGroups(addr);
+    if (parts) {
+        printf("user: %s, domain: %s, tld: %s\n", parts[0], parts[1], parts[2]);
+    }
+}
+
+# Extract all numbers from a string (global extraction)
+RegexExtract numbers("(\\d+)", RE_Global);
+*list<*string> nums = numbers.extractGroups("test 123 and 456 and 789");
+# nums = ("123", "456", "789")
+    @endcode
+
+    @since %Qore 2.3
+ */
+qclass RegexExtract [arg=QoreRegexExtractClass* r; dom=DEFAULT];
+
+//! Creates a compiled regular expression extractor from the given pattern
+/** @param pattern the regular expression pattern with capturing groups
+    @param options optional regex options; see @ref regex_constants for valid values;
+        use \c RE_Global to extract all matches instead of just the first
+
+    @par Example:
+    @code{.py}
+# Extract first match only
+RegexExtract r("(\\d+)-(\\d+)");
+
+# Extract all matches
+RegexExtract r_global("(\\d+)", RE_Global);
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+    @throw REGEX-OPTION-ERROR the options contain invalid option bits
+ */
+RegexExtract::constructor(string pattern, softint options = 0) {
+    SimpleRefHolder<QoreRegexExtractClass> regex(new QoreRegexExtractClass(*pattern, options, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_REGEXEXTRACT, regex.release());
+}
+
+//! Creates a copy of the RegexExtract object
+/**
+    @par Example:
+    @code{.py}
+RegexExtract r2 = r.copy();
+    @endcode
+ */
+RegexExtract::copy() {
+    SimpleRefHolder<QoreRegexExtractClass> regex(new QoreRegexExtractClass(*r));
+    self->setPrivate(CID_REGEXEXTRACT, regex.release());
+}
+
+//! Extracts captured groups from the string using the compiled pattern
+/** @param str the string to extract from
+    @return a list of captured groups, or @ref nothing if the pattern does not match
+
+    If the pattern has no capturing groups, nothing is returned even if the pattern matches.
+
+    When \c RE_Global is set, all matches are found and all captured groups from all matches
+    are returned in a single flat list.
+
+    @par Example:
+    @code{.py}
+RegexExtract r("(\\w+)@(\\w+)");
+*list<*string> parts = r.extractGroups("user@example.com");
+# parts = ("user", "example")
+
+# With global extraction
+RegexExtract r_global("(\\d+)", RE_Global);
+*list<*string> nums = r_global.extractGroups("a1b2c3");
+# nums = ("1", "2", "3")
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+ */
+*list<*string> RegexExtract::extractGroups(string str) [flags=RET_VALUE_ONLY] {
+    return r->extract(str, xsink);
+}
+
+//! Tests if the given string matches the compiled pattern
+/** @param str the string to test against the pattern
+    @return @ref True if the string matches the pattern, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+RegexExtract r("(\\d+)-(\\d+)");
+if (r.match("123-456")) {
+    printf("valid format\n");
+}
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+ */
+bool RegexExtract::match(string str) [flags=RET_VALUE_ONLY] {
+    return r->match(str, xsink);
+}
+
+//! Returns the compiled pattern string
+/** @return the pattern string that was used to create this RegexExtract object
+
+    @par Example:
+    @code{.py}
+RegexExtract r("(\\d+)");
+string pat = r.getPattern();  # returns "(\\d+)"
+    @endcode
+ */
+string RegexExtract::getPattern() [flags=CONSTANT] {
+    return new QoreStringNode(*r->getPattern());
+}
+
+//! Returns the options used when compiling the pattern
+/** @return the regex option flags used when creating this object; see @ref regex_constants for valid values
+
+    @par Example:
+    @code{.py}
+RegexExtract r("(\\d+)", RE_Global | RE_Caseless);
+int opts = r.getOptions();  # returns RE_Global | RE_Caseless
+    @endcode
+ */
+int RegexExtract::getOptions() [flags=CONSTANT] {
+    return r->getOptions();
+}
