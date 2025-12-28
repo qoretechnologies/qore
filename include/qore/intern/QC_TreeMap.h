@@ -36,6 +36,10 @@
 #include <map>
 #include <string>
 
+// forward declarations for DGC support
+class RObject;
+class RSetHelper;
+
 DLLEXPORT extern qore_classid_t CID_TREEMAP;
 DLLLOCAL extern QoreClass* QC_TREEMAP;
 
@@ -63,25 +67,21 @@ public:
     DLLLOCAL TreeMapData() {
     }
 
+    // called from destructor - does not call decScanPrivateData (object being destroyed)
+    DLLLOCAL void destructor(ExceptionSink* xsink);
+
+    // override deref to ensure destructor is called when reference count drops to 0
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
-            for (Map::iterator i = data.begin(), e = data.end(); i != e; ++i) {
-                i->second.discard(xsink);
-            }
+            destructor(xsink);
             delete this;
         }
     }
 
-    DLLLOCAL void put(const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {
-        TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
-        if (keyStr) {
-            QoreAutoRWWriteLocker al(rwl);
+    DLLLOCAL void put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink);
 
-            Map::mapped_type &refToMap = data[keyStr->c_str()];
-            refToMap.discard(xsink);
-            refToMap = value.refSelf();
-        }
-    }
+    // DGC support - scans stored values for circular references
+    DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh);
 
     // return value must be dereferenced by the caller
     DLLLOCAL QoreValue get(const QoreStringNode* key, const ReferenceNode* unmatched, ExceptionSink* xsink) const {
@@ -139,26 +139,20 @@ public:
     }
 
     // return value must be dereferenced
-    DLLLOCAL QoreValue take(const QoreStringNode* key, ExceptionSink* xsink) {
-        TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
-        if (!keyStr) {
-            return QoreValue();
-        }
+    DLLLOCAL QoreValue take(QoreObject* self, const QoreStringNode* key, ExceptionSink* xsink);
 
-        QoreAutoRWWriteLocker al(rwl);
-        Map::iterator i = data.find(keyStr->c_str());
-        if (i == data.end())
-            return QoreValue();
-
-        QoreValue rv = i->second;
-        data.erase(i);
-        return rv;
+    // static accessor for QoreObject.cpp DGC support
+    DLLLOCAL static TreeMapData* get(QoreObject& obj, ExceptionSink* xsink) {
+        return static_cast<TreeMapData*>(obj.getReferencedPrivateData(CID_TREEMAP, xsink));
     }
 
 private:
     typedef std::map<std::string, QoreValue> Map;
     Map data;
     mutable QoreRWLock rwl;
+
+    // issue #5028: maintain a count of all scanable objects in the treemap for DGC
+    int scan_count = 0;
 };
 
 #endif
