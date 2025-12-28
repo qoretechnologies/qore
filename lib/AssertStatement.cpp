@@ -88,7 +88,7 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
             if (msg_val->getType() == NT_LIST) {
                 // Variadic case: use sprintf with the list (format, args...)
                 const QoreListNode* args = msg_val->get<const QoreListNode>();
-                msg_str = q_sprintf(args, -1, 0, xsink);
+                msg_str = q_sprintf(args, 0, 0, xsink);
                 if (*xsink) {
                     return 0;
                 }
