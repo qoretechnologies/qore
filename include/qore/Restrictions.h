@@ -100,6 +100,7 @@
 #define PO_NO_INHERIT_PROGRAM_DATA          (1LL << 60)  //!< do not inherit module-specific Program data from the parent
 #define PO_BROKEN_VARARGS                   (1LL << 61)  //!< allow for old pre-%Qore 1.17 vararg handling with implicit ellipses
 #define PO_BROKEN_LIST_RANGE                (1LL << 62)  //!< allow for old pre-%Qore 2.0 list range behavior
+#define PO_ENABLE_DEBUG                     (1LL << 63)  //!< enable \@assert and \@debug statements (otherwise ignored at parse time)
 
 // aliases for old defines
 #define PO_NO_SYSTEM_FUNC_VARIANTS          PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS
@@ -134,7 +135,7 @@
 
 //! mask of all options allowing for more freedom (instead of less)
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \
-    |PO_ALLOW_DEBUGGER)
+    |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG)
 
 //! mask of options that have no effect on code access or code safety
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
