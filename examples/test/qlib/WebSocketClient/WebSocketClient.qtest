@@ -12,6 +12,7 @@
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm

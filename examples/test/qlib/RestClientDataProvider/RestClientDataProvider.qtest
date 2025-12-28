@@ -16,6 +16,7 @@
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/RestClientDataProvider
 %requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 
 %try-module yaml >= 0.5

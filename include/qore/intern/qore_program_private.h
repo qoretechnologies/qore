@@ -2208,7 +2208,7 @@ public:
         //printd(5, "QP::mPW(code: %d, warn: '%s', fmt: '%s') priv->pwo.warn_mask: %d priv->warnSink: %p %s\n", code,
         //    warn, fmt, priv->pwo.warn_mask, priv->warnSink,
         //    priv->warnSink && (code & priv->pwo.warn_mask) ? "OK" : "SKIPPED");
-        if (!pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
             return;
         }
 
@@ -2230,7 +2230,7 @@ public:
         //printd(5, "QoreProgram::makeParseWarning(code: %d, warn: '%s', desc: '%s') priv->pwo.warn_mask: %d "
         //    "priv->warnSink: %p %s\n", code, warn, desc->c_str(), priv->pwo.warn_mask, priv->warnSink,
         //    priv->warnSink && (code & priv->pwo.warn_mask) ? "OK" : "SKIPPED");
-        if (!pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
             desc->deref();
             return;
         }

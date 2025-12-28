@@ -13,6 +13,7 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/HttpClientDataProvider
 %requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 
 %exec-class HttpClientDataProviderTest

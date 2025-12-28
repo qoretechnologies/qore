@@ -16,6 +16,7 @@
 %requires ../../../../qlib/RestSchemaValidator.qm
 %requires ../../../../qlib/Swagger.qm
 %requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/AsyncSocketIo
 

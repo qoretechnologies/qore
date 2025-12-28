@@ -30,6 +30,20 @@
       - new module supporting OpenAPI 3.* schemas for REST API integration
     - <a href="../../modules/RestSchemaDataProvider/html/index.html">RestSchemaDataProvider</a> module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
+    - <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
+      - implemented async I/O mode for high-concurrency connection handling (enabled by default)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
+        - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
+        - request processing is dispatched to ThreadPool for concurrent handler execution
+        - HTTP responses are sent asynchronously using \c Socket::startPollSend()
+        - enables handling many more concurrent connections with fewer threads
+        - sub-millisecond response latency for simple requests
+        - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
+        - new \c HttpServer::queueAsyncResponse() method for async response sending
+        - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
+    - <a href="../../modules/HttpServerAsyncIo/html/index.html">HttpServerAsyncIo</a> module
+      - new module providing async I/O support classes for the HttpServer module
+        (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
     - <a href="../../modules/HttpServerUtil/html/index.html">HttpServerUtil</a> module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
@@ -107,6 +121,7 @@
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular
       references; the TreeMap class now supports deterministic garbage collection
       (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
+    - fixed a potential crash when raising parse warnings with no associated Program object
 
     @section qore_2_2_1 Qore 2.2.1
 
