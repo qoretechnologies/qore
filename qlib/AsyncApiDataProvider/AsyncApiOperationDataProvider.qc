@@ -177,7 +177,7 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
 
     #! Returns a hash of all supported observable events
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
-        hash<string, hash<DataProviderMessageInfo>> rv;
+        hash<string, hash<DataProviderMessageInfo>> rv = {};
         if (op.action == "receive" && op.messages) {
             foreach AsyncApi::MessageObject msg in (op.messages) {
                 string msg_name = msg.name ?? operation_id;
@@ -196,7 +196,7 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
 
     #! Returns a hash of all supported outbound messages
     private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
-        hash<string, hash<DataProviderMessageInfo>> rv;
+        hash<string, hash<DataProviderMessageInfo>> rv = {};
         if (op.action == "send" && op.messages) {
             foreach AsyncApi::MessageObject msg in (op.messages) {
                 string msg_name = msg.name ?? operation_id;
