@@ -76,6 +76,9 @@ static void check_broken_op(YYLTYPE* yylloc, const char* got, const char* expect
 // Parenthesis depth for @assert skip state
 static thread_local int assert_paren_depth = 0;
 
+// Brace depth for @debug block skip state
+static thread_local int debug_brace_depth = 0;
+
 static int ascii_to_octal(char c) {
    assert(isoctaldigit(c));
    return c - '0';
@@ -922,7 +925,7 @@ static bool angle_balanced(const char* p) {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state p_skip_assert
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state p_skip_assert p_skip_debug_block
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1535,6 +1538,28 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
+<p_skip_debug_block>{
+   \{                                   {
+                                            ++debug_brace_depth;
+                                        }
+   \}                                   {
+                                            if (debug_brace_depth > 0) {
+                                                --debug_brace_depth;
+                                                if (debug_brace_depth == 0) {
+                                                    // finished skipping debug block
+                                                    BEGIN(INITIAL);
+                                                }
+                                            }
+                                        }
+   \"([^\"\\]|\\.)*\"                   // skip string literals (to handle braces in strings)
+   \'([^\'\\]|\\.)*\'                   // skip single-quoted strings
+   [^{}\"\'\n]+                         // skip other characters
+   \n                                   // skip newlines
+   <<EOF>>                              {
+                                            parse_error(*get_loc(yylloc), "unexpected end of file in @debug block");
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
 ^%endif{WS}*$                           parse_cond_pop(get_loc(yylloc));
 ^%include{WS}*$                         { parse_error(*get_loc(yylloc), "missing argument to %%include"); }
 ^%include{WS}+                          BEGIN(incl);
@@ -2053,6 +2078,14 @@ cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->stri
                                            // skip debug when disabled - enter skip state
                                            assert_paren_depth = 0;
                                            BEGIN(p_skip_assert);
+                                        }
+@debug/{WS}*\{                          {
+                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                               return TOK_DEBUG_BLOCK;
+                                           }
+                                           // skip debug block when disabled - enter skip state
+                                           debug_brace_depth = 0;
+                                           BEGIN(p_skip_debug_block);
                                         }
 {DIGIT}+n                               yylval->num = new QoreNumberNode(yytext); return NUMBER;
 {DIGIT}+"."{DIGIT}+n                    yylval->num = new QoreNumberNode(yytext); return NUMBER;

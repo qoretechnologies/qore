@@ -138,6 +138,9 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %token TOK_DO "do"
 %token TOK_TRY "try"
 %token TOK_THROW "throw"
+%token TOK_ASSERT "@assert"
+%token TOK_DEBUG "@debug"
+%token TOK_DEBUG_BLOCK "@debug block"
 %token TOK_CATCH "catch"
 %token TOK_WHERE "where"
 %token TOK_WHILE "while"
@@ -868,6 +871,18 @@ statement:
         | TOK_THROW exp ';' {
             $$ = new ASTThrowStatement($2);
             $$->loc.set(@1, @3);
+        }
+        | TOK_ASSERT '(' exp ')' ';' {
+            $$ = new ASTAssertStatement($3);
+            $$->loc.set(@1, @5);
+        }
+        | TOK_DEBUG '(' exp ')' ';' {
+            $$ = new ASTDebugStatement($3);
+            $$->loc.set(@1, @5);
+        }
+        | TOK_DEBUG_BLOCK statement_or_block {
+            $$ = new ASTDebugStatement($2);
+            $$->loc.set(@1, @2);
         }
         | TOK_ON_EXIT statement_or_block {
             $$ = new ASTOnBlockExitStatement($2, ASTOnBlockExitStatement::Condition::AOBEC_Exit);

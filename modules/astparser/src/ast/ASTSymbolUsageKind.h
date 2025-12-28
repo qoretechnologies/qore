@@ -92,6 +92,8 @@ enum ASTSymbolUsageKind {
     ASUK_ThrowStmtExpr = 314,
     ASUK_TryStmtCatchVar = 315,
     ASUK_WhileStmtCond = 316,
+    ASUK_AssertStmtExpr = 317,
+    ASUK_DebugStmtExpr = 318,
 };
 
 #endif // _QLS_AST_ASTSYMBOLUSAGEKIND_H

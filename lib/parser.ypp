@@ -1612,6 +1612,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token TOK_THROW "throw"
 %token TOK_ASSERT "@assert"
 %token TOK_DEBUG "@debug"
+%token TOK_DEBUG_BLOCK "@debug block"
 %token TOK_CATCH "catch"
 %token TOK_WHERE "where"
 %token TOK_WHILE "while"
@@ -2269,6 +2270,9 @@ statement:
     }
     | TOK_DEBUG '(' exp ')' ';' {
         $$ = new DebugStatement(@1.first_line, @4.last_line, $3);
+    }
+    | TOK_DEBUG_BLOCK statement_or_block {
+        $$ = new DebugStatement(@1.first_line, @2.last_line, $2);
     }
     | TOK_ON_EXIT statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Unconditional);
