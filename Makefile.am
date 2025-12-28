@@ -953,6 +953,9 @@ noinst_HEADERS = \
 	include/qore/intern/ql_compression.h \
 	include/qore/intern/QC_TermIOS.h \
 	include/qore/intern/QC_Queue.h \
+	include/qore/intern/QC_Regex.h \
+	include/qore/intern/QC_RegexExtract.h \
+	include/qore/intern/QC_RegexSubst.h \
 	include/qore/intern/QC_Socket.h \
 	include/qore/intern/QC_Sequence.h \
 	include/qore/intern/QC_RWLock.h \
