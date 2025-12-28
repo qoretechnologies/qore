@@ -1,0 +1,527 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ElasticSearchLoggerAppender.qm Qore ElasticSearch Logger Appender Module
+
+/** ElasticSearchLoggerAppender.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%module-cmd(jni) add-module-classpath $module:oracle-jdbc.jar
+
+# minimum qore version
+%requires qore >= 2.0
+
+# requires the Logger module
+%requires Logger
+
+# requires the RestClient module
+%requires RestClient
+
+# assume local var scope, do not use "$" for vars, members, and method calls
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module ElasticSearchLoggerAppender {
+    version = "1.0";
+    desc = "ElasticSearch Logger Appender Module";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ElasticSearchLoggerAppender Module
+
+    @tableofcontents
+
+    @section elasticsearchloggerappenderintro Introduction to the ElasticSearchLoggerAppender Module
+
+    The %ElasticSearchLoggerAppender module provides a logger appender that sends log events to ElasticSearch
+    using the bulk API for efficient batch logging.
+
+    @section elasticsearchloggerappenderfeatures Features
+
+    - Batched logging using ElasticSearch Bulk API for high throughput
+    - Configurable batch size and flush interval
+    - Support for date-based index patterns (e.g., \c logs-%Y.%m.%d)
+    - Structured JSON documents with standard log fields
+    - Thread-safe buffer management
+    - Automatic flush on close
+
+    @section elasticsearchloggerappenderusage Usage Example
+
+    @code{.py}
+    %requires Logger
+    %requires ElasticSearchLoggerAppender
+
+    Logger logger("MyApp", LoggerLevel::getLevelInfo());
+
+    ElasticSearchLoggerAppender appender("es-appender",
+        new LoggerLayoutPattern("%d [%p] %c - %m%n"),
+        {
+            "url": "http://localhost:9200",
+            "index": "app-logs-%Y.%m.%d",
+            "batch_size": 100,
+            "flush_interval_ms": 5000,
+        });
+
+    logger.addAppender(appender);
+    appender.open();
+
+    logger.info("Application started");
+    logger.error("Something went wrong");
+
+    # Ensure all logs are flushed
+    appender.close();
+    @endcode
+
+    @section elasticsearchloggerappenderdoc Document Structure
+
+    Each log event is converted to an ElasticSearch document with the following structure:
+
+    @code{.json}
+    {
+        "@timestamp": "2024-01-15T10:30:45.123456+00:00",
+        "level": "ERROR",
+        "level_value": 40000,
+        "logger": "MyApp.Service",
+        "message": "Connection failed",
+        "thread_id": 12345,
+        "location": {
+            "file": "Service.q",
+            "line": 142,
+            "function": "connect"
+        },
+        "exception": {
+            "type": "SOCKET-ERROR",
+            "message": "Connection refused"
+        },
+        "host": {
+            "name": "server01.example.com"
+        }
+    }
+    @endcode
+
+    @section elasticsearchloggerappenderrelnotes Release Notes
+
+    @subsection elasticsearchloggerappenderv10 v1.0
+    - Initial release with batching support
+*/
+
+#! Main namespace for the ElasticSearchLoggerAppender module
+public namespace ElasticSearchLoggerAppender {
+#! ElasticSearch Logger Appender with batching support
+/** This appender sends log events to ElasticSearch using the Bulk API for efficient batch logging.
+
+    Events are buffered and sent in batches when either:
+    - The batch size is reached
+    - The flush interval timer expires
+    - The appender is closed
+
+    @par Example:
+    @code{.py}
+    ElasticSearchLoggerAppender appender("es-appender",
+        new LoggerLayoutPattern("%d [%p] %c - %m%n"),
+        {
+            "url": "http://localhost:9200",
+            "index": "app-logs-%Y.%m.%d",
+            "batch_size": 100,
+            "flush_interval_ms": 5000,
+        });
+    @endcode
+*/
+public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout {
+    public {
+        #! Default batch size
+        const DefaultBatchSize = 100;
+
+        #! Default flush interval in milliseconds
+        const DefaultFlushIntervalMs = 5000;
+    }
+
+    private:internal {
+        #! REST client for ElasticSearch communication
+        RestClient::RestClient rest;
+
+        #! Index name pattern (may contain date format placeholders like %Y, %m, %d)
+        string indexPattern;
+
+        #! Ingest pipeline (optional)
+        *string pipeline;
+
+        #! Buffer for batched events
+        list<hash<auto>> eventBuffer = ();
+
+        #! Maximum batch size
+        int batchSize;
+
+        #! Flush interval in milliseconds
+        int flushIntervalMs;
+
+        #! Mutex for thread-safe buffer access
+        Mutex bufferMutex();
+
+        #! Timer thread ID for periodic flushing
+        *int timerTid;
+
+        #! Flag to signal timer thread to stop
+        bool stopTimer = False;
+
+        #! Counter for tracking active flush operations
+        Counter flushCounter(0);
+
+        #! Whether the appender is open
+        bool isOpened = False;
+    }
+
+    #! Creates the ElasticSearch logger appender
+    /** @param name the name of the appender
+        @param layout the layout for formatting log events
+        @param options configuration options:
+            - \c url (required): ElasticSearch URL (e.g., "http://localhost:9200")
+            - \c index (required): Index name pattern (e.g., "logs-%Y.%m.%d")
+            - \c batch_size: Maximum events per batch (default: 100)
+            - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
+            - \c pipeline: Ingest pipeline name (optional)
+            - \c connect_timeout: Connection timeout in milliseconds (optional)
+            - \c timeout: Request timeout in milliseconds (optional)
+    */
+    constructor(*string name, Logger::LoggerLayout layout, hash<auto> options)
+            : LoggerAppenderWithLayout(name, layout) {
+        if (!options.url) {
+            throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'url'";
+        }
+        if (!options.index) {
+            throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'index'";
+        }
+
+        # Create REST client
+        hash<auto> rest_opts = {
+            "url": options.url,
+        };
+        if (options.connect_timeout) {
+            rest_opts.connect_timeout = options.connect_timeout;
+        }
+        if (options.timeout) {
+            rest_opts.timeout = options.timeout;
+        }
+        rest = new RestClient::RestClient(rest_opts);
+
+        indexPattern = options.index;
+        batchSize = options.batch_size ?? DefaultBatchSize;
+        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        pipeline = options.pipeline;
+    }
+
+    #! Creates the ElasticSearch logger appender with an existing REST client
+    /** @param name the name of the appender
+        @param layout the layout for formatting log events
+        @param rest existing REST client for ElasticSearch
+        @param options configuration options:
+            - \c index (required): Index name pattern
+            - \c batch_size: Maximum events per batch (default: 100)
+            - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
+            - \c pipeline: Ingest pipeline name (optional)
+    */
+    constructor(*string name, Logger::LoggerLayout layout, RestClient::RestClient rest, hash<auto> options)
+            : LoggerAppenderWithLayout(name, layout) {
+        if (!options.index) {
+            throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'index'";
+        }
+
+        self.rest = rest;
+        indexPattern = options.index;
+        batchSize = options.batch_size ?? DefaultBatchSize;
+        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        pipeline = options.pipeline;
+    }
+
+    #! Destructor - ensures cleanup
+    destructor() {
+        if (isOpened) {
+            try {
+                closeImpl();
+            } catch () {
+                # Ignore errors during cleanup
+            }
+        }
+    }
+
+    #! Flushes any buffered events immediately
+    public flush() {
+        list<hash<auto>> toFlush;
+        {
+            AutoLock al(bufferMutex);
+            if (!eventBuffer.size()) {
+                return;
+            }
+            toFlush = eventBuffer;
+            eventBuffer = ();
+        }
+        flushBatch(toFlush);
+    }
+
+    #! Returns the REST client
+    public RestClient::RestClient getRestClient() {
+        return rest;
+    }
+
+    #! Returns the index pattern
+    public string getIndexPattern() {
+        return indexPattern;
+    }
+
+    #! Returns the current batch size setting
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    #! Returns the current flush interval in milliseconds
+    public int getFlushIntervalMs() {
+        return flushIntervalMs;
+    }
+
+    #! Processes log events
+    /** @param type the event type (EVENT_OPEN, EVENT_LOG, EVENT_CLOSE)
+        @param params the event parameters (serialized event for EVENT_LOG)
+    */
+    public processEventImpl(int type, auto params) {
+        switch (type) {
+            case Logger::EVENT_OPEN:
+                openImpl();
+                break;
+            case Logger::EVENT_LOG:
+                addToBuffer(params);
+                break;
+            case Logger::EVENT_CLOSE:
+                closeImpl();
+                break;
+        }
+    }
+
+    #! Serializes a log event into a document hash
+    /** @param event the log event to serialize
+        @return a hash suitable for indexing in ElasticSearch
+    */
+    public auto serializeImpl(Logger::LoggerEvent event) {
+        return createDocument(event);
+    }
+
+    #! Opens the appender and starts the flush timer
+    private openImpl() {
+        if (isOpened) {
+            return;
+        }
+        isOpened = True;
+        startFlushTimer();
+    }
+
+    #! Closes the appender, flushes remaining events, and stops the timer
+    private closeImpl() {
+        if (!isOpened) {
+            return;
+        }
+
+        # Stop timer first
+        stopFlushTimer();
+
+        # Flush remaining events
+        flush();
+
+        # Wait for any in-progress flushes
+        flushCounter.waitForZero();
+
+        isOpened = False;
+    }
+
+    #! Adds a serialized event to the buffer
+    private addToBuffer(auto serializedEvent) {
+        if (serializedEvent.typeCode() != NT_HASH) {
+            # If not a hash (e.g., formatted string from layout), wrap it
+            serializedEvent = {
+                "@timestamp": format_date("YYYY-MM-DDTHH:mm:SS.xxZ", now_us()),
+                "message": string(serializedEvent),
+            };
+        }
+
+        list<hash<auto>> toFlush;
+        {
+            AutoLock al(bufferMutex);
+            push eventBuffer, serializedEvent;
+            if (eventBuffer.size() >= batchSize) {
+                toFlush = eventBuffer;
+                eventBuffer = ();
+            }
+        }
+
+        if (toFlush) {
+            flushBatch(toFlush);
+        }
+    }
+
+    #! Starts the background flush timer
+    private startFlushTimer() {
+        stopTimer = False;
+        timerTid = background timerLoop();
+    }
+
+    #! Stops the background flush timer
+    private stopFlushTimer() {
+        stopTimer = True;
+        # Give the timer a chance to notice stopTimer
+        if (timerTid) {
+            # Wait a bit for the timer to exit
+            int waited = 0;
+            while (timerTid && waited < flushIntervalMs + 1000) {
+                usleep(100000);  # 100ms
+                waited += 100;
+            }
+        }
+    }
+
+    #! Background timer loop for periodic flushing
+    private timerLoop() {
+        on_exit {
+            delete timerTid;
+        }
+
+        while (!stopTimer) {
+            # Sleep in small increments to check stopTimer more often
+            int slept = 0;
+            while (!stopTimer && slept < flushIntervalMs) {
+                usleep(100000);  # 100ms
+                slept += 100;
+            }
+
+            if (!stopTimer) {
+                try {
+                    flush();
+                } catch () {
+                    # Ignore errors in timer thread
+                }
+            }
+        }
+    }
+
+    #! Flushes a batch of events to ElasticSearch
+    private flushBatch(list<hash<auto>> batch) {
+        if (!batch.size()) {
+            return;
+        }
+
+        flushCounter.inc();
+        on_exit flushCounter.dec();
+
+        string indexName = resolveIndexName();
+        string bulkBody = "";
+
+        foreach hash<auto> doc in (batch) {
+            # Action line
+            hash<auto> action = {"index": {"_index": indexName}};
+            if (pipeline) {
+                action.index.pipeline = pipeline;
+            }
+            bulkBody += make_json(action) + "\n";
+            # Document line
+            bulkBody += make_json(doc) + "\n";
+        }
+
+        try {
+            hash<auto> response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
+            handleBulkResponse(response.body, batch.size());
+        } catch (hash<ExceptionInfo> ex) {
+            handleError(ex, batch);
+        }
+    }
+
+    #! Handles the bulk API response
+    private handleBulkResponse(hash<auto> response, int batchSize) {
+        if (!response.errors) {
+            return;  # All successful
+        }
+
+        # Extract failed items
+        int failCount = 0;
+        foreach hash<auto> item in (response.items) {
+            hash<auto> result = item.index ?? item.create ?? item.firstValue();
+            if (result.error) {
+                ++failCount;
+            }
+        }
+
+        if (failCount) {
+            # Log to stderr to avoid recursion
+            stderr.printf("ElasticSearchLoggerAppender: %d of %d documents failed to index\n",
+                failCount, batchSize);
+        }
+    }
+
+    #! Handles errors during bulk operations
+    private handleError(hash<ExceptionInfo> ex, list<hash<auto>> batch) {
+        # Log to stderr to avoid recursion
+        stderr.printf("ElasticSearchLoggerAppender error: %s: %s (%d events lost)\n",
+            ex.err, ex.desc, batch.size());
+    }
+
+    #! Resolves the index name by applying date formatting
+    private string resolveIndexName() {
+        return format_date(indexPattern, now_us());
+    }
+
+    #! Creates an ElasticSearch document from a log event
+    private hash<auto> createDocument(Logger::LoggerEvent event) {
+        hash<auto> doc = {
+            "@timestamp": format_date("YYYY-MM-DDTHH:mm:SS.xxZ", event.getTimeStamp() ?? now_us()),
+            "level": event.getLevel().getStr(),
+            "level_value": event.getLevel().getValue(),
+            "logger": event.getCategoryName(),
+            "message": event.getMessage(),
+            "thread_id": event.getThreadId(),
+        };
+
+        # Add location info if available
+        *hash<CallStackInfo> loc = event.getLocationInfo();
+        if (loc) {
+            doc.location = {
+                "file": loc.file,
+                "line": loc.line,
+                "function": loc.function,
+            };
+        }
+
+        # Add exception info if available
+        *hash<ExceptionInfo> ex = event.getThrowableInfo();
+        if (ex) {
+            doc.exception = {
+                "type": ex.err,
+                "message": ex.desc,
+            };
+            if (ex.arg) {
+                doc.exception.arg = ex.arg;
+            }
+        }
+
+        # Add host info
+        doc.host = {"name": gethostname()};
+
+        return doc;
+    }
+}
+}
