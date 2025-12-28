@@ -722,10 +722,7 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
                 case "binary":
                     value = binary(v);
                     break;
-                case "date":
-                case "date-time":
-                    value = date(v);
-                    break;
+                # for date/date-time formats, keep strings as-is during serialization
             }
         } else {
             switch (format) {
@@ -1023,9 +1020,6 @@ public class AsyncApi3Loader {
         return "json";
     }
 }
-
-#! Forward declaration for SchemaObject
-class SchemaObject;
 
 #! Info object for AsyncAPI
 public class InfoObject inherits ObjectBase {
@@ -1404,7 +1398,7 @@ public class OperationObject inherits ObjectBase {
             }
         }
         if (!validated && lastEx) {
-            rethrow lastEx.err, lastEx.desc;
+            throw lastEx.err, lastEx.desc;
         }
     }
 }
@@ -1993,12 +1987,20 @@ public class AsyncApi3Schema inherits ObjectBase, Logger::LoggerWrapper, Qore::S
         @param headers reference to headers (may be modified)
     */
     validateOutgoingMessage(string channel, reference<auto> msg, reference<hash<auto>> headers) {
-        # Find send operations for this channel
+        # Find send operations for this channel - try all and succeed if any validates
+        *hash<ExceptionInfo> lastEx;
         foreach hash<auto> op in (operations.pairIterator()) {
             if (op.value.channelName == channel && op.value.isSend()) {
-                op.value.validateMessage(\msg, \headers);
-                return;
+                try {
+                    op.value.validateMessage(\msg, \headers);
+                    return;  # Success - message validated
+                } catch (hash<ExceptionInfo> ex) {
+                    lastEx = ex;  # Store the error and try next operation
+                }
             }
+        }
+        if (lastEx) {
+            throw lastEx.err, lastEx.desc;
         }
         throw "ASYNCAPI-VALIDATION-ERROR", sprintf("No send operation found for channel %y", channel);
     }
@@ -2009,13 +2011,21 @@ public class AsyncApi3Schema inherits ObjectBase, Logger::LoggerWrapper, Qore::S
         @param headers the message headers
     */
     validateIncomingMessage(string channel, reference<auto> msg, hash<auto> headers) {
-        # Find receive operations for this channel
+        # Find receive operations for this channel - try all and succeed if any validates
+        *hash<ExceptionInfo> lastEx;
         foreach hash<auto> op in (operations.pairIterator()) {
             if (op.value.channelName == channel && op.value.isReceive()) {
-                hash<auto> hdrs = headers;
-                op.value.validateMessage(\msg, \hdrs);
-                return;
+                try {
+                    hash<auto> hdrs = headers;
+                    op.value.validateMessage(\msg, \hdrs);
+                    return;  # Success - message validated
+                } catch (hash<ExceptionInfo> ex) {
+                    lastEx = ex;  # Store the error and try next operation
+                }
             }
+        }
+        if (lastEx) {
+            throw lastEx.err, lastEx.desc;
         }
         throw "ASYNCAPI-VALIDATION-ERROR", sprintf("No receive operation found for channel %y", channel);
     }

@@ -53,8 +53,8 @@ public class AsyncApiChannelDataProvider inherits AsyncApiDataProviderBase {
         if (channel.address) {
             desc += sprintf(" (address: %s)", channel.address);
         }
-        if (channel.description) {
-            desc += sprintf("\n\n%s", channel.description);
+        if (channel.desc) {
+            desc += sprintf("\n\n%s", channel.desc);
         }
         return desc;
     }

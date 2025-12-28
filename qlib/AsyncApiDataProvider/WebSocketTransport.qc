@@ -23,6 +23,7 @@
 */
 
 %requires WebSocketClient
+%requires json
 
 #! contains all public definitions in the AsyncApiDataProvider module
 public namespace AsyncApiDataProvider {
@@ -50,7 +51,8 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
     /** @param opts WebSocket client options including 'url'
     */
     constructor(hash<auto> opts) {
-        wsc = new WebSocketClient(opts);
+        # WebSocketClient requires a callback - use empty callback since messages are handled elsewhere
+        wsc = new WebSocketClient(sub (auto msg) {}, opts);
     }
 
     #! Sends a message via WebSocket

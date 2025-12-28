@@ -64,6 +64,15 @@ operations:
     messages:
       - $ref: '#/channels/systemNotifications/messages/systemMessage'
 
+  sendSystemNotification:
+    action: send
+    channel:
+      $ref: '#/channels/systemNotifications'
+    summary: Send system notification
+    description: Sends a system notification
+    messages:
+      - $ref: '#/channels/systemNotifications/messages/systemMessage'
+
 components:
   schemas:
     ChatMessagePayload:

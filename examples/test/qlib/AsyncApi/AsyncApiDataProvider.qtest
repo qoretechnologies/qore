@@ -122,14 +122,14 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         # Check operation info
         hash<DataProviderInfo> sendInfo = sendOpProvider.getInfo();
         assertTrue(sendInfo.supports_request);
-        assertTrue(sendInfo.supports_messages);
+        assertEq(DataProvider::MSG_Async, sendInfo.supports_messages);
         assertFalse(sendInfo.supports_observable);
 
         # Get receive operation
         AbstractDataProvider recvOpProvider = channelProvider.getChildProvider("receiveChatMessage");
         hash<DataProviderInfo> recvInfo = recvOpProvider.getInfo();
         assertFalse(recvInfo.supports_request);
-        assertFalse(recvInfo.supports_messages);
+        assertEq(DataProvider::MSG_None, recvInfo.supports_messages);
         assertTrue(recvInfo.supports_observable);
     }
 

@@ -54,18 +54,18 @@ public class AsyncApiTest inherits QUnit::Test {
         # Test loading from YAML file
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
         assertEq("Chat API", schema.info.title);
-        assertEq("1.0.0", schema.info.version);
-        assertEq("3.0.0", schema.asyncapi);
+        assertEq("1.0.0", schema.info.apiVersion);
+        assertEq("3.0.0", schema.asyncapiSpec);
 
         # Test loading from string
         string yamlContent = File::readTextFile(testDir + "/ChatApi.asyncapi.yaml");
         AsyncApi::AsyncApi3Schema schema2 = AsyncApi::AsyncApi3Loader::fromString(yamlContent);
         assertEq("Chat API", schema2.info.title);
-        assertEq("1.0.0", schema2.info.version);
+        assertEq("1.0.0", schema2.info.apiVersion);
 
         # Test info object
         assertTrue(schema.info instanceof AsyncApi::InfoObject);
-        assertEq("A sample chat API for testing AsyncAPI 3.0 validation", schema.info.description);
+        assertEq("A sample chat API for testing AsyncAPI 3.0 validation", schema.info.desc);
     }
 
     messageValidationTest() {
@@ -114,7 +114,7 @@ public class AsyncApiTest inherits QUnit::Test {
         *AsyncApi::ChannelObject channel = schema.getChannel("userChat");
         assertTrue(exists channel);
         assertEq("/chat/user", channel.address);
-        assertEq("Channel for user chat messages", channel.description);
+        assertEq("Channel for user chat messages", channel.desc);
 
         # Test that messages are resolved via $ref
         assertTrue(exists channel.messages);

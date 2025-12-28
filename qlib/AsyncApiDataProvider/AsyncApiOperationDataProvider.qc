@@ -65,8 +65,8 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
         if (op.summary) {
             desc += sprintf("\n\n## Summary\n\n%s", op.summary);
         }
-        if (op.description) {
-            desc += sprintf("\n\n## Description\n\n%s", op.description);
+        if (op.desc) {
+            desc += sprintf("\n\n## Description\n\n%s", op.desc);
         }
         return desc;
     }
@@ -85,7 +85,7 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
             "supports_bulk_upsert": False,
             "supports_children": False,
             "supports_request": op.action == "send",
-            "supports_messages": op.action == "send",
+            "supports_messages": op.action == "send" ? DataProvider::MSG_Async : DataProvider::MSG_None,
             "supports_observable": op.action == "receive",
             "transaction_management": False,
             "children_can_support_apis": False,
@@ -173,6 +173,44 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
             type = type.getOrNothingType();
         }
         return type;
+    }
+
+    #! Returns a hash of all supported observable events
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        hash<string, hash<DataProviderMessageInfo>> rv;
+        if (op.action == "receive" && op.messages) {
+            foreach AsyncApi::MessageObject msg in (op.messages) {
+                string msg_name = msg.name ?? operation_id;
+                *AbstractDataProviderType msg_type;
+                if (msg.payload) {
+                    msg_type = getTypeFromSchema(msg.payload);
+                }
+                rv{msg_name} = <DataProviderMessageInfo>{
+                    "desc": msg.summary ?? msg.desc ?? sprintf("Event for operation %y", operation_id),
+                    "type": msg_type ?? AbstractDataProviderTypeMap."auto",
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns a hash of all supported outbound messages
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
+        hash<string, hash<DataProviderMessageInfo>> rv;
+        if (op.action == "send" && op.messages) {
+            foreach AsyncApi::MessageObject msg in (op.messages) {
+                string msg_name = msg.name ?? operation_id;
+                *AbstractDataProviderType msg_type;
+                if (msg.payload) {
+                    msg_type = getTypeFromSchema(msg.payload);
+                }
+                rv{msg_name} = <DataProviderMessageInfo>{
+                    "desc": msg.summary ?? msg.desc ?? sprintf("Message for operation %y", operation_id),
+                    "type": msg_type ?? AbstractDataProviderTypeMap."auto",
+                };
+            }
+        }
+        return rv;
     }
 
     #! Makes a request and returns the response

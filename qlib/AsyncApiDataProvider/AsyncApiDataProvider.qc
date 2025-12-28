@@ -152,8 +152,8 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
     #! Returns the data provider description
     *string getDesc() {
         string desc = sprintf("AsyncAPI data provider for %y", display_name);
-        if (schema.info.description) {
-            desc += sprintf("\n\n%s", schema.info.description);
+        if (schema.info.desc) {
+            desc += sprintf("\n\n%s", schema.info.desc);
         }
         return desc;
     }
