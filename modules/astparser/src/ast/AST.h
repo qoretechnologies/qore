@@ -93,10 +93,12 @@
 #include "ast/expressions/ASTTernaryExpression.h"
 #include "ast/expressions/ASTUnaryExpression.h"
 
+#include "ast/statements/ASTAssertStatement.h"
 #include "ast/statements/ASTBreakStatement.h"
 #include "ast/statements/ASTCallStatement.h"
 #include "ast/statements/ASTContextStatement.h"
 #include "ast/statements/ASTContinueStatement.h"
+#include "ast/statements/ASTDebugStatement.h"
 #include "ast/statements/ASTDoWhileStatement.h"
 #include "ast/statements/ASTExpressionStatement.h"
 #include "ast/statements/ASTForeachStatement.h"

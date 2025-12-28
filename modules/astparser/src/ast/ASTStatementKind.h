@@ -54,6 +54,8 @@ enum ASTStatementKind {
     ASK_Throw = 17,             //!< Identifies an instance of \ref ASTThrowStatement.
     ASK_Try = 18,               //!< Identifies an instance of \ref ASTTryStatement.
     ASK_While = 19,             //!< Identifies an instance of \ref ASTWhileStatement.
+    ASK_Assert = 20,            //!< Identifies an instance of \ref ASTAssertStatement.
+    ASK_Debug = 21,             //!< Identifies an instance of \ref ASTDebugStatement.
 };
 
 #endif // _QLS_AST_ASTSTATEMENTKIND_H

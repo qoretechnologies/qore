@@ -44,10 +44,20 @@ public:
     */
     DLLLOCAL DebugStatement(int start_line, int end_line, QoreValue exp);
 
+    //! Creates a debug statement with a statement block to execute
+    /** @param start_line the starting line number
+        @param end_line the ending line number
+        @param block the statement block to execute
+    */
+    DLLLOCAL DebugStatement(int start_line, int end_line, class StatementBlock* block);
+
     DLLLOCAL virtual ~DebugStatement();
 
+    DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
+
 private:
-    QoreValue expression;  //!< The expression to evaluate
+    QoreValue expression;           //!< The expression to evaluate (if expression form)
+    class StatementBlock* code;     //!< The statement block to execute (if block form)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 

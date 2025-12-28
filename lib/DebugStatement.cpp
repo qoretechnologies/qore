@@ -30,16 +30,26 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/DebugStatement.h"
+#include "qore/intern/StatementBlock.h"
 
 DebugStatement::DebugStatement(int start_line, int end_line, QoreValue exp)
-        : AbstractStatement(start_line, end_line), expression(exp) {
+        : AbstractStatement(start_line, end_line), expression(exp), code(nullptr) {
+}
+
+DebugStatement::DebugStatement(int start_line, int end_line, StatementBlock* block)
+        : AbstractStatement(start_line, end_line), code(block) {
 }
 
 DebugStatement::~DebugStatement() {
     expression.discard(nullptr);
+    delete code;
 }
 
 int DebugStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    if (code) {
+        // Execute the statement block
+        return code->execImpl(return_value, xsink);
+    }
     // Simply evaluate the expression for its side effects (e.g., logging)
     ValueEvalOptimizedRefHolder val(expression, xsink);
     // The result is discarded; we just want the side effects
@@ -53,11 +63,21 @@ int DebugStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     int err = 0;
 
-    // Parse the expression
-    if (expression) {
+    if (code) {
+        // Parse the statement block
+        err = code->parseInitImpl(parse_context);
+    } else if (expression) {
+        // Parse the expression
         parse_context.typeInfo = nullptr;
         err = parse_init_value(expression, parse_context);
     }
 
     return err;
+}
+
+void DebugStatement::parseCommit(QoreProgram* pgm) {
+    AbstractStatement::parseCommit(pgm);
+    if (code) {
+        code->parseCommit(pgm);
+    }
 }

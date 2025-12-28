@@ -333,6 +333,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
 <set_zone><<EOF>>                       { AST_FLEX_DO_EOF }
 ^%enable-all-warnings{WS}*$             { yylval->parseopt = new ASTParseOption(APOK_ENABLE_ALL_WARNINGS); return PARSE_OPTION_FULL; }
+^%enable-debug{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_ENABLE_DEBUG); return PARSE_OPTION_FULL; }
+^%disable-debug{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_DISABLE_DEBUG); return PARSE_OPTION_FULL; }
 ^%disable-all-warnings{WS}*$            { yylval->parseopt = new ASTParseOption(APOK_DISABLE_ALL_WARNINGS); return PARSE_OPTION_FULL; }
 ^%disable-warning{WS}*$                 { yylval->parseopt = new ASTStringParseOption(APOK_DISABLE_WARNING); return PARSE_OPTION_FULL; }
 ^%disable-warning{WS}+                  { BEGIN(disable_warning); return PARSE_OPTION_BEGIN; }
@@ -928,6 +930,9 @@ cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->st
 {DIGIT}+"."{DIGIT}+[eE][+-]?{DIGIT}+    { yylval->decimal = q_strtod(yytext); return QFLOAT; }
 @[Nn][Aa][Nn]@n                         { yylval->string = strdup("@nan@"); return NUMBER; }
 @[Ii][Nn][Ff]@n                         { yylval->string = strdup("@inf@"); return NUMBER; }
+@assert/{WS}*\(                         return TOK_ASSERT;
+@debug/{WS}*\(                          return TOK_DEBUG;
+@debug/{WS}*\{                          return TOK_DEBUG_BLOCK;
 {DIGIT}+n                               { yylval->string = strdup(yytext); return NUMBER; }
 {DIGIT}+"."{DIGIT}+n                    { yylval->string = strdup(yytext); return NUMBER; }
 {DIGIT}+[eE][+-]?{DIGIT}+n              { yylval->string = strdup(yytext); return NUMBER; }

@@ -252,6 +252,12 @@ const ASK_Try = ASK_Try;
 
 //! While statement kind.
 const ASK_While = ASK_While;
+
+//! Assert statement kind.
+const ASK_Assert = ASK_Assert;
+
+//! Debug statement kind.
+const ASK_Debug = ASK_Debug;
 ///@}
 
 /** @defgroup astparser_symbol_kind_constants AST Symbol Kind Constants
@@ -478,4 +484,10 @@ const ASUK_TryStmtCatchVar = ASUK_TryStmtCatchVar;
 
 //! Symbol usage kind for conditions in \c while statements.
 const ASUK_WhileStmtCond = ASUK_WhileStmtCond;
+
+//! Symbol usage kind for expressions in \c @assert statements.
+const ASUK_AssertStmtExpr = ASUK_AssertStmtExpr;
+
+//! Symbol usage kind for expressions in \c @debug statements.
+const ASUK_DebugStmtExpr = ASUK_DebugStmtExpr;
 ///@}
