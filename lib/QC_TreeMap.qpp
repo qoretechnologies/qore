@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_TreeMap.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RSet.h"
 
 //! A container for efficient path prefix lookup.
 /** The primary use of this class is in HttpServer for matching request URIs to handlers.
@@ -66,6 +68,7 @@ TreeMap::constructor() {
 /** Releases any resource held by the instance.
  */
 TreeMap::destructor() {
+    tm->destructor(xsink);
     tm->deref(xsink);
 }
 
@@ -85,7 +88,7 @@ TreeMap::copy() {
     @see TreeMap::remove()
  */
 nothing TreeMap::put(string path, auto value) {
-    tm->put(path, value, xsink);
+    tm->put(self, path, value, xsink);
 }
 
 //! Retrieves a value from the TreeMap and optionally returns the unmatched path suffix
@@ -130,7 +133,7 @@ auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_O
     @see TreeMap::put()
 */
 auto TreeMap::take(string path) {
-    return tm->take(path, xsink);
+    return tm->take(self, path, xsink);
 }
 
 //! Retrieves the entire TreeMap as a hash; returns @ref nothing if the TreeMap is empty
@@ -138,4 +141,115 @@ auto TreeMap::take(string path) {
  */
 *hash TreeMap::getAll() [flags=CONSTANT] {
     return tm->getAll();
+}
+
+void TreeMapData::destructor(ExceptionSink* xsink) {
+    QoreAutoRWWriteLocker al(rwl);
+    for (Map::iterator i = data.begin(), e = data.end(); i != e; ++i) {
+        i->second.discard(xsink);
+    }
+    data.clear();
+}
+
+void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {
+    TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
+    if (!keyStr) {
+        return;
+    }
+
+    bool inc_obj = false;
+    bool dec_obj = false;
+
+    {
+        QoreAutoRWWriteLocker al(rwl);
+
+        bool old_needs_scan = false;
+        bool new_needs_scan = needs_scan(value);
+
+        Map::iterator it = data.find(keyStr->c_str());
+
+        // Check if old value needs scan and discard it
+        if (it != data.end()) {
+            old_needs_scan = needs_scan(it->second);
+            it->second.discard(xsink);
+            // Reuse the existing map entry
+            it->second = value.refSelf();
+        } else {
+            // Insert new entry
+            data[keyStr->c_str()] = value.refSelf();
+        }
+
+        // Update scan_count based on net change
+        if (old_needs_scan && !new_needs_scan) {
+            --scan_count;
+            if (!scan_count) {
+                dec_obj = true;
+            }
+        } else if (!old_needs_scan && new_needs_scan) {
+            if (!scan_count) {
+                inc_obj = true;
+            }
+            ++scan_count;
+        }
+        // If both old and new need scan (or neither does), scan_count doesn't change
+    }
+
+    // Update object's scan_private_data outside the lock
+    // Note: inc before dec to avoid window where scan_private_data is incorrectly 0
+    if (inc_obj) {
+        qore_object_private::get(*self)->incScanPrivateData();
+    }
+    if (dec_obj) {
+        qore_object_private::get(*self)->decScanPrivateData();
+    }
+}
+
+QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, ExceptionSink* xsink) {
+    TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
+    if (!keyStr) {
+        return QoreValue();
+    }
+
+    bool dec_obj = false;
+    QoreValue rv;
+
+    {
+        QoreAutoRWWriteLocker al(rwl);
+        Map::iterator i = data.find(keyStr->c_str());
+        if (i == data.end()) {
+            return QoreValue();
+        }
+
+        rv = i->second;
+        if (needs_scan(rv)) {
+            --scan_count;
+            if (!scan_count) {
+                dec_obj = true;
+            }
+        }
+        data.erase(i);
+    }
+
+    if (dec_obj) {
+        qore_object_private::get(*self)->decScanPrivateData();
+    }
+
+    return rv;
+}
+
+bool TreeMapData::scanMembers(RObject& obj, RSetHelper& rsh) {
+    // if we cannot lock the lock, then return false to ignore
+    // blocking here or returning true could cause a deadlock
+    QoreOptionalRWWriteLocker al(rwl);
+    if (!al) {
+        return false;
+    }
+
+    for (Map::iterator i = data.begin(), e = data.end(); i != e; ++i) {
+        if (i->second.hasNode() && obj.scanCheck(rsh, i->second.getInternalNode())) {
+            return true;
+        }
+    }
+
+    return false;
 }

@@ -38,6 +38,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreQueueIntern.h"
+#include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
@@ -324,6 +325,18 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
             ReferenceHolder<Queue> q(reinterpret_cast<Queue*>(getReferencedPrivateData(CID_QUEUE, &xsink)), &xsink);
             if (!xsink && *q) {
                 if (qore_queue_private::get(**q)->scanMembers(*this, rsh)) {
+                    return true;
+                }
+            }
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+        {
+            // issue #5028: check TreeMap entries for cycles
+            ReferenceHolder<TreeMapData> tm(TreeMapData::get(*obj, &xsink), &xsink);
+            if (!xsink && *tm) {
+                if (tm->scanMembers(*this, rsh)) {
                     return true;
                 }
             }
