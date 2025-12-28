@@ -56,7 +56,7 @@ Regex parts_re("(\\w+)@(\\w+)\\.(\\w+)");
 # parts = ("user", "example", "com")
     @endcode
 
-    @since %Qore 2.1
+    @since %Qore 2.3
  */
 qclass Regex [arg=QoreRegexClass* r; dom=DEFAULT];
 

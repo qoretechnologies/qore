@@ -62,15 +62,15 @@ public:
     }
 
     DLLLOCAL QoreRegexClass(const QoreRegexClass& old) : pattern(old.pattern), options(old.options) {
-        regex = old.regex->refSelf();
+        regex = old.regex ? old.regex->refSelf() : nullptr;
     }
 
     DLLLOCAL bool match(const QoreString* target, ExceptionSink* xsink) const {
-        return regex->exec(target, xsink);
+        return regex ? regex->exec(target, xsink) : false;
     }
 
     DLLLOCAL QoreListNode* extract(const QoreString* target, ExceptionSink* xsink) const {
-        return regex->extractSubstrings(target, xsink);
+        return regex ? regex->extractSubstrings(target, xsink) : nullptr;
     }
 
     DLLLOCAL const QoreString* getPattern() const {

@@ -71,15 +71,15 @@ public:
 
     DLLLOCAL QoreRegexSubstClass(const QoreRegexSubstClass& old)
             : pattern(old.pattern), replacement(old.replacement), options(old.options) {
-        regex = old.regex->refSelf();
+        regex = old.regex ? old.regex->refSelf() : nullptr;
     }
 
     DLLLOCAL QoreStringNode* subst(const QoreString* target, ExceptionSink* xsink) const {
-        return regex->exec(target, &replacement, xsink);
+        return regex ? regex->exec(target, &replacement, xsink) : nullptr;
     }
 
     DLLLOCAL QoreStringNode* subst(const QoreString* target, const QoreString* repl, ExceptionSink* xsink) const {
-        return regex->exec(target, repl, xsink);
+        return regex ? regex->exec(target, repl, xsink) : nullptr;
     }
 
     DLLLOCAL const QoreString* getPattern() const {

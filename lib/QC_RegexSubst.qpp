@@ -66,7 +66,7 @@ RegexSubst digit_match("\\d+", "NUM");
 printf("%s\n", digit_match.subst("test 123 example", "X"));  # "test X example"
     @endcode
 
-    @since %Qore 2.1
+    @since %Qore 2.3
  */
 qclass RegexSubst [arg=QoreRegexSubstClass* r; dom=DEFAULT];
 

@@ -47,7 +47,7 @@ RegexExtract email_parts("(\\w+)@(\\w+)\\.(\\w+)");
 
 list<string> addresses = ("user@example.com", "test@domain.org");
 foreach string addr in (addresses) {
-    *list<*string> parts = email_parts.extract(addr);
+    *list<*string> parts = email_parts.extractGroups(addr);
     if (parts) {
         printf("user: %s, domain: %s, tld: %s\n", parts[0], parts[1], parts[2]);
     }
@@ -55,11 +55,11 @@ foreach string addr in (addresses) {
 
 # Extract all numbers from a string (global extraction)
 RegexExtract numbers("(\\d+)", RE_Global);
-*list<*string> nums = numbers.extract("test 123 and 456 and 789");
+*list<*string> nums = numbers.extractGroups("test 123 and 456 and 789");
 # nums = ("123", "456", "789")
     @endcode
 
-    @since %Qore 2.1
+    @since %Qore 2.3
  */
 qclass RegexExtract [arg=QoreRegexExtractClass* r; dom=DEFAULT];
 
