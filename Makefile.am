@@ -1106,9 +1106,26 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	doxygen/modules/Doxyfile.in \
 	doxygen/modules/Doxyfile.cmake.in \
 	doxygen/lib/Doxyfile.in \
+	qlib/CdsRestDataProvider/dynamics-logo.svg \
+	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
+	qlib/DiscordDataProvider/discord-logo.svg \
+	qlib/ElasticSearchDataProvider/elastic-logo.svg \
+	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
+	qlib/FileDataProvider/file-logo-white.svg \
+	qlib/FileDataProvider/file-logo-black.svg \
+	qlib/FtpClientDataProvider/ftp-logo-white.svg \
+	qlib/FtpClientDataProvider/ftp-logo-black.svg \
+	qlib/GmailDataProvider/gmail-logo.svg \
+	qlib/GoogleCalendarDataProvider/google-calendar-logo.svg \
 	qlib/MewsRestDataProvider/mews-M-white.svg \
+	qlib/OpenAiDataProvider/openai-logo.svg \
+	qlib/Pop3ClientDataProvider/pop3-logo-white.svg \
+	qlib/RestClientDataProvider/webhook-logo.svg \
+	qlib/SalesforceRestDataProvider/salesforce-logo.svg \
 	qlib/ServerSentEventClient/sse-generic-logo.svg \
+	qlib/ServiceNowRestDataProvider/servicenow-logo-white.svg \
+	qlib/ServiceNowRestDataProvider/servicenow-logo-black.svg \
 	$(LIB_DOXYFILES_SRC) \
 	$(LANG_DOXYFILES_SRC) \
 	$(LANG_QPP_SRC) \

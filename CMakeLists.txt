@@ -917,8 +917,8 @@ qore_user_module("qlib/MailMessage.qm" "Mime")
 # base 4 modules
 qore_user_module("qlib/AsyncSocketIo" "HttpServerUtil;Logger")
 qore_user_module("qlib/FilePoller.qm" "Util;DataProvider")
-qore_user_module("qlib/FileDataProvider" "FsUtil;DataProvider")
-qore_user_module("qlib/FtpClientDataProvider" "DataProvider")
+qore_user_module("qlib/FileDataProvider" "FsUtil;DataProvider" "file-logo-white.svg;file-logo-black.svg")
+qore_user_module("qlib/FtpClientDataProvider" "DataProvider" "ftp-logo-white.svg;ftp-logo-black.svg")
 qore_user_module("qlib/HttpClientDataProvider" "DataProvider;FileLocationHandler")
 qore_user_module("qlib/ServerSentEventHandler" "HttpServerUtil;Logger")
 qore_user_module("qlib/SqlUtil" "Util;DataProvider" "SqlUtil-Full.svg")
@@ -961,7 +961,7 @@ qore_user_module("qlib/OpenApi3.qm" "Mime;Util;HttpServerUtil;RestSchemaValidato
 qore_user_module("qlib/RestHandler.qm" "HttpServerUtil;HttpServer;Mime;Util;RestSchemaValidator;Logger")
 qore_user_module("qlib/Swagger.qm" "Mime;Util;HttpServerUtil;RestSchemaValidator;Logger")
 qore_user_module("qlib/VscDebugAdapter.qm" "DebugCmdLine;DebugUtil;Util")
-qore_user_module("qlib/Pop3ClientDataProvider" "Pop3Client;ConnectionProvider;DataProvider")
+qore_user_module("qlib/Pop3ClientDataProvider" "Pop3Client;ConnectionProvider;DataProvider" "pop3-logo-white.svg")
 
 # base 6 modules
 qore_user_module("qlib/FreetdsSqlUtil.qm" "SqlUtil;DataProvider;MssqlSqlUtilBase")
@@ -992,24 +992,24 @@ qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSche
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
 qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;RestSchemaValidator;DataProvider")
-qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider")
-qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider")
-qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider")
+qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
+qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
+qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
-qore_user_module("qlib/ElasticSearchLoggerAppender.qm" "Logger;RestClient" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
 
 # base 8 modules
-qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestClient;DataProvider")
+qore_user_module("qlib/ElasticSearchLoggerAppender.qm" "Logger;RestClient;ElasticSearchDataProvider")
+qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestClient;DataProvider" "salesforce-logo.svg")
 qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestClientDataProvider")
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")
-qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider")
+qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider" "discord-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
-qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient" "openai-logo.svg")
 
 # base 9 modules
-qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider")
-qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider")
+qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
+qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
 
 # print info
 message(STATUS "")
