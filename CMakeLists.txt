@@ -997,6 +997,7 @@ qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestCli
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
+qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "redis-logo.svg")
 
 # base 8 modules
 qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestClient;DataProvider")

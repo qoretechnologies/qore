@@ -46,6 +46,7 @@ DOX_SRC_SPLIT_MODULES = \
     qlib/FileLocationHandler \
     qlib/GoogleDataProvider \
     qlib/ProviderIndexUtil \
+    qlib/RedisDataProvider \
     qlib/RestClientDataProvider \
     qlib/RestSchemaDataProvider \
     qlib/SqlUtil
@@ -147,6 +148,7 @@ OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 OpenApi3DataProvider_modverdir = $(modverdir)/OpenApi3DataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 ProviderIndex_modverdir = $(modverdir)/ProviderIndex
+RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 RestSchemaDataProvider_modverdir = $(modverdir)/RestSchemaDataProvider
@@ -182,6 +184,7 @@ dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])
 dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
 dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
+dist_RedisDataProvider_modver_DATA = $(wildcard qlib/RedisDataProvider/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_RestSchemaDataProvider_modver_DATA = $(wildcard qlib/RestSchemaDataProvider/*.q[cm])
 dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestDataProvider/*.q[cm])
@@ -1295,6 +1298,10 @@ doxygen/qlib/Doxyfile.EmpathicBuildingDataProvider: doxygen/qlib/Doxyfile.tmpl $
 # to provide the graphic file
 doxygen/qlib/Doxyfile.MewsRestDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/MewsRestDataProvider:doxygen/qlib/MewsRestDataProvider -tDataProvider.tag=../../DataProvider/html -tSwaggerDataProvider.tag=../../SwaggerDataProvider/html -tRestClient.tag=../../RestClient/html -tMewsRestClient.tag=../../MewsRestClient/html -X=doxygen/ -E=mews-logo-white.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.RedisDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/RedisDataProvider:doxygen/qlib/RedisDataProvider -tDataProvider.tag=../../DataProvider/html -tConnectionProvider.tag=../../ConnectionProvider/html -X=doxygen/ -E=redis-logo.svg $< $@
 
 doxygen/modules/Doxyfile.astparser: doxygen/modules/Doxyfile.in
 	sed -e s/@QORE_MOD_NAME@/astparser/ \

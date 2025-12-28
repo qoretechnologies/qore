@@ -1,0 +1,230 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore RedisDataProvider module definition
+
+/*  RedisDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+
+module RedisDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Redis servers";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the connection schemes
+        ConnectionSchemeCache::registerScheme("redis", RedisConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("rediss", RedisConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new RedisDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": RedisDataProvider::AppName,
+            "display_name": "Redis Server",
+            "short_desc": "Redis in-memory data store",
+            "desc": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",
+            "scheme": "redis",
+            "logo": RedisLogo,
+            "logo_file_name": "redis-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register actions for strings
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/strings/set",
+            "action": "set-string",
+            "display_name": "Set String",
+            "short_desc": "Set the string value of a key",
+            "desc": "Set the string value of a key in Redis",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/strings/get",
+            "action": "get-string",
+            "display_name": "Get String",
+            "short_desc": "Get the string value of a key",
+            "desc": "Get the string value of a key from Redis",
+            "action_code": DPAT_API,
+        });
+
+        # register actions for hashes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/hashes/set",
+            "action": "set-hash",
+            "display_name": "Set Hash Field",
+            "short_desc": "Set a hash field value",
+            "desc": "Set the value of a hash field in Redis",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/hashes/get",
+            "action": "get-hash",
+            "display_name": "Get Hash Fields",
+            "short_desc": "Get hash field values",
+            "desc": "Get the values of hash fields from Redis",
+            "action_code": DPAT_API,
+        });
+
+        # register actions for lists
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/lists/push",
+            "action": "push-list",
+            "display_name": "Push to List",
+            "short_desc": "Push elements to a list",
+            "desc": "Push elements to a list in Redis",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/lists/pop",
+            "action": "pop-list",
+            "display_name": "Pop from List",
+            "short_desc": "Pop elements from a list",
+            "desc": "Pop elements from a list in Redis",
+            "action_code": DPAT_API,
+        });
+
+        # register actions for pub/sub
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": RedisDataProvider::AppName,
+            "path": "/pubsub/publish",
+            "action": "publish-message",
+            "display_name": "Publish Message",
+            "short_desc": "Publish a message to a channel",
+            "desc": "Publish a message to a Redis pub/sub channel",
+            "action_code": DPAT_API,
+        });
+    };
+}
+
+/** @mainpage RedisDataProvider Module
+
+    @tableofcontents
+
+    @section redisdataproviderintro Introduction to the RedisDataProvider Module
+
+    The %RedisDataProvider module provides a @ref dataproviderintro "data provider" API for Redis
+    servers. It provides connection management and a comprehensive API for all Redis data types
+    and operations.
+
+    This module supports:
+    - Connection management via @ref RedisDataProvider::RedisConnection "RedisConnection"
+    - Full Redis command set through the data provider API
+    - String, Hash, List, Set, Sorted Set, Pub/Sub, Stream, and Transaction operations
+
+    @section redis_connection Redis Connection
+
+    Redis connections can be created using the \c redis:// or \c rediss:// (TLS) URL schemes:
+
+    @par Connection URL Format
+    @verbatim redis://[username:password@]host[:port][/db]
+    rediss://[username:password@]host[:port][/db]
+    @endverbatim
+
+    @par Examples
+    - \c redis://localhost - connect to localhost on default port 6379
+    - \c redis://localhost:6380 - connect to localhost on port 6380
+    - \c redis://secret@localhost/1 - authenticate with password, select db 1
+    - \c redis://user:secret@localhost/0 - ACL auth with username (Redis 6.0+)
+    - \c rediss://localhost - TLS connection to localhost
+
+    @section redis_dataprovider_factory Redis Data Provider Factory
+
+    The name of the Redis data provider factory is <b><tt>redis</tt></b>.
+
+    @section redis_dataprovider_examples Redis Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par Example: Set a String Value
+    @verbatim qdp 'redis{url=redis://localhost}/strings/set' key=mykey,value=myvalue
+    @endverbatim
+
+    @par Example: Get a String Value
+    @verbatim qdp 'redis{url=redis://localhost}/strings/get' key=mykey
+    @endverbatim
+
+    @par Example: Set Hash Fields
+    @verbatim qdp 'redis{url=redis://localhost}/hashes/set' key=myhash,field=name,value=John
+    @endverbatim
+
+    @par Example: Push to a List
+    @verbatim qdp 'redis{url=redis://localhost}/lists/push' key=mylist,values='{item1,item2}'
+    @endverbatim
+
+    @section redis_dataprovider_classes Available Classes
+
+    The following classes are provided by this module:
+    - @ref RedisDataProvider::RedisClient "RedisClient" - Redis RESP protocol client
+    - @ref RedisDataProvider::RedisConnection "RedisConnection" - Connection provider
+    - @ref RedisDataProvider::RedisDataProvider "RedisDataProvider" - Main data provider
+    - @ref RedisDataProvider::RedisDataProviderFactory "RedisDataProviderFactory" - Factory class
+
+    @section redisdataprovider_relnotes Release Notes
+
+    @subsection redisdataprovider_v1_0 RedisDataProvider v1.0
+    - initial release of the module
+    - support for all Redis data types: strings, hashes, lists, sets, sorted sets
+    - support for pub/sub, streams, and transactions
+    - connection provider with redis:// and rediss:// schemes
+*/
+
+#! Contains all public definitions in the RedisDataProvider module
+public namespace RedisDataProvider {
+#! Redis app name
+public const AppName = "Redis";
+}
+
+namespace Priv {
+const RedisLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+<svg
+   version=\"1.1\"
+   viewBox=\"0 0 100 100\"
+   xmlns=\"http://www.w3.org/2000/svg\">
+  <path
+     fill=\"#DC382D\"
+     d=\"M 50,5 C 25.147,5 5,25.147 5,50 5,74.853 25.147,95 50,95 74.853,95 95,74.853 95,50 95,25.147 74.853,5 50,5 Z M 75.5,62.5 C 71.5,64.7 58.8,70.1 54.2,72.6 52.3,73.6 50.7,74 48.4,72.8 43.4,70.3 30.1,64.5 26.3,62.7 24.4,61.8 23.5,61 23.5,59.5 L 23.5,55.1 C 23.5,55.1 43.3,50.9 48.3,49 53.3,47.1 52.8,45.4 48,43.8 43.2,42.2 23.5,38.5 23.5,38.5 L 23.5,34 C 23.5,32.5 24.6,31.5 26.7,30.8 30.8,29.4 44.5,24.6 48.5,23.2 51.5,22.2 53.3,22.8 56.1,24 60.5,25.9 72.1,31.1 75.5,32.6 77.2,33.4 78,34.4 78,35.8 L 78,39.6 C 78,41.2 76.5,42.3 74.2,42.9 69.5,44.1 55.5,47.4 55.5,47.4 55.5,47.4 69.5,51.8 74.5,53.5 76.9,54.3 78,55.5 78,57.1 L 78,60.3 C 78,61.5 77.1,62.1 75.5,62.5 Z\"
+     id=\"path1\" />
+</svg>";
+}
