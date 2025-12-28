@@ -580,8 +580,11 @@ WebSocketClient ws(\event(), {
     /** @param validator the AsyncAPI schema validator
         @param channel the channel name to use for validation
 
-        When set, outgoing messages sent via send() will be validated against the AsyncAPI schema
-        for the specified channel before sending.
+        When set, both outgoing messages sent via send() and incoming messages received via callbacks
+        will be validated against the AsyncAPI schema for the specified channel.
+
+        @note If validation fails for incoming messages, the exception propagates and may cause the
+        connection to close. To implement custom error handling, override the handleEvent() methods.
 
         @since WebSocketClient 2.4
     */
@@ -1118,7 +1121,14 @@ ws.setEventQueue();
         }
     }
 
-    #! Handles processed messages
+    #! Handles processed text messages
+    /** @param buf the message content
+
+        If an AsyncAPI validator is set, the message will be validated before being passed to the callback.
+        Validation failures throw exceptions which propagate to the caller.
+
+        @note Override this method to implement custom validation error handling.
+    */
     private int handleEvent(string buf) {
 %ifndef NoAsyncApi
         if (asyncapi_validator && asyncapi_channel) {
@@ -1134,7 +1144,14 @@ ws.setEventQueue();
         return WSEDC_CONTINUE;
     }
 
-    #! Handles processed messages
+    #! Handles processed binary messages
+    /** @param buf the message content
+
+        If an AsyncAPI validator is set, the message will be validated before being passed to the callback.
+        Validation failures throw exceptions which propagate to the caller.
+
+        @note Override this method to implement custom validation error handling.
+    */
     private int handleEvent(binary buf) {
 %ifndef NoAsyncApi
         if (asyncapi_validator && asyncapi_channel) {

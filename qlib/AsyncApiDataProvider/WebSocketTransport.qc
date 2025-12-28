@@ -56,13 +56,18 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
     /** @param channel the channel (not used for WebSocket - messages go to the connected endpoint)
         @param msg the message data to send
         @param headers optional headers (not used for WebSocket)
+
+        @note Complex types (hashes and lists) are automatically serialized to JSON before sending.
+        Strings and binary data are sent as-is. This assumes JSON content type which is the most
+        common format for WebSocket APIs. For other serialization formats, pre-serialize the message
+        before calling this method.
     */
     send(string channel, auto msg, *hash<auto> headers) {
         if (!connected) {
             throw "TRANSPORT-ERROR", "WebSocket transport is not connected";
         }
 
-        # serialize message if needed
+        # Serialize complex types to JSON; strings and binary are sent as-is
         data send_msg;
         if (msg.typeCode() == NT_HASH || msg.typeCode() == NT_LIST) {
 %ifndef NoJson

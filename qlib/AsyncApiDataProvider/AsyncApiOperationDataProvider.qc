@@ -112,13 +112,19 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase {
     }
 
     #! Returns the message type for this operation
+    /** @return the message type for the first message with a payload, or NOTHING if no messages defined
+
+        @note Currently only returns the type for the first message with a payload. Operations with
+        multiple message types will only expose the first one. Future versions may support union types
+        for operations with multiple message schemas.
+    */
     private *AbstractDataProviderType getMessageType() {
         # get message schemas from the operation (already resolved)
         if (!op.messages) {
             return;
         }
 
-        # for now, handle the first message
+        # Return type for first message with a payload
         foreach AsyncApi::MessageObject msg in (op.messages) {
             if (msg.payload) {
                 return getTypeFromSchema(msg.payload);

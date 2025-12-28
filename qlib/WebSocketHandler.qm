@@ -385,14 +385,18 @@ public class WebSocketConnection {
 
     #! Validates an incoming message against the AsyncAPI schema
     /** @param msg the message to validate (reference, may be modified)
+        @param headers optional headers hash for validation
+
+        @note If validation fails, the exception propagates to the caller. Override this method to implement
+        custom error handling (e.g., logging and continuing instead of disconnecting).
 
         @throws SCHEMA-VALIDATION-ERROR if the message fails validation
 
         @since WebSocketHandler 2.2
     */
-    validateIncomingMessage(reference<auto> msg) {
+    validateIncomingMessage(reference<auto> msg, hash<auto> headers = {}) {
         if (asyncapi_validator && asyncapi_channel) {
-            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, \headers);
         }
     }
 
