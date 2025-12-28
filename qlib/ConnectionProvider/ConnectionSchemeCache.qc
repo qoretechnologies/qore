@@ -179,6 +179,9 @@ public class ConnectionSchemeCache {
 
             "mewsrest": "MewsRestClient",
 
+            "memcached": "MemcachedDataProvider",
+            "memcacheds": "MemcachedDataProvider",
+
             # provided by the jni module
             "mqtttcp": "MqttDataProvider",
             "mqttssl": "MqttDataProvider",

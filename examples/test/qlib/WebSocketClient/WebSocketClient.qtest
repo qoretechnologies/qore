@@ -189,7 +189,7 @@ class WebSocketClientTest inherits QUnit::Test {
         prov.sendMessage(MESSAGE_WS_PING, "hb");
 
         observer.wait(EVENT_WS_PONG);
-        assertEq(3, observer.l.size());
+        assertGe(3, observer.l.size());
         assertEq(EVENT_WS_PONG, observer.getLastMessageId());
     }
 

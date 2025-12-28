@@ -1,0 +1,470 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/MemcachedDataProvider
+
+%exec-class MemcachedDataProviderTest
+
+public class MemcachedDataProviderTest inherits QUnit::Test {
+    private {
+        *MemcachedDataProvider::MemcachedClient client;
+
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+    }
+
+    constructor() : Test("MemcachedDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("basicStorageTest", \basicStorageTest());
+        addTestCase("casOperationTest", \casOperationTest());
+        addTestCase("incrDecrTest", \incrDecrTest());
+        addTestCase("multiGetTest", \multiGetTest());
+        addTestCase("touchTest", \touchTest());
+        addTestCase("appendPrependTest", \appendPrependTest());
+        addTestCase("statsTest", \statsTest());
+        addTestCase("connectionTest", \connectionTest());
+        addTestCase("negativeTests", \negativeTests());
+        addTestCase("keyValidationTests", \keyValidationTests());
+        addTestCase("binaryDataTest", \binaryDataTest());
+        addTestCase("addSuccessTest", \addSuccessTest());
+        addTestCase("gatsTest", \gatsTest());
+        addTestCase("dataProviderTest", \dataProviderTest());
+
+        setupConnection();
+        set_return_value(main());
+    }
+
+    private basicStorageTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_basic_" + get_random_string(8);
+        string value = "test value";
+
+        # Test set
+        hash<auto> result = client.set(key, value, 0, 60);
+        assertTrue(result.stored, "set should store value");
+
+        # Test get
+        result = client.get(key);
+        assertTrue(result.found, "get should find the key");
+        assertEq(value, result.value.toString(), "get should return correct value");
+
+        # Test add (should fail - key exists)
+        result = client.add(key, "new value", 0, 60);
+        assertFalse(result.stored, "add should fail when key exists");
+
+        # Test replace (should succeed)
+        result = client.replace(key, "replaced value", 0, 60);
+        assertTrue(result.stored, "replace should succeed when key exists");
+
+        # Verify replace
+        result = client.get(key);
+        assertEq("replaced value", result.value.toString(), "value should be replaced");
+
+        # Test delete
+        result = client.del(key);
+        assertTrue(result.deleted, "delete should succeed");
+
+        # Verify deletion
+        result = client.get(key);
+        assertFalse(result.found, "get should not find deleted key");
+    }
+
+    private casOperationTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_cas_" + get_random_string(8);
+
+        # Set initial value
+        client.set(key, "initial", 0, 60);
+
+        # Get with CAS
+        hash<auto> result = client.gets(key);
+        assertTrue(result.found, "gets should find the key");
+        int cas = result.cas;
+        assertTrue(cas > 0, "cas token should be positive");
+
+        # CAS update with correct token
+        result = client.cas(key, "updated", cas, 0, 60);
+        assertTrue(result.stored, "cas should succeed with correct token");
+
+        # CAS update with stale token (should fail)
+        result = client.cas(key, "should fail", cas, 0, 60);
+        assertFalse(result.stored, "cas should fail with stale token");
+        assertEq("EXISTS", result.status, "status should be EXISTS");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private incrDecrTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_incr_" + get_random_string(8);
+
+        # Set initial numeric value
+        client.set(key, "100", 0, 60);
+
+        # Increment
+        hash<auto> result = client.incr(key, 10);
+        assertTrue(result.success, "incr should succeed");
+        assertEq(110, result.value, "value should be incremented");
+
+        # Decrement
+        result = client.decr(key, 5);
+        assertTrue(result.success, "decr should succeed");
+        assertEq(105, result.value, "value should be decremented");
+
+        # Decrement below zero (should become 0)
+        result = client.decr(key, 200);
+        assertTrue(result.success, "decr below zero should succeed");
+        assertEq(0, result.value, "value should be 0 (not negative)");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private multiGetTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        # Set multiple keys
+        list<string> key_list = ();
+        for (int i = 0; i < 3; i++) {
+            string key = "test_multi_" + get_random_string(8);
+            push key_list, key;
+            client.set(key, "value" + string(i), 0, 60);
+        }
+
+        # Multi-get
+        hash<auto> result = client.multiGet(key_list);
+        assertEq(3, result.found, "should find all 3 keys");
+        assertEq(0, result.missing, "no keys should be missing");
+
+        # Add a non-existent key
+        push key_list, "nonexistent_" + get_random_string(8);
+        result = client.multiGet(key_list);
+        assertEq(3, result.found, "should still find 3 keys");
+        assertEq(1, result.missing, "1 key should be missing");
+
+        # Cleanup
+        for (int i = 0; i < 3; i++) {
+            client.del(key_list[i]);
+        }
+    }
+
+    private touchTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_touch_" + get_random_string(8);
+
+        # Set with short expiration
+        client.set(key, "test", 0, 60);
+
+        # Touch to extend expiration
+        hash<auto> result = client.touch(key, 120);
+        assertTrue(result.touched, "touch should succeed");
+
+        # GAT test
+        result = client.gat(key, 180);
+        assertTrue(result.found, "gat should find the key");
+        assertEq("test", result.value.toString(), "gat should return correct value");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private appendPrependTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_append_" + get_random_string(8);
+
+        # Set initial value
+        client.set(key, "middle", 0, 60);
+
+        # Prepend
+        hash<auto> result = client.prepend(key, "start-");
+        assertTrue(result.stored, "prepend should succeed");
+
+        # Append
+        result = client.append(key, "-end");
+        assertTrue(result.stored, "append should succeed");
+
+        # Verify
+        result = client.get(key);
+        assertEq("start-middle-end", result.value.toString(), "value should have prepend and append");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private statsTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        # General stats
+        hash<auto> result = client.stats();
+        assertTrue(result.hasKey("pid"), "stats should have pid");
+        assertTrue(result.hasKey("uptime"), "stats should have uptime");
+        assertTrue(result.hasKey("version"), "stats should have version");
+
+        # Version
+        result = client.version();
+        assertTrue(result.version.val(), "version should be returned");
+        assertTrue(result.version =~ /^[0-9]+\./, "version should have numeric format");
+    }
+
+    private connectionTest() {
+        *string url = m_options.url ?? ENV.MEMCACHED_URL;
+        if (!url) {
+            testSkip("no memcached URL available");
+        }
+
+        # Test connection creation
+        MemcachedDataProvider::MemcachedConnection conn({
+            "name": "test-memcached",
+            "url": url,
+        });
+
+        assertEq("memcached", conn.getType(), "connection type should be memcached");
+        assertTrue(conn.hasDataProvider(), "connection should have data provider");
+
+        if (client) {
+            # Test data provider from connection
+            DataProvider::AbstractDataProvider dp = conn.getDataProvider();
+            assertEq("memcached", dp.getName(), "data provider name should be memcached");
+
+            # Test child providers
+            *list<string> children = dp.getChildProviderNames();
+            assertTrue(children.contains("storage"), "should have storage child");
+            assertTrue(children.contains("retrieval"), "should have retrieval child");
+            assertTrue(children.contains("stats"), "should have stats child");
+            assertTrue(children.contains("admin"), "should have admin child");
+        }
+    }
+
+    private negativeTests() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        # Test replace on non-existent key
+        string key = "nonexistent_" + get_random_string(8);
+        hash<auto> result = client.replace(key, "value", 0, 60);
+        assertFalse(result.stored, "replace on non-existent key should fail");
+
+        # Test touch on non-existent key
+        result = client.touch(key, 60);
+        assertFalse(result.touched, "touch on non-existent key should fail");
+
+        # Test append on non-existent key
+        result = client.append(key, "data");
+        assertFalse(result.stored, "append on non-existent key should fail");
+
+        # Test prepend on non-existent key
+        result = client.prepend(key, "data");
+        assertFalse(result.stored, "prepend on non-existent key should fail");
+
+        # Test incr on non-existent key (without initial)
+        result = client.incr(key, 1);
+        assertFalse(result.success, "incr on non-existent key should fail without initial");
+
+        # Test decr on non-existent key (without initial)
+        result = client.decr(key, 1);
+        assertFalse(result.success, "decr on non-existent key should fail without initial");
+
+        # Test delete on non-existent key
+        result = client.del(key);
+        assertFalse(result.deleted, "delete on non-existent key should fail");
+
+        # Test CAS on non-existent key
+        result = client.cas(key, "value", 12345, 0, 60);
+        assertFalse(result.stored, "cas on non-existent key should fail");
+
+        # Test gat on non-existent key
+        result = client.gat(key, 60);
+        assertFalse(result.found, "gat on non-existent key should fail");
+    }
+
+    private keyValidationTests() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        # Test empty key
+        bool caught = False;
+        try {
+            client.get("");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("MEMCACHED-KEY-ERROR", ex.err, "empty key should throw MEMCACHED-KEY-ERROR");
+        }
+        assertTrue(caught, "empty key should throw exception");
+
+        # Test key too long (>250 bytes)
+        caught = False;
+        string longKey = "";
+        for (int i = 0; i < 260; i++) {
+            longKey += "x";
+        }
+        try {
+            client.get(longKey);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("MEMCACHED-KEY-ERROR", ex.err, "long key should throw MEMCACHED-KEY-ERROR");
+        }
+        assertTrue(caught, "long key should throw exception");
+
+        # Test key with space
+        caught = False;
+        try {
+            client.get("key with space");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("MEMCACHED-KEY-ERROR", ex.err, "key with space should throw MEMCACHED-KEY-ERROR");
+        }
+        assertTrue(caught, "key with space should throw exception");
+
+        # Test key with newline
+        caught = False;
+        try {
+            client.get("key\nwith\nnewline");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("MEMCACHED-KEY-ERROR", ex.err, "key with newline should throw MEMCACHED-KEY-ERROR");
+        }
+        assertTrue(caught, "key with newline should throw exception");
+    }
+
+    private binaryDataTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_binary_" + get_random_string(8);
+
+        # Store binary data
+        binary binData = <48656c6c6f00576f726c64>;  # "Hello\0World" including null byte
+        hash<auto> result = client.set(key, binData, 0, 60);
+        assertTrue(result.stored, "set binary should store value");
+
+        # Retrieve and verify
+        result = client.get(key);
+        assertTrue(result.found, "get should find binary key");
+        assertEq(binData, result.value, "binary data should match");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private addSuccessTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_add_new_" + get_random_string(8);
+
+        # Add should succeed on non-existent key
+        hash<auto> result = client.add(key, "new value", 0, 60);
+        assertTrue(result.stored, "add should succeed on non-existent key");
+
+        # Verify
+        result = client.get(key);
+        assertTrue(result.found, "get should find added key");
+        assertEq("new value", result.value.toString(), "value should match");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private gatsTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        string key = "test_gats_" + get_random_string(8);
+        client.set(key, "gats test", 0, 60);
+
+        # Get and touch with CAS
+        hash<auto> result = client.gats(key, 120);
+        assertTrue(result.found, "gats should find key");
+        assertTrue(result.cas > 0, "gats should return CAS token");
+        assertEq("gats test", result.value.toString(), "gats should return correct value");
+
+        # Cleanup
+        client.del(key);
+    }
+
+    private dataProviderTest() {
+        if (!client) {
+            testSkip("no connection to memcached server");
+        }
+
+        # Test using data provider interface
+        MemcachedDataProvider::MemcachedSetDataProvider setProv(client);
+
+        string key = "test_dp_" + get_random_string(8);
+
+        hash<auto> result = setProv.doRequest({
+            "key": key,
+            "value": "data provider test",
+            "exptime": 60,
+        });
+        assertTrue(result.stored, "data provider set should work");
+
+        # Test get via data provider
+        MemcachedDataProvider::MemcachedGetDataProvider getProv(client);
+        result = getProv.doRequest({"key": key});
+        assertTrue(result.found, "data provider get should find key");
+        assertEq("data provider test", result.value.toString(), "data provider should return correct value");
+
+        # Cleanup
+        MemcachedDataProvider::MemcachedDeleteDataProvider delProv(client);
+        delProv.doRequest({"key": key});
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-u,--url=ARG", "URL for the Memcached server", 22);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.MEMCACHED_URL;
+        if (!url) {
+            if (m_options.verbose) {
+                stderr.print("missing --url option or MEMCACHED_URL environment variable\n");
+            }
+            return;
+        }
+
+        try {
+            client = new MemcachedDataProvider::MemcachedClient({"url": url});
+            client.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("connection error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}
