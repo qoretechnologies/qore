@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchAggregationDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchAggregationDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -109,14 +109,14 @@ public class ElasticSearchAggregationDataProvider inherits ElasticSearchDataProv
         string uri = sprintf("%s/_search", index);
 
         # Build query parameters
-        bool q;
+        bool has_query_params;
         foreach string arg in (QueryArgs) {
             if (!exists req{arg}) {
                 continue;
             }
-            if (!q) {
+            if (!has_query_params) {
                 uri += "?";
-                q = True;
+                has_query_params = True;
             } else {
                 uri += "&";
             }

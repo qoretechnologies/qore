@@ -462,6 +462,10 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
         number of records is processed
 
         @return a bulk upsert operation object for this data provider
+
+        @note In ElasticSearch, the bulk action type \c "index" has upsert semantics (create or replace the document
+        with the given ID). Therefore this method uses the same \c "index" action type as getBulkInserter(), and both
+        methods are functionally equivalent in ElasticSearch.
     */
     DataProvider::AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
         return new ElasticSearchBulkOperation(self, rest, name, "index", block_size);

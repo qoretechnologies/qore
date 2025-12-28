@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchBulkOperation.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchBulkOperation.qc Copyright 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -116,7 +116,11 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         if (!buf) {
             return result;
         }
-        int count = buf.firstValue().lsize();
+        auto first = buf.firstValue();
+        if (!first) {
+            return result;
+        }
+        int count = first.lsize();
 
         for (int i = 0; i < count; ++i) {
             # Build the record from column lists
