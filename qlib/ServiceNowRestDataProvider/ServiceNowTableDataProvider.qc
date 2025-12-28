@@ -175,7 +175,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
             QUERY_OP_IN: {
                 "exp": sym(AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN}, QUERY_OP_IN),
                 "impl": string sub (string cn, auto arg) {
-                    if (!arg) {
+                    if (arg.typeCode() == NT_LIST && !arg.size()) {
                         # Empty IN list means no match possible
                         return "sys_id=NULL";
                     }
@@ -195,7 +195,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": string sub (string cn, auto arg) {
-                    if (!arg) {
+                    if (arg.typeCode() == NT_LIST && !arg.size()) {
                         # Empty NOTIN list means all values match
                         return "sys_id!=NULL";
                     }

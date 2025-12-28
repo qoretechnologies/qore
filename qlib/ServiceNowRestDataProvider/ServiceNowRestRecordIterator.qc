@@ -244,7 +244,7 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
 
         # Handle logical operators (AND, OR) - process recursively
         if (exp.exp == DP_OP_AND) {
-            if (!exp.args) {
+            if (!exists exp.args || !exp.args.size()) {
                 # Empty AND is always true - return a tautology
                 return "sys_id!=NULL";
             }
@@ -252,7 +252,7 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
             return foldl $1 + "^" + $2, clauses;
         }
         if (exp.exp == DP_OP_OR) {
-            if (!exp.args) {
+            if (!exists exp.args || !exp.args.size()) {
                 # Empty OR is always false - return a contradiction
                 return "sys_id=NULL";
             }
