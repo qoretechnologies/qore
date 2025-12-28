@@ -159,10 +159,8 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                             client_sock.setSslVerifyMode(ssl_verify_flags);
                             client_sock.captureRemoteCertificates();
                         }
-                        # Accept all client certificates if configured
-                        if (ssl_accept_all_certs) {
-                            client_sock.acceptAllCertificates();
-                        }
+                        # Configure client certificate acceptance behavior
+                        client_sock.acceptAllCertificates(ssl_accept_all_certs);
                         spop = client_sock.startPollUpgradeServerToSSL();
                         @assert(spop, "startPollUpgradeServerToSSL must return poll operation");
                         # Continue loop to poll the new operation
