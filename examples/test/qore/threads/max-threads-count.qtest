@@ -56,6 +56,24 @@ public class MaxThreadCountTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertEq("THREAD-CREATION-FAILURE", ex.err, "found thread count limit");
             limit = num_threads();
+            # Log diagnostic info when thread limit is suspiciously low
+            if (limit < 100) {
+                printf("WARNING: low thread limit detected: %d\n", limit);
+                printf("  exception: %s: %s\n", ex.err, ex.desc);
+                # Try to get cgroup pids limit if available
+                try {
+                    *string pids_max = File::readTextFile("/sys/fs/cgroup/pids.max");
+                    printf("  cgroup pids.max: %s", pids_max);
+                } catch () {
+                    # Try alternate path for cgroup v1
+                    try {
+                        *string pids_max = File::readTextFile("/sys/fs/cgroup/pids/pids.max");
+                        printf("  cgroup pids.max (v1): %s", pids_max);
+                    } catch () {
+                        # Ignore - cgroup info not available
+                    }
+                }
+            }
         }
 
         if (m_options.verbose > 2) {

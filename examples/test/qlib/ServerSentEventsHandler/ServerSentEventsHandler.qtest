@@ -78,6 +78,17 @@ public class Main inherits QUnit::Test {
         client.registerObserver(observer);
         client.observersReady();
 
+        # Wait for the server to register the connection before sending
+        # (the client may report connected before the server has registered it)
+        int retries = 0;
+        while (!sse.getConnectionIds() && retries < 50) {
+            usleep(100ms);
+            ++retries;
+        }
+        if (!sse.getConnectionIds()) {
+            throw "TEST-ERROR", "Server did not register connection in time";
+        }
+
         string str = get_random_string(50);
         hash<SseMessageInfo> event = <SseMessageInfo>{
             "event": "event",

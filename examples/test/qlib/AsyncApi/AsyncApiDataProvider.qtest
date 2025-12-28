@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+# try importing JSON and YAML modules
+%try-module json
+%define NoJson
+%endtry
+%try-module yaml
+%define NoYaml
+%endtry
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/AsyncApi.qm
+%requires ../../../../qlib/AsyncApiDataProvider
+
+%exec-class AsyncApiDataProviderTest
+
+public class AsyncApiDataProviderTest inherits QUnit::Test {
+    private {
+        string testDir;
+    }
+
+    constructor() : Test("AsyncApiDataProviderTest", "1.0") {
+        testDir = get_script_dir();
+        addTestCase("data provider creation test", \dataProviderCreationTest());
+        addTestCase("channel navigation test", \channelNavigationTest());
+        addTestCase("operation navigation test", \operationNavigationTest());
+        addTestCase("message type test", \messageTypeTest());
+        set_return_value(main());
+    }
+
+    checkModules() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    dataProviderCreationTest() {
+        checkModules();
+
+        # Test creation from schema file path
+        hash<auto> opts = {
+            "schema": testDir + "/ChatApi.asyncapi.yaml",
+        };
+        AsyncApiDataProvider::AsyncApiDataProvider provider(opts);
+        assertEq("Chat API", provider.getName());
+
+        # Test description
+        *string desc = provider.getDesc();
+        assertTrue(exists desc);
+        assertTrue(desc.find("Chat API") >= 0);
+
+        # Test that it supports children
+        hash<DataProviderInfo> info = provider.getInfo();
+        assertTrue(info.supports_children);
+        assertEq("asyncapi", info.schema_type);
+    }
+
+    channelNavigationTest() {
+        checkModules();
+
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": testDir + "/ChatApi.asyncapi.yaml",
+        });
+
+        # Get child provider names (channels)
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(exists children);
+        assertTrue(children.size() >= 2);
+        assertTrue(inlist("userChat", children));
+        assertTrue(inlist("systemNotifications", children));
+
+        # Get userChat channel provider
+        AbstractDataProvider channelProvider = provider.getChildProvider("userChat");
+        assertTrue(exists channelProvider);
+        assertEq("userChat", channelProvider.getName());
+
+        # Check channel description includes address
+        *string channelDesc = channelProvider.getDesc();
+        assertTrue(exists channelDesc);
+        assertTrue(channelDesc.find("/chat/user") >= 0);
+    }
+
+    operationNavigationTest() {
+        checkModules();
+
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": testDir + "/ChatApi.asyncapi.yaml",
+        });
+
+        # Navigate to channel
+        AbstractDataProvider channelProvider = provider.getChildProvider("userChat");
+
+        # Get operations for this channel
+        *list<string> operations = channelProvider.getChildProviderNames();
+        assertTrue(exists operations);
+        assertTrue(operations.size() >= 2);
+        assertTrue(inlist("sendChatMessage", operations));
+        assertTrue(inlist("receiveChatMessage", operations));
+
+        # Get send operation
+        AbstractDataProvider sendOpProvider = channelProvider.getChildProvider("sendChatMessage");
+        assertTrue(exists sendOpProvider);
+        assertEq("sendChatMessage", sendOpProvider.getName());
+
+        # Check operation info
+        hash<DataProviderInfo> sendInfo = sendOpProvider.getInfo();
+        assertTrue(sendInfo.supports_request);
+        assertEq(DataProvider::MSG_Async, sendInfo.supports_messages);
+        assertFalse(sendInfo.supports_observable);
+
+        # Get receive operation
+        AbstractDataProvider recvOpProvider = channelProvider.getChildProvider("receiveChatMessage");
+        hash<DataProviderInfo> recvInfo = recvOpProvider.getInfo();
+        assertFalse(recvInfo.supports_request);
+        assertEq(DataProvider::MSG_None, recvInfo.supports_messages);
+        assertTrue(recvInfo.supports_observable);
+    }
+
+    messageTypeTest() {
+        checkModules();
+
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": testDir + "/ChatApi.asyncapi.yaml",
+        });
+
+        # Navigate to send operation
+        AbstractDataProvider sendOpProvider = provider.getChildProviderPath("userChat/sendChatMessage");
+        assertTrue(exists sendOpProvider);
+
+        # Get request type (message type for send operations)
+        *AbstractDataProviderType reqType = sendOpProvider.getRequestType();
+        assertTrue(exists reqType);
+
+        # Check that it has the expected fields
+        *hash<string, AbstractDataField> fields = reqType.getFields();
+        assertTrue(exists fields);
+        assertTrue(fields.hasKey("userId"));
+        assertTrue(fields.hasKey("message"));
+        assertTrue(fields.hasKey("timestamp"));
+
+        # Check field types
+        AbstractDataField userIdField = fields.userId;
+        assertEq(NT_STRING, userIdField.getType().getBaseTypeCode());
+
+        AbstractDataField messageField = fields.message;
+        assertEq(NT_STRING, messageField.getType().getBaseTypeCode());
+
+        # metadata field should be optional
+        if (fields.hasKey("metadata")) {
+            AbstractDataField metadataField = fields.metadata;
+            assertTrue(metadataField.getType().isOrNothingType());
+        }
+    }
+}

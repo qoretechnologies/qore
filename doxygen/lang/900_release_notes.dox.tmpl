@@ -8,6 +8,13 @@
     Minor new features and minor bugfixes; see below for more information
 
     @subsection qore_2_3_0_new_features New Features in Qore
+    - <a href="../../modules/AsyncApi/html/index.html">AsyncApi</a> module
+      - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
+      - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
+    - <a href="../../modules/AsyncApiDataProvider/html/index.html">AsyncApiDataProvider</a> module
+      - new module providing a data provider API for AsyncAPI schemas
+      - protocol-agnostic design with pluggable transports (WebSocket, MQTT, Kafka, etc.)
+      - includes built-in WebSocket transport
     - <a href="../../modules/CdsRestClient/html/index.html">CdsRestClient</a> module
       - added support for Microsoft Dynamics 365 Business Central
         - new \c BusinessCentralRestConnection class for BC connections
@@ -29,6 +36,10 @@
     - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
       - implemented support for specifying the columns to use for upserts separately from the row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
+    - <a href="../../modules/WebSocketClient/html/index.html">WebSocketClient</a> module
+      - added optional AsyncAPI 3.0 validation support for WebSocket messages
+    - <a href="../../modules/WebSocketHandler/html/index.html">WebSocketHandler</a> module
+      - added optional AsyncAPI 3.0 validation support for WebSocket messages
     - updated module ABI and the Program container to allow for better sandboxing
     - new method in the <a href="../../modules/reflection/html/index.html">reflection</a> module:
       - \c Class::tryGetConstant()

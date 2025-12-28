@@ -1,0 +1,2104 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AsyncApi.qm AsyncApi 3.0: https://www.asyncapi.com/
+
+/*  AsyncApi.qm Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+# make sure we have the required qore version
+%requires qore >= 2.3
+
+# try importing JSON and YAML modules
+%try-module json
+%define NoJson
+%endtry
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%requires(reexport) Mime >= 1.4
+%requires(reexport) Util >= 1.3
+%requires(reexport) RestSchemaValidator >= 1.0
+%requires(reexport) FileLocationHandler
+%requires(reexport) DataProvider >= 3.0
+%requires(reexport) Logger
+
+%allow-weak-references
+
+module AsyncApi {
+    version = "1.0";
+    desc = "AsyncApi module providing functionality for AsyncAPI 3.0 schema definitions";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage AsyncApi module
+
+    @tableofcontents
+
+    @section asyncapiintro AsyncApi Module Introduction
+
+    The %AsyncApi module provides a protocol-agnostic <a href="https://www.asyncapi.com/">AsyncAPI 3.0</a>
+    schema validation API to %Qore for event-driven and message-based APIs.
+
+    The primary classes provided by this module:
+    - @ref AsyncApi::AsyncApi3Loader "AsyncApi3Loader": provides static methods for loading %AsyncApi schemas
+    - @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema": the %AsyncApi schema object for message validation
+
+    @par Supported Protocols
+    The AsyncAPI 3.0 specification supports multiple protocols including:
+    - WebSocket (ws, wss)
+    - MQTT
+    - Kafka
+    - AMQP
+    - and more
+
+    The core validation functionality in this module is protocol-agnostic and can be used with any
+    messaging transport. Protocol-specific bindings are parsed and made available for transport-specific
+    handling.
+
+    JSON and YAML serialization and deserialization are supported.
+
+    @section asyncapi_usage AsyncApi Usage
+
+    @subsection asyncapi_generic Generic Usage
+
+    The %AsyncApi module can be used directly with any messaging client for message validation:
+
+    @par Generic Example
+    @code{.py}
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires AsyncApi
+
+# load the AsyncAPI schema
+AsyncApi3Schema schema = AsyncApi3Loader::fromFile("MySchema.asyncapi.yaml");
+
+# validate outgoing message before sending via any transport
+hash<auto> msg = {"userId": "123", "action": "subscribe"};
+hash<auto> headers;
+schema.validateOutgoingMessage("myChannel", \msg, \headers);
+
+# send via your chosen transport (WebSocket, MQTT, Kafka, etc.)
+my_client.send(msg);
+
+# validate incoming message after receiving
+schema.validateIncomingMessage("myChannel", \received_msg, headers);
+    @endcode
+
+    @subsection asyncapi_client WebSocket Integration
+
+    The module provides built-in integration with WebSocket client and handler modules for
+    automatic message validation.
+
+    @par WebSocket Client Example
+    @code{.py}
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires AsyncApi
+%requires WebSocketClient
+
+# load the AsyncAPI schema
+AsyncApi3Schema asyncapi = AsyncApi3Loader::fromFile("MySchema.asyncapi.yaml");
+
+# create a WebSocket client with validation
+hash<auto> opts = {
+    "url": "wss://api.example.com/ws",
+};
+WebSocketClient wsc(sub (data msg) { printf("Received: %y\n", msg); }, opts);
+wsc.setAsyncApiValidator(asyncapi, "myChannel");
+    @endcode
+
+    @section asyncapi_relnotes AsyncApi Module Release Notes
+
+    @subsection asyncapi_1_0 AsyncApi v1.0
+    - initial release of the %AsyncApi module
+    - supports AsyncAPI 3.0 specification
+    - protocol-agnostic message validation
+    - built-in WebSocket integration via WebSocketClient and WebSocketHandler modules
+*/
+
+#! main namespace for all public %AsyncApi declarations
+public namespace AsyncApi {
+
+#! Valid integer type formats
+public const ValidIntFormats = ("int32", "int64", "unix-time");
+#! Valid number type formats
+public const ValidNumberFormats = ("double", "float");
+#! Valid string type formats
+public const ValidStringFormats = ("binary", "byte", "date", "password", "unix-time", "uuid");
+
+#! A hash of valid integer type formats
+public const ValidIntFormatsHash = map {$1: True}, ValidIntFormats;
+#! A hash of valid number type formats
+public const ValidNumberFormatsHash = map {$1: True}, ValidNumberFormats;
+#! A hash of valid string type formats
+public const ValidStringFormatsHash = map {$1: True}, ValidStringFormats;
+
+#! Valid AsyncAPI operation actions
+public const ValidActions = ("send", "receive");
+#! A hash of valid AsyncAPI operation actions
+public const ValidActionsHash = map {$1: True}, ValidActions;
+
+%ifndef NoYaml
+#! Yaml serialization
+const YamlSerialization = {
+    "serialize": \make_yaml(),
+    "serialize_verbose": string sub (auto val) {return make_yaml(val, BlockStyle);},
+    "deserialize": \parse_yaml(),
+    "module": "yaml",
+};
+%endif
+
+%ifndef NoJson
+const JsonSerialization = {
+    "serialize": \make_json(),
+    "serialize_verbose": string sub (auto val) {return make_json(val, JGF_ADD_FORMATTING);},
+    "deserialize": \parse_json(),
+    "module": "json",
+};
+%endif
+
+#! supported mime types for de/serializing data
+public const MimeDataTypes = {
+%ifndef NoJson
+    MimeTypeJson: JsonSerialization,
+%endif
+%ifndef NoYaml
+    MimeTypeYaml: YamlSerialization,
+    MimeTypeYamlRpc: YamlSerialization,
+    "text/yaml": YamlSerialization,
+    "application/yaml": YamlSerialization,
+%endif
+};
+
+#! modules available for data serialization and/or deserialization
+public const SerializationModules = keys (map {$1.module: True}, MimeDataTypes.iterator(), $1.module);
+
+#! MIME types for data serialization
+public const MimeContentTypes = keys MimeDataTypes;
+
+#! Type conversion hash for list to hash conversion
+const AsyncApiListToAnySet = {
+    NT_LIST: hash<auto> sub (list<auto> l) {
+        return map {$1: True}, l;
+    },
+};
+
+#! Type conversion hash for list to hash of strings
+const AsyncApiListToStringSet = {
+    NT_LIST: hash<string, bool> sub (list<auto> l) {
+        return map {$1.toString(): True}, l;
+    },
+};
+
+#! Helper function: check optional field
+/** @param obj_type the object type name for error messages
+    @param oh the hash to check
+    @param name the field name
+    @param type_codes valid type code(s) - can be int or hash<int, auto> for conversion
+    @param target reference to store the value
+
+    @return True if the field was present, False otherwise
+*/
+public bool sub optional_field(string obj_type, hash<auto> oh, string name, auto type_codes,
+        reference<auto> target) {
+    if (!oh.hasKey(name)) {
+        return False;
+    }
+
+    auto val = oh{name};
+    int tc = val.typeCode();
+
+    if (type_codes.typeCode() == NT_INT) {
+        if (tc != type_codes) {
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object: '%s' field has invalid type %y; expected %y",
+                obj_type, name, val.type(), Qore::type(type_codes));
+        }
+        target = val;
+    } else if (type_codes.typeCode() == NT_HASH) {
+        if (!type_codes.hasKey(tc)) {
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object: '%s' field has invalid type %y; expected one of: %y",
+                obj_type, name, val.type(), (map Qore::type($1), keys type_codes));
+        }
+        # check for conversion
+        code conv = type_codes{tc};
+        if (exists conv) {
+            target = conv(val);
+        } else {
+            target = val;
+        }
+    }
+    return True;
+}
+
+#! Helper function: check required field
+/** @param obj_type the object type name for error messages
+    @param oh the hash to check
+    @param name the field name
+    @param type_codes valid type code(s) - can be int or hash<int, auto> for conversion
+    @param target reference to store the value
+
+    @throws REQUIRED-FIELD-MISSING if the field is missing
+    @throws INVALID-FIELD-TYPE if the field has an invalid type
+*/
+public sub required_field(string obj_type, hash<auto> oh, string name, auto type_codes,
+        reference<auto> target) {
+    if (!oh.hasKey(name)) {
+        throw "REQUIRED-FIELD-MISSING", sprintf("%s Object: '%s' field is required but missing", obj_type, name);
+    }
+    optional_field(obj_type, oh, name, type_codes, \target);
+}
+
+#! Base class for the %AsyncApi specification objects, wrapping the vendor extensions.
+public class ObjectBase inherits Qore::Serializable {
+    public {
+        #! Allows extensions to the %AsyncApi Schema.
+        /**
+            The field name MUST begin with \c x-, for example, \c x-internal-id.
+            The value can be \c null, a primitive, an array or an object.
+         */
+        hash<auto> vendorExtensions;
+    }
+
+    #! Constructor.
+    public constructor() {
+    }
+
+    #! Constructor.
+    /**
+        @param oh deserialized hash from the source schema description describing the object
+     */
+    public constructor(hash<auto> oh) {
+        initialize(oh);
+    }
+
+    #! copy constructor
+    constructor(ObjectBase other) {
+        vendorExtensions = other.vendorExtensions;
+    }
+
+    #! Initialize.
+    /**
+        @param oh deserialized hash from the source schema description
+    */
+    public initialize(hash<auto> oh) {
+        vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
+    }
+
+    #! Returns True if this object has the x-deprecated extension set.
+    /** This extension marks an object as deprecated without using the standard deprecated field. */
+    *bool isXDeprecated() {
+        return vendorExtensions."x-deprecated";
+    }
+
+    #! Returns True if this object has the x-internal extension set.
+    /** This extension marks an object as internal/private and not for public consumption. */
+    *bool isInternal() {
+        return vendorExtensions."x-internal";
+    }
+
+    #! Returns True if this object has the x-hidden extension set.
+    /** This extension marks an object as hidden from documentation. */
+    *bool isHidden() {
+        return vendorExtensions."x-hidden";
+    }
+
+    #! Returns the x-displayName extension value if set.
+    /** This extension provides a display name override for documentation. */
+    *string getDisplayName() {
+        return vendorExtensions."x-displayName";
+    }
+}
+
+#! Base used by @ref SchemaObject for JSON Schema validation constraints
+/** Inherits common validation constraint members from
+    @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase".
+*/
+public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
+    public {
+        #! Numeric exclusiveMaximum value (JSON Schema draft-07+)
+        *softfloat exclusiveMaxValue;
+
+        #! Numeric exclusiveMinimum value (JSON Schema draft-07+)
+        *softfloat exclusiveMinValue;
+    }
+
+    #! Constructor.
+    /** @param obj_type the type of object
+        @param oh deserialized hash from the source schema description
+     */
+    public constructor(string obj_type, hash<auto> oh) {
+        optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+        optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
+
+        # Handle exclusiveMaximum - can be boolean or numeric
+        if (oh.hasKey("exclusiveMaximum")) {
+            int tc = oh.exclusiveMaximum.typeCode();
+            if (tc == NT_BOOLEAN) {
+                exclusiveMax = oh.exclusiveMaximum;
+            } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
+                exclusiveMaxValue = oh.exclusiveMaximum;
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMaximum' field has invalid type %y; "
+                    "expected boolean or number", obj_type, oh.exclusiveMaximum.type());
+            }
+        }
+
+        # Handle exclusiveMinimum - can be boolean or numeric
+        if (oh.hasKey("exclusiveMinimum")) {
+            int tc = oh.exclusiveMinimum.typeCode();
+            if (tc == NT_BOOLEAN) {
+                exclusiveMin = oh.exclusiveMinimum;
+            } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
+                exclusiveMinValue = oh.exclusiveMinimum;
+            } else {
+                throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMinimum' field has invalid type %y; "
+                    "expected boolean or number", obj_type, oh.exclusiveMinimum.type());
+            }
+        }
+
+        optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
+        optional_field(obj_type, oh, "minLength", NT_INT, \minLength);
+        optional_field(obj_type, oh, "pattern", NT_STRING, \pattern);
+        optional_field(obj_type, oh, "maxItems", NT_INT, \maxItems);
+        optional_field(obj_type, oh, "minItems", NT_INT, \minItems);
+        optional_field(obj_type, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
+        optional_field(obj_type, oh, "enum", AsyncApiListToAnySet, \enum);
+        optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
+    }
+
+    #! Copy constructor
+    constructor(SchemaBase other) {
+        self += map {$1: other.$1}, (
+            "maximum", "minimum", "exclusiveMax", "exclusiveMin",
+            "exclusiveMaxValue", "exclusiveMinValue",
+            "maxLength", "minLength", "pattern", "maxItems", "minItems",
+            "uniqueItems", "enum", "multipleOf"), exists other.$1;
+    }
+
+    #! Private constructor
+    private constructor() {
+    }
+
+    #! returns an example value for the given type
+    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
+        if (enum) {
+            auto rv = enum.firstKey();
+            switch (type) {
+                case "integer": {
+                    rv = rv.toInt();
+                    switch (format) {
+                        case "unix-time":
+                            rv = localtime(rv);
+                            break;
+                    }
+                    break;
+                }
+                case "number": rv = (format && ValidNumberFormatsHash{format} ? rv.toFloat() : rv.toNumber()); break;
+                case "boolean": rv = rv.toBool(); break;
+                case "string": {
+                    switch (format) {
+                        case "byte": return parse_base64_string(rv);
+                        case "date":
+                        case "date-time":
+                        default:
+                            break;
+                    }
+                }
+            }
+            return rv;
+        }
+        switch (type) {
+            case "string": {
+                switch (format) {
+                    case "byte":
+                    case "binary": return <feedface>;
+                    case "date": return 1987-05-23;
+                    case "date-time": return 1987-05-23T07:45:30Z;
+                    case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
+                    default:
+                        return sprintf("Example %s", fname ?? "string");
+                }
+            }
+            case "integer": {
+                switch (format) {
+                    case "unix-time": return 1726733382;
+                }
+                if (exists minimum)
+                    return exclusiveMin ? minimum + 1 : minimum;
+                if (exists maximum)
+                    return exclusiveMax ? maximum - 1 : maximum;
+                return 1;
+            }
+            case "number": {
+                number rv;
+                if (exists minimum)
+                    rv = exclusiveMin ? minimum + 0.1 : minimum;
+                else if (exists maximum)
+                    rv = exclusiveMax ? maximum - 0.1 : maximum;
+                else
+                    rv = 1.1n;
+                if (format && ValidNumberFormatsHash{format})
+                    return rv.toFloat();
+                return rv;
+            }
+            case "boolean":
+                return True;
+            case "null":
+                return NOTHING;
+            case "any": {
+                return "any value";
+            }
+        }
+    }
+
+    #! validates the value against the schema definition
+    private check(bool serialize, bool request, string type, *string format, *SchemaObject items, string channel,
+            string operation, string name, reference<auto> value) {
+        # accept a single value for an array (= one-element list)
+        if (type == "array") {
+            # convert to a list before checking
+            if (exists value && value.typeCode() != NT_LIST) {
+                value = (value,);
+            }
+            checkArrayParam(serialize, request, items, channel, operation, name, \value);
+        } else {
+            on_error rethrow $1.err, sprintf("%s (while checking parameter %y)", $1.desc, name);
+            checkIntern(serialize, request, type, format, channel, operation, name, value, \value);
+        }
+    }
+
+    private checkStringIntern(string channel, string operation, string name, string value) {
+        # minLength and maxLength are based on the number of characters in the string, not bytes
+        if (exists maxLength && value.length() > maxLength)
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y is too long (maxLength: %d, actual: %d)",
+                    name, channel, operation, maxLength, value.length());
+        if (exists minLength && value.length() < minLength)
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y is too short (minLength: %d, actual: %d)",
+                    name, channel, operation, minLength, value.length());
+        if (exists pattern && !value.regex(pattern))
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y does not fit the parameter string pattern "
+                    "(pattern: %y, value: %y)", name, channel, operation, pattern, value);
+        if (enum && !enum{value})
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values (enum: %y, "
+                    "actual: %y)", name, channel, operation, keys enum, value);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, list<auto> v, reference<list> value) {
+        if (type != "list" && type != "any")
+            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is an array (%y), "
+                "but the expected type is %y", name, channel, operation, v, type);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, hash<auto> v, reference<hash> value) {
+        if (type != "file" && type != "any" && type != "object")
+            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is an object (%y), "
+                "but the expected type is %y", name, channel, operation, v, type);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, int v, reference<auto> value) {
+        # NOTE: "number" also accepts "int"
+        if (type == "number") {
+            checkIntern(serialize, request, type, format, channel, operation, name, v.toNumber(), \value);
+            return;
+        }
+        if (type != "integer" && type != "any")
+            throwInvalidType(name, "integer", type, v);
+
+        if (!serialize) {
+            switch (format) {
+                case "unix-time":
+                    value = localtime(v);
+                    break;
+            }
+        }
+
+        # Check maximum constraint
+        if (exists maximum) {
+            if (exclusiveMax) {
+                if (value >= maximum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
+                            name, channel, operation, maximum, value);
+            } else {
+                if (value > maximum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
+                            name, channel, operation, maximum, value);
+            }
+        }
+
+        # Check exclusiveMaximum constraint (numeric value)
+        if (exists exclusiveMaxValue) {
+            if (value >= exclusiveMaxValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %y, "
+                        "actual: %y)", name, channel, operation, exclusiveMaxValue, value);
+        }
+
+        # Check minimum constraint
+        if (exists minimum) {
+            if (exclusiveMin) {
+                if (value <= minimum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
+                            name, channel, operation, minimum, value);
+            } else {
+                if (value < minimum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
+                            name, channel, operation, minimum, value);
+            }
+        }
+
+        # Check exclusiveMinimum constraint (numeric value)
+        if (exists exclusiveMinValue) {
+            if (value <= exclusiveMinValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %y, "
+                        "actual: %y)", name, channel, operation, exclusiveMinValue, value);
+        }
+
+        if (enum && !enum{value})
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values "
+                    "(enum: %y, actual: %y)", name, channel, operation, keys enum, value);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, number v, reference<number> value) {
+        checkInternNumber(serialize, request, type, format, channel, operation, name, v, \value);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, float v, reference<number> value) {
+        checkInternNumber(serialize, request, type, format, channel, operation, name, v, \value);
+    }
+
+    private checkInternNumber(bool serialize, bool request, string type, *string format, string channel,
+            string operation, string name, auto v, reference<auto> value) {
+        if (type != "number" && type != "any")
+            throwInvalidType(name, "number", type, v);
+
+        # Check maximum constraint
+        if (exists maximum) {
+            if (exclusiveMax) {
+                if (value >= maximum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %f)",
+                            name, channel, operation, maximum, value);
+            } else {
+                if (value > maximum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %f)",
+                            name, channel, operation, maximum, value);
+            }
+        }
+
+        # Check exclusiveMaximum constraint (numeric value)
+        if (exists exclusiveMaxValue) {
+            if (value >= exclusiveMaxValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %f, "
+                        "actual: %f)", name, channel, operation, exclusiveMaxValue, value);
+        }
+
+        # Check minimum constraint
+        if (exists minimum) {
+            if (exclusiveMin) {
+                if (value <= minimum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %f)",
+                            name, channel, operation, minimum, value);
+            } else {
+                if (value < minimum)
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %f)",
+                            name, channel, operation, minimum, value);
+            }
+        }
+
+        # Check exclusiveMinimum constraint (numeric value)
+        if (exists exclusiveMinValue) {
+            if (value <= exclusiveMinValue)
+                throw "SCHEMA-VALIDATION-ERROR",
+                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %f, "
+                        "actual: %f)", name, channel, operation, exclusiveMinValue, value);
+        }
+
+        if (enum && !enum{value}) {
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values (enum: %y, "
+                    "actual: %f)", name, channel, operation, keys enum, value);
+        }
+
+        switch (format) {
+            case "float":
+            case "double":
+            case NOTHING:
+                value = v.toFloat();
+                break;
+
+            default:
+                throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y has an invalid format: %y; expecting "
+                    "(\"float\", \"double\", or no value; value provided: %y)",
+                    name, channel, operation, format, value);
+        }
+    }
+
+    #! converts binary values to strings for supported formats
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, binary v, reference value) {
+        if (type != "string" && type != "any")
+            throwInvalidType(name, "string", type, v);
+
+        if (serialize) {
+            switch (format) {
+                case "byte":
+                    value = make_base64_string(v);
+                    break;
+                case "binary":
+                    value = v;
+                    return;
+                default:
+                    throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter %y: cannot serialize a binary value "
+                        "to a string value with format %y", operation, channel, name, format);
+            }
+            checkStringIntern(channel, operation, name, value);
+        }
+    }
+
+    #! validates string values
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, string v, reference<auto> value) {
+        if (type != "string" && type != "any") {
+            throwInvalidType(name, "string", type, v);
+        }
+
+        if (serialize) {
+            switch (format) {
+                case "byte":
+                    value = make_base64_string(v);
+                    break;
+                case "binary":
+                    value = binary(v);
+                    break;
+                # for date/date-time formats, keep strings as-is during serialization
+            }
+        } else {
+            switch (format) {
+                case "byte":
+                    try {
+                        value = parse_base64_string(v);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
+                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
+                            ex.desc);
+                    }
+                    break;
+                case "binary":
+                    try {
+                        value = binary(v);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
+                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
+                            ex.desc);
+                    }
+                    break;
+                case "date":
+                case "date-time":
+                    try {
+                        value = date(v);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
+                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
+                            ex.desc);
+                    }
+                    break;
+            }
+        }
+        if (value.typeCode() == NT_STRING) {
+            checkStringIntern(channel, operation, name, value);
+        }
+    }
+
+    #! converts dates to/from string or int values for supported formats
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, date v, reference<auto> value) {
+        if (type != "string" && type != "any" && (type != "integer" || format != "unix-time"))
+            throwInvalidType(name, "string", type, v);
+
+        if (serialize) {
+            if (type == "integer" && format == "unix-time") {
+                value = v.getEpochSeconds();
+            } else {
+                switch (format) {
+                    case "date":
+                        value = v.format("YYYY-MM-DD");
+                        break;
+                    case "date-time":
+                        if (v.milliseconds() != 0)
+                            value = v.format("YYYY-MM-DDTHH:mm:SS.yZ");
+                        else
+                            value = v.format("YYYY-MM-DDTHH:mm:SSZ");
+                        break;
+                    default:
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter %y: cannot serialize a date/time "
+                            "value to a string value with format %y", operation, channel, name, format);
+                }
+                checkStringIntern(channel, operation, name, value);
+            }
+        }
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, bool v, reference<bool> value) {
+        if (type != "boolean" && type != "any")
+            throwInvalidType(name, "boolean", type, v);
+    }
+
+    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
+            string name, nothing v, reference<nothing> value) {
+        if (type != "null" && type != "any")
+            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is null, but the "
+                "expected type is %y", name, channel, operation, type);
+    }
+
+    #! validates the value against the schema definition
+    private checkArrayParam(bool serialize, bool request, SchemaObject items, string channel, string operation,
+            string name, reference<list<auto>> value) {
+        if (exists maxItems && value.size() > maxItems) {
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y has too many items (maxItems: %d, actual: %d)",
+                    name, channel, operation, maxItems, value.size());
+        }
+        if (exists minItems && value.size() < minItems) {
+            throw "SCHEMA-VALIDATION-ERROR",
+                sprintf("Parameter %y for channel %y and operation %y has too few items (minItems: %d, actual: %d)",
+                    name, channel, operation, minItems, value.size());
+        }
+
+        if (!value) {
+            return;
+        }
+
+        # check array element types
+        if (!uniqueItems || items.type != "array") {
+            # hash for checking uniqueness if uniqueItems is true
+            hash<string, bool> h;
+            foreach auto v in (\value) {
+                items.check(serialize, request, channel, operation, name, \v);
+                if (uniqueItems) {
+                    if (h{v}) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter value %y is duplicated in the "
+                            "array", operation, channel, v);
+                    }
+                    h{v} = True;
+                }
+            }
+        } else {
+            # perform slow array uniqueness check
+            list<auto> uniqueItemsList = ();
+            foreach auto val in (\value) {
+                items.check(serialize, request, channel, operation, name, \val);
+                if (uniqueItemsList.contains(val)) {
+                    throw "SCHEMA-VALIDATION-ERROR",
+                        sprintf("%s %s: Array parameter %y does not have unique items",
+                            operation, channel, name);
+                }
+                uniqueItemsList += val;
+            }
+        }
+    }
+
+    #! throws a \c SCHEMA-VALIDATION-ERROR exception
+    static private throwInvalidType(string name, string actual, string expected, auto value) {
+        throw "SCHEMA-VALIDATION-ERROR",
+            sprintf("Parameter %y has invalid type %y (should be %y); value: %y", name, actual, expected, value);
+    }
+
+    #! Checks the value against the type
+    /** @return True if the value is OK, False if not
+    */
+    static bool checkValueType(reference<auto> value, string type) {
+        if (type == "any") {
+            return True;
+        }
+        int vt = value.typeCode();
+
+        # check for string values
+        if (vt == NT_STRING) {
+            if (type == "boolean") {
+                if (value == "true") {
+                    value = True;
+                    return True;
+                } else if (value == "false") {
+                    value = False;
+                    return True;
+                }
+            } else if (type == "int" && value =~ /^[0-9]+$/) {
+                value = value.toInt();
+                return True;
+            }
+        }
+
+        # check for number values
+        if (vt == NT_INT && type == "number") {
+            value = value.toFloat();
+            return True;
+        }
+
+        if ((vt == NT_BOOLEAN && type != "boolean") ||
+            (vt == NT_INT && type != "integer") ||
+            (vt == NT_FLOAT && type != "number") ||
+            (vt == NT_STRING && (type != "string" && type != "file")) ||
+            (vt == NT_LIST && type != "array")) {
+            return False;
+        }
+        return True;
+    }
+}
+
+#! Used for loading %AsyncApi definitions
+public class AsyncApi3Loader {
+    #! Load %AsyncApi definition from a string
+    /**
+        @param asyncapiSpecification <a href="https://www.asyncapi.com/">AsyncApi</a> specification
+        @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
+        detected automatically
+        @param opts options for the schema
+
+        @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with JSON module unavailable
+        @throws YAML-MODULE-MISSING trying to parse a YAML %AsyncApi specification with YAML module unavailable
+    */
+    static AsyncApi3Schema fromString(string asyncapiSpecification, *bool json, *hash<auto> opts) {
+        string ser;
+        if (!exists json) {
+            ser = AsyncApi3Loader::detectSourceEncoding(asyncapiSpecification);
+        } else {
+            ser = json ? "json" : "yaml";
+        }
+        return new AsyncApi3Schema(asyncapiSpecification,
+            AsyncApi3Loader::parseSchemaSource(asyncapiSpecification, ser), opts);
+    }
+
+    #! Load <a href="https://www.asyncapi.com/">AsyncApi</a> definition from a file.
+    /**
+        @param filepath path to the <a href="https://www.asyncapi.com/">AsyncApi</a> file
+        @param opts options for the schema
+
+        @throws EMPTY-SCHEMA-FILE %AsyncApi file is empty
+        @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with the json module unavailable
+        @throws YAML-MODULE-MISSING trying to parse a YAML %AsyncApi specification with the yaml module unavailable
+    */
+    static AsyncApi3Schema fromFile(string filepath, *hash<auto> opts) {
+        string file_data = ReadOnlyFile::readTextFile(filepath);
+        return new AsyncApi3Schema(file_data, AsyncApi3Loader::parseSchemaContent(filepath, file_data), opts);
+    }
+
+    #! Load <a href="https://www.asyncapi.com/">AsyncApi</a> definition from a URL or file path.
+    /**
+        @param url URL to the <a href="https://www.asyncapi.com/">AsyncApi</a> file
+        @param json whether the specification is in JSON or YAML format
+        @param opts options for the schema
+
+        @throws EMPTY-SCHEMA-FILE %AsyncApi file is empty
+        @throws JSON-MODULE-MISSING trying to parse a JSON %AsyncApi specification with the json module unavailable
+        @throws YAML-MODULE-MISSING trying to parse a YAML %AsyncApi specification with the yaml module unavailable
+    */
+    static AsyncApi3Schema fromUrl(string url, *bool json, *hash<auto> opts) {
+        if (!exists json) {
+            if (url =~ /\.yaml$/i) {
+                json = False;
+            } else if (url =~ /\.json$/i) {
+                json = True;
+            }
+        }
+        on_error {
+            rethrow $1.err, sprintf("%s (from URL %y)", $1.desc, get_safe_url(url));
+        }
+        return AsyncApi3Loader::fromString(FileLocationHandler::getTextFileFromLocation(url), json, opts);
+    }
+
+    #! Load a schema definition from a file
+    static hash<auto> parseSchemaContent(string filepath, string str) {
+        if (!str)
+            throw "EMPTY-SCHEMA-FILE", sprintf("%y: file is empty", filepath);
+
+        string ser;
+        string filename = basename(filepath);
+        if (filename =~ /.*\.json$/i) {
+            ser = "json";
+        } else if (filename =~ /.*\.yaml$/i) {
+            ser = "yaml";
+        } else {
+            ser = AsyncApi3Loader::detectSourceEncoding(str);
+        }
+
+        return AsyncApi3Loader::parseSchemaSource(str, ser);
+    }
+
+    #! parses the source encoding from the given string
+    static hash<auto> parseSchemaSource(string str, string ser) {
+        auto rv;
+        switch (ser) {
+            case "json": {
+%ifdef NoJson
+                throw "JSON-MODULE-MISSING", "Trying to parse a JSON schema, but the json module is unavailable";
+%else
+                rv = parse_json(str);
+                break;
+%endif
+            }
+            case "yaml": {
+%ifdef NoYaml
+                throw "YAML-MODULE-MISSING", "Trying to parse a YAML schema, but the yaml module is unavailable";
+%else
+                rv = parse_yaml(str);
+                break;
+%endif
+            }
+        }
+        if (rv.typeCode() != NT_HASH) {
+            throw "ASYNCAPI-SCHEMA-ERROR", sprintf("data of type %y provided for AsyncAPI schema; expecting \"hash\"",
+                rv.fullType());
+        }
+        return rv;
+    }
+
+    #! tries to determine the AsyncApi schema source encoding automatically
+    static string detectSourceEncoding(string str) {
+        DataLineIterator it(str);
+        while (it.next()) {
+            string line = trim(it.getValue());
+            if (line.size()) {
+                # Check for JSON indicators first (starts with { or [)
+                if (line =~ /^[\[{]/) {
+                    return "json";
+                }
+                # Check for YAML indicators (key: value format or document markers)
+                if (line =~ /^[^{[\s]+\s*:/ || line =~ /^(---|%YAML)/i) {
+                    return "yaml";
+                }
+                return "json";
+            }
+        }
+        return "json";
+    }
+}
+
+#! Info object for AsyncAPI
+public class InfoObject inherits ObjectBase {
+    public {
+        #! Required. The title of the application
+        string title;
+
+        #! Required. The version of the application API
+        string apiVersion;
+
+        #! A short description of the application
+        *string desc;
+
+        #! A URL to the Terms of Service for the API
+        *string termsOfService;
+
+        #! Contact information
+        *hash<auto> contact;
+
+        #! License information
+        *hash<auto> license;
+    }
+
+    #! Constructor
+    constructor(hash<auto> oh) : ObjectBase(oh) {
+        string obj_type = "Info";
+        required_field(obj_type, oh, "title", NT_STRING, \title);
+        required_field(obj_type, oh, "version", NT_STRING, \apiVersion);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "termsOfService", NT_STRING, \termsOfService);
+        optional_field(obj_type, oh, "contact", NT_HASH, \contact);
+        optional_field(obj_type, oh, "license", NT_HASH, \license);
+    }
+}
+
+#! Server object for AsyncAPI
+public class ServerObject inherits ObjectBase {
+    public {
+        #! Required. The server host
+        string host;
+
+        #! Required. The protocol (ws, wss, amqp, mqtt, etc.)
+        string protocol;
+
+        #! The version of the protocol
+        *string protocolVersion;
+
+        #! The path (for WebSocket)
+        *string pathname;
+
+        #! Server description
+        *string desc;
+
+        #! Server variables
+        hash<string, hash<auto>> variables;
+
+        #! Security requirements
+        *list<hash<auto>> security;
+
+        #! Server bindings
+        *hash<auto> bindings;
+    }
+
+    #! Constructor
+    constructor(hash<auto> oh) : ObjectBase(oh) {
+        string obj_type = "Server";
+        required_field(obj_type, oh, "host", NT_STRING, \host);
+        required_field(obj_type, oh, "protocol", NT_STRING, \protocol);
+        optional_field(obj_type, oh, "protocolVersion", NT_STRING, \protocolVersion);
+        optional_field(obj_type, oh, "pathname", NT_STRING, \pathname);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "variables", NT_HASH, \variables);
+        optional_field(obj_type, oh, "security", NT_LIST, \security);
+        optional_field(obj_type, oh, "bindings", NT_HASH, \bindings);
+    }
+
+    #! Returns the full URL for this server
+    string getUrl() {
+        string url = protocol + "://";
+        url += host;
+        if (pathname) {
+            url += pathname;
+        }
+        return url;
+    }
+}
+
+#! Message object for AsyncAPI
+public class MessageObject inherits ObjectBase {
+    public {
+        #! Unique identifier for the message
+        *string name;
+
+        #! Human-friendly title
+        *string title;
+
+        #! Short summary
+        *string summary;
+
+        #! Description
+        *string desc;
+
+        #! Content type (e.g., application/json)
+        *string contentType;
+
+        #! Payload schema
+        *SchemaObject payload;
+
+        #! Headers schema
+        *SchemaObject headers;
+
+        #! Correlation ID for request-reply
+        *hash<auto> correlationId;
+
+        #! Message bindings
+        *hash<auto> bindings;
+
+        #! Example messages
+        *list<hash<auto>> examples;
+
+        #! Message traits
+        *list<hash<auto>> traits;
+    }
+
+    private {
+        #! Reference to parent schema for $ref resolution
+        AsyncApi3Schema asyncapi;
+    }
+
+    #! Constructor
+    constructor(hash<auto> oh, AsyncApi3Schema schema) : ObjectBase(oh) {
+        asyncapi = schema;
+        string obj_type = "Message";
+
+        optional_field(obj_type, oh, "name", NT_STRING, \name);
+        optional_field(obj_type, oh, "title", NT_STRING, \title);
+        optional_field(obj_type, oh, "summary", NT_STRING, \summary);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "contentType", NT_STRING, \contentType);
+        optional_field(obj_type, oh, "correlationId", NT_HASH, \correlationId);
+        optional_field(obj_type, oh, "bindings", NT_HASH, \bindings);
+        optional_field(obj_type, oh, "examples", NT_LIST, \examples);
+        optional_field(obj_type, oh, "traits", NT_LIST, \traits);
+
+        # Parse payload schema
+        if (oh.hasKey("payload")) {
+            if (oh.payload.typeCode() == NT_HASH) {
+                if (oh.payload."$ref") {
+                    payload = asyncapi.resolveSchemaRef(oh.payload."$ref");
+                } else {
+                    payload = new SchemaObject("payload", oh.payload, asyncapi);
+                }
+            }
+        }
+
+        # Parse headers schema
+        if (oh.hasKey("headers")) {
+            if (oh.headers.typeCode() == NT_HASH) {
+                if (oh.headers."$ref") {
+                    headers = asyncapi.resolveSchemaRef(oh.headers."$ref");
+                } else {
+                    headers = new SchemaObject("headers", oh.headers, asyncapi);
+                }
+            }
+        }
+    }
+
+    #! Validates a message payload against this schema
+    validatePayload(string channel, string operation, reference<auto> msg) {
+        if (payload) {
+            payload.check(True, True, channel, operation, "payload", \msg);
+        }
+    }
+
+    #! Validates message headers against this schema
+    validateHeaders(string channel, string operation, reference<hash<auto>> hdrs) {
+        if (headers) {
+            foreach string key in (keys hdrs) {
+                auto val = hdrs{key};
+                headers.check(True, True, channel, operation, key, \val);
+                hdrs{key} = val;
+            }
+        }
+    }
+}
+
+#! Channel object for AsyncAPI 3.0
+public class ChannelObject inherits ObjectBase {
+    public {
+        #! The channel address (topic/queue name)
+        *string address;
+
+        #! Human-friendly title
+        *string title;
+
+        #! Description
+        *string desc;
+
+        #! Messages that can be sent/received on this channel
+        hash<string, MessageObject> messages;
+
+        #! Channel parameters (for address templating)
+        hash<string, hash<auto>> parameters;
+
+        #! Channel bindings
+        *hash<auto> bindings;
+    }
+
+    private {
+        #! Reference to parent schema
+        AsyncApi3Schema asyncapi;
+    }
+
+    #! Constructor
+    constructor(string channelName, hash<auto> oh, AsyncApi3Schema schema) : ObjectBase(oh) {
+        asyncapi = schema;
+        string obj_type = "Channel";
+
+        optional_field(obj_type, oh, "address", NT_STRING, \address);
+        optional_field(obj_type, oh, "title", NT_STRING, \title);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "parameters", NT_HASH, \parameters);
+        optional_field(obj_type, oh, "bindings", NT_HASH, \bindings);
+
+        # Parse messages
+        hash<auto> msgHash;
+        if (optional_field(obj_type, oh, "messages", NT_HASH, \msgHash)) {
+            foreach hash<auto> item in (msgHash.pairIterator()) {
+                if (item.value.typeCode() == NT_HASH) {
+                    if (item.value."$ref") {
+                        messages{item.key} = asyncapi.resolveMessageRef(item.value."$ref");
+                    } else {
+                        messages{item.key} = new MessageObject(item.value, asyncapi);
+                    }
+                }
+            }
+        }
+    }
+
+    #! Returns a message by name
+    *MessageObject getMessage(string name) {
+        return messages{name};
+    }
+
+    #! Returns the resolved address with parameters substituted
+    string getAddress(*hash<auto> params) {
+        if (!address) {
+            return "";
+        }
+        string result = address;
+        if (params) {
+            foreach hash<auto> p in (params.pairIterator()) {
+                result = replace(result, "{" + p.key + "}", p.value.toString());
+            }
+        }
+        return result;
+    }
+}
+
+#! Operation object for AsyncAPI 3.0
+public class OperationObject inherits ObjectBase {
+    public {
+        #! Required. The action: "send" or "receive"
+        string action;
+
+        #! Operation ID
+        *string operationId;
+
+        #! Human-friendly title
+        *string title;
+
+        #! Short summary
+        *string summary;
+
+        #! Description
+        *string desc;
+
+        #! Reference to the channel
+        *ChannelObject channel;
+
+        #! Channel name (for reference)
+        *string channelName;
+
+        #! Messages for this operation
+        list<MessageObject> messages;
+
+        #! Operation bindings
+        *hash<auto> bindings;
+
+        #! Reply configuration (for request-reply pattern)
+        *hash<auto> reply;
+
+        #! Security requirements
+        *list<hash<auto>> security;
+
+        #! Tags
+        *list<hash<auto>> tags;
+    }
+
+    private {
+        #! Reference to parent schema
+        AsyncApi3Schema asyncapi;
+    }
+
+    #! Constructor
+    constructor(string opId, hash<auto> oh, AsyncApi3Schema schema) : ObjectBase(oh) {
+        asyncapi = schema;
+        string obj_type = "Operation";
+
+        required_field(obj_type, oh, "action", NT_STRING, \action);
+        if (!ValidActionsHash{action}) {
+            throw "INVALID-FIELD-VALUE", sprintf("Operation Object: 'action' field must be 'send' or 'receive'; "
+                "got: %y", action);
+        }
+
+        operationId = opId;
+        optional_field(obj_type, oh, "title", NT_STRING, \title);
+        optional_field(obj_type, oh, "summary", NT_STRING, \summary);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "bindings", NT_HASH, \bindings);
+        optional_field(obj_type, oh, "reply", NT_HASH, \reply);
+        optional_field(obj_type, oh, "security", NT_LIST, \security);
+        optional_field(obj_type, oh, "tags", NT_LIST, \tags);
+
+        # Resolve channel reference
+        if (oh.hasKey("channel")) {
+            if (oh.channel.typeCode() == NT_HASH && oh.channel."$ref") {
+                string ref = oh.channel."$ref";
+                # Extract channel name from reference like "#/channels/userSignup"
+                if (ref =~ /^#\/channels\/(.+)$/) {
+                    channelName = (ref =~ x/^#\/channels\/(.+)$/)[0];
+                    channel = asyncapi.getChannel(channelName);
+                }
+            }
+        }
+
+        # Parse messages
+        *list<auto> msgList;
+        if (optional_field(obj_type, oh, "messages", NT_LIST, \msgList)) {
+            foreach auto msgRef in (msgList) {
+                if (msgRef.typeCode() == NT_HASH && msgRef."$ref") {
+                    messages += asyncapi.resolveMessageRef(msgRef."$ref");
+                }
+            }
+        }
+    }
+
+    #! Returns True if this is a send operation
+    bool isSend() {
+        return action == "send";
+    }
+
+    #! Returns True if this is a receive operation
+    bool isReceive() {
+        return action == "receive";
+    }
+
+    #! Validates a message for this operation
+    validateMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        if (!messages) {
+            return;
+        }
+        # Try to validate against any of the messages
+        bool validated = False;
+        *hash<ExceptionInfo> lastEx;
+        foreach MessageObject msgSchema in (messages) {
+            try {
+                msgSchema.validatePayload(channelName ?? "", operationId ?? "", \msg);
+                if (headers) {
+                    msgSchema.validateHeaders(channelName ?? "", operationId ?? "", \headers);
+                }
+                validated = True;
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                lastEx = ex;
+            }
+        }
+        if (!validated && lastEx) {
+            throw lastEx.err, lastEx.desc;
+        }
+    }
+}
+
+#! Schema object for JSON Schema validation
+public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractSchemaObject {
+    public {
+        #! Items schema for arrays
+        *SchemaObject items;
+
+        #! Properties for objects
+        hash<string, SchemaObject> properties;
+
+        #! Additional properties schema
+        *auto additionalProperties;
+
+        #! allOf schemas
+        *list<SchemaObject> allOf;
+
+        #! oneOf schemas
+        *list<SchemaObject> oneOf;
+
+        #! anyOf schemas
+        *list<SchemaObject> anyOf;
+
+        #! not schema
+        *SchemaObject notSchema;
+
+        #! Const value
+        *auto constValue;
+    }
+
+    private {
+        #! Reference to parent schema
+        AsyncApi3Schema asyncapi;
+    }
+
+    #! Constructor
+    constructor(string schemaName, hash<auto> oh, AsyncApi3Schema schema) : ObjectBase(oh), SchemaBase("Schema", oh) {
+        asyncapi = schema;
+        name = schemaName;
+
+        string obj_type = "Schema";
+        optional_field(obj_type, oh, "type", NT_STRING, \type);
+        optional_field(obj_type, oh, "format", NT_STRING, \format);
+        optional_field(obj_type, oh, "title", NT_STRING, \title);
+        optional_field(obj_type, oh, "description", NT_STRING, \desc);
+        optional_field(obj_type, oh, "default", (NT_STRING: True, NT_INT: True, NT_FLOAT: True,
+            NT_BOOLEAN: True, NT_HASH: True, NT_LIST: True, NT_NULL: True), \defaultVal);
+        optional_field(obj_type, oh, "nullable", NT_BOOLEAN, \nullable);
+        optional_field(obj_type, oh, "readOnly", NT_BOOLEAN, \readOnly);
+        optional_field(obj_type, oh, "const", (NT_STRING: True, NT_INT: True, NT_FLOAT: True,
+            NT_BOOLEAN: True, NT_HASH: True, NT_LIST: True, NT_NULL: True), \constValue);
+
+        # Parse required fields
+        *list<auto> reqList;
+        if (optional_field(obj_type, oh, "required", NT_LIST, \reqList)) {
+            required = map {$1.toString(): True}, reqList;
+        }
+
+        # Parse items for arrays
+        if (oh.hasKey("items")) {
+            if (oh.items.typeCode() == NT_HASH) {
+                if (oh.items."$ref") {
+                    items = asyncapi.resolveSchemaRef(oh.items."$ref");
+                } else {
+                    items = new SchemaObject(name + ".items", oh.items, asyncapi);
+                }
+            }
+        }
+
+        # Parse properties for objects
+        if (oh.hasKey("properties") && oh.properties.typeCode() == NT_HASH) {
+            foreach hash<auto> prop in (oh.properties.pairIterator()) {
+                if (prop.value.typeCode() == NT_HASH) {
+                    if (prop.value."$ref") {
+                        properties{prop.key} = asyncapi.resolveSchemaRef(prop.value."$ref");
+                    } else {
+                        properties{prop.key} = new SchemaObject(prop.key, prop.value, asyncapi);
+                    }
+                }
+            }
+        }
+
+        # Parse additionalProperties
+        if (oh.hasKey("additionalProperties")) {
+            if (oh.additionalProperties.typeCode() == NT_BOOLEAN) {
+                additionalProperties = oh.additionalProperties;
+            } else if (oh.additionalProperties.typeCode() == NT_HASH) {
+                if (oh.additionalProperties."$ref") {
+                    additionalProperties = asyncapi.resolveSchemaRef(oh.additionalProperties."$ref");
+                } else {
+                    additionalProperties = new SchemaObject(name + ".additionalProperties",
+                        oh.additionalProperties, asyncapi);
+                }
+            }
+        }
+
+        # Parse allOf
+        if (oh.hasKey("allOf") && oh.allOf.typeCode() == NT_LIST) {
+            allOf = ();
+            foreach auto item in (oh.allOf) {
+                if (item.typeCode() == NT_HASH) {
+                    if (item."$ref") {
+                        allOf += asyncapi.resolveSchemaRef(item."$ref");
+                    } else {
+                        allOf += new SchemaObject(name + ".allOf", item, asyncapi);
+                    }
+                }
+            }
+        }
+
+        # Parse oneOf
+        if (oh.hasKey("oneOf") && oh.oneOf.typeCode() == NT_LIST) {
+            oneOf = ();
+            foreach auto item in (oh.oneOf) {
+                if (item.typeCode() == NT_HASH) {
+                    if (item."$ref") {
+                        oneOf += asyncapi.resolveSchemaRef(item."$ref");
+                    } else {
+                        oneOf += new SchemaObject(name + ".oneOf", item, asyncapi);
+                    }
+                }
+            }
+        }
+
+        # Parse anyOf
+        if (oh.hasKey("anyOf") && oh.anyOf.typeCode() == NT_LIST) {
+            anyOf = ();
+            foreach auto item in (oh.anyOf) {
+                if (item.typeCode() == NT_HASH) {
+                    if (item."$ref") {
+                        anyOf += asyncapi.resolveSchemaRef(item."$ref");
+                    } else {
+                        anyOf += new SchemaObject(name + ".anyOf", item, asyncapi);
+                    }
+                }
+            }
+        }
+
+        # Parse not
+        if (oh.hasKey("not") && oh.not.typeCode() == NT_HASH) {
+            if (oh.not."$ref") {
+                notSchema = asyncapi.resolveSchemaRef(oh.not."$ref");
+            } else {
+                notSchema = new SchemaObject(name + ".not", oh.not, asyncapi);
+            }
+        }
+
+        # Default type to "any" if not specified
+        if (!type) {
+            type = "any";
+        }
+    }
+
+    #! Validates a value against this schema
+    check(bool serialize, bool request, string channel, string operation, string pname, reference<auto> value) {
+        # Handle nullable
+        if (!exists value && nullable) {
+            return;
+        }
+
+        # Handle const
+        if (exists constValue && value != constValue) {
+            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y must equal %y; got: %y", pname, constValue, value);
+        }
+
+        # Handle allOf - must match all schemas
+        if (allOf) {
+            foreach SchemaObject schema in (allOf) {
+                schema.check(serialize, request, channel, operation, pname, \value);
+            }
+        }
+
+        # Handle oneOf - must match exactly one schema
+        if (oneOf) {
+            int matches = 0;
+            foreach SchemaObject schema in (oneOf) {
+                try {
+                    auto testVal = value;
+                    schema.check(serialize, request, channel, operation, pname, \testVal);
+                    ++matches;
+                } catch () {
+                    # ignore errors
+                }
+            }
+            if (matches == 0) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y does not match any oneOf schemas", pname);
+            }
+            if (matches > 1) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y matches multiple oneOf schemas", pname);
+            }
+        }
+
+        # Handle anyOf - must match at least one schema
+        if (anyOf) {
+            bool matched = False;
+            foreach SchemaObject schema in (anyOf) {
+                try {
+                    auto testVal = value;
+                    schema.check(serialize, request, channel, operation, pname, \testVal);
+                    matched = True;
+                    break;
+                } catch () {
+                    # ignore errors
+                }
+            }
+            if (!matched) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y does not match any anyOf schemas", pname);
+            }
+        }
+
+        # Handle not - must NOT match the schema
+        if (notSchema) {
+            try {
+                auto testVal = value;
+                notSchema.check(serialize, request, channel, operation, pname, \testVal);
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y must not match the 'not' schema", pname);
+            } catch () {
+                # Expected to fail
+            }
+        }
+
+        # Handle object type
+        if (type == "object" && value.typeCode() == NT_HASH) {
+            checkObjectValue(serialize, request, channel, operation, pname, \value);
+            return;
+        }
+
+        # Delegate to base class for type checking
+        SchemaBase::check(serialize, request, type, format, items, channel, operation, pname, \value);
+    }
+
+    #! Validates an object value
+    private checkObjectValue(bool serialize, bool request, string channel, string operation, string pname,
+            reference<hash<auto>> value) {
+        # Check required properties
+        foreach string reqProp in (keys required) {
+            if (!value.hasKey(reqProp)) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y is missing required property %y",
+                    pname, reqProp);
+            }
+        }
+
+        # Check each property
+        foreach hash<auto> prop in (value.pairIterator()) {
+            if (properties{prop.key}) {
+                properties{prop.key}.check(serialize, request, channel, operation, pname + "." + prop.key,
+                    \value{prop.key});
+            } else if (additionalProperties.typeCode() == NT_BOOLEAN && !additionalProperties) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y has unexpected property %y",
+                    pname, prop.key);
+            } else if (additionalProperties.typeCode() == NT_OBJECT) {
+                cast<SchemaObject>(additionalProperties).check(serialize, request, channel, operation,
+                    pname + "." + prop.key, \value{prop.key});
+            }
+        }
+    }
+
+    #! Returns the items schema for arrays
+    *AbstractSchemaObject getItems() {
+        return items;
+    }
+
+    #! Returns a hash of property schemas for objects
+    *hash<string, AbstractSchemaObject> getProperties() {
+        return cast<*hash<string, AbstractSchemaObject>>(properties);
+    }
+
+    #! Returns a data field definition from this schema
+    AbstractDataField getField(string fname, *string fdesc, bool freq = True, *HTTPClient rest, auto default_value) {
+        # Simple implementation - returns a basic field
+        return new QoreDataField(fname, fdesc ?? desc, AbstractDataProviderType::get(type), default_value);
+    }
+}
+
+#! Components object for AsyncAPI
+public class ComponentsObject inherits ObjectBase {
+    public {
+        #! Schema definitions
+        hash<string, SchemaObject> schemas;
+
+        #! Message definitions
+        hash<string, MessageObject> messages;
+
+        #! Channel definitions
+        hash<string, ChannelObject> channels;
+
+        #! Operation definitions
+        hash<string, OperationObject> operations;
+
+        #! Server definitions
+        hash<string, ServerObject> servers;
+
+        #! Security scheme definitions
+        hash<string, hash<auto>> securitySchemes;
+
+        #! Server variable definitions
+        hash<string, hash<auto>> serverVariables;
+
+        #! Parameter definitions
+        hash<string, hash<auto>> parameters;
+
+        #! Correlation ID definitions
+        hash<string, hash<auto>> correlationIds;
+
+        #! Operation trait definitions
+        hash<string, hash<auto>> operationTraits;
+
+        #! Message trait definitions
+        hash<string, hash<auto>> messageTraits;
+
+        #! Server binding definitions
+        hash<string, hash<auto>> serverBindings;
+
+        #! Channel binding definitions
+        hash<string, hash<auto>> channelBindings;
+
+        #! Operation binding definitions
+        hash<string, hash<auto>> operationBindings;
+
+        #! Message binding definitions
+        hash<string, hash<auto>> messageBindings;
+    }
+}
+
+#! Main AsyncAPI 3.0 schema class
+public class AsyncApi3Schema inherits ObjectBase, Logger::LoggerWrapper, Qore::Serializable {
+    public {
+        #! AsyncAPI specification version
+        string asyncapiSpec;
+
+        #! Required. Provides metadata about the API
+        InfoObject info;
+
+        #! Default content type for messages
+        string defaultContentType = MimeTypeJson;
+
+        #! Server definitions
+        hash<string, ServerObject> servers;
+
+        #! Channel definitions
+        hash<string, ChannelObject> channels;
+
+        #! Operation definitions
+        hash<string, OperationObject> operations;
+
+        #! Components
+        ComponentsObject components;
+
+        #! AsyncApi3Schema options
+        const AsyncApiOptions = (
+            "compact_serialization": True,
+            "def_path": True,
+            "try_import": True,
+        );
+    }
+
+    private {
+        #! AsyncAPI specification major version
+        int versionMajor = 3;
+
+        #! AsyncAPI specification minor version
+        int versionMinor = 0;
+
+        #! if serialized data should be subject to compact serialization
+        bool compact_serialization;
+
+        #! the default path to use when retrieving external schema references
+        *string def_path;
+
+        #! a call reference or closure for external schema references
+        *code try_import;
+
+        #! the hash for the schema
+        string hash_str;
+
+        #! maps name -> schema objects for reference resolution
+        hash<string, SchemaObject> schema_cache;
+
+        #! maps name -> message objects for reference resolution
+        hash<string, MessageObject> message_cache;
+
+        #! the raw parsed definitions; used for resolving out-of-order references
+        *hash<auto> source_definition_hash;
+    }
+
+    #! Constructor
+    public constructor(string schema_source, hash<auto> oh, *hash<auto> opts) : ObjectBase(oh) {
+        constructorIntern(schema_source, oh, opts);
+    }
+
+    #! Constructor with logger
+    public constructor(LoggerInterface logger, string schema_source, hash<auto> oh, *hash<auto> opts)
+            : ObjectBase(oh), LoggerWrapper(logger) {
+        constructorIntern(schema_source, oh, opts);
+    }
+
+    #! Common constructor implementation
+    private constructorIntern(string schema_source, hash<auto> oh, *hash<auto> opts) {
+        hash_str = schema_source.toSHA256();
+
+        # process options
+        compact_serialization = remove opts.compact_serialization ?? True;
+        def_path = remove opts.def_path;
+        try_import = remove opts.try_import;
+        if (opts) {
+            throw "ASYNCAPI-OPTION-ERROR", sprintf("unknown options in AsyncApi3Schema constructor: %y; known "
+                "options: %y", keys opts, keys AsyncApiOptions);
+        }
+
+        string obj_type = "AsyncApi";
+
+        # Check asyncapi version
+        if (!oh.hasKey("asyncapi")) {
+            throw "REQUIRED-FIELD-MISSING", sprintf("%s Object: 'asyncapi' field is required", obj_type);
+        }
+        if (oh.asyncapi.typeCode() == NT_STRING) {
+            asyncapiSpec = oh.asyncapi;
+        } else if (oh.asyncapi.typeCode() == NT_FLOAT || oh.asyncapi.typeCode() == NT_INT) {
+            asyncapiSpec = sprintf("%.1f", oh.asyncapi);
+        } else {
+            throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'asyncapi' field has invalid type %y", obj_type,
+                oh.asyncapi.type());
+        }
+
+        # Parse version
+        list<string> parts = asyncapiSpec.split(".");
+        versionMajor = parts[0].toInt();
+        versionMinor = parts.size() > 1 ? parts[1].toInt() : 0;
+
+        if (versionMajor != 3) {
+            throw "INVALID-ASYNCAPI-VERSION", sprintf("invalid schema version %y; major version must be 3",
+                asyncapiSpec);
+        }
+
+        # Parse info
+        hash<auto> infoObj;
+        required_field(obj_type, oh, "info", NT_HASH, \infoObj);
+        info = new InfoObject(infoObj);
+
+        # Parse default content type
+        optional_field(obj_type, oh, "defaultContentType", NT_STRING, \defaultContentType);
+
+        # Initialize components
+        components = new ComponentsObject();
+
+        # Parse components - schemas first (needed for references)
+        if (oh.hasKey("components") && oh.components.typeCode() == NT_HASH) {
+            hash<auto> comp = oh.components;
+
+            # Parse schemas
+            if (comp.hasKey("schemas") && comp.schemas.typeCode() == NT_HASH) {
+                source_definition_hash = comp.schemas;
+                foreach hash<auto> item in (comp.schemas.pairIterator()) {
+                    if (item.value.typeCode() == NT_HASH) {
+                        components.schemas{item.key} = new SchemaObject(item.key, item.value, self);
+                        schema_cache{item.key} = components.schemas{item.key};
+                    }
+                }
+                delete source_definition_hash;
+            }
+
+            # Parse messages
+            if (comp.hasKey("messages") && comp.messages.typeCode() == NT_HASH) {
+                foreach hash<auto> item in (comp.messages.pairIterator()) {
+                    if (item.value.typeCode() == NT_HASH) {
+                        components.messages{item.key} = new MessageObject(item.value, self);
+                        message_cache{item.key} = components.messages{item.key};
+                    }
+                }
+            }
+
+            # Parse security schemes
+            if (comp.hasKey("securitySchemes") && comp.securitySchemes.typeCode() == NT_HASH) {
+                components.securitySchemes = comp.securitySchemes;
+            }
+        }
+
+        # Parse servers
+        if (oh.hasKey("servers") && oh.servers.typeCode() == NT_HASH) {
+            foreach hash<auto> item in (oh.servers.pairIterator()) {
+                if (item.value.typeCode() == NT_HASH) {
+                    servers{item.key} = new ServerObject(item.value);
+                }
+            }
+        }
+
+        # Parse channels
+        if (oh.hasKey("channels") && oh.channels.typeCode() == NT_HASH) {
+            foreach hash<auto> item in (oh.channels.pairIterator()) {
+                if (item.value.typeCode() == NT_HASH) {
+                    channels{item.key} = new ChannelObject(item.key, item.value, self);
+                }
+            }
+        }
+
+        # Parse operations
+        if (oh.hasKey("operations") && oh.operations.typeCode() == NT_HASH) {
+            foreach hash<auto> item in (oh.operations.pairIterator()) {
+                if (item.value.typeCode() == NT_HASH) {
+                    operations{item.key} = new OperationObject(item.key, item.value, self);
+                }
+            }
+        }
+    }
+
+    #! Returns a unique hash for the schema
+    string getHash() {
+        return hash_str;
+    }
+
+    #! Returns a channel by name
+    *ChannelObject getChannel(string name) {
+        return channels{name};
+    }
+
+    #! Returns an operation by ID
+    *OperationObject getOperation(string operationId) {
+        return operations{operationId};
+    }
+
+    #! Returns a list of all channel names
+    list<string> getChannelNames() {
+        return keys channels;
+    }
+
+    #! Returns a list of all operation IDs
+    list<string> getOperationIds() {
+        return keys operations;
+    }
+
+    #! Returns a hash of channel -> operation list
+    hash<string, list<string>> getChannelOperationHash() {
+        hash<string, list<string>> result;
+        foreach hash<auto> op in (operations.pairIterator()) {
+            string chName = op.value.channelName ?? "";
+            if (!result{chName}) {
+                result{chName} = ();
+            }
+            result{chName} += op.key;
+        }
+        return result;
+    }
+
+    #! Resolves a schema reference
+    *SchemaObject resolveSchemaRef(string ref) {
+        # Handle local references like "#/components/schemas/MySchema"
+        if (ref =~ /^#\/components\/schemas\/(.+)$/) {
+            string schemaName = (ref =~ x/^#\/components\/schemas\/(.+)$/)[0];
+            if (schema_cache{schemaName}) {
+                return schema_cache{schemaName};
+            }
+            # Check if we have the source definition
+            if (source_definition_hash{schemaName}) {
+                SchemaObject schema = new SchemaObject(schemaName, source_definition_hash{schemaName}, self);
+                schema_cache{schemaName} = schema;
+                return schema;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Resolves a message reference
+    *MessageObject resolveMessageRef(string ref) {
+        # Handle local references like "#/components/messages/MyMessage"
+        if (ref =~ /^#\/components\/messages\/(.+)$/) {
+            string msgName = (ref =~ x/^#\/components\/messages\/(.+)$/)[0];
+            return message_cache{msgName};
+        }
+        # Handle channel message references like "#/channels/userSignup/messages/userSignedUp"
+        if (ref =~ /^#\/channels\/([^\/]+)\/messages\/(.+)$/) {
+            list<string> parts = (ref =~ x/^#\/channels\/([^\/]+)\/messages\/(.+)$/);
+            string channelName = parts[0];
+            string msgName = parts[1];
+            if (channels{channelName}) {
+                return channels{channelName}.getMessage(msgName);
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Validates an outgoing message
+    /** @param channel the channel name
+        @param msg reference to the message to validate (may be modified)
+        @param headers reference to headers (may be modified)
+    */
+    validateOutgoingMessage(string channel, reference<auto> msg, reference<hash<auto>> headers) {
+        # Find send operations for this channel - try all and succeed if any validates
+        *hash<ExceptionInfo> lastEx;
+        foreach hash<auto> op in (operations.pairIterator()) {
+            if (op.value.channelName == channel && op.value.isSend()) {
+                try {
+                    op.value.validateMessage(\msg, \headers);
+                    return;  # Success - message validated
+                } catch (hash<ExceptionInfo> ex) {
+                    lastEx = ex;  # Store the error and try next operation
+                }
+            }
+        }
+        if (lastEx) {
+            throw lastEx.err, lastEx.desc;
+        }
+        throw "ASYNCAPI-VALIDATION-ERROR", sprintf("No send operation found for channel %y", channel);
+    }
+
+    #! Validates an incoming message
+    /** @param channel the channel name
+        @param msg reference to the message to validate (may be modified)
+        @param headers the message headers
+    */
+    validateIncomingMessage(string channel, reference<auto> msg, hash<auto> headers) {
+        # Find receive operations for this channel - try all and succeed if any validates
+        *hash<ExceptionInfo> lastEx;
+        foreach hash<auto> op in (operations.pairIterator()) {
+            if (op.value.channelName == channel && op.value.isReceive()) {
+                try {
+                    hash<auto> hdrs = headers;
+                    op.value.validateMessage(\msg, \hdrs);
+                    return;  # Success - message validated
+                } catch (hash<ExceptionInfo> ex) {
+                    lastEx = ex;  # Store the error and try next operation
+                }
+            }
+        }
+        if (lastEx) {
+            throw lastEx.err, lastEx.desc;
+        }
+        throw "ASYNCAPI-VALIDATION-ERROR", sprintf("No receive operation found for channel %y", channel);
+    }
+
+    #! Parses and validates a message
+    /** @param channel the channel name
+        @param msg_body the raw message body
+        @param headers the message headers
+
+        @return the parsed message data
+    */
+    auto parseMessage(string channel, *data msg_body, hash<auto> headers) {
+        if (!exists msg_body) {
+            return NOTHING;
+        }
+
+        # Determine content type
+        string ct = headers."content-type" ?? headers."Content-Type" ?? defaultContentType;
+        ct =~ s/[;,].*$//;
+
+        # Deserialize
+        auto msg;
+        if (MimeDataTypes{ct}) {
+            msg = MimeDataTypes{ct}.deserialize(msg_body);
+        } else {
+            throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize content-type: %y", ct);
+        }
+
+        # Validate
+        validateIncomingMessage(channel, \msg, headers);
+
+        return msg;
+    }
+
+    #! Serializes a message
+    /** @param msg the message to serialize
+        @param content_type the content type to use (defaults to defaultContentType)
+
+        @return the serialized message data
+    */
+    data serializeMessage(auto msg, *string content_type) {
+        string ct = content_type ?? defaultContentType;
+        ct =~ s/[;,].*$//;
+
+        if (MimeDataTypes{ct}) {
+            if (compact_serialization) {
+                return MimeDataTypes{ct}.serialize(msg);
+            } else {
+                return MimeDataTypes{ct}.serialize_verbose(msg);
+            }
+        }
+        throw "SERIALIZATION-ERROR", sprintf("cannot serialize content-type: %y", ct);
+    }
+
+    #! Returns the first server URL
+    *string getServerUrl(*string serverName) {
+        if (serverName) {
+            if (servers{serverName}) {
+                return servers{serverName}.getUrl();
+            }
+            return NOTHING;
+        }
+        # Return first server URL
+        if (servers) {
+            return servers.firstValue().getUrl();
+        }
+        return NOTHING;
+    }
+}
+
+} # namespace AsyncApi
