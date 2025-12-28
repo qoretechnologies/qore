@@ -228,30 +228,56 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
     }
 
     private string doWhereExpression(hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
-        list<string> clauses;
-        if (where_cond.exp == DP_OP_AND) {
-            map clauses += doWhereExpressionIntern($1), where_cond.args;
-        } else {
-            clauses += doWhereExpressionIntern(where_cond);
-        }
-        return foldl $1 + "^" + $2, clauses;
+        return processExpressionArg(where_cond);
     }
 
-    private string doWhereExpressionIntern(hash<DataProviderExpression> arg) {
-        *hash<auto> expinfo = ServiceNowTableDataProvider::Expressions{arg.exp};
+    #! Processes a DataProvider expression argument and returns the ServiceNow query string
+    /** @param exp the expression to process
+        @return the ServiceNow query string for the expression
+    */
+    string processExpressionArg(hash<DataProviderExpression> exp) {
+        *hash<auto> expinfo = ServiceNowTableDataProvider::Expressions{exp.exp};
         if (!expinfo) {
             throw "WHERE-ERROR", sprintf("expression references unknown operator %y; known operators: %y",
-                arg.exp, keys ServiceNowTableDataProvider::Expressions);
+                exp.exp, keys ServiceNowTableDataProvider::Expressions);
         }
-        if (!(arg.args[0] instanceof hash<DataProviderFieldReference>)) {
+
+        # Handle logical operators (AND, OR) - process recursively
+        if (exp.exp == DP_OP_AND) {
+            if (!exp.args) {
+                # Empty AND is always true - return a tautology
+                return "sys_id!=NULL";
+            }
+            list<string> clauses = map processExpressionArg($1), exp.args;
+            return foldl $1 + "^" + $2, clauses;
+        }
+        if (exp.exp == DP_OP_OR) {
+            if (!exp.args) {
+                # Empty OR is always false - return a contradiction
+                return "sys_id=NULL";
+            }
+            list<string> clauses = map processExpressionArg($1), exp.args;
+            return foldl $1 + "^OR" + $2, clauses;
+        }
+
+        # For comparison operators, first argument must be a field reference
+        if (exp.args.size() < 1 || !(exp.args[0] instanceof hash<DataProviderFieldReference>)) {
             throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
-                arg.exp);
+                exp.exp);
         }
-        string column = (shift arg.args).field;
+        string column = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+
+        # Build args for the impl function
         list<auto> args = (column,);
-        if (arg.args) {
-            args += map getArgValue(column, $1), arg.args;
+        for (int j = 1; j < exp.args.size(); ++j) {
+            # If the argument is a list, flatten it for IN/NOTIN operators
+            if (exp.args[j].typeCode() == NT_LIST) {
+                args += map getArgValue(column, $1), exp.args[j];
+            } else {
+                push args, getArgValue(column, exp.args[j]);
+            }
         }
+
         return call_function_args(expinfo.impl, args);
     }
 
