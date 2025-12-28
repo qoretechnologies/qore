@@ -19,6 +19,7 @@ class AssertDebugTest inherits QUnit::Test {
         addTestCase("basic debug tests", \basicDebugTests());
         addTestCase("disabled tests", \disabledTests());
         addTestCase("parse error tests", \parseErrorTests());
+        addTestCase("sprintf corner case tests", \sprintfCornerCaseTests());
         set_return_value(main());
     }
 
@@ -57,6 +58,27 @@ class AssertDebugTest inherits QUnit::Test {
 
         # Test assert with complex expression
         @assert((1 + 2) * 3 == 9, "math should work");
+
+        # Test assert with sprintf-style format and single arg
+        int x = 5;
+        try {
+            @assert(x > 10, "x must be > 10, got: %d", x);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("x must be > 10, got: 5", ex.desc);
+        }
+
+        # Test assert with sprintf-style format and multiple args
+        int expected = 10;
+        int actual = 5;
+        try {
+            @assert(expected == actual, "expected %d but got %d", expected, actual);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("expected 10 but got 5", ex.desc);
+        }
     }
 
     basicDebugTests() {
@@ -150,5 +172,83 @@ class AssertDebugTest inherits QUnit::Test {
                 @debug(hash.key = (1 + 2));
             }
         ", "test");
+    }
+
+    sprintfCornerCaseTests() {
+        # Test sprintf with more args than format placeholders (extra args ignored)
+        try {
+            @assert(False, "only one: %d", 1, 2, 3);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("only one: 1", ex.desc);
+        }
+
+        # Test sprintf with fewer args than placeholders (missing args become empty)
+        try {
+            @assert(False, "need two: %d %d", 42);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            # sprintf handles missing args gracefully
+            assertTrue(ex.desc.find("42") >= 0);
+        }
+
+        # Test with non-string as format (converted to string)
+        try {
+            @assert(False, 123);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("123", ex.desc);
+        }
+
+        # Test format string with no placeholders but args provided
+        try {
+            @assert(False, "no placeholders", 1, 2, 3);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("no placeholders", ex.desc);
+        }
+
+        # Test with various format specifiers
+        try {
+            @assert(False, "int:%d str:%s float:%f", 42, "hello", 3.14);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertTrue(ex.desc.find("int:42") >= 0);
+            assertTrue(ex.desc.find("str:hello") >= 0);
+            assertTrue(ex.desc.find("float:3.14") >= 0);
+        }
+
+        # Test empty format string with args
+        try {
+            @assert(False, "", 1, 2);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("", ex.desc);
+        }
+
+        # Test condition that uses parentheses to group a complex expression
+        int a = 1;
+        int b = 2;
+        @assert((a + b) == 3, "math works");
+
+        # Test that comma in condition still works with simple message
+        # (comma operator returns last value, so (False, True) == True)
+        @assert((False, True), "comma operator condition");
+
+        # Test variadic with complex expressions as args
+        hash<auto> h = {"value": 42};
+        try {
+            @assert(False, "hash value: %d, calc: %d", h.value, 1 + 2 + 3);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("hash value: 42, calc: 6", ex.desc);
+        }
     }
 }

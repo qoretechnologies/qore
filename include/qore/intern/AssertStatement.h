@@ -37,19 +37,18 @@
 
 class AssertStatement : public AbstractStatement {
 public:
-    //! Creates an assert statement with an expression and optional message
+    //! Creates an assert statement with an expression
     /** @param start_line the starting line number
         @param end_line the ending line number
-        @param cond the condition expression (must evaluate to true)
-        @param msg optional message expression (shown on assertion failure)
+        @param exp the expression - can be a single condition or a list (condition, msg, args...)
     */
-    DLLLOCAL AssertStatement(int start_line, int end_line, QoreValue cond, QoreValue msg = QoreValue());
+    DLLLOCAL AssertStatement(int start_line, int end_line, QoreValue exp);
 
     DLLLOCAL virtual ~AssertStatement();
 
 private:
     QoreValue condition;  //!< The condition to assert
-    QoreValue message;    //!< Optional message on failure
+    QoreValue message;    //!< Optional message/format args on failure (can be list for sprintf)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 

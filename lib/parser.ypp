@@ -2263,10 +2263,9 @@ statement:
         $$ = new ThrowStatement(@1.first_line, @2.last_line, $2);
     }
     | TOK_ASSERT '(' exp ')' ';' {
+        // exp could be: single condition, or list (condition, msg, args...)
+        // AssertStatement handles both cases
         $$ = new AssertStatement(@1.first_line, @4.last_line, $3);
-    }
-    | TOK_ASSERT '(' exp ',' exp ')' ';' {
-        $$ = new AssertStatement(@1.first_line, @6.last_line, $3, $5);
     }
     | TOK_DEBUG '(' exp ')' ';' {
         $$ = new DebugStatement(@1.first_line, @4.last_line, $3);
