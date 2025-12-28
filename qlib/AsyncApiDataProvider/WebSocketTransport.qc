@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires WebSocketClient
-%requires json
-
 #! contains all public definitions in the AsyncApiDataProvider module
 public namespace AsyncApiDataProvider {
 
@@ -68,7 +65,11 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
         # serialize message if needed
         data send_msg;
         if (msg.typeCode() == NT_HASH || msg.typeCode() == NT_LIST) {
+%ifndef NoJson
             send_msg = make_json(msg);
+%else
+            throw "JSON-NOT-AVAILABLE", "JSON module is required for message serialization";
+%endif
         } else {
             send_msg = msg;
         }

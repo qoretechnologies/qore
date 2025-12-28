@@ -37,6 +37,12 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) AsyncApi
+%requires WebSocketClient
+
+# optional module for JSON serialization
+%try-module json
+%define NoJson
+%endtry
 
 module AsyncApiDataProvider {
     version = "1.0";
