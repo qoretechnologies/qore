@@ -79,13 +79,13 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         string uri = "_bulk";
         list<string> params = ();
         if (pipeline) {
-            push params, sprintf("pipeline=%s", pipeline);
+            push params, sprintf("pipeline=%s", encode_url(pipeline, True));
         }
         if (routing) {
-            push params, sprintf("routing=%s", routing);
+            push params, sprintf("routing=%s", encode_url(routing, True));
         }
         if (refresh) {
-            push params, sprintf("refresh=%s", refresh);
+            push params, sprintf("refresh=%s", encode_url(refresh, True));
         }
         if (params) {
             uri += "?" + params.join("&");

@@ -104,7 +104,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             } else {
                 uri += "&";
             }
-            uri += sprintf("%s=%s", arg, req{arg});
+            uri += sprintf("%s=%s", arg, encode_url(string(req{arg}), True));
         }
 
         # Note: We need to parse the response as JSON because RestClient doesn't auto-parse

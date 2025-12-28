@@ -83,7 +83,8 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
     constructor(RestClient::RestClient rest, string name, hash<auto> index,
             hash<string, DataProvider::AbstractDataField> record_type, *hash<auto> where_cond,
             *hash<auto> search_options, string scroll_timeout = "1m", int batch_size = 1000)
-            : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
+            : AbstractDataProviderRecordIterator(search_options.requires_result ?? True,
+                search_options.max_records ?? -1) {
         self.rest = rest;
         self.name = name;
         self.index = index;

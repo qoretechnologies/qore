@@ -120,7 +120,7 @@ public class ElasticSearchAggregationDataProvider inherits ElasticSearchDataProv
             } else {
                 uri += "&";
             }
-            uri += sprintf("%s=%s", arg, remove req{arg});
+            uri += sprintf("%s=%s", arg, encode_url(string(remove req{arg}), True));
         }
 
         # Build request body
