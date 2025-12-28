@@ -881,7 +881,8 @@ i+ =4;
     Enables \c @@assert and \c @@debug statements. When this parse option is set:
     - \c @@assert statements are parsed and executed at runtime, throwing an \c ASSERTION-ERROR exception
       if the condition is false
-    - \c @@debug statements are parsed and executed at runtime for their side effects (e.g., logging)
+    - \c @@debug statements are parsed and executed at runtime for their side effects (e.g., logging);
+      supports both expression form \c @@debug(expr) and block form \c @@debug \c { \c ... \c }
 
     Without this directive, both \c @@assert and \c @@debug statements are completely skipped at parse time,
     providing zero runtime overhead when debugging is disabled.
@@ -892,6 +893,7 @@ i+ =4;
     @assert(condition, "error message");
     @assert(condition, "format string", arg1, arg2, ...);  # sprintf-style formatting
     @debug(expression);
+    @debug { statements... }
     @endcode
 
     The \c @@assert statement supports sprintf-style formatting when multiple arguments are provided after
@@ -903,6 +905,11 @@ i+ =4;
 
 sub validate_input(int value, int max_value) {
     @debug(printf("validate_input called with: %d\n", value));
+    @debug {
+        printf("Detailed debug info:\n");
+        printf("  value: %d\n", value);
+        printf("  max_value: %d\n", max_value);
+    }
     @assert(value > 0, "value must be positive, got: %d", value);
     @assert(value < max_value, "value %d exceeds maximum %d", value, max_value);
     @assert(value < 100);  # uses default message "assertion failed"

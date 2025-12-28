@@ -53,6 +53,7 @@
       - \c @@assert(condition) and \c @@assert(condition, message) throw \c ASSERTION-ERROR when condition is false
       - \c @@assert supports sprintf-style formatting: \c @@assert(condition, "format", arg1, arg2, ...)
       - \c @@debug(expression) evaluates an expression for its side effects (e.g., logging)
+      - \c @@debug \c { \c ... \c } executes a block of statements only when debugging is enabled
       - both statements are completely skipped at parse time when \c %%enable-debug is not set, providing
         zero runtime overhead
       - use \c %%enable-debug / \c %%disable-debug parse directives or \c PO_ENABLE_DEBUG parse option
