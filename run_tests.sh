@@ -8,6 +8,9 @@ print_usage () {
   echo "  -j         Use --format=junit option for the tests, making them print JUnit output."
   echo "  -t         Measure execution time of the tests."
   echo "  -v         Use --format=plain option for the tests, making them print one statement per each test case."
+  echo
+  echo "Environment variables:"
+  echo "  QORE_TEST_OPTS   Additional options to pass to qore (e.g., '-penable-debug')."
 }
 
 err_multiple_format_opts() {
@@ -165,15 +168,15 @@ for test in $TESTS; do
         echo "====================================="
         echo "Running test ($i/$TEST_COUNT): $test"
         echo "-------------------------------------"
-        echo "cmdline: $QORE $test $TEST_OUTPUT_FORMAT"
+        echo "cmdline: $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT"
         echo "-------------------------------------"
     fi
 
     # Run single test.
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval $TIME_CMD $QORE $test $TEST_OUTPUT_FORMAT
+        eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     else
-        $QORE $test $TEST_OUTPUT_FORMAT
+        $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     fi
 
     if [ $? -eq 0 ]; then

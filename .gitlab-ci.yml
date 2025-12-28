@@ -24,6 +24,7 @@ variables:
   MYSQL_DATABASE: omq
   MYSQL_ROOT_PASSWORD: omq
   QORE_DB_CONNSTR_MYSQL: 'mysql:root/omq@omq(UTF8)%mysql'
+  QORE_TEST_OPTS: '-penable-debug'
 
 test-ubuntu-amd64:
   stage: test
