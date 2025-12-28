@@ -890,16 +890,21 @@ i+ =4;
     @code{.py}
     @assert(condition);
     @assert(condition, "error message");
+    @assert(condition, "format string", arg1, arg2, ...);  # sprintf-style formatting
     @debug(expression);
     @endcode
+
+    The \c @@assert statement supports sprintf-style formatting when multiple arguments are provided after
+    the condition. The format string and arguments are processed with \c sprintf() to create the error message.
 
     @par Example:
     @code{.py}
 %enable-debug
 
-sub validate_input(int value) {
+sub validate_input(int value, int max_value) {
     @debug(printf("validate_input called with: %d\n", value));
-    @assert(value > 0, "value must be positive");
+    @assert(value > 0, "value must be positive, got: %d", value);
+    @assert(value < max_value, "value %d exceeds maximum %d", value, max_value);
     @assert(value < 100);  # uses default message "assertion failed"
     return value * 2;
 }
