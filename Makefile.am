@@ -21,6 +21,7 @@ DOX_SRC_MODULES = qlib/Mime.qm \
 	qlib/MapperUtil.qm \
 	qlib/WebSocketUtil.qm \
 	qlib/Logger.qm \
+	qlib/AsyncApi.qm \
 	qlib/OpenApi3.qm \
 	qlib/RestSchemaValidator.qm \
 	qlib/Swagger.qm \
@@ -118,8 +119,10 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventClient \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
-    qlib/SwaggerDataProvider
+    qlib/SwaggerDataProvider \
+    qlib/AsyncApiDataProvider
 
+AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
 AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
 AwsRestClientDataProvider_modverdir = $(modverdir)/AwsRestClientDataProvider
 BulkSqlUtil_modverdir = $(modverdir)/BulkSqlUtil
@@ -187,6 +190,7 @@ dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
+dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
 	$(DOX_MODULES)
@@ -1237,6 +1241,12 @@ doxygen/qlib/Doxyfile.RestSchemaValidator: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 
 doxygen/qlib/Doxyfile.Swagger: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/Swagger.qm:doxygen/qlib/Swagger.qm -tMime.tag=../../Mime/html -tUtil.tag=../../Util/html -tHttpServerUtil.tag=../../HttpServerUtil/html -tRestSchemaValidator.tag=../../RestSchemaValidator/html $< $@
+
+doxygen/qlib/Doxyfile.AsyncApi: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/AsyncApi.qm:doxygen/qlib/AsyncApi.qm -tMime.tag=../../Mime/html -tUtil.tag=../../Util/html -tHttpServerUtil.tag=../../HttpServerUtil/html -tRestSchemaValidator.tag=../../RestSchemaValidator/html $< $@
+
+doxygen/qlib/Doxyfile.AsyncApiDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/AsyncApiDataProvider:doxygen/qlib/AsyncApiDataProvider -tDataProvider.tag=../../DataProvider/html -tAsyncApi.tag=../../AsyncApi/html -tWebSocketClient.tag=../../WebSocketClient/html $< $@
 
 doxygen/qlib/Doxyfile.RestClient: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/RestClient.qm:doxygen/qlib/RestClient.qm -tDataProvider.tag=../../DataProvider/html -tMime.tag=../../Mime/html -tConnectionProvider.tag=../../ConnectionProvider/html -tRestSchemaValidator.tag=../../RestSchemaValidator/html -tSwagger.tag=../../Swagger/html -tOpenApi3.tag=../../OpenApi3/html $< $@

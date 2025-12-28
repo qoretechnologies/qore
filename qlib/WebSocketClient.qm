@@ -40,6 +40,11 @@
 %requires(reexport) DataProvider
 %requires(reexport) Logger
 
+# Optional AsyncAPI support
+%try-module AsyncApi >= 1.0
+%define NoAsyncApi
+%endtry
+
 %try-module yaml >= 0.7.3
 %define NoYaml
 %endtry
@@ -49,7 +54,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.3";
+    version = "2.4";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -174,6 +179,11 @@ c.waitForZero();
     @endcode
 
     @section websocketclient_relnotes WebSocketClient Module Release History
+
+    @subsection wsc_v2_4 v2.4
+    - added optional AsyncAPI validation support via @ref WebSocketClient::WebSocketClient::setAsyncApiValidator()
+      "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
+      (<a href="https://github.com/qoretechnologies/qore/issues/5010">issue 5010</a>)
 
     @subsection wsc_v2_3 v2.3
     - added the @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
@@ -392,7 +402,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const DefaultTimeout = 15s;
 
         #! module version
-        const Version = "2.3";
+        const Version = "2.4";
 
         #! default user agent string for HTTP requests
         const DefaultUserAgent = sprintf("Qore-WebSocketClient/%s", WebSocketClient::Version);
@@ -469,6 +479,14 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! Event disposition code: unknown opcode
         const WSEDC_UNKNOWN_OPCODE = 3;
+
+%ifndef NoAsyncApi
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
+%endif
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -494,11 +512,17 @@ WebSocketClient ws(\event(), {
         @param cb the callback @ref closure "closure" or @ref call_reference "call reference" for received messages
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
+        - \c asyncapi: the path or URL to an AsyncAPI schema file for message validation; only used if
+          \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
+        - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
+          \a validator is provided
         - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object for message validation;
+          overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
@@ -510,6 +534,8 @@ WebSocketClient ws(\event(), {
         - WebSocketClient 1.9.1 added the \c raw_callback option
         - WebSocketClient 2.3 removed logging closures, added LoggerWrapper as a base class, added token option
           support, added support for subclassing
+        - WebSocketClient 2.4 added the \c asyncapi, \c asyncapi_channel, and \c validator options for AsyncAPI
+          schema validation
     */
     constructor(code cb, hash<auto> opts) {
         constructorInit(opts);
@@ -548,6 +574,48 @@ WebSocketClient ws(\event(), {
     bool getReconnect() {
         return reconnect;
     }
+
+%ifndef NoAsyncApi
+    #! Sets an AsyncAPI validator for message validation
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+
+        When set, outgoing messages sent via send() will be validated against the AsyncAPI schema
+        for the specified channel before sending.
+
+        @since WebSocketClient 2.4
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    /** @return the AsyncAPI validator or NOTHING if not set
+
+        @since WebSocketClient 2.4
+    */
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    /** @return the channel name or NOTHING if not set
+
+        @since WebSocketClient 2.4
+    */
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    /** @since WebSocketClient 2.4
+    */
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
+    }
+%endif
 
     #! Connects to the websocket server
     /** @par Example:
@@ -1012,6 +1080,28 @@ ws.setEventQueue();
         remove http_opts.token_type;
         http_opts.encoding = "UTF-8";
 
+%ifndef NoAsyncApi
+        # process AsyncAPI validator options
+        if (http_opts.hasKey("validator")) {
+            if (!(http_opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                raiseError("validator object expected to be an instance of AsyncApi3Schema; got %y instead",
+                    http_opts.validator.fullType());
+            }
+            if (!http_opts.asyncapi_channel) {
+                raiseError("'asyncapi_channel' option is required when 'validator' is provided");
+            }
+            asyncapi_validator = remove http_opts.validator;
+            asyncapi_channel = remove http_opts.asyncapi_channel;
+        } else if (http_opts.hasKey("asyncapi")) {
+            if (!http_opts.asyncapi_channel) {
+                raiseError("'asyncapi_channel' option is required when 'asyncapi' is provided");
+            }
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(http_opts.asyncapi);
+            asyncapi_channel = remove http_opts.asyncapi_channel;
+            remove http_opts.asyncapi;
+        }
+%endif
+
         hc = new HTTPClient(http_opts);
     }
 
@@ -1030,6 +1120,12 @@ ws.setEventQueue();
 
     #! Handles processed messages
     private int handleEvent(string buf) {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            auto msg = buf;
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
+        }
+%endif
         if (callback) {
             callback(buf);
         } else {
@@ -1040,6 +1136,12 @@ ws.setEventQueue();
 
     #! Handles processed messages
     private int handleEvent(binary buf) {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            auto msg = buf;
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
+        }
+%endif
         if (callback) {
             callback(buf);
         } else {
@@ -1556,8 +1658,16 @@ class MyObserver inherits Observer {
     #! Sends string data over the web socket with timeout specified in options; if any errors occur, an exception is thrown
     /**
         @param value The value to serialize and send over the WebSocket
+
+        If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     sendData(auto value) {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            hash<auto> headers;
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \value, \headers);
+        }
+%endif
         send(serializeData(value));
     }
 

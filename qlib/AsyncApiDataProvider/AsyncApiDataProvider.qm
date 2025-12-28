@@ -1,0 +1,150 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AsyncApiDataProvider module definition
+
+/*  AsyncApiDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+# allow the use of the weak reference assignment operator: ':='
+%allow-weak-references
+
+%requires(reexport) DataProvider
+%requires(reexport) AsyncApi
+
+module AsyncApiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for AsyncAPI schemas";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new AsyncApiDataProviderFactory());
+    };
+}
+
+/** @mainpage AsyncApiDataProvider Module
+
+    @tableofcontents
+
+    @section asyncapidataproviderintro Introduction to the AsyncApiDataProvider Module
+
+    The %AsyncApiDataProvider module provides a @ref dataproviderintro "data provider" API for AsyncAPI 3.0
+    event-driven APIs. The module is protocol-agnostic and supports pluggable transports for different
+    messaging protocols.
+
+    The @ref AsyncApiDataProvider::AsyncApiDataProvider "AsyncApiDataProvider" class allows for introspecting
+    an AsyncAPI schema, while the @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider"
+    class supports the @ref dataproviderintro "data provider" message API for communication with messaging servers.
+
+    @section asyncapi_transports Supported Transports
+
+    The module uses a pluggable transport architecture via the
+    @ref AsyncApiDataProvider::AbstractAsyncApiTransport "AbstractAsyncApiTransport" interface. This allows
+    the same AsyncAPI schema to be used with different messaging protocols:
+
+    - @ref AsyncApiDataProvider::WebSocketTransport "WebSocketTransport" - Built-in WebSocket transport
+    - MQTT transport - Available via MqttDataProvider module (planned)
+    - Kafka transport - Available via KafkaDataProvider module (planned)
+
+    @section asyncapi_provider_hierarchy Provider Hierarchy
+
+    AsyncAPI schemas can be introspected with the following format:
+    - Channel: <tt><i>channel_name</i>/<i>operation_id</i></tt>
+      - ex: <tt><b>userSignup/sendUserSignup</b></tt>
+      - results in a
+        @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider" object where the
+        message schemas can be queried and messages can be sent/received
+
+    @section asyncapi_usage Usage Examples
+
+    @subsection asyncapi_websocket_example WebSocket Example
+
+    @code{.py}
+%requires AsyncApiDataProvider
+
+# Create provider with WebSocket transport (default when URL provided)
+AsyncApiDataProvider provider({
+    "schema": "chat-api.asyncapi.yaml",
+    "url": "wss://api.example.com/ws",
+});
+
+# Navigate to operation
+AbstractDataProvider op = provider.getChildProviderPath("userChat/sendChatMessage");
+
+# Send a message
+op.doRequest({"userId": "123", "message": "Hello!"});
+    @endcode
+
+    @subsection asyncapi_custom_transport Custom Transport Example
+
+    @code{.py}
+%requires AsyncApiDataProvider
+
+# Create a custom transport (e.g., for MQTT)
+class MyMqttTransport inherits AbstractAsyncApiTransport {
+    send(string channel, auto msg, *hash<auto> headers) {
+        # Send via MQTT client
+    }
+    string getProtocol() { return "mqtt"; }
+    bool isConnected() { return True; }
+    connect() { }
+}
+
+# Use custom transport with AsyncAPI provider
+AsyncApiDataProvider provider({
+    "schema": "iot-api.asyncapi.yaml",
+    "transport": new MyMqttTransport(),
+});
+    @endcode
+
+    @section asyncapi_classes Available Classes
+
+    The following classes are provided by this module:
+    - @ref AsyncApiDataProvider::AbstractAsyncApiTransport "AbstractAsyncApiTransport" - Abstract transport interface
+    - @ref AsyncApiDataProvider::WebSocketTransport "WebSocketTransport" - WebSocket transport implementation
+    - @ref AsyncApiDataProvider::AsyncApiDataProvider "AsyncApiDataProvider" - Root data provider
+    - @ref AsyncApiDataProvider::AsyncApiDataProviderBase "AsyncApiDataProviderBase" - Base class
+    - @ref AsyncApiDataProvider::AsyncApiDataProviderCommon "AsyncApiDataProviderCommon" - Common functionality
+    - @ref AsyncApiDataProvider::AsyncApiDataProviderFactory "AsyncApiDataProviderFactory" - Factory class
+    - @ref AsyncApiDataProvider::AsyncApiChannelDataProvider "AsyncApiChannelDataProvider" - Channel provider
+    - @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider" - Operation provider
+
+    @section asyncapidataprovider_relnotes Release Notes
+
+    @subsection asyncapidataprovider_v1_0 AsyncApiDataProvider v1.0
+    - initial release of the module
+    - protocol-agnostic design with pluggable transports
+    - built-in WebSocket transport support
+*/
+
+#! contains all public definitions in the AsyncApiDataProvider module
+public namespace AsyncApiDataProvider {
+}

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebSocketHandler.qm Qore handler definition for the HttpServer module for providing WebSocket server services
 
-/*  WebSocketHandler.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  WebSocketHandler.qm Copyright 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,10 +36,15 @@
 %requires Util
 %requires(reexport) Logger
 
+# Optional AsyncAPI support
+%try-module AsyncApi >= 1.0
+%define NoAsyncApi
+%endtry
+
 %new-style
 
 module WebSocketHandler {
-    version = "2.1";
+    version = "2.2";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -65,6 +70,11 @@ module WebSocketHandler {
     - @ref WebSocketHandler::WebSocketHandler
 
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_2 Version 2.2
+    - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
+      "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
+      (<a href="https://github.com/qoretechnologies/qore/issues/5010">issue 5010</a>)
 
     @subsection websockethandler_v2_1 Version 2.1
     - implemented support for a variable send timeout
@@ -176,6 +186,14 @@ public class WebSocketConnection {
 
         #! The TID of the I/O thread
         int tid = gettid();
+
+%ifndef NoAsyncApi
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
+%endif
     }
 
     private:internal {
@@ -230,15 +248,31 @@ public class WebSocketConnection {
 
     #! Pushes an unencoded message on the connection's message queue
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
+
+        If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     send(data msg) {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            hash<auto> headers;
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
+        }
+%endif
         queue.push(ws_encode_message(msg));
     }
 
     #! Pushes an unencoded message on the connection's message queue
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
+
+        If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     send(data msg, int op, bool fin) {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            hash<auto> headers;
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
+        }
+%endif
         queue.push(ws_encode_message(msg, op, NOTHING, fin));
     }
 
@@ -308,6 +342,74 @@ public class WebSocketConnection {
         # WebSocketHandler::startImpl() thread)
         queue.push(binary());
     }
+
+%ifndef NoAsyncApi
+    #! Sets an AsyncAPI validator for message validation
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+
+        When set, messages can be validated against the AsyncAPI schema for the specified channel.
+
+        @since WebSocketHandler 2.2
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    /** @return the AsyncAPI validator or NOTHING if not set
+
+        @since WebSocketHandler 2.2
+    */
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    /** @return the channel name or NOTHING if not set
+
+        @since WebSocketHandler 2.2
+    */
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    /** @since WebSocketHandler 2.2
+    */
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
+    }
+
+    #! Validates an incoming message against the AsyncAPI schema
+    /** @param msg the message to validate
+
+        @throws SCHEMA-VALIDATION-ERROR if the message fails validation
+
+        @since WebSocketHandler 2.2
+    */
+    validateIncomingMessage(auto msg) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
+        }
+    }
+
+    #! Validates an outgoing message against the AsyncAPI schema
+    /** @param msg the message to validate
+        @param headers reference to headers (may be modified)
+
+        @throws SCHEMA-VALIDATION-ERROR if the message fails validation
+
+        @since WebSocketHandler 2.2
+    */
+    validateOutgoingMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
+        }
+    }
+%endif
 }
 
 #! the main web socket handler class
@@ -741,9 +843,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     } else {
                         buf += h.msg;
                     }
-                    wsc.gotMessage(remove buf);
+                    auto msg = remove buf;
+                    wsc.validateIncomingMessage(msg);
+                    wsc.gotMessage(msg);
                     continue;
                 } else if (h.op == WSOP_Text || h.op == WSOP_Binary) {
+                    wsc.validateIncomingMessage(h.msg);
                     wsc.gotMessage(h.msg);
                     continue;
                 } else if (h.op == WSOP_Continuation) {

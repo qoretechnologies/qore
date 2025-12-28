@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+# try importing JSON and YAML modules
+%try-module json
+%define NoJson
+%endtry
+%try-module yaml
+%define NoYaml
+%endtry
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/AsyncApi.qm
+
+%exec-class AsyncApiTest
+
+public class AsyncApiTest inherits QUnit::Test {
+    private {
+        string testDir;
+    }
+
+    constructor() : Test("AsyncApiTest", "1.0") {
+        testDir = get_script_dir();
+        addTestCase("schema parsing test", \schemaParsingTest());
+        addTestCase("message validation test", \messageValidationTest());
+        addTestCase("ref resolution test", \refResolutionTest());
+        addTestCase("channel operations test", \channelOperationsTest());
+        addTestCase("validation constraints test", \validationConstraintsTest());
+        set_return_value(main());
+    }
+
+    checkModules() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    schemaParsingTest() {
+        checkModules();
+
+        # Test loading from YAML file
+        AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
+        assertEq("Chat API", schema.info.title);
+        assertEq("1.0.0", schema.info.version);
+        assertEq("3.0.0", schema.asyncapi);
+
+        # Test loading from string
+        string yamlContent = File::readTextFile(testDir + "/ChatApi.asyncapi.yaml");
+        AsyncApi::AsyncApi3Schema schema2 = AsyncApi::AsyncApi3Loader::fromString(yamlContent);
+        assertEq("Chat API", schema2.info.title);
+        assertEq("1.0.0", schema2.info.version);
+
+        # Test info object
+        assertTrue(schema.info instanceof AsyncApi::InfoObject);
+        assertEq("A sample chat API for testing AsyncAPI 3.0 validation", schema.info.description);
+    }
+
+    messageValidationTest() {
+        checkModules();
+
+        AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
+
+        # Test valid outgoing message
+        hash<auto> validMessage = {
+            "userId": "user123",
+            "message": "Hello, world!",
+            "timestamp": "2024-01-15T10:30:00Z",
+        };
+        hash<auto> headers = {};
+
+        # Should not throw
+        schema.validateOutgoingMessage("userChat", \validMessage, \headers);
+        assertTrue(True);
+
+        # Test valid typing indicator
+        hash<auto> typingMessage = {
+            "userId": "user123",
+            "isTyping": True,
+        };
+        schema.validateOutgoingMessage("userChat", \typingMessage, \headers);
+        assertTrue(True);
+
+        # Test invalid message - missing required field
+        hash<auto> invalidMessage = {
+            "message": "Hello without userId",
+        };
+        try {
+            schema.validateOutgoingMessage("userChat", \invalidMessage, \headers);
+            fail("Expected SCHEMA-VALIDATION-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+    }
+
+    refResolutionTest() {
+        checkModules();
+
+        AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
+
+        # Test channel lookup
+        *AsyncApi::ChannelObject channel = schema.getChannel("userChat");
+        assertTrue(exists channel);
+        assertEq("/chat/user", channel.address);
+        assertEq("Channel for user chat messages", channel.description);
+
+        # Test that messages are resolved via $ref
+        assertTrue(exists channel.messages);
+        assertTrue(channel.messages.hasKey("chatMessage"));
+
+        # Test operation lookup
+        *AsyncApi::OperationObject op = schema.getOperation("sendChatMessage");
+        assertTrue(exists op);
+        assertEq("send", op.action);
+        assertEq("Send a chat message", op.summary);
+
+        # Test that operation references are resolved
+        assertEq("userChat", op.channelName);
+        assertTrue(exists op.channel);
+
+        # Test messages list is populated
+        assertTrue(op.messages.size() > 0);
+        AsyncApi::MessageObject msg = op.messages[0];
+        assertTrue(exists msg.payload);
+    }
+
+    channelOperationsTest() {
+        checkModules();
+
+        AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
+
+        # Test getChannelOperationHash
+        hash<string, list<string>> channelOps = schema.getChannelOperationHash();
+        assertTrue(channelOps.hasKey("userChat"));
+        assertTrue(channelOps.hasKey("systemNotifications"));
+
+        # userChat should have 3 operations (send, receive, typing)
+        list<string> userChatOps = channelOps.userChat;
+        assertTrue(userChatOps.size() >= 2);
+        assertTrue(inlist("sendChatMessage", userChatOps));
+        assertTrue(inlist("receiveChatMessage", userChatOps));
+
+        # systemNotifications should have 1 receive operation
+        list<string> systemOps = channelOps.systemNotifications;
+        assertTrue(systemOps.size() >= 1);
+        assertTrue(inlist("receiveSystemNotification", systemOps));
+
+        # Test operation actions
+        *AsyncApi::OperationObject sendOp = schema.getOperation("sendChatMessage");
+        assertTrue(sendOp.isSend());
+        assertFalse(sendOp.isReceive());
+
+        *AsyncApi::OperationObject recvOp = schema.getOperation("receiveChatMessage");
+        assertFalse(recvOp.isSend());
+        assertTrue(recvOp.isReceive());
+    }
+
+    validationConstraintsTest() {
+        checkModules();
+
+        AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
+
+        # Test string length validation
+        hash<auto> tooLongMessage = {
+            "userId": "user123",
+            "message": strmul("x", 5000),  # exceeds maxLength of 4096
+            "timestamp": "2024-01-15T10:30:00Z",
+        };
+        hash<auto> headers = {};
+        try {
+            schema.validateOutgoingMessage("userChat", \tooLongMessage, \headers);
+            fail("Expected SCHEMA-VALIDATION-ERROR for too long message");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+
+        # Test enum validation for system messages
+        hash<auto> invalidEnumMessage = {
+            "type": "invalid_type",  # not in enum
+            "message": "Test message",
+        };
+        try {
+            schema.validateOutgoingMessage("systemNotifications", \invalidEnumMessage, \headers);
+            fail("Expected SCHEMA-VALIDATION-ERROR for invalid enum");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+
+        # Test valid enum value
+        hash<auto> validEnumMessage = {
+            "type": "info",
+            "message": "Test message",
+        };
+        schema.validateOutgoingMessage("systemNotifications", \validEnumMessage, \headers);
+        assertTrue(True);
+
+        # Test empty string validation (minLength: 1)
+        hash<auto> emptyMessage = {
+            "userId": "user123",
+            "message": "",  # empty, but minLength is 1
+            "timestamp": "2024-01-15T10:30:00Z",
+        };
+        try {
+            schema.validateOutgoingMessage("userChat", \emptyMessage, \headers);
+            fail("Expected SCHEMA-VALIDATION-ERROR for empty message");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+    }
+}
