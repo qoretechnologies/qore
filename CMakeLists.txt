@@ -162,6 +162,9 @@ set(LIBQORE_QPP_SRC
     lib/QC_DebugProgram.qpp
     lib/QC_Breakpoint.qpp
     lib/QC_Expression.qpp
+    lib/QC_Regex.qpp
+    lib/QC_RegexSubst.qpp
+    lib/QC_RegexExtract.qpp
     lib/QC_Queue.qpp
     lib/QC_RWLock.qpp
     lib/QC_SQLStatement.qpp

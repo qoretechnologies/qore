@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class RegexExtractTest
+
+public class RegexExtractTest inherits QUnit::Test {
+    constructor() : Test("RegexExtract", "1.0") {
+        addTestCase("basic extract test", \basicExtractTest());
+        addTestCase("global extract test", \globalExtractTest());
+        addTestCase("multiple groups test", \multipleGroupsTest());
+        addTestCase("nested groups test", \nestedGroupsTest());
+        addTestCase("no match test", \noMatchTest());
+        addTestCase("match test", \matchTest());
+        addTestCase("copy constructor test", \copyConstructorTest());
+        addTestCase("getter methods test", \getterMethodsTest());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner cases test", \cornerCasesTest());
+        addTestCase("optional groups test", \optionalGroupsTest());
+
+        set_return_value(main());
+    }
+
+    private basicExtractTest() {
+        RegexExtract r("(\\d+)");
+        *list<*string> result = r.extractGroups("test 123 example");
+        assertEq(1, result.size());
+        assertEq("123", result[0]);
+
+        RegexExtract word("(\\w+)");
+        result = word.extractGroups("hello world");
+        assertEq(1, result.size());
+        assertEq("hello", result[0]);
+    }
+
+    private globalExtractTest() {
+        # With RE_Global, extract all matches
+        RegexExtract r("(\\d+)", RE_Global);
+        *list<*string> result = r.extractGroups("a1b2c3d4");
+        assertEq(4, result.size());
+        assertEq("1", result[0]);
+        assertEq("2", result[1]);
+        assertEq("3", result[2]);
+        assertEq("4", result[3]);
+
+        # Extract all words
+        RegexExtract words("(\\w+)", RE_Global);
+        result = words.extractGroups("hello world test");
+        assertEq(3, result.size());
+        assertEq("hello", result[0]);
+        assertEq("world", result[1]);
+        assertEq("test", result[2]);
+    }
+
+    private multipleGroupsTest() {
+        RegexExtract r("(\\w+)@(\\w+)\\.(\\w+)");
+        *list<*string> result = r.extractGroups("user@example.com");
+        assertEq(3, result.size());
+        assertEq("user", result[0]);
+        assertEq("example", result[1]);
+        assertEq("com", result[2]);
+
+        RegexExtract phone("(\\d{3})-(\\d{3})-(\\d{4})");
+        result = phone.extractGroups("Call 555-123-4567 now");
+        assertEq(3, result.size());
+        assertEq("555", result[0]);
+        assertEq("123", result[1]);
+        assertEq("4567", result[2]);
+    }
+
+    private nestedGroupsTest() {
+        RegexExtract r("((\\d+)-(\\d+))");
+        *list<*string> result = r.extractGroups("test 123-456 example");
+        assertEq(3, result.size());
+        assertEq("123-456", result[0]);
+        assertEq("123", result[1]);
+        assertEq("456", result[2]);
+
+        RegexExtract deep("(a(b(c)))");
+        result = deep.extractGroups("xabcy");
+        assertEq(3, result.size());
+        assertEq("abc", result[0]);
+        assertEq("bc", result[1]);
+        assertEq("c", result[2]);
+    }
+
+    private noMatchTest() {
+        RegexExtract r("(\\d+)");
+        assertNothing(r.extractGroups("no numbers here"));
+        assertNothing(r.extractGroups(""));
+
+        RegexExtract email("(\\w+)@(\\w+)\\.(\\w+)");
+        assertNothing(email.extractGroups("not an email"));
+    }
+
+    private matchTest() {
+        RegexExtract r("(\\d+)-(\\d+)");
+        assertTrue(r.match("123-456"));
+        assertFalse(r.match("123456"));
+        assertFalse(r.match("abc-def"));
+
+        # match() should work independently of extract()
+        assertTrue(r.match("test 999-888 test"));
+        *list<*string> result = r.extractGroups("test 999-888 test");
+        assertEq(2, result.size());
+    }
+
+    private copyConstructorTest() {
+        RegexExtract r("(\\d+)", RE_Global | RE_Caseless);
+        RegexExtract copy = r.copy();
+
+        *list<*string> r1 = r.extractGroups("a1b2c3");
+        *list<*string> r2 = copy.extractGroups("a1b2c3");
+        assertEq(r1, r2);
+        assertEq(r.getPattern(), copy.getPattern());
+        assertEq(r.getOptions(), copy.getOptions());
+
+        # Verify independence
+        assertTrue(r.match("123"));
+        assertTrue(copy.match("456"));
+    }
+
+    private getterMethodsTest() {
+        RegexExtract r("(\\d+)-(\\w+)", RE_Global | RE_Caseless);
+        assertEq("(\\d+)-(\\w+)", r.getPattern());
+        assertEq(RE_Global | RE_Caseless, r.getOptions());
+
+        RegexExtract simple("(a)");
+        assertEq("(a)", simple.getPattern());
+        assertEq(0, simple.getOptions());
+    }
+
+    private negativeTests() {
+        # Invalid pattern
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new RegexExtract("[invalid"); });
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new RegexExtract("(unclosed"); });
+
+        # Pattern without capturing groups - extract returns NOTHING even on match
+        RegexExtract noGroups("hello");
+        assertTrue(noGroups.match("hello world"));
+        assertNothing(noGroups.extractGroups("hello world"));
+    }
+
+    private cornerCasesTest() {
+        # Empty string
+        RegexExtract r("(a*)");
+        *list<*string> result = r.extractGroups("");
+        # Empty pattern might match empty string
+        assertNothing(result);
+
+        # Unicode
+        RegexExtract uni("(café)");
+        result = uni.extractGroups("I love café");
+        assertEq(1, result.size());
+        assertEq("café", result[0]);
+
+        # Case insensitive
+        RegexExtract ci("(HELLO)", RE_Caseless);
+        result = ci.extractGroups("hello world");
+        assertEq(1, result.size());
+        assertEq("hello", result[0]);
+
+        # Multiline
+        RegexExtract ml("^(\\w+)", RE_MultiLine | RE_Global);
+        result = ml.extractGroups("line1\nline2\nline3");
+        assertEq(3, result.size());
+        assertEq("line1", result[0]);
+        assertEq("line2", result[1]);
+        assertEq("line3", result[2]);
+    }
+
+    private optionalGroupsTest() {
+        # Optional group that matches
+        RegexExtract r("(\\d+)(-\\d+)?");
+        *list<*string> result = r.extractGroups("123-456");
+        assertEq(2, result.size());
+        assertEq("123", result[0]);
+        assertEq("-456", result[1]);
+
+        # Optional group that doesn't match - only matched groups are returned
+        result = r.extractGroups("123");
+        assertEq(1, result.size());
+        assertEq("123", result[0]);
+
+        # Alternation
+        RegexExtract alt("(cat|dog)");
+        result = alt.extractGroups("I have a cat");
+        assertEq(1, result.size());
+        assertEq("cat", result[0]);
+
+        result = alt.extractGroups("I have a dog");
+        assertEq(1, result.size());
+        assertEq("dog", result[0]);
+    }
+}

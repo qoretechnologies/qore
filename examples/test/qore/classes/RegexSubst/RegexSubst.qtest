@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class RegexSubstTest
+
+public class RegexSubstTest inherits QUnit::Test {
+    constructor() : Test("RegexSubst", "1.0") {
+        addTestCase("basic substitution test", \basicSubstTest());
+        addTestCase("global substitution test", \globalSubstTest());
+        addTestCase("backreference test", \backreferenceTest());
+        addTestCase("no match test", \noMatchTest());
+        addTestCase("override replacement test", \overrideReplacementTest());
+        addTestCase("special chars test", \specialCharsTest());
+        addTestCase("copy constructor test", \copyConstructorTest());
+        addTestCase("getter methods test", \getterMethodsTest());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner cases test", \cornerCasesTest());
+        addTestCase("escape sequences test", \escapeSequencesTest());
+
+        set_return_value(main());
+    }
+
+    private basicSubstTest() {
+        RegexSubst r("foo", "bar");
+        assertEq("bar", r.subst("foo"));
+        assertEq("bar baz", r.subst("foo baz"));
+        assertEq("hello bar world", r.subst("hello foo world"));
+
+        # Only first occurrence without RE_Global
+        assertEq("bar foo foo", r.subst("foo foo foo"));
+    }
+
+    private globalSubstTest() {
+        # With RE_Global, replace all occurrences
+        RegexSubst r("foo", "bar", RE_Global);
+        assertEq("bar bar bar", r.subst("foo foo foo"));
+        assertEq("bar", r.subst("foo"));
+        assertEq("barbaz", r.subst("foobaz"));
+
+        # Replace all whitespace
+        RegexSubst ws("\\s+", "_", RE_Global);
+        assertEq("hello_world_test", ws.subst("hello world test"));
+        assertEq("a_b_c_d", ws.subst("a  b   c    d"));
+    }
+
+    private backreferenceTest() {
+        # Simple backreference
+        RegexSubst swap("(\\w+)\\s+(\\w+)", "$2 $1");
+        assertEq("world hello", swap.subst("hello world"));
+
+        # Multiple backreferences
+        RegexSubst dup("(\\w+)", "$1$1");
+        assertEq("hellohello world", dup.subst("hello world"));
+
+        # Backreference to non-existent group (non-existent refs become empty)
+        RegexSubst r("(a)", "$1$2$3");
+        assertEq("a", r.subst("a"));
+
+        # Backreference with global
+        RegexSubst dupAll("(\\w+)", "[$1]", RE_Global);
+        assertEq("[hello] [world]", dupAll.subst("hello world"));
+    }
+
+    private noMatchTest() {
+        RegexSubst r("foo", "bar");
+        # When there's no match, original string is returned
+        assertEq("hello world", r.subst("hello world"));
+        assertEq("", r.subst(""));
+        assertEq("123", r.subst("123"));
+    }
+
+    private overrideReplacementTest() {
+        RegexSubst r("\\d+", "NUM");
+        # Use default replacement
+        assertEq("test NUM", r.subst("test 123"));
+
+        # Override replacement
+        assertEq("test XXX", r.subst("test 123", "XXX"));
+        assertEq("test [NUMBER]", r.subst("test 456", "[NUMBER]"));
+
+        # Original default is preserved
+        assertEq("test NUM", r.subst("test 789"));
+
+        # Override with backreference
+        RegexSubst r2("(\\d+)", "NUM");
+        assertEq("test [123]", r2.subst("test 123", "[$1]"));
+    }
+
+    private specialCharsTest() {
+        # Replacement with special regex chars
+        RegexSubst r("x", "[*]");
+        assertEq("a[*]b", r.subst("axb"));
+
+        # Pattern with special chars - global replacement
+        RegexSubst special("\\.", "-", RE_Global);
+        assertEq("a-b-c", special.subst("a.b.c"));
+
+        # HTML-like replacements - note: only opening <b> is replaced, not </b>
+        RegexSubst html("<b>", "**", RE_Global);
+        assertEq("**bold</b> text", html.subst("<b>bold</b> text"));
+    }
+
+    private copyConstructorTest() {
+        RegexSubst r("foo", "bar", RE_Global | RE_Caseless);
+        RegexSubst copy = r.copy();
+
+        assertEq(r.subst("FOO foo"), copy.subst("FOO foo"));
+        assertEq(r.getPattern(), copy.getPattern());
+        assertEq(r.getReplacement(), copy.getReplacement());
+        assertEq(r.getOptions(), copy.getOptions());
+
+        # Verify independence
+        assertEq("bar bar", r.subst("foo FOO"));
+        assertEq("bar bar", copy.subst("Foo fOO"));
+    }
+
+    private getterMethodsTest() {
+        RegexSubst r("\\d+", "NUM", RE_Global | RE_Caseless);
+        assertEq("\\d+", r.getPattern());
+        assertEq("NUM", r.getReplacement());
+        assertEq(RE_Global | RE_Caseless, r.getOptions());
+
+        RegexSubst simple("a", "b");
+        assertEq("a", simple.getPattern());
+        assertEq("b", simple.getReplacement());
+        assertEq(0, simple.getOptions());
+    }
+
+    private negativeTests() {
+        # Invalid pattern
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new RegexSubst("[invalid", "x"); });
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new RegexSubst("(unclosed", "x"); });
+
+        # Empty pattern with global causes infinite recursion - but only if it matches
+        # The implementation should handle this gracefully
+    }
+
+    private cornerCasesTest() {
+        # ^ pattern matches start of non-empty strings
+        RegexSubst r("^", "START");
+        assertEq("STARThello", r.subst("hello"));
+
+        RegexSubst r2("$", "END");
+        assertEq("helloEND", r2.subst("hello"));
+
+        # Very long replacement
+        string longRepl = "";
+        for (int i = 0; i < 100; i++) {
+            longRepl += "X";
+        }
+        RegexSubst longR("a", longRepl);
+        assertEq(longRepl + "bc", longR.subst("abc"));
+
+        # Unicode in pattern and replacement
+        RegexSubst uni("café", "coffee");
+        assertEq("I love coffee", uni.subst("I love café"));
+
+        # Case insensitive
+        RegexSubst ci("hello", "hi", RE_Caseless);
+        assertEq("hi world", ci.subst("HELLO world"));
+    }
+
+    private escapeSequencesTest() {
+        RegexSubst r("x", "a\\nb");
+        assertEq("a\nb", r.subst("x"));
+
+        RegexSubst r2("x", "a\\tb");
+        assertEq("a\tb", r2.subst("x"));
+
+        RegexSubst r3("x", "a\\\\b");
+        assertEq("a\\b", r3.subst("x"));
+
+        RegexSubst r4("x", "a\\$1b");
+        assertEq("a$1b", r4.subst("x"));
+    }
+}

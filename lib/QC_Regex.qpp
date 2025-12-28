@@ -1,0 +1,156 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Regex.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_Regex.h"
+
+//! The Regex class provides a way to compile a regular expression pattern once and apply it to multiple strings efficiently
+/** The class allows for pre-compilation of regular expression patterns, which is useful when the same pattern
+    needs to be applied multiple times to different strings. This avoids the overhead of recompiling the pattern
+    each time.
+
+    @par Example:
+    @code{.py}
+# Create a regex to match email addresses
+Regex email_re("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
+
+# Use it to validate multiple strings
+list<string> addresses = ("user@example.com", "invalid", "test@test.org");
+foreach string addr in (addresses) {
+    if (email_re.match(addr)) {
+        printf("%y is a valid email\n", addr);
+    }
+}
+
+# Extract parts of a string
+Regex parts_re("(\\w+)@(\\w+)\\.(\\w+)");
+*list<*string> parts = parts_re.extractGroups("user@example.com");
+# parts = ("user", "example", "com")
+    @endcode
+
+    @since %Qore 2.3
+ */
+qclass Regex [arg=QoreRegexClass* r; dom=DEFAULT];
+
+//! Creates a compiled regular expression from the given pattern
+/** @param pattern the regular expression pattern to compile
+    @param options optional regex options; see @ref regex_constants for valid values
+
+    @par Example:
+    @code{.py}
+Regex r("\\d+");
+Regex r_case("hello", RE_Caseless);
+Regex r_multi("^line", RE_MultiLine | RE_Caseless);
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+    @throw REGEX-OPTION-ERROR the options contain invalid option bits
+ */
+Regex::constructor(string pattern, softint options = 0) {
+    SimpleRefHolder<QoreRegexClass> regex(new QoreRegexClass(*pattern, options, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_REGEX, regex.release());
+}
+
+//! Creates a copy of the Regex object
+/**
+    @par Example:
+    @code{.py}
+Regex r2 = r.copy();
+    @endcode
+ */
+Regex::copy() {
+    SimpleRefHolder<QoreRegexClass> regex(new QoreRegexClass(*r));
+    self->setPrivate(CID_REGEX, regex.release());
+}
+
+//! Tests if the given string matches the compiled pattern
+/** @param str the string to test against the pattern
+    @return @ref True if the string matches the pattern, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+Regex r("\\d{3}-\\d{4}");
+if (r.match("555-1234")) {
+    printf("valid phone number\n");
+}
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+ */
+bool Regex::match(string str) [flags=RET_VALUE_ONLY] {
+    return r->match(str, xsink);
+}
+
+//! Extracts captured groups from the string using the compiled pattern
+/** @param str the string to extract from
+    @return a list of captured groups, or @ref nothing if the pattern does not match
+
+    @par Example:
+    @code{.py}
+Regex r("(\\w+)@(\\w+)\\.(\\w+)");
+*list<*string> parts = r.extractGroups("user@example.com");
+# parts = ("user", "example", "com")
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+ */
+*list<*string> Regex::extractGroups(string str) [flags=RET_VALUE_ONLY] {
+    return r->extract(str, xsink);
+}
+
+//! Returns the compiled pattern string
+/** @return the pattern string that was used to create this Regex object
+
+    @par Example:
+    @code{.py}
+Regex r("\\d+");
+string pat = r.getPattern();  # returns "\\d+"
+    @endcode
+ */
+string Regex::getPattern() [flags=CONSTANT] {
+    return new QoreStringNode(*r->getPattern());
+}
+
+//! Returns the options used when compiling the pattern
+/** @return the regex option flags used when creating this object; see @ref regex_constants for valid values
+
+    @par Example:
+    @code{.py}
+Regex r("hello", RE_Caseless | RE_MultiLine);
+int opts = r.getOptions();  # returns RE_Caseless | RE_MultiLine
+    @endcode
+ */
+int Regex::getOptions() [flags=CONSTANT] {
+    return r->getOptions();
+}

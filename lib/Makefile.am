@@ -68,6 +68,7 @@ QORE_QPP_TARGETS = QC_Queue.cpp QC_Socket.cpp QC_ReadOnlyFile.cpp QC_File.cpp QC
 	QC_Datasource.cpp QC_DatasourcePool.cpp QC_SQLStatement.cpp QC_Dir.cpp \
     QC_ProgramControl.cpp QC_Program.cpp QC_DebugProgram.cpp QC_Breakpoint.cpp \
 	QC_Expression.cpp \
+	QC_Regex.cpp QC_RegexSubst.cpp QC_RegexExtract.cpp \
 	QC_GetOpt.cpp QC_TermIOS.cpp QC_TimeZone.cpp QC_SSLCertificate.cpp QC_SSLPrivateKey.cpp \
 	QC_AbstractThreadResource.cpp \
 	QC_StreamBase.cpp \

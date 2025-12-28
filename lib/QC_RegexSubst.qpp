@@ -1,0 +1,190 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_RegexSubst.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_RegexSubst.h"
+
+//! The RegexSubst class provides compiled regular expression substitutions that can be applied to multiple strings
+/** The class allows for pre-compilation of a substitution pattern once, and then applying it efficiently to
+    multiple strings. The replacement string can be specified at construction time and/or overridden per call.
+
+    @par Replacement String Syntax
+    The replacement string supports the following special sequences:
+    - \c $1, \c $2, etc.: Backreferences to captured groups
+    - \c \\n: Newline
+    - \c \\t: Tab
+    - \c \\r: Carriage return
+    - \c \\\\: Literal backslash
+    - \c \\$: Literal dollar sign
+
+    @par Example:
+    @code{.py}
+# Create a substitution to remove HTML tags
+RegexSubst strip_html("<[^>]+>", "");
+
+# Use it on multiple strings
+list<string> texts = ("<b>bold</b>", "<i>italic</i>", "plain text");
+foreach string text in (texts) {
+    printf("cleaned: %s\n", strip_html.subst(text));
+}
+
+# Global substitution - replace all occurrences
+RegexSubst to_underscore("\\s+", "_", RE_Global);
+string result = to_underscore.subst("hello world test");
+# result = "hello_world_test"
+
+# Override replacement at call time
+RegexSubst digit_match("\\d+", "NUM");
+printf("%s\n", digit_match.subst("test 123 example", "X"));  # "test X example"
+    @endcode
+
+    @since %Qore 2.3
+ */
+qclass RegexSubst [arg=QoreRegexSubstClass* r; dom=DEFAULT];
+
+//! Creates a compiled regular expression substitution from the given pattern and replacement
+/** @param pattern the regular expression pattern to match
+    @param replacement the replacement string (supports backreferences like \c $1, \c $2, etc.)
+    @param options optional regex options; see @ref regex_constants for valid values;
+        use \c RE_Global to replace all occurrences instead of just the first
+
+    @par Example:
+    @code{.py}
+# Replace first occurrence
+RegexSubst r("foo", "bar");
+
+# Replace all occurrences
+RegexSubst r_global("\\s+", " ", RE_Global);
+
+# Case-insensitive global replacement
+RegexSubst r_both("error", "warning", RE_Caseless | RE_Global);
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+    @throw REGEX-OPTION-ERROR the options contain invalid option bits
+ */
+RegexSubst::constructor(string pattern, string replacement, softint options = 0) {
+    SimpleRefHolder<QoreRegexSubstClass> regex(new QoreRegexSubstClass(*pattern, *replacement, options, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_REGEXSUBST, regex.release());
+}
+
+//! Creates a copy of the RegexSubst object
+/**
+    @par Example:
+    @code{.py}
+RegexSubst r2 = r.copy();
+    @endcode
+ */
+RegexSubst::copy() {
+    SimpleRefHolder<QoreRegexSubstClass> regex(new QoreRegexSubstClass(*r));
+    self->setPrivate(CID_REGEXSUBST, regex.release());
+}
+
+//! Performs substitution on the given string using the default replacement
+/** @param str the string to perform substitution on
+    @return a new string with the substitution(s) applied
+
+    @par Example:
+    @code{.py}
+RegexSubst r("\\d+", "NUM", RE_Global);
+string result = r.subst("test 123 and 456");
+# result = "test NUM and NUM"
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+    @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
+ */
+string RegexSubst::subst(string str) [flags=RET_VALUE_ONLY] {
+    return r->subst(str, xsink);
+}
+
+//! Performs substitution on the given string using a different replacement
+/** @param str the string to perform substitution on
+    @param replacement the replacement string to use instead of the default
+
+    @return a new string with the substitution(s) applied
+
+    @par Example:
+    @code{.py}
+RegexSubst r("\\d+", "NUM");
+# Override the replacement
+string result = r.subst("test 123", "XXX");
+# result = "test XXX"
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+    @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
+ */
+string RegexSubst::subst(string str, string replacement) [flags=RET_VALUE_ONLY] {
+    return r->subst(str, replacement, xsink);
+}
+
+//! Returns the compiled pattern string
+/** @return the pattern string that was used to create this RegexSubst object
+
+    @par Example:
+    @code{.py}
+RegexSubst r("\\d+", "NUM");
+string pat = r.getPattern();  # returns "\\d+"
+    @endcode
+ */
+string RegexSubst::getPattern() [flags=CONSTANT] {
+    return new QoreStringNode(*r->getPattern());
+}
+
+//! Returns the default replacement string
+/** @return the default replacement string that was specified in the constructor
+
+    @par Example:
+    @code{.py}
+RegexSubst r("\\d+", "NUM");
+string repl = r.getReplacement();  # returns "NUM"
+    @endcode
+ */
+string RegexSubst::getReplacement() [flags=CONSTANT] {
+    return new QoreStringNode(*r->getReplacement());
+}
+
+//! Returns the options used when compiling the pattern
+/** @return the regex option flags used when creating this object; see @ref regex_constants for valid values
+
+    @par Example:
+    @code{.py}
+RegexSubst r("hello", "world", RE_Caseless | RE_Global);
+int opts = r.getOptions();  # returns RE_Caseless | RE_Global
+    @endcode
+ */
+int RegexSubst::getOptions() [flags=CONSTANT] {
+    return r->getOptions();
+}
