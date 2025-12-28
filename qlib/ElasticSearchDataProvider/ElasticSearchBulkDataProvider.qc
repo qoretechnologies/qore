@@ -107,7 +107,13 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             uri += sprintf("%s=%s", arg, req{arg});
         }
 
-        return rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
+        # Note: We need to parse the response as JSON because RestClient doesn't auto-parse
+        # when using application/x-ndjson content-type for the request
+        auto response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"});
+        if (response.typeCode() == NT_STRING) {
+            return parse_json(response);
+        }
+        return response.body ?? response;
     }
 
     #! Formats the operations list as NDJSON

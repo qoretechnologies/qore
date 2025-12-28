@@ -54,6 +54,12 @@ module ElasticSearchLoggerAppender {
 
     @section elasticsearchloggerappenderintro Introduction to the ElasticSearchLoggerAppender Module
 
+    @htmlonly
+    <div class="image">
+      <img src="elastic-logo.svg" alt="ElasticSearch Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
     The %ElasticSearchLoggerAppender module provides a logger appender that sends log events to ElasticSearch
     using the bulk API for efficient batch logging.
 
@@ -91,6 +97,52 @@ module ElasticSearchLoggerAppender {
 
     # Ensure all logs are flushed
     appender.close();
+    @endcode
+
+    @section elasticsearchloggerappenderopts Constructor Options
+
+    The @ref ElasticSearchLoggerAppender::ElasticSearchLoggerAppender "ElasticSearchLoggerAppender" class accepts
+    the following options in the constructor:
+
+    |!Option|!Type|!Required|!Description
+    |\c url|string|Yes|The ElasticSearch server URL (e.g., \c "http://localhost:9200")
+    |\c index|string|Yes|Index name pattern; supports date format placeholders like \c %Y, \c %m, \c %d \
+        (e.g., \c "app-logs-%Y.%m.%d" creates daily indices)
+    |\c batch_size|int|No|Maximum number of log events per batch before flushing (default: 100)
+    |\c flush_interval_ms|int|No|Maximum time in milliseconds between flushes (default: 5000)
+    |\c pipeline|string|No|ElasticSearch ingest pipeline name for document processing
+    |\c connect_timeout|int|No|Connection timeout in milliseconds
+    |\c timeout|int|No|Request timeout in milliseconds
+
+    @subsection elasticsearchloggerappenderexamples Additional Examples
+
+    @par Using with Date-Based Indices
+    @code{.py}
+    # Creates indices like "myapp-2024.01.15", "myapp-2024.01.16", etc.
+    ElasticSearchLoggerAppender appender("es", layout, {
+        "url": "http://elasticsearch:9200",
+        "index": "myapp-%Y.%m.%d",
+    });
+    @endcode
+
+    @par High-Throughput Configuration
+    @code{.py}
+    # Larger batches and shorter flush intervals for high-volume logging
+    ElasticSearchLoggerAppender appender("es", layout, {
+        "url": "http://elasticsearch:9200",
+        "index": "high-volume-logs",
+        "batch_size": 500,
+        "flush_interval_ms": 1000,
+    });
+    @endcode
+
+    @par Using an Existing REST Client
+    @code{.py}
+    # Use a pre-configured REST client (useful for authentication, custom headers, etc.)
+    RestClient rest({"url": "http://elasticsearch:9200", "headers": {"Authorization": "Bearer token"}});
+    ElasticSearchLoggerAppender appender("es", layout, rest, {
+        "index": "secure-logs",
+    });
     @endcode
 
     @section elasticsearchloggerappenderdoc Document Structure
@@ -445,8 +497,15 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         }
 
         try {
+            # Note: We need to parse the response as JSON because RestClient doesn't auto-parse
+            # when using application/x-ndjson content-type for the request
             auto raw_response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
-            hash<auto> response = raw_response.body ?? {};
+            hash<auto> response;
+            if (raw_response.typeCode() == NT_STRING) {
+                response = parse_json(raw_response);
+            } else {
+                response = raw_response.body ?? {};
+            }
             handleBulkResponse(response, batch.size());
         } catch (hash<ExceptionInfo> ex) {
             handleError(ex, batch);

@@ -36,6 +36,20 @@
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
     - new function:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+    - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
+      - added Bulk API support with NDJSON format and partial failure handling
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added Scroll API for efficient iteration over large result sets
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - added Aggregations API (terms, histogram, date_histogram, metrics, etc.)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - enabled bulk operations on ElasticSearchIndexTableDataProvider
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - <a href="../../modules/ElasticSearchLoggerAppender/html/index.html">ElasticSearchLoggerAppender</a> module
+      - new module providing a logger appender that sends log events to ElasticSearch using the Bulk API with
+        batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
+        buffer management
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
@@ -52,6 +66,10 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
+    - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
+      - fixed a bug in AbstractDataProviderBulkOperation::setupInitialRecord() that caused the buffer to have
+        an empty string key, preventing bulk operations from flushing correctly
+        (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

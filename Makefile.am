@@ -95,7 +95,8 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/WebUtil.qm \
 	qlib/ZeyosRestClient.qm \
 	qlib/BillwerkRestClient.qm \
-    qlib/AwsRestClient.qm
+    qlib/AwsRestClient.qm \
+    qlib/ElasticSearchLoggerAppender.qm
 
 DOX_SPLIT_MODULES = \
     qlib/AsyncSocketIo \
@@ -1277,6 +1278,9 @@ doxygen/qlib/Doxyfile.FsUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 # to provide the graphic file
 doxygen/qlib/Doxyfile.ElasticSearchDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/ElasticSearchDataProvider:doxygen/qlib/ElasticSearchDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@
+
+doxygen/qlib/Doxyfile.ElasticSearchLoggerAppender: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/ElasticSearchLoggerAppender.qm:doxygen/qlib/ElasticSearchLoggerAppender.qm -tLogger.tag=../../Logger/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@
 
 # to provide the graphic file
 doxygen/qlib/Doxyfile.EmpathicBuildingDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)

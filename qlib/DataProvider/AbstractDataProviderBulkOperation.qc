@@ -274,7 +274,7 @@ map op2.queueData($1), data2.iterator();
             }
         }
 
-        buf = map {$1.key: ()}, keys recs;
+        buf = map {$1: ()}, keys recs;
     }
 }
 }

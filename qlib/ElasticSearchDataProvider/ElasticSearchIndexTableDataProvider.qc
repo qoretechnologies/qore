@@ -453,7 +453,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
 
         @return a bulk insert operation object for this data provider
     */
-    private DataProvider::AbstractDataProviderBulkOperation getBulkInserterImpl(*int block_size) {
+    DataProvider::AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
         return new ElasticSearchBulkOperation(self, rest, name, "index", block_size);
     }
 
@@ -463,7 +463,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
 
         @return a bulk upsert operation object for this data provider
     */
-    private DataProvider::AbstractDataProviderBulkOperation getBulkUpserterImpl(*int block_size) {
+    DataProvider::AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
         return new ElasticSearchBulkOperation(self, rest, name, "index", block_size);
     }
 
