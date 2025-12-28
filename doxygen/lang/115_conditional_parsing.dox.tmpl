@@ -1,6 +1,90 @@
 /** @page conditional_parsing Conditional Parsing and Parse Defines
 
-    %Qore supports conditional parsing with parse defines similar to the C/C++ preprocessor. In the current version of %Qore, the implementation is very simple; only the following parse directives are supported: @ref define "%define", @ref else "%else", @ref endif "%endif", @ref ifdef "%ifdef", and @ref ifndef "%ifndef".
+    %Qore supports conditional parsing with parse defines similar to the C/C++ preprocessor. The following parse directives are supported: @ref define "%define", @ref else "%else", @ref elif "%elif", @ref endif "%endif", @ref if "%if", @ref ifdef "%ifdef", and @ref ifndef "%ifndef".
+
+    These directives allow for the existence (or lack thereof) of a parse define to affect which code is parsed into the program at parse time.
+
+    @section if_directive The %if Directive
+
+    The @ref if "%if" directive supports C preprocessor-style boolean expressions using the \c defined() function. This allows for more complex conditional logic than the simple @ref ifdef "%ifdef" directive.
+
+    @subsection if_syntax Syntax
+
+    @code{.py}
+%if defined(SYMBOL)
+    # code included if SYMBOL is defined
+%endif
+    @endcode
+
+    @subsection if_operators Supported Operators
+
+    The @ref if "%if" directive supports the following operators:
+    - \c defined(SYMBOL) - returns true if SYMBOL is defined
+    - \c ! - logical NOT operator
+    - \c && - logical AND operator
+    - \c || - logical OR operator
+    - \c () - parentheses for grouping
+
+    @subsection if_examples Examples
+
+    @code{.py}
+# Simple defined check
+%if defined(DEBUG)
+    printf("Debug mode enabled\n");
+%endif
+
+# Negation
+%if !defined(PRODUCTION)
+    printf("Not in production\n");
+%endif
+
+# AND operator
+%if defined(FEATURE_A) && defined(FEATURE_B)
+    printf("Both features enabled\n");
+%endif
+
+# OR operator
+%if defined(LINUX) || defined(MACOS)
+    printf("Unix-like system\n");
+%endif
+
+# Complex expression with parentheses
+%if (defined(UNIX) || defined(LINUX)) && !defined(EMBEDDED)
+    printf("Full Unix system\n");
+%endif
+    @endcode
+
+    @section elif_directive The %elif Directive
+
+    The @ref elif "%elif" directive provides else-if functionality, allowing multiple conditions to be tested in sequence. It uses the same expression syntax as @ref if "%if".
+
+    @code{.py}
+%if defined(WINDOWS)
+    printf("Windows\n");
+%elif defined(LINUX)
+    printf("Linux\n");
+%elif defined(MACOS)
+    printf("macOS\n");
+%else
+    printf("Unknown platform\n");
+%endif
+    @endcode
+
+    @section legacy_directives Legacy Directives
+
+    The @ref ifdef "%ifdef" and @ref ifndef "%ifndef" directives provide simple existence checks and remain supported for backwards compatibility:
+
+    @code{.py}
+%ifdef DEBUG
+    printf("Debug mode\n");
+%endif
+
+%ifndef RELEASE
+    printf("Not a release build\n");
+%endif
+    @endcode
+
+    @section define_usage Using Parse Defines
 
     Basically, the above allow for the existence (or lack thereof) of a parse define to affect which code is parsed into the program at parse time.
 

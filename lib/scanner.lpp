@@ -665,6 +665,202 @@ static bool parse_is_defined(YYLTYPE* yylloc, const char* pstr, bool def = true)
     return qore_program_private::parseIsDefined(getProgram(), str.c_str());
 }
 
+// Expression parser for %if directive with boolean logic support
+// Grammar:
+//   expr     := or_expr
+//   or_expr  := and_expr ('||' and_expr)*
+//   and_expr := unary_expr ('&&' unary_expr)*
+//   unary_expr := '!' unary_expr | primary
+//   primary  := 'defined' '(' IDENT ')' | '(' expr ')'
+class ConditionParser {
+private:
+    const char* pos;
+    const char* end;
+    YYLTYPE* yylloc;
+    bool error;
+
+    void skip_whitespace() {
+        while (pos < end && (*pos == ' ' || *pos == '\t')) {
+            ++pos;
+        }
+    }
+
+    bool match(const char* str) {
+        skip_whitespace();
+        size_t len = strlen(str);
+        if (pos + len <= end && !strncmp(pos, str, len)) {
+            // For 'defined', ensure it's not part of a larger identifier
+            if (strcmp(str, "defined") == 0 && pos + len < end
+                && (isalnum(static_cast<unsigned char>(pos[len])) || pos[len] == '_')) {
+                // 'defined' is followed by an identifier character, so this is not a standalone keyword
+                return false;
+            }
+            pos += len;
+            return true;
+        }
+        return false;
+    }
+
+    bool peek(const char* str) {
+        skip_whitespace();
+        size_t len = strlen(str);
+        return pos + len <= end && !strncmp(pos, str, len);
+    }
+
+    // Parse an identifier (for defined())
+    bool parse_identifier(QoreString& ident) {
+        skip_whitespace();
+        const char* start = pos;
+        // First character must be letter or underscore
+        if (pos >= end || (!isalpha(*pos) && *pos != '_')) {
+            return false;
+        }
+        ++pos;
+        // Subsequent characters can be alphanumeric or underscore
+        while (pos < end && (isalnum(*pos) || *pos == '_')) {
+            ++pos;
+        }
+        ident.set(start, pos - start);
+        return true;
+    }
+
+    // primary := 'defined' '(' IDENT ')' | '(' expr ')'
+    bool parse_primary() {
+        skip_whitespace();
+
+        if (match("defined")) {
+            skip_whitespace();
+            if (!match("(")) {
+                parse_error(*get_loc(yylloc), "expected '(' after 'defined' in %%if expression");
+                error = true;
+                return false;
+            }
+            QoreString ident;
+            if (!parse_identifier(ident)) {
+                parse_error(*get_loc(yylloc), "expected identifier in 'defined()' in %%if expression");
+                error = true;
+                return false;
+            }
+            skip_whitespace();
+            if (!match(")")) {
+                parse_error(*get_loc(yylloc), "expected ')' after identifier in 'defined()' in %%if expression");
+                error = true;
+                return false;
+            }
+            return qore_program_private::parseIsDefined(getProgram(), ident.c_str());
+        }
+
+        if (match("(")) {
+            bool result = parse_or_expr();
+            skip_whitespace();
+            if (!match(")")) {
+                parse_error(*get_loc(yylloc), "expected ')' in %%if expression");
+                error = true;
+                return false;
+            }
+            return result;
+        }
+
+        // Error: unexpected token
+        skip_whitespace();
+        if (pos < end) {
+            // Try to show what was found
+            QoreString tok;
+            const char* start = pos;
+            while (pos < end && !isspace(*pos) && *pos != '(' && *pos != ')' && *pos != '&' && *pos != '|' && *pos != '!') {
+                ++pos;
+            }
+            if (pos > start) {
+                tok.set(start, pos - start);
+                parse_error(*get_loc(yylloc), "unexpected token '%s' in %%if expression; expected 'defined(IDENT)' or '('", tok.c_str());
+            } else {
+                parse_error(*get_loc(yylloc), "unexpected character '%c' in %%if expression", *pos);
+            }
+        } else {
+            parse_error(*get_loc(yylloc), "unexpected end of %%if expression");
+        }
+        error = true;
+        return false;
+    }
+
+    // unary_expr := '!' unary_expr | primary
+    bool parse_unary_expr() {
+        skip_whitespace();
+        if (match("!")) {
+            return !parse_unary_expr();
+        }
+        return parse_primary();
+    }
+
+    // and_expr := unary_expr ('&&' unary_expr)*
+    bool parse_and_expr() {
+        bool result = parse_unary_expr();
+        if (error) return false;
+
+        while (peek("&&")) {
+            match("&&");
+            bool rhs = parse_unary_expr();
+            if (error) return false;
+            result = result && rhs;
+        }
+        return result;
+    }
+
+    // or_expr := and_expr ('||' and_expr)*
+    bool parse_or_expr() {
+        bool result = parse_and_expr();
+        if (error) return false;
+
+        while (peek("||")) {
+            match("||");
+            bool rhs = parse_and_expr();
+            if (error) return false;
+            result = result || rhs;
+        }
+        return result;
+    }
+
+public:
+    ConditionParser(YYLTYPE* loc, const char* expr, size_t len)
+        : pos(expr), end(expr + len), yylloc(loc), error(false) {}
+
+    bool parse(bool& result) {
+        skip_whitespace();
+        if (pos >= end) {
+            parse_error(*get_loc(yylloc), "empty expression in %%if directive");
+            return false;
+        }
+        result = parse_or_expr();
+        if (error) return false;
+
+        // Check for trailing garbage
+        skip_whitespace();
+        if (pos < end) {
+            QoreString remaining(pos, end - pos);
+            remaining.trim();
+            if (!remaining.empty()) {
+                parse_error(*get_loc(yylloc), "unexpected trailing text '%s' in %%if expression", remaining.c_str());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool has_error() const { return error; }
+};
+
+static bool parse_evaluate_condition(YYLTYPE* yylloc, const char* expr, bool& result) {
+    QoreString str(expr);
+    str.trim();
+    if (str.empty()) {
+        parse_error(*get_loc(yylloc), "missing expression in %%if directive");
+        return false;
+    }
+
+    ConditionParser parser(yylloc, str.c_str(), str.size());
+    return parser.parse(result);
+}
+
 static bool is_identifier(const char *str) {
     if (!(getProgram()->getParseOptions64() & PO_REQUIRE_BARE_REFS)) {
         if (*str++ != '$') {
@@ -723,7 +919,7 @@ static bool angle_balanced(const char* p) {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1134,10 +1330,62 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%else{WS}*$                            {
-                                            if (!parse_cond_else()) {
-                                                parse_error(*get_loc(yylloc), "%%else found without %%if");
+^%if{WS}*$                              { parse_error(*get_loc(yylloc), "missing expression in %%if"); }
+^%if{WS}+                               BEGIN(p_if);
+<p_if>{
+   [^\n\r]+$                            {
+                                            parse_cond_push(true);
+                                            bool result;
+                                            if (parse_evaluate_condition(yylloc, yytext, result)) {
+                                                if (result) {
+                                                    //printd(5, "%%if: expression is true\n");
+                                                    BEGIN(INITIAL);
+                                                } else {
+                                                    //printd(5, "%%if: expression is false\n");
+                                                    // skip to the next %elif, %else or %endif
+                                                    BEGIN(p_skip_to_endif_or_else);
+                                                }
                                             } else {
+                                                // Parse error occurred, skip to endif
+                                                BEGIN(p_skip_to_endif);
+                                            }
+                                        }
+   <<EOF>>                              {
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+^%elif{WS}*$                            {
+                                            // %elif without expression
+                                            if (!parse_cond_else()) {
+                                                parse_error(*get_loc(yylloc), "%%elif found without %%if");
+                                            } else if (parse_cond_has_else()) {
+                                                parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
+                                                BEGIN(p_skip_to_endif);
+                                            } else {
+                                                parse_error(*get_loc(yylloc), "missing expression in %%elif");
+                                                BEGIN(p_skip_to_endif);
+                                            }
+                                        }
+^%elif{WS}+[^\n\r]+$                    {
+                                            // We're in a true branch, skip remaining elif/else to endif
+                                            if (!parse_cond_else()) {
+                                                parse_error(*get_loc(yylloc), "%%elif found without %%if");
+                                            } else if (parse_cond_has_else()) {
+                                                parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
+                                                BEGIN(p_skip_to_endif);
+                                            } else {
+                                                BEGIN(p_skip_to_endif);
+                                            }
+                                        }
+^%else{WS}*$                            {
+                                            if (!parse_cond_can_else(get_loc(yylloc))) {
+                                                if (!parse_cond_else()) {
+                                                    parse_error(*get_loc(yylloc), "%%else found without %%if");
+                                                }
+                                                // else: error already reported by parse_cond_can_else
+                                                BEGIN(p_skip_to_endif);
+                                            } else {
+                                                parse_cond_mark_else();
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
@@ -1152,9 +1400,30 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
+   ^%else{WS}*$                         {
+                                            // Check for duplicate %else at the current level
+                                            if (parse_cond_test(get_loc(yylloc))) {
+                                                if (parse_cond_has_else()) {
+                                                    parse_error(*get_loc(yylloc), "%%else already encountered in this conditional block");
+                                                }
+                                                // else: first %else at this level while skipping, just continue skipping
+                                            }
+                                            // else: nested %else, just continue skipping
+                                        }
+   ^%elif{WS}+[^\n\r]+$                 {
+                                            // Check for %elif after %else at the current level
+                                            if (parse_cond_test(get_loc(yylloc)) && parse_cond_has_else()) {
+                                                parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
+                                            }
+                                            // else: just continue skipping
+                                        }
    ^.*                                  {
+                                            // Check for nested conditionals: %ifdef, %ifndef, or %if followed by whitespace
                                             if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
-                                                //printd(5, "p_skip_to_endif: found %%ifdef (%s); skipping\n", yytext);
+                                                //printd(5, "p_skip_to_endif: found %%ifdef/%%ifndef (%s); skipping\n", yytext);
+                                                parse_cond_push();
+                                            } else if (!strncmp("%if", yytext, 3) && (yytext[3] == ' ' || yytext[3] == '\t')) {
+                                                //printd(5, "p_skip_to_endif: found %%if (%s); skipping\n", yytext);
                                                 parse_cond_push();
                                             }
 #ifdef DEBUG
@@ -1168,10 +1437,46 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
 }
 <p_skip_to_endif_or_else>{
+   ^%elif{WS}+[^\n\r]+$                 {
+                                            // Only evaluate %elif if we're at the top level of the current conditional
+                                            if (parse_cond_test(get_loc(yylloc))) {
+                                                // Check if %else was already seen
+                                                if (parse_cond_has_else()) {
+                                                    parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
+                                                    BEGIN(p_skip_to_endif);
+                                                } else {
+                                                    // Skip the "%elif " prefix to get the expression
+                                                    const char* expr = yytext + 5;
+                                                    while (*expr == ' ' || *expr == '\t') ++expr;
+                                                    bool result;
+                                                    if (parse_evaluate_condition(yylloc, expr, result)) {
+                                                        if (result) {
+                                                            //printd(5, "%%elif: expression is true\n");
+                                                            BEGIN(INITIAL);
+                                                        } else {
+                                                            //printd(5, "%%elif: expression is false\n");
+                                                            // skip to the next %elif, %else or %endif
+                                                            // (stay in current state)
+                                                        }
+                                                    } else {
+                                                        // Parse error occurred, skip to endif
+                                                        BEGIN(p_skip_to_endif);
+                                                    }
+                                                }
+                                            }
+                                            // If not at top level, just continue skipping (stay in current state)
+                                        }
    ^%else{WS}*$                         {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
                                             if (parse_cond_test(get_loc(yylloc))) {
-                                                BEGIN(INITIAL);
+                                                // Check for duplicate %else
+                                                if (parse_cond_has_else()) {
+                                                    parse_error(*get_loc(yylloc), "%%else already encountered in this conditional block");
+                                                    BEGIN(p_skip_to_endif);
+                                                } else {
+                                                    parse_cond_mark_else();
+                                                    BEGIN(INITIAL);
+                                                }
                                             }
                                         }
    ^%endif{WS}*$                        {
@@ -1185,8 +1490,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 #endif
                                         }
    ^.*                                  {
+                                            // Check for nested conditionals: %ifdef, %ifndef, or %if followed by whitespace
                                             if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
-                                                //printd(5, "p_skip_to_endif_or_else: found %%ifdef (%s); skipping\n", yytext);
+                                                //printd(5, "p_skip_to_endif_or_else: found %%ifdef/%%ifndef (%s); skipping\n", yytext);
+                                                parse_cond_push();
+                                            } else if (!strncmp("%if", yytext, 3) && (yytext[3] == ' ' || yytext[3] == '\t')) {
+                                                //printd(5, "p_skip_to_endif_or_else: found %%if (%s); skipping\n", yytext);
                                                 parse_cond_push();
                                             }
 #ifdef DEBUG
