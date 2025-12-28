@@ -66,6 +66,8 @@ public class DataProvider {
     public {
         #! Map of known data provider factory names to modules
         const FactoryMap = {
+            "asyncapi": "AsyncApiDataProvider",
+
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
 

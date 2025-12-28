@@ -1,0 +1,158 @@
+asyncapi: 3.0.0
+info:
+  title: Chat API
+  version: 1.0.0
+  description: A sample chat API for testing AsyncAPI 3.0 validation
+
+servers:
+  development:
+    host: localhost:8080
+    protocol: ws
+    description: Development server
+
+channels:
+  userChat:
+    address: /chat/user
+    description: Channel for user chat messages
+    messages:
+      chatMessage:
+        $ref: '#/components/messages/ChatMessage'
+      userTyping:
+        $ref: '#/components/messages/UserTyping'
+
+  systemNotifications:
+    address: /chat/system
+    description: Channel for system notifications
+    messages:
+      systemMessage:
+        $ref: '#/components/messages/SystemMessage'
+
+operations:
+  sendChatMessage:
+    action: send
+    channel:
+      $ref: '#/channels/userChat'
+    summary: Send a chat message
+    description: Sends a chat message to the channel
+    messages:
+      - $ref: '#/channels/userChat/messages/chatMessage'
+
+  receiveChatMessage:
+    action: receive
+    channel:
+      $ref: '#/channels/userChat'
+    summary: Receive a chat message
+    description: Receives a chat message from the channel
+    messages:
+      - $ref: '#/channels/userChat/messages/chatMessage'
+
+  sendTypingIndicator:
+    action: send
+    channel:
+      $ref: '#/channels/userChat'
+    summary: Send typing indicator
+    description: Sends a typing indicator to notify others
+    messages:
+      - $ref: '#/channels/userChat/messages/userTyping'
+
+  receiveSystemNotification:
+    action: receive
+    channel:
+      $ref: '#/channels/systemNotifications'
+    summary: Receive system notification
+    description: Receives a system notification
+    messages:
+      - $ref: '#/channels/systemNotifications/messages/systemMessage'
+
+  sendSystemNotification:
+    action: send
+    channel:
+      $ref: '#/channels/systemNotifications'
+    summary: Send system notification
+    description: Sends a system notification
+    messages:
+      - $ref: '#/channels/systemNotifications/messages/systemMessage'
+
+components:
+  schemas:
+    ChatMessagePayload:
+      type: object
+      required:
+        - userId
+        - message
+        - timestamp
+      properties:
+        userId:
+          type: string
+          description: The ID of the user sending the message
+        message:
+          type: string
+          description: The chat message content
+          minLength: 1
+          maxLength: 4096
+        timestamp:
+          type: string
+          format: date-time
+          description: The timestamp of the message
+        metadata:
+          type: object
+          description: Optional metadata
+          additionalProperties: true
+
+    UserTypingPayload:
+      type: object
+      required:
+        - userId
+        - isTyping
+      properties:
+        userId:
+          type: string
+          description: The ID of the user
+        isTyping:
+          type: boolean
+          description: Whether the user is typing
+
+    SystemMessagePayload:
+      type: object
+      required:
+        - type
+        - message
+      properties:
+        type:
+          type: string
+          enum:
+            - info
+            - warning
+            - error
+          description: The type of system message
+        message:
+          type: string
+          description: The system message content
+        code:
+          type: integer
+          description: Optional error code
+
+  messages:
+    ChatMessage:
+      name: ChatMessage
+      title: Chat Message
+      summary: A chat message from a user
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ChatMessagePayload'
+
+    UserTyping:
+      name: UserTyping
+      title: User Typing Indicator
+      summary: Indicates when a user is typing
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserTypingPayload'
+
+    SystemMessage:
+      name: SystemMessage
+      title: System Message
+      summary: A system notification message
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SystemMessagePayload'
