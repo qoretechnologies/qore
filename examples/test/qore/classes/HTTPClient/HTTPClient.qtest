@@ -206,8 +206,7 @@ class RealTestHttpServer inherits HttpServer {
         return <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            # Disable async mode due to client cert capture issue (see GitHub issue)
-            "async_mode": False,
+            "async_mode": True,
         };
     }
 }
