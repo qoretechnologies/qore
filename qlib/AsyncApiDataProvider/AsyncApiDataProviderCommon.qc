@@ -25,7 +25,7 @@
 #! contains all public definitions in the AsyncApiDataProvider module
 public namespace AsyncApiDataProvider {
 #! The AsyncAPI data provider common base class
-public class AsyncApiDataProviderCommon inherits DataProvider::AbstractDataProvider {
+public class AsyncApiDataProviderCommon inherits DataProvider::AbstractDataProvider, Logger::LoggerWrapper {
     private {
         #! The AsyncAPI schema
         AsyncApi::AsyncApi3Schema schema;

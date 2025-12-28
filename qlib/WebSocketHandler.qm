@@ -74,7 +74,7 @@ module WebSocketHandler {
     @subsection websockethandler_v2_2 Version 2.2
     - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
       "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
-      (<a href="https://github.com/qoretechnologies/qore/issues/5010">issue 5010</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
 
     @subsection websockethandler_v2_1 Version 2.1
     - implemented support for a variable send timeout
@@ -384,13 +384,13 @@ public class WebSocketConnection {
     }
 
     #! Validates an incoming message against the AsyncAPI schema
-    /** @param msg the message to validate
+    /** @param msg the message to validate (reference, may be modified)
 
         @throws SCHEMA-VALIDATION-ERROR if the message fails validation
 
         @since WebSocketHandler 2.2
     */
-    validateIncomingMessage(auto msg) {
+    validateIncomingMessage(reference<auto> msg) {
         if (asyncapi_validator && asyncapi_channel) {
             asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
         }
@@ -844,12 +844,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         buf += h.msg;
                     }
                     auto msg = remove buf;
-                    wsc.validateIncomingMessage(msg);
+                    wsc.validateIncomingMessage(\msg);
                     wsc.gotMessage(msg);
                     continue;
                 } else if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-                    wsc.validateIncomingMessage(h.msg);
-                    wsc.gotMessage(h.msg);
+                    auto msg = h.msg;
+                    wsc.validateIncomingMessage(\msg);
+                    wsc.gotMessage(msg);
                     continue;
                 } else if (h.op == WSOP_Continuation) {
                     logError("FIN bit set with %d: %y opcode, but no data has been buffered", h.op,

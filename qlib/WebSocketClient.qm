@@ -183,7 +183,7 @@ c.waitForZero();
     @subsection wsc_v2_4 v2.4
     - added optional AsyncAPI validation support via @ref WebSocketClient::WebSocketClient::setAsyncApiValidator()
       "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
-      (<a href="https://github.com/qoretechnologies/qore/issues/5010">issue 5010</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
 
     @subsection wsc_v2_3 v2.3
     - added the @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
