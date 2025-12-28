@@ -7,6 +7,8 @@ default:
       alias: mysql
     - name: postgres:18
       alias: pgsql
+    - name: memcached:latest
+      alias: memcached
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -24,6 +26,7 @@ variables:
   MYSQL_DATABASE: omq
   MYSQL_ROOT_PASSWORD: omq
   QORE_DB_CONNSTR_MYSQL: 'mysql:root/omq@omq(UTF8)%mysql'
+  MEMCACHED_URL: 'memcached://memcached:11211'
   QORE_TEST_OPTS: '-penable-debug'
 
 test-ubuntu-amd64:

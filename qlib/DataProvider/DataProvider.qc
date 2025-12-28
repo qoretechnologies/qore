@@ -97,6 +97,7 @@ public class DataProvider {
             "kafka": "KafkaDataProvider",
 
             "mewsrest": "MewsRestDataProvider",
+            "memcached": "MemcachedDataProvider",
 
             # provided by the jni module
             "mqtt": "MqttDataProvider",
