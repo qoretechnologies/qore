@@ -166,6 +166,34 @@ public hash<QueryOperatorInfo> sub query_op_notlike(string str) {
     return query_make_op(QUERY_OP_NOTLIKE, str);
 }
 
+#! returns an @ref QueryOperatorInfo hash for the \c "STARTSWITH" operator with the given argument for use in ServiceNow queries
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"name": query_op_startswith("INC")});
+    @endcode
+
+    @param str the argument for the operator
+
+    @return an @ref QueryOperatorInfo hash for use in ServiceNow queries
+*/
+public hash<QueryOperatorInfo> sub query_op_startswith(string str) {
+    return query_make_op(QUERY_OP_STARTSWITH, str);
+}
+
+#! returns an @ref QueryOperatorInfo hash for the \c "ENDSWITH" operator with the given argument for use in ServiceNow queries
+/** @par Example:
+    @code{.py}
+AbstractDataProviderRecordIterator i = provider.searchRecords({"name": query_op_endswith("001")});
+    @endcode
+
+    @param str the argument for the operator
+
+    @return an @ref QueryOperatorInfo hash for use in ServiceNow queries
+*/
+public hash<QueryOperatorInfo> sub query_op_endswith(string str) {
+    return query_make_op(QUERY_OP_ENDSWITH, str);
+}
+
 #! returns an @ref QueryOperatorInfo hash for the \c "<" operator with the given argument for use in ServiceNow queries when comparing column values to immediate values
 /** @par Example:
     @code{.py}
@@ -283,7 +311,7 @@ AbstractDataProviderRecordIterator i = provider.searchRecords({"value": query_op
     @note The argument list size may be constrained depending on the database server / driver used; passing a large
     number of arguments to this function may be a sign of an improper application or query design
 */
-public hash<QueryOperatorInfo> sub soql_op_in() {
+public hash<QueryOperatorInfo> sub query_op_in() {
     return query_make_op(QUERY_OP_IN, argv);
 }
 
@@ -300,7 +328,7 @@ AbstractDataProviderRecordIterator i = provider.searchRecords({"value": query_op
     @note The argument list size may be constrained depending on the database server / driver used; passing a large
     number of arguments to this function may be a sign of an improper application or query design
 */
-public hash<QueryOperatorInfo> sub soql_op_in(list<auto> args) {
+public hash<QueryOperatorInfo> sub query_op_in(list<auto> args) {
     return query_make_op(QUERY_OP_IN, args);
 }
 
@@ -315,7 +343,7 @@ AbstractDataProviderRecordIterator i = provider.searchRecords({"value": query_op
     @note The argument list size may be constrained depending on the database server / driver used; passing a large
     number of arguments to this function may be a sign of an improper application or query design
 */
-public hash<QueryOperatorInfo> sub soql_op_notin() {
+public hash<QueryOperatorInfo> sub query_op_notin() {
     return query_make_op(QUERY_OP_NOTIN, argv);
 }
 
@@ -332,7 +360,7 @@ AbstractDataProviderRecordIterator i = provider.searchRecords({"value": query_op
     @note The argument list size may be constrained depending on the database server / driver used; passing a large
     number of arguments to this function may be a sign of an improper application or query design
 */
-public hash<QueryOperatorInfo> sub soql_op_notin(list<auto> args) {
+public hash<QueryOperatorInfo> sub query_op_notin(list<auto> args) {
     return query_make_op(QUERY_OP_NOTIN, args);
 }
 

@@ -57,6 +57,7 @@ class ServiceNowTest inherits QUnit::Test {
     constructor() : Test("ServiceNowTest", "1.0", \ARGV, MyOpts) {
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("ServiceNow DataProvider test", \ServiceNowDataProviderTests());
+        addTestCase("ServiceNow query operator unit tests", \queryOperatorUnitTests());
         addTestCase("ServiceNow REST", \ServiceNowRestTests());
         addTestCase("connection tests", \connectionTest());
 
@@ -178,6 +179,315 @@ class ServiceNowTest inherits QUnit::Test {
 
             # update the record
             assertEq(1, incident.updateRecords({"short_description": "deleteme-now"}, {"sys_id": id}));
+
+            # Test nesting validation: AND containing OR should throw an error
+            # ServiceNow's query syntax doesn't support this pattern due to operator precedence
+            # "a^ORb^c" is interpreted as "a OR (b AND c)", not "(a OR b) AND c"
+            {
+                # Build an unsupported expression: AND(OR(a, b), c)
+                hash<DataProviderExpression> unsupported_expr = <DataProviderExpression>{
+                    "exp": DP_OP_AND,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_OR,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "1",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "2",
+                                    ),
+                                },
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": QUERY_OP_EQ,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "priority"},
+                                "1",
+                            ),
+                        },
+                    ),
+                };
+                assertThrows("WHERE-ERROR", "ServiceNow does not support AND expressions containing OR",
+                    \incident.searchRecords(), (unsupported_expr,));
+            }
+
+            # Test that OR containing AND is supported (this should not throw)
+            # OR(AND(a, b), AND(c, d)) -> "a^b^ORc^d" = "(a AND b) OR (c AND d)"
+            {
+                hash<DataProviderExpression> supported_expr = <DataProviderExpression>{
+                    "exp": DP_OP_OR,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_AND,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "1",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "priority"},
+                                        "1",
+                                    ),
+                                },
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": DP_OP_AND,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "2",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "priority"},
+                                        "2",
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                };
+                # This should not throw - OR(AND(...), AND(...)) is supported
+                # The query will be: state=1^priority=1^ORstate=2^priority=2
+                # We don't care about results, just that no exception was thrown
+                map $1, incident.searchRecords(supported_expr, {"limit": 1});
+                assertTrue(True, "OR(AND(...), AND(...)) expression is supported");
+            }
+        }
+    }
+
+    # Unit tests for ServiceNow query operators that don't require a connection
+    #
+    # NOTE: ServiceNow Nesting Limitation
+    # ServiceNow's encoded query syntax uses "^" for AND and "^OR" for OR, where AND has higher
+    # precedence than OR. This means:
+    # - "a^b^ORc^d" is interpreted as "(a AND b) OR (c AND d)" - works correctly
+    # - "a^ORb^c" is interpreted as "a OR (b AND c)" - NOT "(a OR b) AND c"
+    #
+    # Therefore:
+    # - OR(AND(...), AND(...)) expressions work correctly
+    # - AND(OR(...), ...) expressions are NOT supported and will throw an error
+    #
+    # See ServiceNowDataProviderTests for integration tests that verify this validation
+    queryOperatorUnitTests() {
+        # Test ServiceNowTableDataProvider::Expressions has all expected operators
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(DP_OP_AND),
+            "Expressions has AND");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(DP_OP_OR),
+            "Expressions has OR");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_EQ),
+            "Expressions has EQ");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_NE),
+            "Expressions has NE");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_LT),
+            "Expressions has LT");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_LE),
+            "Expressions has LE");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_GT),
+            "Expressions has GT");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_GE),
+            "Expressions has GE");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_IN),
+            "Expressions has IN");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_NOTIN),
+            "Expressions has NOTIN");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_LIKE),
+            "Expressions has LIKE");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_NOTLIKE),
+            "Expressions has NOTLIKE");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_STARTSWITH),
+            "Expressions has STARTSWITH");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_ENDSWITH),
+            "Expressions has ENDSWITH");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_ISEMPTY),
+            "Expressions has ISEMPTY");
+        assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(QUERY_OP_ISNOTEMPTY),
+            "Expressions has ISNOTEMPTY");
+
+        # Test operator function structures
+        {
+            hash<QueryOperatorInfo> op = query_op_like("test");
+            assertEq(QUERY_OP_LIKE, op.op, "query_op_like creates correct operator");
+            assertEq("test", op.arg, "query_op_like preserves argument");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_notlike("test");
+            assertEq(QUERY_OP_NOTLIKE, op.op, "query_op_notlike creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_startswith("INC");
+            assertEq(QUERY_OP_STARTSWITH, op.op, "query_op_startswith creates correct operator");
+            assertEq("INC", op.arg, "query_op_startswith preserves argument");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_endswith("001");
+            assertEq(QUERY_OP_ENDSWITH, op.op, "query_op_endswith creates correct operator");
+            assertEq("001", op.arg, "query_op_endswith preserves argument");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_lt(10);
+            assertEq(QUERY_OP_LT, op.op, "query_op_lt creates correct operator");
+            assertEq(10, op.arg, "query_op_lt preserves argument");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_le(10);
+            assertEq(QUERY_OP_LE, op.op, "query_op_le creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_gt(5);
+            assertEq(QUERY_OP_GT, op.op, "query_op_gt creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_ge(5);
+            assertEq(QUERY_OP_GE, op.op, "query_op_ge creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_eq("value");
+            assertEq(QUERY_OP_EQ, op.op, "query_op_eq creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_ne("value");
+            assertEq(QUERY_OP_NE, op.op, "query_op_ne creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_in("a", "b", "c");
+            assertEq(QUERY_OP_IN, op.op, "query_op_in creates correct operator");
+            assertEq(("a", "b", "c"), op.arg, "query_op_in preserves arguments");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_in(("x", "y", "z"));
+            assertEq(QUERY_OP_IN, op.op, "query_op_in with list creates correct operator");
+            assertEq(("x", "y", "z"), op.arg, "query_op_in with list preserves arguments");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_notin("a", "b");
+            assertEq(QUERY_OP_NOTIN, op.op, "query_op_notin creates correct operator");
+            assertEq(("a", "b"), op.arg, "query_op_notin preserves arguments");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_notin(("x", "y"));
+            assertEq(QUERY_OP_NOTIN, op.op, "query_op_notin with list creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_isempty();
+            assertEq(QUERY_OP_ISEMPTY, op.op, "query_op_isempty creates correct operator");
+        }
+
+        {
+            hash<QueryOperatorInfo> op = query_op_isnotempty();
+            assertEq(QUERY_OP_ISNOTEMPTY, op.op, "query_op_isnotempty creates correct operator");
+        }
+
+        # Test expression impl functions by calling them directly
+        {
+            # Test EQ impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_EQ}.impl;
+            assertEq("priority=1", impl("priority", "1"), "EQ impl generates correct query");
+        }
+
+        {
+            # Test NE impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_NE}.impl;
+            assertEq("status!=closed", impl("status", "closed"), "NE impl generates correct query");
+        }
+
+        {
+            # Test LIKE impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_LIKE}.impl;
+            assertEq("descriptionLIKEerror", impl("description", "error"), "LIKE impl generates correct query");
+        }
+
+        {
+            # Test STARTSWITH impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_STARTSWITH}.impl;
+            assertEq("numberSTARTSWITHINC", impl("number", "INC"), "STARTSWITH impl generates correct query");
+        }
+
+        {
+            # Test ENDSWITH impl (this was buggy before - returned ISEMPTY)
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_ENDSWITH}.impl;
+            assertEq("numberENDSWITH001", impl("number", "001"), "ENDSWITH impl generates correct query");
+        }
+
+        {
+            # Test ISEMPTY impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_ISEMPTY}.impl;
+            assertEq("descriptionISEMPTY", impl("description", NOTHING), "ISEMPTY impl generates correct query");
+        }
+
+        {
+            # Test ISNOTEMPTY impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_ISNOTEMPTY}.impl;
+            assertEq("descriptionISNOTEMPTY", impl("description", NOTHING), "ISNOTEMPTY impl generates correct query");
+        }
+
+        {
+            # Test IN impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_IN}.impl;
+            assertEq("stateIN1,2,3", impl("state", ("1", "2", "3")), "IN impl generates correct query");
+        }
+
+        {
+            # Test IN impl with empty list (should return contradiction)
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_IN}.impl;
+            assertEq("sys_id=NULL", impl("state", ()), "IN impl with empty list returns contradiction");
+        }
+
+        {
+            # Test NOTIN impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_NOTIN}.impl;
+            assertEq("stateNOTIN4,5", impl("state", ("4", "5")), "NOTIN impl generates correct query");
+        }
+
+        {
+            # Test NOTIN impl with empty list (should return tautology)
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_NOTIN}.impl;
+            assertEq("sys_id!=NULL", impl("state", ()), "NOTIN impl with empty list returns tautology");
+        }
+
+        {
+            # Test LT impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_LT}.impl;
+            assertEq("priority<3", impl("priority", "3"), "LT impl generates correct query");
+        }
+
+        {
+            # Test GT impl
+            code impl = ServiceNowTableDataProvider::Expressions{QUERY_OP_GT}.impl;
+            assertEq("priority>1", impl("priority", "1"), "GT impl generates correct query");
         }
     }
 
