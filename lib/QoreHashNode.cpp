@@ -692,6 +692,39 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
         return 0;
     }
 
+    if (foff <= FMT_YAML_LONG) {
+        // Multi-line YAML format; indent encoded as FMT_YAML_LONG - foff
+        int indent = FMT_YAML_LONG - foff;
+        if (!size()) {
+            if (indent > 0)
+                str.addch(' ', indent);
+            str.concat("{}");
+            return 0;
+        }
+        ConstHashIterator hi(this);
+        while (hi.next()) {
+            if (indent > 0)
+                str.addch(' ', indent);
+            str.sprintf("%s:", hi.getKey());
+            QoreValue v = hi.get();
+            qore_type_t vtype = v.getType();
+            if (vtype == NT_HASH || vtype == NT_LIST) {
+                // Complex value: newline then indented content
+                str.concat('\n');
+                if (v.getAsString(str, foff - 2, xsink))
+                    return -1;
+            } else {
+                // Simple value: space then value in YAML short format
+                str.concat(' ');
+                if (v.getAsString(str, FMT_YAML_SHORT, xsink))
+                    return -1;
+            }
+            if (!hi.last())
+                str.concat('\n');
+        }
+        return 0;
+    }
+
     if (!size()) {
         str.concat(&EmptyHashString);
         return 0;
@@ -730,7 +763,7 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
 QoreString* QoreHashNode::getAsString(bool &del, int foff, ExceptionSink* xsink) const {
     del = false;
     size_t elements = size();
-    if (!elements && foff != FMT_YAML_SHORT)
+    if (!elements && foff != FMT_YAML_SHORT && foff > FMT_YAML_LONG)
         return &EmptyHashString;
 
     TempString rv(new QoreString);

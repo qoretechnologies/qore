@@ -781,6 +781,11 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
             tbuf.concat(*t, xsink);
             break;
         }
+        case 'Y': {
+            QoreNodeAsStringHelper t(qv, FMT_YAML_LONG, xsink);
+            tbuf.concat(*t, xsink);
+            break;
+        }
         default:
             // if the format argument is not understood, then make sure and just consume the '%' char
             tbuf.concat('%');

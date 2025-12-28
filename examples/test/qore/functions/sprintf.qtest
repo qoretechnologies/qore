@@ -18,6 +18,7 @@ public class SprintfTest inherits QUnit::Test {
         addTestCase("separators", \separators());
         addTestCase("broken sprintf test", \brokenSprintf());
         addTestCase("Test 1", \test(), NOTHING);
+        addTestCase("yaml long format", \yamlLongFormat());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -84,5 +85,61 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         assertEq("%", vsprintf("%%% s", ()));
         assertEq("arg", vsprintf("%s", "arg"));
         assertEq("arg", vsprintf("%s", ("arg",)));
+    }
+
+    yamlLongFormat() {
+        # Basic hash
+        assertEq("name: \"John\"\nage: 30", sprintf("%Y", ("name": "John", "age": 30)));
+
+        # Basic list
+        assertEq("- 1\n- 2\n- 3", sprintf("%Y", (1, 2, 3)));
+
+        # Nested hash
+        assertEq("outer:\n  inner: 1", sprintf("%Y", ("outer": ("inner": 1))));
+
+        # Deeply nested hash
+        assertEq("a:\n  b:\n    c: 1", sprintf("%Y", ("a": ("b": ("c": 1)))));
+
+        # Hash with list value
+        assertEq("items:\n  - 1\n  - 2\n  - 3", sprintf("%Y", ("items": (1, 2, 3))));
+
+        # List with hash items
+        assertEq("- 1\n- 2\n-\n  key: \"value\"", sprintf("%Y", (1, 2, ("key": "value"))));
+
+        # Nested list
+        assertEq("-\n  - 1\n  - 2\n-\n  - 3\n  - 4", sprintf("%Y", ((1, 2), (3, 4))));
+
+        # Empty containers
+        assertEq("empty_hash:\n  {}\nempty_list:\n  []", sprintf("%Y", ("empty_hash": {}, "empty_list": ())));
+
+        # NOTHING/null
+        assertEq("value: null", sprintf("%Y", ("value": NOTHING)));
+
+        # Binary data
+        assertEq("data: !!binary SGVsbG8=", sprintf("%Y", ("data": <48656c6c6f>)));
+
+        # Compare %y (short) vs %Y (long)
+        hash<auto> data = ("a": 1, "b": (1, 2));
+        assertEq("{a: 1, b: [1, 2]}", sprintf("%y", data));
+        assertEq("a: 1\nb:\n  - 1\n  - 2", sprintf("%Y", data));
+
+        # Top-level simple values use YAML short format
+        assertEq("42", sprintf("%Y", 42));
+        assertEq("\"hello\"", sprintf("%Y", "hello"));
+        assertEq("null", sprintf("%Y", NOTHING));
+
+        # Complex nested structure
+        hash<auto> complex = (
+            "users": (
+                ("name": "Alice", "age": 30),
+                ("name": "Bob", "age": 25),
+            ),
+            "config": (
+                "debug": True,
+                "timeout": 30,
+            ),
+        );
+        string expected = "users:\n  -\n    name: \"Alice\"\n    age: 30\n  -\n    name: \"Bob\"\n    age: 25\nconfig:\n  debug: True\n  timeout: 30";
+        assertEq(expected, sprintf("%Y", complex));
     }
 }

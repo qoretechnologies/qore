@@ -438,7 +438,8 @@ void QoreValue::discard(ExceptionSink* xsink) {
 
 int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink *xsink) const {
     if (isNothing()) {
-        str.concat(format_offset == FMT_YAML_SHORT ? &YamlNullString : &NothingTypeString);
+        str.concat((format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
+            ? &YamlNullString : &NothingTypeString);
         return 0;
     }
     switch (type) {
@@ -461,7 +462,8 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink *xs
 QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* xsink) const {
     if (isNothing()) {
         del = false;
-        return format_offset == FMT_YAML_SHORT ? &YamlNullString : &NothingTypeString;
+        return (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
+            ? &YamlNullString : &NothingTypeString;
     }
     switch (type) {
         case QV_Int: del = true; return new QoreStringMaker(QLLD, v.i);

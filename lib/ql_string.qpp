@@ -548,6 +548,7 @@ const RE_Unicode = PCRE2_UCP;
     |\c x|Integer, output in base 16 (hexadecimal) format with lower-case a-f
     |\c X|Integer, output in base 16 (hexadecimal) format with upper-case A-F
     |\c y|Any %Qore value, formatted as a pseudo-YAML string, without any line breaks; this format option is similar to \c "%n", but uses a YAML-like format.  Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
+    |\c Y|Any %Qore value, formatted as a multi-line pseudo-YAML string with proper indentation for nested structures; similar to \c "%y" but with line breaks and indentation for readability. Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
 
     @anchor string_escape_chars
     <b>String Escape Characters</b>
