@@ -234,6 +234,25 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
     #! Processes a DataProvider expression argument and returns the ServiceNow query string
     /** @param exp the expression to process
         @return the ServiceNow query string for the expression
+
+        @note ServiceNow Nesting Limitation:
+        ServiceNow's encoded query syntax uses \c "^" for AND and \c "^OR" for OR, where AND has higher
+        precedence than OR.  This means:
+        - \c "a^b^ORc^d" is interpreted as \c "(a AND b) OR (c AND d)" - works correctly
+        - \c "a^ORb^c" is interpreted as \c "a OR (b AND c)" - NOT \c "(a OR b) AND c"
+
+        Therefore, \c OR(AND(...), AND(...)) expressions work correctly, but \c AND(OR(...), ...) expressions
+        cannot be correctly represented in ServiceNow's query syntax.  This method validates the expression
+        tree and throws an exception if an unsupported nesting pattern is detected.
+
+        Supported patterns:
+        - Simple comparisons: \c field=value
+        - AND at top level: \c AND(comp1, comp2, ...)
+        - OR at top level: \c OR(comp1, comp2, ...)
+        - OR containing AND children: \c OR(AND(a, b), AND(c, d)) -> \c "a^b^ORc^d"
+
+        Unsupported patterns:
+        - AND containing OR children: \c AND(OR(a, b), c) - would be misinterpreted
     */
     string processExpressionArg(hash<DataProviderExpression> exp) {
         *hash<auto> expinfo = ServiceNowTableDataProvider::Expressions{exp.exp};
@@ -248,6 +267,17 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
                 # Empty AND is always true - return a tautology
                 return "sys_id!=NULL";
             }
+            # Validate: AND cannot contain OR children due to ServiceNow precedence rules
+            # ServiceNow interprets "a^ORb^c" as "a OR (b AND c)", not "(a OR b) AND c"
+            foreach hash<DataProviderExpression> child in (exp.args) {
+                if (child.exp == DP_OP_OR) {
+                    throw "WHERE-ERROR", "ServiceNow does not support AND expressions containing OR "
+                        "children; the query 'AND(OR(a, b), c)' cannot be correctly represented in "
+                        "ServiceNow's encoded query syntax due to operator precedence (AND binds tighter "
+                        "than OR). Consider restructuring your query or using OR(AND(...), AND(...)) "
+                        "instead, which is supported.";
+                }
+            }
             list<string> clauses = map processExpressionArg($1), exp.args;
             return foldl $1 + "^" + $2, clauses;
         }
@@ -256,6 +286,7 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
                 # Empty OR is always false - return a contradiction
                 return "sys_id=NULL";
             }
+            # OR containing AND children is supported: "a^b^ORc^d" = "(a AND b) OR (c AND d)"
             list<string> clauses = map processExpressionArg($1), exp.args;
             return foldl $1 + "^OR" + $2, clauses;
         }

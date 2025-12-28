@@ -179,10 +179,115 @@ class ServiceNowTest inherits QUnit::Test {
 
             # update the record
             assertEq(1, incident.updateRecords({"short_description": "deleteme-now"}, {"sys_id": id}));
+
+            # Test nesting validation: AND containing OR should throw an error
+            # ServiceNow's query syntax doesn't support this pattern due to operator precedence
+            # "a^ORb^c" is interpreted as "a OR (b AND c)", not "(a OR b) AND c"
+            {
+                # Build an unsupported expression: AND(OR(a, b), c)
+                hash<DataProviderExpression> unsupported_expr = <DataProviderExpression>{
+                    "exp": DP_OP_AND,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_OR,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "1",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "2",
+                                    ),
+                                },
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": QUERY_OP_EQ,
+                            "args": (
+                                <DataProviderFieldReference>{"field": "priority"},
+                                "1",
+                            ),
+                        },
+                    ),
+                };
+                assertThrows("WHERE-ERROR", "ServiceNow does not support AND expressions containing OR",
+                    \incident.searchRecords(), (unsupported_expr,));
+            }
+
+            # Test that OR containing AND is supported (this should not throw)
+            # OR(AND(a, b), AND(c, d)) -> "a^b^ORc^d" = "(a AND b) OR (c AND d)"
+            {
+                hash<DataProviderExpression> supported_expr = <DataProviderExpression>{
+                    "exp": DP_OP_OR,
+                    "args": (
+                        <DataProviderExpression>{
+                            "exp": DP_OP_AND,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "1",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "priority"},
+                                        "1",
+                                    ),
+                                },
+                            ),
+                        },
+                        <DataProviderExpression>{
+                            "exp": DP_OP_AND,
+                            "args": (
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "state"},
+                                        "2",
+                                    ),
+                                },
+                                <DataProviderExpression>{
+                                    "exp": QUERY_OP_EQ,
+                                    "args": (
+                                        <DataProviderFieldReference>{"field": "priority"},
+                                        "2",
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                };
+                # This should not throw - OR(AND(...), AND(...)) is supported
+                # The query will be: state=1^priority=1^ORstate=2^priority=2
+                # We don't care about results, just that no exception was thrown
+                map $1, incident.searchRecords(supported_expr, {"limit": 1});
+                assertTrue(True, "OR(AND(...), AND(...)) expression is supported");
+            }
         }
     }
 
     # Unit tests for ServiceNow query operators that don't require a connection
+    #
+    # NOTE: ServiceNow Nesting Limitation
+    # ServiceNow's encoded query syntax uses "^" for AND and "^OR" for OR, where AND has higher
+    # precedence than OR. This means:
+    # - "a^b^ORc^d" is interpreted as "(a AND b) OR (c AND d)" - works correctly
+    # - "a^ORb^c" is interpreted as "a OR (b AND c)" - NOT "(a OR b) AND c"
+    #
+    # Therefore:
+    # - OR(AND(...), AND(...)) expressions work correctly
+    # - AND(OR(...), ...) expressions are NOT supported and will throw an error
+    #
+    # See ServiceNowDataProviderTests for integration tests that verify this validation
     queryOperatorUnitTests() {
         # Test ServiceNowTableDataProvider::Expressions has all expected operators
         assertTrue(ServiceNowTableDataProvider::Expressions.hasKey(DP_OP_AND),
