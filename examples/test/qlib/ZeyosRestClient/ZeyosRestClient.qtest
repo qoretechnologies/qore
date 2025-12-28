@@ -14,6 +14,7 @@
 %ifndef NoJson
 %requires ../../../../qlib/ZeyosRestClient.qm
 %endif
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 
 %requires qore >= 0.9.11

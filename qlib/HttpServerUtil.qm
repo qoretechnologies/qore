@@ -505,6 +505,11 @@ public hashdecl HttpListenerOptionInfo {
 
     #! Free-form information to be used by custom listener startup code
     hash<auto> additional_info;
+
+    #! If True, the listener's main thread will not be started (for use with async I/O mode)
+    /** @since HttpServer 1.x
+    */
+    bool no_start_main_thread = False;
 }
 
 #! hash providing HTTP handler configuration info

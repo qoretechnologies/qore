@@ -1,0 +1,146 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpServerAsyncIo.qm Qore user module providing async I/O support for HttpServer
+
+/*  HttpServerAsyncIo.qm Copyright 2024 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+%enable-debug
+
+%requires Logger
+
+module HttpServerAsyncIo {
+    version = "1.0";
+    desc = "Async I/O support for HttpServer";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Module initialization
+    };
+}
+
+/** @mainpage HttpServerAsyncIo Module
+
+    @tableofcontents
+
+    @section httpserverasyncio_intro Introduction
+
+    The %HttpServerAsyncIo module provides async I/O poll operations for the HttpServer module,
+    enabling high-performance non-blocking I/O for HTTP, SSE, and WebSocket connections.
+
+    This module leverages the @ref Qore::AbstractPollOperation pattern and integrates with
+    @ref AsyncSocketIoController for efficient multiplexed I/O handling.
+
+    @section httpserverasyncio_components Components
+
+    - @ref HttpServerAsyncIo::HttpAcceptPollOperation "HttpAcceptPollOperation" - Composite operation for accept + SSL + header
+    - @ref HttpServerAsyncIo::HttpIdlePollOperation "HttpIdlePollOperation" - Monitors idle keep-alive connections
+    - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support
+    - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O
+    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
+    - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
+
+    @section httpserverasyncio_relnotes Release Notes
+
+    @subsection httpserverasyncio_v1_0 Version 1.0
+    - Initial release
+*/
+
+#! Main namespace for HttpServerAsyncIo module
+public namespace HttpServerAsyncIo {
+    #! WebSocket opcodes
+    public const WS_OP_CONTINUATION = 0x0;
+    public const WS_OP_TEXT = 0x1;
+    public const WS_OP_BINARY = 0x2;
+    public const WS_OP_CLOSE = 0x8;
+    public const WS_OP_PING = 0x9;
+    public const WS_OP_PONG = 0xA;
+
+    #! Default header read timeout (30 seconds)
+    public const DefaultHeaderReadTimeout = 30s;
+
+    #! Default idle connection timeout (75 seconds)
+    public const DefaultIdleTimeout = 75s;
+
+    #! Result info for HTTP request callbacks
+    public hashdecl HttpRequestResultInfo {
+        #! Close the connection after handling
+        bool close = False;
+
+        #! Return socket to idle pool for keep-alive
+        bool return_to_idle = False;
+
+        #! Enable streaming mode (SSE or WebSocket)
+        bool streaming = False;
+
+        #! Stream type: "sse" or "websocket"
+        *string stream_type;
+
+        #! Stream poll operation (when streaming=True)
+        *AbstractPollOperation stream_operation;
+
+        #! Keep-alive timeout
+        *timeout ttl;
+    }
+
+    #! Connection info passed to callbacks
+    public hashdecl HttpConnectionInfo {
+        #! The socket for this connection
+        Socket sock;
+
+        #! Parsed HTTP headers
+        hash<auto> hdr;
+
+        #! Header parsing info
+        hash<auto> header_info;
+
+        #! The listener that accepted this connection
+        object listener;
+
+        #! Connection context
+        hash<auto> cx;
+
+        #! True if this is a keep-alive request (not first on connection)
+        bool keep_alive = False;
+
+        #! True if SSL/TLS connection
+        bool ssl = False;
+    }
+
+    #! WebSocket frame info
+    public hashdecl WebSocketFrameInfo {
+        #! Frame type: "text", "binary", "ping", "pong", "close", "disconnect"
+        string type;
+
+        #! Frame data (string for text, binary for binary/ping/pong)
+        auto data;
+
+        #! Close code (for close frames)
+        *int code;
+
+        #! Close reason (for close frames)
+        *string reason;
+    }
+}

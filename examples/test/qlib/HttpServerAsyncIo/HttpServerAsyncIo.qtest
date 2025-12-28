@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+
+%exec-class HttpServerAsyncIoTest
+
+class TestTarget inherits HttpAsyncTarget {
+    public {
+        hash<auto> last_request;
+        bool request_received = False;
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        last_request = info;
+        request_received = True;
+        return <HttpRequestResultInfo>{
+            "close": True,
+        };
+    }
+
+    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+}
+
+public class HttpServerAsyncIoTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerAsyncIo Test", "1.0") {
+        addTestCase("Constants test", \constantsTest());
+        addTestCase("Hashdecl test", \hashdeclTest());
+        addTestCase("Target class test", \targetClassTest());
+        addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
+        addTestCase("Controller start/stop test", \controllerStartStopTest());
+        set_return_value(main());
+    }
+
+    constantsTest() {
+        # Test WebSocket opcodes
+        assertEq(0x0, WS_OP_CONTINUATION);
+        assertEq(0x1, WS_OP_TEXT);
+        assertEq(0x2, WS_OP_BINARY);
+        assertEq(0x8, WS_OP_CLOSE);
+        assertEq(0x9, WS_OP_PING);
+        assertEq(0xA, WS_OP_PONG);
+
+        # Test timeouts
+        assertEq(30s, DefaultHeaderReadTimeout);
+        assertEq(75s, DefaultIdleTimeout);
+    }
+
+    hashdeclTest() {
+        # Test HttpRequestResultInfo hashdecl
+        hash<HttpRequestResultInfo> result = <HttpRequestResultInfo>{
+            "close": True,
+            "return_to_idle": False,
+            "streaming": False,
+        };
+        assertTrue(result.close);
+        assertFalse(result.return_to_idle);
+        assertFalse(result.streaming);
+
+        # Test WebSocketFrameInfo hashdecl
+        hash<WebSocketFrameInfo> frame = <WebSocketFrameInfo>{
+            "type": "text",
+            "data": "Hello",
+        };
+        assertEq("text", frame.type);
+        assertEq("Hello", frame.data);
+    }
+
+    targetClassTest() {
+        # Test that our target class can be instantiated
+        TestTarget target();
+
+        # Create a minimal connection info
+        Socket sock();
+        sock.bind("localhost:0");
+        hash<HttpConnectionInfo> info = <HttpConnectionInfo>{
+            "sock": sock,
+            "hdr": {},
+            "header_info": {},
+            "listener": sock,  # Just use sock as listener for test
+            "cx": {},
+            "keep_alive": False,
+            "ssl": False,
+        };
+
+        # Call onHttpRequest
+        hash<HttpRequestResultInfo> result = target.onHttpRequest(info);
+        assertTrue(target.request_received);
+        assertTrue(result.close);
+
+        sock.close();
+    }
+
+    idlePollOperationBasicTest() {
+        # Create a socket pair for testing
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port);
+
+        Socket accepted = server.accept(100ms);
+
+        # Create idle poll operation with short timeout
+        HttpIdlePollOperation op(accepted, 50ms);
+        assertEq("idle_monitor", op.getGoal());
+        assertEq("idle", op.getState());
+        assertFalse(op.goalReached());
+
+        # Clean up
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    controllerStartStopTest() {
+        # Create controller
+        HttpAsyncSocketIoController ctrl();
+
+        # Verify initial state
+        assertFalse(ctrl.running());
+
+        # Start controller
+        ctrl.start();
+        assertTrue(ctrl.running());
+
+        # Get stats
+        hash<auto> stats = ctrl.getStats();
+        assertEq(0, stats.listeners);
+        assertEq(0, stats.connections);
+        assertTrue(stats.running);
+
+        # Stop controller
+        ctrl.stop();
+        assertFalse(ctrl.running());
+    }
+}

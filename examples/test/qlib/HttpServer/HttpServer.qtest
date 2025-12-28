@@ -11,7 +11,11 @@
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
 
 %exec-class HttpServerTest
 
@@ -66,6 +70,26 @@ class ReqHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+# WebSocket connection for async mode tests
+class TestWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+}
+
+# WebSocket handler for async mode tests
+class TestWsHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestWsConnection(self);
+    }
+}
+
 public class HttpServerTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -73,6 +97,19 @@ public class HttpServerTest inherits QUnit::Test {
         ReqHandler mHandler;
         int port;
         string url;
+
+        # async mode server and client
+        HttpServer mAsyncServer;
+        HTTPClient mAsyncClient;
+        int asyncPort;
+        string asyncUrl;
+
+        # async mode HTTPS server
+        int asyncSslPort;
+        string asyncSslUrl;
+
+        # WebSocket handler for async mode
+        TestWsHandler mWsHandler;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
@@ -152,6 +189,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("misc", \misc());
         addTestCase("2nd wildcard listener", \secondWildcardListener());
         addTestCase("bug 2936 multipart form-data binary file upload", \multipartFormDataBinaryFileTest());
+        addTestCase("async mode basic", \asyncModeBasicTest());
+        addTestCase("async mode keep-alive", \asyncModeKeepAliveTest());
+        addTestCase("async mode concurrent", \asyncModeConcurrentTest());
+        addTestCase("async mode HTTPS", \asyncModeHttpsTest());
+        addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
+        addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
+        addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -165,6 +209,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
+            "async_mode": False,  # Explicitly disable async mode to test sync path
         };
         mServer = new HttpServer(http_opts);
         mHandler = new ReqHandler();
@@ -177,21 +222,56 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setDefaultHandler("my-handler", mHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         url = "http://localhost:" + port;
+
+        # Set up async mode server
+        Logger asyncLogger("async-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            asyncLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> async_opts = <HttpServerOptionInfo>{
+            "logger": asyncLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mAsyncServer = new HttpServer(async_opts);
+        mAsyncServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        mAsyncServer.setDefaultHandler("my-handler", new ReqHandler());
+        asyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        asyncUrl = "http://localhost:" + asyncPort;
+
+        # Add HTTPS listener for async server
+        asyncSslPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        asyncSslUrl = "https://localhost:" + asyncSslPort;
+
+        # Add WebSocket handler for async server
+        mWsHandler = new TestWsHandler({"logger": asyncLogger});
+        mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+
+        # Wait for the async I/O thread to start polling
+        sleep(250ms);
     }
 
     globalTearDown() {
         delete mServer;
         delete mHandler;
+        delete mAsyncServer;
     }
 
     setUp() {
-        mClient = new HTTPClient(("url": url, "additional_methods": {"TEST": True}));
+        mClient = new HTTPClient(("url": url, "additional_methods": {"TEST": True}, "timeout": 5s));
         mClient.connect();
+        mAsyncClient = new HTTPClient(("url": asyncUrl, "additional_methods": {"TEST": True}, "timeout": 5s));
+        # Don't pre-connect for async client - let tests manage their own connections
     }
 
     tearDown() {
         mClient.disconnect();
         delete mClient;
+        delete mAsyncClient;
     }
 
     idleTest() {
@@ -414,6 +494,222 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq(MimeTypePng, info."response-headers"."content-type");
         assertEq(BinImage, img);
         assertEq("chunked", info."response-headers"."transfer-encoding");
+    }
+
+    asyncModeBasicTest() {
+        # Verify async mode is enabled
+        assertTrue(mAsyncServer.getAsyncMode());
+        assertFalse(mServer.getAsyncMode());
+
+        # Create client with short timeout to ensure async operations don't block indefinitely
+        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Test basic GET request
+        assertEq("GET, abc, /abc", client.get("/abc"));
+
+        # Test GET with different paths
+        assertEq("GET, abc/test/1/5/t, /abc/test/1/5/t", client.get("/abc/test/1/5/t"));
+
+        # Test POST request
+        hash resp = client.send("dx123", "POST", "/abc");
+        assertEq(200, resp.status_code);
+        assertEq("POST, dx123, abc, /abc", resp.body);
+    }
+
+    asyncModeKeepAliveTest() {
+        # Test keep-alive connections work with async mode
+        # Make multiple requests on the same connection with short timeout
+        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # First request
+        assertEq("GET, test1, /test1", client.get("/test1"));
+        # Second request on same connection (keep-alive)
+        assertEq("GET, test2, /test2", client.get("/test2"));
+        # Third request
+        assertEq("GET, test3, /test3", client.get("/test3"));
+
+        # Test with POST as well
+        hash resp = client.send("body1", "POST", "/post1");
+        assertEq(200, resp.status_code);
+        assertEq("POST, body1, post1, /post1", resp.body);
+
+        # Another request after POST
+        assertEq("GET, final, /final", client.get("/final"));
+    }
+
+    asyncModeConcurrentTest() {
+        # Test concurrent connections with async mode
+        # Each worker makes a single request on a new connection to test concurrent accept
+        int numConnections = 5;
+
+        Counter cnt(numConnections);
+
+        for (int i = 0; i < numConnections; ++i) {
+            # Use short timeout (5s) to ensure async operations don't block indefinitely
+            background asyncConcurrentWorker(i, cnt, 5s);
+        }
+
+        # Wait for all workers to complete (10s overall timeout)
+        # waitForZero returns remaining count (0 on success)
+        assertEq(0, cnt.waitForZero(10s));
+    }
+
+    private asyncConcurrentWorker(int workerId, Counter cnt, date testTimeout) {
+        on_exit cnt.dec();
+
+        try {
+            # Each worker creates a new connection for each request
+            # This tests concurrent accept and request handling without relying on keep-alive
+            HTTPClient client({"url": asyncUrl, "timeout": testTimeout});
+            client.connect();
+            on_exit client.disconnect();
+
+            string path = sprintf("/worker%d", workerId);
+            string expected = sprintf("GET, worker%d, %s", workerId, path);
+            string result = client.get(path);
+            if (result != expected) {
+                throw "ASSERTION-ERROR", sprintf("Worker %d failed: expected %y, got %y",
+                    workerId, expected, result);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            printf("Worker %d failed: %s: %s\n", workerId, ex.err, ex.desc);
+            rethrow;
+        }
+    }
+
+    asyncModeHttpsTest() {
+        # Test HTTPS connections with async mode
+        HTTPClient client({
+            "url": asyncSslUrl,
+            "timeout": 5s,
+            "ssl_verify_cert": False,  # Self-signed cert
+        });
+        client.connect();
+        on_exit client.disconnect();
+
+        # Test basic GET request over HTTPS
+        assertEq("GET, secure, /secure", client.get("/secure"));
+
+        # Test POST over HTTPS
+        hash resp = client.send("secure-data", "POST", "/secure-post");
+        assertEq(200, resp.status_code);
+        assertEq("POST, secure-data, secure-post, /secure-post", resp.body);
+
+        # Test keep-alive over HTTPS
+        assertEq("GET, test1, /test1", client.get("/test1"));
+        assertEq("GET, test2, /test2", client.get("/test2"));
+    }
+
+    asyncModeErrorResponsesTest() {
+        # Test error responses (4xx, 5xx) with async mode
+        # Use error_passthru to get error responses without exceptions
+        HTTPClient client({"url": asyncUrl, "timeout": 5s, "error_passthru": True});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Test 400 Bad Request
+        hash resp = client.send(NOTHING, "GET", "/test400/path");
+        assertEq(400, resp.status_code);
+
+        # Test 500 Internal Server Error
+        resp = client.send(NOTHING, "GET", "/test500/path");
+        assertEq(500, resp.status_code);
+
+        # Test 501 Not Implemented
+        resp = client.send(NOTHING, "GET", "/test501/path");
+        assertEq(501, resp.status_code);
+
+        # Test 204 No Content
+        resp = client.send(NOTHING, "GET", "/test204/path");
+        assertEq(204, resp.status_code);
+
+        # Test 304 Not Modified
+        resp = client.send(NOTHING, "GET", "/test304/path");
+        assertEq(304, resp.status_code);
+
+        # Connection should still work after errors
+        assertEq("GET, aftererror, /aftererror", client.get("/aftererror"));
+    }
+
+    asyncModeConnectionCloseTest() {
+        # Test client disconnect scenarios with async mode
+
+        # Test 1: Client closes connection immediately after sending request
+        {
+            Socket sock();
+            sock.connect("localhost:" + asyncPort);
+            sock.send("GET /disconnect HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            # Read response (server should handle gracefully)
+            try {
+                *string resp = sock.recv(1024, 1s);
+                # If we get a response, it should be valid HTTP
+                if (resp) {
+                    assertTrue(resp =~ /^HTTP\/1\.[01] [0-9]{3}/);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Timeout or closed connection is OK
+                assertTrue(ex.err == "SOCKET-TIMEOUT" || ex.err == "SOCKET-CLOSED");
+            }
+            sock.close();
+        }
+
+        # Test 2: Verify server still works after abrupt client disconnect
+        {
+            HTTPClient client({"url": asyncUrl, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            assertEq("GET, afterdisconnect, /afterdisconnect", client.get("/afterdisconnect"));
+        }
+
+        # Test 3: Multiple rapid connect/disconnect cycles
+        for (int i = 0; i < 5; ++i) {
+            Socket sock();
+            sock.connect("localhost:" + asyncPort);
+            sock.send("GET /rapid" + i + " HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            sock.close();  # Close immediately
+        }
+
+        # Verify server still responsive
+        {
+            HTTPClient client({"url": asyncUrl, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            assertEq("GET, stillworks, /stillworks", client.get("/stillworks"));
+        }
+    }
+
+    asyncModeWebSocketTest() {
+        # Test WebSocket protocol upgrade with async mode
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async server
+        string wsUrl = "ws://localhost:" + asyncPort + "/ws";
+        WebSocketClient wsc(callback, {"url": wsUrl, "timeout": 5s});
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Send a message and wait for echo
+        wsc.send("hello");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world", receivedMsg);
     }
 }
 

@@ -28,6 +28,7 @@
 %requires Util >= 1.0
 %requires(reexport) HttpServerUtil >= 1.0
 %requires Logger
+%requires HttpServerAsyncIo
 
 %try-module sysconf
 %define NO_SYSCONF
@@ -35,6 +36,7 @@
 
 %new-style
 %allow-weak-references
+%enable-debug
 
 module HttpServer {
     version = "1.4";
@@ -136,6 +138,18 @@ log("started listener on %s", lh.desc);
     @endcode
 
     @section http_relnotes HttpServer Module Release Notes
+
+    @subsection http1_5 HttpServer 1.5
+    - implemented async I/O mode for high-concurrency connection handling, enabled by default
+      (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
+      - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
+      - request processing is dispatched to ThreadPool for concurrent handler execution
+      - HTTP responses are sent asynchronously using \c Socket::startPollSend()
+      - enables handling many more concurrent connections with fewer threads
+      - sub-millisecond response latency for simple requests
+      - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
+      - new \c HttpServer::queueAsyncResponse() method for async response sending
+      - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
 
     @subsection http1_4 HttpServer 1.4
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
@@ -407,6 +421,15 @@ public hashdecl HttpServerOptionInfo {
         HttpServer::DefaultIdleThreads
 %endif
         ;
+
+    #! Enable async I/O mode for high-concurrency connection handling
+    /** When enabled, a single I/O thread handles accept and HTTP header reading
+        using non-blocking I/O, then dispatches request processing to the ThreadPool.
+        This allows handling many more concurrent connections with fewer threads.
+
+        @since HttpServer 1.1
+    */
+    bool async_mode = True;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -549,6 +572,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
+
+        #! Async I/O mode enabled (default: True)
+        bool asyncMode = True;
+
+        #! Async I/O controller (when async mode is enabled)
+        *Priv::HttpServerIoController asyncIo;
 
         #! Cached HTTP date header value
         static string cached_date_header;
@@ -915,6 +944,18 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         lm.enter();
         on_exit lm.exit();
 
+        # Remove listener from async I/O controller if running
+        if (asyncIo) {
+            try {
+                asyncIo.removeListener(l.getID());
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore error if listener was not registered (can happen during shutdown)
+                if (ex.err != "CONTROLLER-REMOVE-LISTENER-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+
         delete smap.(l.getAddress());
         remove listeners.(l.getID());
         remove nmap.(l.getName());
@@ -925,6 +966,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     /** do not call stop() after calling stopNoWait(); it can cause a deadlock
      */
     stop() {
+        # Stop async I/O controller first if running
+        if (asyncIo) {
+            asyncIo.stop();
+        }
+
         # shutdown all listeners
         lm.enter();
         on_exit lm.exit();
@@ -1004,7 +1050,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! gets the TID of a listener based on its listener ID
+    /** In async mode, returns the async I/O controller's thread ID since
+        listeners don't have dedicated threads.
+    */
     int getListenerTID(softint id) {
+        if (asyncMode) {
+            return asyncIo.getTid();
+        }
         return listeners{id}.tid;
     }
 
@@ -1422,6 +1474,50 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return debug;
     }
 
+    #! Returns True if async I/O mode is enabled
+    /** @return True if async I/O mode is enabled, False otherwise
+
+        @since HttpServer 1.x
+    */
+    bool getAsyncMode() {
+        return asyncMode;
+    }
+
+    #! Returns a connection to the async I/O controller for keep-alive handling
+    /** @param sock the socket to return
+        @param cx the connection context
+        @param listener the listener for this connection
+        @param phi persistent handler info (if any)
+
+        @note This method does nothing if async mode is not enabled
+
+        @since HttpServer 1.x
+    */
+    returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener, *HttpPersistentHandlerInfo phi) {
+        if (asyncIo) {
+            asyncIo.returnConnection(sock, cx, listener, phi);
+        }
+    }
+
+    #! Queues a response for async sending
+    /** @param sock the socket to send the response on
+        @param response the response info to send
+
+        @note This method does nothing if async mode is not enabled
+
+        @since HttpServer 1.x
+    */
+    queueAsyncResponse(Socket sock, hash<HttpAsyncResponseInfo> response) {
+        if (asyncIo) {
+            asyncIo.queueResponse(sock, response);
+        }
+    }
+
+    #! Returns True if async mode is enabled
+    bool isAsyncMode() {
+        return asyncMode;
+    }
+
     startConnection(code c) {
         threadPool.submit(c);
     }
@@ -1458,6 +1554,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         if (opts.ttl) {
             setTtl(opts.ttl);
+        }
+        # Initialize async I/O mode (default: enabled)
+        # Note: opts.async_mode should be True by default from the hashdecl,
+        # but we use ?? True to ensure async mode is enabled even if opts is
+        # passed as a hash<auto> instead of hash<HttpServerOptionInfo>
+        asyncMode = opts.async_mode ?? True;
+        log("HttpServer init: async_mode option=%y, asyncMode=%y", opts.async_mode, asyncMode);
+        if (asyncMode) {
+            asyncIo = new Priv::HttpServerIoController(self, logger);
+            asyncIo.start();
         }
     }
 
@@ -1542,6 +1648,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("there is already an active listener with name %y", info.name);
         }
 
+        # In async mode, don't start the listener's main thread
+        if (asyncMode) {
+            info.no_start_main_thread = True;
+        }
+
         c.inc();
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
         on_error c.dec();
@@ -1550,6 +1661,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listeners{id} = l;
         smap{sock} = id;
         nmap{info.name} = id;
+
+        # In async mode, add the listener to the async I/O controller
+        if (asyncMode) {
+            asyncIo.addListener(l);
+        }
 
         # rename listener if a wildcard service was provided
         if (info.service == "0") {
@@ -1634,10 +1750,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Handles incoming requests
     /** this method is called by the listeners when a request is received
+        If async_response_out is provided, captures response info instead of sending
     */
     handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
             HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated,
-            reference<bool> dedicated_external) {
+            reference<bool> dedicated_external, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
@@ -1736,6 +1853,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (handler && hdr.expect) {
                 if (hdr.expect == "100-continue") {
                     hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
+                    # Note: 100-continue is always sent synchronously since we need to wait for body
                     sendReply(listener, s, handler, resp, \cx, hdr, head, \dedicated, \dedicated_external);
                 } else {
                     string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
@@ -1881,7 +1999,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 return;
             }
 
-            sendReply(listener, s, handler, rv, \cx, hdr, head, \dedicated, \dedicated_external);
+            sendReply(listener, s, handler, rv, \cx, hdr, head, \dedicated, \dedicated_external,
+                \async_response_out);
         } catch (hash<ExceptionInfo> ex) {
             string desc = !debug
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -1907,9 +2026,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     # sends a reply to a request
+    # If async_response_out is provided, capture response info instead of sending
     sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
             reference<hash> cx, hash<auto> hdr, bool head, reference<bool> dedicated,
-            reference<bool> dedicated_external) {
+            reference<bool> dedicated_external, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         if (exists rv.close)
             cx.close = boolean(rv.close);
 
@@ -1955,7 +2075,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv);
+            doResponse(listener, s, cx, rv, \async_response_out);
         } else if (rv."code" >= 400) {
             if (!rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
@@ -1986,7 +2106,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     ?? s.getEncoding().lwr());
             }
 
-            doResponse(listener, s, cx, rv);
+            doResponse(listener, s, cx, rv, \async_response_out);
         }
 
         if (rv.log)
@@ -2011,6 +2131,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 if (listener.registerDedicatedSocket(cx.id, handler, \dedicated)) {
                     on_exit cx.close = True;
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
+                    # For async mode: the 101 response was captured but not sent.
+                    # We must send it BEFORE calling start() so the client knows to switch protocols.
+                    if (async_response_out) {
+                        s.sendHTTPResponse(async_response_out."code",
+                            HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                            async_response_out.hdr ?? {}, async_response_out.body);
+                        # Clear the reference so caller knows response was already sent
+                        delete async_response_out;
+                    }
                     try {
                         dedicated_external = sockhandler.start(listener.getID(), cx + {"listener": listener}, hdr, s);
                     } catch (hash<ExceptionInfo> ex) {
@@ -2040,23 +2169,50 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     # rv is "hash" to strip types
-    private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv) {
+    # If async_response_out is provided, capture response info instead of sending
+    private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv,
+            *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
+        auto body = rv.body;
+
+        if (chunked) {
+            body = rv.chunked_body ?? rv.body;
+            if (body instanceof StringInputStream) {
+                StringInputStream input_stream = cast<StringInputStream>(body);
+                if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
+                    body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
+                }
+            } else if ((body instanceof string) || (body instanceof binary)) {
+                body = new BinaryInputStream(body);
+            }
+            rv.hdr."Transfer-Encoding" = "chunked";
+        }
+
+        # If async capture is requested, store response info instead of sending
+        if (async_response_out) {
+            # For async sending, we need to read streams into memory
+            if (body instanceof InputStream) {
+                body = body.read(-1);
+            }
+            async_response_out = <HttpAsyncResponseInfo>{
+                "code": rv."code",
+                "hdr": rv.hdr ?? {},
+                "body": body,
+                "chunked": chunked,
+                "close": cx.close ?? False,
+                "cx": cx,
+                "listener": listener,
+            };
+            listener.logResponse(cx, rv);
+            return;
+        }
+
         try {
-            if (!rv.chunked_body && (!rv.body || (!rv.hdr."Transfer-Encoding" && !(rv.body instanceof InputStream)))) {
+            if (!chunked) {
                 # send a normal monolithic response
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
             } else {
                 # send a chunked response stream
-                auto body = rv.chunked_body ?? rv.body;
-                if (body instanceof StringInputStream) {
-                    StringInputStream input_stream = cast<StringInputStream>(body);
-                    if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
-                        body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
-                    }
-                } else if ((body instanceof string) || (body instanceof binary)) {
-                    body = new BinaryInputStream(body);
-                }
-                rv.hdr."Transfer-Encoding" = "chunked";
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, body);
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -2277,10 +2433,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             throw "HTTP-LISTEN-ERROR", sprintf("listen error %d on socket %s: %s", errno(), socket, strerror());
         }
 
-        # start main listener thread
-        cThreads.inc();
-
-        tid = background mainThread();
+        # start main listener thread (unless using async I/O mode)
+        if (!opts.no_start_main_thread) {
+            cThreads.inc();
+            tid = background mainThread();
+        }
     }
 
     #! Returns a hash of extra headers to be added to all responses from this listener
@@ -2478,6 +2635,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     bool isSecure() {
         return ssl;
+    }
+
+    #! Returns the SSL certificate object if configured
+    /** @return the SSL certificate or NOTHING if not an SSL listener
+    */
+    *SSLCertificate getSslCertificate() {
+        return opts.cert;
+    }
+
+    #! Returns the SSL private key object if configured
+    /** @return the SSL private key or NOTHING if not an SSL listener
+    */
+    *SSLPrivateKey getSslPrivateKey() {
+        return opts.key;
     }
 
     hash<auto> getInfo() {
@@ -2979,7 +3150,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Returns the context template for new connections
-    private hash<auto> getContextTemplate(hash<auto> info) {
+    /** @param info peer info hash with "address", "address_desc", "port" keys
+        @return context hash for new connection
+    */
+    hash<auto> getContextTemplate(hash<auto> info) {
         return {
             "socket": socket,
             "socket-info": socket_info,
@@ -2989,6 +3163,144 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "listener-id": id,
             "listener-name": name,
         };
+    }
+
+    #! Returns the listener ID
+    int getId() {
+        return id;
+    }
+
+    #! Handles an async request from the HttpServerIoController
+    /** This method is called from a ThreadPool thread after the HTTP header has been
+        asynchronously read by the I/O controller.
+
+        @param s the client socket
+        @param cx the connection context (will be modified)
+        @param hdr the parsed HTTP header (will be modified)
+        @param header_info header parsing info
+        @param phi persistent handler info (for keep-alive connections)
+    */
+    handleAsyncRequest(Socket s, hash<auto> cx, hash<auto> hdr, hash<auto> header_info,
+            *HttpPersistentHandlerInfo phi) {
+        # Initialize dedicated flags
+        bool dedicated;
+        bool dedicated_external;
+
+        # Increment connection thread counter - this mirrors the sync mode behavior
+        # where cThreads.inc() is called before starting the connection thread
+        cThreads.inc();
+        on_exit {
+            # Decrement appropriate counter based on dedicated status
+            if (!dedicated) {
+                cThreads.dec();
+            } else {
+                dThreads.dec();
+            }
+        }
+
+        # Create default phi if not provided
+        if (!phi) {
+            phi = new HttpPersistentHandlerInfo();
+        }
+
+        # Get peer info for handleRequest
+        hash<auto> info = cx."peer-info";
+        info.desc = info.address_desc;
+        if (info.port) {
+            info.desc += ":" + info.port;
+        }
+
+        # Process path: decode URL-encoded characters
+        cx.raw_path = hdr.path;
+        hdr.path = decode_url(hdr.path);
+        cx += {
+            "orig_path": hdr.path,
+            "masked_path": serv.maskData(hdr.path),
+        };
+
+        # Remove leading / if present in path
+        if (hdr.path =~ /^\//) {
+            splice hdr.path, 0, 1;
+        }
+
+        # Set authorization if present
+        if (hdr.authorization) {
+            cx.auth = hdr.authorization;
+        }
+
+        # Save original content-type and process content-type header
+        if (hdr."content-type") {
+            hdr."_qore_orig_content_type" = hdr."content-type";
+        }
+        hdr."content-type" = header_info."body-content-type";
+        if (hdr."content-type".typeCode() == NT_LIST) {
+            hdr."content-type" = hdr."content-type"[0];
+        }
+
+        # Copy headers to the context
+        cx.hdr = hdr;
+
+        # Set encoding info
+        cx.char_encoding = s.getEncoding();
+        cx."response-encoding" = header_info."accept-charset";
+
+        # Check if we need to close the connection (from HTTP version negotiation)
+        cx.close = header_info.close;
+
+        # Log the request
+        {
+            string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
+                cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version, hdr."user-agent");
+            if (hdr."transfer-encoding" == "chunked") {
+                lstr += " body: chunked";
+            }
+            if (hdr."_qore_orig_content_type") {
+                lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
+            }
+            if (ssl) {
+                lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+            }
+            lstr += ")";
+            log("%s", lstr);
+        }
+
+        # Set user context and header info
+        cx.uctx = get_thread_data("uctx");
+        cx."header-info" = header_info;
+
+        # Add client certificate if requested and available
+        if (get_remote_certs) {
+            cx."client-cert" = s.getRemoteCertificate();
+        }
+
+        # For async mode, capture the response for async sending
+        *hash<HttpAsyncResponseInfo> async_response;
+
+        # Call handleRequest with the correct signature
+        serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
+            \dedicated_external, \async_response);
+
+        # Handle response: either queue for async sending or connection was handled (dedicated/error)
+        if (async_response) {
+            # Update response with phi for keep-alive
+            async_response.phi = phi;
+            # Queue response for async sending - I/O controller will handle keep-alive
+            serv.queueAsyncResponse(s, async_response);
+        } else if (!dedicated && !dedicated_external) {
+            # Response was already sent (reply_sent or error)
+            if (!cx.close && s.isOpen()) {
+                # Keep-alive: return to idle for next request
+                serv.returnConnectionToAsyncIo(s, cx, self, phi);
+            } else if (s.isOpen()) {
+                # Connection should be closed - close it now
+                try {
+                    s.shutdown();
+                    s.close();
+                } catch () {
+                    # Ignore close errors
+                }
+            }
+        }
     }
 }
 }
@@ -3329,6 +3641,887 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
             case EVENT_LOG:
                 call_function(logfunc, params);
                 break;
+        }
+    }
+}
+
+#! Internal hashdecl for listener poll info
+/** @private
+*/
+hashdecl HttpListenerPollInfo {
+    #! The listener object
+    HttpListener listener;
+
+    #! Accept poll operation (NOTHING if waiting for poll to return)
+    *AbstractPollOperation accept_op;
+
+    #! Listener ID
+    int id;
+
+    #! Whether the listener uses SSL
+    bool ssl;
+}
+
+#! Internal hashdecl for async response data
+/** Used to capture response data for async sending instead of synchronous send.
+    @private
+*/
+hashdecl HttpAsyncResponseInfo {
+    #! HTTP status code
+    int code;
+
+    #! Response headers
+    hash<auto> hdr;
+
+    #! Response body (NOTHING if no body)
+    *data body;
+
+    #! Whether this is a chunked response
+    bool chunked = False;
+
+    #! Whether to close the connection after sending
+    bool close = False;
+
+    #! Connection context (for keep-alive)
+    hash<auto> cx;
+
+    #! Listener reference
+    HttpListener listener;
+
+    #! Persistent handler info (for keep-alive)
+    *HttpPersistentHandlerInfo phi;
+}
+
+#! Internal hashdecl for connection poll info
+/** @private
+*/
+hashdecl HttpConnectionPollInfo {
+    #! Client socket
+    Socket sock;
+
+    #! Current poll operation
+    *AbstractPollOperation spop;
+
+    #! Connection state: "idle", "read_header", "dispatched", or "sending_response"
+    string state;
+
+    #! Timeout for current operation
+    date timeout_date;
+
+    #! Operation start time
+    date start;
+
+    #! Listener ID for this connection
+    int listener_id;
+
+    #! Listener reference
+    HttpListener listener;
+
+    #! Request context
+    hash<auto> cx;
+
+    #! For persistent connections: the handler
+    *HttpPersistentHandlerInfo phi;
+
+    #! Parsed header (set when header is complete)
+    *hash<auto> hdr;
+
+    #! Header info (set when header is complete)
+    *hash<auto> header_info;
+
+    #! Response data for async sending (set when in sending_response state)
+    *hash<HttpAsyncResponseInfo> response;
+}
+
+#! Async I/O controller for HttpServer
+/** This class manages async I/O operations for the HttpServer, including:
+    - Non-blocking accept on listener sockets
+    - Non-blocking SSL handshake
+    - Non-blocking HTTP header reading
+    - Idle connection management for keep-alive
+
+    The controller runs a single I/O thread that uses Socket::poll() to efficiently
+    monitor multiple sockets. When an HTTP request header is fully read, the connection
+    is dispatched to the HttpServer's ThreadPool for request processing.
+
+    @private
+*/
+class HttpServerIoController {
+    public {
+        #! Default SSL handshake timeout
+        const DefaultSslTimeout = 30s;
+
+        #! Default header read timeout
+        const DefaultHeaderReadTimeout = 30s;
+
+        #! Polling event map for logging
+        const PollEventMap = {
+            SOCK_POLLIN: "read",
+            SOCK_POLLOUT: "write",
+            SOCK_POLLIN | SOCK_POLLOUT: "read and write",
+        };
+    }
+
+    private {
+        #! Reference to HttpServer
+        HttpServer server;
+
+        #! Logger
+        *LoggerInterface logger;
+
+        #! Lock for atomic actions
+        Mutex m();
+
+        #! Listener sockets: listener_id -> HttpListenerPollInfo
+        hash<string, hash<HttpListenerPollInfo>> listeners;
+
+        #! Connection cache: socket unique_hash -> HttpConnectionPollInfo
+        hash<string, hash<HttpConnectionPollInfo>> connections;
+
+        #! I/O thread TID
+        int tid;
+
+        #! Exit flag
+        bool exit_flag = False;
+    }
+
+    private:internal {
+        #! File to signal the I/O thread
+        File sem_write;
+
+        #! File to read in the I/O thread
+        ReadOnlyFile sem_read;
+
+        #! Semaphore descriptor info for polling
+        hash<SocketPollInfo> sem_info;
+
+        #! I/O thread counter
+        Counter mcnt();
+
+        #! Command queue
+        Queue cmdq();
+
+        #! I/O thread command: add listener
+        const IO_ADD_LISTENER = "add_listener";
+
+        #! I/O thread command: remove listener
+        const IO_REMOVE_LISTENER = "remove_listener";
+
+        #! I/O thread command: add connection
+        const IO_ADD_CONNECTION = "add_connection";
+
+        #! I/O thread command: return connection (from ThreadPool after response)
+        const IO_RETURN_CONNECTION = "return_connection";
+
+        #! I/O thread command: close connection
+        const IO_CLOSE_CONNECTION = "close_connection";
+
+        #! I/O thread command: queue response for async sending
+        const IO_QUEUE_RESPONSE = "queue_response";
+
+        #! I/O thread command: quit
+        const IO_QUIT = "quit";
+
+        #! Default send timeout
+        const DefaultSendTimeout = 30s;
+    }
+
+    #! Creates the async I/O controller
+    /** @param server the HttpServer instance
+        @param logger optional logger interface
+    */
+    constructor(HttpServer server, *LoggerInterface logger) {
+        self.server = server;
+        self.logger = logger;
+
+        # Create pipe for inter-thread signaling
+        hash<PipeInfo> info = File::getPipe();
+        sem_read = info.read;
+        sem_write = info.write;
+        sem_info = <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": sem_read,
+        };
+    }
+
+    #! Destructor - stops the I/O thread if running
+    destructor() {
+        stop();
+    }
+
+    #! Starts the I/O thread
+    /** @throw CONTROLLER-START-ERROR if the I/O thread is already running
+    */
+    start() {
+        AutoLock al(m);
+        if (tid) {
+            throw "CONTROLLER-START-ERROR", sprintf("I/O thread is already running in TID %d", tid);
+        }
+        startIntern();
+    }
+
+    #! Stops the I/O thread
+    stop() {
+        {
+            AutoLock al(m);
+            if (tid) {
+                exit_flag = True;
+                sendCmd(IO_QUIT);
+            }
+        }
+        mcnt.waitForZero();
+    }
+
+    #! Returns True if the I/O thread is running
+    bool running() {
+        return mcnt.getCount() > 0;
+    }
+
+    #! Returns the thread ID of the I/O thread
+    /** @return the thread ID of the I/O thread, or 0 if not running
+    */
+    int getTid() {
+        return tid ?? 0;
+    }
+
+    #! Adds a listener socket to be polled for accepts
+    /** @param listener the HttpListener to add
+    */
+    addListener(HttpListener listener) {
+        @assert(listener, "listener cannot be null");
+        AutoLock al(m);
+        int id = listener.getId();
+        string key = id.toString();
+        @debug(log(LoggerLevel::DEBUG, "addListener(): adding listener %d", id));
+
+        if (listeners{key}) {
+            throw "CONTROLLER-ADD-LISTENER-ERROR", sprintf("Listener ID %d is already registered", id);
+        }
+
+        # Create poll info for listener
+        listeners{key} = <HttpListenerPollInfo>{
+            "listener": listener,
+            "accept_op": NOTHING,  # Will be set when poll starts
+            "id": id,
+            "ssl": listener.isSecure(),
+        };
+        @assert(listeners{key}.listener, "listener poll info must have listener");
+
+        if (tid) {
+            sendCmd(IO_ADD_LISTENER, key);
+        }
+        log(LoggerLevel::INFO, "Added listener %d to async I/O controller", id);
+    }
+
+    #! Removes a listener from polling
+    /** @param listener_id the listener ID to remove
+    */
+    removeListener(int listener_id) {
+        AutoLock al(m);
+        string key = listener_id.toString();
+
+        if (!listeners{key}) {
+            throw "CONTROLLER-REMOVE-LISTENER-ERROR", sprintf("Listener ID %d is not registered", listener_id);
+        }
+
+        if (tid) {
+            sendCmd(IO_REMOVE_LISTENER, key);
+        }
+        remove listeners{key};
+        log(LoggerLevel::INFO, "Removed listener %d from async I/O controller", listener_id);
+    }
+
+    #! Returns a connection to the controller for keep-alive handling
+    /** @param sock the socket to return
+        @param cx the connection context
+        @param listener the listener for this connection
+        @param phi persistent handler info (if any)
+    */
+    returnConnection(Socket sock, hash<auto> cx, HttpListener listener, *HttpPersistentHandlerInfo phi) {
+        @assert(sock, "socket cannot be null");
+        @assert(sock.isOpen(), "socket must be open");
+        @assert(listener, "listener cannot be null");
+        AutoLock al(m);
+        string key = sock.uniqueHash();
+        @debug(log(LoggerLevel::DEBUG, "returnConnection(): returning connection %y", key));
+
+        if (connections{key}) {
+            throw "CONTROLLER-RETURN-ERROR", sprintf("Connection %y is already registered", key);
+        }
+
+        date now = now_us();
+        connections{key} = <HttpConnectionPollInfo>{
+            "sock": sock,
+            "spop": NOTHING,
+            "state": "idle",
+            "timeout_date": now + server.getTtl(),
+            "start": now,
+            "listener_id": listener.getId(),
+            "listener": listener,
+            "cx": cx,
+            "phi": phi,
+        };
+        @assert(connections{key}.state == "idle", "new connection must be in idle state");
+
+        if (tid) {
+            sendCmd(IO_RETURN_CONNECTION, key);
+        }
+    }
+
+    #! Closes a connection
+    /** @param sock the socket to close
+    */
+    closeConnection(Socket sock) {
+        AutoLock al(m);
+        string key = sock.uniqueHash();
+
+        if (connections{key}) {
+            if (tid) {
+                sendCmd(IO_CLOSE_CONNECTION, key);
+            } else {
+                remove connections{key};
+            }
+        }
+    }
+
+    #! Queues a response for async sending
+    /** @param sock the socket to send the response on
+        @param response the response info to send
+    */
+    queueResponse(Socket sock, hash<HttpAsyncResponseInfo> response) {
+        @assert(sock, "socket cannot be null");
+        @assert(sock.isOpen(), "socket must be open for response");
+        @assert(response.listener, "response must have listener");
+        @assert(response.code >= 100 && response.code < 600, "response code must be valid HTTP status");
+        AutoLock al(m);
+        string key = sock.uniqueHash();
+        @debug(log(LoggerLevel::DEBUG, "queueResponse(): queuing response %d for %y", response.code, key));
+
+        # Remove any existing connection entry (connection might be in "dispatched" state)
+        remove connections{key};
+
+        date now = now_us();
+        connections{key} = <HttpConnectionPollInfo>{
+            "sock": sock,
+            "spop": NOTHING,
+            "state": "sending_response",
+            "timeout_date": now + DefaultSendTimeout,
+            "start": now,
+            "listener_id": response.listener.getId(),
+            "listener": response.listener,
+            "cx": response.cx,
+            "phi": response.phi,
+            "response": response,
+        };
+        @assert(connections{key}.state == "sending_response", "response connection must be in sending_response state");
+
+        if (tid) {
+            sendCmd(IO_QUEUE_RESPONSE, key);
+        }
+    }
+
+    #! Returns controller info
+    hash<auto> getInfo() {
+        AutoLock al(m);
+        return {
+            "listeners": listeners.size(),
+            "connections": connections.size(),
+            "io_tid": tid,
+            "cmdq": cmdq.size(),
+        };
+    }
+
+    #! Starts the I/O thread (called locked)
+    private startIntern() {
+        exit_flag = False;
+        mcnt.inc();
+        on_error mcnt.dec();
+        tid = background ioThread();
+    }
+
+    #! Main I/O thread
+    private ioThread() {
+        log(LoggerLevel::INFO, "HttpServer async I/O thread started");
+        on_exit {
+            {
+                AutoLock al(m);
+                remove tid;
+            }
+            log(LoggerLevel::INFO, "HttpServer async I/O thread exiting");
+            mcnt.dec();
+        }
+
+        while (!exit_flag) {
+            try {
+                @debug(log(LoggerLevel::DEBUG, "ioThread: loop iteration start"));
+                # Build poll list - explicitly create list with one element
+                softlist<hash<SocketPollInfo>> poll_list = (sem_info,);
+                *date poll_timeout;
+                date now = now_us();
+
+                {
+                    AutoLock al(m);
+                    @debug(log(LoggerLevel::DEBUG, "ioThread: got lock, listeners=%d connections=%d",
+                        listeners.size(), connections.size()));
+
+                    # Add listener accept operations
+                    @debug(log(LoggerLevel::DEBUG, "ioThread: checking %d listeners", listeners.size()));
+                    foreach string key in (keys listeners) {
+                        hash<HttpListenerPollInfo> linfo = listeners{key};
+                        @debug(log(LoggerLevel::DEBUG, "ioThread: listener %s, has accept_op=%y", key, linfo.accept_op.val()));
+                        if (!linfo.accept_op) {
+                            # Start new composite accept operation (accept + SSL + header)
+                            try {
+                                @debug(log(LoggerLevel::DEBUG, "ioThread: creating accept op for listener %s", key));
+                                linfo.accept_op = listeners{key}.accept_op =
+                                    new HttpServerAsyncIo::HttpAcceptPollOperation(
+                                        linfo.listener,
+                                        linfo.ssl,
+                                        linfo.listener.getSslCertificate(),
+                                        linfo.listener.getSslPrivateKey(),
+                                    );
+                                @debug(log(LoggerLevel::DEBUG, "ioThread: accept op created for listener %s", key));
+                            } catch (hash<ExceptionInfo> ex) {
+                                log(LoggerLevel::ERROR, "Failed to start accept poll for listener %d: %s: %s",
+                                    linfo.id, ex.err, ex.desc);
+                                continue;
+                            }
+                        }
+
+                        # Continue the poll operation to get poll info
+                        try {
+                            @debug(log(LoggerLevel::DEBUG, "ioThread: calling continuePoll for listener %s", key));
+                            auto poll_result = linfo.accept_op.continuePoll();
+                            @debug(log(LoggerLevel::DEBUG, "ioThread: continuePoll returned %y", poll_result.val()));
+                            if (poll_result) {
+                                poll_list += cast<hash<SocketPollInfo>>(poll_result);
+                            } else {
+                                # Accept completed - handle it
+                                @debug(log(LoggerLevel::DEBUG, "ioThread: accept complete for listener %s", key));
+                                handleAcceptComplete(key, linfo);
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            log(LoggerLevel::ERROR, "Error polling listener %d: %s: %s",
+                                linfo.id, ex.err, ex.desc);
+                            # Reset accept operation
+                            remove listeners{key}.accept_op;
+                        }
+                    }
+
+                    # Add connection operations
+                    hash<string, bool> to_remove;
+                    foreach string key in (keys connections) {
+                        hash<HttpConnectionPollInfo> cinfo = connections{key};
+
+                        # Check timeout
+                        if (cinfo.timeout_date <= now) {
+                            log(LoggerLevel::DEBUG, "Connection %y timed out in state %y", key, cinfo.state);
+                            to_remove{key} = True;
+                            continue;
+                        }
+
+                        # Get poll info for this connection
+                        try {
+                            *hash<SocketPollInfo> info = getConnectionPollInfo(key, cinfo);
+                            if (info) {
+                                poll_list += info;
+                                # Track earliest timeout - use updated timeout from hash, not cinfo copy
+                                date conn_timeout = connections{key}.timeout_date;
+                                if (!poll_timeout || conn_timeout < poll_timeout) {
+                                    poll_timeout = conn_timeout;
+                                }
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            log(LoggerLevel::ERROR, "Error with connection %y: %s: %s", key, ex.err, ex.desc);
+                            to_remove{key} = True;
+                        }
+                    }
+
+                    # Remove timed out / errored connections
+                    foreach string key in (keys to_remove) {
+                        closeConnectionIntern(key);
+                    }
+                }
+
+                # Calculate poll timeout
+                int timeout_ms;
+                if (poll_timeout) {
+                    timeout_ms = max(0, (poll_timeout - now).durationMilliseconds());
+                } else {
+                    timeout_ms = 100;  # Default 100ms poll (reduced from 1s for lower latency)
+                }
+                # Cap poll timeout at 100ms for responsiveness
+                timeout_ms = min(timeout_ms, 100);
+
+                # Poll all sockets
+                @debug(log(LoggerLevel::DEBUG, "ioThread: polling %d items, timeout=%d", poll_list.size(), timeout_ms));
+                Socket::poll(poll_list, timeout_ms);
+                @debug(log(LoggerLevel::DEBUG, "ioThread: poll returned"));
+
+                # Process any commands
+                if (processCommands()) {
+                    break;
+                }
+
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error in I/O thread: %s", get_exception_string(ex));
+            }
+        }
+
+        # Final cleanup
+        processCommands();
+    }
+
+    #! Gets poll info for a connection, progressing state as needed
+    /** @note Connection states:
+        - "idle": keep-alive connection waiting for new request
+        - "read_header": reading HTTP header for keep-alive connection
+        - "sending_response": sending HTTP response asynchronously
+        SSL handshake is handled by HttpAcceptPollOperation for new connections
+    */
+    private *hash<SocketPollInfo> getConnectionPollInfo(string key, hash<HttpConnectionPollInfo> cinfo) {
+        # Initialize poll operation if needed
+        if (!cinfo.spop) {
+            switch (cinfo.state) {
+                case "idle":
+                    # For idle connections, poll for HTTP header directly
+                    # This avoids consuming data that belongs to the HTTP header
+                    cinfo.spop = connections{key}.spop = cinfo.sock.startPollReadHttpHeader();
+                    # Transition state since we're now reading header
+                    cinfo.state = connections{key}.state = "read_header";
+                    connections{key}.timeout_date = now_us() + DefaultHeaderReadTimeout;
+                    break;
+
+                case "read_header":
+                    cinfo.spop = connections{key}.spop = cinfo.sock.startPollReadHttpHeader();
+                    break;
+
+                case "sending_response": {
+                    # Format HTTP response and start async send
+                    binary data = formatHttpResponse(cinfo.response);
+                    cinfo.spop = connections{key}.spop = cinfo.sock.startPollSend(data);
+                    break;
+                }
+            }
+        }
+
+        # Continue the poll operation in a loop while data is available
+        # This handles cases where data is already buffered
+        auto poll_result;
+        while (True) {
+            poll_result = cinfo.spop.continuePoll();
+
+            if (!poll_result) {
+                # Operation completed
+                handleConnectionComplete(key, cinfo);
+                return NOTHING;
+            }
+
+            # Check if header is complete
+            if (poll_result.hasKey("hdr")) {
+                break;
+            }
+
+            # Check if data is available and we should continue immediately
+            if (!cinfo.sock.isDataAvailable(0ms)) {
+                break;
+            }
+        }
+
+        if (!poll_result) {
+            # Operation completed (SSL handshake, idle data available, etc.)
+            handleConnectionComplete(key, cinfo);
+            return NOTHING;
+        }
+
+        # Check if HTTP header read is complete (returns hash with 'hdr' key)
+        # This only applies to read_header state
+        if (cinfo.state == "read_header" && poll_result.hasKey("hdr")) {
+            # HTTP header read complete - store the result and dispatch
+            connections{key}.hdr = poll_result.hdr;
+            connections{key}.header_info = poll_result.info;
+            dispatchToThreadPool(key);
+            return NOTHING;
+        }
+
+        return cast<hash<SocketPollInfo>>(poll_result);
+    }
+
+    #! Handles a completed accept operation (using HttpAcceptPollOperation)
+    private handleAcceptComplete(string listener_key, hash<HttpListenerPollInfo> linfo) {
+        @assert(linfo.accept_op, "accept operation must exist");
+        @assert(linfo.listener, "listener must exist");
+        # Get output from accept poll operation - includes socket and SSL status
+        hash<auto> output = linfo.accept_op.getOutput();
+        @assert(output.sock, "accept output must have socket");
+        Socket new_sock = output.sock;
+        @debug(log(LoggerLevel::DEBUG, "handleAcceptComplete(): listener %d", linfo.id));
+
+        # Get peer info - may fail if connection was closed during accept/SSL handshake
+        hash<auto> peer_info;
+        try {
+            peer_info = new_sock.getPeerInfo();
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Connection closed before peer info available on listener %d: %s",
+                linfo.id, ex.desc);
+            new_sock.close();
+            # Reset accept operation for next connection
+            remove listeners{listener_key}.accept_op;
+            return;
+        }
+
+        log(LoggerLevel::DEBUG, "Accepted connection on listener %d from %y (SSL: %y)",
+            linfo.id, peer_info.address_desc, output.ssl);
+
+        # Create connection context
+        hash<auto> cx = linfo.listener.getContextTemplate({
+            "address": peer_info.address,
+            "address_desc": peer_info.address_desc,
+            "port": peer_info.port,
+        });
+        cx."socket-info" = new_sock.getSocketInfo();
+
+        # Add connection to tracking - header will be read in the next poll iteration
+        string conn_key = new_sock.uniqueHash();
+        hash<HttpConnectionPollInfo> cinfo = <HttpConnectionPollInfo>{
+            "sock": new_sock,
+            "state": "read_header",
+            "start": now_us(),
+            "timeout_date": now_us() + DefaultHeaderReadTimeout,
+            "listener_id": linfo.id,
+            "listener": linfo.listener,
+            "cx": cx,
+        };
+        connections{conn_key} = cinfo;
+
+        # Reset accept operation for next connection immediately
+        # This allows accepting new connections while reading header from this one
+        remove listeners{listener_key}.accept_op;
+    }
+
+    #! Handles a completed connection operation (for keep-alive connections)
+    private handleConnectionComplete(string key, hash<HttpConnectionPollInfo> cinfo) {
+        @assert(key, "connection key cannot be empty");
+        @assert(cinfo.sock, "connection must have socket");
+        @debug(log(LoggerLevel::DEBUG, "handleConnectionComplete(): key %y, state %y", key, cinfo.state));
+        switch (cinfo.state) {
+            case "idle":
+                # Idle state now transitions directly to read_header in getConnectionPollInfo
+                # This case should not be reached
+                log(LoggerLevel::ERROR, "Unexpected idle completion for %y", key);
+                closeConnectionIntern(key);
+                break;
+
+            case "read_header":
+                # Header complete - dispatch to ThreadPool
+                @assert(cinfo.spop, "read_header state must have poll operation");
+                auto output = cinfo.spop.getOutput();
+                if (output.typeCode() == NT_HASH) {
+                    hash<auto> header_result = output;
+                    log(LoggerLevel::DEBUG, "Header complete for keep-alive %y: %s %s",
+                        key, header_result.hdr.method, header_result.hdr.path);
+
+                    # Store header info
+                    connections{key}.hdr = header_result.hdr;
+                    connections{key}.header_info = header_result.info;
+
+                    # Dispatch to ThreadPool
+                    dispatchToThreadPool(key);
+                } else {
+                    log(LoggerLevel::ERROR, "Unexpected header result type for %y: %y", key, output.type());
+                    closeConnectionIntern(key);
+                }
+                break;
+
+            case "sending_response":
+                # Response sent - check if we should keep alive or close
+                handleSendComplete(key, cinfo);
+                break;
+        }
+    }
+
+    #! Dispatches a connection to the ThreadPool for request processing
+    private dispatchToThreadPool(string key) {
+        hash<HttpConnectionPollInfo> cinfo = remove connections{key};
+
+        server.startConnection(sub () {
+            processRequestInThreadPool(cinfo);
+        });
+    }
+
+    #! Processes a request in the ThreadPool
+    private processRequestInThreadPool(hash<HttpConnectionPollInfo> cinfo) {
+        try {
+            # Let the listener handle the request using its existing logic
+            cinfo.listener.handleAsyncRequest(
+                cinfo.sock,
+                cinfo.cx,
+                cinfo.hdr,
+                cinfo.header_info,
+                cinfo.phi,
+            );
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error processing request: %s", get_exception_string(ex));
+            try {
+                cinfo.sock.close();
+            } catch () {
+                # Ignore close errors
+            }
+        }
+    }
+
+    #! Closes a connection (called locked)
+    #! Formats an HTTP response as binary data for async sending
+    private binary formatHttpResponse(hash<HttpAsyncResponseInfo> response) {
+        string status_line = sprintf("HTTP/1.1 %d %s\r\n", response.code,
+            HttpServer::HttpCodes{response.code} ?? "Unknown");
+
+        # Build headers
+        string headers = "";
+        foreach string key in (keys response.hdr) {
+            auto val = response.hdr{key};
+            if (val.typeCode() == NT_LIST) {
+                foreach auto v in (val) {
+                    headers += sprintf("%s: %s\r\n", key, v);
+                }
+            } else {
+                headers += sprintf("%s: %s\r\n", key, val);
+            }
+        }
+
+        # Add Content-Length if we have a body and it's not chunked
+        if (response.body && !response.chunked) {
+            headers += sprintf("Content-Length: %d\r\n", response.body.size());
+        }
+
+        # End headers
+        headers += "\r\n";
+
+        # Combine status line, headers, and body
+        binary result = binary(status_line) + binary(headers);
+        if (response.body) {
+            if (response.chunked) {
+                # Format as chunked transfer encoding
+                result += binary(sprintf("%x\r\n", response.body.size()));
+                result += response.body.typeCode() == NT_BINARY ? response.body : binary(response.body);
+                result += binary("\r\n0\r\n\r\n");
+            } else {
+                result += response.body.typeCode() == NT_BINARY ? response.body : binary(response.body);
+            }
+        }
+
+        return result;
+    }
+
+    #! Handles completion of sending a response
+    private handleSendComplete(string key, hash<HttpConnectionPollInfo> cinfo) {
+        log(LoggerLevel::DEBUG, "Response sent for %y (close: %y)", key, cinfo.response.close);
+
+        if (cinfo.response.close || !cinfo.sock.isOpen()) {
+            # Close the connection
+            closeConnectionIntern(key);
+        } else {
+            # Keep alive - transition to idle state
+            date now = now_us();
+            connections{key} = <HttpConnectionPollInfo>{
+                "sock": cinfo.sock,
+                "spop": NOTHING,
+                "state": "idle",
+                "timeout_date": now + server.getTtl(),
+                "start": now,
+                "listener_id": cinfo.listener_id,
+                "listener": cinfo.listener,
+                "cx": cinfo.cx,
+                "phi": cinfo.phi,
+            };
+        }
+    }
+
+    #! Closes a connection (called locked)
+    private closeConnectionIntern(string key) {
+        if (*hash<HttpConnectionPollInfo> cinfo = remove connections{key}) {
+            try {
+                cinfo.sock.close();
+            } catch () {
+                # Ignore close errors
+            }
+        }
+    }
+
+    #! Processes commands from the command queue
+    /** @return True if quit command received
+    */
+    private bool processCommands() {
+        # Read all data from semaphore file (to clear the signal)
+        try {
+            sem_read.read(-1, 0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "FILE-READ-TIMEOUT") {
+                rethrow;
+            }
+        }
+
+        # Process all commands
+        try {
+            while (hash<auto> cmd = cmdq.get(-1)) {
+                AutoLock al(m);
+                switch (cmd.cmd) {
+                    case IO_QUIT:
+                        # Close all connections
+                        foreach string key in (keys connections) {
+                            closeConnectionIntern(key);
+                        }
+                        return True;
+
+                    case IO_ADD_LISTENER:
+                        # Listener already added to hash - will be picked up in next poll
+                        break;
+
+                    case IO_REMOVE_LISTENER:
+                        # Listener already removed from hash
+                        break;
+
+                    case IO_ADD_CONNECTION:
+                    case IO_RETURN_CONNECTION:
+                        # Connection already added to hash - will be picked up in next poll
+                        break;
+
+                    case IO_CLOSE_CONNECTION: {
+                        string key = cmd.args[0];
+                        closeConnectionIntern(key);
+                        break;
+                    }
+
+                    case IO_QUEUE_RESPONSE:
+                        # Response already added to connections hash - will be picked up in next poll
+                        break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+
+        return False;
+    }
+
+    #! Sends a command to the I/O thread
+    private sendCmd(string cmd) {
+        if (!tid) {
+            return;
+        }
+        cmdq.push({
+            "cmd": cmd,
+            "args": argv,
+        });
+        sem_write.write(".");
+    }
+
+    #! Logs a message
+    private log(int level, string fmt) {
+        if (logger) {
+            logger.log(level, vsprintf(fmt, argv));
         }
     }
 }

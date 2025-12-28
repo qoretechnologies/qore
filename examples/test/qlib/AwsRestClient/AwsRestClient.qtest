@@ -8,6 +8,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/AwsRestClient.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 
 %requires qore >= 0.9.3

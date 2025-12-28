@@ -1,0 +1,123 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpAsyncTarget.qc Defines the HttpAsyncTarget abstract class
+
+/** HttpAsyncTarget.qc Copyright 2024 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Main namespace
+public namespace HttpServerAsyncIo {
+
+#! Abstract class for receiving async HTTP events
+/** This abstract class defines the callbacks that the HttpAsyncSocketIoController
+    uses to notify the application about HTTP protocol events.
+
+    Implementations should handle:
+    - New HTTP requests (onHttpRequest)
+    - Idle connection timeouts (onIdleTimeout)
+    - I/O errors (onError)
+    - SSE client disconnects (onSseDisconnect)
+    - WebSocket frames (onWebSocketFrame)
+    - WebSocket connection closes (onWebSocketClose)
+
+    @since HttpServerAsyncIo 1.0
+*/
+public class HttpAsyncTarget {
+    #! Called when an HTTP request is ready (header fully parsed)
+    /** This is the main callback for handling HTTP requests. The implementation
+        should:
+        1. Find the appropriate handler based on URL/content-type
+        2. Process the request (inline or via ThreadPool)
+        3. Return instructions for connection handling
+
+        @param info Connection and request information (see @ref HttpConnectionInfo)
+        @return Instructions for connection handling (see @ref HttpRequestResultInfo):
+            - \c close: True to close connection after response
+            - \c return_to_idle: True to return to keep-alive pool
+            - \c streaming: True for SSE/WebSocket
+            - \c stream_type: "sse" or "websocket"
+            - \c stream_operation: The poll operation for streaming
+            - \c ttl: Keep-alive timeout
+
+        @see HttpRequestResultInfo
+        @see HttpConnectionInfo
+    */
+    abstract hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info);
+
+    #! Called when an idle connection times out
+    /** This is called when a keep-alive connection has been idle for longer
+        than the configured TTL. The implementation should close the socket.
+
+        @param sock The socket that timed out
+        @param listener The listener that accepted this connection
+        @param cx Connection context
+    */
+    abstract onIdleTimeout(Socket sock, object listener, hash<auto> cx);
+
+    #! Called on I/O errors
+    /** This is called when an I/O error occurs during async operations.
+        The implementation should log the error and close the socket.
+
+        @param sock The socket where the error occurred
+        @param ex Exception information
+        @param listener The listener for this connection
+        @param cx Connection context (may be empty for errors during accept)
+    */
+    abstract onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx);
+
+    #! Called when an SSE client disconnects
+    /** This is called when the client closes an SSE connection or the
+        connection is lost. The implementation should clean up any
+        subscriber registrations.
+
+        @param sock The socket that disconnected
+        @param listener The listener for this connection
+        @param cx Connection context
+    */
+    abstract onSseDisconnect(Socket sock, object listener, hash<auto> cx);
+
+    #! Called when a WebSocket frame is received
+    /** This is called for text and binary WebSocket frames. Ping frames
+        are handled automatically (pong is sent), but the callback is still
+        invoked for notification.
+
+        @param sock The WebSocket socket
+        @param frame Frame information (see @ref WebSocketFrameInfo)
+        @param listener The listener for this connection
+        @param cx Connection context
+
+        @see WebSocketFrameInfo
+    */
+    abstract onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx);
+
+    #! Called when a WebSocket connection closes
+    /** This is called when the WebSocket close handshake completes or
+        when the connection is lost unexpectedly.
+
+        @param sock The WebSocket socket
+        @param code Close status code (1000 = normal, 1006 = abnormal, etc.)
+        @param reason Close reason text
+        @param listener The listener for this connection
+        @param cx Connection context
+    */
+    abstract onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx);
+}
+
+} # namespace HttpServerAsyncIo

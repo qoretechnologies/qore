@@ -8,6 +8,7 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/BillwerkRestClient.qm
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 
 %try-module json
