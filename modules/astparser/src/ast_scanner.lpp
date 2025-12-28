@@ -334,6 +334,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 <set_zone><<EOF>>                       { AST_FLEX_DO_EOF }
 ^%enable-all-warnings{WS}*$             { yylval->parseopt = new ASTParseOption(APOK_ENABLE_ALL_WARNINGS); return PARSE_OPTION_FULL; }
 ^%enable-debug{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_ENABLE_DEBUG); return PARSE_OPTION_FULL; }
+^%disable-debug{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_DISABLE_DEBUG); return PARSE_OPTION_FULL; }
 ^%disable-all-warnings{WS}*$            { yylval->parseopt = new ASTParseOption(APOK_DISABLE_ALL_WARNINGS); return PARSE_OPTION_FULL; }
 ^%disable-warning{WS}*$                 { yylval->parseopt = new ASTStringParseOption(APOK_DISABLE_WARNING); return PARSE_OPTION_FULL; }
 ^%disable-warning{WS}+                  { BEGIN(disable_warning); return PARSE_OPTION_BEGIN; }
