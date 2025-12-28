@@ -87,25 +87,86 @@ public class RedisPubSubDataProvider inherits RedisDataProviderBase {
 public class RedisPubSubRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'publish' (default), 'pubsub_channels', 'pubsub_numsub', 'pubsub_numpat'"},
-            "channel": {"type": StringOrNothingType, "desc": "Channel name for PUBLISH"},
-            "channels": {"type": SoftListOrNothingType, "desc": "Channel names for PUBSUB NUMSUB"},
-            "message": {"type": AutoType, "desc": "Message to publish"},
-            "pattern": {"type": StringOrNothingType, "desc": "Pattern for PUBSUB CHANNELS"},
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Pub/Sub operation",
+                "desc": "Operation: 'publish' (default), 'pubsub_channels', 'pubsub_numsub', 'pubsub_numpat'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "publish", "desc": "Publish message to channel"},
+                    <AllowedValueInfo>{"value": "pubsub_channels", "desc": "List active channels"},
+                    <AllowedValueInfo>{"value": "pubsub_numsub", "desc": "Get subscriber counts"},
+                    <AllowedValueInfo>{"value": "pubsub_numpat", "desc": "Get pattern subscription count"},
+                ),
+            },
+            "channel": {
+                "display_name": "Channel",
+                "short_desc": "Channel name",
+                "desc": "Channel name for PUBLISH",
+                "type": StringOrNothingType,
+                "example_value": "notifications",
+            },
+            "channels": {
+                "display_name": "Channels",
+                "short_desc": "Channel names",
+                "desc": "Channel names for PUBSUB NUMSUB",
+                "type": SoftListOrNothingType,
+                "example_value": ("channel1", "channel2"),
+            },
+            "message": {
+                "display_name": "Message",
+                "short_desc": "Message to publish",
+                "desc": "Message to publish",
+                "type": AutoType,
+                "example_value": "Hello subscribers!",
+            },
+            "pattern": {
+                "display_name": "Pattern",
+                "short_desc": "Channel pattern",
+                "desc": "Pattern for PUBSUB CHANNELS",
+                "type": StringOrNothingType,
+                "example_value": "news.*",
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisPubSubResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "receivers": {"type": IntOrNothingType, "desc": "Number of clients that received the message"},
-            "channels": {"type": SoftListOrNothingType, "desc": "Active channels matching pattern"},
-            "subscribers": {"type": AutoHashOrNothingType, "desc": "Channel subscriber counts"},
-            "pattern_count": {"type": IntOrNothingType, "desc": "Number of pattern subscriptions"},
+            "receivers": {
+                "display_name": "Receivers",
+                "short_desc": "Message receivers count",
+                "desc": "Number of clients that received the message",
+                "type": IntOrNothingType,
+                "example_value": 5,
+            },
+            "channels": {
+                "display_name": "Channels",
+                "short_desc": "Active channels",
+                "desc": "Active channels matching pattern",
+                "type": SoftListOrNothingType,
+            },
+            "subscribers": {
+                "display_name": "Subscribers",
+                "short_desc": "Subscriber counts",
+                "desc": "Channel subscriber counts",
+                "type": AutoHashOrNothingType,
+            },
+            "pattern_count": {
+                "display_name": "Pattern Count",
+                "short_desc": "Pattern subscriptions",
+                "desc": "Number of pattern subscriptions",
+                "type": IntOrNothingType,
+                "example_value": 3,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

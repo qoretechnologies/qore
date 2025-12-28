@@ -122,33 +122,150 @@ public class RedisKeyDataProvider inherits RedisDataProviderBase {
 public class RedisKeyRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'del' (default), 'exists', 'expire', 'expireat', 'pexpire', 'ttl', 'pttl', 'persist', 'keys', 'scan', 'type', 'rename', 'renamenx'"},
-            "key": {"type": StringOrNothingType, "desc": "The key to operate on"},
-            "keys": {"type": SoftListOrNothingType, "desc": "Multiple keys for DEL/EXISTS"},
-            "newkey": {"type": StringOrNothingType, "desc": "New key name for RENAME"},
-            "seconds": {"type": IntOrNothingType, "desc": "TTL in seconds for EXPIRE"},
-            "milliseconds": {"type": IntOrNothingType, "desc": "TTL in milliseconds for PEXPIRE"},
-            "timestamp": {"type": IntOrNothingType, "desc": "Unix timestamp for EXPIREAT"},
-            "pattern": {"type": StringOrNothingType, "desc": "Pattern for KEYS/SCAN"},
-            "cursor": {"type": IntOrNothingType, "desc": "Cursor for SCAN (default: 0)"},
-            "count": {"type": IntOrNothingType, "desc": "Count hint for SCAN"},
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Key operation type",
+                "desc": "Operation: 'del' (default), 'exists', 'expire', 'expireat', 'pexpire', 'ttl', 'pttl', 'persist', 'keys', 'scan', 'type', 'rename', 'renamenx'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "del", "desc": "Delete key(s)"},
+                    <AllowedValueInfo>{"value": "exists", "desc": "Check if key(s) exist"},
+                    <AllowedValueInfo>{"value": "expire", "desc": "Set TTL in seconds"},
+                    <AllowedValueInfo>{"value": "expireat", "desc": "Set expiry Unix timestamp"},
+                    <AllowedValueInfo>{"value": "pexpire", "desc": "Set TTL in milliseconds"},
+                    <AllowedValueInfo>{"value": "ttl", "desc": "Get TTL in seconds"},
+                    <AllowedValueInfo>{"value": "pttl", "desc": "Get TTL in milliseconds"},
+                    <AllowedValueInfo>{"value": "persist", "desc": "Remove expiry"},
+                    <AllowedValueInfo>{"value": "keys", "desc": "Find keys by pattern"},
+                    <AllowedValueInfo>{"value": "scan", "desc": "Incrementally iterate keys"},
+                    <AllowedValueInfo>{"value": "type", "desc": "Get key type"},
+                    <AllowedValueInfo>{"value": "rename", "desc": "Rename key"},
+                    <AllowedValueInfo>{"value": "renamenx", "desc": "Rename if new key doesn't exist"},
+                ),
+            },
+            "key": {
+                "display_name": "Key",
+                "short_desc": "Key to operate on",
+                "desc": "The key to operate on",
+                "type": StringOrNothingType,
+                "example_value": "mykey",
+            },
+            "keys": {
+                "display_name": "Keys",
+                "short_desc": "Multiple keys",
+                "desc": "Multiple keys for DEL/EXISTS",
+                "type": SoftListOrNothingType,
+                "example_value": ("key1", "key2"),
+            },
+            "newkey": {
+                "display_name": "New Key",
+                "short_desc": "New key name for RENAME",
+                "desc": "New key name for RENAME",
+                "type": StringOrNothingType,
+                "example_value": "newkey",
+            },
+            "seconds": {
+                "display_name": "Seconds",
+                "short_desc": "TTL in seconds",
+                "desc": "TTL in seconds for EXPIRE",
+                "type": IntOrNothingType,
+                "example_value": 3600,
+            },
+            "milliseconds": {
+                "display_name": "Milliseconds",
+                "short_desc": "TTL in milliseconds",
+                "desc": "TTL in milliseconds for PEXPIRE",
+                "type": IntOrNothingType,
+                "example_value": 60000,
+            },
+            "timestamp": {
+                "display_name": "Timestamp",
+                "short_desc": "Unix timestamp",
+                "desc": "Unix timestamp for EXPIREAT",
+                "type": IntOrNothingType,
+            },
+            "pattern": {
+                "display_name": "Pattern",
+                "short_desc": "Key pattern",
+                "desc": "Pattern for KEYS/SCAN",
+                "type": StringOrNothingType,
+                "example_value": "user:*",
+            },
+            "cursor": {
+                "display_name": "Cursor",
+                "short_desc": "SCAN cursor",
+                "desc": "Cursor for SCAN (default: 0)",
+                "type": IntOrNothingType,
+                "example_value": 0,
+            },
+            "count": {
+                "display_name": "Count",
+                "short_desc": "SCAN count hint",
+                "desc": "Count hint for SCAN",
+                "type": IntOrNothingType,
+                "example_value": 100,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisKeyResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "deleted": {"type": IntOrNothingType, "desc": "Number of keys deleted"},
-            "count": {"type": IntOrNothingType, "desc": "Number of existing keys"},
-            "success": {"type": SoftBoolType, "desc": "Operation success"},
-            "ttl": {"type": IntOrNothingType, "desc": "TTL in seconds/milliseconds (-1 = no expiry, -2 = key doesn't exist)"},
-            "keys": {"type": SoftListOrNothingType, "desc": "List of keys matching pattern"},
-            "cursor": {"type": IntOrNothingType, "desc": "Next cursor for SCAN (0 = complete)"},
-            "type": {"type": StringOrNothingType, "desc": "Key type (string, list, set, zset, hash, stream)"},
+            "deleted": {
+                "display_name": "Deleted",
+                "short_desc": "Keys deleted count",
+                "desc": "Number of keys deleted",
+                "type": IntOrNothingType,
+                "example_value": 1,
+            },
+            "count": {
+                "display_name": "Count",
+                "short_desc": "Existing keys count",
+                "desc": "Number of existing keys",
+                "type": IntOrNothingType,
+                "example_value": 2,
+            },
+            "success": {
+                "display_name": "Success",
+                "short_desc": "Operation success",
+                "desc": "Operation success",
+                "type": SoftBoolType,
+                "example_value": True,
+            },
+            "ttl": {
+                "display_name": "TTL",
+                "short_desc": "Time to live",
+                "desc": "TTL in seconds/milliseconds (-1 = no expiry, -2 = key doesn't exist)",
+                "type": IntOrNothingType,
+                "example_value": 3600,
+            },
+            "keys": {
+                "display_name": "Keys",
+                "short_desc": "Matching keys",
+                "desc": "List of keys matching pattern",
+                "type": SoftListOrNothingType,
+            },
+            "cursor": {
+                "display_name": "Cursor",
+                "short_desc": "Next SCAN cursor",
+                "desc": "Next cursor for SCAN (0 = complete)",
+                "type": IntOrNothingType,
+            },
+            "type": {
+                "display_name": "Type",
+                "short_desc": "Key type",
+                "desc": "Key type (string, list, set, zset, hash, stream)",
+                "type": StringOrNothingType,
+                "example_value": "string",
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

@@ -126,27 +126,64 @@ public class RedisHashGetRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The hash key",
                 "desc": "The hash key to operate on",
+                "type": StringType,
+                "example_value": "myhash",
             },
             "operation": {
-                "type": StringOrNothingType,
+                "display_name": "Operation",
+                "short_desc": "Hash get operation type",
                 "desc": "The operation: 'hget' (default), 'hmget', 'hgetall', 'hkeys', 'hvals', 'hlen'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "hget",
+                        "desc": "Get single field value",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hmget",
+                        "desc": "Get multiple field values",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hgetall",
+                        "desc": "Get all fields and values",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hkeys",
+                        "desc": "Get all field names",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hvals",
+                        "desc": "Get all values",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hlen",
+                        "desc": "Get number of fields",
+                    },
+                ),
             },
             "field": {
-                "type": StringOrNothingType,
+                "display_name": "Field",
+                "short_desc": "Field name for HGET",
                 "desc": "The field name for HGET operation",
+                "type": StringOrNothingType,
+                "example_value": "username",
             },
             "fields": {
-                "type": SoftListOrNothingType,
+                "display_name": "Fields",
+                "short_desc": "Field names for HMGET",
                 "desc": "The list of field names for HMGET operation",
+                "type": SoftListOrNothingType,
+                "example_value": ("field1", "field2"),
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -156,31 +193,43 @@ public class RedisHashGetResponseDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "Single field value",
                 "desc": "The field value for HGET operation",
+                "type": AutoType,
+                "example_value": "john_doe",
             },
             "values": {
-                "type": SoftListOrNothingType,
+                "display_name": "Values",
+                "short_desc": "Multiple field values",
                 "desc": "The field values for HMGET/HVALS operations",
+                "type": SoftListOrNothingType,
             },
             "hash": {
-                "type": AutoHashOrNothingType,
+                "display_name": "Hash",
+                "short_desc": "Full hash contents",
                 "desc": "The full hash for HGETALL operation",
+                "type": AutoHashOrNothingType,
             },
             "keys": {
-                "type": SoftListOrNothingType,
+                "display_name": "Keys",
+                "short_desc": "Field names",
                 "desc": "The field names for HKEYS operation",
+                "type": SoftListOrNothingType,
             },
             "length": {
-                "type": IntOrNothingType,
+                "display_name": "Length",
+                "short_desc": "Number of fields",
                 "desc": "The number of fields for HLEN operation",
+                "type": IntOrNothingType,
+                "example_value": 5,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

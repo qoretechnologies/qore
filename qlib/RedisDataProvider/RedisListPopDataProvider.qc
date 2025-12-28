@@ -97,30 +97,74 @@ public class RedisListPopDataProvider inherits RedisDataProviderBase {
 public class RedisListPopRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The list key"},
-            "right": {"type": SoftBoolOrNothingType, "desc": "Pop from right side (RPOP) instead of left (LPOP)"},
-            "count": {"type": IntOrNothingType, "desc": "Number of elements to pop (Redis 6.2+)"},
-            "blocking": {"type": SoftBoolOrNothingType, "desc": "Use blocking pop (BLPOP/BRPOP)"},
-            "timeout": {"type": IntOrNothingType, "desc": "Timeout in seconds for blocking pop (0 = infinite)"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The list key",
+                "desc": "The list key",
+                "type": StringType,
+                "example_value": "mylist",
+            },
+            "right": {
+                "display_name": "Pop Right",
+                "short_desc": "Pop from right side (RPOP)",
+                "desc": "Pop from right side (RPOP) instead of left (LPOP)",
+                "type": SoftBoolOrNothingType,
+            },
+            "count": {
+                "display_name": "Count",
+                "short_desc": "Number of elements to pop",
+                "desc": "Number of elements to pop (Redis 6.2+)",
+                "type": IntOrNothingType,
+                "example_value": 3,
+            },
+            "blocking": {
+                "display_name": "Blocking",
+                "short_desc": "Use blocking pop",
+                "desc": "Use blocking pop (BLPOP/BRPOP)",
+                "type": SoftBoolOrNothingType,
+            },
+            "timeout": {
+                "display_name": "Timeout",
+                "short_desc": "Blocking timeout in seconds",
+                "desc": "Timeout in seconds for blocking pop (0 = infinite)",
+                "type": IntOrNothingType,
+                "example_value": 30,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
 public class RedisListPopResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "value": {"type": AutoType, "desc": "The popped value, or NOTHING if list is empty"},
-            "values": {"type": SoftListOrNothingType, "desc": "Multiple popped values (when count > 1)"},
-            "key": {"type": StringOrNothingType, "desc": "The key from which value was popped (for blocking ops)"},
+            "value": {
+                "display_name": "Value",
+                "short_desc": "Popped value",
+                "desc": "The popped value, or NOTHING if list is empty",
+                "type": AutoType,
+                "example_value": "item1",
+            },
+            "values": {
+                "display_name": "Values",
+                "short_desc": "Multiple popped values",
+                "desc": "Multiple popped values (when count > 1)",
+                "type": SoftListOrNothingType,
+            },
+            "key": {
+                "display_name": "Key",
+                "short_desc": "Source key for blocking ops",
+                "desc": "The key from which value was popped (for blocking ops)",
+                "type": StringOrNothingType,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

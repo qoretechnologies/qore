@@ -90,25 +90,102 @@ public class RedisSetAddDataProvider inherits RedisDataProviderBase {
 public class RedisSetAddRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The set key"},
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'sadd' (default), 'srem', 'smembers', 'sismember', 'smismember'"},
-            "member": {"type": AutoType, "desc": "Single member to add/remove/check"},
-            "members": {"type": SoftListOrNothingType, "desc": "Multiple members to add/remove/check"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The set key",
+                "desc": "The set key",
+                "type": StringType,
+                "example_value": "myset",
+            },
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Set operation type",
+                "desc": "Operation: 'sadd' (default), 'srem', 'smembers', 'sismember', 'smismember'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "sadd",
+                        "desc": "Add member(s) to set",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "srem",
+                        "desc": "Remove member(s) from set",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "smembers",
+                        "desc": "Get all members",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sismember",
+                        "desc": "Check if member exists",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "smismember",
+                        "desc": "Check multiple members",
+                    },
+                ),
+            },
+            "member": {
+                "display_name": "Member",
+                "short_desc": "Single member",
+                "desc": "Single member to add/remove/check",
+                "type": AutoType,
+                "example_value": "value1",
+            },
+            "members": {
+                "display_name": "Members",
+                "short_desc": "Multiple members",
+                "desc": "Multiple members to add/remove/check",
+                "type": SoftListOrNothingType,
+                "example_value": ("value1", "value2", "value3"),
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisSetAddResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "added": {"type": IntOrNothingType, "desc": "Number of members added"},
-            "removed": {"type": IntOrNothingType, "desc": "Number of members removed"},
-            "members": {"type": SoftListOrNothingType, "desc": "Set members for SMEMBERS"},
-            "is_member": {"type": SoftBoolType, "desc": "True if member exists for SISMEMBER"},
-            "results": {"type": SoftListOrNothingType, "desc": "Membership results for SMISMEMBER"},
+            "added": {
+                "display_name": "Added",
+                "short_desc": "Members added count",
+                "desc": "Number of members added",
+                "type": IntOrNothingType,
+                "example_value": 3,
+            },
+            "removed": {
+                "display_name": "Removed",
+                "short_desc": "Members removed count",
+                "desc": "Number of members removed",
+                "type": IntOrNothingType,
+                "example_value": 1,
+            },
+            "members": {
+                "display_name": "Members",
+                "short_desc": "Set members",
+                "desc": "Set members for SMEMBERS",
+                "type": SoftListOrNothingType,
+            },
+            "is_member": {
+                "display_name": "Is Member",
+                "short_desc": "Member exists",
+                "desc": "True if member exists for SISMEMBER",
+                "type": SoftBoolType,
+                "example_value": True,
+            },
+            "results": {
+                "display_name": "Results",
+                "short_desc": "Membership results",
+                "desc": "Membership results for SMISMEMBER",
+                "type": SoftListOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

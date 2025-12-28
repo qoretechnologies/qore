@@ -124,27 +124,95 @@ public class RedisTransactionDataProvider inherits RedisDataProviderBase {
 public class RedisTransactionRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'execute_transaction' (default), 'multi', 'exec', 'discard', 'watch', 'unwatch'"},
-            "commands": {"type": SoftListOrNothingType, "desc": "List of commands for execute_transaction, each is [cmd, arg1, arg2, ...]"},
-            "keys": {"type": SoftListOrNothingType, "desc": "Keys to WATCH"},
-            "watch_keys": {"type": SoftListOrNothingType, "desc": "Keys to watch before execute_transaction"},
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Transaction operation",
+                "desc": "Operation: 'execute_transaction' (default), 'multi', 'exec', 'discard', 'watch', 'unwatch'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "execute_transaction", "desc": "Execute commands atomically"},
+                    <AllowedValueInfo>{"value": "multi", "desc": "Start transaction"},
+                    <AllowedValueInfo>{"value": "exec", "desc": "Execute queued commands"},
+                    <AllowedValueInfo>{"value": "discard", "desc": "Discard transaction"},
+                    <AllowedValueInfo>{"value": "watch", "desc": "Watch keys for changes"},
+                    <AllowedValueInfo>{"value": "unwatch", "desc": "Unwatch all keys"},
+                ),
+            },
+            "commands": {
+                "display_name": "Commands",
+                "short_desc": "Transaction commands",
+                "desc": "List of commands for execute_transaction, each is [cmd, arg1, arg2, ...]",
+                "type": SoftListOrNothingType,
+            },
+            "keys": {
+                "display_name": "Keys",
+                "short_desc": "Keys to WATCH",
+                "desc": "Keys to WATCH",
+                "type": SoftListOrNothingType,
+                "example_value": ("key1", "key2"),
+            },
+            "watch_keys": {
+                "display_name": "Watch Keys",
+                "short_desc": "Keys to watch",
+                "desc": "Keys to watch before execute_transaction",
+                "type": SoftListOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisTransactionResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "queued": {"type": SoftBoolType, "desc": "Transaction started (MULTI)"},
-            "results": {"type": SoftListOrNothingType, "desc": "Results from EXEC"},
-            "discarded": {"type": SoftBoolType, "desc": "Transaction was discarded"},
-            "watching": {"type": SoftBoolType, "desc": "Now watching keys"},
-            "unwatched": {"type": SoftBoolType, "desc": "Keys unwatched"},
-            "aborted": {"type": SoftBoolType, "desc": "Transaction was aborted (WATCH key modified)"},
-            "reason": {"type": StringOrNothingType, "desc": "Reason for abort"},
+            "queued": {
+                "display_name": "Queued",
+                "short_desc": "Transaction started",
+                "desc": "Transaction started (MULTI)",
+                "type": SoftBoolType,
+            },
+            "results": {
+                "display_name": "Results",
+                "short_desc": "Execution results",
+                "desc": "Results from EXEC",
+                "type": SoftListOrNothingType,
+            },
+            "discarded": {
+                "display_name": "Discarded",
+                "short_desc": "Transaction discarded",
+                "desc": "Transaction was discarded",
+                "type": SoftBoolType,
+            },
+            "watching": {
+                "display_name": "Watching",
+                "short_desc": "Watching keys",
+                "desc": "Now watching keys",
+                "type": SoftBoolType,
+            },
+            "unwatched": {
+                "display_name": "Unwatched",
+                "short_desc": "Keys unwatched",
+                "desc": "Keys unwatched",
+                "type": SoftBoolType,
+            },
+            "aborted": {
+                "display_name": "Aborted",
+                "short_desc": "Transaction aborted",
+                "desc": "Transaction was aborted (WATCH key modified)",
+                "type": SoftBoolType,
+            },
+            "reason": {
+                "display_name": "Reason",
+                "short_desc": "Abort reason",
+                "desc": "Reason for abort",
+                "type": StringOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

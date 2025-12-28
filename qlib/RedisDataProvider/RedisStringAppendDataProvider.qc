@@ -113,35 +113,70 @@ public class RedisStringAppendRequestDataType inherits DataProvider::HashDataTyp
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The key to operate on",
                 "desc": "The key to operate on",
+                "type": StringType,
+                "example_value": "mystring",
             },
             "operation": {
-                "type": StringOrNothingType,
+                "display_name": "Operation",
+                "short_desc": "String operation type",
                 "desc": "The operation to perform: 'append' (default), 'strlen', 'getrange', or 'setrange'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "append",
+                        "desc": "Append value to string",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "strlen",
+                        "desc": "Get string length",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "getrange",
+                        "desc": "Get substring",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "setrange",
+                        "desc": "Overwrite part of string",
+                    },
+                ),
             },
             "value": {
-                "type": StringOrNothingType,
+                "display_name": "Value",
+                "short_desc": "Value to append or set",
                 "desc": "The value to append or set (for 'append' and 'setrange' operations)",
+                "type": StringOrNothingType,
+                "example_value": " world",
             },
             "start": {
-                "type": IntOrNothingType,
+                "display_name": "Start",
+                "short_desc": "Start offset for getrange",
                 "desc": "Start offset for 'getrange' operation",
+                "type": IntOrNothingType,
+                "example_value": 0,
             },
             "end": {
-                "type": IntOrNothingType,
+                "display_name": "End",
+                "short_desc": "End offset for getrange",
                 "desc": "End offset for 'getrange' operation",
+                "type": IntOrNothingType,
+                "example_value": 4,
             },
             "offset": {
-                "type": IntOrNothingType,
+                "display_name": "Offset",
+                "short_desc": "Offset for setrange",
                 "desc": "Offset for 'setrange' operation",
+                "type": IntOrNothingType,
+                "example_value": 6,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -151,19 +186,25 @@ public class RedisStringAppendResponseDataType inherits DataProvider::HashDataTy
         #! Field descriptions
         const Fields = {
             "length": {
-                "type": IntOrNothingType,
+                "display_name": "Length",
+                "short_desc": "String length after operation",
                 "desc": "The new length of the string after the operation (for APPEND, STRLEN, SETRANGE)",
+                "type": IntOrNothingType,
+                "example_value": 11,
             },
             "value": {
-                "type": StringOrNothingType,
+                "display_name": "Value",
+                "short_desc": "Substring value",
                 "desc": "The substring value (for GETRANGE operation)",
+                "type": StringOrNothingType,
+                "example_value": "hello",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

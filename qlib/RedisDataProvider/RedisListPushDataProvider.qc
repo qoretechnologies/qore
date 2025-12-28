@@ -94,28 +94,62 @@ public class RedisListPushDataProvider inherits RedisDataProviderBase {
 public class RedisListPushRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The list key"},
-            "value": {"type": AutoType, "desc": "Single value to push"},
-            "values": {"type": SoftListOrNothingType, "desc": "Multiple values to push"},
-            "right": {"type": SoftBoolOrNothingType, "desc": "Push to right side (RPUSH) instead of left (LPUSH)"},
-            "only_if_exists": {"type": SoftBoolOrNothingType, "desc": "Only push if the list exists (LPUSHX/RPUSHX)"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The list key",
+                "desc": "The list key",
+                "type": StringType,
+                "example_value": "mylist",
+            },
+            "value": {
+                "display_name": "Value",
+                "short_desc": "Single value to push",
+                "desc": "Single value to push",
+                "type": AutoType,
+                "example_value": "item1",
+            },
+            "values": {
+                "display_name": "Values",
+                "short_desc": "Multiple values to push",
+                "desc": "Multiple values to push",
+                "type": SoftListOrNothingType,
+                "example_value": ("item1", "item2", "item3"),
+            },
+            "right": {
+                "display_name": "Push Right",
+                "short_desc": "Push to right side (RPUSH)",
+                "desc": "Push to right side (RPUSH) instead of left (LPUSH)",
+                "type": SoftBoolOrNothingType,
+            },
+            "only_if_exists": {
+                "display_name": "Only If Exists",
+                "short_desc": "Only push if list exists",
+                "desc": "Only push if the list exists (LPUSHX/RPUSHX)",
+                "type": SoftBoolOrNothingType,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
 public class RedisListPushResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "length": {"type": IntType, "desc": "The new length of the list"},
+            "length": {
+                "display_name": "Length",
+                "short_desc": "New list length",
+                "desc": "The new length of the list",
+                "type": IntType,
+                "example_value": 5,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

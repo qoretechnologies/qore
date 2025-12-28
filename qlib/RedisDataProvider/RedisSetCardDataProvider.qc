@@ -86,22 +86,73 @@ public class RedisSetCardDataProvider inherits RedisDataProviderBase {
 public class RedisSetCardRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The set key"},
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'scard' (default), 'srandmember', 'spop'"},
-            "count": {"type": IntOrNothingType, "desc": "Number of random members to return/pop"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The set key",
+                "desc": "The set key",
+                "type": StringType,
+                "example_value": "myset",
+            },
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Cardinality operation",
+                "desc": "Operation: 'scard' (default), 'srandmember', 'spop'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "scard",
+                        "desc": "Get set cardinality",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "srandmember",
+                        "desc": "Get random member(s)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "spop",
+                        "desc": "Pop random member(s)",
+                    },
+                ),
+            },
+            "count": {
+                "display_name": "Count",
+                "short_desc": "Number of random members",
+                "desc": "Number of random members to return/pop",
+                "type": IntOrNothingType,
+                "example_value": 3,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisSetCardResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "count": {"type": IntOrNothingType, "desc": "Set cardinality for SCARD"},
-            "member": {"type": AutoType, "desc": "Random member for single SRANDMEMBER/SPOP"},
-            "members": {"type": SoftListOrNothingType, "desc": "Random members for SRANDMEMBER/SPOP with count"},
+            "count": {
+                "display_name": "Count",
+                "short_desc": "Set cardinality",
+                "desc": "Set cardinality for SCARD",
+                "type": IntOrNothingType,
+                "example_value": 10,
+            },
+            "member": {
+                "display_name": "Member",
+                "short_desc": "Random member",
+                "desc": "Random member for single SRANDMEMBER/SPOP",
+                "type": AutoType,
+            },
+            "members": {
+                "display_name": "Members",
+                "short_desc": "Random members",
+                "desc": "Random members for SRANDMEMBER/SPOP with count",
+                "type": SoftListOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

@@ -111,28 +111,109 @@ public class RedisServerDataProvider inherits RedisDataProviderBase {
 public class RedisServerRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'info' (default), 'dbsize', 'flushdb', 'flushall', 'ping', 'echo', 'time', 'config_get', 'client_list'"},
-            "section": {"type": StringOrNothingType, "desc": "Section for INFO (server, clients, memory, persistence, stats, replication, cpu, cluster, keyspace)"},
-            "message": {"type": StringOrNothingType, "desc": "Message for ECHO"},
-            "parameter": {"type": StringOrNothingType, "desc": "Parameter pattern for CONFIG GET"},
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Server operation type",
+                "desc": "Operation: 'info' (default), 'dbsize', 'flushdb', 'flushall', 'ping', 'echo', 'time', 'config_get', 'client_list'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "info", "desc": "Get server information"},
+                    <AllowedValueInfo>{"value": "dbsize", "desc": "Get database size"},
+                    <AllowedValueInfo>{"value": "flushdb", "desc": "Flush current database"},
+                    <AllowedValueInfo>{"value": "flushall", "desc": "Flush all databases"},
+                    <AllowedValueInfo>{"value": "ping", "desc": "Ping server"},
+                    <AllowedValueInfo>{"value": "echo", "desc": "Echo message"},
+                    <AllowedValueInfo>{"value": "time", "desc": "Get server time"},
+                    <AllowedValueInfo>{"value": "config_get", "desc": "Get configuration"},
+                    <AllowedValueInfo>{"value": "client_list", "desc": "List clients"},
+                ),
+            },
+            "section": {
+                "display_name": "Section",
+                "short_desc": "INFO section",
+                "desc": "Section for INFO (server, clients, memory, persistence, stats, replication, cpu, cluster, keyspace)",
+                "type": StringOrNothingType,
+                "example_value": "server",
+            },
+            "message": {
+                "display_name": "Message",
+                "short_desc": "Message for ECHO",
+                "desc": "Message for ECHO",
+                "type": StringOrNothingType,
+                "example_value": "hello",
+            },
+            "parameter": {
+                "display_name": "Parameter",
+                "short_desc": "Config parameter pattern",
+                "desc": "Parameter pattern for CONFIG GET",
+                "type": StringOrNothingType,
+                "example_value": "maxmemory*",
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisServerResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "info": {"type": StringOrNothingType, "desc": "Server info string"},
-            "size": {"type": IntOrNothingType, "desc": "Database size (key count)"},
-            "success": {"type": SoftBoolType, "desc": "Operation success"},
-            "response": {"type": StringOrNothingType, "desc": "Response for PING/ECHO"},
-            "seconds": {"type": IntOrNothingType, "desc": "Unix timestamp seconds"},
-            "microseconds": {"type": IntOrNothingType, "desc": "Microseconds"},
-            "config": {"type": AutoHashOrNothingType, "desc": "Configuration parameters"},
-            "clients": {"type": StringOrNothingType, "desc": "Client list"},
+            "info": {
+                "display_name": "Info",
+                "short_desc": "Server info string",
+                "desc": "Server info string",
+                "type": StringOrNothingType,
+            },
+            "size": {
+                "display_name": "Size",
+                "short_desc": "Database size",
+                "desc": "Database size (key count)",
+                "type": IntOrNothingType,
+                "example_value": 1000,
+            },
+            "success": {
+                "display_name": "Success",
+                "short_desc": "Operation success",
+                "desc": "Operation success",
+                "type": SoftBoolType,
+                "example_value": True,
+            },
+            "response": {
+                "display_name": "Response",
+                "short_desc": "PING/ECHO response",
+                "desc": "Response for PING/ECHO",
+                "type": StringOrNothingType,
+                "example_value": "PONG",
+            },
+            "seconds": {
+                "display_name": "Seconds",
+                "short_desc": "Unix timestamp seconds",
+                "desc": "Unix timestamp seconds",
+                "type": IntOrNothingType,
+            },
+            "microseconds": {
+                "display_name": "Microseconds",
+                "short_desc": "Microseconds",
+                "desc": "Microseconds",
+                "type": IntOrNothingType,
+            },
+            "config": {
+                "display_name": "Config",
+                "short_desc": "Configuration parameters",
+                "desc": "Configuration parameters",
+                "type": AutoHashOrNothingType,
+            },
+            "clients": {
+                "display_name": "Clients",
+                "short_desc": "Client list",
+                "desc": "Client list",
+                "type": StringOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

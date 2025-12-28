@@ -109,27 +109,48 @@ public class RedisHashDelRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The hash key",
                 "desc": "The hash key to operate on",
+                "type": StringType,
+                "example_value": "myhash",
             },
             "operation": {
-                "type": StringOrNothingType,
+                "display_name": "Operation",
+                "short_desc": "Delete or check existence",
                 "desc": "The operation: 'hdel' (default), 'hexists'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "hdel",
+                        "desc": "Delete field(s)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "hexists",
+                        "desc": "Check if field exists",
+                    },
+                ),
             },
             "field": {
-                "type": StringOrNothingType,
+                "display_name": "Field",
+                "short_desc": "Field name",
                 "desc": "The field name for single field operations",
+                "type": StringOrNothingType,
+                "example_value": "username",
             },
             "fields": {
-                "type": SoftListOrNothingType,
+                "display_name": "Fields",
+                "short_desc": "Multiple field names",
                 "desc": "A list of field names for deleting multiple fields",
+                "type": SoftListOrNothingType,
+                "example_value": ("field1", "field2"),
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -139,19 +160,25 @@ public class RedisHashDelResponseDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "deleted": {
-                "type": IntOrNothingType,
+                "display_name": "Deleted",
+                "short_desc": "Number of fields deleted",
                 "desc": "The number of fields deleted",
+                "type": IntOrNothingType,
+                "example_value": 2,
             },
             "exists": {
-                "type": SoftBoolType,
+                "display_name": "Exists",
+                "short_desc": "Field exists",
                 "desc": "True if the field exists (for HEXISTS operation)",
+                "type": SoftBoolType,
+                "example_value": True,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

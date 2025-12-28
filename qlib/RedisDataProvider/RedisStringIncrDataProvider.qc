@@ -130,27 +130,39 @@ public class RedisStringIncrRequestDataType inherits DataProvider::HashDataType 
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The key to increment/decrement",
                 "desc": "The key to increment/decrement",
+                "type": StringType,
+                "example_value": "counter",
             },
             "increment": {
-                "type": IntOrNothingType,
+                "display_name": "Increment",
+                "short_desc": "Integer increment value",
                 "desc": "The integer increment value (use negative for decrement). If not specified, defaults to 1",
+                "type": IntOrNothingType,
+                "example_value": 5,
             },
             "decrement": {
-                "type": IntOrNothingType,
+                "display_name": "Decrement",
+                "short_desc": "Integer decrement value",
                 "desc": "The integer decrement value. Alternative to using negative increment",
+                "type": IntOrNothingType,
+                "example_value": 1,
             },
             "increment_float": {
-                "type": FloatOrNothingType,
+                "display_name": "Float Increment",
+                "short_desc": "Floating-point increment",
                 "desc": "The floating-point increment value (uses INCRBYFLOAT command)",
+                "type": FloatOrNothingType,
+                "example_value": 1.5,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -160,15 +172,18 @@ public class RedisStringIncrResponseDataType inherits DataProvider::HashDataType
         #! Field descriptions
         const Fields = {
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "New value after operation",
                 "desc": "The new value after the increment/decrement operation (integer or float depending on command)",
+                "type": AutoType,
+                "example_value": 10,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

@@ -114,31 +114,44 @@ public class RedisHashSetRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The hash key",
                 "desc": "The hash key to operate on",
+                "type": StringType,
+                "example_value": "myhash",
             },
             "field": {
-                "type": StringOrNothingType,
+                "display_name": "Field",
+                "short_desc": "Field name for single operations",
                 "desc": "The field name for single field operations",
+                "type": StringOrNothingType,
+                "example_value": "username",
             },
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "Value to set",
                 "desc": "The value to set for single field operations",
+                "type": AutoType,
+                "example_value": "john_doe",
             },
             "fields": {
-                "type": SoftListOrNothingType,
+                "display_name": "Fields",
+                "short_desc": "Multiple field-value pairs",
                 "desc": "A list of {field, value} hashes for setting multiple fields",
+                "type": SoftListOrNothingType,
             },
             "nx": {
-                "type": SoftBoolOrNothingType,
+                "display_name": "Only If New",
+                "short_desc": "Set only if field doesn't exist",
                 "desc": "Set to True to only set if the field does not exist (HSETNX)",
+                "type": SoftBoolOrNothingType,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -148,19 +161,25 @@ public class RedisHashSetResponseDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "fields_added": {
-                "type": IntOrNothingType,
+                "display_name": "Fields Added",
+                "short_desc": "Number of new fields added",
                 "desc": "The number of new fields added (0 if field was updated, 1 if created)",
+                "type": IntOrNothingType,
+                "example_value": 1,
             },
             "created": {
-                "type": SoftBoolType,
+                "display_name": "Created",
+                "short_desc": "Field was created",
                 "desc": "True if the field was created (for HSETNX operation)",
+                "type": SoftBoolType,
+                "example_value": True,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

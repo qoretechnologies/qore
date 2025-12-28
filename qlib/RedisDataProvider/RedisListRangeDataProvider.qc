@@ -106,34 +106,127 @@ public class RedisListRangeDataProvider inherits RedisDataProviderBase {
 public class RedisListRangeRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The list key"},
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'lrange' (default), 'lindex', 'llen', 'lset', 'linsert', 'ltrim'"},
-            "start": {"type": IntOrNothingType, "desc": "Start index for LRANGE/LTRIM (default: 0)"},
-            "stop": {"type": IntOrNothingType, "desc": "Stop index for LRANGE/LTRIM (default: -1)"},
-            "index": {"type": IntOrNothingType, "desc": "Index for LINDEX/LSET"},
-            "value": {"type": AutoType, "desc": "Value for LSET/LINSERT"},
-            "pivot": {"type": AutoType, "desc": "Pivot element for LINSERT"},
-            "before": {"type": SoftBoolOrNothingType, "desc": "Insert before pivot (True) or after (False) for LINSERT"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The list key",
+                "desc": "The list key",
+                "type": StringType,
+                "example_value": "mylist",
+            },
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "List range operation",
+                "desc": "Operation: 'lrange' (default), 'lindex', 'llen', 'lset', 'linsert', 'ltrim'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "lrange",
+                        "desc": "Get range of elements",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "lindex",
+                        "desc": "Get element by index",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "llen",
+                        "desc": "Get list length",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "lset",
+                        "desc": "Set element at index",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "linsert",
+                        "desc": "Insert element before/after pivot",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "ltrim",
+                        "desc": "Trim list to range",
+                    },
+                ),
+            },
+            "start": {
+                "display_name": "Start",
+                "short_desc": "Start index",
+                "desc": "Start index for LRANGE/LTRIM (default: 0)",
+                "type": IntOrNothingType,
+                "example_value": 0,
+            },
+            "stop": {
+                "display_name": "Stop",
+                "short_desc": "Stop index",
+                "desc": "Stop index for LRANGE/LTRIM (default: -1)",
+                "type": IntOrNothingType,
+                "example_value": -1,
+            },
+            "index": {
+                "display_name": "Index",
+                "short_desc": "Element index",
+                "desc": "Index for LINDEX/LSET",
+                "type": IntOrNothingType,
+                "example_value": 0,
+            },
+            "value": {
+                "display_name": "Value",
+                "short_desc": "Value to set/insert",
+                "desc": "Value for LSET/LINSERT",
+                "type": AutoType,
+                "example_value": "new_item",
+            },
+            "pivot": {
+                "display_name": "Pivot",
+                "short_desc": "Pivot element for LINSERT",
+                "desc": "Pivot element for LINSERT",
+                "type": AutoType,
+            },
+            "before": {
+                "display_name": "Before",
+                "short_desc": "Insert before pivot",
+                "desc": "Insert before pivot (True) or after (False) for LINSERT",
+                "type": SoftBoolOrNothingType,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
 public class RedisListRangeResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "values": {"type": SoftListOrNothingType, "desc": "List elements for LRANGE"},
-            "value": {"type": AutoType, "desc": "Element value for LINDEX"},
-            "length": {"type": IntOrNothingType, "desc": "List length for LLEN/LINSERT"},
-            "success": {"type": SoftBoolType, "desc": "Success flag for LSET/LTRIM"},
+            "values": {
+                "display_name": "Values",
+                "short_desc": "List elements",
+                "desc": "List elements for LRANGE",
+                "type": SoftListOrNothingType,
+            },
+            "value": {
+                "display_name": "Value",
+                "short_desc": "Element value",
+                "desc": "Element value for LINDEX",
+                "type": AutoType,
+            },
+            "length": {
+                "display_name": "Length",
+                "short_desc": "List length",
+                "desc": "List length for LLEN/LINSERT",
+                "type": IntOrNothingType,
+                "example_value": 10,
+            },
+            "success": {
+                "display_name": "Success",
+                "short_desc": "Operation success",
+                "desc": "Success flag for LSET/LTRIM",
+                "type": SoftBoolType,
+                "example_value": True,
+            },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

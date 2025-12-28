@@ -92,30 +92,125 @@ public class RedisSortedSetAddDataProvider inherits RedisDataProviderBase {
 public class RedisSortedSetAddRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "key": {"type": StringType, "desc": "The sorted set key"},
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'zadd' (default), 'zrem', 'zincrby'"},
-            "member": {"type": AutoType, "desc": "Single member"},
-            "score": {"type": FloatOrNothingType, "desc": "Score for single member"},
-            "members": {"type": SoftListOrNothingType, "desc": "List of {score, member} hashes"},
-            "increment": {"type": FloatOrNothingType, "desc": "Increment value for ZINCRBY"},
-            "nx": {"type": SoftBoolOrNothingType, "desc": "Only add new elements (don't update scores)"},
-            "xx": {"type": SoftBoolOrNothingType, "desc": "Only update existing elements"},
-            "gt": {"type": SoftBoolOrNothingType, "desc": "Only update when new score > current score"},
-            "lt": {"type": SoftBoolOrNothingType, "desc": "Only update when new score < current score"},
-            "ch": {"type": SoftBoolOrNothingType, "desc": "Return number of changed elements instead of added"},
+            "key": {
+                "display_name": "Key",
+                "short_desc": "The sorted set key",
+                "desc": "The sorted set key",
+                "type": StringType,
+                "example_value": "myzset",
+            },
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Sorted set operation",
+                "desc": "Operation: 'zadd' (default), 'zrem', 'zincrby'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "zadd",
+                        "desc": "Add/update members",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "zrem",
+                        "desc": "Remove members",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "zincrby",
+                        "desc": "Increment member score",
+                    },
+                ),
+            },
+            "member": {
+                "display_name": "Member",
+                "short_desc": "Single member",
+                "desc": "Single member",
+                "type": AutoType,
+                "example_value": "member1",
+            },
+            "score": {
+                "display_name": "Score",
+                "short_desc": "Score for member",
+                "desc": "Score for single member",
+                "type": FloatOrNothingType,
+                "example_value": 1.0,
+            },
+            "members": {
+                "display_name": "Members",
+                "short_desc": "Score-member pairs",
+                "desc": "List of {score, member} hashes",
+                "type": SoftListOrNothingType,
+            },
+            "increment": {
+                "display_name": "Increment",
+                "short_desc": "Increment value",
+                "desc": "Increment value for ZINCRBY",
+                "type": FloatOrNothingType,
+                "example_value": 1.5,
+            },
+            "nx": {
+                "display_name": "Only New",
+                "short_desc": "Only add new elements",
+                "desc": "Only add new elements (don't update scores)",
+                "type": SoftBoolOrNothingType,
+            },
+            "xx": {
+                "display_name": "Only Existing",
+                "short_desc": "Only update existing",
+                "desc": "Only update existing elements",
+                "type": SoftBoolOrNothingType,
+            },
+            "gt": {
+                "display_name": "Greater Than",
+                "short_desc": "Update if new > current",
+                "desc": "Only update when new score > current score",
+                "type": SoftBoolOrNothingType,
+            },
+            "lt": {
+                "display_name": "Less Than",
+                "short_desc": "Update if new < current",
+                "desc": "Only update when new score < current score",
+                "type": SoftBoolOrNothingType,
+            },
+            "ch": {
+                "display_name": "Changed",
+                "short_desc": "Return changed count",
+                "desc": "Return number of changed elements instead of added",
+                "type": SoftBoolOrNothingType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisSortedSetAddResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "added": {"type": IntOrNothingType, "desc": "Number of elements added/changed"},
-            "removed": {"type": IntOrNothingType, "desc": "Number of elements removed"},
-            "score": {"type": FloatOrNothingType, "desc": "New score after ZINCRBY"},
+            "added": {
+                "display_name": "Added",
+                "short_desc": "Elements added/changed",
+                "desc": "Number of elements added/changed",
+                "type": IntOrNothingType,
+                "example_value": 1,
+            },
+            "removed": {
+                "display_name": "Removed",
+                "short_desc": "Elements removed",
+                "desc": "Number of elements removed",
+                "type": IntOrNothingType,
+                "example_value": 0,
+            },
+            "score": {
+                "display_name": "Score",
+                "short_desc": "New score",
+                "desc": "New score after ZINCRBY",
+                "type": FloatOrNothingType,
+                "example_value": 2.5,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

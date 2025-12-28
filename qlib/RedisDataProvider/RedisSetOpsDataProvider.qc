@@ -94,24 +94,103 @@ public class RedisSetOpsDataProvider inherits RedisDataProviderBase {
 public class RedisSetOpsRequestDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "operation": {"type": StringOrNothingType, "desc": "Operation: 'sunion' (default), 'sinter', 'sdiff', 'sunionstore', 'sinterstore', 'sdiffstore', 'smove'"},
-            "keys": {"type": SoftListOrNothingType, "desc": "Set keys for union/intersection/difference operations"},
-            "source": {"type": StringOrNothingType, "desc": "Source set for SMOVE"},
-            "destination": {"type": StringOrNothingType, "desc": "Destination set for store operations and SMOVE"},
-            "member": {"type": AutoType, "desc": "Member to move for SMOVE"},
+            "operation": {
+                "display_name": "Operation",
+                "short_desc": "Set operation type",
+                "desc": "Operation: 'sunion' (default), 'sinter', 'sdiff', 'sunionstore', 'sinterstore', 'sdiffstore', 'smove'",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "sunion",
+                        "desc": "Union of sets",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sinter",
+                        "desc": "Intersection of sets",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sdiff",
+                        "desc": "Difference of sets",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sunionstore",
+                        "desc": "Store union result",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sinterstore",
+                        "desc": "Store intersection result",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "sdiffstore",
+                        "desc": "Store difference result",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "smove",
+                        "desc": "Move member between sets",
+                    },
+                ),
+            },
+            "keys": {
+                "display_name": "Keys",
+                "short_desc": "Set keys for operations",
+                "desc": "Set keys for union/intersection/difference operations",
+                "type": SoftListOrNothingType,
+                "example_value": ("set1", "set2"),
+            },
+            "source": {
+                "display_name": "Source",
+                "short_desc": "Source set for SMOVE",
+                "desc": "Source set for SMOVE",
+                "type": StringOrNothingType,
+                "example_value": "source_set",
+            },
+            "destination": {
+                "display_name": "Destination",
+                "short_desc": "Destination set",
+                "desc": "Destination set for store operations and SMOVE",
+                "type": StringOrNothingType,
+                "example_value": "dest_set",
+            },
+            "member": {
+                "display_name": "Member",
+                "short_desc": "Member to move",
+                "desc": "Member to move for SMOVE",
+                "type": AutoType,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 
 public class RedisSetOpsResponseDataType inherits DataProvider::HashDataType {
     private {
         const Fields = {
-            "members": {"type": SoftListOrNothingType, "desc": "Resulting set members"},
-            "count": {"type": IntOrNothingType, "desc": "Number of elements in resulting set (for store ops)"},
-            "moved": {"type": SoftBoolType, "desc": "True if member was moved (for SMOVE)"},
+            "members": {
+                "display_name": "Members",
+                "short_desc": "Resulting members",
+                "desc": "Resulting set members",
+                "type": SoftListOrNothingType,
+            },
+            "count": {
+                "display_name": "Count",
+                "short_desc": "Elements in result",
+                "desc": "Number of elements in resulting set (for store ops)",
+                "type": IntOrNothingType,
+                "example_value": 5,
+            },
+            "moved": {
+                "display_name": "Moved",
+                "short_desc": "Member was moved",
+                "desc": "True if member was moved (for SMOVE)",
+                "type": SoftBoolType,
+                "example_value": True,
+            },
         };
     }
-    constructor() { map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator(); }
+    constructor() {
+        addQoreFields(Fields);
+    }
 }
 }

@@ -146,55 +146,81 @@ public class RedisStringSetRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringOrNothingType,
+                "display_name": "Key",
+                "short_desc": "The key to set",
                 "desc": "The key to set (for single SET operation)",
+                "type": StringOrNothingType,
+                "example_value": "mykey",
             },
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "The value to set",
                 "desc": "The value to set (for single SET operation)",
+                "type": AutoType,
+                "example_value": "myvalue",
             },
             "pairs": {
-                "type": SoftListOrNothingType,
+                "display_name": "Key-Value Pairs",
+                "short_desc": "Multiple key-value pairs for MSET",
                 "desc": "A list of {key, value} hashes for MSET operation",
+                "type": SoftListOrNothingType,
             },
             "ex": {
-                "type": IntOrNothingType,
+                "display_name": "Expire Seconds",
+                "short_desc": "Expiration time in seconds",
                 "desc": "Set expiration time in seconds",
+                "type": IntOrNothingType,
+                "example_value": 3600,
             },
             "px": {
-                "type": IntOrNothingType,
+                "display_name": "Expire Milliseconds",
+                "short_desc": "Expiration time in milliseconds",
                 "desc": "Set expiration time in milliseconds",
+                "type": IntOrNothingType,
+                "example_value": 60000,
             },
             "exat": {
-                "type": IntOrNothingType,
+                "display_name": "Expire At (Unix)",
+                "short_desc": "Unix timestamp for expiration",
                 "desc": "Set expiration time as Unix timestamp in seconds",
+                "type": IntOrNothingType,
             },
             "pxat": {
-                "type": IntOrNothingType,
+                "display_name": "Expire At (Unix ms)",
+                "short_desc": "Unix timestamp in ms for expiration",
                 "desc": "Set expiration time as Unix timestamp in milliseconds",
+                "type": IntOrNothingType,
             },
             "keepttl": {
-                "type": SoftBoolOrNothingType,
+                "display_name": "Keep TTL",
+                "short_desc": "Retain existing TTL",
                 "desc": "Retain the TTL associated with the key",
+                "type": SoftBoolOrNothingType,
             },
             "nx": {
-                "type": SoftBoolOrNothingType,
+                "display_name": "Only If New",
+                "short_desc": "Set only if key doesn't exist",
                 "desc": "Only set the key if it does not already exist",
+                "type": SoftBoolOrNothingType,
             },
             "xx": {
-                "type": SoftBoolOrNothingType,
+                "display_name": "Only If Exists",
+                "short_desc": "Set only if key exists",
                 "desc": "Only set the key if it already exists",
+                "type": SoftBoolOrNothingType,
             },
             "get": {
-                "type": SoftBoolOrNothingType,
+                "display_name": "Get Previous",
+                "short_desc": "Return old value",
                 "desc": "Return the old value stored at key, or nil when key did not exist",
+                "type": SoftBoolOrNothingType,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -204,19 +230,24 @@ public class RedisStringSetResponseDataType inherits DataProvider::HashDataType 
         #! Field descriptions
         const Fields = {
             "success": {
-                "type": SoftBoolType,
+                "display_name": "Success",
+                "short_desc": "Operation success status",
                 "desc": "True if the operation was successful",
+                "type": SoftBoolType,
+                "example_value": True,
             },
             "previous_value": {
-                "type": AutoType,
+                "display_name": "Previous Value",
+                "short_desc": "Old value before update",
                 "desc": "The previous value if GET option was used, or NOTHING if the key did not exist",
+                "type": AutoType,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

@@ -106,27 +106,39 @@ public class RedisHashIncrRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringType,
+                "display_name": "Key",
+                "short_desc": "The hash key",
                 "desc": "The hash key",
+                "type": StringType,
+                "example_value": "myhash",
             },
             "field": {
-                "type": StringType,
+                "display_name": "Field",
+                "short_desc": "Field to increment",
                 "desc": "The field name to increment",
+                "type": StringType,
+                "example_value": "counter",
             },
             "increment": {
-                "type": IntOrNothingType,
+                "display_name": "Increment",
+                "short_desc": "Integer increment value",
                 "desc": "The integer increment value (default: 1)",
+                "type": IntOrNothingType,
+                "example_value": 5,
             },
             "increment_float": {
-                "type": FloatOrNothingType,
+                "display_name": "Float Increment",
+                "short_desc": "Floating-point increment",
                 "desc": "The floating-point increment value (uses HINCRBYFLOAT)",
+                "type": FloatOrNothingType,
+                "example_value": 1.5,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -136,15 +148,18 @@ public class RedisHashIncrResponseDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "New value after increment",
                 "desc": "The new value after incrementing (integer or float)",
+                "type": AutoType,
+                "example_value": 10,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

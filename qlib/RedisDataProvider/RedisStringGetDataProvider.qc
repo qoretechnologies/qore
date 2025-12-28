@@ -111,19 +111,25 @@ public class RedisStringGetRequestDataType inherits DataProvider::HashDataType {
         #! Field descriptions
         const Fields = {
             "key": {
-                "type": StringOrNothingType,
+                "display_name": "Key",
+                "short_desc": "The key to retrieve",
                 "desc": "The key to get the value for (use for single key retrieval)",
+                "type": StringOrNothingType,
+                "example_value": "mykey",
             },
             "keys": {
-                "type": SoftListOrNothingType,
+                "display_name": "Keys",
+                "short_desc": "Multiple keys to retrieve",
                 "desc": "A list of keys to get values for (use for multiple key retrieval with MGET)",
+                "type": SoftListOrNothingType,
+                "example_value": ("key1", "key2", "key3"),
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -133,19 +139,24 @@ public class RedisStringGetResponseDataType inherits DataProvider::HashDataType 
         #! Field descriptions
         const Fields = {
             "value": {
-                "type": AutoType,
+                "display_name": "Value",
+                "short_desc": "The retrieved value",
                 "desc": "The value of the key (for single key GET), or NOTHING if the key does not exist",
+                "type": AutoType,
+                "example_value": "myvalue",
             },
             "values": {
-                "type": SoftListOrNothingType,
+                "display_name": "Values",
+                "short_desc": "Multiple retrieved values",
                 "desc": "The values of the keys (for MGET), with NOTHING for keys that do not exist",
+                "type": SoftListOrNothingType,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }
