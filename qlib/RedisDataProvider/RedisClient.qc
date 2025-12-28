@@ -112,13 +112,13 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
             host = opts.host;
         }
         if (opts.port) {
-            @assert(opts.port > 0 && opts.port <= 65535, sprintf("invalid port number: %d", opts.port));
+            @assert(opts.port > 0 && opts.port <= 65535, "invalid port number: %d", opts.port);
             port = opts.port;
         }
         password = opts.password;
         username = opts.username;
         if (opts.db) {
-            @assert(opts.db >= 0, sprintf("invalid database number: %d", opts.db));
+            @assert(opts.db >= 0, "invalid database number: %d", opts.db);
             db = opts.db;
         }
         if (opts.connect_timeout) {
@@ -277,7 +277,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
     #! Selects the given database
     private selectDb(int database) {
-        @assert(database >= 0, sprintf("invalid database number: %d", database));
+        @assert(database >= 0, "invalid database number: %d", database);
         try {
             command("SELECT", database);
             @debug(logDebug("RedisClient: selected database %d", database));
