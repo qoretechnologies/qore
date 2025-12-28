@@ -492,6 +492,8 @@ set(LIBQORE_CPP_SRC
     lib/TryStatement.cpp
     lib/RethrowStatement.cpp
     lib/ThrowStatement.cpp
+    lib/AssertStatement.cpp
+    lib/DebugStatement.cpp
     lib/SwitchStatement.cpp
     lib/Variable.cpp
     lib/support.cpp

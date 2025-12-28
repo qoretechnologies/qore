@@ -774,6 +774,13 @@ const PO_NO_INHERIT_PROGRAM_DATA = PO_NO_INHERIT_PROGRAM_DATA;
     @since %Qore 1.17
 */
 const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
+
+//! enables \@assert and \@debug statements (otherwise ignored at parse time)
+/** @see @ref enable-debug "%enable-debug"
+
+    @since %Qore 2.1
+*/
+const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
 ///@}
 
 /** @defgroup warning_constants Warning Constants

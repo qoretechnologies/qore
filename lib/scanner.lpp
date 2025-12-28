@@ -73,6 +73,9 @@ static void check_broken_op(YYLTYPE* yylloc, const char* got, const char* expect
     }
 }
 
+// Parenthesis depth for @assert skip state
+static thread_local int assert_paren_depth = 0;
+
 static int ascii_to_octal(char c) {
    assert(isoctaldigit(c));
    return c - '0';
@@ -919,7 +922,7 @@ static bool angle_balanced(const char* p) {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state p_skip_assert
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1014,6 +1017,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%allow-statement-no-effect{WS}*$       parse_set_parse_options(yylloc, PO_ALLOW_STATEMENT_NO_EFFECT);
 ^%strict-types{WS}*$                    parse_set_parse_options(yylloc, PO_STRICT_TYPES);
 ^%loose-types{WS}*$                     parse_disable_parse_options(yylloc, PO_STRICT_TYPES);
+^%enable-debug{WS}*$                    parse_set_parse_options(yylloc, PO_ENABLE_DEBUG);
+^%disable-debug{WS}*$                   parse_disable_parse_options(yylloc, PO_ENABLE_DEBUG);
 ^%no-reflection{WS}*$                   parse_set_parse_options(yylloc, PO_NO_REFLECTION);
 ^%no-transient{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TRANSIENT);
 ^%push-parse-options{WS}*$              push_parse_options();
@@ -1505,6 +1510,28 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
    \n                                   // ignore
    <<EOF>>                              {
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+<p_skip_assert>{
+   \(                                   {
+                                            ++assert_paren_depth;
+                                        }
+   \)                                   {
+                                            if (assert_paren_depth > 0) {
+                                                --assert_paren_depth;
+                                                if (assert_paren_depth == 0) {
+                                                    // finished skipping assert expression
+                                                    BEGIN(INITIAL);
+                                                }
+                                            }
+                                        }
+   \"([^\"\\]|\\.)*\"                   // skip string literals (to handle parens in strings)
+   \'([^\'\\]|\\.)*\'                   // skip single-quoted strings
+   [^()\"\'\n]+                         // skip other characters
+   \n                                   // skip newlines
+   <<EOF>>                              {
+                                            parse_error(*get_loc(yylloc), "unexpected end of file in @assert expression");
                                             QORE_FLEX_DO_EOF
                                         }
 }
@@ -2011,6 +2038,22 @@ cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->stri
 {DIGIT}+"."{DIGIT}+[eE][+-]?{DIGIT}+    yylval->decimal = q_strtod(yytext); return QFLOAT;
 @[Nn][Aa][Nn]@n                         yylval->num = new QoreNumberNode("@nan@"); return NUMBER;
 @[Ii][Nn][Ff]@n                         yylval->num = new QoreNumberNode("@inf@"); return NUMBER;
+@assert/{WS}*\(                         {
+                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                               return TOK_ASSERT;
+                                           }
+                                           // skip assert when disabled - enter skip state
+                                           assert_paren_depth = 0;
+                                           BEGIN(p_skip_assert);
+                                        }
+@debug/{WS}*\(                          {
+                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                               return TOK_DEBUG;
+                                           }
+                                           // skip debug when disabled - enter skip state
+                                           assert_paren_depth = 0;
+                                           BEGIN(p_skip_assert);
+                                        }
 {DIGIT}+n                               yylval->num = new QoreNumberNode(yytext); return NUMBER;
 {DIGIT}+"."{DIGIT}+n                    yylval->num = new QoreNumberNode(yytext); return NUMBER;
 {DIGIT}+[eE][+-]?{DIGIT}+n              yylval->num = new QoreNumberNode(yytext); return NUMBER;

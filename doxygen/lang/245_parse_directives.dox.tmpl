@@ -47,10 +47,12 @@
     |@ref correct-varargs "%correct-varargs"|revert the effect of the @ref broken-varargs "%broken-varargs" parse option
     |@ref define "%define"|Creates and optionally sets a value for a @ref conditional_parsing "parse define" <br><br>Since %Qore 0.8.3
     |@ref disable-all-warnings "%disable-all-warnings"|Turns off all @ref warnings "warnings"
+    |@ref disable-debug "%disable-debug"|Disables @@assert and @@debug statements (they are skipped at parse time); reverts the effect of @ref enable-debug "%enable-debug"<br><br>Since %Qore 2.1
     |@ref disable-warning "%disable-warning" <em>@ref warnings "warning-code"</em>|Disables the named @ref warnings "warning" until @ref enable-warning "%enable-warning" is encountered with the same code or @ref enable-all-warnings "%enable-all-warnings" is encountered
     |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref if "%if"; uses the same expression syntax as @ref if "%if"
     |@ref else "%else"|Allows for parsing an alternate block when used with the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all @ref warnings "warnings"
+    |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br><br>Since %Qore 2.1
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
@@ -862,6 +864,71 @@ i+ =4;
 
     @par Description
     Enables all warnings while parsing. See @ref warnings for more information.
+
+    <hr>
+    @section enable-debug %enable-debug
+
+    @par Parse Directive:
+    <tt>%%enable-debug</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-enable-debug</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_ENABLE_DEBUG
+
+    @par Description:
+    Enables \c @@assert and \c @@debug statements. When this parse option is set:
+    - \c @@assert statements are parsed and executed at runtime, throwing an \c ASSERTION-ERROR exception
+      if the condition is false
+    - \c @@debug statements are parsed and executed at runtime for their side effects (e.g., logging)
+
+    Without this directive, both \c @@assert and \c @@debug statements are completely skipped at parse time,
+    providing zero runtime overhead when debugging is disabled.
+
+    @par Syntax:
+    @code{.py}
+    @assert(condition);
+    @assert(condition, "error message");
+    @debug(expression);
+    @endcode
+
+    @par Example:
+    @code{.py}
+%enable-debug
+
+sub validate_input(int value) {
+    @debug(printf("validate_input called with: %d\n", value));
+    @assert(value > 0, "value must be positive");
+    @assert(value < 100);  # uses default message "assertion failed"
+    return value * 2;
+}
+    @endcode
+
+    @since %Qore 2.1
+
+    @see @ref disable-debug "%disable-debug"
+
+    <hr>
+    @section disable-debug %disable-debug
+
+    @par Parse Directive:
+    <tt>%%disable-debug</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a (reverts @ref Qore::PO_ENABLE_DEBUG)
+
+    @par Description:
+    Disables \c @@assert and \c @@debug statements by reverting the effect of @ref enable-debug "%enable-debug".
+    When debugging is disabled, both statement types are completely skipped at parse time, providing
+    zero runtime overhead.
+
+    @since %Qore 2.1
+
+    @see @ref enable-debug "%enable-debug"
 
     <hr>
     @section enable-warning %enable-warning

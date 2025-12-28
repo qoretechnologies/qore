@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%no-child-restrictions
+%enable-debug
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class AssertDebugTest
+
+class AssertDebugTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AssertDebugTest", "1.0", \ARGV) {
+        addTestCase("basic assert tests", \basicAssertTests());
+        addTestCase("assert with message tests", \assertMessageTests());
+        addTestCase("basic debug tests", \basicDebugTests());
+        addTestCase("disabled tests", \disabledTests());
+        addTestCase("parse error tests", \parseErrorTests());
+        set_return_value(main());
+    }
+
+    basicAssertTests() {
+        # Test that passing asserts don't throw
+        @assert(True);
+        @assert(1 == 1);
+        @assert(1 + 1 == 2);
+        @assert("test" == "test");
+
+        # Test that failing asserts throw ASSERTION-ERROR
+        assertThrows("ASSERTION-ERROR", sub() { @assert(False); });
+        assertThrows("ASSERTION-ERROR", sub() { @assert(1 == 2); });
+        assertThrows("ASSERTION-ERROR", sub() { @assert(1 + 1 == 3); });
+    }
+
+    assertMessageTests() {
+        # Test assert with custom message
+        try {
+            @assert(False, "custom error message");
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("custom error message", ex.desc);
+        }
+
+        # Test assert with expression message
+        string msg = "dynamic message";
+        try {
+            @assert(1 == 2, msg);
+            fail("should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASSERTION-ERROR", ex.err);
+            assertEq("dynamic message", ex.desc);
+        }
+
+        # Test assert with complex expression
+        @assert((1 + 2) * 3 == 9, "math should work");
+    }
+
+    basicDebugTests() {
+        # Test that @debug evaluates its expression
+        int counter = 0;
+        @debug(++counter);
+        assertEq(1, counter);
+
+        # Test @debug with function call
+        list<string> log = ();
+        @debug(log += "debug message");
+        assertEq(("debug message",), log);
+
+        # Test @debug with complex expression
+        hash<auto> h = {};
+        @debug(h.key = "value");
+        assertEq("value", h.key);
+    }
+
+    disabledTests() {
+        # Test that asserts and debug are skipped when parsed without %enable-debug
+        # We use Program to test this
+        Program p(PO_NEW_STYLE);
+        # Without PO_ENABLE_DEBUG, both should be skipped
+        p.parse("
+            our int x = 0;
+            our int debug_count = 0;
+            sub run_test() {
+                @debug(++debug_count);  # This should be skipped
+                @assert(False);  # This should be skipped
+                x = 1;
+            }
+        ", "test");
+        p.callFunction("run_test");
+        assertEq(1, p.getGlobalVariable("x"));
+        # When @debug is skipped, debug_count is never modified at runtime,
+        # so getGlobalVariable returns NOTHING (not the initialization value)
+        assertNothing(p.getGlobalVariable("debug_count"));
+
+        # With PO_ENABLE_DEBUG, assert should throw
+        Program p2(PO_NEW_STYLE | PO_ENABLE_DEBUG);
+        p2.parse("
+            sub test() { @assert(False); }
+        ", "test");
+        assertThrows("ASSERTION-ERROR", \p2.callFunction(), "test");
+
+        # With PO_ENABLE_DEBUG, debug should execute
+        Program p3(PO_NEW_STYLE | PO_ENABLE_DEBUG);
+        p3.parse("
+            our int debug_count = 0;
+            sub test() { @debug(++debug_count); }
+        ", "test");
+        p3.callFunction("test");
+        assertEq(1, p3.getGlobalVariable("debug_count"));
+    }
+
+    parseErrorTests() {
+        # Test parse errors for @assert and @debug syntax
+        Program p(PO_NEW_STYLE | PO_ENABLE_DEBUG);
+
+        # @assert requires at least one argument
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @assert(); }", "test"));
+
+        # @debug requires exactly one argument
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @debug(); }", "test"));
+
+        # @assert without parentheses is a syntax error
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @assert True; }", "test"));
+
+        # @debug without parentheses is a syntax error
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @debug 1; }", "test"));
+
+        # @assert missing semicolon
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @assert(True) }", "test"));
+
+        # @debug missing semicolon
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p.parse(), ("sub t() { @debug(1) }", "test"));
+
+        # Test that nested parentheses are correctly skipped when disabled
+        Program p2(PO_NEW_STYLE);  # No PO_ENABLE_DEBUG
+        # This should parse without error (the @assert is skipped)
+        p2.parse("
+            sub test() {
+                @assert(func(a, (b + c)));
+                @debug(hash.key = (1 + 2));
+            }
+        ", "test");
+    }
+}
