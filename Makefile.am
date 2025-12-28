@@ -122,7 +122,8 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider \
-    qlib/AsyncApiDataProvider
+    qlib/AsyncApiDataProvider \
+    qlib/HttpServerAsyncIo
 
 AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
 AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
@@ -144,6 +145,7 @@ GmailDataProvider_modverdir = $(modverdir)/GmailDataProvider
 GoogleDataProvider_modverdir = $(modverdir)/GoogleDataProvider
 GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
 HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
+HttpServerAsyncIo_modverdir = $(modverdir)/HttpServerAsyncIo
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 OpenApi3DataProvider_modverdir = $(modverdir)/OpenApi3DataProvider
@@ -179,6 +181,7 @@ dist_GmailDataProvider_modver_DATA = $(wildcard qlib/GmailDataProvider/*.q[cm])
 dist_GoogleDataProvider_modver_DATA = $(wildcard qlib/GoogleDataProvider/*.q[cm])
 dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarDataProvider/*.q[cm])
 dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
+dist_HttpServerAsyncIo_modver_DATA = $(wildcard qlib/HttpServerAsyncIo/*.q[cm])
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
 dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]) $(wildcard qlib/OpenAiDataProvider/*-swagger-2.0.yaml)
 dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q[cm])
@@ -1234,6 +1237,9 @@ doxygen/qlib/Doxyfile.HttpServerUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 
 doxygen/qlib/Doxyfile.HttpServer: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/HttpServer.qm:doxygen/qlib/HttpServer.qm -tHttpServerUtil.tag=../../HttpServerUtil/html -tMime.tag=../../Mime/html -tUtil.tag=../../Util/html $< $@
+
+doxygen/qlib/Doxyfile.HttpServerAsyncIo: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/HttpServerAsyncIo:doxygen/qlib/HttpServerAsyncIo.qm -tHttpServer.tag=../../HttpServer/html $< $@
 
 doxygen/qlib/Doxyfile.MailMessage: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/MailMessage.qm:doxygen/qlib/MailMessage.qm -tMime.tag=../../Mime/html $< $@
