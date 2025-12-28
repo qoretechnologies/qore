@@ -61,6 +61,9 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         #! SSL verify flags for client certificate verification
         int ssl_verify_flags = SSL_VERIFY_NONE;
 
+        #! Accept all client certificates (including self-signed)
+        bool ssl_accept_all_certs = True;
+
         #! Current poll operation being executed
         SocketPollOperation spop;
 
@@ -77,9 +80,10 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         @param cert SSL certificate (SSLCertificate object or PEM data, required if ssl is True)
         @param key SSL private key (SSLPrivateKey object or PEM data, required if ssl is True)
         @param ssl_verify_flags SSL verification flags for client certificate verification (e.g. SSL_VERIFY_PEER)
+        @param ssl_accept_all_certs if True, accept all client certificates including self-signed ones
     */
     constructor(Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
-            int ssl_verify_flags = SSL_VERIFY_NONE) {
+            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True) {
         @assert(listener, "listener socket cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
         self.listener = listener;
@@ -87,6 +91,7 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         self.cert = cert;
         self.key = key;
         self.ssl_verify_flags = ssl_verify_flags;
+        self.ssl_accept_all_certs = ssl_accept_all_certs;
         # Start the accept poll operation
         spop = listener.startPollAccept();
         @assert(spop, "startPollAccept must return poll operation");
@@ -154,6 +159,8 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                             client_sock.setSslVerifyMode(ssl_verify_flags);
                             client_sock.captureRemoteCertificates();
                         }
+                        # Configure client certificate acceptance behavior
+                        client_sock.acceptAllCertificates(ssl_accept_all_certs);
                         spop = client_sock.startPollUpgradeServerToSSL();
                         @assert(spop, "startPollUpgradeServerToSSL must return poll operation");
                         # Continue loop to poll the new operation

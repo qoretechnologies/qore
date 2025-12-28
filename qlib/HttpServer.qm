@@ -2719,6 +2719,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return opts.key;
     }
 
+    #! Returns whether to accept all client certificates (including self-signed) for async mode
+    /** @return True if all client certificates should be accepted
+
+        @since HttpServer 1.5
+    */
+    bool getSslAcceptAllCerts() {
+        return ssl_accept_all_certs;
+    }
+
     auto removeUserThreadContext(*string k) {
         if (!exists k) {
             remove_thread_data("uctx");
@@ -4121,6 +4130,7 @@ class HttpServerIoController {
                                         linfo.listener.getSslCertificateObject(),
                                         linfo.listener.getSslPrivateKeyObject(),
                                         linfo.listener.getSslVerifyFlags(),
+                                        linfo.listener.getSslAcceptAllCerts(),
                                     );
                                 @debug(log(LoggerLevel::DEBUG, "ioThread: accept op created for listener %s", key));
                             } catch (hash<ExceptionInfo> ex) {
