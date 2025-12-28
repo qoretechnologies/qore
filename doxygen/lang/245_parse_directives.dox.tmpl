@@ -48,14 +48,16 @@
     |@ref define "%define"|Creates and optionally sets a value for a @ref conditional_parsing "parse define" <br><br>Since %Qore 0.8.3
     |@ref disable-all-warnings "%disable-all-warnings"|Turns off all @ref warnings "warnings"
     |@ref disable-warning "%disable-warning" <em>@ref warnings "warning-code"</em>|Disables the named @ref warnings "warning" until @ref enable-warning "%enable-warning" is encountered with the same code or @ref enable-all-warnings "%enable-all-warnings" is encountered
-    |@ref else "%else"|Allows for parsing an alternate block when used with the @ref ifdef "%ifdef" or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
+    |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref if "%if"; uses the same expression syntax as @ref if "%if"
+    |@ref else "%else"|Allows for parsing an alternate block when used with the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all @ref warnings "warnings"
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
-    |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref ifdef "%ifdef" or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
+    |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
-    |@ref ifdef "%ifdef"|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref else "%else" or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
-    |@ref ifndef "%ifndef"|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref else "%else" or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
+    |@ref if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
+    |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
+    |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref include "%include" <em>file_name</em>|Starts parsing \a file_name immediately. Parsing resumes with the current input after \a file_name has been completely parsed
     |@ref lockdown "%lockdown"|Made up of @ref no-external-access "%no-external-access", @ref no-threads "%no-threads", and @ref no-io "%no-io"; equivalent to parse option @ref Qore::PO_LOCKDOWN and the \c --lockdown command line option
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
@@ -800,6 +802,36 @@ i+ =4;
     Disables the named warning while parsing. See @ref warnings for more information.
 
     <hr>
+    @section elif %elif
+
+    @par Parse Directive:
+    <tt>%%elif</tt> \em expression
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Provides else-if functionality in a @ref conditional_parsing "conditionally-parsed" block started by @ref if "%if". The expression uses the same syntax as @ref if "%if", supporting \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators.
+
+    @par Example:
+    @code{.py}
+%if defined(WINDOWS)
+    printf("Windows\n");
+%elif defined(LINUX)
+    printf("Linux\n");
+%elif defined(MACOS)
+    printf("macOS\n");
+%else
+    printf("Unknown platform\n");
+%endif
+    @endcode
+
+    @see @ref conditional_parsing
+
+    <hr>
     @section else %else
 
     @par Parse Directive:
@@ -812,7 +844,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Allows for parsing an alternate block when used with the @ref ifdef "%ifdef" or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Allows for parsing an alternate block when used with the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
 
     @since %Qore 0.8.3
 
@@ -859,7 +891,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Closes a conditionally-parsed block started by the @ref ifdef "%ifdef" or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Closes a conditionally-parsed block started by the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
 
     @since %Qore 0.8.3
 
@@ -898,10 +930,10 @@ i+ =4;
     @see @ref Qore::set_return_value()
 
     <hr>
-    @section ifdef %ifdef
+    @section if %if
 
     @par Parse Directive:
-    <tt>%%ifdef</tt>
+    <tt>%%if</tt> \em expression
 
     @par Command Line:
     n/a
@@ -910,7 +942,47 @@ i+ =4;
     n/a
 
     @par Description:
-    Opens a conditionally-parsed block; if the given @ref conditional_parsing "parse define" is defined, then the block after the <tt>%%ifdef</tt> is parsed until either an @ref else "%else" or an @ref endif "%endif"
+    Opens a conditionally-parsed block with boolean expression support. The expression can use the following operators:
+    - \c defined(SYMBOL) - returns true if SYMBOL is defined
+    - \c ! - logical NOT operator
+    - \c && - logical AND operator
+    - \c || - logical OR operator
+    - \c () - parentheses for grouping
+
+    @par Examples:
+    @code{.py}
+# Simple defined check
+%if defined(DEBUG)
+    printf("Debug mode\n");
+%endif
+
+# Boolean logic
+%if defined(FEATURE_A) && !defined(LEGACY_MODE)
+    printf("Feature A enabled\n");
+%endif
+
+# Complex expression
+%if (defined(UNIX) || defined(LINUX)) && defined(HAS_NETWORK)
+    printf("Unix with networking\n");
+%endif
+    @endcode
+
+    @see @ref conditional_parsing
+
+    <hr>
+    @section ifdef %ifdef
+
+    @par Parse Directive:
+    <tt>%%ifdef</tt> \em define_name
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Opens a conditionally-parsed block; if the given @ref conditional_parsing "parse define" is defined, then the block after the <tt>%%ifdef</tt> is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif"
 
     @since %Qore 0.8.3
 
@@ -918,7 +990,7 @@ i+ =4;
     @section ifndef %ifndef
 
     @par Parse Directive:
-    <tt>%%ifndef</tt>
+    <tt>%%ifndef</tt> \em define_name
 
     @par Command Line:
     n/a
@@ -927,7 +999,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Opens a conditionally-parsed block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the <tt>%%ifndef</tt> is parsed until either an @ref else "%else" or an @ref endif "%endif"
+    Opens a conditionally-parsed block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the <tt>%%ifndef</tt> is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif"
 
     @since %Qore 0.8.3
 

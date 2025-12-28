@@ -189,6 +189,8 @@ struct ParseConditionalStack {
     unsigned count;
     typedef std::vector<unsigned> ui_vec_t;
     ui_vec_t markvec;
+    // Tracks which mark levels have seen %else (to prevent multiple %else or %elif after %else)
+    std::set<unsigned> else_seen;
 
     DLLLOCAL ParseConditionalStack() : count(0) {
     }
@@ -204,6 +206,37 @@ struct ParseConditionalStack {
 
     DLLLOCAL bool checkElse() {
         return count;
+    }
+
+    // Check if we can process %else at the current level (returns false if %else already seen)
+    DLLLOCAL bool canProcessElse(const QoreProgramLocation* loc) {
+        if (!count || markvec.empty()) {
+            return false;
+        }
+        unsigned mark = markvec.back();
+        if (count - 1 != mark) {
+            return false;  // Not at top level of current conditional
+        }
+        if (else_seen.find(mark) != else_seen.end()) {
+            parse_error(*loc, "%%else already encountered in this conditional block");
+            return false;
+        }
+        return true;
+    }
+
+    // Mark that %else has been seen at the current level
+    DLLLOCAL void markElseSeen() {
+        if (!markvec.empty()) {
+            else_seen.insert(markvec.back());
+        }
+    }
+
+    // Check if %else has been seen at the current level (for %elif checking)
+    DLLLOCAL bool hasElseSeen() const {
+        if (markvec.empty()) {
+            return false;
+        }
+        return else_seen.find(markvec.back()) != else_seen.end();
     }
 
     DLLLOCAL bool test(const QoreProgramLocation* loc) const {
@@ -230,6 +263,8 @@ struct ParseConditionalStack {
         assert(!markvec.empty());
         if (count == markvec.back()) {
             //printd(5, "ParseConditionalStack::pop() popping %%endif mark %u\n", count);
+            // Clean up else_seen for this level
+            else_seen.erase(markvec.back());
             markvec.pop_back();
             return true;
         }
@@ -1337,6 +1372,23 @@ void parse_cond_push(bool mark) {
 bool parse_cond_else() {
     ThreadData* td = thread_data.get();
     return td->pcs ? td->pcs->checkElse() : false;
+}
+
+bool parse_cond_can_else(const QoreProgramLocation* loc) {
+    ThreadData* td = thread_data.get();
+    return td->pcs ? td->pcs->canProcessElse(loc) : false;
+}
+
+void parse_cond_mark_else() {
+    ThreadData* td = thread_data.get();
+    if (td->pcs) {
+        td->pcs->markElseSeen();
+    }
+}
+
+bool parse_cond_has_else() {
+    ThreadData* td = thread_data.get();
+    return td->pcs ? td->pcs->hasElseSeen() : false;
 }
 
 bool parse_cond_pop(const QoreProgramLocation* loc) {

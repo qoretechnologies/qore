@@ -15,6 +15,11 @@ public class ParseDirectiveTest inherits QUnit::Test {
 
     constructor() : Test("ParseDirectiveTest", "1.0") {
         addTestCase("else test", \elseTest());
+        addTestCase("%if defined() test", \ifDefinedTest());
+        addTestCase("%if boolean logic test", \ifBooleanLogicTest());
+        addTestCase("%elif test", \elifTest());
+        addTestCase("%if nested test", \ifNestedTest());
+        addTestCase("%if error test", \ifErrorTest());
         addTestCase("strict-types test", \strictTypesTest());
         addTestCase("returns test", \returnsTest());
         addTestCase("missing arg to %append-include-path", \missingArgAppendIncludePath());
@@ -56,6 +61,387 @@ int sub test() {
 %endif
 ", "test");
         assertEq(1, p.callFunction("test"));
+    }
+
+    ifDefinedTest() {
+        # Test basic %if defined()
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("FOO", True);
+            p.parse("
+%if defined(FOO)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test %if !defined()
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.parse("
+%if !defined(FOO)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test %if defined() when not defined
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.parse("
+%if defined(BAR)
+int sub test() { return 0; }
+%else
+int sub test() { return 1; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+    }
+
+    ifBooleanLogicTest() {
+        # Test && operator
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.define("B", True);
+            p.parse("
+%if defined(A) && defined(B)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test && with one false
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.parse("
+%if defined(A) && defined(B)
+int sub test() { return 0; }
+%else
+int sub test() { return 1; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test || operator
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.parse("
+%if defined(A) || defined(B)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test || with both false
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.parse("
+%if defined(A) || defined(B)
+int sub test() { return 0; }
+%else
+int sub test() { return 1; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test complex expression with parentheses
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.define("C", True);
+            p.parse("
+%if (defined(A) || defined(B)) && defined(C)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test !defined() with && and ||
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.parse("
+%if defined(A) && !defined(B)
+int sub test() { return 1; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+    }
+
+    elifTest() {
+        # Test basic %elif
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("B", True);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(B)
+int sub test() { return 2; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(2, p.callFunction("test"));
+        }
+
+        # Test %elif chain
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("C", True);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(B)
+int sub test() { return 2; }
+%elif defined(C)
+int sub test() { return 3; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(3, p.callFunction("test"));
+        }
+
+        # Test %elif with boolean expression
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("X", True);
+            p.define("Y", True);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(X) && defined(Y)
+int sub test() { return 2; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(2, p.callFunction("test"));
+        }
+
+        # Test first true branch wins
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.define("B", True);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(B)
+int sub test() { return 2; }
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test %else fallback
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(B)
+int sub test() { return 2; }
+%else
+int sub test() { return 3; }
+%endif
+", "test");
+            assertEq(3, p.callFunction("test"));
+        }
+    }
+
+    ifNestedTest() {
+        # Test nested %if
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.define("B", True);
+            p.parse("
+%if defined(A)
+%if defined(B)
+int sub test() { return 1; }
+%else
+int sub test() { return 2; }
+%endif
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        # Test nested %if with outer false
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("B", True);
+            p.parse("
+%if defined(A)
+%if defined(B)
+int sub test() { return 1; }
+%else
+int sub test() { return 2; }
+%endif
+%else
+int sub test() { return 3; }
+%endif
+", "test");
+            assertEq(3, p.callFunction("test"));
+        }
+
+        # Test nested with %elif
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("B", True);
+            p.define("C", True);
+            p.parse("
+%if defined(A)
+int sub test() { return 1; }
+%elif defined(B)
+%if defined(C)
+int sub test() { return 2; }
+%else
+int sub test() { return 3; }
+%endif
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(2, p.callFunction("test"));
+        }
+
+        # Test mixing %if with %ifdef
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            p.define("B", True);
+            p.parse("
+%if defined(A)
+%ifdef B
+int sub test() { return 1; }
+%else
+int sub test() { return 2; }
+%endif
+%else
+int sub test() { return 0; }
+%endif
+", "test");
+            assertEq(1, p.callFunction("test"));
+        }
+    }
+
+    ifErrorTest() {
+        # Test missing expression in %if
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "missing expression in %if",
+                \p.parse(), ("%if\nint x = 1;\n%endif\n", ""));
+        }
+
+        # Test %elif without %if
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "%elif found without %if",
+                \p.parse(), ("%elif defined(A)\nint x = 1;\n%endif\n", ""));
+        }
+
+        # Test invalid expression
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "unexpected token",
+                \p.parse(), ("%if FOO\nint x = 1;\n%endif\n", ""));
+        }
+
+        # Test missing identifier in defined()
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "expected identifier",
+                \p.parse(), ("%if defined()\nint x = 1;\n%endif\n", ""));
+        }
+
+        # Test missing closing paren in defined()
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "expected '\\)'",
+                \p.parse(), ("%if defined(FOO\nint x = 1;\n%endif\n", ""));
+        }
+
+        # Test unclosed %if at EOF
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "conditional block.*left open",
+                \p.parse(), ("%if defined(A)\nint x = 1;\n", ""));
+        }
+
+        # Test unmatched %endif
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "unmatched %endif",
+                \p.parse(), ("int x = 1;\n%endif\n", ""));
+        }
+
+        # Test %else after %else (in true branch)
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            assertThrows("PARSE-EXCEPTION", "%else already encountered",
+                \p.parse(), ("%if defined(A)\nint x = 1;\n%else\nint x = 2;\n%else\nint x = 3;\n%endif\n", ""));
+        }
+
+        # Test %else after %else (in false branch going to else)
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "%else already encountered",
+                \p.parse(), ("%if defined(A)\nint x = 1;\n%else\nint x = 2;\n%else\nint x = 3;\n%endif\n", ""));
+        }
+
+        # Test %elif after %else (in true branch)
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            p.define("A", True);
+            assertThrows("PARSE-EXCEPTION", "%elif after %else",
+                \p.parse(), ("%if defined(A)\nint x = 1;\n%else\nint x = 2;\n%elif defined(B)\nint x = 3;\n%endif\n", ""));
+        }
+
+        # Test %elif after %else (in false branch going to else)
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "%elif after %else",
+                \p.parse(), ("%if defined(A)\nint x = 1;\n%else\nint x = 2;\n%elif defined(B)\nint x = 3;\n%endif\n", ""));
+        }
+
+        # Test deeply nested unclosed conditional
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            assertThrows("PARSE-EXCEPTION", "conditional block.*left open",
+                \p.parse(), ("%if defined(A)\n%if defined(B)\n%if defined(C)\nint x = 1;\n%endif\n%endif\n", ""));
+        }
     }
 
     strictTypesTest() {
