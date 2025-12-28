@@ -39,7 +39,7 @@
 %enable-debug
 
 module HttpServer {
-    version = "1.4";
+    version = "1.5";
     desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -427,7 +427,7 @@ public hashdecl HttpServerOptionInfo {
         using non-blocking I/O, then dispatches request processing to the ThreadPool.
         This allows handling many more concurrent connections with fewer threads.
 
-        @since HttpServer 1.1
+        @since HttpServer 1.5
     */
     bool async_mode = True;
 }
@@ -1477,7 +1477,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     #! Returns True if async I/O mode is enabled
     /** @return True if async I/O mode is enabled, False otherwise
 
-        @since HttpServer 1.x
+        @since HttpServer 1.5
     */
     bool getAsyncMode() {
         return asyncMode;
@@ -1491,7 +1491,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         @note This method does nothing if async mode is not enabled
 
-        @since HttpServer 1.x
+        @since HttpServer 1.5
     */
     returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener, *HttpPersistentHandlerInfo phi) {
         if (asyncIo) {
@@ -1505,7 +1505,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         @note This method does nothing if async mode is not enabled
 
-        @since HttpServer 1.x
+        @since HttpServer 1.5
     */
     queueAsyncResponse(Socket sock, hash<HttpAsyncResponseInfo> response) {
         if (asyncIo) {

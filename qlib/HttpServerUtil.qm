@@ -507,7 +507,7 @@ public hashdecl HttpListenerOptionInfo {
     hash<auto> additional_info;
 
     #! If True, the listener's main thread will not be started (for use with async I/O mode)
-    /** @since HttpServer 1.x
+    /** @since HttpServer 1.5
     */
     bool no_start_main_thread = False;
 }
