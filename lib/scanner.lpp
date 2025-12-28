@@ -689,12 +689,11 @@ private:
         skip_whitespace();
         size_t len = strlen(str);
         if (pos + len <= end && !strncmp(pos, str, len)) {
-            // For operators, just match; for 'defined', ensure it's not part of a larger identifier
-            if (len > 2 || !isalnum(str[0])) {
-                // Check that 'defined' is not followed by an alphanumeric character
-                if (strcmp(str, "defined") == 0 && pos + len < end && (isalnum(pos[len]) || pos[len] == '_')) {
-                    return false;
-                }
+            // For 'defined', ensure it's not part of a larger identifier
+            if (strcmp(str, "defined") == 0 && pos + len < end
+                && (isalnum(static_cast<unsigned char>(pos[len])) || pos[len] == '_')) {
+                // 'defined' is followed by an identifier character, so this is not a standalone keyword
+                return false;
             }
             pos += len;
             return true;
@@ -1419,7 +1418,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             // else: just continue skipping
                                         }
    ^.*                                  {
-                                            // Check for nested conditionals: %ifdef, %ifndef, or %if (but not %ifdef/%ifndef)
+                                            // Check for nested conditionals: %ifdef, %ifndef, or %if followed by whitespace
                                             if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
                                                 //printd(5, "p_skip_to_endif: found %%ifdef/%%ifndef (%s); skipping\n", yytext);
                                                 parse_cond_push();
@@ -1491,7 +1490,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 #endif
                                         }
    ^.*                                  {
-                                            // Check for nested conditionals: %ifdef, %ifndef, or %if (but not %ifdef/%ifndef)
+                                            // Check for nested conditionals: %ifdef, %ifndef, or %if followed by whitespace
                                             if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%ifdef/%%ifndef (%s); skipping\n", yytext);
                                                 parse_cond_push();
