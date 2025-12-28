@@ -28,7 +28,7 @@
 %strict-args
 
 # make sure we have the required qore version
-%requires qore >= 2.0
+%requires qore >= 2.3
 
 # try importing JSON and YAML modules
 %try-module json
