@@ -27,11 +27,13 @@ public namespace AsyncApiDataProvider {
 
 #! WebSocket transport implementation for AsyncAPI
 /** This class provides WebSocket transport for AsyncAPI message operations.
+
+    Uses WebSocketClientWithSerialization for built-in JSON/YAML serialization support.
 */
 public class WebSocketTransport inherits AbstractAsyncApiTransport {
     private {
-        #! The WebSocket client
-        WebSocketClient::WebSocketClient wsc;
+        #! The WebSocket client with serialization support
+        WebSocketClient::WebSocketClientWithSerialization wsc;
 
         #! Connection status
         bool connected = False;
@@ -40,16 +42,23 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
     #! Creates the transport with an existing WebSocket client
     /** @param wsc the WebSocket client to use
     */
-    constructor(WebSocketClient::WebSocketClient wsc) {
+    constructor(WebSocketClient::WebSocketClientWithSerialization wsc) {
         self.wsc = wsc;
     }
 
     #! Creates the transport with connection options
     /** @param opts WebSocket client options including 'url'
+
+        The following options are supported in addition to standard HTTP client options:
+        - \c data: serialization format: \c "json" (default), \c "yaml", or \c "none"
+        - \c url: the WebSocket URL to connect to
     */
     constructor(hash<auto> opts) {
-        # WebSocketClient requires a callback - use empty callback since messages are handled elsewhere
-        wsc = new WebSocketClient(sub (auto msg) {}, opts);
+        # Default to JSON serialization if not specified
+        if (!opts.hasKey("data")) {
+            opts.data = "json";
+        }
+        wsc = new WebSocketClientWithSerialization(opts);
     }
 
     #! Sends a message via WebSocket
@@ -57,29 +66,13 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
         @param msg the message data to send
         @param headers optional headers (not used for WebSocket)
 
-        @note Complex types (hashes and lists) are automatically serialized to JSON before sending.
-        Strings and binary data are sent as-is. This assumes JSON content type which is the most
-        common format for WebSocket APIs. For other serialization formats, pre-serialize the message
-        before calling this method.
+        @note Messages are automatically serialized according to the \c data option (default: JSON).
     */
     send(string channel, auto msg, *hash<auto> headers) {
         if (!connected) {
             throw "TRANSPORT-ERROR", "WebSocket transport is not connected";
         }
-
-        # Serialize complex types to JSON; strings and binary are sent as-is
-        data send_msg;
-        if (msg.typeCode() == NT_HASH || msg.typeCode() == NT_LIST) {
-%ifndef NoJson
-            send_msg = make_json(msg);
-%else
-            throw "JSON-NOT-AVAILABLE", "JSON module is required for message serialization";
-%endif
-        } else {
-            send_msg = msg;
-        }
-
-        wsc.send(send_msg);
+        wsc.sendData(msg);
     }
 
     #! Returns the protocol name
@@ -122,7 +115,7 @@ public class WebSocketTransport inherits AbstractAsyncApiTransport {
     #! Returns the underlying WebSocket client
     /** @return the WebSocket client object
     */
-    WebSocketClient::WebSocketClient getWebSocketClient() {
+    WebSocketClient::WebSocketClientWithSerialization getWebSocketClient() {
         return wsc;
     }
 }
