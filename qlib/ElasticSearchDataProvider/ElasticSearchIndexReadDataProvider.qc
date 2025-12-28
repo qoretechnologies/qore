@@ -129,17 +129,25 @@ class ElasticSearchIndexReadRequestDataType inherits DataProvider::HashDataType 
             # query parameters
             "index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name to read",
                 "desc": "The name of the index to read",
+                "example_value": "my-index",
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
+                "display_name": "Allow No Indices",
+                "short_desc": "Allow no matching indices",
                 "desc": "f `false`, the request returns an error if any wildcard expression, index alias, or `_all` "
                     "value targets only missing or closed indices. This behavior applies even if the request targets "
                     "other open indices. For example, a request targeting `foo*,bar*` returns an error if an index "
                     "starts with `foo` but no index starts with `bar`",
+                "example_value": True,
             },
             "expand_wildcards": {
                 "type": StringOrNothingType,
+                "display_name": "Expand Wildcards",
+                "short_desc": "Wildcard expansion mode",
                 "desc": "Type of index that wildcard patterns can match. If the request can target data streams, "
                     "this argument determines whether wildcard expressions match hidden data streams. Supports "
                     "comma-separated values, such as open,hidden. Valid values are:\n"
@@ -150,36 +158,51 @@ class ElasticSearchIndexReadRequestDataType inherits DataProvider::HashDataType 
                     "- `hidden`: Match hidden data streams and hidden indices. Must be combined with `open`, "
                         "`closed`, or both\n"
                     "- `none`: Wildcard patterns are not accepted",
+                "example_value": "open",
             },
             "features": {
                 "type": StringOrNothingType,
+                "display_name": "Features",
+                "short_desc": "Index features to return",
                 "desc": "Return information about specific index features. Supports comma-separated values. Valid "
                     "values are: `aliases`, `mappings`, and `settings`.",
+                "example_value": "aliases,mappings,settings",
             },
             "flat_settings": {
                 "type": SoftBoolStringType,
+                "display_name": "Flat Settings",
+                "short_desc": "Return flat settings",
                 "desc": "If `true`, returns settings in flat format",
+                "example_value": False,
             },
             "include_defaults": {
                 "type": SoftBoolStringType,
+                "display_name": "Include Defaults",
+                "short_desc": "Include default settings",
                 "desc": "If `true`, return all default settings in the response",
+                "example_value": False,
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
+                "display_name": "Ignore Unavailable",
+                "short_desc": "Ignore missing indices",
                 "desc": "If `false`, the request returns an error if it targets a missing or closed index",
+                "example_value": False,
             },
             "master_timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Master Timeout",
+                "short_desc": "Master node timeout",
                 "desc": "Period to wait for a connection to the master node. If no response is received before the "
                     "timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

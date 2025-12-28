@@ -125,17 +125,25 @@ class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataTyp
             # query parameters
             "index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name to delete",
                 "desc": "The name of the index to delete",
+                "example_value": "my-index",
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
+                "display_name": "Allow No Indices",
+                "short_desc": "Allow no matching indices",
                 "desc": "If `false` (default `true`), the request returns an error if any wildcard expression, index "
                     "alias, or `_all` value targets only missing or closed indices. This behavior applies even if "
                     "the request targets other open indices. For example, a request targeting `foo*,bar*` returns an "
                     "error if an index starts with `foo` but no index starts with `bar`",
+                "example_value": True,
             },
             "expand_wildcards": {
                 "type": StringOrNothingType,
+                "display_name": "Expand Wildcards",
+                "short_desc": "Wildcard expansion mode",
                 "desc": "Type of index that wildcard patterns can match. If the request can target data streams, "
                     "this argument determines whether wildcard expressions match hidden data streams. Supports "
                     "comma-separated values, such as `open,hidden` (default `open,closed`). Valid values are:\n"
@@ -146,29 +154,38 @@ class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataTyp
                     "- `hidden`: Match hidden data streams and hidden indices. Must be combined with `open`, "
                         "`closed`, or both\n"
                     "- `none`: Wildcard patterns are not accepted",
+                "example_value": "open,closed",
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
+                "display_name": "Ignore Unavailable",
+                "short_desc": "Ignore missing indices",
                 "desc": "If `false, the request returns an error if it targets a missing or closed "
                     "index. Defaults to `false`",
+                "example_value": False,
             },
             "master_timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Master Timeout",
+                "short_desc": "Master node timeout",
                 "desc": "Period to wait for a connection to the master node (default `30s`). If no response is "
                     "received before the timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
             "timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Timeout",
+                "short_desc": "Response timeout",
                 "desc": "Period to wait for a response (default `30s`). If no response is received before the "
                     "timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

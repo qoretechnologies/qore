@@ -184,52 +184,77 @@ public class ElasticSearchScrollSearchRequestDataType inherits DataProvider::Has
         const Fields = {
             "index": {
                 "type": StringOrNothingType,
+                "display_name": "Index",
+                "short_desc": "Index to search",
                 "desc": "The name of the index to search (required for initial scroll, not needed for continue/clear)",
+                "example_value": "logs-*",
             },
             "scroll": {
                 "type": StringOrNothingType,
+                "display_name": "Scroll Timeout",
+                "short_desc": "Scroll context lifetime",
                 "desc": "How long to keep the scroll context alive (e.g., '1m' for 1 minute, '5m' for 5 minutes). "
                     "Default: '1m'",
                 "default_value": "1m",
+                "example_value": "1m",
             },
             "scroll_id": {
                 "type": StringOrNothingType,
+                "display_name": "Scroll ID",
+                "short_desc": "Previous scroll ID",
                 "desc": "The scroll ID from a previous scroll response. If provided, continues the scroll. "
                     "If not provided, starts a new scroll.",
             },
             "size": {
                 "type": IntOrNothingType,
+                "display_name": "Page Size",
+                "short_desc": "Hits per scroll page",
                 "desc": "The number of hits to return per scroll page. Default: 1000",
                 "default_value": 1000,
+                "example_value": 1000,
             },
             "clear": {
                 "type": SoftBoolStringType,
+                "display_name": "Clear Scroll",
+                "short_desc": "Clear scroll context",
                 "desc": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling "
                     "to free up resources.",
+                "example_value": False,
             },
             "query": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Query",
+                "short_desc": "Search query DSL",
                 "desc": "The query to execute using ElasticSearch Query DSL (for initial scroll only)",
+                "example_value": {"match_all": {}},
             },
             "routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Custom routing value",
                 "desc": "Custom routing value (for initial scroll only)",
+                "example_value": "user123",
             },
             "preference": {
                 "type": StringOrNothingType,
+                "display_name": "Preference",
+                "short_desc": "Shard preference",
                 "desc": "Specifies which shard replicas to execute the search request on (for initial scroll only)",
+                "example_value": "_local",
             },
             "request_cache": {
                 "type": SoftBoolStringType,
+                "display_name": "Request Cache",
+                "short_desc": "Cache the request",
                 "desc": "Whether to cache the request (for initial scroll only)",
+                "example_value": True,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -239,26 +264,37 @@ public class ElasticSearchScrollSearchShardsDataType inherits DataProvider::Hash
         const Fields = {
             "total": {
                 "type": IntType,
+                "display_name": "Total Shards",
+                "short_desc": "Total number of shards",
                 "desc": "Total number of shards",
+                "example_value": 5,
             },
             "successful": {
                 "type": IntType,
+                "display_name": "Successful Shards",
+                "short_desc": "Shards that succeeded",
                 "desc": "Number of successful shards",
+                "example_value": 5,
             },
             "skipped": {
                 "type": IntOrNothingType,
+                "display_name": "Skipped Shards",
+                "short_desc": "Shards that were skipped",
                 "desc": "Number of skipped shards",
+                "example_value": 0,
             },
             "failed": {
                 "type": IntType,
+                "display_name": "Failed Shards",
+                "short_desc": "Shards that failed",
                 "desc": "Number of failed shards",
+                "example_value": 0,
             },
         };
     }
 
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -269,30 +305,47 @@ public class ElasticSearchScrollSearchResponseDataType inherits DataProvider::Ha
         const Fields = {
             "_scroll_id": {
                 "type": StringOrNothingType,
+                "display_name": "Scroll ID",
+                "short_desc": "ID for next scroll request",
                 "desc": "The scroll ID for subsequent requests. This may change between requests.",
             },
             "took": {
                 "type": IntOrNothingType,
+                "display_name": "Time Taken",
+                "short_desc": "Request duration in ms",
                 "desc": "How long the request took in milliseconds",
+                "example_value": 15,
             },
             "timed_out": {
                 "type": BoolOrNothingType,
+                "display_name": "Timed Out",
+                "short_desc": "Whether request timed out",
                 "desc": "Whether the request timed out",
+                "example_value": False,
             },
             "_shards": {
                 "type": new ElasticSearchScrollSearchShardsDataType(),
+                "display_name": "Shards",
+                "short_desc": "Shard execution info",
                 "desc": "Shard information",
             },
             "hits": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Hits",
+                "short_desc": "Search results",
                 "desc": "The search hits containing total count and the actual hit documents",
             },
             "succeeded": {
                 "type": BoolOrNothingType,
+                "display_name": "Succeeded",
+                "short_desc": "Clear operation success",
                 "desc": "For clear operations: whether the scroll context was successfully cleared",
+                "example_value": True,
             },
             "error": {
                 "type": StringOrNothingType,
+                "display_name": "Error",
+                "short_desc": "Clear operation error",
                 "desc": "For clear operations: error message if clearing failed",
             },
         };
@@ -300,8 +353,7 @@ public class ElasticSearchScrollSearchResponseDataType inherits DataProvider::Ha
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

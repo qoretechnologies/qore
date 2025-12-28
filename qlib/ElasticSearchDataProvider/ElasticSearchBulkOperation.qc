@@ -92,15 +92,7 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         }
 
         # Send bulk request
-        # Note: We need to parse the response as JSON because RestClient doesn't auto-parse
-        # when using application/x-ndjson content-type for the request
-        auto raw_response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"});
-        hash<auto> response;
-        if (raw_response.typeCode() == NT_STRING) {
-            response = parse_json(raw_response);
-        } else {
-            response = raw_response.body ?? {};
-        }
+        hash<auto> response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
 
         # Handle partial failures
         if (response.errors) {

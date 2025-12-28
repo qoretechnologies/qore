@@ -126,58 +126,87 @@ class ElasticSearchDocumentDeleteRequestDataType inherits DataProvider::HashData
             # query parameters
             "index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name",
                 "desc": "The name of the index holding the document to delete",
+                "example_value": "my-index",
             },
             "id": {
                 "type": StringType,
+                "display_name": "Document ID",
+                "short_desc": "Document identifier",
                 "desc": "The ID of the document to delete",
+                "example_value": "doc-123",
             },
             "if_seq_no": {
                 "type": IntOrNothingType,
+                "display_name": "If Seq No",
+                "short_desc": "Required sequence number",
                 "desc": "Only perform the operation if the document has this sequence number",
+                "example_value": 1,
             },
             "if_primary_term": {
                 "type": IntOrNothingType,
+                "display_name": "If Primary Term",
+                "short_desc": "Required primary term",
                 "desc": "Only perform the operation if the document has this primary term",
+                "example_value": 1,
             },
             "refresh": {
                 "type": StringOrNothingType,
+                "display_name": "Refresh",
+                "short_desc": "Refresh setting",
                 "desc": "If `true` (default `false`), Elasticsearch refreshes the affected shards to make this "
                     "operation visible to search, if `wait_for` then wait for a refresh to make this operation "
                     "visible to search, if `false` do nothing with refreshes. Valid values: `true`, `false`, "
                     "`wait_for`",
+                "example_value": "wait_for",
             },
             "routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Custom routing value",
                 "desc": "Custom value used to route operations to a specific shard",
+                "example_value": "user123",
             },
             "timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Timeout",
+                "short_desc": "Response wait period",
                 "desc": "Period to wait for a response (default `1m`). If no response is received before the "
                     "timeout expires, the request fails and returns an error",
+                "example_value": "1m",
             },
             "version": {
                 "type": IntOrNothingType,
+                "display_name": "Version",
+                "short_desc": "Required version",
                 "desc": "Explicit version number for concurrency control. The specified version must match the "
                     "current version of the document for the request to succeed",
+                "example_value": 1,
             },
             "version_type": {
                 "type": StringOrNothingType,
+                "display_name": "Version Type",
+                "short_desc": "Version type",
                 "desc": "Specific version type: `external`, `external_gte`",
+                "example_value": "external",
             },
             "wait_for_active_shards": {
                 "type": StringOrNothingType,
+                "display_name": "Wait For Active Shards",
+                "short_desc": "Required active shards",
                 "desc": "The number of shard copies that must be active before proceeding with the operation "
                     "(default `1`). Set to `all` or any positive integer up to the total number of shards in the "
                     "index (number_of_replicas+1)",
+                "example_value": "1",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -188,44 +217,66 @@ public class ElasticSearchDocumentDeleteResponseDataType inherits DataProvider::
         const Fields = {
             "_index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name",
                 "desc": "The name of the index the document was added to",
+                "example_value": "my-index",
             },
             "_id": {
                 "type": StringType,
+                "display_name": "Document ID",
+                "short_desc": "Document identifier",
                 "desc": "The unique identifier for the added document",
+                "example_value": "doc-123",
             },
             "_version": {
                 "type": IntType,
+                "display_name": "Version",
+                "short_desc": "Document version",
                 "desc": "The document version. Incremented each time the document is updated",
+                "example_value": 1,
             },
             "result": {
                 "type": StringType,
+                "display_name": "Result",
+                "short_desc": "Operation result",
                 "desc": "The result of the indexing operation: `deleted`",
+                "example_value": "deleted",
             },
             "_shards": {
                 "type": new ElasticSearchDocumentCreateShardsDataType(),
+                "display_name": "Shards",
+                "short_desc": "Replication info",
                 "desc": "Provides information about the replication process of the index operation",
             },
             "_seq_no": {
                 "type": IntType,
+                "display_name": "Sequence Number",
+                "short_desc": "Sequence number",
                 "desc": "The sequence number assigned to the document for the indexing operation. Sequence numbers "
-                    "are used to ensure an older version of a document doesn’t overwrite a newer version",
+                    "are used to ensure an older version of a document doesn't overwrite a newer version",
+                "example_value": 1,
             },
             "_primary_term": {
                 "type": IntType,
+                "display_name": "Primary Term",
+                "short_desc": "Primary term",
                 "desc": "The primary term assigned to the document for the indexing operation",
+                "example_value": 1,
             },
             "_type": {
                 "type": StringOrNothingType,
-                "desc": "The document type. Elasticsearch indices now support a single document type, `_doc`"
+                "display_name": "Type",
+                "short_desc": "Document type (deprecated)",
+                "desc": "The document type. Elasticsearch indices now support a single document type, `_doc`",
+                "example_value": "_doc",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

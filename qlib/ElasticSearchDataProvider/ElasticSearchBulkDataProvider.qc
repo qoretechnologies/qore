@@ -107,13 +107,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             uri += sprintf("%s=%s", arg, encode_url(string(req{arg}), True));
         }
 
-        # Note: We need to parse the response as JSON because RestClient doesn't auto-parse
-        # when using application/x-ndjson content-type for the request
-        auto response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"});
-        if (response.typeCode() == NT_STRING) {
-            return parse_json(response);
-        }
-        return response.body ?? response;
+        return rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
     }
 
     #! Formats the operations list as NDJSON
@@ -208,55 +202,87 @@ public class ElasticSearchBulkOperationItemDataType inherits DataProvider::HashD
         const Fields = {
             "action": {
                 "type": StringType,
+                "display_name": "Action",
+                "short_desc": "Operation type",
                 "desc": "The action type: 'index', 'create', 'update', or 'delete'",
+                "example_value": "index",
             },
             "_index": {
                 "type": StringOrNothingType,
+                "display_name": "Index",
+                "short_desc": "Target index name",
                 "desc": "The target index for this operation (optional if default index is set)",
+                "example_value": "my-index",
             },
             "_id": {
                 "type": StringOrNothingType,
+                "display_name": "Document ID",
+                "short_desc": "Document identifier",
                 "desc": "The document ID (optional for index/create, required for update/delete)",
+                "example_value": "doc-123",
             },
             "doc": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Document",
+                "short_desc": "Document body",
                 "desc": "The document body for index/create operations, or the partial document for update operations",
+                "example_value": {"title": "Example", "content": "Sample document"},
             },
             "doc_as_upsert": {
                 "type": SoftBoolStringType,
+                "display_name": "Doc As Upsert",
+                "short_desc": "Use doc as upsert",
                 "desc": "For update: if true, use the doc as the upsert document if the document does not exist",
+                "example_value": True,
             },
             "script": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Script",
+                "short_desc": "Update script",
                 "desc": "For update: a script to run to update the document",
+                "example_value": {"source": "ctx._source.counter++"},
             },
             "upsert": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Upsert",
+                "short_desc": "Upsert document",
                 "desc": "For update: the document to insert if it does not exist",
+                "example_value": {"counter": 1},
             },
             "routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Custom routing value",
                 "desc": "Custom routing value for this operation",
+                "example_value": "user123",
             },
             "pipeline": {
                 "type": StringOrNothingType,
+                "display_name": "Pipeline",
+                "short_desc": "Ingest pipeline name",
                 "desc": "The ingest pipeline to use for this operation",
+                "example_value": "my-pipeline",
             },
             "if_seq_no": {
                 "type": IntOrNothingType,
+                "display_name": "If Seq No",
+                "short_desc": "Optimistic concurrency seq no",
                 "desc": "Only perform the operation if the document has this sequence number",
+                "example_value": 1,
             },
             "if_primary_term": {
                 "type": IntOrNothingType,
+                "display_name": "If Primary Term",
+                "short_desc": "Optimistic concurrency term",
                 "desc": "Only perform the operation if the document has this primary term",
+                "example_value": 1,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -267,39 +293,58 @@ public class ElasticSearchBulkRequestDataType inherits DataProvider::HashDataTyp
         const Fields = {
             "operations": {
                 "type": new ListDataType("BulkOperationsList", new ElasticSearchBulkOperationItemDataType(), True),
+                "display_name": "Operations",
+                "short_desc": "List of bulk operations",
                 "desc": "List of bulk operations to perform",
             },
             "pipeline": {
                 "type": StringOrNothingType,
+                "display_name": "Pipeline",
+                "short_desc": "Default ingest pipeline",
                 "desc": "The default ingest pipeline to use for all operations",
+                "example_value": "my-pipeline",
             },
             "refresh": {
                 "type": StringOrNothingType,
+                "display_name": "Refresh",
+                "short_desc": "Refresh setting",
                 "desc": "Refresh setting: 'true', 'false', or 'wait_for'",
+                "example_value": "wait_for",
             },
             "routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Default routing value",
                 "desc": "Default routing value for all operations",
+                "example_value": "user123",
             },
             "timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Timeout",
+                "short_desc": "Response wait period",
                 "desc": "Period to wait for a response (default: 1m)",
+                "example_value": "1m",
             },
             "wait_for_active_shards": {
                 "type": StringOrNothingType,
+                "display_name": "Wait For Active Shards",
+                "short_desc": "Required active shards",
                 "desc": "Number of shard copies that must be active before proceeding",
+                "example_value": "1",
             },
             "require_alias": {
                 "type": SoftBoolStringType,
+                "display_name": "Require Alias",
+                "short_desc": "Destination must be alias",
                 "desc": "If true, the destination must be an index alias",
+                "example_value": False,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

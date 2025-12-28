@@ -132,48 +132,67 @@ public class ElasticSearchIndexCreateRequestDataType inherits ElasticSearchIndex
             # query parameters
             "index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name to create",
                 "desc": "The name of the index to create",
+                "example_value": "my-index",
             },
             "wait_for_active_shards": {
                 "type": SoftStringOrNothingType,
+                "display_name": "Wait For Active Shards",
+                "short_desc": "Required active shards",
                 "desc": "The number of shard copies that must be active before proceeding with the operation. "
                     "Set to `all` or any positive integer up to the total number of shards in the "
                     "index (number_of_replicas+1). Default: `1`, the primary shard.",
+                "example_value": "1",
             },
             "master_timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Master Timeout",
+                "short_desc": "Master node timeout",
                 "desc": "Period to wait for a connection to the master node (default `30s`). If no response is "
                     "received before the timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
             "timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Timeout",
+                "short_desc": "Response timeout",
                 "desc": "Period to wait for a response (default `30s`). If no response is received before the "
                     "timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
 
             # body parameters
             "aliases": {
                 "type": new ElasticSearchIndexAliasesDataType(),
+                "display_name": "Aliases",
+                "short_desc": "Index aliases",
                 "desc": "The key is the alias name. Index alias names support date math",
             },
             "mappings": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Mappings",
+                "short_desc": "Field mappings",
                 "desc": "Mapping for fields in the index. If specified, this mapping can include:\n"
                     "- Field names\n"
                     "- Field data types\n"
                     "- Mapping parameters",
+                "example_value": {"properties": {"title": {"type": "text"}}},
             },
             "settings": {
                 "type": AutoHashOrNothingType,
+                "display_name": "Settings",
+                "short_desc": "Index configuration",
                 "desc": "Configuration options for the index",
+                "example_value": {"number_of_shards": 1, "number_of_replicas": 1},
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

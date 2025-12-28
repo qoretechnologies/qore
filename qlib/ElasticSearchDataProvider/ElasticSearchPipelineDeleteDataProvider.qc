@@ -125,25 +125,33 @@ class ElasticSearchPipelineDeleteRequestDataType inherits HashDataType {
             # query parameters
             "pipeline": {
                 "type": StringType,
+                "display_name": "Pipeline",
+                "short_desc": "Pipeline name to delete",
                 "desc": "The name of the pipeline to delete",
+                "example_value": "my-pipeline",
             },
             "master_timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Master Timeout",
+                "short_desc": "Master node timeout",
                 "desc": "Period to wait for a connection to the master node (default: `30s`). If no response is "
                     "received before the timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
             "timeout": {
                 "type": StringOrNothingType,
+                "display_name": "Timeout",
+                "short_desc": "Response timeout",
                 "desc": "Period to wait for a response (default: `30s`). If no response is received before the "
                     "timeout expires, the request fails and returns an error",
+                "example_value": "30s",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

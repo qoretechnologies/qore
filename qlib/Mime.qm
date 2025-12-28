@@ -312,6 +312,30 @@ public namespace Mime {
     #! Mime type for server-sent events
     public const MimeTypeSse = "text/event-stream";
 
+    #! Set of MIME types that are JSON-compatible (can be parsed with parse_json())
+    /** These MIME types represent JSON or JSON-derived formats that can be
+        deserialized using the standard parse_json() function.
+    */
+    public const MimeTypesJson = {
+        MimeTypeJson: True,                              # application/json
+        "application/vnd.oracle.resource+json": True,   # Oracle REST Data Services
+        "application/vnd.api+json": True,               # JSON:API
+        "application/swagger+json": True,               # Swagger/OpenAPI
+        "application/x-ndjson": True,                   # Newline-Delimited JSON (ElasticSearch bulk)
+        "application/ld+json": True,                    # JSON-LD
+    };
+
+    #! Returns True if the MIME type is JSON-compatible
+    /** @param mime the MIME type to check (may include charset and other modifiers which are stripped)
+
+        @return True if the MIME type can be parsed as JSON
+    */
+    public bool sub is_mime_json(string mime) {
+        # Strip charset and other modifiers
+        mime =~ s/;.*//;
+        return MimeTypesJson{mime} ?? False;
+    }
+
     #! A map of default mime types per file extension; the hash keys are file extensions in lower-case without the dot (ex: \c "txt")
     /** @showinitializer
      */
