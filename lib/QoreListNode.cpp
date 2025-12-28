@@ -995,6 +995,39 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
         return 0;
     }
 
+    if (foff <= FMT_YAML_LONG) {
+        // Multi-line YAML format; indent encoded as FMT_YAML_LONG - foff
+        int indent = FMT_YAML_LONG - foff;
+        if (!size()) {
+            if (indent > 0)
+                str.addch(' ', indent);
+            str.concat("[]");
+            return 0;
+        }
+        ConstListIterator li(this);
+        while (li.next()) {
+            if (indent > 0)
+                str.addch(' ', indent);
+            str.concat('-');
+            QoreValue v = li.getValue();
+            qore_type_t vtype = v.getType();
+            if (vtype == NT_HASH || vtype == NT_LIST) {
+                // Complex value: newline then indented content
+                str.concat('\n');
+                if (v.getAsString(str, foff - 2, xsink))
+                    return -1;
+            } else {
+                // Simple value: space then value in YAML short format
+                str.concat(' ');
+                if (v.getAsString(str, FMT_YAML_SHORT, xsink))
+                    return -1;
+            }
+            if (!li.last())
+                str.concat('\n');
+        }
+        return 0;
+    }
+
     if (!size()) {
         str.concat(&EmptyListString);
         return 0;
@@ -1038,7 +1071,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using this function directly
 QoreString *QoreListNode::getAsString(bool &del, int foff, ExceptionSink* xsink) const {
     del = false;
-    if (!priv->length && foff != FMT_YAML_SHORT) {
+    if (!priv->length && foff != FMT_YAML_SHORT && foff > FMT_YAML_LONG) {
         return &EmptyListString;
     }
 
