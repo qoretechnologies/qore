@@ -996,6 +996,7 @@ qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchema
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
+qore_user_module("qlib/ElasticSearchLoggerAppender.qm" "Logger;RestClient" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
 
 # base 8 modules

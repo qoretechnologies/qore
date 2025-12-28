@@ -34,6 +34,11 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("ElasticSearchDataProvider Test", "1.0") {
         addTestCase("mainTest", \mainTest());
+        addTestCase("bulkApiTest", \bulkApiTest());
+        addTestCase("scrollApiTest", \scrollApiTest());
+        addTestCase("aggregationTest", \aggregationTest());
+        addTestCase("bulkOperationTest", \bulkOperationTest());
+        addTestCase("negativeTests", \negativeTests());
 
         setupConnection();
 
@@ -171,6 +176,332 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
         assertEq(1, prov.deleteRecords({"_id": newid}, {"refresh": "true"}));
         res = prov.searchSingleRecord({"_id": newid});
         assertNothing(res);
+    }
+
+    #! Test bulk API operations
+    private bulkApiTest() {
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new ElasticSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "title": {"type": "text"},
+                    "count": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        ElasticSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Test bulk create
+        ElasticSearchBulkDataProvider bulk(rest);
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "index", "_index": index, "doc": {"title": "doc1", "count": 1}},
+                {"action": "index", "_index": index, "doc": {"title": "doc2", "count": 2}},
+                {"action": "index", "_index": index, "doc": {"title": "doc3", "count": 3}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+        assertEq(3, h.items.size());
+
+        # Verify documents were created
+        prov = new ElasticSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index});
+        assertEq(3, h.hits.total.value);
+
+        # Test bulk update
+        string id1 = h.hits.hits[0]._id;
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "update", "_index": index, "_id": id1, "doc": {"count": 100}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Verify update
+        ElasticSearchDocumentReadDataProvider docread(rest);
+        h = docread.doRequest({"index": index, "id": id1});
+        assertEq(100, h._source.count);
+
+        # Test bulk delete
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "delete", "_index": index, "_id": id1},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Verify deletion
+        prov = new ElasticSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index});
+        assertEq(2, h.hits.total.value);
+    }
+
+    #! Test scroll API operations
+    private scrollApiTest() {
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index with multiple documents
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new ElasticSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "num": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        ElasticSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Create 25 documents for scroll testing
+        ElasticSearchBulkDataProvider bulk(rest);
+        list<hash<auto>> ops = ();
+        for (int i = 0; i < 25; i++) {
+            push ops, {"action": "index", "_index": index, "doc": {"num": i}};
+        }
+        h = bulk.doRequest({"operations": ops, "refresh": "true"});
+        assertFalse(h.errors);
+
+        # Test scroll search - initial request
+        ElasticSearchScrollSearchDataProvider scroll(rest);
+        h = scroll.doRequest({
+            "index": index,
+            "scroll": "1m",
+            "size": 10,
+        });
+        assertTrue(h._scroll_id.val());
+        assertEq(10, h.hits.hits.size());
+        string scroll_id = h._scroll_id;
+
+        # Continue scrolling
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "scroll": "1m",
+        });
+        assertTrue(h._scroll_id.val());
+        assertEq(10, h.hits.hits.size());
+        scroll_id = h._scroll_id;
+
+        # Get remaining documents
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "scroll": "1m",
+        });
+        assertEq(5, h.hits.hits.size());
+        scroll_id = h._scroll_id;
+
+        # Clear scroll context
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "clear": True,
+        });
+        assertTrue(h.succeeded);
+    }
+
+    #! Test aggregation API
+    private aggregationTest() {
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index with data for aggregation
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new ElasticSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "category": {"type": "keyword"},
+                    "price": {"type": "float"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        ElasticSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Create test documents
+        ElasticSearchBulkDataProvider bulk(rest);
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "index", "_index": index, "doc": {"category": "A", "price": 10.0}},
+                {"action": "index", "_index": index, "doc": {"category": "A", "price": 20.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 30.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 40.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 50.0}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Test aggregations
+        ElasticSearchAggregationDataProvider agg(rest);
+
+        # Test terms aggregation
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "by_category": {
+                    "terms": {"field": "category"},
+                },
+            },
+        });
+        assertTrue(h.aggregations.hasKey("by_category"));
+        assertEq(2, h.aggregations.by_category.buckets.size());
+
+        # Find bucket counts
+        hash<auto> buckets = map {$1.key: $1.doc_count}, h.aggregations.by_category.buckets;
+        assertEq(2, buckets.A);
+        assertEq(3, buckets.B);
+
+        # Test metrics aggregations
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "avg_price": {"avg": {"field": "price"}},
+                "sum_price": {"sum": {"field": "price"}},
+                "min_price": {"min": {"field": "price"}},
+                "max_price": {"max": {"field": "price"}},
+            },
+        });
+        assertEq(30.0, h.aggregations.avg_price.value);
+        assertEq(150.0, h.aggregations.sum_price.value);
+        assertEq(10.0, h.aggregations.min_price.value);
+        assertEq(50.0, h.aggregations.max_price.value);
+
+        # Test nested aggregation (terms + avg)
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "by_category": {
+                    "terms": {"field": "category"},
+                    "aggs": {
+                        "avg_price": {"avg": {"field": "price"}},
+                    },
+                },
+            },
+        });
+        assertTrue(h.aggregations.by_category.buckets[0].hasKey("avg_price"));
+    }
+
+    #! Test bulk operation class (record-based bulk insert)
+    private bulkOperationTest() {
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new ElasticSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "name": {"type": "text"},
+                    "value": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        ElasticSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Get index info for table provider
+        ElasticSearchIndexReadDataProvider idxread(rest);
+        hash<auto> index_hash = idxread.doRequest({"index": index}){index};
+
+        # Test bulk inserter
+        ElasticSearchIndexTableDataProvider tableProv(rest, index, index_hash);
+        AbstractDataProviderBulkOperation bulkOp = tableProv.getBulkInserter(5);
+
+        # Queue 12 records (should flush twice at block_size=5, then flush remaining 2)
+        for (int i = 0; i < 12; i++) {
+            bulkOp.queueData({"name": "item" + string(i), "value": i});
+        }
+        bulkOp.flush();
+
+        # Verify all records were inserted
+        # Need to refresh before search
+        rest.post(index + "/_refresh");
+        prov = new ElasticSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index, "size": 20});
+        assertEq(12, h.hits.total.value);
+    }
+
+    #! Negative tests - test error handling
+    private negativeTests() {
+        # Test bulk API with invalid action type
+        if (rest) {
+            ElasticSearchBulkDataProvider bulk(rest);
+            try {
+                bulk.doRequest({
+                    "operations": (
+                        {"action": "invalid_action", "_index": "test", "doc": {"x": 1}},
+                    ),
+                });
+                fail("Expected exception for invalid action type");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("ELASTICSEARCH-BULK-ERROR", ex.err);
+                assertTrue(ex.desc.find("Invalid action type") >= 0);
+            }
+        }
+
+        # Test scroll search request type validation
+        ElasticSearchScrollSearchRequestDataType scrollReq();
+        assertTrue(scrollReq.getField("index").val());
+        assertTrue(scrollReq.getField("scroll").val());
+        assertTrue(scrollReq.getField("scroll_id").val());
+        assertTrue(scrollReq.getField("clear").val());
+
+        # Test aggregation request type validation
+        ElasticSearchAggregationRequestDataType aggReq();
+        assertTrue(aggReq.getField("index").val());
+        assertTrue(aggReq.getField("query").val());
+        assertTrue(aggReq.getField("aggs").val());
+        assertTrue(aggReq.getField("aggregations").val());
+
+        # Test bulk response types
+        ElasticSearchBulkResponseDataType bulkResp();
+        assertTrue(bulkResp.getField("took").val());
+        assertTrue(bulkResp.getField("errors").val());
+        assertTrue(bulkResp.getField("items").val());
+
+        # Test bulk error data type
+        ElasticSearchBulkErrorDataType errType();
+        assertTrue(errType.getField("type").val());
+        assertTrue(errType.getField("reason").val());
     }
 
     private usageIntern() {

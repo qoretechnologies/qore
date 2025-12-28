@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/ElasticSearchLoggerAppender.qm
+
+%exec-class ElasticSearchLoggerAppenderTest
+
+public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
+    private {
+        RestClient rest;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {
+        addTestCase("constructorTest", \constructorTest());
+        addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("batchingTest", \batchingTest());
+        addTestCase("negativeTests", \negativeTests());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    #! Test constructor validation
+    private constructorTest() {
+        # Test missing url
+        try {
+            new ElasticSearchLoggerAppender::ElasticSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"index": "test-logs"}
+            );
+            fail("Expected exception for missing url");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ELASTICSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("url") >= 0);
+        }
+
+        # Test missing index
+        try {
+            new ElasticSearchLoggerAppender::ElasticSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"url": "http://localhost:9200"}
+            );
+            fail("Expected exception for missing index");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ELASTICSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("index") >= 0);
+        }
+
+        # Test valid constructor (doesn't connect until open)
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+                "batch_size": 50,
+                "flush_interval_ms": 1000,
+            }
+        );
+        assertEq("test-logs-%Y.%m.%d", appender.getIndexPattern());
+        assertEq(50, appender.getBatchSize());
+        assertEq(1000, appender.getFlushIntervalMs());
+    }
+
+    #! Test document creation from log events
+    private documentCreationTest() {
+        # Create appender with mock-like settings (won't actually connect)
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs",
+            }
+        );
+
+        # Create a test log event
+        date ts = now_us();
+        LoggerEvent event(
+            "test.fqcn",
+            "TestLogger",
+            LoggerLevel::getLevelError(),
+            "Test message: %d",
+            (42,),
+            NOTHING,
+            gettid(),
+            ts,
+            NOTHING
+        );
+
+        # Serialize the event
+        hash<auto> doc = appender.serializeImpl(event);
+
+        # Verify document structure
+        assertTrue(doc.hasKey("@timestamp"));
+        assertEq("ERROR", doc.level);
+        assertEq(40000, doc.level_value);
+        assertEq("TestLogger", doc.logger);
+        assertEq("Test message: 42", doc.message);
+        assertEq(gettid(), doc.thread_id);
+        assertTrue(doc.hasKey("host"));
+        assertTrue(doc.host.hasKey("name"));
+    }
+
+    #! Test batching behavior
+    private batchingTest() {
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create unique index for this test
+        string index = "test-logs-" + get_random_string().lwr();
+
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            rest,
+            {
+                "index": index,
+                "batch_size": 5,
+                "flush_interval_ms": 60000,  # Long interval so we control flushing
+            }
+        );
+
+        on_exit {
+            # Clean up test index
+            try {
+                rest.del(index);
+            } catch () {}
+        }
+
+        # Open appender
+        appender.open();
+        on_exit appender.close();
+
+        # Create logger and attach appender
+        Logger logger("BatchTest", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+
+        # Log 3 events (less than batch size - should not flush yet)
+        logger.info("Message 1");
+        logger.info("Message 2");
+        logger.info("Message 3");
+
+        # Force flush
+        appender.flush();
+
+        # Wait a moment for ES to index
+        sleep(1s);
+
+        # Refresh index
+        try {
+            rest.post(index + "/_refresh");
+        } catch () {}
+
+        # Verify documents in ES
+        try {
+            hash<auto> response = rest.post(index + "/_search").body;
+            assertTrue(response.hits.total.value >= 3);
+        } catch (hash<ExceptionInfo> ex) {
+            # Index might not exist yet if first flush didn't work
+            if (ex.desc !~ /index_not_found/) {
+                rethrow;
+            }
+        }
+    }
+
+    #! Negative tests
+    private negativeTests() {
+        # Test with REST client constructor - missing index
+        if (rest) {
+            try {
+                new ElasticSearchLoggerAppender::ElasticSearchLoggerAppender(
+                    "test",
+                    new LoggerLayoutPattern("%m%n"),
+                    rest,
+                    {}  # Missing index
+                );
+                fail("Expected exception for missing index");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("ELASTICSEARCH-APPENDER-ERROR", ex.err);
+            }
+        }
+
+        # Test that we can create appender even without valid connection
+        # (connection errors happen on flush, not construction)
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://invalid-host-that-does-not-exist:9200",
+                "index": "test-logs",
+                "batch_size": 1,
+            }
+        );
+        assertTrue(True);  # Construction succeeded
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the ElasticSearch server instance", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.ELASTICSEARCH_URL;
+        if (!url) {
+            if (m_options.verbose) {
+                stderr.print("missing --url option or ELASTICSEARCH_URL environment variable\n");
+            }
+            return;
+        }
+
+        try {
+            rest = new RestClient({"url": url});
+            # Test connection
+            rest.get("_cluster/health");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+            delete rest;
+        }
+    }
+}

@@ -60,6 +60,8 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
             "supports_update": True,
             "supports_delete": True,
             "supports_create": True,
+            "supports_bulk_create": True,
+            "supports_bulk_upsert": True,
             "create_options": {
                 "if_seq_no": <DataProviderOptionInfo>{
                     "display_name": "Only If Sequence",
@@ -443,6 +445,30 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
         # NOTE: this call will throw an exception if the create operation fails
         string id = rest.post(uri, rec).body._id;
         return {"_id": id} + rec;
+    }
+
+    #! Returns a bulk insert operation object for this data provider
+    /** @param block_size the number of records in a block; the bulk insert operation must be flushed before this
+        number of records is processed
+
+        @return a bulk insert operation object for this data provider
+    */
+    DataProvider::AbstractDataProviderBulkOperation getBulkInserter(*int block_size) {
+        return new ElasticSearchBulkOperation(self, rest, name, "index", block_size);
+    }
+
+    #! Returns a bulk upsert operation object for this data provider
+    /** @param block_size the number of records in a block; the bulk upsert operation must be flushed before this
+        number of records is processed
+
+        @return a bulk upsert operation object for this data provider
+
+        @note In ElasticSearch, the bulk action type \c "index" has upsert semantics (create or replace the document
+        with the given ID). Therefore this method uses the same \c "index" action type as getBulkInserter(), and both
+        methods are functionally equivalent in ElasticSearch.
+    */
+    DataProvider::AbstractDataProviderBulkOperation getBulkUpserter(*int block_size) {
+        return new ElasticSearchBulkOperation(self, rest, name, "index", block_size);
     }
 
     #! Returns data provider static info

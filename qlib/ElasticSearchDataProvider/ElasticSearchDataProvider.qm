@@ -36,9 +36,10 @@
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
+%requires json
 
 module ElasticSearchDataProvider {
-    version = "1.1";
+    version = "1.2";
     desc = "user module providing a data provider API for ElasticSearch instances";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -84,6 +85,37 @@ module ElasticSearchDataProvider {
             "desc": "Add a document to / ingest data in ElasticSearch",
             "action_code": DPAT_API,
             "output_type": ElasticSearchDocumentCreateResponseDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElasticSearchDataProvider::AppName,
+            "path": "/document/bulk",
+            "action": "bulk-operations",
+            "display_name": "Bulk Operations",
+            "short_desc": "Perform bulk document operations",
+            "desc": "Perform bulk index, create, update, and delete operations on ElasticSearch documents",
+            "action_code": DPAT_API,
+            "output_type": ElasticSearchBulkResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElasticSearchDataProvider::AppName,
+            "path": "/index/scroll-search",
+            "action": "scroll-search",
+            "display_name": "Scroll Search",
+            "short_desc": "Search with scroll API for large result sets",
+            "desc": "Search an ElasticSearch index using the Scroll API for efficient iteration over large result sets",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ElasticSearchDataProvider::AppName,
+            "path": "/index/aggregate",
+            "action": "aggregate",
+            "display_name": "Aggregations",
+            "short_desc": "Compute aggregations over search results",
+            "desc": "Compute analytics and aggregations over ElasticSearch search results (terms, histogram, metrics, etc.)",
+            "action_code": DPAT_API,
         });
     };
 }

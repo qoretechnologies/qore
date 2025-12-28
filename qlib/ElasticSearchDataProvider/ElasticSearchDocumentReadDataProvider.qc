@@ -126,68 +126,103 @@ class ElasticSearchDocumentReadRequestDataType inherits DataProvider::HashDataTy
             # query parameters
             "index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name",
                 "desc": "The name of the index holding the document to read",
+                "example_value": "my-index",
             },
             "id": {
                 "type": StringType,
+                "display_name": "Document ID",
+                "short_desc": "Document identifier",
                 "desc": "The ID of the document to read",
+                "example_value": "doc-123",
             },
             "preference": {
                 "type": StringOrNothingType,
+                "display_name": "Preference",
+                "short_desc": "Node or shard preference",
                 "desc": "Specifies the node or shard the operation should be performed on; random by default",
+                "example_value": "_local",
             },
             "realtime": {
                 "type": SoftBoolStringType,
+                "display_name": "Realtime?",
+                "short_desc": "Real-time read",
                 "desc": "If `true` (the default), the request is real-time as opposed to near-real-time",
+                "example_value": True,
             },
             "refresh": {
                 "type": SoftBoolStringType,
+                "display_name": "Refresh?",
+                "short_desc": "Refresh before read",
                 "desc": "If `true` (default `false`), the request refreshes the relevant shard before retrieving the "
                     "document",
+                "example_value": False,
             },
             "routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Custom routing value",
                 "desc": "Custom value used to route operations to a specific shard",
+                "example_value": "user123",
             },
             "stored_fields": {
                 "type": SoftBoolStringType,
+                "display_name": "Stored Fields?",
+                "short_desc": "Retrieve stored fields",
                 "desc": "If `true` (default `false`), retrieves the document fields stored in the index rather than "
                     "the document `_source`",
+                "example_value": False,
             },
             "_source": {
                 "type": StringOrNothingType,
+                "display_name": "Source",
+                "short_desc": "Source field control",
                 "desc": "`true` or `false` to return the `_source` field or not, or a list of fields to return",
+                "example_value": "true",
             },
             "_source_excludes": {
                 "type": StringOrNothingType,
+                "display_name": "Source Excludes",
+                "short_desc": "Fields to exclude",
                 "desc": "A comma-separated list of source fields to exclude from the response.\n\n"
                     "You can also use this parameter to exclude fields from the subset specified in the "
                     "`_source_includes` query parameter.\n\n"
                     "If the `_source` parameter is `false`, this parameter is ignored",
+                "example_value": "meta.*",
             },
             "_source_includes": {
                 "type": StringOrNothingType,
+                "display_name": "Source Includes",
+                "short_desc": "Fields to include",
                 "desc": "A comma-separated list of source fields to include in the response.\n\n"
                     "If this parameter is specified, only these source fields are returned. You can exclude fields "
                     "from this subset using the `_source_excludes` query parameter.\n\n"
                     "If the `_source` parameter is `false`, this parameter is ignored",
+                "example_value": "title,content",
             },
             "version": {
                 "type": IntOrNothingType,
+                "display_name": "Version",
+                "short_desc": "Required version",
                 "desc": "Explicit version number for concurrency control. The specified version must match the "
                     "current version of the document for the request to succeed",
+                "example_value": 1,
             },
             "version_type": {
                 "type": StringOrNothingType,
+                "display_name": "Version Type",
+                "short_desc": "Version type",
                 "desc": "Specific version type: `external`, `external_gte`",
+                "example_value": "external",
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -198,50 +233,74 @@ public class ElasticSearchDocumentReadResponseDataType inherits DataProvider::Ha
         const Fields = {
             "_index": {
                 "type": StringType,
+                "display_name": "Index",
+                "short_desc": "Index name",
                 "desc": "The name of the index the document was added to",
+                "example_value": "my-index",
             },
             "_id": {
                 "type": StringType,
+                "display_name": "Document ID",
+                "short_desc": "Document identifier",
                 "desc": "The unique identifier for the added document",
+                "example_value": "doc-123",
             },
             "_version": {
                 "type": IntType,
+                "display_name": "Version",
+                "short_desc": "Document version",
                 "desc": "The document version. Incremented each time the document is updated",
+                "example_value": 1,
             },
             "found": {
                 "type": BoolType,
+                "display_name": "Found?",
+                "short_desc": "Document exists",
                 "desc": "Indicates whether the document exists: `true` or `false`",
+                "example_value": True,
             },
             "_routing": {
                 "type": StringOrNothingType,
+                "display_name": "Routing",
+                "short_desc": "Document routing",
                 "desc": "The explicit routing, if set",
+                "example_value": "user123",
             },
             "_source": {
                 "type": StringOrNothingType,
+                "display_name": "Source",
+                "short_desc": "Document data",
                 "desc": "If `found` is `true`, contains the document data formatted in JSON. Excluded if the "
                     "`_source` parameter is set to `false` or the `stored_fields` parameter is set to `true`",
             },
             "_fields": {
                 "type": StringOrNothingType,
+                "display_name": "Fields",
+                "short_desc": "Stored fields",
                 "desc": "If the `stored_fields` parameter is set to `true` and `found` is `true`, this will contain "
                     "the document fields stored in the index",
             },
             "_seq_no": {
                 "type": IntType,
+                "display_name": "Sequence Number",
+                "short_desc": "Sequence number",
                 "desc": "The sequence number assigned to the document for the indexing operation. Sequence numbers "
-                    "are used to ensure an older version of a document doesn’t overwrite a newer version",
+                    "are used to ensure an older version of a document doesn't overwrite a newer version",
+                "example_value": 1,
             },
             "_primary_term": {
                 "type": IntType,
+                "display_name": "Primary Term",
+                "short_desc": "Primary term",
                 "desc": "The primary term assigned to the document for the indexing operation",
+                "example_value": 1,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 }

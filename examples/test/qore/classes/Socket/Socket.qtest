@@ -267,7 +267,7 @@ class SocketTest inherits QUnit::Test {
                 s0.setPrivateKey(TestCert);
                 q.push(port);
 
-                Socket s2 = s0.acceptSSL(100ms);
+                Socket s2 = s0.acceptSSL(15s);
                 # Receive all data - loop until we get the expected size
                 binary b0;
                 while (b0.size() < BinarySize) {

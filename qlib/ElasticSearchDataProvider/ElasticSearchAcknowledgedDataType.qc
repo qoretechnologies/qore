@@ -31,15 +31,17 @@ public class ElasticSearchAcknowledgedDataType inherits DataProvider::HashDataTy
         const Fields = {
             "acknowledged": {
                 "type": BoolType,
+                "display_name": "Acknowledged?",
+                "short_desc": "Request acknowledged",
                 "desc": "The request has been acknowledged by the server",
+                "example_value": True,
             },
         };
     }
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
