@@ -55,6 +55,7 @@ public class RedisStreamDataProvider inherits RedisDataProviderBase {
     *string getDesc() { return sprintf("Redis stream provider for `%s`", redis.getSafeURL()); }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @debug(log(LoggerLevel::DEBUG, "stream operation: %y", req.operation ?? "xadd"));
         switch (req.operation) {
             case "xread":
                 list<auto> args = ();
@@ -115,6 +116,8 @@ public class RedisStreamDataProvider inherits RedisDataProviderBase {
                 return {"trimmed": trimmed};
 
             default:  # xadd
+                @assert(req.key.val(), "key is required for XADD");
+                @assert(req.fields.val(), "fields are required for XADD");
                 list<auto> args = (req.key,);
                 if (req.maxlen) { args += "MAXLEN"; if (req.approximate) args += "~"; args += req.maxlen; }
                 args += req.id ?? "*";

@@ -74,16 +74,20 @@ public class RedisStringSetDataProvider inherits RedisDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # Handle MSET for multiple key-value pairs
         if (req.pairs) {
+            @assert(req.pairs.val(), "pairs list cannot be empty for MSET");
             list<auto> args = ();
             foreach hash<auto> pair in (req.pairs) {
+                @assert(pair.key.val(), "each pair must have a key");
                 args += pair.key;
                 args += pair.value;
             }
+            @debug(log(LoggerLevel::DEBUG, "MSET: %d pairs", req.pairs.size()));
             redis.commandWithArgs("MSET", args);
             return {"success": True};
         }
 
         # Build SET command with options
+        @assert(req.key.val(), "key is required for SET operation");
         list<auto> args = (req.key, req.value);
 
         # Add expiration options
@@ -115,6 +119,7 @@ public class RedisStringSetDataProvider inherits RedisDataProviderBase {
             args += "GET";
         }
 
+        @debug(log(LoggerLevel::DEBUG, "SET: key=%y", req.key));
         auto result = redis.commandWithArgs("SET", args);
 
         # Handle response based on options

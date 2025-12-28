@@ -72,14 +72,20 @@ public class RedisHashSetDataProvider inherits RedisDataProviderBase {
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @assert(req.key.val(), "key is required for hash SET operation");
         if (req.nx) {
             # HSETNX - set only if field doesn't exist
+            @assert(req.field.val(), "field is required for HSETNX");
+            @debug(log(LoggerLevel::DEBUG, "HSETNX: key=%y field=%y", req.key, req.field));
             int result = redis.command("HSETNX", req.key, req.field, req.value);
             return {"created": result == 1};
         } else if (req.fields) {
             # HSET with multiple field-value pairs
+            @assert(req.fields.val(), "fields list cannot be empty");
+            @debug(log(LoggerLevel::DEBUG, "HSET: key=%y %d fields", req.key, req.fields.size()));
             list<auto> args = (req.key,);
             foreach hash<auto> fv in (req.fields) {
+                @assert(fv.field.val(), "each field must have a field name");
                 args += fv.field;
                 args += fv.value;
             }
@@ -87,6 +93,8 @@ public class RedisHashSetDataProvider inherits RedisDataProviderBase {
             return {"fields_added": count};
         } else {
             # HSET - single field-value
+            @assert(req.field.val(), "field is required for HSET");
+            @debug(log(LoggerLevel::DEBUG, "HSET: key=%y field=%y", req.key, req.field));
             int result = redis.command("HSET", req.key, req.field, req.value);
             return {"fields_added": result};
         }

@@ -79,10 +79,14 @@ public class RedisStringGetDataProvider inherits RedisDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # Handle single key or multiple keys
         if (req.keys) {
+            @assert(req.keys.val(), "keys list cannot be empty for MGET");
+            @debug(log(LoggerLevel::DEBUG, "MGET: %d keys", req.keys.size()));
             # MGET for multiple keys
             list<auto> values = redis.commandWithArgs("MGET", req.keys);
             return {"values": values};
         } else {
+            @assert(req.key.val(), "key is required for GET operation");
+            @debug(log(LoggerLevel::DEBUG, "GET: key=%y", req.key));
             # GET for single key
             auto value = redis.command("GET", req.key);
             return {"value": value};

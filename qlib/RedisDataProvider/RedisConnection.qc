@@ -155,6 +155,7 @@ public class RedisConnection inherits ConnectionProvider::AbstractConnectionWith
         @see hasDataProvider()
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        @debug(logDebug("RedisConnection::getDataProvider(): creating data provider"));
         return new RedisDataProvider({"redis": get()} + constructor_options);
     }
 
@@ -181,9 +182,11 @@ public class RedisConnection inherits ConnectionProvider::AbstractConnectionWith
     */
     private RedisClient getImpl(bool connect = True, *hash<auto> rtopts) {
         hash<auto> client_opts = getClientOptions(rtopts);
+        @debug(logDebug("RedisConnection::getImpl(): creating client with opts: %y", client_opts - "password"));
         RedisClient client(client_opts);
         if (connect) {
             client.connect();
+            @debug(logDebug("RedisConnection::getImpl(): client connected"));
         }
         return client;
     }

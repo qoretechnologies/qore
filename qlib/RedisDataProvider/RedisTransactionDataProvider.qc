@@ -55,6 +55,7 @@ public class RedisTransactionDataProvider inherits RedisDataProviderBase {
     *string getDesc() { return sprintf("Redis transaction provider for `%s`", redis.getSafeURL()); }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @debug(log(LoggerLevel::DEBUG, "transaction operation: %y", req.operation ?? "execute_transaction"));
         switch (req.operation) {
             case "multi":
                 string result = redis.command("MULTI");
@@ -69,6 +70,7 @@ public class RedisTransactionDataProvider inherits RedisDataProviderBase {
                 return {"discarded": True};
 
             case "watch":
+                @assert(req.keys.val(), "keys are required for WATCH operation");
                 redis.commandWithArgs("WATCH", req.keys);
                 return {"watching": True};
 
@@ -78,21 +80,22 @@ public class RedisTransactionDataProvider inherits RedisDataProviderBase {
 
             default:  # execute_transaction - convenience method
                 # Execute a list of commands in a transaction
-                if (!req.commands) {
-                    throw "REDIS-ERROR", "commands list is required for execute_transaction";
-                }
+                @assert(req.commands.val(), "commands list is required for execute_transaction");
 
                 # WATCH keys if specified
                 if (req.watch_keys) {
+                    @debug(log(LoggerLevel::DEBUG, "WATCH: %d keys", req.watch_keys.size()));
                     redis.commandWithArgs("WATCH", req.watch_keys);
                 }
 
                 # Start transaction
+                @debug(log(LoggerLevel::DEBUG, "executing transaction with %d commands", req.commands.size()));
                 redis.command("MULTI");
 
                 try {
                     # Queue all commands
                     foreach list<auto> cmd in (req.commands) {
+                        @assert(cmd.val() && cmd[0].val(), "each command must have a command name");
                         redis.commandWithArgs(cmd[0], cmd.size() > 1 ? cmd[1..] : ());
                     }
 

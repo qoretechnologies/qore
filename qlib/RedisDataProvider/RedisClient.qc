@@ -112,11 +112,13 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
             host = opts.host;
         }
         if (opts.port) {
+            @assert(opts.port > 0 && opts.port <= 65535, sprintf("invalid port number: %d", opts.port));
             port = opts.port;
         }
         password = opts.password;
         username = opts.username;
         if (opts.db) {
+            @assert(opts.db >= 0, sprintf("invalid database number: %d", opts.db));
             db = opts.db;
         }
         if (opts.connect_timeout) {
@@ -156,6 +158,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
     #! Parses a Redis URL
     private parseUrl(string url) {
+        @assert(url.val(), "URL cannot be empty");
         # Parse URL: redis://[username:password@]host[:port][/db]
         hash<UrlInfo> url_info = parse_url(url);
 
@@ -204,7 +207,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
             return;
         }
 
-        logDebug("RedisClient: connecting to %s:%d", host, port);
+        @debug(logDebug("RedisClient: connecting to %s:%d", host, port));
 
         sock.setSendTimeout(io_timeout);
         sock.setRecvTimeout(io_timeout);
@@ -223,7 +226,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
         }
 
         connected = True;
-        logDebug("RedisClient: connected to %s:%d", host, port);
+        @debug(logDebug("RedisClient: connected to %s:%d", host, port));
 
         # Authenticate if password is provided
         if (password) {
@@ -245,7 +248,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
                 # Ignore errors on close
             }
             connected = False;
-            logDebug("RedisClient: disconnected from %s:%d", host, port);
+            @debug(logDebug("RedisClient: disconnected from %s:%d", host, port));
         }
     }
 
@@ -265,7 +268,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
                 # Legacy password-only authentication
                 result = command("AUTH", password);
             }
-            logDebug("RedisClient: authentication successful");
+            @debug(logDebug("RedisClient: authentication successful"));
         } catch (hash<ExceptionInfo> ex) {
             disconnect();
             throw "REDIS-AUTH-ERROR", sprintf("Redis authentication failed: %s", ex.desc);
@@ -274,9 +277,10 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
     #! Selects the given database
     private selectDb(int database) {
+        @assert(database >= 0, sprintf("invalid database number: %d", database));
         try {
             command("SELECT", database);
-            logDebug("RedisClient: selected database %d", database);
+            @debug(logDebug("RedisClient: selected database %d", database));
         } catch (hash<ExceptionInfo> ex) {
             disconnect();
             throw "REDIS-SELECT-ERROR", sprintf("failed to select Redis database %d: %s", database, ex.desc);
@@ -313,6 +317,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
         @throw REDIS-NOT-CONNECTED if not connected to the server
     */
     auto commandWithArgs(string cmd, softlist<auto> args) {
+        @assert(cmd.val(), "command name cannot be empty");
         if (!connected) {
             throw "REDIS-NOT-CONNECTED", "not connected to Redis server; call connect() first";
         }
@@ -322,12 +327,12 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
         # Encode and send
         string encoded = encodeRESP(cmdlist);
-        logTrace("RedisClient: sending command: %y", cmdlist);
+        @debug(logTrace("RedisClient: sending command: %y", cmdlist));
         sock.send(encoded);
 
         # Read and decode response
         auto result = decodeRESP();
-        logTrace("RedisClient: received response: %y", result);
+        @debug(logTrace("RedisClient: received response: %y", result));
         return result;
     }
 
@@ -351,6 +356,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
         @endcode
     */
     list<auto> pipeline(list<list<auto>> commands) {
+        @assert(commands.val(), "pipeline commands cannot be empty");
         if (!connected) {
             throw "REDIS-NOT-CONNECTED", "not connected to Redis server; call connect() first";
         }
@@ -358,10 +364,11 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
         # Encode all commands
         string encoded = "";
         foreach list<auto> cmdlist in (commands) {
+            @assert(cmdlist.val() && cmdlist[0].val(), "each pipeline command must have a command name");
             encoded += encodeRESP(cmdlist);
         }
 
-        logTrace("RedisClient: pipeline sending %d commands", commands.size());
+        @debug(logTrace("RedisClient: pipeline sending %d commands", commands.size()));
         sock.send(encoded);
 
         # Read all responses

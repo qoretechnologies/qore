@@ -55,33 +55,44 @@ public class RedisKeyDataProvider inherits RedisDataProviderBase {
     *string getDesc() { return sprintf("Redis key operations provider for `%s`", redis.getSafeURL()); }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @debug(log(LoggerLevel::DEBUG, "key operation: %y", req.operation ?? "del"));
         switch (req.operation) {
             case "exists":
                 list<auto> args = req.keys ?? (req.key,);
+                @assert(args.val(), "key or keys required for EXISTS");
                 int count = redis.commandWithArgs("EXISTS", args);
                 return {"count": count};
 
             case "expire":
+                @assert(req.key.val(), "key is required for EXPIRE");
+                @assert(exists req.seconds, "seconds is required for EXPIRE");
                 int result = redis.command("EXPIRE", req.key, req.seconds);
                 return {"success": result == 1};
 
             case "expireat":
+                @assert(req.key.val(), "key is required for EXPIREAT");
+                @assert(exists req.timestamp, "timestamp is required for EXPIREAT");
                 int result = redis.command("EXPIREAT", req.key, req.timestamp);
                 return {"success": result == 1};
 
             case "pexpire":
+                @assert(req.key.val(), "key is required for PEXPIRE");
+                @assert(exists req.milliseconds, "milliseconds is required for PEXPIRE");
                 int result = redis.command("PEXPIRE", req.key, req.milliseconds);
                 return {"success": result == 1};
 
             case "ttl":
+                @assert(req.key.val(), "key is required for TTL");
                 int ttl = redis.command("TTL", req.key);
                 return {"ttl": ttl};
 
             case "pttl":
+                @assert(req.key.val(), "key is required for PTTL");
                 int pttl = redis.command("PTTL", req.key);
                 return {"ttl": pttl};
 
             case "persist":
+                @assert(req.key.val(), "key is required for PERSIST");
                 int result = redis.command("PERSIST", req.key);
                 return {"success": result == 1};
 
@@ -96,19 +107,25 @@ public class RedisKeyDataProvider inherits RedisDataProviderBase {
                 return {"cursor": result[0].toInt(), "keys": result[1]};
 
             case "type":
+                @assert(req.key.val(), "key is required for TYPE");
                 string type = redis.command("TYPE", req.key);
                 return {"type": type};
 
             case "rename":
+                @assert(req.key.val(), "key is required for RENAME");
+                @assert(req.newkey.val(), "newkey is required for RENAME");
                 redis.command("RENAME", req.key, req.newkey);
                 return {"success": True};
 
             case "renamenx":
+                @assert(req.key.val(), "key is required for RENAMENX");
+                @assert(req.newkey.val(), "newkey is required for RENAMENX");
                 int result = redis.command("RENAMENX", req.key, req.newkey);
                 return {"success": result == 1};
 
             default:  # del
                 list<auto> args = req.keys ?? (req.key,);
+                @assert(args.val(), "key or keys required for DEL");
                 int deleted = redis.commandWithArgs("DEL", args);
                 return {"deleted": deleted};
         }
