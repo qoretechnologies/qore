@@ -180,7 +180,7 @@ public class RedisListRangeRequestDataType inherits DataProvider::HashDataType {
                 "type": AutoType,
             },
             "before": {
-                "display_name": "Before",
+                "display_name": "Before?",
                 "short_desc": "Insert before pivot",
                 "desc": "Insert before pivot (True) or after (False) for LINSERT",
                 "type": SoftBoolOrNothingType,
@@ -216,7 +216,7 @@ public class RedisListRangeResponseDataType inherits DataProvider::HashDataType 
                 "example_value": 10,
             },
             "success": {
-                "display_name": "Success",
+                "display_name": "Success?",
                 "short_desc": "Operation success",
                 "desc": "Success flag for LSET/LTRIM",
                 "type": SoftBoolType,

@@ -172,7 +172,7 @@ public class RedisSortedSetRangeRequestDataType inherits DataProvider::HashDataT
                 "example_value": 100,
             },
             "withscores": {
-                "display_name": "With Scores",
+                "display_name": "With Scores?",
                 "short_desc": "Include scores",
                 "desc": "Include scores in response",
                 "type": SoftBoolOrNothingType,

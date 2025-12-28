@@ -251,7 +251,7 @@ public class RedisStreamRequestDataType inherits DataProvider::HashDataType {
                 "example_value": "mygroup",
             },
             "mkstream": {
-                "display_name": "Make Stream",
+                "display_name": "Make Stream?",
                 "short_desc": "Create stream if not exists",
                 "desc": "Create stream if not exists for XGROUP CREATE",
                 "type": SoftBoolOrNothingType,
@@ -264,7 +264,7 @@ public class RedisStreamRequestDataType inherits DataProvider::HashDataType {
                 "example_value": 1000,
             },
             "approximate": {
-                "display_name": "Approximate",
+                "display_name": "Approximate?",
                 "short_desc": "Use approximate trimming",
                 "desc": "Use approximate trimming (~)",
                 "type": SoftBoolOrNothingType,
@@ -328,14 +328,14 @@ public class RedisStreamResponseDataType inherits DataProvider::HashDataType {
                 "type": SoftListOrNothingType,
             },
             "success": {
-                "display_name": "Success",
+                "display_name": "Success?",
                 "short_desc": "Operation success",
                 "desc": "Operation success",
                 "type": SoftBoolType,
                 "example_value": True,
             },
             "destroyed": {
-                "display_name": "Destroyed",
+                "display_name": "Destroyed?",
                 "short_desc": "Group was destroyed",
                 "desc": "Group was destroyed",
                 "type": SoftBoolType,

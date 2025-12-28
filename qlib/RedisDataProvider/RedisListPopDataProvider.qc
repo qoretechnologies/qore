@@ -105,7 +105,7 @@ public class RedisListPopRequestDataType inherits DataProvider::HashDataType {
                 "example_value": "mylist",
             },
             "right": {
-                "display_name": "Pop Right",
+                "display_name": "Pop Right?",
                 "short_desc": "Pop from right side (RPOP)",
                 "desc": "Pop from right side (RPOP) instead of left (LPOP)",
                 "type": SoftBoolOrNothingType,
@@ -118,7 +118,7 @@ public class RedisListPopRequestDataType inherits DataProvider::HashDataType {
                 "example_value": 3,
             },
             "blocking": {
-                "display_name": "Blocking",
+                "display_name": "Blocking?",
                 "short_desc": "Use blocking pop",
                 "desc": "Use blocking pop (BLPOP/BRPOP)",
                 "type": SoftBoolOrNothingType,

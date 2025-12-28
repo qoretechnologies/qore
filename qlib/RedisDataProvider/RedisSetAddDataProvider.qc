@@ -170,7 +170,7 @@ public class RedisSetAddResponseDataType inherits DataProvider::HashDataType {
                 "type": SoftListOrNothingType,
             },
             "is_member": {
-                "display_name": "Is Member",
+                "display_name": "Is Member?",
                 "short_desc": "Member exists",
                 "desc": "True if member exists for SISMEMBER",
                 "type": SoftBoolType,

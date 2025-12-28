@@ -197,25 +197,25 @@ public class RedisStringSetRequestDataType inherits DataProvider::HashDataType {
                 "type": IntOrNothingType,
             },
             "keepttl": {
-                "display_name": "Keep TTL",
+                "display_name": "Keep TTL?",
                 "short_desc": "Retain existing TTL",
                 "desc": "Retain the TTL associated with the key",
                 "type": SoftBoolOrNothingType,
             },
             "nx": {
-                "display_name": "Only If New",
+                "display_name": "Only If New?",
                 "short_desc": "Set only if key doesn't exist",
                 "desc": "Only set the key if it does not already exist",
                 "type": SoftBoolOrNothingType,
             },
             "xx": {
-                "display_name": "Only If Exists",
+                "display_name": "Only If Exists?",
                 "short_desc": "Set only if key exists",
                 "desc": "Only set the key if it already exists",
                 "type": SoftBoolOrNothingType,
             },
             "get": {
-                "display_name": "Get Previous",
+                "display_name": "Get Previous?",
                 "short_desc": "Return old value",
                 "desc": "Return the old value stored at key, or nil when key did not exist",
                 "type": SoftBoolOrNothingType,
@@ -235,7 +235,7 @@ public class RedisStringSetResponseDataType inherits DataProvider::HashDataType 
         #! Field descriptions
         const Fields = {
             "success": {
-                "display_name": "Success",
+                "display_name": "Success?",
                 "short_desc": "Operation success status",
                 "desc": "True if the operation was successful",
                 "type": SoftBoolType,

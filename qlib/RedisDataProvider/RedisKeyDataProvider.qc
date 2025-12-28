@@ -247,7 +247,7 @@ public class RedisKeyResponseDataType inherits DataProvider::HashDataType {
                 "example_value": 2,
             },
             "success": {
-                "display_name": "Success",
+                "display_name": "Success?",
                 "short_desc": "Operation success",
                 "desc": "Operation success",
                 "type": SoftBoolType,

@@ -181,7 +181,7 @@ public class RedisSetOpsResponseDataType inherits DataProvider::HashDataType {
                 "example_value": 5,
             },
             "moved": {
-                "display_name": "Moved",
+                "display_name": "Moved?",
                 "short_desc": "Member was moved",
                 "desc": "True if member was moved (for SMOVE)",
                 "type": SoftBoolType,

@@ -116,13 +116,13 @@ public class RedisListPushRequestDataType inherits DataProvider::HashDataType {
                 "example_value": ("item1", "item2", "item3"),
             },
             "right": {
-                "display_name": "Push Right",
+                "display_name": "Push Right?",
                 "short_desc": "Push to right side (RPUSH)",
                 "desc": "Push to right side (RPUSH) instead of left (LPUSH)",
                 "type": SoftBoolOrNothingType,
             },
             "only_if_exists": {
-                "display_name": "Only If Exists",
+                "display_name": "Only If Exists?",
                 "short_desc": "Only push if list exists",
                 "desc": "Only push if the list exists (LPUSHX/RPUSHX)",
                 "type": SoftBoolOrNothingType,

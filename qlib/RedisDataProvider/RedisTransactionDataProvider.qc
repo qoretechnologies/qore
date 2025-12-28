@@ -171,7 +171,7 @@ public class RedisTransactionResponseDataType inherits DataProvider::HashDataTyp
     private {
         const Fields = {
             "queued": {
-                "display_name": "Queued",
+                "display_name": "Queued?",
                 "short_desc": "Transaction started",
                 "desc": "Transaction started (MULTI)",
                 "type": SoftBoolType,
@@ -183,25 +183,25 @@ public class RedisTransactionResponseDataType inherits DataProvider::HashDataTyp
                 "type": SoftListOrNothingType,
             },
             "discarded": {
-                "display_name": "Discarded",
+                "display_name": "Discarded?",
                 "short_desc": "Transaction discarded",
                 "desc": "Transaction was discarded",
                 "type": SoftBoolType,
             },
             "watching": {
-                "display_name": "Watching",
+                "display_name": "Watching?",
                 "short_desc": "Watching keys",
                 "desc": "Now watching keys",
                 "type": SoftBoolType,
             },
             "unwatched": {
-                "display_name": "Unwatched",
+                "display_name": "Unwatched?",
                 "short_desc": "Keys unwatched",
                 "desc": "Keys unwatched",
                 "type": SoftBoolType,
             },
             "aborted": {
-                "display_name": "Aborted",
+                "display_name": "Aborted?",
                 "short_desc": "Transaction aborted",
                 "desc": "Transaction was aborted (WATCH key modified)",
                 "type": SoftBoolType,

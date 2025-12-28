@@ -167,7 +167,7 @@ public class RedisHashDelResponseDataType inherits DataProvider::HashDataType {
                 "example_value": 2,
             },
             "exists": {
-                "display_name": "Exists",
+                "display_name": "Exists?",
                 "short_desc": "Field exists",
                 "desc": "True if the field exists (for HEXISTS operation)",
                 "type": SoftBoolType,

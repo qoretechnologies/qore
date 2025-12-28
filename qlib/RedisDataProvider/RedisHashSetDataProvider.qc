@@ -149,7 +149,7 @@ public class RedisHashSetRequestDataType inherits DataProvider::HashDataType {
                 "type": SoftListOrNothingType,
             },
             "nx": {
-                "display_name": "Only If New",
+                "display_name": "Only If New?",
                 "short_desc": "Set only if field doesn't exist",
                 "desc": "Set to True to only set if the field does not exist (HSETNX)",
                 "type": SoftBoolOrNothingType,
@@ -176,7 +176,7 @@ public class RedisHashSetResponseDataType inherits DataProvider::HashDataType {
                 "example_value": 1,
             },
             "created": {
-                "display_name": "Created",
+                "display_name": "Created?",
                 "short_desc": "Field was created",
                 "desc": "True if the field was created (for HSETNX operation)",
                 "type": SoftBoolType,
