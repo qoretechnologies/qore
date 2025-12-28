@@ -116,6 +116,17 @@ class MyQueue inherits Queue {
     }
 }
 
+class MyTreeMap {
+    public {
+        TreeMap tm();
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++dc;
+    }
+}
+
 hashdecl Issue3841 {
     auto a = new Mutex();
 }
@@ -124,6 +135,7 @@ class DgcTest inherits QUnit::Test {
     constructor() : Test("GcTest", "1.0") {
         addTestCase("issue 3841 test", \issue3841Test());
         addTestCase("issue3101Test", \issue3101Test());
+        addTestCase("issue5028Test", \issue5028Test());
         addTestCase("GcTests", \gcTests());
         addTestCase("ClosureTests", \closureTests());
         addTestCase("Destructor order", \dtorOrder());
@@ -194,6 +206,55 @@ class DgcTest inherits QUnit::Test {
             q.clear();
         }
         assertEq(6, MyQueue::dc);
+    }
+
+    # issue #5028: TreeMap DGC support
+    issue5028Test() {
+        # Test 1: Self-reference via TreeMap
+        {
+            MyTreeMap obj();
+            obj.tm.put("self", obj);
+        }
+        assertEq(1, MyTreeMap::dc);
+
+        # Test 2: Two-object cycle via TreeMap
+        {
+            MyTreeMap obj1();
+            MyTreeMap obj2();
+            obj1.tm.put("other", obj2);
+            obj2.tm.put("other", obj1);
+        }
+        assertEq(3, MyTreeMap::dc);
+
+        # Test 3: TreeMap stores object, then takes it
+        {
+            MyTreeMap obj();
+            obj.tm.put("key", obj);
+            obj.tm.take("key");
+        }
+        assertEq(4, MyTreeMap::dc);
+
+        # Test 4: Replace object with simple value
+        {
+            MyTreeMap obj();
+            obj.tm.put("key", obj);
+            obj.tm.put("key", 42);
+        }
+        assertEq(5, MyTreeMap::dc);
+
+        # Test 5: Object nested in hash
+        {
+            MyTreeMap obj();
+            obj.tm.put("nested", {"inner": obj});
+        }
+        assertEq(6, MyTreeMap::dc);
+
+        # Test 6: Object nested in list
+        {
+            MyTreeMap obj();
+            obj.tm.put("list", (obj,));
+        }
+        assertEq(7, MyTreeMap::dc);
     }
 
     gcTests() {

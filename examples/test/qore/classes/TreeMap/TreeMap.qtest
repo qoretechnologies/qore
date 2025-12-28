@@ -28,6 +28,7 @@ public class TreeMapTest inherits QUnit::Test {
         addTestCase("take", \testTake());
         addTestCase("getAll", \testGetAll());
         addTestCase("unmatched", \testUnmatched());
+        addTestCase("DGC tests", \testDgc());
 
         set_return_value(main());
     }
@@ -139,6 +140,104 @@ public class TreeMapTest inherits QUnit::Test {
         testAssertion("unmatched-6", \equals(), (("1"), (val)));
         int i;
         assertThrows("RUNTIME-OVERLOAD-ERROR", \tm.get(), ("abc/s/u/", \i), "throw exception");
+    }
+
+    testDgc() {
+        if (!HAVE_DETERMINISTIC_GC) {
+            testSkip("HAVE_DETERMINISTIC_GC is not defined");
+        }
+
+        # Test 1: Self-reference via TreeMap - object stores itself
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("self", obj);
+        }
+        assertEq(1, DgcTreeMapTest::dc, "self-reference via TreeMap");
+
+        # Test 2: Two-object cycle via TreeMap
+        {
+            DgcTreeMapTest obj1();
+            DgcTreeMapTest obj2();
+            obj1.tm.put("other", obj2);
+            obj2.tm.put("other", obj1);
+        }
+        assertEq(3, DgcTreeMapTest::dc, "two-object cycle via TreeMap");
+
+        # Test 3: Object in hash stored in TreeMap
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("nested", {"ref": obj});
+        }
+        assertEq(4, DgcTreeMapTest::dc, "object in hash stored in TreeMap");
+
+        # Test 4: Object in list stored in TreeMap
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("list", (1, obj, 3));
+        }
+        assertEq(5, DgcTreeMapTest::dc, "object in list stored in TreeMap");
+
+        # Test 5: Replace scannable value with non-scannable (negative test)
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("key", obj);
+            obj.tm.put("key", "simple string");  # Replace with non-scannable
+        }
+        assertEq(6, DgcTreeMapTest::dc, "replace scannable with non-scannable");
+
+        # Test 6: Take scannable value (negative test)
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("key", obj);
+            auto val = obj.tm.take("key");  # Remove the scannable value
+        }
+        assertEq(7, DgcTreeMapTest::dc, "take scannable value");
+
+        # Test 7: Multiple entries, only some scannable
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("str", "string");
+            obj.tm.put("int", 42);
+            obj.tm.put("self", obj);
+            obj.tm.put("float", 3.14);
+        }
+        assertEq(8, DgcTreeMapTest::dc, "multiple entries with mixed types");
+
+        # Test 8: Deep nesting - hash containing list containing object
+        {
+            DgcTreeMapTest obj();
+            obj.tm.put("deep", {"level1": {"level2": (obj,)}});
+        }
+        assertEq(9, DgcTreeMapTest::dc, "deep nesting with object");
+
+        # Test 9: Multiple TreeMaps with cross-references
+        {
+            DgcTreeMapTest obj1();
+            DgcTreeMapTest obj2();
+            obj1.tm.put("ref", obj2);
+            obj2.tm.put("ref", obj1);
+            obj1.tm.put("self", obj1);
+            obj2.tm.put("self", obj2);
+        }
+        assertEq(11, DgcTreeMapTest::dc, "multiple TreeMaps with cross-references");
+
+        # Test 10: Empty TreeMap destruction (corner case)
+        {
+            DgcTreeMapTest obj();
+            # Don't put anything - just destroy
+        }
+        assertEq(12, DgcTreeMapTest::dc, "empty TreeMap destruction");
+    }
+}
+
+class DgcTreeMapTest {
+    public {
+        TreeMap tm();
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++dc;
     }
 }
 

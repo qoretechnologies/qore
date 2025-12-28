@@ -103,6 +103,9 @@
       - fixed a bug in AbstractDataProviderBulkOperation::setupInitialRecord() that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular
+      references; the TreeMap class now supports deterministic garbage collection
+      (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
