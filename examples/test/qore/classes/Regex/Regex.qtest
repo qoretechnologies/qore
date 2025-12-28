@@ -1,0 +1,226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class RegexTest
+
+public class RegexTest inherits QUnit::Test {
+    constructor() : Test("Regex", "1.0") {
+        addTestCase("basic match test", \basicMatchTest());
+        addTestCase("case sensitivity test", \caseSensitivityTest());
+        addTestCase("multiline test", \multilineTest());
+        addTestCase("dotall test", \dotallTest());
+        addTestCase("extended test", \extendedTest());
+        addTestCase("extract test", \extractTest());
+        addTestCase("unicode test", \unicodeTest());
+        addTestCase("copy constructor test", \copyConstructorTest());
+        addTestCase("getter methods test", \getterMethodsTest());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner cases test", \cornerCasesTest());
+
+        set_return_value(main());
+    }
+
+    private basicMatchTest() {
+        Regex r("\\d+");
+        assertTrue(r.match("abc123def"));
+        assertFalse(r.match("abcdef"));
+
+        Regex word("\\bword\\b");
+        assertTrue(word.match("a word here"));
+        assertFalse(word.match("awordhere"));
+
+        # Test anchored patterns
+        Regex start("^hello");
+        assertTrue(start.match("hello world"));
+        assertFalse(start.match("world hello"));
+
+        Regex end("world$");
+        assertTrue(end.match("hello world"));
+        assertFalse(end.match("world hello"));
+    }
+
+    private caseSensitivityTest() {
+        # Without RE_Caseless
+        Regex r("hello");
+        assertTrue(r.match("hello"));
+        assertFalse(r.match("HELLO"));
+        assertFalse(r.match("Hello"));
+
+        # With RE_Caseless
+        Regex ri("hello", RE_Caseless);
+        assertTrue(ri.match("hello"));
+        assertTrue(ri.match("HELLO"));
+        assertTrue(ri.match("Hello"));
+        assertTrue(ri.match("hElLo"));
+    }
+
+    private multilineTest() {
+        string text = "line1\nline2\nline3";
+
+        # Without RE_MultiLine, ^ only matches start of string
+        Regex r("^line");
+        assertTrue(r.match(text));  # Matches "line1" at start
+
+        # With RE_MultiLine, ^ matches start of each line
+        Regex rm("^line2", RE_MultiLine);
+        assertTrue(rm.match(text));
+
+        # Without RE_MultiLine, $ only matches end of string
+        Regex r2("line3$");
+        assertTrue(r2.match(text));
+
+        Regex r3("line1$");
+        assertFalse(r3.match(text));  # line1 is not at end
+
+        # With RE_MultiLine, $ matches end of each line
+        Regex r4("line1$", RE_MultiLine);
+        assertTrue(r4.match(text));
+    }
+
+    private dotallTest() {
+        string text = "hello\nworld";
+
+        # Without RE_DotAll, . doesn't match newline
+        Regex r("hello.world");
+        assertFalse(r.match(text));
+
+        # With RE_DotAll, . matches newline
+        Regex rd("hello.world", RE_DotAll);
+        assertTrue(rd.match(text));
+    }
+
+    private extendedTest() {
+        # With RE_Extended, whitespace is ignored and # starts comments
+        Regex r("\\d{3}  # area code
+                 -      # separator
+                 \\d{4} # number", RE_Extended);
+        assertTrue(r.match("555-1234"));
+        assertFalse(r.match("55-1234"));
+    }
+
+    private extractTest() {
+        # Basic extraction
+        Regex r("(\\w+)@(\\w+)\\.(\\w+)");
+        *list<*string> parts = r.extractGroups("user@example.com");
+        assertEq(3, parts.size());
+        assertEq("user", parts[0]);
+        assertEq("example", parts[1]);
+        assertEq("com", parts[2]);
+
+        # No match returns NOTHING
+        assertNothing(r.extractGroups("not an email"));
+
+        # Nested groups
+        Regex nested("((\\d+)-(\\d+))");
+        parts = nested.extractGroups("123-456");
+        assertEq(3, parts.size());
+        assertEq("123-456", parts[0]);
+        assertEq("123", parts[1]);
+        assertEq("456", parts[2]);
+
+        # Optional groups - when optional group doesn't match, only matched groups are returned
+        Regex opt("(\\d+)(-\\d+)?");
+        parts = opt.extractGroups("123");
+        assertEq(1, parts.size());
+        assertEq("123", parts[0]);
+
+        # When optional group matches, it's included
+        parts = opt.extractGroups("123-456");
+        assertEq(2, parts.size());
+        assertEq("123", parts[0]);
+        assertEq("-456", parts[1]);
+    }
+
+    private unicodeTest() {
+        # Test with unicode strings
+        Regex r("\\w+");
+        assertTrue(r.match("hello"));
+
+        # Test with non-ASCII characters
+        Regex utf("café");
+        assertTrue(utf.match("I love café"));
+
+        Regex emoji("🎉");
+        assertTrue(emoji.match("party 🎉 time"));
+    }
+
+    private copyConstructorTest() {
+        Regex r("\\d+", RE_Caseless);
+        Regex copy = r.copy();
+
+        assertTrue(copy.match("123"));
+        assertEq(r.getPattern(), copy.getPattern());
+        assertEq(r.getOptions(), copy.getOptions());
+
+        # Verify they're independent
+        assertTrue(r.match("456"));
+        assertTrue(copy.match("789"));
+    }
+
+    private getterMethodsTest() {
+        Regex r("\\d{3}-\\d{4}", RE_Caseless | RE_MultiLine);
+        assertEq("\\d{3}-\\d{4}", r.getPattern());
+        assertEq(RE_Caseless | RE_MultiLine, r.getOptions());
+
+        Regex simple("hello");
+        assertEq("hello", simple.getPattern());
+        assertEq(0, simple.getOptions());
+    }
+
+    private negativeTests() {
+        # Invalid pattern
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new Regex("[invalid"); });
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new Regex("(unclosed"); });
+        assertThrows("REGEX-COMPILATION-ERROR", sub() { new Regex("(?P<"); });
+
+        # Empty pattern is valid
+        Regex empty("");
+        assertTrue(empty.match("anything"));  # Empty pattern matches anything
+
+        # Pattern with no capturing groups - extract returns NOTHING for a match
+        Regex noGroups("hello");
+        assertNothing(noGroups.extractGroups("hello world"));
+    }
+
+    private cornerCasesTest() {
+        # Empty string matching
+        Regex r("^$");
+        assertTrue(r.match(""));
+        assertFalse(r.match("not empty"));
+
+        # Very long pattern
+        string longPattern = "";
+        for (int i = 0; i < 100; i++) {
+            longPattern += "a";
+        }
+        Regex longRe(longPattern);
+        assertFalse(longRe.match("short"));
+        assertTrue(longRe.match(longPattern));
+
+        # Special regex characters
+        Regex special("\\[\\]\\(\\)\\{\\}\\^\\$\\.\\*\\+\\?\\|\\\\");
+        assertTrue(special.match("[](){}^$.*+?|\\"));
+
+        # Lookahead
+        Regex lookahead("foo(?=bar)");
+        assertTrue(lookahead.match("foobar"));
+        assertFalse(lookahead.match("foobaz"));
+
+        # Lookbehind
+        Regex lookbehind("(?<=foo)bar");
+        assertTrue(lookbehind.match("foobar"));
+        assertFalse(lookbehind.match("bazbar"));
+
+        # Negative lookahead
+        Regex negLookahead("foo(?!bar)");
+        assertFalse(negLookahead.match("foobar"));
+        assertTrue(negLookahead.match("foobaz"));
+    }
+}
