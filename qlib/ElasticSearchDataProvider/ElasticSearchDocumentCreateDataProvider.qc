@@ -217,7 +217,7 @@ public class ElasticSearchDocumentCreateRequestDataType inherits DataProvider::H
             },
             "require_alias": {
                 "type": SoftBoolStringType,
-                "display_name": "Require Alias",
+                "display_name": "Require Alias?",
                 "short_desc": "Destination must be alias",
                 "desc": "If `true` (default `false`), the destination must be an index alias",
                 "example_value": False,

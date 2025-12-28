@@ -243,21 +243,21 @@ public class ElasticSearchAggregationRequestDataType inherits DataProvider::Hash
             },
             "request_cache": {
                 "type": SoftBoolStringType,
-                "display_name": "Request Cache",
+                "display_name": "Request Cache?",
                 "short_desc": "Cache the request",
                 "desc": "Whether to cache the request",
                 "example_value": True,
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
-                "display_name": "Ignore Unavailable",
+                "display_name": "Ignore Unavailable?",
                 "short_desc": "Ignore unavailable indices",
                 "desc": "Whether to ignore unavailable indices",
                 "example_value": True,
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
-                "display_name": "Allow No Indices",
+                "display_name": "Allow No Indices?",
                 "short_desc": "Allow no matching indices",
                 "desc": "Whether to allow wildcards that match no indices",
                 "example_value": True,
@@ -332,7 +332,7 @@ public class ElasticSearchAggregationResponseDataType inherits DataProvider::Has
             },
             "timed_out": {
                 "type": BoolType,
-                "display_name": "Timed Out",
+                "display_name": "Timed Out?",
                 "short_desc": "Whether request timed out",
                 "desc": "Whether the request timed out",
                 "example_value": False,

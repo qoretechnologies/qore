@@ -215,7 +215,7 @@ public class ElasticSearchScrollSearchRequestDataType inherits DataProvider::Has
             },
             "clear": {
                 "type": SoftBoolStringType,
-                "display_name": "Clear Scroll",
+                "display_name": "Clear Scroll?",
                 "short_desc": "Clear scroll context",
                 "desc": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling "
                     "to free up resources.",
@@ -244,7 +244,7 @@ public class ElasticSearchScrollSearchRequestDataType inherits DataProvider::Has
             },
             "request_cache": {
                 "type": SoftBoolStringType,
-                "display_name": "Request Cache",
+                "display_name": "Request Cache?",
                 "short_desc": "Cache the request",
                 "desc": "Whether to cache the request (for initial scroll only)",
                 "example_value": True,
@@ -318,7 +318,7 @@ public class ElasticSearchScrollSearchResponseDataType inherits DataProvider::Ha
             },
             "timed_out": {
                 "type": BoolOrNothingType,
-                "display_name": "Timed Out",
+                "display_name": "Timed Out?",
                 "short_desc": "Whether request timed out",
                 "desc": "Whether the request timed out",
                 "example_value": False,
@@ -337,7 +337,7 @@ public class ElasticSearchScrollSearchResponseDataType inherits DataProvider::Ha
             },
             "succeeded": {
                 "type": BoolOrNothingType,
-                "display_name": "Succeeded",
+                "display_name": "Succeeded?",
                 "short_desc": "Clear operation success",
                 "desc": "For clear operations: whether the scroll context was successfully cleared",
                 "example_value": True,

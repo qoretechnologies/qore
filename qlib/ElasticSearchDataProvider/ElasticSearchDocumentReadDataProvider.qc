@@ -147,14 +147,14 @@ class ElasticSearchDocumentReadRequestDataType inherits DataProvider::HashDataTy
             },
             "realtime": {
                 "type": SoftBoolStringType,
-                "display_name": "Realtime",
+                "display_name": "Realtime?",
                 "short_desc": "Real-time read",
                 "desc": "If `true` (the default), the request is real-time as opposed to near-real-time",
                 "example_value": True,
             },
             "refresh": {
                 "type": SoftBoolStringType,
-                "display_name": "Refresh",
+                "display_name": "Refresh?",
                 "short_desc": "Refresh before read",
                 "desc": "If `true` (default `false`), the request refreshes the relevant shard before retrieving the "
                     "document",
@@ -169,7 +169,7 @@ class ElasticSearchDocumentReadRequestDataType inherits DataProvider::HashDataTy
             },
             "stored_fields": {
                 "type": SoftBoolStringType,
-                "display_name": "Stored Fields",
+                "display_name": "Stored Fields?",
                 "short_desc": "Retrieve stored fields",
                 "desc": "If `true` (default `false`), retrieves the document fields stored in the index rather than "
                     "the document `_source`",
@@ -254,7 +254,7 @@ public class ElasticSearchDocumentReadResponseDataType inherits DataProvider::Ha
             },
             "found": {
                 "type": BoolType,
-                "display_name": "Found",
+                "display_name": "Found?",
                 "short_desc": "Document exists",
                 "desc": "Indicates whether the document exists: `true` or `false`",
                 "example_value": True,

@@ -203,8 +203,11 @@ public class ElasticSearchIndexCreateResponseDataType inherits ElasticSearchAckn
         const Fields = {
             "shards_acknowledged": {
                 "type": BoolType,
+                "display_name": "Shards Acknowledged?",
+                "short_desc": "Shards started in time",
                 "desc": "Indicates whether the requisite number of shard copies were started for each shard in the "
                     "index before timing out",
+                "example_value": True,
             },
             "index": {
                 "type": StringType,

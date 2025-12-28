@@ -31,7 +31,7 @@ public class ElasticSearchAcknowledgedDataType inherits DataProvider::HashDataTy
         const Fields = {
             "acknowledged": {
                 "type": BoolType,
-                "display_name": "Acknowledged",
+                "display_name": "Acknowledged?",
                 "short_desc": "Request acknowledged",
                 "desc": "The request has been acknowledged by the server",
                 "example_value": True,

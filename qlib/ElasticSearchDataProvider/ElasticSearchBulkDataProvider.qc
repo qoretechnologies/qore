@@ -230,7 +230,7 @@ public class ElasticSearchBulkOperationItemDataType inherits DataProvider::HashD
             },
             "doc_as_upsert": {
                 "type": SoftBoolStringType,
-                "display_name": "Doc As Upsert",
+                "display_name": "Doc As Upsert?",
                 "short_desc": "Use doc as upsert",
                 "desc": "For update: if true, use the doc as the upsert document if the document does not exist",
                 "example_value": True,
@@ -334,7 +334,7 @@ public class ElasticSearchBulkRequestDataType inherits DataProvider::HashDataTyp
             },
             "require_alias": {
                 "type": SoftBoolStringType,
-                "display_name": "Require Alias",
+                "display_name": "Require Alias?",
                 "short_desc": "Destination must be alias",
                 "desc": "If true, the destination must be an index alias",
                 "example_value": False,

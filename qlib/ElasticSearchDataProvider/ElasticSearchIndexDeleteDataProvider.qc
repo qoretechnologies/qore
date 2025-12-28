@@ -132,7 +132,7 @@ class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataTyp
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
-                "display_name": "Allow No Indices",
+                "display_name": "Allow No Indices?",
                 "short_desc": "Allow no matching indices",
                 "desc": "If `false` (default `true`), the request returns an error if any wildcard expression, index "
                     "alias, or `_all` value targets only missing or closed indices. This behavior applies even if "
@@ -158,7 +158,7 @@ class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataTyp
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
-                "display_name": "Ignore Unavailable",
+                "display_name": "Ignore Unavailable?",
                 "short_desc": "Ignore missing indices",
                 "desc": "If `false, the request returns an error if it targets a missing or closed "
                     "index. Defaults to `false`",

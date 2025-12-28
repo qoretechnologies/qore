@@ -136,7 +136,7 @@ class ElasticSearchIndexReadRequestDataType inherits DataProvider::HashDataType 
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
-                "display_name": "Allow No Indices",
+                "display_name": "Allow No Indices?",
                 "short_desc": "Allow no matching indices",
                 "desc": "f `false`, the request returns an error if any wildcard expression, index alias, or `_all` "
                     "value targets only missing or closed indices. This behavior applies even if the request targets "
@@ -170,21 +170,21 @@ class ElasticSearchIndexReadRequestDataType inherits DataProvider::HashDataType 
             },
             "flat_settings": {
                 "type": SoftBoolStringType,
-                "display_name": "Flat Settings",
+                "display_name": "Flat Settings?",
                 "short_desc": "Return flat settings",
                 "desc": "If `true`, returns settings in flat format",
                 "example_value": False,
             },
             "include_defaults": {
                 "type": SoftBoolStringType,
-                "display_name": "Include Defaults",
+                "display_name": "Include Defaults?",
                 "short_desc": "Include default settings",
                 "desc": "If `true`, return all default settings in the response",
                 "example_value": False,
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
-                "display_name": "Ignore Unavailable",
+                "display_name": "Ignore Unavailable?",
                 "short_desc": "Ignore missing indices",
                 "desc": "If `false`, the request returns an error if it targets a missing or closed index",
                 "example_value": False,

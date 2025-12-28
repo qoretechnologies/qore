@@ -248,7 +248,7 @@ public class ElasticSearchBulkResponseDataType inherits DataProvider::HashDataTy
             },
             "errors": {
                 "type": BoolType,
-                "display_name": "Errors",
+                "display_name": "Errors?",
                 "short_desc": "Whether any operations failed",
                 "desc": "If true, one or more of the operations in the bulk request did not complete successfully",
                 "example_value": False,

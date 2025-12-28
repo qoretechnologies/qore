@@ -161,7 +161,7 @@ public class ElasticSearchDocumentUpdateRequestDataType inherits DataProvider::H
             },
             "require_alias": {
                 "type": SoftBoolStringType,
-                "display_name": "Require Alias",
+                "display_name": "Require Alias?",
                 "short_desc": "Destination must be alias",
                 "desc": "If `true` (default `false`), the destination must be an index alias",
                 "example_value": False,
@@ -249,14 +249,14 @@ public class ElasticSearchDocumentUpdateRequestDataType inherits DataProvider::H
             },
             "detect_noop": {
                 "type": BoolOrNothingType,
-                "display_name": "Detect Noop",
+                "display_name": "Detect Noop?",
                 "short_desc": "Ignore no-op updates",
                 "desc": "Ignore noops",
                 "example_value": True,
             },
             "doc_as_upsert": {
                 "type": BoolOrNothingType,
-                "display_name": "Doc As Upsert",
+                "display_name": "Doc As Upsert?",
                 "short_desc": "Use doc as upsert",
                 "desc": "Instead of sending a partial doc plus an upsert doc, you can set `doc_as_upsert` to `true` "
                     "to use the contents of `doc` as the upsert value",
@@ -264,7 +264,7 @@ public class ElasticSearchDocumentUpdateRequestDataType inherits DataProvider::H
             },
             "scripted_upsert": {
                 "type": BoolOrNothingType,
-                "display_name": "Scripted Upsert",
+                "display_name": "Scripted Upsert?",
                 "short_desc": "Run script on upsert",
                 "desc": "To run the script whether or not the document exists",
                 "example_value": False,

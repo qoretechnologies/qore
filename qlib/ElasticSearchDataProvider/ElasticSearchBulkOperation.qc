@@ -92,7 +92,7 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         }
 
         # Send bulk request
-        hash<auto> response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
+        *hash<auto> response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
 
         # Handle partial failures
         if (response.errors) {

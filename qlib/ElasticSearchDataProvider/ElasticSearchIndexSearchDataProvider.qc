@@ -144,7 +144,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "allow_no_indices": {
                 "type": SoftBoolStringType,
-                "display_name": "Allow No Indices",
+                "display_name": "Allow No Indices?",
                 "short_desc": "Allow no matching indices",
                 "desc": "If `false` (default `true`), the request returns an error if any wildcard expression, index "
                     "alias, or `_all` value targets only missing or closed indices. This behavior applies even if "
@@ -154,7 +154,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "allow_partial_search_results": {
                 "type": SoftBoolStringType,
-                "display_name": "Allow Partial Results",
+                "display_name": "Allow Partial Results?",
                 "short_desc": "Return partial results",
                 "desc": "If `true`, returns partial results if there are shard request timeouts or shard failures. "
                     "If `false`, returns an error with no partial results.\n\n"
@@ -172,7 +172,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "analyze_wildcard": {
                 "type": SoftBoolStringType,
-                "display_name": "Analyze Wildcard",
+                "display_name": "Analyze Wildcard?",
                 "short_desc": "Analyze wildcards",
                 "desc": "If `true` (default `false`), wildcard and prefix queries are analyzed.\n\n"
                     "This parameter can only be used when the `q` query string parameter is specified",
@@ -189,7 +189,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "ccs_minimize_roundtrips": {
                 "type": SoftBoolStringType,
-                "display_name": "CCS Minimize Roundtrips",
+                "display_name": "CCS Minimize Roundtrips?",
                 "short_desc": "Minimize CCS roundtrips",
                 "desc": "If `true` (the default), network round-trips between the coordinating node and the remote "
                     "clusters are minimized when executing cross-cluster search (CCS) requests",
@@ -237,7 +237,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "explain_query": {
                 "type": SoftBoolStringType,
-                "display_name": "Explain Query",
+                "display_name": "Explain Query?",
                 "short_desc": "Return score details",
                 "desc": "If `true` (default `false`), returns detailed information about score computation as part "
                     "of a hit",
@@ -254,14 +254,14 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "ignore_throttled": {
                 "type": SoftBoolStringType,
-                "display_name": "Ignore Throttled",
+                "display_name": "Ignore Throttled?",
                 "short_desc": "Ignore frozen indices",
                 "desc": "If `true` (the default), concrete, expanded or aliased indices will be ignored when frozen",
                 "example_value": True,
             },
             "ignore_unavailable": {
                 "type": SoftBoolStringType,
-                "display_name": "Ignore Unavailable",
+                "display_name": "Ignore Unavailable?",
                 "short_desc": "Ignore missing indices",
                 "desc": "If `false` (the default), the request returns an error if it targets a missing or closed "
                     "index",
@@ -269,7 +269,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "lenient": {
                 "type": SoftBoolStringType,
-                "display_name": "Lenient",
+                "display_name": "Lenient?",
                 "short_desc": "Ignore format errors",
                 "desc": "If `true` (default `false`), format-based query failures (such as providing text to a "
                     "numeric field) in the query string will be ignored.\n\n"
@@ -336,7 +336,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "request_cache": {
                 "type": SoftBoolStringType,
-                "display_name": "Request Cache",
+                "display_name": "Request Cache?",
                 "short_desc": "Enable result caching",
                 "desc": "If `true`, the caching of search results is enabled for requests where size is `0`. "
                     "Defaults to index level settings",
@@ -344,7 +344,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "rest_total_hits_as_int": {
                 "type": SoftBoolStringType,
-                "display_name": "Total Hits as Int",
+                "display_name": "Total Hits as Int?",
                 "short_desc": "Return total as integer",
                 "desc": "Indicates whether `hits.total` should be rendered as an integer or an object in the rest "
                     "search response (default `false`)",
@@ -383,7 +383,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "seq_no_primary_term_query": {
                 "type": SoftBoolStringType,
-                "display_name": "Seq No Primary Term",
+                "display_name": "Seq No Primary Term?",
                 "short_desc": "Return seq_no/primary_term",
                 "desc": "If `true`, returns sequence number and primary term of the last modification of each hit",
                 "example_value": False,
@@ -514,7 +514,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "track_scores": {
                 "type": SoftBoolStringType,
-                "display_name": "Track Scores",
+                "display_name": "Track Scores?",
                 "short_desc": "Calculate scores",
                 "desc": "If `true` (default `false`), calculate and return document scores, even if the scores are "
                     "not used for sorting",
@@ -531,7 +531,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "typed_keys": {
                 "type": SoftBoolStringType,
-                "display_name": "Typed Keys",
+                "display_name": "Typed Keys?",
                 "short_desc": "Prefix agg names",
                 "desc": "If `true` (the default), aggregation and suggester names are be prefixed by their "
                     "respective types in the response",
@@ -539,7 +539,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "version_query": {
                 "type": SoftBoolStringType,
-                "display_name": "Version Query",
+                "display_name": "Version Query?",
                 "short_desc": "Return doc version",
                 "desc": "If `true`, returns document version as part of a hit",
                 "example_value": False,
@@ -601,7 +601,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "explain": {
                 "type": BoolOrNothingType,
-                "display_name": "Explain",
+                "display_name": "Explain?",
                 "short_desc": "Explain scoring",
                 "desc": "If `true` (default `false`), returns detailed information about score computation as part "
                     "of a hit",
@@ -723,7 +723,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "seq_no_primary_term": {
                 "type": SoftBoolStringType,
-                "display_name": "Seq No Primary Term",
+                "display_name": "Seq No Primary Term?",
                 "short_desc": "Return seq_no/primary_term",
                 "desc": "If `true`, returns sequence number and primary term of the last modification of each hit",
                 "example_value": False,
@@ -792,7 +792,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
             },
             "version": {
                 "type": SoftBoolStringType,
-                "display_name": "Version",
+                "display_name": "Version?",
                 "short_desc": "Return doc version",
                 "desc": "If `true` (default `false`), returns document version as part of a hit",
                 "example_value": False,
