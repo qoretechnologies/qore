@@ -147,7 +147,8 @@ echo "QORE_DB_CONNSTR_FREETDS: ${QORE_DB_CONNSTR_FREETDS}"
 echo "QORE_DB_CONNSTR_MYSQL: ${QORE_DB_CONNSTR_MYSQL}"
 echo "QORE_DB_CONNSTR_PGSQL: ${QORE_DB_CONNSTR_PGSQL}"
 echo "QORE_DB_CONNSTR_ORACLE: ${QORE_DB_CONNSTR_ORACLE}"
-echo "REDIS_URL: ${REDIS_URL}"
+# Mask credentials in REDIS_URL (replace user:pass@ with ***@)
+echo "REDIS_URL: $(echo "${REDIS_URL}" | sed 's|://[^@]*@|://***@|')"
 
 if [ $MEASURE_TIME -eq 1 ]; then
     printf "TIME_CMD: %s\n" "$TIME_CMD"
