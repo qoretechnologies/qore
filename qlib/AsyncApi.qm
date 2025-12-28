@@ -556,12 +556,12 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
             if (exclusiveMax) {
                 if (value >= maximum)
                     throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %d)",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
                             name, channel, operation, maximum, value);
             } else {
                 if (value > maximum)
                     throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %d)",
+                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
                             name, channel, operation, maximum, value);
             }
         }
@@ -570,8 +570,8 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
         if (exists exclusiveMaxValue) {
             if (value >= exclusiveMaxValue)
                 throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %f, "
-                        "actual: %d)", name, channel, operation, exclusiveMaxValue, value);
+                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %y, "
+                        "actual: %y)", name, channel, operation, exclusiveMaxValue, value);
         }
 
         # Check minimum constraint
@@ -579,12 +579,12 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
             if (exclusiveMin) {
                 if (value <= minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %d)",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
                             name, channel, operation, minimum, value);
             } else {
                 if (value < minimum)
                     throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %d)",
+                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
                             name, channel, operation, minimum, value);
             }
         }
@@ -593,14 +593,14 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
         if (exists exclusiveMinValue) {
             if (value <= exclusiveMinValue)
                 throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %f, "
-                        "actual: %d)", name, channel, operation, exclusiveMinValue, value);
+                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %y, "
+                        "actual: %y)", name, channel, operation, exclusiveMinValue, value);
         }
 
         if (enum && !enum{value})
             throw "SCHEMA-VALIDATION-ERROR",
                 sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values "
-                    "(enum: %y, actual: %d)", name, channel, operation, keys enum, value);
+                    "(enum: %y, actual: %y)", name, channel, operation, keys enum, value);
     }
 
     private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
@@ -1011,7 +1011,12 @@ public class AsyncApi3Loader {
         while (it.next()) {
             string line = trim(it.getValue());
             if (line.size()) {
-                if (line =~ /^([^{])+:/ || line =~ /^(---|%YAML)/ || line =~ /^\{[a-z0-9_]+:/) {
+                # Check for JSON indicators first (starts with { or [)
+                if (line =~ /^[\[{]/) {
+                    return "json";
+                }
+                # Check for YAML indicators (key: value format or document markers)
+                if (line =~ /^[^{[\s]+\s*:/ || line =~ /^(---|%YAML)/i) {
                     return "yaml";
                 }
                 return "json";
