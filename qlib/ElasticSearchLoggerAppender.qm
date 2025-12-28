@@ -314,8 +314,10 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         if (isOpened) {
             try {
                 closeImpl();
-            } catch () {
-                # Ignore errors during cleanup
+            } catch (hash<ExceptionInfo> ex) {
+                # Log to stderr; exceptions must not propagate from a destructor
+                stderr.printf("ElasticSearchLoggerAppender: error during cleanup (some log events may be lost): "
+                    "%s: %s\n", ex.err, ex.desc);
             }
         }
     }

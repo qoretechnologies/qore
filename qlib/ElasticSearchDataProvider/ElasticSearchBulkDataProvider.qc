@@ -124,6 +124,12 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
                     "update, delete", action);
             }
 
+            # Validate that doc is provided for index/create operations
+            if ((action == "index" || action == "create") && !op.doc) {
+                throw "ELASTICSEARCH-BULK-ERROR", sprintf("Missing 'doc' field for '%s' operation; a document is "
+                    "required for index and create actions", action);
+            }
+
             # Build action metadata
             hash<auto> action_meta = {};
             if (op._index) {
