@@ -149,6 +149,7 @@ void TreeMapData::destructor(ExceptionSink* xsink) {
         i->second.discard(xsink);
     }
     data.clear();
+    scan_count = 0;
 }
 
 void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {

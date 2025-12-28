@@ -70,6 +70,14 @@ public:
     // called from destructor - does not call decScanPrivateData (object being destroyed)
     DLLLOCAL void destructor(ExceptionSink* xsink);
 
+    // override deref to ensure destructor is called when reference count drops to 0
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            destructor(xsink);
+            delete this;
+        }
+    }
+
     DLLLOCAL void put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink);
 
     // DGC support - scans stored values for circular references

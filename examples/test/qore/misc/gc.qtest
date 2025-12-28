@@ -135,7 +135,7 @@ class DgcTest inherits QUnit::Test {
     constructor() : Test("GcTest", "1.0") {
         addTestCase("issue 3841 test", \issue3841Test());
         addTestCase("issue3101Test", \issue3101Test());
-        addTestCase("issue5025Test", \issue5025Test());
+        addTestCase("issue5028Test", \issue5028Test());
         addTestCase("GcTests", \gcTests());
         addTestCase("ClosureTests", \closureTests());
         addTestCase("Destructor order", \dtorOrder());
@@ -208,8 +208,8 @@ class DgcTest inherits QUnit::Test {
         assertEq(6, MyQueue::dc);
     }
 
-    # issue #5025: TreeMap DGC support
-    issue5025Test() {
+    # issue #5028: TreeMap DGC support
+    issue5028Test() {
         # Test 1: Self-reference via TreeMap
         {
             MyTreeMap obj();
