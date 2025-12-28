@@ -2380,20 +2380,34 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # create SSL certificate and private key objects from PEM files if passed
         if (opts.cert) {
-            setupSslIntern();
+            # In async mode (no_start_main_thread), don't configure SSL on the listener socket
+            # because startPollAccept() on an SSL socket doesn't properly handle client certificate
+            # verification. Instead, we'll manually upgrade each accepted connection to SSL.
+            if (!opts.no_start_main_thread) {
+                setupSslIntern();
+            }
             if (opts.get_remote_certs) {
                 # issue #3512: enable remote certificates to be retrieved by default for HTTPS listeners
-                captureRemoteCertificates();
+                if (!opts.no_start_main_thread) {
+                    captureRemoteCertificates();
+                }
                 # get certificates from peers
                 ssl_verify_flags = opts.ssl_verify_flags |= SSL_VERIFY_PEER;
                 get_remote_certs = True;
             }
             if (opts.ssl_verify_flags) {
-                setSslVerifyMode(ssl_verify_flags = opts.ssl_verify_flags);
+                if (!opts.no_start_main_thread) {
+                    setSslVerifyMode(ssl_verify_flags = opts.ssl_verify_flags);
+                } else {
+                    ssl_verify_flags = opts.ssl_verify_flags;
+                }
             }
             if (exists opts.ssl_accept_all_certs) {
                 # accept all certificates
-                acceptAllCertificates(ssl_accept_all_certs = opts.ssl_accept_all_certs);
+                if (!opts.no_start_main_thread) {
+                    acceptAllCertificates(ssl_accept_all_certs = opts.ssl_accept_all_certs);
+                }
+                ssl_accept_all_certs = opts.ssl_accept_all_certs;
             }
             ssl = True;
         }
@@ -2676,6 +2690,33 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     private softlist<string> getSslVerifyModeList() {
         return (map $1.value, SslVerifyMap.pairIterator(), ssl_verify_flags & $1.key.toInt()) ?* "SSL_VERIFY_NONE";
+    }
+
+    #! Returns the SSL verify flags
+    /** @return the SSL verification flags (e.g. SSL_VERIFY_PEER)
+
+        @since HttpServer 1.5
+    */
+    int getSslVerifyFlags() {
+        return ssl_verify_flags;
+    }
+
+    #! Returns the SSL certificate object for async mode
+    /** @return the SSL certificate object, or NOTHING if not configured
+
+        @since HttpServer 1.5
+    */
+    *SSLCertificate getSslCertificateObject() {
+        return opts.cert;
+    }
+
+    #! Returns the SSL private key object for async mode
+    /** @return the SSL private key object, or NOTHING if not configured
+
+        @since HttpServer 1.5
+    */
+    *SSLPrivateKey getSslPrivateKeyObject() {
+        return opts.key;
     }
 
     auto removeUserThreadContext(*string k) {
@@ -4077,8 +4118,9 @@ class HttpServerIoController {
                                     new HttpServerAsyncIo::HttpAcceptPollOperation(
                                         linfo.listener,
                                         linfo.ssl,
-                                        linfo.listener.getSslCertificate(),
-                                        linfo.listener.getSslPrivateKey(),
+                                        linfo.listener.getSslCertificateObject(),
+                                        linfo.listener.getSslPrivateKeyObject(),
+                                        linfo.listener.getSslVerifyFlags(),
                                     );
                                 @debug(log(LoggerLevel::DEBUG, "ioThread: accept op created for listener %s", key));
                             } catch (hash<ExceptionInfo> ex) {

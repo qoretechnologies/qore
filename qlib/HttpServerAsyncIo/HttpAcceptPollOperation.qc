@@ -58,6 +58,9 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         #! SSL private key for the listener (if SSL) - can be SSLPrivateKey or data
         auto key;
 
+        #! SSL verify flags for client certificate verification
+        int ssl_verify_flags = SSL_VERIFY_NONE;
+
         #! Current poll operation being executed
         SocketPollOperation spop;
 
@@ -73,14 +76,17 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         @param ssl if True, perform SSL handshake after accept
         @param cert SSL certificate (SSLCertificate object or PEM data, required if ssl is True)
         @param key SSL private key (SSLPrivateKey object or PEM data, required if ssl is True)
+        @param ssl_verify_flags SSL verification flags for client certificate verification (e.g. SSL_VERIFY_PEER)
     */
-    constructor(Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING) {
+    constructor(Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
+            int ssl_verify_flags = SSL_VERIFY_NONE) {
         @assert(listener, "listener socket cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
         self.listener = listener;
         self.ssl = ssl;
         self.cert = cert;
         self.key = key;
+        self.ssl_verify_flags = ssl_verify_flags;
         # Start the accept poll operation
         spop = listener.startPollAccept();
         @assert(spop, "startPollAccept must return poll operation");
@@ -135,13 +141,18 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                             return NOTHING;
                         }
 
-                        # Transition to SSL handshake (for cases where listener doesn't auto-upgrade)
+                        # Transition to SSL handshake
                         state = STATE_SSL_HANDSHAKE;
                         if (cert) {
                             client_sock.setCertificate(cert);
                         }
                         if (key) {
                             client_sock.setPrivateKey(key);
+                        }
+                        # Set SSL verify mode and enable certificate capture for client certs
+                        if (ssl_verify_flags != SSL_VERIFY_NONE) {
+                            client_sock.setSslVerifyMode(ssl_verify_flags);
+                            client_sock.captureRemoteCertificates();
                         }
                         spop = client_sock.startPollUpgradeServerToSSL();
                         @assert(spop, "startPollUpgradeServerToSSL must return poll operation");
