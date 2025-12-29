@@ -1539,12 +1539,31 @@ public class AbstractHttpRequestHandler {
         stream = n_stream;
     }
 
-    #! returns @ref True "True" if the current connection is persistent, @ref False "False" if not
+    #! Returns @ref True "True" if the current connection is persistent, @ref False "False" if not
+    /** Persistent mode means that subsequent requests on the same connection will be handled
+        by the same thread, providing thread affinity for thread-local resources.
+
+        @return @ref True "True" if the current connection is in persistent mode
+    */
     bool isPersistent() {
         return boolean(get_thread_data(PersistenceThreadKey));
     }
 
-    #! called externally to notify the handler that the connection will be persistent
+    #! Sets or clears persistent mode for the current connection
+    /** When persistent mode is enabled, the server ensures that all subsequent requests
+        on this connection are handled by the same thread until persistence is released.
+        This is important for handlers that use thread-local resources like database
+        transactions or DatasourcePool handles.
+
+        @par Async I/O Mode Behavior
+        In async I/O mode, when a handler calls \c setPersistent(True), the connection
+        automatically switches from async dispatch to synchronous/dedicated thread mode.
+        The thread that processed the initial request continues to handle all subsequent
+        requests on that connection until \c setPersistent(False) is called, at which
+        point the connection returns to async I/O handling.
+
+        @param p if @ref True "True", enables persistent mode; if @ref False "False", disables it
+    */
     setPersistent(bool p = True) {
         if (p) {
             save_thread_data((PersistenceThreadKey: True));
