@@ -14,24 +14,31 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/RestClient.qm
 
-# mongodb builtin module - uses QORE_MODULE_DIR
-%requires mongodb
+# mongodb builtin module - optional, may not be built if libmongoc is not available
+%try-module mongodb
+%define NoMongoDB
+%endtry
 
-# Module under test - relative path
+# Module under test - also optional since it requires mongodb
+%ifndef NoMongoDB
 %requires ../../../../qlib/MongoDbDataProvider
+%endif
 
 %exec-class MongoDbDataProviderTest
 
 public class MongoDbDataProviderTest inherits QUnit::Test {
     private {
         *string url;
+%ifndef NoMongoDB
         *MongoClient client;
+%endif
         string test_db = "qore_data_provider_test";
         string test_coll = "test_collection";
     }
 
     constructor() : Test("MongoDbDataProviderTest", "1.0") {
         url = ENV.MONGODB_URL;
+%ifndef NoMongoDB
         addTestCase("connection test", \connectionTest());
         addTestCase("factory test", \factoryTest());
         addTestCase("data provider hierarchy test", \hierarchyTest());
@@ -46,7 +53,21 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("invalid connection test", \invalidConnectionTest());
+%else
+        addTestCase("module check", \moduleCheck());
+%endif
         set_return_value(main());
+    }
+
+%ifdef NoMongoDB
+    moduleCheck() {
+        testSkip("mongodb module not available (libmongoc not installed)");
+    }
+%endif
+
+%ifndef NoMongoDB
+    private checkModule() {
+        # Module is available, nothing to do
     }
 
     private bool ensureConnection() {
@@ -81,6 +102,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     connectionTest() {
+        checkModule();
         if (!url) {
             testSkip("MONGODB_URL not set");
             return;
@@ -97,6 +119,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     factoryTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         # Test factory creation
@@ -108,6 +131,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     hierarchyTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -147,6 +171,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     insertProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -185,6 +210,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     findProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -247,6 +273,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     updateProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -299,6 +326,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     deleteProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -336,6 +364,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     aggregateProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -374,6 +403,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     bulkProviderTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -412,6 +442,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     recordOperationsTest() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -455,6 +486,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     negativeTests() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -509,6 +541,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     connectionSchemeTest() {
+        checkModule();
         if (!url) {
             testSkip("MONGODB_URL not set");
             return;
@@ -521,6 +554,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     cornerCaseTests() {
+        checkModule();
         if (!ensureConnection()) return;
 
         on_exit cleanup();
@@ -660,6 +694,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     invalidConnectionTest() {
+        checkModule();
         # Test connection to invalid host
         assertThrows("MONGODB-CLIENT-ERROR", sub() {
             MongoClient badClient("mongodb://nonexistent.invalid.host:27017");
@@ -671,4 +706,5 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
             new MongoClient("not-a-valid-url");
         });
     }
+%endif
 }
