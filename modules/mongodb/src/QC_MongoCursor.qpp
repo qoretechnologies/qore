@@ -1,0 +1,118 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_MongoCursor.qpp
+
+    Qore mongodb module - MongoCursor class definition
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_MongoCursor.h"
+
+//! The MongoCursor class provides iteration over MongoDB query results
+/** This class is returned by find() and aggregate() operations and allows
+    iterating over the result documents one at a time.
+
+    @par Example:
+    @code{.py}
+# Iterate using next()
+MongoCursor cursor = coll.find({"status": "active"});
+while (*hash<auto> doc = cursor.next()) {
+    printf("Document: %y\n", doc);
+}
+
+# Get all results as a list
+MongoCursor cursor = coll.find();
+list<hash<auto>> docs = cursor.toList();
+    @endcode
+
+    @since mongodb 1.0
+*/
+qclass MongoCursor [arg=QoreMongoCursor* cursor; ns=mongodb; flags=final];
+
+//! Returns the next document from the cursor
+/** @return the next document, or @ref nothing if no more documents
+
+    @par Example:
+    @code{.py}
+while (*hash<auto> doc = cursor.next()) {
+    printf("Document: %y\n", doc);
+}
+    @endcode
+
+    @throw MONGODB-CURSOR-ERROR cursor error
+*/
+*hash<auto> MongoCursor::next() {
+    return cursor->next(xsink);
+}
+
+//! Checks if there are more documents available
+/** @return True if there are more documents
+
+    @par Example:
+    @code{.py}
+while (cursor.more()) {
+    hash<auto> doc = cursor.next();
+    // process doc
+}
+    @endcode
+
+    @note This method may not be 100% accurate for all cursor types.
+    It's generally better to use next() and check for @ref nothing.
+*/
+bool MongoCursor::more() {
+    return cursor->more(xsink);
+}
+
+//! Returns all remaining documents as a list
+/** @return a list of all remaining documents
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> docs = cursor.toList();
+foreach hash<auto> doc in (docs) {
+    printf("Document: %y\n", doc);
+}
+    @endcode
+
+    @throw MONGODB-CURSOR-ERROR cursor error
+
+    @note This method exhausts the cursor. After calling toList(),
+    subsequent calls to next() will return @ref nothing.
+*/
+list<hash<auto>> MongoCursor::toList() {
+    return cursor->toList(xsink);
+}
+
+//! Closes the cursor and releases resources
+/** @par Example:
+    @code{.py}
+cursor.close();
+    @endcode
+
+    @note Cursors are automatically closed when garbage collected,
+    but calling close() explicitly is recommended for long-lived
+    cursor objects.
+*/
+nothing MongoCursor::close() {
+    cursor->close();
+}

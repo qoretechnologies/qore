@@ -271,21 +271,18 @@ public class MongoDbCollectionDataProvider inherits DataProvider::AbstractDataPr
         if (rec._id) {
             filter = {"_id": rec._id};
         } else {
-            # Without _id, try to find by all fields
+            # Without _id, use all fields as the filter
             filter = rec;
         }
 
-        # Check if document exists
-        *hash<auto> existing = coll.findOne(filter);
-        if (existing) {
-            # Update existing document
-            coll.updateOne(filter, {"$set": rec});
-            return UpsertResultUpdated;
-        } else {
-            # Insert new document
-            coll.insertOne(rec);
+        # Perform an atomic upsert to avoid race conditions
+        hash<auto> result = coll.updateOne(filter, {"$set": rec}, {"upsert": True});
+
+        # If upsertedId is present, a new document was inserted; otherwise an existing one was updated
+        if (result.upsertedId) {
             return UpsertResultInserted;
         }
+        return UpsertResultUpdated;
     }
 
     #! Deletes zero or more records

@@ -120,43 +120,29 @@ public class MongoDbBulkDataProvider inherits DataProvider::AbstractDataProvider
                 ++inserted_count;
                 inserted_ids += result.insertedId;
             } else if (op.updateOne) {
-                # Handle upsert manually if requested
+                *hash<auto> opts;
                 if (op.updateOne.upsert) {
-                    *hash<auto> existing = coll.findOne(op.updateOne.filter ?? {});
-                    if (!existing) {
-                        # Insert new document
-                        hash<auto> doc = op.updateOne.filter ?? {};
-                        if (op.updateOne.update."$set") {
-                            doc += op.updateOne.update."$set";
-                        }
-                        hash<auto> insertResult = coll.insertOne(doc);
-                        ++upserted_count;
-                        upserted_ids += insertResult.insertedId;
-                        continue;
-                    }
+                    opts = {"upsert": True};
                 }
-                hash<auto> result = coll.updateOne(op.updateOne.filter ?? {}, op.updateOne.update);
+                hash<auto> result = coll.updateOne(op.updateOne.filter ?? {}, op.updateOne.update, opts);
                 matched_count += result.matchedCount;
                 modified_count += result.modifiedCount;
+                if (result.upsertedId) {
+                    ++upserted_count;
+                    upserted_ids += result.upsertedId;
+                }
             } else if (op.updateMany) {
-                # Handle upsert manually if requested
+                *hash<auto> opts;
                 if (op.updateMany.upsert) {
-                    *hash<auto> existing = coll.findOne(op.updateMany.filter ?? {});
-                    if (!existing) {
-                        # Insert new document
-                        hash<auto> doc = op.updateMany.filter ?? {};
-                        if (op.updateMany.update."$set") {
-                            doc += op.updateMany.update."$set";
-                        }
-                        hash<auto> insertResult = coll.insertOne(doc);
-                        ++upserted_count;
-                        upserted_ids += insertResult.insertedId;
-                        continue;
-                    }
+                    opts = {"upsert": True};
                 }
-                hash<auto> result = coll.updateMany(op.updateMany.filter ?? {}, op.updateMany.update);
+                hash<auto> result = coll.updateMany(op.updateMany.filter ?? {}, op.updateMany.update, opts);
                 matched_count += result.matchedCount;
                 modified_count += result.modifiedCount;
+                if (result.upsertedId) {
+                    ++upserted_count;
+                    upserted_ids += result.upsertedId;
+                }
             } else if (op.deleteOne) {
                 hash<auto> result = coll.deleteOne(op.deleteOne.filter ?? {});
                 deleted_count += result.deletedCount;
@@ -164,18 +150,16 @@ public class MongoDbBulkDataProvider inherits DataProvider::AbstractDataProvider
                 hash<auto> result = coll.deleteMany(op.deleteMany.filter ?? {});
                 deleted_count += result.deletedCount;
             } else if (op.replaceOne) {
-                # Implement replaceOne as deleteOne + insertOne
-                hash<auto> filter = op.replaceOne.filter ?? {};
-                *hash<auto> existing = coll.findOne(filter);
-                if (existing) {
-                    coll.deleteOne(filter);
-                    hash<auto> insertResult = coll.insertOne(op.replaceOne.replacement);
-                    ++matched_count;
-                    ++modified_count;
-                } else if (op.replaceOne.upsert) {
-                    hash<auto> insertResult = coll.insertOne(op.replaceOne.replacement);
+                *hash<auto> opts;
+                if (op.replaceOne.upsert) {
+                    opts = {"upsert": True};
+                }
+                hash<auto> result = coll.replaceOne(op.replaceOne.filter ?? {}, op.replaceOne.replacement, opts);
+                matched_count += result.matchedCount;
+                modified_count += result.modifiedCount;
+                if (result.upsertedId) {
                     ++upserted_count;
-                    upserted_ids += insertResult.insertedId;
+                    upserted_ids += result.upsertedId;
                 }
             } else {
                 throw "MONGODB-BULK-ERROR", sprintf("unknown operation type in bulk request: %y", keys op);

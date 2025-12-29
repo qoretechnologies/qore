@@ -1,0 +1,1050 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# mongodb.qtest
+#
+# Qore mongodb module test script
+#
+# Copyright (C) 2025 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires QUnit
+%requires mongodb
+
+public class MongoDbTest inherits QUnit::Test {
+    private {
+        *string mongodb_url;
+        *MongoClient client;
+        string test_db = "qore_test_db";
+        string test_coll = "qore_test_collection";
+    }
+
+    constructor() : Test("MongoDbTest", "1.0") {
+        mongodb_url = ENV.MONGODB_URL ?? "mongodb://localhost:27017";
+        addTestCase("ObjectId tests", \objectIdTests());
+        addTestCase("ObjectId edge cases", \objectIdEdgeCaseTests());
+        addTestCase("Connection tests", \connectionTests());
+        addTestCase("Connection negative tests", \connectionNegativeTests());
+        addTestCase("Database tests", \databaseTests());
+        addTestCase("CRUD tests", \crudTests());
+        addTestCase("Find options tests", \findOptionsTests());
+        addTestCase("Update operators tests", \updateOperatorsTests());
+        addTestCase("Upsert and replace tests", \upsertAndReplaceTests());
+        addTestCase("Query operators tests", \queryOperatorsTests());
+        addTestCase("Aggregation tests", \aggregationTests());
+        addTestCase("Cursor tests", \cursorTests());
+        addTestCase("Negative tests", \negativeTests());
+        addTestCase("Corner cases", \cornerCaseTests());
+        addTestCase("Data type tests", \dataTypeTests());
+        addTestCase("Large data tests", \largeDataTests());
+        addTestCase("Memory stress tests", \memoryStressTests());
+        set_return_value(main());
+    }
+
+    private bool ensureClient() {
+        if (!client) {
+            try {
+                client = new MongoClient(mongodb_url);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip("MongoDB not available: " + ex.desc);
+                return False;
+            }
+        }
+        return client.val();
+    }
+
+    private MongoCollection getCleanCollection(string coll_name = test_coll) {
+        MongoDatabase db = client.getDatabase(test_db);
+        try { db.getCollection(coll_name).drop(); } catch () {}
+        return db.createCollection(coll_name);
+    }
+
+    objectIdTests() {
+        # Test ObjectId creation
+        ObjectId oid1();
+        assertEq(24, oid1.toString().size(), "ObjectId string length");
+
+        # Test ObjectId from string
+        string oid_str = oid1.toString();
+        ObjectId oid2(oid_str);
+        assertEq(oid_str, oid2.toString(), "ObjectId round-trip");
+        assertTrue(oid1.equals(oid2), "ObjectId equality");
+
+        # Test ObjectId comparison
+        ObjectId oid3();
+        assertEq(0, oid1.compare(oid2), "equal ObjectId comparison");
+        assertNeq(0, oid1.compare(oid3), "different ObjectId comparison");
+
+        # Test ObjectId timestamp
+        date dt = oid1.getTimestamp();
+        assertTrue(dt >= now() - 1m, "ObjectId timestamp reasonable");
+
+        # Test hashCode
+        int hash1 = oid1.hashCode();
+        int hash2 = oid2.hashCode();
+        assertEq(hash1, hash2, "equal ObjectIds have equal hashCodes");
+    }
+
+    objectIdEdgeCaseTests() {
+        # Test invalid ObjectId - too short
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() { ObjectId oid("abc"); });
+
+        # Test invalid ObjectId - too long
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() { ObjectId oid("0123456789abcdef0123456789"); });
+
+        # Test invalid ObjectId - not hex
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() { ObjectId oid("zzzzzzzzzzzzzzzzzzzzzzzz"); });
+
+        # Test invalid ObjectId - mixed valid/invalid
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() { ObjectId oid("0123456789abcdefghijklmn"); });
+
+        # Test invalid ObjectId - empty string
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() { ObjectId oid(""); });
+
+        # Test valid ObjectId with all zeros
+        ObjectId oid_zeros("000000000000000000000000");
+        assertEq("000000000000000000000000", oid_zeros.toString(), "all zeros ObjectId");
+
+        # Test valid ObjectId with all f's
+        ObjectId oid_fs("ffffffffffffffffffffffff");
+        assertEq("ffffffffffffffffffffffff", oid_fs.toString(), "all f's ObjectId");
+
+        # Test ObjectId case insensitivity (uppercase hex)
+        ObjectId oid_upper("AABBCCDD00112233AABBCCDD");
+        assertEq("aabbccdd00112233aabbccdd", oid_upper.toString(), "uppercase hex normalized");
+
+        # Test multiple ObjectId creation for uniqueness
+        hash<string, bool> seen;
+        for (int i = 0; i < 100; i++) {
+            ObjectId oid();
+            string s = oid.toString();
+            assertFalse(seen{s}, "ObjectId " + string(i) + " is unique");
+            seen{s} = True;
+        }
+    }
+
+    connectionTests() {
+        if (!ensureClient()) return;
+
+        # Test ping
+        assertTrue(client.ping(), "MongoDB ping");
+
+        # Test URI
+        *string uri = client.getUri();
+        assertEq(True, uri.val(), "getUri returns value");
+
+        # Test list databases
+        list<string> dbs = client.listDatabaseNames();
+        assertEq(True, dbs.size() >= 0, "listDatabaseNames returns list");
+
+        # Test get database
+        MongoDatabase db = client.getDatabase(test_db);
+        assertEq(test_db, db.getName(), "database name");
+    }
+
+    connectionNegativeTests() {
+        # Test invalid connection string - malformed URI
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            MongoClient client("invalid://not-a-mongodb-uri");
+        });
+
+        # Test invalid connection string - empty
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            MongoClient client("");
+        });
+
+        # Test invalid connection string - missing scheme
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            MongoClient client("localhost:27017");
+        });
+
+        # Test connection to non-existent host (should fail on operations, not connect)
+        # MongoDB driver uses lazy connection, so creation may succeed
+        # but operations should fail with proper timeout
+    }
+
+    databaseTests() {
+        if (!ensureClient()) return;
+
+        MongoDatabase db = client.getDatabase(test_db);
+
+        # Test getName
+        assertEq(test_db, db.getName(), "database getName");
+
+        # Test listCollectionNames
+        list<string> collections = db.listCollectionNames();
+        assertTrue(collections.size() >= 0, "listCollectionNames returns list");
+
+        # Test createCollection and drop
+        string temp_coll = "temp_test_collection_" + string(rand());
+        MongoCollection coll = db.createCollection(temp_coll);
+        assertEq(True, coll.val(), "createCollection returns collection");
+
+        collections = db.listCollectionNames();
+        assertTrue(inlist(temp_coll, collections), "created collection in list");
+
+        coll.drop();
+        collections = db.listCollectionNames();
+        assertFalse(inlist(temp_coll, collections), "dropped collection not in list");
+
+        # Test runCommand
+        hash<auto> result = db.runCommand({"ping": 1});
+        assertEq(1, result.ok, "runCommand ping ok");
+
+        # Test runCommand - serverStatus
+        result = db.runCommand({"serverStatus": 1});
+        assertEq(1, result.ok, "runCommand serverStatus ok");
+    }
+
+    crudTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test insertOne
+        hash<auto> doc = {"name": "Alice", "age": 30, "email": "alice@example.com"};
+        hash<auto> result = coll.insertOne(doc);
+        assertEq(True, result.val(), "insertOne returns result");
+
+        # Test findOne
+        *hash<auto> found = coll.findOne({"name": "Alice"});
+        assertEq("Alice", found.name, "findOne returns correct document");
+        assertEq(30, found.age, "findOne returns correct age");
+        assertTrue(found._id.val(), "findOne includes _id");
+
+        # Test insertMany
+        list<hash<auto>> docs = (
+            {"name": "Bob", "age": 25},
+            {"name": "Charlie", "age": 35},
+            {"name": "Diana", "age": 28},
+        );
+        result = coll.insertMany(docs);
+        assertEq(True, result.val(), "insertMany returns result");
+
+        # Test find with cursor
+        MongoCursor cursor = coll.find({"age": {"$gte": 28}});
+        list<hash<auto>> results = cursor.toList();
+        assertEq(3, results.size(), "find returns correct number of documents");
+
+        # Test countDocuments
+        int count = coll.countDocuments();
+        assertEq(4, count, "countDocuments returns correct count");
+        count = coll.countDocuments({"age": {"$lt": 30}});
+        assertEq(2, count, "countDocuments with filter returns correct count");
+
+        # Test updateOne
+        result = coll.updateOne({"name": "Alice"}, {"$set": {"age": 31}});
+        assertEq(True, result.val(), "updateOne returns result");
+        found = coll.findOne({"name": "Alice"});
+        assertEq(31, found.age, "updateOne updated document");
+
+        # Test updateMany
+        result = coll.updateMany({"age": {"$lt": 30}}, {"$set": {"status": "young"}});
+        assertEq(True, result.val(), "updateMany returns result");
+
+        # Test deleteOne
+        result = coll.deleteOne({"name": "Bob"});
+        assertEq(True, result.val(), "deleteOne returns result");
+        count = coll.countDocuments();
+        assertEq(3, count, "deleteOne removed document");
+
+        # Test deleteMany
+        result = coll.deleteMany({"status": "young"});
+        assertEq(True, result.val(), "deleteMany returns result");
+
+        # Clean up
+        coll.drop();
+    }
+
+    findOptionsTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Insert test data
+        for (int i = 0; i < 20; i++) {
+            coll.insertOne({"index": i, "name": "item" + string(i), "category": i % 3});
+        }
+
+        # Test find with limit
+        MongoCursor cursor = coll.find({}, {"limit": 5});
+        list<auto> results = cursor.toList();
+        assertEq(5, results.size(), "find with limit");
+
+        # Test find with skip
+        cursor = coll.find({}, {"skip": 15});
+        results = cursor.toList();
+        assertEq(5, results.size(), "find with skip");
+
+        # Test find with sort ascending
+        cursor = coll.find({}, {"sort": {"index": 1}, "limit": 5});
+        results = cursor.toList();
+        assertEq(0, results[0].index, "find with sort asc first item");
+        assertEq(4, results[4].index, "find with sort asc last item");
+
+        # Test find with sort descending
+        cursor = coll.find({}, {"sort": {"index": -1}, "limit": 5});
+        results = cursor.toList();
+        assertEq(19, results[0].index, "find with sort desc first item");
+        assertEq(15, results[4].index, "find with sort desc last item");
+
+        # Test find with projection
+        cursor = coll.find({}, {"projection": {"name": 1, "_id": 0}, "limit": 1});
+        results = cursor.toList();
+        assertTrue(results[0].name.val(), "projection includes name");
+        assertFalse(exists results[0]._id, "projection excludes _id");
+        assertFalse(exists results[0].index, "projection excludes index");
+
+        # Test find with combined options
+        cursor = coll.find(
+            {"category": 1},
+            {"sort": {"index": -1}, "skip": 2, "limit": 3}
+        );
+        results = cursor.toList();
+        assertEq(3, results.size(), "combined options result count");
+
+        # Clean up
+        coll.drop();
+    }
+
+    updateOperatorsTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Insert test document
+        coll.insertOne({"name": "test", "count": 10, "tags": ("a", "b"), "nested": {"x": 1}});
+
+        # Test $set
+        coll.updateOne({"name": "test"}, {"$set": {"count": 20}});
+        *hash<auto> found = coll.findOne({"name": "test"});
+        assertEq(20, found.count, "$set operator");
+
+        # Test $inc
+        coll.updateOne({"name": "test"}, {"$inc": {"count": 5}});
+        found = coll.findOne({"name": "test"});
+        assertEq(25, found.count, "$inc operator");
+
+        # Test $unset
+        coll.updateOne({"name": "test"}, {"$unset": {"count": ""}});
+        found = coll.findOne({"name": "test"});
+        assertFalse(exists found.count, "$unset operator");
+
+        # Test $push
+        coll.updateOne({"name": "test"}, {"$push": {"tags": "c"}});
+        found = coll.findOne({"name": "test"});
+        assertEq(3, found.tags.size(), "$push operator");
+        assertEq("c", found.tags[2], "$push added element");
+
+        # Test $pull
+        coll.updateOne({"name": "test"}, {"$pull": {"tags": "a"}});
+        found = coll.findOne({"name": "test"});
+        assertEq(2, found.tags.size(), "$pull operator");
+
+        # Test $rename
+        coll.updateOne({"name": "test"}, {"$rename": {"nested": "nested_renamed"}});
+        found = coll.findOne({"name": "test"});
+        assertFalse(exists found.nested, "$rename removed old field");
+        assertTrue(found.nested_renamed.val(), "$rename created new field");
+
+        # Test $mul
+        coll.updateOne({"name": "test"}, {"$set": {"value": 10}});
+        coll.updateOne({"name": "test"}, {"$mul": {"value": 2}});
+        found = coll.findOne({"name": "test"});
+        assertEq(20, found.value, "$mul operator");
+
+        # Test $min
+        coll.updateOne({"name": "test"}, {"$min": {"value": 5}});
+        found = coll.findOne({"name": "test"});
+        assertEq(5, found.value, "$min operator (lower value)");
+
+        coll.updateOne({"name": "test"}, {"$min": {"value": 100}});
+        found = coll.findOne({"name": "test"});
+        assertEq(5, found.value, "$min operator (higher value unchanged)");
+
+        # Test $max
+        coll.updateOne({"name": "test"}, {"$max": {"value": 50}});
+        found = coll.findOne({"name": "test"});
+        assertEq(50, found.value, "$max operator");
+
+        # Clean up
+        coll.drop();
+    }
+
+    upsertAndReplaceTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test updateOne with upsert - insert when not exists
+        hash<auto> result = coll.updateOne(
+            {"name": "upsert_test"},
+            {"$set": {"value": 100}},
+            {"upsert": True}
+        );
+        assertEq(0, result.matchedCount, "upsert insert matchedCount");
+        assertTrue(result.upsertedId.val(), "upsert insert has upsertedId");
+
+        # Verify the document was inserted
+        *hash<auto> found = coll.findOne({"name": "upsert_test"});
+        assertEq("upsert_test", found.name, "upsert inserted document name");
+        assertEq(100, found.value, "upsert inserted document value");
+
+        # Test updateOne with upsert - update when exists
+        result = coll.updateOne(
+            {"name": "upsert_test"},
+            {"$set": {"value": 200}},
+            {"upsert": True}
+        );
+        assertEq(1, result.matchedCount, "upsert update matchedCount");
+        assertFalse(result.upsertedId.val(), "upsert update has no upsertedId");
+        assertEq(1, result.modifiedCount, "upsert update modifiedCount");
+
+        # Verify the document was updated
+        found = coll.findOne({"name": "upsert_test"});
+        assertEq(200, found.value, "upsert updated document value");
+
+        # Test updateMany with upsert
+        result = coll.updateMany(
+            {"category": "new_category"},
+            {"$set": {"status": "active"}},
+            {"upsert": True}
+        );
+        assertTrue(result.upsertedId.val(), "updateMany upsert has upsertedId");
+
+        # Test replaceOne - replace existing document
+        coll.insertOne({"name": "replace_test", "old_field": "old_value"});
+        result = coll.replaceOne(
+            {"name": "replace_test"},
+            {"name": "replace_test", "new_field": "new_value"}
+        );
+        assertEq(1, result.matchedCount, "replaceOne matchedCount");
+        assertEq(1, result.modifiedCount, "replaceOne modifiedCount");
+
+        # Verify replacement
+        found = coll.findOne({"name": "replace_test"});
+        assertEq("new_value", found.new_field, "replaceOne new field");
+        assertFalse(exists found.old_field, "replaceOne removed old field");
+
+        # Test replaceOne with upsert - insert when not exists
+        result = coll.replaceOne(
+            {"name": "replace_upsert_test"},
+            {"name": "replace_upsert_test", "created": True},
+            {"upsert": True}
+        );
+        assertEq(0, result.matchedCount, "replaceOne upsert matchedCount");
+        assertTrue(result.upsertedId.val(), "replaceOne upsert has upsertedId");
+
+        # Verify upserted document
+        found = coll.findOne({"name": "replace_upsert_test"});
+        assertEq(True, found.created, "replaceOne upserted document");
+
+        # Clean up
+        coll.drop();
+    }
+
+    queryOperatorsTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Insert test data
+        for (int i = 0; i < 10; i++) {
+            coll.insertOne({
+                "index": i,
+                "even": (i % 2) == 0,
+                "category": ("A", "B", "C")[i % 3],
+                "tags": i < 5 ? ("small",) : ("large",),
+            });
+        }
+
+        # Test $eq
+        int count = coll.countDocuments({"index": {"$eq": 5}});
+        assertEq(1, count, "$eq operator");
+
+        # Test $ne
+        count = coll.countDocuments({"index": {"$ne": 5}});
+        assertEq(9, count, "$ne operator");
+
+        # Test $gt
+        count = coll.countDocuments({"index": {"$gt": 7}});
+        assertEq(2, count, "$gt operator");
+
+        # Test $gte
+        count = coll.countDocuments({"index": {"$gte": 7}});
+        assertEq(3, count, "$gte operator");
+
+        # Test $lt
+        count = coll.countDocuments({"index": {"$lt": 3}});
+        assertEq(3, count, "$lt operator");
+
+        # Test $lte
+        count = coll.countDocuments({"index": {"$lte": 3}});
+        assertEq(4, count, "$lte operator");
+
+        # Test $in
+        count = coll.countDocuments({"index": {"$in": (1, 3, 5, 7)}});
+        assertEq(4, count, "$in operator");
+
+        # Test $nin
+        count = coll.countDocuments({"index": {"$nin": (1, 3, 5, 7)}});
+        assertEq(6, count, "$nin operator");
+
+        # Test $and
+        count = coll.countDocuments({"$and": ({"index": {"$gte": 3}}, {"index": {"$lte": 6}})});
+        assertEq(4, count, "$and operator");
+
+        # Test $or
+        count = coll.countDocuments({"$or": ({"index": 0}, {"index": 9})});
+        assertEq(2, count, "$or operator");
+
+        # Test $not
+        count = coll.countDocuments({"index": {"$not": {"$gte": 5}}});
+        assertEq(5, count, "$not operator");
+
+        # Test $exists
+        coll.insertOne({"index": 100, "optional_field": "exists"});
+        count = coll.countDocuments({"optional_field": {"$exists": True}});
+        assertEq(1, count, "$exists true operator");
+        count = coll.countDocuments({"optional_field": {"$exists": False}});
+        assertEq(10, count, "$exists false operator");
+
+        # Test $regex
+        count = coll.countDocuments({"category": {"$regex": "^[AB]$"}});
+        assertEq(7, count, "$regex operator");
+
+        # Test array $all
+        coll.insertOne({"index": 200, "tags": ("small", "large")});
+        count = coll.countDocuments({"tags": {"$all": ("small", "large")}});
+        assertEq(1, count, "$all operator");
+
+        # Test array $size
+        count = coll.countDocuments({"tags": {"$size": 1}});
+        assertEq(11, count, "$size operator");
+
+        # Test $elemMatch
+        coll.insertOne({"index": 300, "items": ({"x": 1, "y": 2}, {"x": 3, "y": 4})});
+        count = coll.countDocuments({"items": {"$elemMatch": {"x": 1, "y": 2}}});
+        assertEq(1, count, "$elemMatch operator");
+
+        # Clean up
+        coll.drop();
+    }
+
+    aggregationTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Insert test data
+        list<hash<auto>> docs = (
+            {"category": "A", "value": 10, "status": "active"},
+            {"category": "A", "value": 20, "status": "active"},
+            {"category": "B", "value": 30, "status": "inactive"},
+            {"category": "B", "value": 40, "status": "active"},
+            {"category": "C", "value": 50, "status": "active"},
+        );
+        coll.insertMany(docs);
+
+        # Test $match stage
+        list<hash<auto>> pipeline = ({"$match": {"status": "active"}},);
+        MongoCursor cursor = coll.aggregate(pipeline);
+        list<hash<auto>> results = cursor.toList();
+        assertEq(4, results.size(), "$match stage");
+
+        # Test $group stage
+        pipeline = (
+            {"$group": {"_id": "$category", "total": {"$sum": "$value"}}},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(3, results.size(), "$group stage count");
+
+        # Test $sort stage
+        pipeline = (
+            {"$group": {"_id": "$category", "total": {"$sum": "$value"}}},
+            {"$sort": {"total": -1}},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq("B", results[0]._id, "$sort stage first");
+
+        # Test $project stage
+        pipeline = (
+            {"$project": {"category": 1, "doubled": {"$multiply": ("$value", 2)}}},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(20, results[0].doubled, "$project with expression");
+
+        # Test $limit stage
+        pipeline = ({"$limit": 2},);
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(2, results.size(), "$limit stage");
+
+        # Test $skip stage
+        pipeline = ({"$skip": 3},);
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(2, results.size(), "$skip stage");
+
+        # Test $count stage
+        pipeline = ({"$count": "total"},);
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(5, results[0].total, "$count stage");
+
+        # Test complex pipeline
+        pipeline = (
+            {"$match": {"value": {"$gte": 20}}},
+            {"$group": {"_id": "$category", "total": {"$sum": "$value"}, "count": {"$sum": 1}}},
+            {"$match": {"count": {"$gte": 1}}},
+            {"$sort": {"total": -1}},
+            {"$limit": 2},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(2, results.size(), "complex pipeline result count");
+        assertEq("B", results[0]._id, "complex pipeline first group");
+        assertEq(70, results[0].total, "complex pipeline total");
+
+        # Test $unwind stage
+        coll.insertOne({"category": "D", "tags": ("t1", "t2", "t3")});
+        pipeline = (
+            {"$match": {"category": "D"}},
+            {"$unwind": "$tags"},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq(3, results.size(), "$unwind stage");
+
+        # Test $addFields stage
+        pipeline = (
+            {"$addFields": {"newField": "added"}},
+            {"$limit": 1},
+        );
+        cursor = coll.aggregate(pipeline);
+        results = cursor.toList();
+        assertEq("added", results[0].newField, "$addFields stage");
+
+        # Clean up
+        coll.drop();
+    }
+
+    cursorTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Insert test data
+        for (int i = 0; i < 100; i++) {
+            coll.insertOne({"index": i});
+        }
+
+        # Test cursor iteration with next()
+        MongoCursor cursor = coll.find({}, {"sort": {"index": 1}});
+        int count = 0;
+        while (*hash<auto> doc = cursor.next()) {
+            assertEq(count, doc.index, "cursor next() iteration " + string(count));
+            count++;
+            if (count >= 10) break;  # Don't iterate all 100
+        }
+        assertEq(10, count, "cursor next() iteration count");
+
+        # Test cursor more()
+        cursor = coll.find({}, {"limit": 5});
+        assertTrue(cursor.more(), "cursor more() before iteration");
+        cursor.toList();
+        assertFalse(cursor.more(), "cursor more() after exhaustion");
+
+        # Test cursor toList()
+        cursor = coll.find({}, {"limit": 50});
+        list<auto> results = cursor.toList();
+        assertEq(50, results.size(), "cursor toList() size");
+
+        # Test cursor close()
+        cursor = coll.find();
+        cursor.close();
+        # After close, operations should be safe (return nothing)
+        assertEq(NOTHING, cursor.next(), "cursor next() after close");
+
+        # Test empty cursor
+        cursor = coll.find({"index": -1});  # No matching documents
+        results = cursor.toList();
+        assertEq(0, results.size(), "empty cursor toList()");
+        assertFalse(cursor.more(), "empty cursor more()");
+
+        # Clean up
+        coll.drop();
+    }
+
+    negativeTests() {
+        # ObjectId negative tests
+        assertThrows("MONGODB-OBJECTID-ERROR", sub() {
+            ObjectId oid("invalid");
+        });
+
+        # Connection negative tests
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            MongoClient client("invalid://not-a-mongodb-uri");
+        });
+
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test invalid update (missing operator)
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            coll.updateOne({"name": "test"}, {"name": "updated"});  # Missing $set
+        });
+
+        # Test invalid aggregation pipeline (invalid stage)
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            coll.aggregate(({"$invalidStage": {}},));
+        });
+
+        # Test insertMany with empty list
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            coll.insertMany(());
+        });
+
+        # Test insertMany with non-hash element
+        # Note: This is caught at parse time due to type checking, so we use cast<> to test runtime
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            list<auto> bad_list = ("not a hash",);
+            coll.insertMany(cast<list<hash<auto>>>(bad_list));
+        });
+
+        # Test drop on already dropped collection (should not throw, MongoDB is idempotent)
+        coll.drop();
+        try {
+            coll.drop();  # Second drop should not throw
+            assertTrue(True, "double drop doesn't throw");
+        } catch () {
+            # Some MongoDB versions may throw, that's acceptable
+            assertTrue(True, "double drop throws (acceptable)");
+        }
+
+        # Test invalid database command
+        MongoDatabase db = client.getDatabase(test_db);
+        assertThrows("MONGODB-DATABASE-ERROR", sub() {
+            db.runCommand({"invalidCommand": 1});
+        });
+
+        # Clean up
+        try { coll.drop(); } catch () {}
+    }
+
+    cornerCaseTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test empty collection operations
+        int count = coll.countDocuments();
+        assertEq(0, count, "empty collection count");
+
+        MongoCursor cursor = coll.find();
+        list<hash<auto>> results = cursor.toList();
+        assertEq(0, results.size(), "find on empty collection");
+
+        *hash<auto> found = coll.findOne();
+        assertEq(NOTHING, found, "findOne on empty collection");
+
+        # Test update on non-existent document
+        hash<auto> result = coll.updateOne({"name": "nonexistent"}, {"$set": {"x": 1}});
+        assertEq(0, result.modifiedCount, "updateOne non-existent modifiedCount");
+
+        # Test delete on non-existent document
+        result = coll.deleteOne({"name": "nonexistent"});
+        assertEq(0, result.deletedCount, "deleteOne non-existent deletedCount");
+
+        # Test null/NOTHING values
+        hash<auto> doc = {"name": "Test", "nullfield": NOTHING};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "Test"});
+        assertTrue(exists found.nullfield, "null field exists");
+
+        # Test nested documents
+        doc = {"name": "Nested", "address": {"city": "NYC", "zip": "10001"}};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "Nested"});
+        assertEq("NYC", found.address.city, "nested document field");
+
+        # Test query on nested field
+        found = coll.findOne({"address.city": "NYC"});
+        assertEq("Nested", found.name, "query nested field");
+
+        # Test arrays
+        doc = {"name": "WithArray", "tags": ("tag1", "tag2", "tag3")};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "WithArray"});
+        assertEq(3, found.tags.size(), "array field size");
+
+        # Test array query
+        found = coll.findOne({"tags": "tag2"});
+        assertEq("WithArray", found.name, "array element query");
+
+        # Test special characters in field names
+        doc = {"name": "SpecialFields", "field-with-dash": 1, "field.with.dots": 2};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "SpecialFields"});
+        assertEq(1, found."field-with-dash", "field with dash");
+
+        # Test empty string values
+        doc = {"name": "EmptyString", "value": ""};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "EmptyString"});
+        assertEq("", found.value, "empty string value");
+
+        # Test boolean values
+        doc = {"name": "Booleans", "active": True, "deleted": False};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "Booleans"});
+        assertTrue(found.active, "true boolean value");
+        assertFalse(found.deleted, "false boolean value");
+
+        # Test query by boolean
+        found = coll.findOne({"active": True});
+        assertEq("Booleans", found.name, "query by boolean");
+
+        # Clean up
+        coll.drop();
+    }
+
+    dataTypeTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test unicode
+        hash<auto> doc = {"name": "Unicode", "text": "Hello 世界 🌍 Ω α β γ"};
+        coll.insertOne(doc);
+        *hash<auto> found = coll.findOne({"name": "Unicode"});
+        assertEq("Hello 世界 🌍 Ω α β γ", found.text, "unicode text");
+
+        # Test various integer sizes
+        doc = {
+            "name": "Integers",
+            "small": 42,
+            "large": 9223372036854775807,  # Max int64 (MAXINT)
+            "negative": -9223372036854775807,  # Min int64 (MININT)
+            "zero": 0,
+        };
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "Integers"});
+        assertEq(42, found.small, "small integer");
+        assertEq(9223372036854775807, found.large, "large integer");
+        assertEq(-9223372036854775807, found.negative, "negative integer");
+        assertEq(0, found.zero, "zero integer");
+
+        # Test floating point
+        doc = {
+            "name": "Floats",
+            "pi": 3.14159265359,
+            "neg": -123.456,
+            "zero": 0.0,
+            "small": 0.0000001,
+        };
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "Floats"});
+        assertTrue(abs(found.pi - 3.14159265359) < 0.0000001, "pi float");
+        assertTrue(abs(found.neg - (-123.456)) < 0.0001, "negative float");
+        assertEq(0.0, found.zero, "zero float");
+
+        # Test dates
+        date now = now_us();
+        doc = {"name": "WithDate", "created": now};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "WithDate"});
+        # Note: MongoDB stores millisecond precision
+        assertTrue(abs(found.created - now) < 1s, "date field close to original");
+
+        # Test date in past
+        date past = 1990-01-01T00:00:00Z;
+        doc = {"name": "PastDate", "date": past};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "PastDate"});
+        assertEq(past, found.date, "past date");
+
+        # Test binary data
+        binary bin = <deadbeef>;
+        doc = {"name": "WithBinary", "data": bin};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "WithBinary"});
+        assertEq(bin.toHex(), found.data.toHex(), "binary field");
+
+        # Test larger binary
+        binary large_bin = binary();
+        for (int i = 0; i < 1000; i++) {
+            large_bin += <ab>;
+        }
+        doc = {"name": "LargeBinary", "data": large_bin};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "LargeBinary"});
+        assertEq(large_bin.size(), found.data.size(), "large binary size");
+
+        # Test ObjectId as field value
+        ObjectId oid();
+        doc = {"name": "WithObjectId", "ref_id": oid};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "WithObjectId"});
+        assertEq(oid.toString(), found.ref_id.toString(), "ObjectId field");
+
+        # Test mixed type array
+        doc = {"name": "MixedArray", "items": (1, "two", 3.0, True, NOTHING)};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "MixedArray"});
+        assertEq(5, found.items.size(), "mixed array size");
+        assertEq(1, found.items[0], "mixed array int");
+        assertEq("two", found.items[1], "mixed array string");
+        assertEq(True, found.items[3], "mixed array bool");
+
+        # Clean up
+        coll.drop();
+    }
+
+    largeDataTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test deeply nested document (10 levels)
+        hash<auto> nested = {"value": "deepest"};
+        for (int i = 0; i < 10; i++) {
+            nested = {"level" + string(i): nested};
+        }
+        nested.name = "DeepNested";
+        coll.insertOne(nested);
+        *hash<auto> found = coll.findOne({"name": "DeepNested"});
+        assertEq("deepest", found.level9.level8.level7.level6.level5.level4.level3.level2.level1.level0.value,
+            "deeply nested value");
+
+        # Test large array (1000 elements)
+        list<int> large_array = ();
+        for (int i = 0; i < 1000; i++) {
+            large_array += i;
+        }
+        hash<auto> doc = {"name": "LargeArray", "items": large_array};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "LargeArray"});
+        assertEq(1000, found.items.size(), "large array size");
+        assertEq(0, found.items[0], "large array first");
+        assertEq(999, found.items[999], "large array last");
+
+        # Test long string (100KB)
+        string long_str = "";
+        for (int i = 0; i < 10000; i++) {
+            long_str += "0123456789";
+        }
+        doc = {"name": "LongString", "text": long_str};
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "LongString"});
+        assertEq(100000, found.text.size(), "long string size");
+
+        # Test many fields (100 fields)
+        doc = {"name": "ManyFields"};
+        for (int i = 0; i < 100; i++) {
+            doc{"field" + string(i)} = i;
+        }
+        coll.insertOne(doc);
+        found = coll.findOne({"name": "ManyFields"});
+        assertEq(50, found.field50, "many fields check");
+
+        # Test bulk insert (1000 documents)
+        list<hash<auto>> bulk_docs = ();
+        for (int i = 0; i < 1000; i++) {
+            bulk_docs += {"bulk_index": i, "data": "document " + string(i)};
+        }
+        coll.insertMany(bulk_docs);
+        int count = coll.countDocuments({"bulk_index": {"$exists": True}});
+        assertEq(1000, count, "bulk insert count");
+
+        # Test find with large result set
+        MongoCursor cursor = coll.find({"bulk_index": {"$exists": True}});
+        list<auto> results = cursor.toList();
+        assertEq(1000, results.size(), "large result set size");
+
+        # Clean up
+        coll.drop();
+    }
+
+    memoryStressTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection();
+
+        # Test creating many ObjectIds
+        for (int i = 0; i < 1000; i++) {
+            ObjectId oid();
+            string s = oid.toString();
+            ObjectId oid2(s);
+            assertTrue(oid.equals(oid2), "ObjectId stress " + string(i));
+        }
+
+        # Test many insert/find cycles
+        for (int i = 0; i < 100; i++) {
+            hash<auto> doc = {"stress_index": i, "data": "stress test " + string(i)};
+            coll.insertOne(doc);
+            *hash<auto> found = coll.findOne({"stress_index": i});
+            assertEq(i, found.stress_index, "insert/find stress " + string(i));
+        }
+
+        # Test many cursor operations
+        for (int i = 0; i < 50; i++) {
+            MongoCursor cursor = coll.find({"stress_index": {"$exists": True}}, {"limit": 10});
+            list<auto> results = cursor.toList();
+            assertEq(10, results.size(), "cursor stress " + string(i));
+        }
+
+        # Test many update operations
+        for (int i = 0; i < 100; i++) {
+            coll.updateOne(
+                {"stress_index": i % 100},
+                {"$set": {"updated": True, "update_count": i}}
+            );
+        }
+
+        # Test many delete operations
+        for (int i = 0; i < 50; i++) {
+            coll.deleteOne({"stress_index": i});
+        }
+        int count = coll.countDocuments();
+        assertEq(50, count, "delete stress remaining count");
+
+        # Test collection create/drop cycle
+        MongoDatabase db = client.getDatabase(test_db);
+        for (int i = 0; i < 10; i++) {
+            string temp_name = "stress_coll_" + string(i);
+            MongoCollection temp_coll = db.createCollection(temp_name);
+            temp_coll.insertOne({"x": i});
+            temp_coll.drop();
+        }
+
+        # Clean up
+        coll.drop();
+    }
+}

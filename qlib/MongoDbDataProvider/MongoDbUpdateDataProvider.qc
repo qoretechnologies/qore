@@ -101,38 +101,23 @@ public class MongoDbUpdateDataProvider inherits DataProvider::AbstractDataProvid
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> result;
-        auto upserted_id;
-
-        # Handle upsert by checking if document exists first
+        # Build options hash with upsert if requested
+        *hash<auto> opts;
         if (req.upsert) {
-            *hash<auto> existing = coll.findOne(req.filter ?? {});
-            if (!existing) {
-                # Document doesn't exist, insert it
-                hash<auto> doc = req.filter ?? {};
-                # Apply update operators to create the document
-                if (req.update."$set") {
-                    doc += req.update."$set";
-                }
-                hash<auto> insertResult = coll.insertOne(doc);
-                return {
-                    "matched_count": 0,
-                    "modified_count": 0,
-                    "upserted_id": insertResult.insertedId,
-                };
-            }
+            opts = {"upsert": True};
         }
 
+        hash<auto> result;
         if (req.update_one) {
-            result = coll.updateOne(req.filter ?? {}, req.update);
+            result = coll.updateOne(req.filter ?? {}, req.update, opts);
         } else {
-            result = coll.updateMany(req.filter ?? {}, req.update);
+            result = coll.updateMany(req.filter ?? {}, req.update, opts);
         }
 
         return {
             "matched_count": result.matchedCount,
             "modified_count": result.modifiedCount,
-            "upserted_id": upserted_id,
+            "upserted_id": result.upsertedId,
         };
     }
 }

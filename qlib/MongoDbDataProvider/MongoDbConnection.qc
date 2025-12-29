@@ -112,7 +112,7 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         MongoClient client(url);
         if (connect) {
             if (!client.ping()) {
-                throw "MONGODB-CONNECTION-ERROR", sprintf("failed to ping MongoDB server at %s", url);
+                throw "MONGODB-CONNECTION-ERROR", "failed to ping MongoDB server";
             }
         }
         return client;
