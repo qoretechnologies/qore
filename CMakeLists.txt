@@ -886,6 +886,23 @@ add_subdirectory(modules/astparser)
 add_subdirectory(modules/reflection)
 # logger module
 add_subdirectory(modules/logger_bin)
+# mongodb module (optional, requires libmongoc)
+find_package(mongoc-1.0 QUIET)
+if (mongoc-1.0_FOUND)
+    add_subdirectory(modules/mongodb)
+else()
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(MONGOC QUIET libmongoc-1.0)
+        if (MONGOC_FOUND)
+            add_subdirectory(modules/mongodb)
+        else()
+            message(STATUS "libmongoc not found - mongodb module will not be built")
+        endif()
+    else()
+        message(STATUS "libmongoc not found - mongodb module will not be built")
+    endif()
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1008,6 +1025,7 @@ qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhoo
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
+qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")
 qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "redis-logo.svg")
 
 # base 8 modules

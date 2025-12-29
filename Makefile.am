@@ -9,6 +9,9 @@ qoredatadir = $(datarootdir)/qore
 AUTOMAKE_OPTIONS = foreign
 
 SUBDIRS = lib modules/astparser modules/reflection modules/logger_bin
+if COND_MONGODB
+SUBDIRS += modules/mongodb
+endif
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
 
@@ -123,7 +126,8 @@ DOX_SPLIT_MODULES = \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider \
     qlib/AsyncApiDataProvider \
-    qlib/HttpServerAsyncIo
+    qlib/HttpServerAsyncIo \
+    qlib/MongoDbDataProvider
 
 AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
 AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
@@ -147,6 +151,7 @@ GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
 HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 HttpServerAsyncIo_modverdir = $(modverdir)/HttpServerAsyncIo
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
+MongoDbDataProvider_modverdir = $(modverdir)/MongoDbDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
 OpenApi3DataProvider_modverdir = $(modverdir)/OpenApi3DataProvider
 Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
@@ -183,6 +188,7 @@ dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarData
 dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
 dist_HttpServerAsyncIo_modver_DATA = $(wildcard qlib/HttpServerAsyncIo/*.q[cm])
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
+dist_MongoDbDataProvider_modver_DATA = $(wildcard qlib/MongoDbDataProvider/*.q[cm])
 dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]) $(wildcard qlib/OpenAiDataProvider/*-swagger-2.0.yaml)
 dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q[cm])
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])

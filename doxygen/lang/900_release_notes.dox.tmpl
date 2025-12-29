@@ -94,6 +94,21 @@
         commands
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
+    - <a href="../../modules/mongodb/html/index.html">mongodb</a> module
+      - new builtin module providing MongoDB client connectivity using libmongoc
+      - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
+      - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
+        deleteMany)
+      - aggregation pipeline support
+      - automatic BSON to Qore value conversion (hashes, lists, dates, binary, ObjectId, etc.)
+    - <a href="../../modules/MongoDbDataProvider/html/index.html">MongoDbDataProvider</a> module
+      - new module providing a data provider API for MongoDB servers
+      - hierarchical data provider structure: databases -> collections -> operations
+      - full CRUD support through insert, find, update, and delete data providers
+      - aggregation pipeline support via aggregate data provider
+      - bulk write operations support via bulk data provider
+      - record-based interface for collections with search, create, update, upsert, and delete operations
+      - connection support with \c mongodb:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support

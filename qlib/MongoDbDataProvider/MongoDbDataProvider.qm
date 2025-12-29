@@ -1,0 +1,217 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore MongoDbDataProvider module definition
+
+/*  MongoDbDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+%requires mongodb
+
+module MongoDbDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for MongoDB servers";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the connection scheme
+        ConnectionSchemeCache::registerScheme("mongodb", MongoDbConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new MongoDbDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": MongoDbDataProvider::AppName,
+            "display_name": "MongoDB Server",
+            "short_desc": "MongoDB NoSQL database",
+            "desc": "MongoDB is a document-oriented NoSQL database for high volume data storage",
+            "scheme": "mongodb",
+            "logo": MongoDbLogo,
+            "logo_file_name": "mongodb-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # path variable definitions for collection actions
+        hash<string, hash<DataProviderPathVarInfo>> collection_path_vars = {
+            "database": <DataProviderPathVarInfo>{
+                "display_name": "Database",
+                "short_desc": "MongoDB database name",
+                "desc": "The name of the MongoDB database",
+            },
+            "collection": <DataProviderPathVarInfo>{
+                "display_name": "Collection",
+                "short_desc": "MongoDB collection name",
+                "desc": "The name of the MongoDB collection",
+            },
+        };
+
+        # register CRUD actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/insert",
+            "path_vars": collection_path_vars,
+            "action": "insert",
+            "display_name": "Insert Document",
+            "short_desc": "Insert a document into a collection",
+            "desc": "Insert one or more documents into a MongoDB collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/find",
+            "path_vars": collection_path_vars,
+            "action": "find",
+            "display_name": "Find Documents",
+            "short_desc": "Query documents in a collection",
+            "desc": "Find documents in a MongoDB collection using query filters",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/update",
+            "path_vars": collection_path_vars,
+            "action": "update",
+            "display_name": "Update Documents",
+            "short_desc": "Update documents in a collection",
+            "desc": "Update one or more documents in a MongoDB collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/delete",
+            "path_vars": collection_path_vars,
+            "action": "delete",
+            "display_name": "Delete Documents",
+            "short_desc": "Delete documents from a collection",
+            "desc": "Delete one or more documents from a MongoDB collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/aggregate",
+            "path_vars": collection_path_vars,
+            "action": "aggregate",
+            "display_name": "Aggregation Pipeline",
+            "short_desc": "Run aggregation pipeline",
+            "desc": "Execute an aggregation pipeline on a MongoDB collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MongoDbDataProvider::AppName,
+            "path": "/databases/{database}/collections/{collection}/bulk",
+            "path_vars": collection_path_vars,
+            "action": "bulk",
+            "display_name": "Bulk Operations",
+            "short_desc": "Execute bulk write operations",
+            "desc": "Execute bulk insert, update, and delete operations on a MongoDB collection",
+            "action_code": DPAT_API,
+        });
+    };
+}
+
+/** @mainpage MongoDbDataProvider Module
+
+    @tableofcontents
+
+    @section mongodbdataproviderintro Introduction to the MongoDbDataProvider Module
+
+    @htmlonly
+    <div class="image">
+      <img src="mongodb-logo.svg" alt="MongoDB Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
+    The %MongoDbDataProvider module provides a @ref dataproviderintro "data provider" API for
+    MongoDB servers. It uses the builtin \c mongodb module which wraps libmongoc for efficient
+    communication and provides full CRUD operations, aggregation pipelines, and bulk operations.
+
+    This data provider provides MongoDB API access to:
+    - databases: <b><tt>databases/{@ref MongoDbDataProvider::MongoDbDatabaseDataProvider "database_name"}</tt></b>
+    - collections: <b><tt>databases/db_name/collections/{@ref MongoDbDataProvider::MongoDbCollectionDataProvider "collection_name"}</tt></b>
+    - CRUD operations: <b><tt>databases/db_name/collections/coll_name/{@ref MongoDbDataProvider::MongoDbInsertDataProvider "insert",
+      @ref MongoDbDataProvider::MongoDbFindDataProvider "find",
+      @ref MongoDbDataProvider::MongoDbUpdateDataProvider "update",
+      @ref MongoDbDataProvider::MongoDbDeleteDataProvider "delete"}</tt></b>
+    - aggregation: <b><tt>databases/db_name/collections/coll_name/{@ref MongoDbDataProvider::MongoDbAggregateDataProvider "aggregate"}</tt></b>
+    - bulk: <b><tt>databases/db_name/collections/coll_name/{@ref MongoDbDataProvider::MongoDbBulkDataProvider "bulk"}</tt></b>
+
+    @section mongodbdataprovider_factory MongoDB Data Provider Factory
+
+    The name of the MongoDB data provider factory is <b><tt>mongodb</tt></b>.
+
+    @section mongodbdataprovider_examples MongoDB Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: Insert a Document
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll/insert' document='{"name": "test", "value": 42}'
+    @endverbatim
+
+    @par API Example: Find Documents
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll/find' filter='{"name": "test"}'
+    @endverbatim
+
+    @par API Example: Update Documents
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll/update' filter='{"name": "test"}',update='{"$set": {"value": 100}}'
+    @endverbatim
+
+    @par API Example: Delete Documents
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll/delete' filter='{"name": "test"}'
+    @endverbatim
+
+    @par API Example: Aggregation Pipeline
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll/aggregate' pipeline='[{"$group": {"_id": "$category", "total": {"$sum": "$value"}}}]'
+    @endverbatim
+
+    @par Record-Based Example: Search Collection
+    @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll' name=test
+    @endverbatim
+
+    @section mongodbdataprovider_relnotes Release Notes
+
+    @subsection mongodbdataprovider_v1_0 MongoDbDataProvider v1.0
+    - Initial release of the module
+*/
+
+public namespace MongoDbDataProvider {
+}
+
+namespace Priv {
+    const MongoDbLogo = File::readTextFile(get_script_dir() + "/mongodb-logo.svg");
+}

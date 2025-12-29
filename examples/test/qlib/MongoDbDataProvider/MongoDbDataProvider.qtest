@@ -1,0 +1,674 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Use relative paths for qlib modules to test current development version
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClient.qm
+
+# mongodb builtin module - uses QORE_MODULE_DIR
+%requires mongodb
+
+# Module under test - relative path
+%requires ../../../../qlib/MongoDbDataProvider
+
+%exec-class MongoDbDataProviderTest
+
+public class MongoDbDataProviderTest inherits QUnit::Test {
+    private {
+        *string url;
+        *MongoClient client;
+        string test_db = "qore_data_provider_test";
+        string test_coll = "test_collection";
+    }
+
+    constructor() : Test("MongoDbDataProviderTest", "1.0") {
+        url = ENV.MONGODB_URL;
+        addTestCase("connection test", \connectionTest());
+        addTestCase("factory test", \factoryTest());
+        addTestCase("data provider hierarchy test", \hierarchyTest());
+        addTestCase("insert provider test", \insertProviderTest());
+        addTestCase("find provider test", \findProviderTest());
+        addTestCase("update provider test", \updateProviderTest());
+        addTestCase("delete provider test", \deleteProviderTest());
+        addTestCase("aggregate provider test", \aggregateProviderTest());
+        addTestCase("bulk provider test", \bulkProviderTest());
+        addTestCase("record operations test", \recordOperationsTest());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("invalid connection test", \invalidConnectionTest());
+        set_return_value(main());
+    }
+
+    private bool ensureConnection() {
+        if (!url) {
+            testSkip("MONGODB_URL not set");
+            return False;
+        }
+        if (!client) {
+            try {
+                client = new MongoClient(url);
+                if (!client.ping()) {
+                    testSkip("Cannot connect to MongoDB");
+                    return False;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("MongoDB connection error: %s", ex.err));
+                return False;
+            }
+        }
+        return True;
+    }
+
+    private cleanup() {
+        if (client) {
+            try {
+                MongoDatabase db = client.getDatabase(test_db);
+                db.drop();
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+    }
+
+    connectionTest() {
+        if (!url) {
+            testSkip("MONGODB_URL not set");
+            return;
+        }
+
+        # Test connection with URL
+        MongoDbConnection conn("test", "Test connection", url);
+        assertEq("mongodb", conn.getType());
+        assertTrue(conn.hasDataProvider());
+
+        # Test getting data provider from connection
+        AbstractDataProvider dp = conn.getDataProvider();
+        assertEq("mongodb", dp.getName());
+    }
+
+    factoryTest() {
+        if (!ensureConnection()) return;
+
+        # Test factory creation
+        MongoDbDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("mongodb", info.name);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+    }
+
+    hierarchyTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        # Create test database and collection
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+        coll.insertOne({"test": "data"});
+
+        # Test root provider
+        MongoDbDataProvider root({"client": client});
+        assertEq("mongodb", root.getName());
+
+        # Test databases provider
+        *list<string> children = root.getChildProviderNames();
+        assertTrue(children.contains("databases"));
+
+        AbstractDataProvider databases = root.getChildProvider("databases");
+        assertEq("databases", databases.getName());
+
+        # Test database provider
+        AbstractDataProvider dbProv = databases.getChildProvider(test_db);
+        assertEq(test_db, dbProv.getName());
+
+        # Test collection provider
+        AbstractDataProvider collProv = dbProv.getChildProvider(test_coll);
+        assertEq(test_coll, collProv.getName());
+
+        # Test child providers of collection
+        *list<string> collChildren = collProv.getChildProviderNames();
+        assertTrue(collChildren.contains("insert"));
+        assertTrue(collChildren.contains("find"));
+        assertTrue(collChildren.contains("update"));
+        assertTrue(collChildren.contains("delete"));
+        assertTrue(collChildren.contains("aggregate"));
+        assertTrue(collChildren.contains("bulk"));
+    }
+
+    insertProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider insertProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("insert");
+
+        assertEq("insert", insertProv.getName());
+
+        # Test single document insert
+        hash<auto> result = insertProv.doRequest({
+            "document": {"name": "test1", "value": 100},
+        });
+        assertEq(1, result.inserted_count);
+        assertEq(1, result.inserted_ids.size());
+
+        # Test multiple document insert
+        result = insertProv.doRequest({
+            "documents": (
+                {"name": "test2", "value": 200},
+                {"name": "test3", "value": 300},
+            ),
+        });
+        assertEq(2, result.inserted_count);
+        # Note: insertMany doesn't return individual IDs in libmongoc
+        assertTrue(result.hasKey("inserted_ids"));
+
+        # Verify documents were inserted
+        assertEq(3, coll.countDocuments());
+    }
+
+    findProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        # Insert test data
+        for (int i = 0; i < 10; i++) {
+            coll.insertOne({"index": i, "category": i % 3 == 0 ? "A" : "B"});
+        }
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider findProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("find");
+
+        assertEq("find", findProv.getName());
+
+        # Test find all
+        hash<auto> result = findProv.doRequest({});
+        assertEq(10, result.count);
+        assertEq(10, result.documents.size());
+
+        # Test find with filter
+        result = findProv.doRequest({
+            "filter": {"category": "A"},
+        });
+        assertEq(4, result.count);  # 0, 3, 6, 9
+
+        # Test find with limit
+        result = findProv.doRequest({
+            "limit": 3,
+        });
+        assertEq(3, result.count);
+
+        # Test find with skip
+        result = findProv.doRequest({
+            "skip": 5,
+        });
+        assertEq(5, result.count);
+
+        # Test find with sort
+        result = findProv.doRequest({
+            "sort": {"index": -1},
+            "limit": 1,
+        });
+        assertEq(1, result.count);
+        assertEq(9, result.documents[0].index);
+
+        # Test find with projection
+        result = findProv.doRequest({
+            "filter": {"index": 0},
+            "projection": {"index": 1, "_id": 0},
+        });
+        assertEq(1, result.count);
+        assertTrue(result.documents[0].hasKey("index"));
+        assertFalse(result.documents[0].hasKey("category"));
+    }
+
+    updateProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        # Insert test data
+        for (int i = 0; i < 5; i++) {
+            coll.insertOne({"index": i, "status": 0});
+        }
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider updateProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("update");
+
+        assertEq("update", updateProv.getName());
+
+        # Test updateOne
+        hash<auto> result = updateProv.doRequest({
+            "filter": {"index": 0},
+            "update": {"$set": {"status": 1}},
+            "update_one": True,
+        });
+        assertEq(1, result.matched_count);
+        assertEq(1, result.modified_count);
+
+        # Verify
+        *hash<auto> doc = coll.findOne({"index": 0});
+        assertEq(1, doc.status);
+
+        # Test updateMany
+        result = updateProv.doRequest({
+            "filter": {"status": 0},
+            "update": {"$set": {"status": 1}},
+        });
+        assertEq(4, result.matched_count);
+        assertEq(4, result.modified_count);
+
+        # Test upsert
+        result = updateProv.doRequest({
+            "filter": {"index": 100},
+            "update": {"$set": {"index": 100, "status": 1}},
+            "upsert": True,
+        });
+        assertEq(0, result.matched_count);
+        assertTrue(exists result.upserted_id);
+    }
+
+    deleteProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        # Insert test data
+        for (int i = 0; i < 10; i++) {
+            coll.insertOne({"index": i});
+        }
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider deleteProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("delete");
+
+        assertEq("delete", deleteProv.getName());
+
+        # Test deleteOne
+        hash<auto> result = deleteProv.doRequest({
+            "filter": {"index": 0},
+            "delete_one": True,
+        });
+        assertEq(1, result.deleted_count);
+        assertEq(9, coll.countDocuments());
+
+        # Test deleteMany
+        result = deleteProv.doRequest({
+            "filter": {"index": {"$lt": 5}},
+        });
+        assertEq(4, result.deleted_count);  # 1, 2, 3, 4
+        assertEq(5, coll.countDocuments());
+    }
+
+    aggregateProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        # Insert test data
+        coll.insertMany((
+            {"category": "A", "value": 10},
+            {"category": "A", "value": 20},
+            {"category": "B", "value": 30},
+            {"category": "B", "value": 40},
+            {"category": "C", "value": 50},
+        ));
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider aggProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("aggregate");
+
+        assertEq("aggregate", aggProv.getName());
+
+        # Test aggregation pipeline
+        hash<auto> result = aggProv.doRequest({
+            "pipeline": (
+                {"$group": {"_id": "$category", "total": {"$sum": "$value"}}},
+                {"$sort": {"total": -1}},
+            ),
+        });
+
+        assertEq(3, result.count);
+        assertEq("B", result.results[0]._id);  # B has highest total (70)
+        assertEq(70, result.results[0].total);
+    }
+
+    bulkProviderTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider bulkProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("bulk");
+
+        assertEq("bulk", bulkProv.getName());
+
+        # Test bulk operations
+        hash<auto> result = bulkProv.doRequest({
+            "operations": (
+                {"insertOne": {"document": {"name": "bulk1", "value": 1}}},
+                {"insertOne": {"document": {"name": "bulk2", "value": 2}}},
+                {"insertOne": {"document": {"name": "bulk3", "value": 3}}},
+                {"updateOne": {"filter": {"name": "bulk1"}, "update": {"$set": {"value": 100}}}},
+                {"deleteOne": {"filter": {"name": "bulk3"}}},
+            ),
+        });
+
+        assertEq(3, result.inserted_count);
+        assertEq(1, result.matched_count);
+        assertEq(1, result.modified_count);
+        assertEq(1, result.deleted_count);
+
+        # Verify final state
+        assertEq(2, coll.countDocuments());
+        *hash<auto> doc = coll.findOne({"name": "bulk1"});
+        assertEq(100, doc.value);
+    }
+
+    recordOperationsTest() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider collProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll);
+
+        # Test createRecord
+        *hash<auto> created = collProv.createRecord({"name": "record1", "value": 42});
+        assertTrue(exists created._id);
+        assertEq("record1", created.name);
+
+        # Verify with MongoDB directly
+        *hash<auto> found = coll.findOne({"name": "record1"});
+        assertEq("record1", found.name);
+        assertEq(42, found.value);
+
+        # Test upsertRecord - insert case
+        string upsertAction = collProv.upsertRecord({"name": "upserted", "value": 999});
+        assertEq(UpsertResultInserted, upsertAction);
+
+        # Verify upsert insert
+        found = coll.findOne({"name": "upserted"});
+        assertEq(999, found.value);
+
+        # Test upsertRecord - update case
+        upsertAction = collProv.upsertRecord({"_id": found._id, "name": "upserted", "value": 1000});
+        assertEq(UpsertResultUpdated, upsertAction);
+
+        # Verify upsert update
+        found = coll.findOne({"name": "upserted"});
+        assertEq(1000, found.value);
+
+        # Verify we have 2 documents
+        assertEq(2, coll.countDocuments());
+    }
+
+    negativeTests() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider insertProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("insert");
+
+        # Test insert without document or documents
+        assertThrows("MONGODB-INSERT-ERROR", sub() {
+            insertProv.doRequest({});
+        });
+
+        AbstractDataProvider aggProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("aggregate");
+
+        # Test aggregate without pipeline
+        assertThrows("MONGODB-AGGREGATE-ERROR", sub() {
+            aggProv.doRequest({});
+        });
+
+        AbstractDataProvider bulkProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll)
+            .getChildProvider("bulk");
+
+        # Test bulk without operations
+        assertThrows("MONGODB-BULK-ERROR", sub() {
+            bulkProv.doRequest({});
+        });
+
+        # Test bulk with invalid operation
+        assertThrows("MONGODB-BULK-ERROR", sub() {
+            bulkProv.doRequest({
+                "operations": (
+                    {"invalidOp": {"foo": "bar"}},
+                ),
+            });
+        });
+
+        # Test constructor without url or client
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new MongoDbDataProvider({});
+        });
+    }
+
+    connectionSchemeTest() {
+        if (!url) {
+            testSkip("MONGODB_URL not set");
+            return;
+        }
+
+        # Test connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("mongodb");
+        assertEq("MongoDB Connection", scheme.display_name);
+        assertTrue(scheme.schemes.mongodb);
+    }
+
+    cornerCaseTests() {
+        if (!ensureConnection()) return;
+
+        on_exit cleanup();
+
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(test_coll);
+
+        MongoDbDataProvider root({"client": client});
+        AbstractDataProvider collProv = root.getChildProvider("databases")
+            .getChildProvider(test_db)
+            .getChildProvider(test_coll);
+        AbstractDataProvider findProv = collProv.getChildProvider("find");
+        AbstractDataProvider updateProv = collProv.getChildProvider("update");
+        AbstractDataProvider deleteProv = collProv.getChildProvider("delete");
+
+        # Test operations on empty collection
+        hash<auto> result = findProv.doRequest({});
+        assertEq(0, result.count);
+        assertEq(0, result.documents.size());
+
+        result = deleteProv.doRequest({"filter": {"nonexistent": "field"}});
+        assertEq(0, result.deleted_count);
+
+        result = updateProv.doRequest({
+            "filter": {"nonexistent": "field"},
+            "update": {"$set": {"x": 1}},
+        });
+        assertEq(0, result.matched_count);
+
+        # Test nested documents
+        *hash<auto> created = collProv.createRecord({
+            "name": "nested_test",
+            "nested": {
+                "level1": {
+                    "level2": {
+                        "value": "deep",
+                    },
+                },
+            },
+        });
+        assertTrue(exists created._id);
+        *hash<auto> found = coll.findOne({"name": "nested_test"});
+        assertEq("deep", found.nested.level1.level2.value);
+
+        # Test array fields
+        created = collProv.createRecord({
+            "name": "array_test",
+            "tags": ("tag1", "tag2", "tag3"),
+            "numbers": (1, 2, 3, 4, 5),
+        });
+        found = coll.findOne({"name": "array_test"});
+        assertEq(3, found.tags.size());
+        assertEq(5, found.numbers.size());
+        assertEq("tag2", found.tags[1]);
+
+        # Test Unicode and special characters
+        created = collProv.createRecord({
+            "name": "unicode_test",
+            "text": "Hello 世界 مرحبا שלום 🎉",
+            "special": "tab:\there\nnewline",
+        });
+        found = coll.findOne({"name": "unicode_test"});
+        assertEq("Hello 世界 مرحبا שלום 🎉", found.text);
+        assertTrue(found.special.find("\t") >= 0);
+
+        # Test null/NOTHING values
+        created = collProv.createRecord({
+            "name": "null_test",
+            "null_field": NOTHING,
+            "empty_string": "",
+            "zero": 0,
+        });
+        found = coll.findOne({"name": "null_test"});
+        assertFalse(exists found.null_field);
+        assertEq("", found.empty_string);
+        assertEq(0, found.zero);
+
+        # Test date/time values
+        date now = now_us();
+        created = collProv.createRecord({
+            "name": "datetime_test",
+            "timestamp": now,
+        });
+        found = coll.findOne({"name": "datetime_test"});
+        assertTrue(exists found.timestamp);
+
+        # Test ObjectId in queries
+        created = collProv.createRecord({"name": "objectid_test", "value": 1});
+        auto id = created._id;
+        found = coll.findOne({"_id": id});
+        assertEq("objectid_test", found.name);
+
+        # Test find with non-matching filter
+        result = findProv.doRequest({"filter": {"nonexistent_field": "no_match"}});
+        assertEq(0, result.count);
+
+        # Test update with $inc operator
+        coll.insertOne({"name": "counter", "count": 0});
+        result = updateProv.doRequest({
+            "filter": {"name": "counter"},
+            "update": {"$inc": {"count": 5}},
+        });
+        assertEq(1, result.modified_count);
+        found = coll.findOne({"name": "counter"});
+        assertEq(5, found.count);
+
+        # Test update with $unset operator
+        result = updateProv.doRequest({
+            "filter": {"name": "counter"},
+            "update": {"$unset": {"count": ""}},
+        });
+        assertEq(1, result.modified_count);
+        found = coll.findOne({"name": "counter"});
+        assertFalse(found.hasKey("count"));
+
+        # Test aggregation with empty result
+        AbstractDataProvider aggProv = collProv.getChildProvider("aggregate");
+        result = aggProv.doRequest({
+            "pipeline": (
+                {"$match": {"nonexistent": "value"}},
+            ),
+        });
+        assertEq(0, result.count);
+
+        # Test bulk with mixed success
+        AbstractDataProvider bulkProv = collProv.getChildProvider("bulk");
+        result = bulkProv.doRequest({
+            "operations": (
+                {"insertOne": {"document": {"bulk_corner": 1}}},
+                {"updateOne": {"filter": {"nonexistent": "doc"}, "update": {"$set": {"x": 1}}}},
+                {"deleteOne": {"filter": {"nonexistent": "doc"}}},
+            ),
+        });
+        assertEq(1, result.inserted_count);
+        assertEq(0, result.matched_count);
+        assertEq(0, result.deleted_count);
+    }
+
+    invalidConnectionTest() {
+        # Test connection to invalid host
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            MongoClient badClient("mongodb://nonexistent.invalid.host:27017");
+            badClient.ping();
+        });
+
+        # Test invalid URL format
+        assertThrows("MONGODB-CLIENT-ERROR", sub() {
+            new MongoClient("not-a-valid-url");
+        });
+    }
+}
