@@ -1,0 +1,26 @@
+name: Copilot Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  copilot-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Request Copilot Review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Install gh-copilot-review extension
+          gh extension install ChrisCarini/gh-copilot-review || true
+
+          # Request Copilot code review on the PR
+          gh copilot-review ${{ github.event.pull_request.number }} || echo "Copilot review request completed or not available"
