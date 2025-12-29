@@ -1,0 +1,143 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_MongoClient.qpp
+
+    Qore mongodb module - MongoClient class definition
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_MongoClient.h"
+#include "QC_MongoDatabase.h"
+
+//! The MongoClient class provides MongoDB client connection management
+/** This class wraps a MongoDB client connection and provides methods for
+    database access and server management operations.
+
+    @par Example:
+    @code{.py}
+# Connect to MongoDB
+MongoClient client("mongodb://localhost:27017");
+
+# Ping the server
+if (client.ping()) {
+    print("Connected successfully\n");
+}
+
+# List databases
+list<string> dbs = client.listDatabaseNames();
+
+# Get a database handle
+MongoDatabase db = client.getDatabase("mydb");
+    @endcode
+
+    @since mongodb 1.0
+*/
+qclass MongoClient [arg=QoreMongoClient* client; ns=mongodb; flags=final];
+
+//! Creates a MongoDB client connection from a URI string
+/** @param uri the MongoDB connection URI (e.g., "mongodb://localhost:27017")
+
+    @par Example:
+    @code{.py}
+# Simple connection
+MongoClient client("mongodb://localhost:27017");
+
+# Connection with authentication
+MongoClient client("mongodb://user:password@localhost:27017/mydb?authSource=admin");
+
+# Replica set connection
+MongoClient client("mongodb://host1:27017,host2:27017/?replicaSet=rs0");
+    @endcode
+
+    @throw MONGODB-CLIENT-ERROR failed to parse URI or create client
+*/
+MongoClient::constructor(string uri) {
+    SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(uri->c_str(), xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_MONGOCLIENT, holder.release());
+}
+
+//! Pings the MongoDB server to verify connectivity
+/** @return True if the ping succeeded
+
+    @par Example:
+    @code{.py}
+if (client.ping()) {
+    print("Server is reachable\n");
+}
+    @endcode
+
+    @throw MONGODB-CLIENT-ERROR ping failed
+*/
+bool MongoClient::ping() {
+    return client->ping(xsink);
+}
+
+//! Returns a list of database names on the server
+/** @return a list of database names
+
+    @par Example:
+    @code{.py}
+list<string> dbs = client.listDatabaseNames();
+foreach string db in (dbs) {
+    printf("Database: %s\n", db);
+}
+    @endcode
+
+    @throw MONGODB-CLIENT-ERROR failed to list databases
+*/
+list<string> MongoClient::listDatabaseNames() {
+    return client->listDatabaseNames(xsink);
+}
+
+//! Returns a MongoDatabase object for the given database name
+/** @param name the database name
+    @return a MongoDatabase object
+
+    @par Example:
+    @code{.py}
+MongoDatabase db = client.getDatabase("mydb");
+    @endcode
+*/
+MongoDatabase MongoClient::getDatabase(string name) {
+    mongoc_database_t* db = client->getDatabase(name->c_str());
+    if (!db) {
+        xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to get database '%s'", name->c_str());
+        return QoreValue();
+    }
+    return new QoreObject(QC_MONGODATABASE, getProgram(), new QoreMongoDatabase(db, client->refSelf()));
+}
+
+//! Returns the connection URI string
+/** @return the MongoDB connection URI
+
+    @par Example:
+    @code{.py}
+string uri = client.getUri();
+    @endcode
+*/
+*string MongoClient::getUri() [flags=CONSTANT] {
+    return client->getUri();
+}

@@ -1,0 +1,336 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_MongoCollection.qpp
+
+    Qore mongodb module - MongoCollection class definition
+
+    Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_MongoCollection.h"
+#include "QC_MongoCursor.h"
+
+//! The MongoCollection class provides MongoDB collection operations
+/** This class represents a MongoDB collection and provides methods for
+    CRUD operations, aggregation, and collection management.
+
+    @par Example:
+    @code{.py}
+# Get a collection
+MongoCollection users = db.getCollection("users");
+
+# Insert a document
+hash<auto> result = users.insertOne({"name": "John", "age": 30});
+
+# Find documents
+MongoCursor cursor = users.find({"age": {"$gt": 25}});
+while (*hash<auto> doc = cursor.next()) {
+    printf("Found: %y\n", doc);
+}
+
+# Update documents
+users.updateOne({"name": "John"}, {"$set": {"age": 31}});
+
+# Delete documents
+users.deleteMany({"age": {"$lt": 18}});
+    @endcode
+
+    @since mongodb 1.0
+*/
+qclass MongoCollection [arg=QoreMongoCollection* collection; ns=mongodb; flags=final];
+
+//! Returns the name of this collection
+/** @return the collection name
+
+    @par Example:
+    @code{.py}
+string name = coll.getName();
+    @endcode
+*/
+*string MongoCollection::getName() [flags=CONSTANT] {
+    return collection->getName();
+}
+
+//! Inserts a single document into the collection
+/** @param document the document to insert
+    @return a hash containing the insert result with @c insertedId
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.insertOne({"name": "Alice", "age": 25});
+printf("Inserted ID: %y\n", result.insertedId);
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR insert failed
+*/
+hash<auto> MongoCollection::insertOne(hash<auto> document) {
+    return collection->insertOne(document, xsink);
+}
+
+//! Inserts multiple documents into the collection
+/** @param documents a list of documents to insert
+    @return a hash containing the insert result with @c insertedCount
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> docs = (
+    {"name": "Alice", "age": 25},
+    {"name": "Bob", "age": 30},
+);
+hash<auto> result = coll.insertMany(docs);
+printf("Inserted %d documents\n", result.insertedCount);
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR insert failed
+*/
+hash<auto> MongoCollection::insertMany(list<hash<auto>> documents) {
+    return collection->insertMany(documents, xsink);
+}
+
+//! Finds documents in the collection
+/** @param filter the query filter (optional, empty hash matches all)
+    @param opts find options (optional): @c projection, @c sort, @c limit, @c skip
+    @return a MongoCursor for iterating the results
+
+    @par Example:
+    @code{.py}
+# Find all documents
+MongoCursor cursor = coll.find();
+
+# Find with filter
+MongoCursor cursor = coll.find({"status": "active"});
+
+# Find with options
+MongoCursor cursor = coll.find({"status": "active"}, {
+    "projection": {"name": 1, "age": 1},
+    "sort": {"age": -1},
+    "limit": 10
+});
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR find failed
+*/
+MongoCursor MongoCollection::find(*hash<auto> filter, *hash<auto> opts) {
+    mongoc_cursor_t* cursor = collection->find(filter, opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_MONGOCURSOR, getProgram(), new QoreMongoCursor(cursor));
+}
+
+//! Finds a single document in the collection
+/** @param filter the query filter
+    @return the first matching document, or @ref nothing if no match
+
+    @par Example:
+    @code{.py}
+*hash<auto> doc = coll.findOne({"_id": oid});
+if (doc) {
+    printf("Found: %y\n", doc);
+}
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR find failed
+*/
+*hash<auto> MongoCollection::findOne(*hash<auto> filter) {
+    return collection->findOne(filter, xsink);
+}
+
+//! Updates a single document in the collection
+/** @param filter the query filter to select the document
+    @param update the update operations (use @c $set, @c $inc, etc.)
+    @param options optional update options (e.g., @c upsert: True)
+    @return a hash containing @c matchedCount, @c modifiedCount, and optionally @c upsertedId
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.updateOne(
+    {"_id": oid},
+    {"$set": {"status": "active"}, "$inc": {"version": 1}}
+);
+printf("Modified: %d\n", result.modifiedCount);
+
+# With upsert
+hash<auto> result = coll.updateOne(
+    {"name": "test"},
+    {"$set": {"value": 1}},
+    {"upsert": True}
+);
+if (result.upsertedId) {
+    printf("Inserted new document with id: %y\n", result.upsertedId);
+}
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR update failed
+*/
+hash<auto> MongoCollection::updateOne(hash<auto> filter, hash<auto> update, *hash<auto> options) {
+    return collection->updateOne(filter, update, options, xsink);
+}
+
+//! Updates multiple documents in the collection
+/** @param filter the query filter to select documents
+    @param update the update operations
+    @param options optional update options (e.g., @c upsert: True)
+    @return a hash containing @c matchedCount, @c modifiedCount, and optionally @c upsertedId
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.updateMany(
+    {"status": "pending"},
+    {"$set": {"status": "processed"}}
+);
+printf("Modified %d documents\n", result.modifiedCount);
+
+# With upsert
+hash<auto> result = coll.updateMany(
+    {"category": "new"},
+    {"$set": {"reviewed": True}},
+    {"upsert": True}
+);
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR update failed
+*/
+hash<auto> MongoCollection::updateMany(hash<auto> filter, hash<auto> update, *hash<auto> options) {
+    return collection->updateMany(filter, update, options, xsink);
+}
+
+//! Replaces a single document in the collection
+/** @param filter the query filter to select the document
+    @param replacement the replacement document (must not contain update operators)
+    @param options optional replace options (e.g., @c upsert: True)
+    @return a hash containing @c matchedCount, @c modifiedCount, and optionally @c upsertedId
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.replaceOne(
+    {"_id": oid},
+    {"name": "new name", "value": 100}
+);
+printf("Replaced: %d\n", result.modifiedCount);
+
+# With upsert
+hash<auto> result = coll.replaceOne(
+    {"name": "test"},
+    {"name": "test", "value": 1, "created": now()},
+    {"upsert": True}
+);
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR replace failed
+*/
+hash<auto> MongoCollection::replaceOne(hash<auto> filter, hash<auto> replacement, *hash<auto> options) {
+    return collection->replaceOne(filter, replacement, options, xsink);
+}
+
+//! Deletes a single document from the collection
+/** @param filter the query filter to select the document
+    @return a hash containing @c deletedCount
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.deleteOne({"_id": oid});
+if (result.deletedCount > 0) {
+    print("Document deleted\n");
+}
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR delete failed
+*/
+hash<auto> MongoCollection::deleteOne(hash<auto> filter) {
+    return collection->deleteOne(filter, xsink);
+}
+
+//! Deletes multiple documents from the collection
+/** @param filter the query filter to select documents
+    @return a hash containing @c deletedCount
+
+    @par Example:
+    @code{.py}
+hash<auto> result = coll.deleteMany({"status": "obsolete"});
+printf("Deleted %d documents\n", result.deletedCount);
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR delete failed
+*/
+hash<auto> MongoCollection::deleteMany(hash<auto> filter) {
+    return collection->deleteMany(filter, xsink);
+}
+
+//! Counts the number of documents matching a filter
+/** @param filter the query filter (optional, empty hash counts all)
+    @return the count of matching documents
+
+    @par Example:
+    @code{.py}
+int total = coll.countDocuments();
+int active = coll.countDocuments({"status": "active"});
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR count failed
+*/
+int MongoCollection::countDocuments(*hash<auto> filter) {
+    return collection->countDocuments(filter, xsink);
+}
+
+//! Drops (deletes) this collection
+/** @return True if the collection was dropped
+
+    @par Example:
+    @code{.py}
+if (coll.drop()) {
+    print("Collection dropped\n");
+}
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR drop failed
+*/
+bool MongoCollection::drop() {
+    return collection->drop(xsink);
+}
+
+//! Runs an aggregation pipeline on the collection
+/** @param pipeline a list of pipeline stages
+    @return a MongoCursor for iterating the results
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> pipeline = (
+    {"$match": {"status": "active"}},
+    {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+    {"$sort": {"count": -1}}
+);
+MongoCursor cursor = coll.aggregate(pipeline);
+while (*hash<auto> doc = cursor.next()) {
+    printf("%s: %d\n", doc._id, doc.count);
+}
+    @endcode
+
+    @throw MONGODB-COLLECTION-ERROR aggregation failed
+*/
+MongoCursor MongoCollection::aggregate(list<hash<auto>> pipeline) {
+    mongoc_cursor_t* cursor = collection->aggregate(pipeline, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_MONGOCURSOR, getProgram(), new QoreMongoCursor(cursor));
+}

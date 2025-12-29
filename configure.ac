@@ -8,6 +8,7 @@ AC_INIT([qore], [2.3.0],
 AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 tar-pax subdir-objects])
 AC_CONFIG_HEADER(include/qore/intern/unix-config.h)
 AC_CONFIG_HEADER(modules/astparser/config.h)
+AC_CONFIG_HEADER(modules/mongodb/config.h)
 
 # fix default include dir
 DEFAULT_INCLUDES="-I\${top_builddir}/include/qore"
@@ -973,6 +974,20 @@ done
 if test -z "$BZ2_LDFLAGS"; then
     AC_MSG_ERROR([no bzlib library found])
 fi
+
+# Check for libmongoc (MongoDB C driver) - optional
+AC_MSG_CHECKING([for libmongoc libraries and header files])
+if pkg-config --exists libmongoc-1.0 2>/dev/null; then
+    MONGODB_CPPFLAGS="`pkg-config --cflags libmongoc-1.0`"
+    MONGODB_LIBS="`pkg-config --libs libmongoc-1.0`"
+    have_mongodb=yes
+    AC_MSG_RESULT([yes (pkg-config)])
+else
+    have_mongodb=no
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST([MONGODB_CPPFLAGS])
+AC_SUBST([MONGODB_LIBS])
 
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
@@ -2020,6 +2035,7 @@ AM_CONDITIONAL([COND_NEED_INET_PTON],          [test "$ac_cv_func_inet_pton" != 
 AM_CONDITIONAL([COND_NEED_GETOPT_LONG],        [test "$ac_cv_header_getopt_h" != yes])
 AM_CONDITIONAL([COND_HAVE_MPFR],               [test "$have_mpfr_h" = yes])
 AM_CONDITIONAL([COND_MINGWCC],                 [test "$mingw" = yes])
+AM_CONDITIONAL([COND_MONGODB],                 [test "$have_mongodb" = yes])
 
 # find prefix
 if test -n "${exec_prefix}" -a "${exec_prefix}" != NONE; then
@@ -2141,6 +2157,7 @@ AC_CONFIG_FILES([Makefile lib/Makefile])
 AC_CONFIG_FILES([modules/astparser/Makefile modules/astparser/src/Makefile])
 AC_CONFIG_FILES([modules/reflection/Makefile modules/reflection/src/Makefile])
 AC_CONFIG_FILES([modules/logger_bin/Makefile modules/logger_bin/src/Makefile])
+AC_CONFIG_FILES([modules/mongodb/Makefile modules/mongodb/src/Makefile])
 AC_CONFIG_FILES([qore.pc])
 AC_CONFIG_FILES([cmake/QoreConfig.cmake cmake/QoreConfigVersion.cmake])
 AC_OUTPUT
@@ -2174,6 +2191,8 @@ show_library_feature "single compilation unit" $enable_single_compilation_unit
 echo "*** DEBUG OPTIONS (i.e. performance penalty) ***"
 show_library_feature profiling $enable_profile
 show_library_feature debug $enable_debug
+echo "*** OPTIONAL BUILTIN MODULES ***"
+show_library_feature "mongodb module" $have_mongodb
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"
