@@ -1,0 +1,59 @@
+/** @mainpage Qore mongodb Module
+
+    @tableofcontents
+
+    @section mongodbintro mongodb Module Introduction
+
+    The \c mongodb module provides MongoDB database connectivity for %Qore programs, allowing
+    applications to interact with MongoDB servers for document storage, retrieval, and management.
+
+    This module wraps the libmongoc C driver library to provide efficient and full-featured
+    MongoDB connectivity including:
+    - Connection management with connection pooling
+    - CRUD operations (Create, Read, Update, Delete)
+    - Aggregation pipelines
+    - Cursor-based iteration for large result sets
+    - BSON type support including ObjectId
+
+    This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
+    more information). The module is tagged as such in the module's header (meaning it can be loaded
+    unconditionally regardless of how the %Qore library was initialized).
+
+    To use the module in a %Qore script, use the \c %%requires directive as follows:
+    @code %requires mongodb @endcode
+
+    Classes provided by this module:
+    - @ref mongodb::MongoClient "MongoClient" - MongoDB client connection management
+    - @ref mongodb::MongoDatabase "MongoDatabase" - MongoDB database operations
+    - @ref mongodb::MongoCollection "MongoCollection" - MongoDB collection CRUD operations
+    - @ref mongodb::MongoCursor "MongoCursor" - Cursor for iterating query results
+    - @ref mongodb::ObjectId "ObjectId" - MongoDB ObjectId type
+
+    @section mongodbconnection Connection Strings
+
+    MongoDB connections use the standard MongoDB connection string format:
+    @code
+    mongodb://[username:password@]host[:port][/database][?options]
+    @endcode
+
+    Examples:
+    @code
+    # Connect to local MongoDB
+    MongoClient client("mongodb://localhost:27017");
+
+    # Connect with authentication
+    MongoClient client("mongodb://user:password@localhost:27017/mydb?authSource=admin");
+
+    # Connect to replica set
+    MongoClient client("mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=myReplicaSet");
+    @endcode
+
+    @section mongodbreleasenotes mongodb Module Release Notes
+
+    @subsection mongodb_1_0 mongodb Module Version 1.0
+    - Initial release with full CRUD support
+    - Aggregation pipeline support
+    - Cursor-based iteration
+    - ObjectId type support
+    - BSON to Qore type conversion
+*/
