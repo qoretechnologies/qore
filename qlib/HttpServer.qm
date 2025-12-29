@@ -3343,7 +3343,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             # Handler requires thread affinity - switch to synchronous mode
             # Send current response synchronously first
-            if (async_response) {
+            if (async_response.code) {
                 sendResponseSync(s, async_response);
             }
             # Continue handling requests on this thread until persistence ends
@@ -3378,19 +3378,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     private sendResponseSync(Socket s, hash<HttpAsyncResponseInfo> response) {
         @assert(response.code, "response.code must be set");
         @debug {
+            auto body_size = response.body ? response.body.size() : 0;
             log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y", response.code,
-                response.body.size(), response.chunked);
+                body_size, response.chunked);
         }
         try {
-            if (!response.chunked) {
-                # Send a normal monolithic response
-                s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
-                    response.hdr ?? {}, response.body);
-            } else {
-                # Send a chunked response
-                s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
-                    response.hdr ?? {}, response.body);
-            }
+            # Send response (chunked data has already been read into memory in async_response)
+            s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
+                response.hdr ?? {}, response.body);
         } catch (hash<ExceptionInfo> ex) {
             log("ERROR: Failed to send response synchronously: %s: %s", ex.err, ex.desc);
             rethrow;
@@ -3446,8 +3441,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     if (!s.isOpen()) {
                         return;
                     }
-                    # Check for idle timeout only if not in persistent mode
-                    # Persistent connections don't have idle timeouts
+                    # Check for idle timeout only if persistence has been released
+                    # (persistent connections have no idle timeout while active)
                     if (!phi.handler || !phi.handler.isPersistent()) {
                         if ((now_us() - start) > ttl) {
                             log("cid %d: idle timeout, closing connection", cx.id);
@@ -3552,7 +3547,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 # Send response synchronously
-                if (async_response) {
+                if (async_response && async_response.code) {
                     sendResponseSync(s, async_response);
                 }
 
