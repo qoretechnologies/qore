@@ -48,6 +48,7 @@ public class MongoDbCollectionDataProvider inherits DataProvider::AbstractDataPr
             "create_options": NOTHING,
             "upsert_options": UpsertOptions,
             "transaction_management": False,
+            "has_record": True,
             "supports_schema": False,
             "children_can_support_apis": True,
             "children_can_support_records": False,
@@ -214,12 +215,12 @@ public class MongoDbCollectionDataProvider inherits DataProvider::AbstractDataPr
     }
 
     #! Returns the record type for this provider
-    /** Returns a generic hash type since MongoDB is schemaless.
+    /** Returns NOTHING since MongoDB is schemaless.
         This allows any fields to be used in queries.
     */
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        # Return an empty HashDataType that accepts any fields (schemaless)
-        return new HashDataType(AutoHashType, "MongoDbDocument");
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # MongoDB is schemaless, so return NOTHING to allow any fields
+        return NOTHING;
     }
 
     #! Returns an iterator for zero or more records matching the search options

@@ -455,6 +455,10 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
             .getChildProvider(test_db)
             .getChildProvider(test_coll);
 
+        # Verify has_record is True
+        hash<DataProviderInfo> info = collProv.getInfo();
+        assertTrue(info.has_record, "MongoDbCollectionDataProvider should have has_record: True");
+
         # Test createRecord
         *hash<auto> created = collProv.createRecord({"name": "record1", "value": 42});
         assertTrue(exists created._id);
@@ -483,6 +487,77 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
 
         # Verify we have 2 documents
         assertEq(2, coll.countDocuments());
+
+        # Add more test data for searchRecords
+        collProv.createRecord({"name": "searchable1", "category": "A", "value": 100});
+        collProv.createRecord({"name": "searchable2", "category": "A", "value": 200});
+        collProv.createRecord({"name": "searchable3", "category": "B", "value": 300});
+
+        # Test searchRecords - find all
+        AbstractDataProviderRecordIterator iter = collProv.searchRecords();
+        int count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(5, count, "searchRecords() should return all 5 documents");
+
+        # Test searchRecords with filter
+        iter = collProv.searchRecords({"category": "A"});
+        count = 0;
+        while (iter.next()) {
+            hash<auto> rec = iter.getValue();
+            assertEq("A", rec.category);
+            ++count;
+        }
+        assertEq(2, count, "searchRecords with filter should return 2 documents");
+
+        # Test searchRecords with limit option
+        iter = collProv.searchRecords(NOTHING, {"limit": 2});
+        count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(2, count, "searchRecords with limit should return 2 documents");
+
+        # Test searchRecords with sort option
+        iter = collProv.searchRecords({"category": "A"}, {"sort": {"value": -1}});
+        assertTrue(iter.next());
+        hash<auto> first = iter.getValue();
+        assertEq(200, first.value, "First record with descending sort should have value 200");
+
+        # Test updateRecords
+        int updated = collProv.updateRecords({"status": "modified"}, {"category": "A"});
+        assertEq(2, updated, "updateRecords should update 2 documents");
+
+        # Verify updates
+        iter = collProv.searchRecords({"category": "A"});
+        while (iter.next()) {
+            hash<auto> rec = iter.getValue();
+            assertEq("modified", rec.status);
+        }
+
+        # Test updateRecords with no matches
+        updated = collProv.updateRecords({"status": "never"}, {"nonexistent": "field"});
+        assertEq(0, updated, "updateRecords with no matches should return 0");
+
+        # Test deleteRecords
+        int deleted = collProv.deleteRecords({"category": "B"});
+        assertEq(1, deleted, "deleteRecords should delete 1 document");
+
+        # Verify deletion
+        iter = collProv.searchRecords({"category": "B"});
+        count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(0, count, "No documents with category B should remain");
+
+        # Test deleteRecords with no matches
+        deleted = collProv.deleteRecords({"nonexistent": "field"});
+        assertEq(0, deleted, "deleteRecords with no matches should return 0");
+
+        # Verify final count
+        assertEq(4, coll.countDocuments(), "Should have 4 documents remaining");
     }
 
     negativeTests() {

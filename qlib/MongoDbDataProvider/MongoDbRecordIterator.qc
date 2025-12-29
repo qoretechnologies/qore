@@ -75,8 +75,10 @@ public class MongoDbRecordIterator inherits DataProvider::AbstractDataProviderRe
     /** @return True if a record is available, False if no more records
     */
     private bool nextImpl() {
-        if (cursor.next()) {
-            current_doc = cursor.getValue();
+        # cursor.next() returns the document directly, or NOTHING if no more documents
+        *hash<auto> doc = cursor.next();
+        if (doc) {
+            current_doc = doc;
             is_valid = True;
             return True;
         }
