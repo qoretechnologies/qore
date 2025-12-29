@@ -63,6 +63,7 @@
 
 const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -d, --dox-output=arg   doxygen output file name\n"
+    " -D, --define=arg       define a preprocessor macro (can be used multiple times)\n"
     " -h, --help             this help text\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
     " -o, --output=arg       cpp output file name\n"
@@ -71,6 +72,7 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -v, --verbose          increases verbosity level\n";
 
 static const option pgm_opts[] = {
+    {"define", required_argument, nullptr, 'D'},
     {"dox-output", required_argument, nullptr, 'd'},
     {"help", no_argument, nullptr, 'h'},
     {"javadoc", required_argument, nullptr, 'j'},
@@ -143,6 +145,9 @@ static strmap_t dnmap;
 
 // set of possible code flags
 static strset_t fset;
+
+// predefined preprocessor macros from command line (-D)
+static strset_t cmdline_defines;
 
 // parameter structure
 struct Param {
@@ -319,6 +324,375 @@ static void trim(std::string& str) {
         str.erase(0, 1);
     trim_end(str);
 }
+
+// Preprocessor conditional state for #ifdef/#ifndef/#if/#elif/#else/#endif support
+struct PreprocessorCondition {
+    std::string directive;      // "ifdef", "ifndef", "if", "elif", "else"
+    std::string expression;     // The condition expression
+    bool was_true;              // Was any branch in this group true?
+    bool currently_active;      // Is this branch currently active?
+    unsigned line;              // Line number for error reporting
+
+    PreprocessorCondition(const std::string& dir, const std::string& expr, bool active, unsigned ln)
+        : directive(dir), expression(expr), was_true(active), currently_active(active), line(ln) {
+    }
+};
+
+class PreprocessorState {
+    std::set<std::string> defines;              // Currently defined macros
+    std::vector<PreprocessorCondition> stack;   // Condition nesting stack
+    const char* fileName;
+
+    // Parse "defined(MACRO)" or "defined MACRO" and return the macro name
+    static bool parseDefinedExpr(const std::string& expr, size_t& pos, std::string& macro) {
+        size_t start = pos;
+        // Skip whitespace
+        while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+
+        // Check for "defined"
+        if (expr.compare(pos, 7, "defined") != 0) {
+            pos = start;
+            return false;
+        }
+        pos += 7;
+
+        // Skip whitespace
+        while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+
+        bool has_paren = false;
+        if (pos < expr.size() && expr[pos] == '(') {
+            has_paren = true;
+            ++pos;
+            while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+        }
+
+        // Get macro name
+        size_t name_start = pos;
+        while (pos < expr.size() && idchar(expr[pos])) ++pos;
+        if (pos == name_start) {
+            pos = start;
+            return false;
+        }
+        macro = expr.substr(name_start, pos - name_start);
+
+        if (has_paren) {
+            while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+            if (pos >= expr.size() || expr[pos] != ')') {
+                pos = start;
+                return false;
+            }
+            ++pos;
+        }
+        return true;
+    }
+
+    // Evaluate a primary expression (defined(), macro name, integer, or parenthesized expr)
+    bool evalPrimary(const std::string& expr, size_t& pos) const {
+        // Skip whitespace
+        while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+
+        if (pos >= expr.size()) return false;
+
+        // Handle negation
+        if (expr[pos] == '!') {
+            ++pos;
+            return !evalPrimary(expr, pos);
+        }
+
+        // Handle parentheses
+        if (expr[pos] == '(') {
+            ++pos;
+            bool result = evalOr(expr, pos);
+            while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+            if (pos < expr.size() && expr[pos] == ')') ++pos;
+            return result;
+        }
+
+        // Handle "defined(MACRO)" or "defined MACRO"
+        std::string macro;
+        if (parseDefinedExpr(expr, pos, macro)) {
+            return isDefined(macro);
+        }
+
+        // Handle integer literal
+        if (isdigit(expr[pos])) {
+            size_t num_start = pos;
+            while (pos < expr.size() && isdigit(expr[pos])) ++pos;
+            std::string num_str = expr.substr(num_start, pos - num_start);
+            return std::stoi(num_str) != 0;
+        }
+
+        // Handle bare macro name (treated as defined check)
+        if (idchar(expr[pos])) {
+            size_t name_start = pos;
+            while (pos < expr.size() && idchar(expr[pos])) ++pos;
+            macro = expr.substr(name_start, pos - name_start);
+            return isDefined(macro);
+        }
+
+        return false;
+    }
+
+    // Evaluate AND expressions (left-to-right with short-circuit)
+    bool evalAnd(const std::string& expr, size_t& pos) const {
+        bool result = evalPrimary(expr, pos);
+        while (true) {
+            while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+            if (pos + 1 < expr.size() && expr[pos] == '&' && expr[pos + 1] == '&') {
+                pos += 2;
+                result = result && evalPrimary(expr, pos);
+            } else {
+                break;
+            }
+        }
+        return result;
+    }
+
+    // Evaluate OR expressions (left-to-right with short-circuit)
+    bool evalOr(const std::string& expr, size_t& pos) const {
+        bool result = evalAnd(expr, pos);
+        while (true) {
+            while (pos < expr.size() && whitespace(expr[pos])) ++pos;
+            if (pos + 1 < expr.size() && expr[pos] == '|' && expr[pos + 1] == '|') {
+                pos += 2;
+                result = result || evalAnd(expr, pos);
+            } else {
+                break;
+            }
+        }
+        return result;
+    }
+
+public:
+    PreprocessorState() : fileName(nullptr) {
+    }
+
+    void setFileName(const char* fn) {
+        fileName = fn;
+    }
+
+    void initFromCommandLine() {
+        defines = cmdline_defines;
+    }
+
+    // Check if we should skip current content
+    bool isSkipping() const {
+        for (const auto& cond : stack) {
+            if (!cond.currently_active) return true;
+        }
+        return false;
+    }
+
+    // Define a macro
+    void define(const std::string& name) {
+        defines.insert(name);
+    }
+
+    // Undefine a macro
+    void undef(const std::string& name) {
+        defines.erase(name);
+    }
+
+    // Check if a macro is defined
+    bool isDefined(const std::string& name) const {
+        return defines.find(name) != defines.end();
+    }
+
+    // Evaluate a condition expression
+    bool evaluateCondition(const std::string& expr) const {
+        size_t pos = 0;
+        return evalOr(expr, pos);
+    }
+
+    // Handle #ifdef
+    void pushIfdef(const std::string& name, unsigned line) {
+        bool active = !isSkipping() && isDefined(name);
+        stack.emplace_back("ifdef", name, active, line);
+    }
+
+    // Handle #ifndef
+    void pushIfndef(const std::string& name, unsigned line) {
+        bool active = !isSkipping() && !isDefined(name);
+        stack.emplace_back("ifndef", name, active, line);
+    }
+
+    // Handle #if
+    void pushIf(const std::string& expr, unsigned line) {
+        bool active = !isSkipping() && evaluateCondition(expr);
+        stack.emplace_back("if", expr, active, line);
+    }
+
+    // Handle #elif
+    bool handleElif(const std::string& expr, unsigned line) {
+        if (stack.empty()) {
+            error("%s:%d: #elif without matching #if/#ifdef/#ifndef\n", fileName, line);
+            return false;
+        }
+        auto& top = stack.back();
+        if (top.directive == "else") {
+            error("%s:%d: #elif after #else\n", fileName, line);
+            return false;
+        }
+        // Only evaluate if no previous branch was true and parent is active
+        bool parent_active = true;
+        for (size_t i = 0; i + 1 < stack.size(); ++i) {
+            if (!stack[i].currently_active) {
+                parent_active = false;
+                break;
+            }
+        }
+        if (!top.was_true && parent_active && evaluateCondition(expr)) {
+            top.currently_active = true;
+            top.was_true = true;
+        } else {
+            top.currently_active = false;
+        }
+        top.directive = "elif";
+        top.expression = expr;
+        return true;
+    }
+
+    // Handle #else
+    bool handleElse(unsigned line) {
+        if (stack.empty()) {
+            error("%s:%d: #else without matching #if/#ifdef/#ifndef\n", fileName, line);
+            return false;
+        }
+        auto& top = stack.back();
+        if (top.directive == "else") {
+            error("%s:%d: duplicate #else\n", fileName, line);
+            return false;
+        }
+        // Only active if no previous branch was true and parent is active
+        bool parent_active = true;
+        for (size_t i = 0; i + 1 < stack.size(); ++i) {
+            if (!stack[i].currently_active) {
+                parent_active = false;
+                break;
+            }
+        }
+        top.currently_active = !top.was_true && parent_active;
+        top.directive = "else";
+        return true;
+    }
+
+    // Handle #endif
+    bool handleEndif(unsigned line) {
+        if (stack.empty()) {
+            error("%s:%d: #endif without matching #if/#ifdef/#ifndef\n", fileName, line);
+            return false;
+        }
+        stack.pop_back();
+        return true;
+    }
+
+    // Handle #define
+    void handleDefine(const std::string& name) {
+        if (!isSkipping()) {
+            define(name);
+        }
+    }
+
+    // Handle #undef
+    void handleUndef(const std::string& name) {
+        if (!isSkipping()) {
+            undef(name);
+        }
+    }
+
+    // Check for unclosed conditionals
+    bool hasUnclosedConditions() const {
+        return !stack.empty();
+    }
+
+    // Get info about unclosed conditionals for error reporting
+    std::string getUnclosedConditionInfo() const {
+        if (stack.empty()) return "";
+        std::string result;
+        for (const auto& cond : stack) {
+            if (!result.empty()) result += ", ";
+            result += "#" + cond.directive + " at line " + std::to_string(cond.line);
+        }
+        return result;
+    }
+
+    // Handle a preprocessor directive line - returns true if it was a directive we handle
+    // The directive is also added to output buffer if needed
+    bool handleDirective(const std::string& line, unsigned lineNumber, std::string& output) {
+        if (line.empty() || line[0] != '#') return false;
+
+        std::string trimmed = line.substr(1);
+        // Skip whitespace after #
+        size_t pos = 0;
+        while (pos < trimmed.size() && whitespace(trimmed[pos])) ++pos;
+        trimmed = trimmed.substr(pos);
+
+        std::string directive;
+        pos = 0;
+        while (pos < trimmed.size() && isalpha(trimmed[pos])) {
+            directive += trimmed[pos++];
+        }
+
+        // Skip whitespace after directive
+        while (pos < trimmed.size() && whitespace(trimmed[pos])) ++pos;
+
+        // Get the rest as the argument
+        std::string arg = trimmed.substr(pos);
+        trim_end(arg);
+
+        if (directive == "ifdef") {
+            pushIfdef(arg, lineNumber);
+            output += line;  // Pass through to C++ output
+            return true;
+        } else if (directive == "ifndef") {
+            pushIfndef(arg, lineNumber);
+            output += line;
+            return true;
+        } else if (directive == "if") {
+            pushIf(arg, lineNumber);
+            output += line;
+            return true;
+        } else if (directive == "elif") {
+            if (!handleElif(arg, lineNumber)) return false;
+            output += line;
+            return true;
+        } else if (directive == "else") {
+            if (!handleElse(lineNumber)) return false;
+            output += line;
+            return true;
+        } else if (directive == "endif") {
+            if (!handleEndif(lineNumber)) return false;
+            output += line;
+            return true;
+        } else if (directive == "define") {
+            // Only handle simple defines without values
+            std::string name;
+            size_t i = 0;
+            while (i < arg.size() && idchar(arg[i])) {
+                name += arg[i++];
+            }
+            if (!name.empty()) {
+                handleDefine(name);
+            }
+            output += line;  // Pass through
+            return true;
+        } else if (directive == "undef") {
+            std::string name;
+            size_t i = 0;
+            while (i < arg.size() && idchar(arg[i])) {
+                name += arg[i++];
+            }
+            if (!name.empty()) {
+                handleUndef(name);
+            }
+            output += line;
+            return true;
+        }
+
+        // Not a directive we handle - let it pass through unchanged
+        return false;
+    }
+};
 
 static int read_line(unsigned &lineNumber, std::string& str, FILE* fp) {
     while (true) {
@@ -2418,6 +2792,7 @@ protected:
     const char* fileName;
     unsigned startLineNumber;
     unsigned& lineNumber;
+    PreprocessorState& ppState; // preprocessor state for #ifdef handling
 
     void checkBuf(std::string& buf) {
         if (!buf.empty()) {
@@ -2521,8 +2896,8 @@ protected:
     }
 
 public:
-    Group(std::string& buf, FILE* fp, const char* fn, unsigned& ln)
-            : valid(true), fileName(fn), startLineNumber(ln), lineNumber(ln) {
+    Group(std::string& buf, FILE* fp, const char* fn, unsigned& ln, PreprocessorState& pps)
+            : valid(true), fileName(fn), startLineNumber(ln), lineNumber(ln), ppState(pps) {
         doc = buf;
         if (readUntilOpenGroup(fileName, lineNumber, doc, fp)) {
             error("%s:%d: could not find start of group\n", fileName, lineNumber);
@@ -2537,6 +2912,20 @@ public:
                 error("%s:%d: a premature EOF reading group\n", fileName, lineNumber);
                 valid = false;
                 return;
+            }
+
+            // Handle preprocessor directives
+            if (!line.empty() && line[0] == '#') {
+                if (ppState.handleDirective(line, lineNumber, buf)) {
+                    continue;
+                }
+                // Not a recognized directive - pass through if not skipping
+            }
+
+            // Skip content in inactive conditional blocks
+            if (ppState.isSkipping()) {
+                buf += line;  // Keep the raw text for pass-through to C++
+                continue;
             }
 
             if (!line.compare(0, 10, "namespace ")) {
@@ -4287,6 +4676,8 @@ protected:
     // class element map
     cemap_t cemap;
     bool valid, has_class;      // has at least 1 class element
+    // preprocessor state for #ifdef/#ifndef/#if/#elif/#else/#endif
+    PreprocessorState ppState;
 
     void checkBuf(std::string& buf) {
         if (!buf.empty()) {
@@ -4316,6 +4707,10 @@ protected:
 
         lineNumber = 1;
 
+        // Initialize preprocessor state
+        ppState.setFileName(fileName);
+        ppState.initFromCommandLine();
+
         int rc = 0;
 
         std::string str;
@@ -4329,10 +4724,24 @@ protected:
             if (str.empty())
                 break;
 
+            // Handle preprocessor directives
+            if (!str.empty() && str[0] == '#') {
+                if (ppState.handleDirective(str, lineNumber, buf)) {
+                    continue;
+                }
+                // Not a recognized directive - pass through if not skipping
+            }
+
+            // Skip content in inactive conditional blocks
+            if (ppState.isSkipping()) {
+                buf += str;  // Keep the raw text for pass-through to C++
+                continue;
+            }
+
             if (!str.compare(0, 13, "/** @defgroup")) {
                 checkBuf(buf);
 
-                if (groups.add(new Group(str, fp, fileName, lineNumber))) {
+                if (groups.add(new Group(str, fp, fileName, lineNumber, ppState))) {
                     rc = -1;
                     break;
                 }
@@ -4509,6 +4918,12 @@ protected:
         }
 
         checkBuf(buf);
+
+        // Check for unclosed preprocessor conditionals
+        if (ppState.hasUnclosedConditions()) {
+            error("%s: unclosed preprocessor conditionals: %s\n", fileName, ppState.getUnclosedConditionInfo().c_str());
+            rc = -1;
+        }
 
         fclose(fp);
 
@@ -5013,12 +5428,17 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:hj:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
             case 'd':
                 opts.dox_fn = optarg;
+                break;
+
+            case 'D':
+                cmdline_defines.insert(optarg);
+                log(LL_INFO, "defined preprocessor macro: %s\n", optarg);
                 break;
 
             case 'h':
