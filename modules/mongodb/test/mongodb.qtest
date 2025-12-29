@@ -48,6 +48,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Connection tests", \connectionTests());
         addTestCase("Connection negative tests", \connectionNegativeTests());
         addTestCase("Database tests", \databaseTests());
+        addTestCase("Insert result tests", \insertResultTests());
         addTestCase("CRUD tests", \crudTests());
         addTestCase("Find options tests", \findOptionsTests());
         addTestCase("Update operators tests", \updateOperatorsTests());
@@ -218,21 +219,104 @@ public class MongoDbTest inherits QUnit::Test {
         assertEq(1, result.ok, "runCommand serverStatus ok");
     }
 
+    insertResultTests() {
+        if (!ensureClient()) return;
+
+        MongoCollection coll = getCleanCollection("insert_result_tests");
+
+        # Test 1: insertOne without _id returns generated ObjectId
+        hash<auto> result = coll.insertOne({"name": "test1", "value": 100});
+        assertTrue(result.hasKey("insertedId"), "insertOne result has insertedId key");
+        assertTrue(result.insertedId instanceof ObjectId, "insertedId is ObjectId type");
+        assertEq(1, result.insertedCount, "insertedCount is 1");
+
+        # Verify the returned insertedId matches the stored document
+        *hash<auto> found = coll.findOne({"name": "test1"});
+        assertTrue(found._id instanceof ObjectId, "stored _id is ObjectId");
+        assertEq(result.insertedId.toString(), found._id.toString(),
+            "insertedId matches stored document _id");
+
+        # Test 2: insertOne with explicit ObjectId _id
+        ObjectId explicit_oid();
+        result = coll.insertOne({"_id": explicit_oid, "name": "test2"});
+        assertTrue(result.insertedId instanceof ObjectId, "insertedId with explicit _id is ObjectId");
+        assertEq(explicit_oid.toString(), result.insertedId.toString(),
+            "insertedId equals explicitly provided ObjectId");
+
+        # Verify storage
+        found = coll.findOne({"_id": explicit_oid});
+        assertEq("test2", found.name, "document with explicit _id found correctly");
+
+        # Test 3: Multiple inserts return unique insertedIds
+        list<string> inserted_ids = ();
+        for (int i = 0; i < 10; i++) {
+            result = coll.insertOne({"name": "multi" + string(i)});
+            string id_str = result.insertedId.toString();
+            assertFalse(inlist(id_str, inserted_ids), "insertedId " + string(i) + " is unique");
+            inserted_ids += id_str;
+        }
+        assertEq(10, inserted_ids.size(), "10 unique insertedIds generated");
+
+        # Test 4: insertedId can be used to find the document immediately
+        result = coll.insertOne({"name": "findable", "data": "important"});
+        ObjectId new_id = result.insertedId;
+        found = coll.findOne({"_id": new_id});
+        assertEq("findable", found.name, "can find by insertedId immediately");
+        assertEq("important", found.data, "found document has correct data");
+
+        # Test 5: insertOne with complex document still returns insertedId
+        result = coll.insertOne({
+            "name": "complex",
+            "nested": {"level1": {"level2": {"value": 42}}},
+            "array": (1, 2, 3, 4, 5),
+            "mixed": ("string", 123, True, NOTHING),
+        });
+        assertTrue(result.insertedId instanceof ObjectId, "complex doc insertedId is ObjectId");
+        found = coll.findOne({"_id": result.insertedId});
+        assertEq(42, found.nested.level1.level2.value, "complex document stored correctly");
+
+        # Test 6: Negative - duplicate _id should fail
+        ObjectId dup_oid();
+        coll.insertOne({"_id": dup_oid, "name": "first"});
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            coll.insertOne({"_id": dup_oid, "name": "second"});
+        }, "duplicate _id throws error");
+
+        # Verify the first document still exists
+        found = coll.findOne({"_id": dup_oid});
+        assertEq("first", found.name, "original document unchanged after dup error");
+
+        # Clean up
+        coll.drop();
+    }
+
     crudTests() {
         if (!ensureClient()) return;
 
         MongoCollection coll = getCleanCollection();
 
-        # Test insertOne
+        # Test insertOne - verify insertedId is returned
         hash<auto> doc = {"name": "Alice", "age": 30, "email": "alice@example.com"};
         hash<auto> result = coll.insertOne(doc);
         assertEq(True, result.val(), "insertOne returns result");
+        assertEq(1, result.insertedCount, "insertOne returns insertedCount");
+        assertTrue(result.insertedId instanceof ObjectId, "insertOne returns insertedId as ObjectId");
 
-        # Test findOne
+        # Test findOne - verify insertedId matches document _id
         *hash<auto> found = coll.findOne({"name": "Alice"});
         assertEq("Alice", found.name, "findOne returns correct document");
         assertEq(30, found.age, "findOne returns correct age");
         assertTrue(found._id.val(), "findOne includes _id");
+        assertTrue(found._id instanceof ObjectId, "findOne _id is ObjectId");
+        assertEq(result.insertedId.toString(), found._id.toString(), "insertedId matches document _id");
+
+        # Test insertOne with explicit _id
+        ObjectId explicit_oid();
+        hash<auto> doc_with_id = {"_id": explicit_oid, "name": "Explicit", "value": 123};
+        result = coll.insertOne(doc_with_id);
+        assertEq(explicit_oid.toString(), result.insertedId.toString(), "insertOne with explicit _id returns same _id");
+        found = coll.findOne({"name": "Explicit"});
+        assertEq(explicit_oid.toString(), found._id.toString(), "explicit _id stored correctly");
 
         # Test insertMany
         list<hash<auto>> docs = (

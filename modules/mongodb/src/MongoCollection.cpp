@@ -26,6 +26,7 @@
 */
 
 #include "QC_MongoCollection.h"
+#include "QC_ObjectId.h"
 #include "bson_conversion.h"
 
 // CID_MONGOCOLLECTION and QC_MONGOCOLLECTION are defined in QC_MongoCollection.cpp (generated from .qpp)
@@ -41,6 +42,20 @@ QoreHashNode* QoreMongoCollection::insertOne(const QoreHashNode* document, Excep
         return nullptr;
     }
 
+    // Check if document already has an _id, if not add one
+    bson_iter_t iter;
+    bson_oid_t oid;
+    bool had_id = bson_iter_init_find(&iter, doc, "_id");
+    if (!had_id) {
+        bson_oid_init(&oid, nullptr);
+        bson_append_oid(doc, "_id", 3, &oid);
+    } else {
+        // Copy existing OID if it's an OID type
+        if (BSON_ITER_HOLDS_OID(&iter)) {
+            bson_oid_copy(bson_iter_oid(&iter), &oid);
+        }
+    }
+
     bson_t reply;
     bson_error_t error;
     bool result = mongoc_collection_insert_one(collection, doc, nullptr, &reply, &error);
@@ -54,6 +69,12 @@ QoreHashNode* QoreMongoCollection::insertOne(const QoreHashNode* document, Excep
 
     QoreHashNode* rv = bson_to_qore_hash(&reply, xsink);
     bson_destroy(&reply);
+
+    // Add insertedId to the result
+    if (rv) {
+        rv->setKeyValue("insertedId", new QoreObject(QC_OBJECTID, getProgram(), new QoreObjectId(oid)), xsink);
+    }
+
     return rv;
 }
 
