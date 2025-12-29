@@ -433,14 +433,14 @@ class PreprocessorState {
         return false;
     }
 
-    // Evaluate AND expressions
+    // Evaluate AND expressions (left-to-right with short-circuit)
     bool evalAnd(const std::string& expr, size_t& pos) const {
         bool result = evalPrimary(expr, pos);
         while (true) {
             while (pos < expr.size() && whitespace(expr[pos])) ++pos;
             if (pos + 1 < expr.size() && expr[pos] == '&' && expr[pos + 1] == '&') {
                 pos += 2;
-                result = evalPrimary(expr, pos) && result;
+                result = result && evalPrimary(expr, pos);
             } else {
                 break;
             }
@@ -448,14 +448,14 @@ class PreprocessorState {
         return result;
     }
 
-    // Evaluate OR expressions
+    // Evaluate OR expressions (left-to-right with short-circuit)
     bool evalOr(const std::string& expr, size_t& pos) const {
         bool result = evalAnd(expr, pos);
         while (true) {
             while (pos < expr.size() && whitespace(expr[pos])) ++pos;
             if (pos + 1 < expr.size() && expr[pos] == '|' && expr[pos + 1] == '|') {
                 pos += 2;
-                result = evalAnd(expr, pos) || result;
+                result = result || evalAnd(expr, pos);
             } else {
                 break;
             }
@@ -2916,7 +2916,7 @@ public:
 
             // Handle preprocessor directives
             if (!line.empty() && line[0] == '#') {
-                if (ppState.handleDirective(line, lineNumber - 1, buf)) {
+                if (ppState.handleDirective(line, lineNumber, buf)) {
                     continue;
                 }
                 // Not a recognized directive - pass through if not skipping
@@ -4726,7 +4726,7 @@ protected:
 
             // Handle preprocessor directives
             if (!str.empty() && str[0] == '#') {
-                if (ppState.handleDirective(str, lineNumber - 1, buf)) {
+                if (ppState.handleDirective(str, lineNumber, buf)) {
                     continue;
                 }
                 // Not a recognized directive - pass through if not skipping
