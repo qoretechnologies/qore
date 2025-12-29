@@ -296,7 +296,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         date ttl = mServer.getTtl();
         on_exit mServer.setTtl(ttl);
 
-        mServer.setTtl(1us);
+        # Use a TTL that's short but won't cause a race condition between the server's
+        # idle timeout check and the client's next request
+        mServer.setTtl(100ms);
 
         # Use retry wrapper since server may close connection before client detects it
         assertEq("GET, abc, /abc", doWithRetry(string sub() { return mClient.get("/abc"); }));
