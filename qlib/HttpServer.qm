@@ -3352,7 +3352,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Handle response: either queue for async sending or connection was handled (dedicated/error)
-        if (async_response) {
+        if (async_response.code) {
             # Update response with phi for keep-alive
             async_response.phi = phi;
             # Queue response for async sending - I/O controller will handle keep-alive
@@ -4668,9 +4668,9 @@ class HttpServerIoController {
             }
         }
 
-        # Add Content-Length if we have a body and it's not chunked
-        if (response.body && !response.chunked) {
-            headers += sprintf("Content-Length: %d\r\n", response.body.size());
+        # Add Content-Length for non-chunked responses (including 0 for empty body)
+        if (!response.chunked) {
+            headers += sprintf("Content-Length: %d\r\n", response.body ? response.body.size() : 0);
         }
 
         # End headers
