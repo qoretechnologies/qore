@@ -150,6 +150,11 @@ log("started listener on %s", lh.desc);
       - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
       - new \c HttpServer::queueAsyncResponse() method for async response sending
       - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
+    - added persistent handler support in async I/O mode
+      - handlers calling \c setPersistent(True) now automatically switch to synchronous/dedicated thread mode
+      - ensures thread affinity for thread-local resources (e.g. database transactions, DatasourcePool handles)
+      - connection returns to async I/O when handler releases persistence via \c setPersistent(False)
+      - new private \c HttpListener::handlePersistentConnectionSync() method for synchronous request handling
 
     @subsection http1_4 HttpServer 1.4
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
@@ -3324,14 +3329,30 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # For async mode, capture the response for async sending
-        *hash<HttpAsyncResponseInfo> async_response;
+        hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
 
         # Call handleRequest with the correct signature
         serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
             \dedicated_external, \async_response);
 
+        # Check if handler opted into persistence - if so, we need thread affinity
+        # and must switch to synchronous mode for this connection
+        if (!dedicated && !dedicated_external && phi.handler && phi.handler.isPersistent()) {
+            @debug {
+                log("DEBUG: cid %d: handler opted into persistence, switching to sync mode", cx.id);
+            }
+            # Handler requires thread affinity - switch to synchronous mode
+            # Send current response synchronously first
+            if (async_response.code) {
+                sendResponseSync(s, async_response);
+            }
+            # Continue handling requests on this thread until persistence ends
+            handlePersistentConnectionSync(s, \cx, phi, info);
+            return;
+        }
+
         # Handle response: either queue for async sending or connection was handled (dedicated/error)
-        if (async_response) {
+        if (async_response.code) {
             # Update response with phi for keep-alive
             async_response.phi = phi;
             # Queue response for async sending - I/O controller will handle keep-alive
@@ -3349,6 +3370,212 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 } catch () {
                     # Ignore close errors
                 }
+            }
+        }
+    }
+
+    #! Sends a response synchronously (used when switching from async to sync mode for persistent handlers)
+    private sendResponseSync(Socket s, hash<HttpAsyncResponseInfo> response) {
+        @assert(response.code, "response.code must be set");
+        @debug {
+            auto body_size = response.body ? response.body.size() : 0;
+            log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y", response.code,
+                body_size, response.chunked);
+        }
+        try {
+            # Send response (chunked data has already been read into memory in async_response)
+            s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
+                response.hdr ?? {}, response.body);
+        } catch (hash<ExceptionInfo> ex) {
+            log("ERROR: Failed to send response synchronously: %s: %s", ex.err, ex.desc);
+            rethrow;
+        }
+        logResponse(response.cx, response);
+    }
+
+    #! Handles a persistent connection synchronously after async mode detected persistence
+    /** This method is called when a handler opts into persistence via setPersistent(True).
+        It handles all subsequent requests on the current thread until:
+        - The handler releases persistence (isPersistent() returns False)
+        - The connection is closed
+        - An error occurs
+
+        @param s the socket for the connection
+        @param cx the connection context
+        @param phi the persistent handler info
+        @param info peer info for logging
+    */
+    private handlePersistentConnectionSync(Socket s, reference<hash<auto>> cx, HttpPersistentHandlerInfo phi,
+            hash<auto> info) {
+        @assert(phi.handler, "phi.handler must be set when entering persistent sync mode");
+        @assert(phi.handler.isPersistent(), "handler must be persistent when entering persistent sync mode");
+        log("cid %d: switching to synchronous mode for persistent handler", cx.id);
+
+        # Static listener context template
+        hash<auto> cx_listener = getContextTemplate(info);
+
+        try {
+            while (s.isOpen()) {
+                # Check if persistence has ended - if so, return to async I/O
+                if (!phi.handler || !phi.handler.isPersistent()) {
+                    @debug {
+                        log("DEBUG: cid %d: persistence ended, handler=%y isPersistent=%y", cx.id,
+                            phi.handler ? True : False, phi.handler ? phi.handler.isPersistent() : False);
+                    }
+                    log("cid %d: persistence ended, returning to async I/O", cx.id);
+                    if (!cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, cx, self, phi);
+                    }
+                    return;
+                }
+
+                # Wait for next request with idle timeout
+                date poll_interval = HttpServer::PollTimeout;
+                date ttl = serv.getTtl();
+                if (poll_interval > ttl) {
+                    poll_interval = ttl;
+                }
+
+                date start = now_us();
+                while (!s.isDataAvailable(poll_interval)) {
+                    if (!s.isOpen()) {
+                        return;
+                    }
+                    # Check for idle timeout only if persistence has been released
+                    # (persistent connections have no idle timeout while active)
+                    if (!phi.handler || !phi.handler.isPersistent()) {
+                        if ((now_us() - start) > ttl) {
+                            log("cid %d: idle timeout, closing connection", cx.id);
+                            return;
+                        }
+                    }
+                }
+
+                # Reset context for new request
+                cx = cx_listener;
+
+                # Read HTTP header
+                hash<auto> header_info;
+                hash<auto> hdr;
+                try {
+                    hdr = s.readHTTPHeader(HttpServer::ReadTimeout, \header_info);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-CLOSED") {
+                        # Connection closed by peer
+                        return;
+                    } else if (ex.err == "SOCKET-TIMEOUT") {
+                        string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
+                        logError("cid %d: %s", cx.id, err);
+                        cx.close = True;
+                        serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
+                        return;
+                    }
+                    string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
+                    logError("cid %d: %s", cx.id, etxt);
+                    cx.close = True;
+                    serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
+                    return;
+                }
+
+                # Process path
+                cx.raw_path = hdr.path;
+                hdr.path = decode_url(hdr.path);
+                cx += {
+                    "orig_path": hdr.path,
+                    "masked_path": serv.maskData(hdr.path),
+                };
+
+                if (hdr.path =~ /^\//) {
+                    splice hdr.path, 0, 1;
+                }
+
+                if (hdr.authorization) {
+                    cx.auth = hdr.authorization;
+                }
+
+                # Process content-type
+                if (hdr."content-type") {
+                    hdr."_qore_orig_content_type" = hdr."content-type";
+                }
+                hdr."content-type" = header_info."body-content-type";
+                if (hdr."content-type".typeCode() == NT_LIST) {
+                    hdr."content-type" = hdr."content-type"[0];
+                }
+
+                cx.hdr = hdr;
+                cx.char_encoding = s.getEncoding();
+                cx."response-encoding" = header_info."accept-charset";
+                cx.close = header_info.close;
+
+                # Log the request
+                {
+                    string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
+                        cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version,
+                        hdr."user-agent");
+                    if (hdr."transfer-encoding" == "chunked") {
+                        lstr += " body: chunked";
+                    }
+                    if (hdr."_qore_orig_content_type") {
+                        lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
+                    }
+                    if (ssl) {
+                        lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+                    }
+                    lstr += " [persistent-sync]";
+                    lstr += ")";
+                    log("%s", lstr);
+                }
+
+                cx.uctx = get_thread_data("uctx");
+                cx."header-info" = header_info;
+
+                if (get_remote_certs) {
+                    cx."client-cert" = s.getRemoteCertificate();
+                }
+
+                # Process request
+                bool dedicated;
+                bool dedicated_external;
+                *hash<HttpAsyncResponseInfo> async_response;
+
+                serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
+                    \dedicated_external, \async_response);
+
+                # If handler took over the socket (dedicated), we're done
+                if (dedicated || dedicated_external) {
+                    return;
+                }
+
+                # Send response synchronously
+                if (async_response && async_response.code) {
+                    sendResponseSync(s, async_response);
+                }
+
+                # Check if connection should be closed
+                if (cx.close) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            string etxt = serv.getDebug()
+                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
+                : get_exception_string(ex);
+            logError("cid %d: persistent handler error: %s", cx.id, etxt);
+            cx.close = True;
+            try {
+                serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
+            } catch () {
+                # Ignore errors sending error response
+            }
+        }
+
+        # Close connection
+        if (s.isOpen()) {
+            try {
+                s.shutdown();
+                s.close();
+            } catch () {
+                # Ignore close errors
             }
         }
     }
@@ -4441,9 +4668,9 @@ class HttpServerIoController {
             }
         }
 
-        # Add Content-Length if we have a body and it's not chunked
-        if (response.body && !response.chunked) {
-            headers += sprintf("Content-Length: %d\r\n", response.body.size());
+        # Add Content-Length for non-chunked responses (including 0 for empty body)
+        if (!response.chunked) {
+            headers += sprintf("Content-Length: %d\r\n", response.body ? response.body.size() : 0);
         }
 
         # End headers

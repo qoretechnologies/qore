@@ -21,17 +21,28 @@
 # DEALINGS IN THE SOFTWARE.
 
 # Find libmongoc and libbson
-find_package(mongoc-1.0 QUIET)
-if (NOT mongoc-1.0_FOUND)
-    # Fall back to pkg-config
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(MONGOC REQUIRED libmongoc-1.0)
-    pkg_check_modules(BSON REQUIRED libbson-1.0)
+# Prefer pkg-config as it works reliably with shared libs only (Alpine's cmake
+# config references static libs that may not be installed)
+find_package(PkgConfig QUIET)
+if (PkgConfig_FOUND)
+    pkg_check_modules(MONGOC libmongoc-1.0)
+    pkg_check_modules(BSON libbson-1.0)
+endif()
+
+if (MONGOC_FOUND AND BSON_FOUND)
     set(MONGODB_INCLUDE_DIRS ${MONGOC_INCLUDE_DIRS} ${BSON_INCLUDE_DIRS})
+    set(MONGODB_LIBRARY_DIRS ${MONGOC_LIBRARY_DIRS} ${BSON_LIBRARY_DIRS})
     set(MONGODB_LIBRARIES ${MONGOC_LIBRARIES} ${BSON_LIBRARIES})
 else()
-    set(MONGODB_INCLUDE_DIRS)
-    set(MONGODB_LIBRARIES mongo::mongoc_shared)
+    # Fall back to cmake config
+    find_package(mongoc-1.0 QUIET)
+    if (mongoc-1.0_FOUND)
+        set(MONGODB_INCLUDE_DIRS)
+        set(MONGODB_LIBRARIES mongo::mongoc_shared)
+    else()
+        message(STATUS "MongoDB C driver not found - mongodb module will not be built")
+        return()
+    endif()
 endif()
 
 # Start of hacks to simulate installed QoreConfig.cmake
@@ -54,6 +65,9 @@ include_directories(${CMAKE_SOURCE_DIR}/build/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 if (MONGODB_INCLUDE_DIRS)
     include_directories(${MONGODB_INCLUDE_DIRS})
+endif()
+if (MONGODB_LIBRARY_DIRS)
+    link_directories(${MONGODB_LIBRARY_DIRS})
 endif()
 
 # QPP source files (Qore PreProcessor)

@@ -196,6 +196,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
+        addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
+        addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
+        addTestCase("async mode persistent connection close", \asyncModePersistentConnectionCloseTest());
+        addTestCase("async mode persistent error", \asyncModePersistentErrorTest());
+        addTestCase("async mode persistent concurrent", \asyncModePersistentConcurrentTest());
+        addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
+        addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -731,6 +738,353 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world", receivedMsg);
+    }
+
+    asyncModePersistentHandlerTest() {
+        # Test that persistent handlers in async mode get thread affinity
+        # Set up server with persistent handler
+        Logger persistLogger("persist-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            persistLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> persist_opts = <HttpServerOptionInfo>{
+            "logger": persistLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer persistServer(persist_opts);
+        on_exit persistServer.stop();
+
+        PersistentTestHandler handler();
+        persistServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        persistServer.setDefaultHandler("persistent", handler);
+        int persistPort = persistServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string persistUrl = "http://localhost:" + persistPort;
+
+        # Create client with keep-alive
+        HTTPClient client({"url": persistUrl, "timeout": 10s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # First request - starts persistent mode
+        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp1.status_code);
+        assertEq("started", resp1.body);
+        int tid1 = resp1."x-thread-id".toInt();
+        assertTrue(tid1 > 0, "Thread ID should be positive");
+
+        # Second request - should be on same thread (thread affinity)
+        hash<auto> resp2 = client.send("continue", "POST", "/persistent/continue");
+        assertEq(200, resp2.status_code);
+        assertEq("continued", resp2.body);
+        int tid2 = resp2."x-thread-id".toInt();
+        assertEq(tid1, tid2, "Persistent requests should be handled by same thread");
+
+        # Third request - still on same thread
+        hash<auto> resp3 = client.send("more", "POST", "/persistent/continue");
+        assertEq(200, resp3.status_code);
+        int tid3 = resp3."x-thread-id".toInt();
+        assertEq(tid1, tid3, "All persistent requests should be on same thread");
+
+        # End persistent mode
+        hash<auto> resp4 = client.send("end", "POST", "/persistent/end");
+        assertEq(200, resp4.status_code);
+        assertEq("ended", resp4.body);
+    }
+
+    asyncModePersistentToNonPersistentTest() {
+        # Test transition from persistent to non-persistent mode
+        Logger transLogger("trans-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            transLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> trans_opts = <HttpServerOptionInfo>{
+            "logger": transLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer transServer(trans_opts);
+        on_exit transServer.stop();
+
+        PersistentTestHandler handler();
+        transServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        transServer.setDefaultHandler("persistent", handler);
+        int transPort = transServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string transUrl = "http://localhost:" + transPort;
+
+        HTTPClient client({"url": transUrl, "timeout": 10s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Start persistent mode
+        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp1.status_code);
+
+        # End persistent mode
+        hash<auto> resp2 = client.send("end", "POST", "/persistent/end");
+        assertEq(200, resp2.status_code);
+        assertEq("ended", resp2.body);
+
+        # Next request after persistence ended - may be on different thread
+        # (this tests that connection returns to async I/O)
+        hash<auto> resp3 = client.send("normal", "POST", "/persistent/normal");
+        assertEq(200, resp3.status_code);
+        # We don't assert thread ID here as it may or may not be the same
+    }
+
+    asyncModePersistentConnectionCloseTest() {
+        # Test that connection close during persistent mode is handled correctly
+        Logger closeLogger("close-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            closeLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> close_opts = <HttpServerOptionInfo>{
+            "logger": closeLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer closeServer(close_opts);
+        on_exit closeServer.stop();
+
+        PersistentTestHandler handler();
+        closeServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        closeServer.setDefaultHandler("persistent", handler);
+        int closePort = closeServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string closeUrl = "http://localhost:" + closePort;
+
+        {
+            HTTPClient client({"url": closeUrl, "timeout": 10s});
+            client.connect();
+
+            # Start persistent mode
+            hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+            assertEq(200, resp1.status_code);
+
+            # Close connection without ending persistence
+            client.disconnect();
+        }
+
+        # Server should handle the abrupt disconnect gracefully
+        # Try connecting again to verify server is still working
+        {
+            HTTPClient client2({"url": closeUrl, "timeout": 10s});
+            client2.connect();
+            on_exit client2.disconnect();
+
+            hash<auto> resp = client2.send("normal", "POST", "/persistent/normal");
+            assertEq(200, resp.status_code);
+        }
+    }
+
+    asyncModePersistentErrorTest() {
+        # Test error handling during persistent connection
+        Logger errLogger("err-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            errLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> err_opts = <HttpServerOptionInfo>{
+            "logger": errLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer errServer(err_opts);
+        on_exit errServer.stop();
+
+        PersistentTestHandler handler();
+        errServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        errServer.setDefaultHandler("persistent", handler);
+        int errPort = errServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string errUrl = "http://localhost:" + errPort;
+
+        HTTPClient client({"url": errUrl, "timeout": 10s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Start persistent mode
+        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp1.status_code);
+
+        # Request that triggers an error - HTTPClient throws on 500 responses
+        # The server closes the connection on errors during persistent mode
+        try {
+            hash<auto> resp2 = client.send("error", "POST", "/persistent/error");
+            assertEq(500, resp2.status_code);
+        } catch (hash<ExceptionInfo> ex) {
+            # HTTPClient throws HTTP-CLIENT-RECEIVE-ERROR on 500 status
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(500, ex.arg.status_code);
+        }
+
+        # Verify server is still accepting connections
+        HTTPClient client2({"url": errUrl, "timeout": 10s});
+        client2.connect();
+        on_exit client2.disconnect();
+
+        hash<auto> resp3 = client2.send("normal", "POST", "/persistent/normal");
+        assertEq(200, resp3.status_code);
+    }
+
+    asyncModePersistentConcurrentTest() {
+        # Test multiple concurrent persistent connections
+        Logger concLogger("conc-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            concLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> conc_opts = <HttpServerOptionInfo>{
+            "logger": concLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer concServer(conc_opts);
+        on_exit concServer.stop();
+
+        PersistentTestHandler handler();
+        concServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        concServer.setDefaultHandler("persistent", handler);
+        int concPort = concServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string concUrl = "http://localhost:" + concPort;
+
+        # Create multiple clients
+        list<HTTPClient> clients = ();
+        list<int> threadIds = ();
+
+        for (int i = 0; i < 3; i++) {
+            HTTPClient client({"url": concUrl, "timeout": 10s});
+            client.connect();
+            push clients, client;
+
+            # Start persistent mode for each client
+            hash<auto> resp = client.send("start", "POST", "/persistent/start");
+            assertEq(200, resp.status_code);
+            push threadIds, resp."x-thread-id".toInt();
+        }
+
+        # Each client should have its own thread (thread affinity)
+        # Verify by making more requests
+        for (int i = 0; i < 3; i++) {
+            hash<auto> resp = clients[i].send("continue", "POST", "/persistent/continue");
+            assertEq(200, resp.status_code);
+            int currentTid = resp."x-thread-id".toInt();
+            assertEq(threadIds[i], currentTid, sprintf("Client %d should maintain thread affinity", i));
+        }
+
+        # Different clients may or may not have different thread IDs depending on timing
+        # The important thing is that each client maintains its OWN thread affinity
+
+        # Clean up
+        for (int i = 0; i < 3; i++) {
+            hash<auto> resp = clients[i].send("end", "POST", "/persistent/end");
+            assertEq(200, resp.status_code);
+            clients[i].disconnect();
+        }
+    }
+
+    asyncModeNonPersistentTest() {
+        # Negative test: verify non-persistent requests work normally in async mode
+        Logger npLogger("np-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            npLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> np_opts = <HttpServerOptionInfo>{
+            "logger": npLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer npServer(np_opts);
+        on_exit npServer.stop();
+
+        PersistentTestHandler handler();
+        npServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        npServer.setDefaultHandler("persistent", handler);
+        int npPort = npServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string npUrl = "http://localhost:" + npPort;
+
+        HTTPClient client({"url": npUrl, "timeout": 10s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Make multiple non-persistent requests
+        # These should NOT trigger synchronous mode
+        for (int i = 0; i < 5; i++) {
+            hash<auto> resp = client.send("normal", "POST", "/persistent/normal");
+            assertEq(200, resp.status_code);
+            assertEq("normal", resp.body);
+        }
+    }
+
+    asyncModePersistentWithSyncServerTest() {
+        # Test that sync mode server still works with persistent handlers
+        # (This verifies we didn't break sync mode)
+        Logger syncLogger("sync-persist-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            syncLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> sync_opts = <HttpServerOptionInfo>{
+            "logger": syncLogger,
+            "debug": True,
+            "async_mode": False,  # Sync mode
+        };
+        HttpServer syncServer(sync_opts);
+        on_exit syncServer.stop();
+
+        PersistentTestHandler handler();
+        syncServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
+        syncServer.setDefaultHandler("persistent", handler);
+        int syncPort = syncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string syncUrl = "http://localhost:" + syncPort;
+
+        HTTPClient client({"url": syncUrl, "timeout": 10s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Start persistent mode
+        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
+        assertEq(200, resp1.status_code);
+        int tid1 = resp1."x-thread-id".toInt();
+
+        # Continue in persistent mode
+        hash<auto> resp2 = client.send("continue", "POST", "/persistent/continue");
+        assertEq(200, resp2.status_code);
+        int tid2 = resp2."x-thread-id".toInt();
+
+        # In sync mode, requests should also be on the same thread
+        assertEq(tid1, tid2, "Sync mode persistent requests should be on same thread");
+
+        # End persistent mode
+        hash<auto> resp3 = client.send("end", "POST", "/persistent/end");
+        assertEq(200, resp3.status_code);
+    }
+}
+
+#! Test handler that supports persistent connections
+class PersistentTestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = hdr.path;
+        int tid = gettid();
+
+        if (path =~ /start$/) {
+            # Start persistent mode
+            setPersistent(True);
+            return makeResponse({"x-thread-id": string(tid)}, 200, "started");
+        } else if (path =~ /continue$/) {
+            # Continue in persistent mode (verify we're persistent)
+            if (!isPersistent()) {
+                return makeResponse({"x-thread-id": string(tid)}, 500, "not persistent");
+            }
+            return makeResponse({"x-thread-id": string(tid)}, 200, "continued");
+        } else if (path =~ /end$/) {
+            # End persistent mode
+            setPersistent(False);
+            return makeResponse({"x-thread-id": string(tid)}, 200, "ended");
+        } else if (path =~ /error$/) {
+            # Trigger an error
+            throw "TEST-ERROR", "Intentional test error";
+        } else if (path =~ /normal$/) {
+            # Non-persistent request
+            return makeResponse({"x-thread-id": string(tid)}, 200, "normal");
+        }
+
+        return makeResponse({"x-thread-id": string(tid)}, 404, "not found");
     }
 }
 
