@@ -1016,6 +1016,17 @@ public:
      */
     DLLEXPORT bool getRelaxedAbstractMatch() const;
 
+    //! Resolves abstract method variants against parent class implementations at runtime
+    /** For use with classes created dynamically at runtime (e.g., JNI classes imported through Python)
+        where abstract method resolution needs to happen after class creation.
+
+        This method checks all abstract method variants against parent class implementations
+        and removes abstract variants that have matching concrete implementations in parent classes.
+
+        @since %Qore 2.2
+     */
+    DLLEXPORT void runtimeResolveAbstractMethods();
+
     //! Finds the given local member or returns nullptr
     /** @since %Qore 0.9
     */

@@ -331,10 +331,12 @@ struct PreprocessorCondition {
     std::string expression;     // The condition expression
     bool was_true;              // Was any branch in this group true?
     bool currently_active;      // Is this branch currently active?
+    bool pass_through;          // Unknown macro - pass through to C++ without skipping
     unsigned line;              // Line number for error reporting
 
-    PreprocessorCondition(const std::string& dir, const std::string& expr, bool active, unsigned ln)
-        : directive(dir), expression(expr), was_true(active), currently_active(active), line(ln) {
+    PreprocessorCondition(const std::string& dir, const std::string& expr, bool active, bool passthru, unsigned ln)
+        : directive(dir), expression(expr), was_true(active), currently_active(active),
+          pass_through(passthru), line(ln) {
     }
 };
 
@@ -476,8 +478,10 @@ public:
     }
 
     // Check if we should skip current content
+    // Returns false for pass-through blocks (unknown macros)
     bool isSkipping() const {
         for (const auto& cond : stack) {
+            if (cond.pass_through) continue;  // Unknown macro - don't skip, process normally
             if (!cond.currently_active) return true;
         }
         return false;
@@ -505,30 +509,56 @@ public:
     }
 
     // Handle #ifdef
-    void pushIfdef(const std::string& name, unsigned line) {
+    // If the macro is unknown (not passed via -D), push a pass_through entry so #endif matching works
+    // Returns true if we should track this condition, false if unknown (pass-through)
+    bool pushIfdef(const std::string& name, unsigned line) {
+        bool known = isDefined(name);  // Only consider macros from -D as "known"
+        if (!known) {
+            // Unknown macro - push pass_through entry so #endif can match, but don't skip content
+            stack.emplace_back("ifdef", name, true, true, line);
+            return false;
+        }
         bool active = !isSkipping() && isDefined(name);
-        stack.emplace_back("ifdef", name, active, line);
+        stack.emplace_back("ifdef", name, active, false, line);
+        return true;
     }
 
     // Handle #ifndef
-    void pushIfndef(const std::string& name, unsigned line) {
+    // If the macro is unknown (not passed via -D), push a pass_through entry so #endif matching works
+    // Returns true if we should track this condition, false if unknown (pass-through)
+    bool pushIfndef(const std::string& name, unsigned line) {
+        bool known = isDefined(name);  // Only consider macros from -D as "known"
+        if (!known) {
+            // Unknown macro - push pass_through entry so #endif can match, but don't skip content
+            stack.emplace_back("ifndef", name, true, true, line);
+            return false;
+        }
         bool active = !isSkipping() && !isDefined(name);
-        stack.emplace_back("ifndef", name, active, line);
+        stack.emplace_back("ifndef", name, active, false, line);
+        return true;
     }
 
     // Handle #if
-    void pushIf(const std::string& expr, unsigned line) {
-        bool active = !isSkipping() && evaluateCondition(expr);
-        stack.emplace_back("if", expr, active, line);
+    // For complex expressions, we can only evaluate if all macros are known
+    // Push a pass_through entry so #endif matching works
+    // Returns true if we should track this condition, false if unknown (pass-through)
+    bool pushIf(const std::string& expr, unsigned line) {
+        // For #if, push pass_through entry - let C++ compiler handle the condition
+        stack.emplace_back("if", expr, true, true, line);
+        return false;
     }
 
-    // Handle #elif
+    // Handle #elif - returns true if tracked, false if pass-through (unknown macro context)
     bool handleElif(const std::string& expr, unsigned line) {
         if (stack.empty()) {
-            error("%s:%d: #elif without matching #if/#ifdef/#ifndef\n", fileName, line);
+            error("%s:%d: #elif without #if\n", fileName, line);
             return false;
         }
         auto& top = stack.back();
+        if (top.pass_through) {
+            // Pass-through context - don't track
+            return false;
+        }
         if (top.directive == "else") {
             error("%s:%d: #elif after #else\n", fileName, line);
             return false;
@@ -536,7 +566,7 @@ public:
         // Only evaluate if no previous branch was true and parent is active
         bool parent_active = true;
         for (size_t i = 0; i + 1 < stack.size(); ++i) {
-            if (!stack[i].currently_active) {
+            if (!stack[i].currently_active && !stack[i].pass_through) {
                 parent_active = false;
                 break;
             }
@@ -552,13 +582,17 @@ public:
         return true;
     }
 
-    // Handle #else
+    // Handle #else - returns true if tracked, false if pass-through (unknown macro context)
     bool handleElse(unsigned line) {
         if (stack.empty()) {
-            error("%s:%d: #else without matching #if/#ifdef/#ifndef\n", fileName, line);
+            error("%s:%d: #else without #if\n", fileName, line);
             return false;
         }
         auto& top = stack.back();
+        if (top.pass_through) {
+            // Pass-through context - don't track
+            return false;
+        }
         if (top.directive == "else") {
             error("%s:%d: duplicate #else\n", fileName, line);
             return false;
@@ -566,7 +600,7 @@ public:
         // Only active if no previous branch was true and parent is active
         bool parent_active = true;
         for (size_t i = 0; i + 1 < stack.size(); ++i) {
-            if (!stack[i].currently_active) {
+            if (!stack[i].currently_active && !stack[i].pass_through) {
                 parent_active = false;
                 break;
             }
@@ -576,14 +610,15 @@ public:
         return true;
     }
 
-    // Handle #endif
+    // Handle #endif - returns true if tracked, false if pass-through (unknown macro context)
     bool handleEndif(unsigned line) {
         if (stack.empty()) {
-            error("%s:%d: #endif without matching #if/#ifdef/#ifndef\n", fileName, line);
+            error("%s:%d: #endif without #if\n", fileName, line);
             return false;
         }
+        bool was_pass_through = stack.back().pass_through;
         stack.pop_back();
-        return true;
+        return !was_pass_through;
     }
 
     // Handle #define
@@ -600,16 +635,19 @@ public:
         }
     }
 
-    // Check for unclosed conditionals
+    // Check for unclosed conditionals (only tracked ones, not pass-through)
     bool hasUnclosedConditions() const {
-        return !stack.empty();
+        for (const auto& cond : stack) {
+            if (!cond.pass_through) return true;
+        }
+        return false;
     }
 
-    // Get info about unclosed conditionals for error reporting
+    // Get info about unclosed conditionals for error reporting (only tracked ones)
     std::string getUnclosedConditionInfo() const {
-        if (stack.empty()) return "";
         std::string result;
         for (const auto& cond : stack) {
+            if (cond.pass_through) continue;
             if (!result.empty()) result += ", ";
             result += "#" + cond.directive + " at line " + std::to_string(cond.line);
         }
@@ -617,7 +655,8 @@ public:
     }
 
     // Handle a preprocessor directive line - returns true if it was a directive we handle
-    // The directive is also added to output buffer if needed
+    // For unknown macros (not defined via -D), returns false so the line passes through normally
+    // Only tracks and handles directives for known macros
     bool handleDirective(const std::string& line, unsigned lineNumber, std::string& output) {
         if (line.empty() || line[0] != '#') return false;
 
@@ -641,27 +680,45 @@ public:
         trim_end(arg);
 
         if (directive == "ifdef") {
-            pushIfdef(arg, lineNumber);
+            if (!pushIfdef(arg, lineNumber)) {
+                // Unknown macro - don't track, let it pass through as regular text
+                return false;
+            }
             output += line;  // Pass through to C++ output
             return true;
         } else if (directive == "ifndef") {
-            pushIfndef(arg, lineNumber);
+            if (!pushIfndef(arg, lineNumber)) {
+                // Unknown macro - don't track, let it pass through as regular text
+                return false;
+            }
             output += line;
             return true;
         } else if (directive == "if") {
-            pushIf(arg, lineNumber);
+            if (!pushIf(arg, lineNumber)) {
+                // Complex expression - don't track, let it pass through
+                return false;
+            }
             output += line;
             return true;
         } else if (directive == "elif") {
-            if (!handleElif(arg, lineNumber)) return false;
+            if (!handleElif(arg, lineNumber)) {
+                // Not tracking (pass-through context) - let it pass through
+                return false;
+            }
             output += line;
             return true;
         } else if (directive == "else") {
-            if (!handleElse(lineNumber)) return false;
+            if (!handleElse(lineNumber)) {
+                // Not tracking (pass-through context) - let it pass through
+                return false;
+            }
             output += line;
             return true;
         } else if (directive == "endif") {
-            if (!handleEndif(lineNumber)) return false;
+            if (!handleEndif(lineNumber)) {
+                // Not tracking (pass-through context) - let it pass through
+                return false;
+            }
             output += line;
             return true;
         } else if (directive == "define") {
@@ -2919,7 +2976,10 @@ public:
                 if (ppState.handleDirective(line, lineNumber, buf)) {
                     continue;
                 }
-                // Not a recognized directive - pass through if not skipping
+                // Not a recognized/tracked directive - add to buf and continue
+                // This handles unknown #ifdef/#endif macros as pass-through to C++
+                buf += line;
+                continue;
             }
 
             // Skip content in inactive conditional blocks
@@ -4729,7 +4789,10 @@ protected:
                 if (ppState.handleDirective(str, lineNumber, buf)) {
                     continue;
                 }
-                // Not a recognized directive - pass through if not skipping
+                // Not a recognized/tracked directive - add to buf and continue
+                // This handles unknown #ifdef/#endif macros as pass-through to C++
+                buf += str;
+                continue;
             }
 
             // Skip content in inactive conditional blocks

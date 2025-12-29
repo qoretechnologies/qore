@@ -176,6 +176,9 @@ struct AbstractMethodMap : amap_t {
 
     DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
 
+    // runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
+    DLLLOCAL void runtimeInit(qore_class_private& qc, BCList* scl);
+
     DLLLOCAL QoreStringNode* checkAbstract(const char* cname) const;
 
     // we check if there are any abstract method variants still in the committed lists
@@ -1641,6 +1644,10 @@ public:
     DLLLOCAL void resolveCopy();
 
     DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v) const;
+
+    // runtime version for dynamically-created classes (e.g., JNI classes)
+    DLLLOCAL MethodVariantBase* runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
+        bool relaxed_match) const;
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 

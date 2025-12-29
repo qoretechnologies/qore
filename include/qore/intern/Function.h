@@ -1329,6 +1329,9 @@ public:
     // if an identical signature is found to the passed variant, then it is removed from the abstract list
     DLLLOCAL MethodVariantBase* parseHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
 
+    // runtime version - assumes signatures are already resolved
+    DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
+
     DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant);
 
     DLLLOCAL void parseRollbackMethod();
