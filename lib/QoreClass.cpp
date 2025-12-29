@@ -377,11 +377,13 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                 vmap_t::iterator ti = vi++;
 
                 i->second->vlist.erase(ti);
-                // replace abstract variant
-                const QoreMethod* m = qc.cls->findLocalMethod(i->first.c_str());
-                if (m) {
-                    qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction()->replaceAbstractVariant(v);
+                // replace abstract variant - create local method if needed
+                QoreMethod* m = qc.findLocalCommittedMethod(i->first.c_str());
+                if (!m) {
+                    m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
+                    qc.hm[m->getName()] = m;
                 }
+                qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
             }
             ++vi;

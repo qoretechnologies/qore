@@ -509,12 +509,13 @@ public:
     }
 
     // Handle #ifdef
-    // If the macro is unknown (not passed via -D), don't track it - just pass through to C++
+    // If the macro is unknown (not passed via -D), push a pass_through entry so #endif matching works
     // Returns true if we should track this condition, false if unknown (pass-through)
     bool pushIfdef(const std::string& name, unsigned line) {
         bool known = isDefined(name);  // Only consider macros from -D as "known"
         if (!known) {
-            // Unknown macro - don't track, pass through to C++ and process content normally
+            // Unknown macro - push pass_through entry so #endif can match, but don't skip content
+            stack.emplace_back("ifdef", name, true, true, line);
             return false;
         }
         bool active = !isSkipping() && isDefined(name);
@@ -523,12 +524,13 @@ public:
     }
 
     // Handle #ifndef
-    // If the macro is unknown (not passed via -D), don't track it - just pass through to C++
+    // If the macro is unknown (not passed via -D), push a pass_through entry so #endif matching works
     // Returns true if we should track this condition, false if unknown (pass-through)
     bool pushIfndef(const std::string& name, unsigned line) {
         bool known = isDefined(name);  // Only consider macros from -D as "known"
         if (!known) {
-            // Unknown macro - don't track, pass through to C++ and process content normally
+            // Unknown macro - push pass_through entry so #endif can match, but don't skip content
+            stack.emplace_back("ifndef", name, true, true, line);
             return false;
         }
         bool active = !isSkipping() && !isDefined(name);
@@ -538,21 +540,25 @@ public:
 
     // Handle #if
     // For complex expressions, we can only evaluate if all macros are known
-    // For now, don't track - just pass through to C++ and let C++ compiler handle them
+    // Push a pass_through entry so #endif matching works
     // Returns true if we should track this condition, false if unknown (pass-through)
     bool pushIf(const std::string& expr, unsigned line) {
-        // For #if, don't track - pass through to C++ since we can't fully evaluate complex expressions
-        // The C++ compiler will handle the condition
+        // For #if, push pass_through entry - let C++ compiler handle the condition
+        stack.emplace_back("if", expr, true, true, line);
         return false;
     }
 
     // Handle #elif - returns true if tracked, false if pass-through (unknown macro context)
     bool handleElif(const std::string& expr, unsigned line) {
         if (stack.empty()) {
-            // Not tracking - this is a pass-through context (unknown macro)
+            error("%s:%d: #elif without #if\n", fileName, line);
             return false;
         }
         auto& top = stack.back();
+        if (top.pass_through) {
+            // Pass-through context - don't track
+            return false;
+        }
         if (top.directive == "else") {
             error("%s:%d: #elif after #else\n", fileName, line);
             return false;
@@ -560,7 +566,7 @@ public:
         // Only evaluate if no previous branch was true and parent is active
         bool parent_active = true;
         for (size_t i = 0; i + 1 < stack.size(); ++i) {
-            if (!stack[i].currently_active) {
+            if (!stack[i].currently_active && !stack[i].pass_through) {
                 parent_active = false;
                 break;
             }
@@ -579,10 +585,14 @@ public:
     // Handle #else - returns true if tracked, false if pass-through (unknown macro context)
     bool handleElse(unsigned line) {
         if (stack.empty()) {
-            // Not tracking - this is a pass-through context (unknown macro)
+            error("%s:%d: #else without #if\n", fileName, line);
             return false;
         }
         auto& top = stack.back();
+        if (top.pass_through) {
+            // Pass-through context - don't track
+            return false;
+        }
         if (top.directive == "else") {
             error("%s:%d: duplicate #else\n", fileName, line);
             return false;
@@ -590,7 +600,7 @@ public:
         // Only active if no previous branch was true and parent is active
         bool parent_active = true;
         for (size_t i = 0; i + 1 < stack.size(); ++i) {
-            if (!stack[i].currently_active) {
+            if (!stack[i].currently_active && !stack[i].pass_through) {
                 parent_active = false;
                 break;
             }
@@ -603,11 +613,12 @@ public:
     // Handle #endif - returns true if tracked, false if pass-through (unknown macro context)
     bool handleEndif(unsigned line) {
         if (stack.empty()) {
-            // Not tracking - this is a pass-through context (unknown macro)
+            error("%s:%d: #endif without #if\n", fileName, line);
             return false;
         }
+        bool was_pass_through = stack.back().pass_through;
         stack.pop_back();
-        return true;
+        return !was_pass_through;
     }
 
     // Handle #define
@@ -624,16 +635,19 @@ public:
         }
     }
 
-    // Check for unclosed conditionals
+    // Check for unclosed conditionals (only tracked ones, not pass-through)
     bool hasUnclosedConditions() const {
-        return !stack.empty();
+        for (const auto& cond : stack) {
+            if (!cond.pass_through) return true;
+        }
+        return false;
     }
 
-    // Get info about unclosed conditionals for error reporting
+    // Get info about unclosed conditionals for error reporting (only tracked ones)
     std::string getUnclosedConditionInfo() const {
-        if (stack.empty()) return "";
         std::string result;
         for (const auto& cond : stack) {
+            if (cond.pass_through) continue;
             if (!result.empty()) result += ", ";
             result += "#" + cond.directive + " at line " + std::to_string(cond.line);
         }
