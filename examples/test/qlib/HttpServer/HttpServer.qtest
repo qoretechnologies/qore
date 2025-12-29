@@ -274,25 +274,44 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         delete mAsyncClient;
     }
 
+    # Helper to retry HTTP calls that may fail due to server closing idle connections
+    private auto doWithRetry(code call) {
+        int retries = 3;
+        while (True) {
+            try {
+                return call();
+            } catch (hash<ExceptionInfo> ex) {
+                # Retry on socket errors caused by server closing idle connection
+                if (retries > 0 && (ex.err == "SOCKET-SEND-ERROR" || ex.err == "SOCKET-NOT-OPEN"
+                        || ex.err == "SOCKET-CLOSED")) {
+                    --retries;
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
     idleTest() {
         date ttl = mServer.getTtl();
         on_exit mServer.setTtl(ttl);
 
         mServer.setTtl(1us);
 
-        assertEq("GET, abc, /abc", mClient.get("/abc"));
+        # Use retry wrapper since server may close connection before client detects it
+        assertEq("GET, abc, /abc", doWithRetry(string sub() { return mClient.get("/abc"); }));
         usleep(2us);
-        assertEq("GET, abc, abc", mClient.get("abc"));
+        assertEq("GET, abc, abc", doWithRetry(string sub() { return mClient.get("abc"); }));
         usleep(2us);
-        assertEq("GET, abc/test/1/5/t, /abc/test/1/5/t", mClient.get("/abc/test/1/5/t"));
+        assertEq("GET, abc/test/1/5/t, /abc/test/1/5/t", doWithRetry(string sub() { return mClient.get("/abc/test/1/5/t"); }));
         usleep(2us);
-        hash<auto> resp = mClient.send("dx123", "POST", "/abc");
+        hash<auto> resp = doWithRetry(hash<auto> sub() { return mClient.send("dx123", "POST", "/abc"); });
         assertEq(200, resp.status_code);
         assertEq("POST, dx123, abc, /abc", resp.body);
         usleep(2us);
-        assertEq("a1, GET, alt1, /alt1", mClient.get("/alt1"));
+        assertEq("a1, GET, alt1, /alt1", doWithRetry(string sub() { return mClient.get("/alt1"); }));
         usleep(2us);
-        assertEq("a1, POST, alt1/test, alt1/test", mClient.post("alt1/test", ""));
+        assertEq("a1, POST, alt1/test, alt1/test", doWithRetry(string sub() { return mClient.post("alt1/test", ""); }));
     }
 
     issue4312() {

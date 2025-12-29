@@ -361,6 +361,41 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
     }
 }
 
+// runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
+// issue #5056: allows abstract method resolution for classes created at runtime
+void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
+    //printd(5, "AbstractMethodMap::runtimeInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
+    //    empty());
+    for (amap_t::iterator i = begin(), e = end(); i != e;) {
+        for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
+            // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
+            // pending_save
+            MethodVariantBase* v = scl->runtimeMatchNonAbstractVariant(i->first, vi->second, relaxed_match);
+            if (v) {
+                const char* sig = vi->second->getAbstractSignature();
+                i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
+                vmap_t::iterator ti = vi++;
+
+                i->second->vlist.erase(ti);
+                // replace abstract variant
+                const QoreMethod* m = qc.cls->findLocalMethod(i->first.c_str());
+                if (m) {
+                    qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction()->replaceAbstractVariant(v);
+                }
+                continue;
+            }
+            ++vi;
+        }
+        // issue #2741: remove the abstract method if there are no more abstract variants
+        if (i->second->vlist.empty()) {
+            delete i->second;
+            erase(i++);
+        } else {
+            ++i;
+        }
+    }
+}
+
 void AbstractMethodMap::parseAddAbstractVariant(const char* name, MethodVariantBase* f) {
     amap_t::iterator i = amap_t::find(name);
     if (i == end()) {
@@ -2573,6 +2608,33 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         }
         if (nqc->priv->scl) {
             MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v);
+            if (ov)
+                return ov;
+        }
+    }
+
+    return nullptr;
+}
+
+// runtime version for dynamically-created classes (e.g., JNI classes)
+MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
+        bool relaxed_match) const {
+    for (auto& i : *this) {
+        const QoreClass* nqc = (*i).sclass;
+        // nqc may be nullptr if there were errors earlier
+        // also if the original abstract variant comes from the class being searched, then skip it
+        if (!nqc || v->getClass() == nqc)
+            continue;
+
+        QoreMethod* m = nqc->priv->findLocalCommittedMethod(name.c_str());
+        if (m) {
+            MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+            MethodVariantBase* ov = f->runtimeHasVariantWithSignature(v, relaxed_match);
+            if (ov && !ov->isAbstract())
+                return ov;
+        }
+        if (nqc->priv->scl) {
+            MethodVariantBase* ov = nqc->priv->scl->runtimeMatchNonAbstractVariant(name, v, relaxed_match);
             if (ov)
                 return ov;
         }
@@ -4821,6 +4883,12 @@ bool QoreClass::getRelaxedAbstractMatch() const {
     return priv->ahm.relaxed_match;
 }
 
+void QoreClass::runtimeResolveAbstractMethods() {
+    if (priv->scl) {
+        priv->ahm.runtimeInit(*priv, priv->scl);
+    }
+}
+
 const QoreExternalNormalMember* QoreClass::findLocalMember(const char* name) const {
     return reinterpret_cast<const QoreExternalNormalMember*>(priv->members.find(name));
 }
@@ -5069,6 +5137,17 @@ MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVarian
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
+        if ((*i)->isSignatureIdentical(sig, relaxed_match)) {
+            return reinterpret_cast<MethodVariantBase*>(*i);
+        }
+    }
+    return nullptr;
+}
+
+// runtime version - assumes signatures are already resolved
+MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match) const {
+    AbstractFunctionSignature& sig = *(v->getSignature());
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         if ((*i)->isSignatureIdentical(sig, relaxed_match)) {
             return reinterpret_cast<MethodVariantBase*>(*i);
         }

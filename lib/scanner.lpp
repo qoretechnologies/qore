@@ -2143,8 +2143,30 @@ hash\<{WORD}\>\{                        {
                                               return ANGLE_IDENTIFIER;
                                            }
                                         }
+      [;{}]                             {
+                                           // Likely a forgotten closing angle bracket - report error
+                                           yylloc->restoreFirst();
+                                           parse_error(*get_loc(yylloc), "unterminated type specification '%s'; "
+                                               "missing closing '>' before '%c'",
+                                               yylval->String->c_str(), yytext[0]);
+                                           // Add missing closing brackets and return what we have
+                                           while (!angle_balanced(yylval->String->c_str())) {
+                                               yylval->String->concat('>');
+                                           }
+                                           char* str = yylval->String->giveBuffer();
+                                           yylval->String->deref();
+                                           yylval->string = str;
+                                           // Put back the offending character for normal parsing
+                                           unput(yytext[0]);
+                                           BEGIN(INITIAL);
+                                           return ANGLE_IDENTIFIER;
+                                        }
       [^>]                              yylval->String->concat(yytext);
       <<EOF>>                           {
+                                           yylloc->restoreFirst();
+                                           parse_error(*get_loc(yylloc), "unterminated type specification '%s'; "
+                                               "missing closing '>' before end of file",
+                                               yylval->String->c_str());
                                            yylval->String->deref();
                                            QORE_FLEX_DO_EOF
                                         }

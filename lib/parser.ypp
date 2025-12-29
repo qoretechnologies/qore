@@ -1084,8 +1084,16 @@ public:
                             parse_error(*loc, "invalid subtype specification in '%s'", str);
                         return;
                     }
-                    const char* e = strrchr(str, '>');
-                    if (!e || e < p) {
+                    // Find matching '>' using bracket counting instead of strrchr
+                    // This correctly handles nested types like hash<list<int>, list<string>>
+                    int depth = 1;
+                    const char* e = p + 1;
+                    while (*e && depth > 0) {
+                        if (*e == '<') ++depth;
+                        else if (*e == '>') --depth;
+                        if (depth > 0) ++e;
+                    }
+                    if (depth != 0 || *e != '>') {
                         if (raise_error)
                             parse_error(*loc, "unbalanced angle brackets in subtype specification in '%s'", str);
                         return;
@@ -1101,14 +1109,19 @@ public:
                 }
                 case ',':
                     buf.trim();
-                    if (buf.empty()) {
+                    if (!buf.empty()) {
+                        // Push the accumulated simple type
+                        subtypes.push_back(getParseType(loc, buf.giveBuffer(), or_nothing, raise_error));
+                        buf.reset();
+                        or_nothing = false;
+                    } else if (subtypes.empty()) {
+                        // Empty buffer AND no subtypes pushed yet means invalid syntax
                         if (raise_error)
                             parse_error(*loc, "invalid subtype specification in '%s'", str);
                         return;
                     }
-                    subtypes.push_back(getParseType(loc, buf.giveBuffer(), or_nothing, raise_error));
-                    buf.reset();
-                    or_nothing = false;
+                    // If buf is empty but subtypes is not empty, it means we just processed
+                    // a complex type like list<int> and can continue to the next subtype
                     comma = true;
                 break;
                 case '*': {
