@@ -103,8 +103,14 @@ modules/astparser/src/*.qtest
 modules/reflection/src/QC_*.cpp
 modules/reflection/src/QC_*.qtest
 
-# module-reflection
-modules/reflection/src/QC_*.cpp
+# module-logger_bin
+modules/logger_bin/src/QC_*.cpp
+
+# module-mongodb build artifacts
+modules/mongodb/cmake/
+modules/mongodb/config.h
+modules/mongodb/stamp-h*
+modules/mongodb/test/*.supp
 
 # Doxygen generated files
 docs
