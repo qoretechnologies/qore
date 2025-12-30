@@ -37,6 +37,9 @@
 # JSON support for WebSocket message protocol
 %requires json
 
+# Reflection support for introspection commands
+%requires reflection
+
 module QoreRepl {
     version = "1.1";
     desc = "Qore REPL (Read-Eval-Print Loop) module";
@@ -128,11 +131,89 @@ server.start();
     - @c {"type": "prompt", "value": "qore> ", "needsMoreInput": false} - Prompt update
     - @c {"type": "session", "sessionId": "...", "version": "1.0"} - Session info on connect
 
+    @section qorerepl_sandboxing Sandboxing and Security
+
+    The QoreRepl class supports sandboxing through Qore's parse options. You can restrict
+    what code the REPL can execute by passing parse options when creating the underlying
+    Program object.
+
+    @subsection qorerepl_sandbox_usage Sandboxed REPL Example
+
+    @code{.py}
+%requires QoreRepl
+
+# Create a sandboxed REPL that cannot access filesystem, network, or external processes
+int sandbox_options = PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS;
+QoreRepl repl(NOTHING, sandbox_options);
+
+# Filesystem commands will show graceful error messages
+*hash<auto> result = repl.eval("/pwd");
+# Result: {"output": "Error: Filesystem access is restricted in this session\n"}
+
+# Code that tries to access restricted resources will fail
+result = repl.eval("File::readTextFile('/etc/passwd')");
+# Result: {"exception": "PARSE-EXCEPTION", ...}
+    @endcode
+
+    @subsection qorerepl_sandbox_options Available Parse Options for Sandboxing
+
+    Common parse options for sandboxing:
+
+    |!Parse Option|!Description
+    |@ref Qore::PO_NO_FILESYSTEM|Disables filesystem access (affects /pwd, /cd, /load, /save commands)
+    |@ref Qore::PO_NO_NETWORK|Disables network access (affects Socket, HTTPClient, etc.)
+    |@ref Qore::PO_NO_EXTERNAL_PROCESS|Disables external process execution (system(), backquote, etc.)
+    |@ref Qore::PO_NO_PROCESS_CONTROL|Disables process control functions (exit(), fork(), etc.)
+    |@ref Qore::PO_NO_THREAD_CONTROL|Disables thread control (background operator, thread_exit)
+    |@ref Qore::PO_NO_DATABASE|Disables database access
+
+    @subsection qorerepl_sandbox_commands Command Behavior in Sandboxed Mode
+
+    When filesystem access is restricted (@ref Qore::PO_NO_FILESYSTEM), the following
+    REPL commands will display helpful error messages instead of failing silently:
+
+    - @c /pwd - Shows "Filesystem access is restricted in this session"
+    - @c /cd - Shows "Filesystem access is restricted in this session"
+    - @c /load - Shows "Filesystem access is restricted in this session"
+    - @c /save - Shows "Filesystem access is restricted in this session"
+
+    All other REPL commands continue to work normally in sandboxed mode, including
+    introspection commands (/vars, /functions, /classes, etc.) and session commands
+    (/help, /reset, /history, etc.).
+
+    @subsection qorerepl_websocket_sandbox Sandboxed WebSocket Server
+
+    You can also create sandboxed WebSocket REPL servers:
+
+    @code{.py}
+%requires HttpServer
+%requires QoreRepl
+
+# Create a sandboxed WebSocket REPL handler
+int sandbox_options = PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS;
+QoreReplWebSocketHandler handler(NOTHING, sandbox_options);
+
+# Add authentication for additional security
+handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
+    return hdr."x-api-key" == "secret123";
+});
+
+# Add to HTTP server
+HttpServer server({"port": 8080});
+server.addHandler("/ws/repl", handler);
+server.start();
+    @endcode
+
     @section qorerepl_relnotes Release Notes
 
     @subsection qorerepl_v1_1 v1.1
     - Added WebSocket server support with QoreReplWebSocketHandler and QoreReplWebSocketConnection
     - Added AsyncAPI 3.0 schema for the WebSocket message protocol
+    - Added sandboxing support with graceful handling of restricted commands
+    - Added introspection commands: /functions, /classes, /constants, /namespaces, /modules, /type, /describe
+    - Added session commands: /history, /timing
+    - Added file commands: /save, /pwd, /cd
+    - Added auto-return for pure expressions (e.g., "1 + 1" displays "=> 2")
     - Added comprehensive tests
 
     @subsection qorerepl_v1_0 v1.0

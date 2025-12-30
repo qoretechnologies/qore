@@ -105,6 +105,8 @@ static const char repl_pgm[] =
    "\n"
    "QoreRepl::QoreRepl repl();\n"
    "\n"
+   "stdout.printf(\"Qore %s Interactive Shell\\nType /help for commands, /quit to exit\\n\", Qore::VersionString);\n"
+   "\n"
    "while (True) {\n"
    "    stdout.printf(repl.getPrompt());\n"
    "    stdout.sync();\n"
@@ -120,6 +122,9 @@ static const char repl_pgm[] =
    "        stderr.printf(\"Error: %s\\n\", QoreRepl::QoreRepl::formatError(result.error));\n"
    "    } else if (exists result.value) {\n"
    "        stdout.printf(\"=> %s\\n\", QoreRepl::QoreRepl::formatValue(result.value));\n"
+   "    }\n"
+   "    if (result.timing) {\n"
+   "        stdout.printf(\"   (%s)\\n\", result.timing.format(\"HH:mm:SS.xx\"));\n"
    "    }\n"
    "}\n";
 
