@@ -551,7 +551,8 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
                 if (!args.size()) {
                     return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/load requires a filename"}};
                 }
-                return loadFile(args[0]);
+                # Join args to support paths with spaces
+                return loadFile(args.join(" "));
 
             case "/save":
                 if (isFilesystemRestricted()) {
@@ -560,7 +561,8 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
                 if (!args.size()) {
                     return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/save requires a filename"}};
                 }
-                return saveHistory(args[0]);
+                # Join args to support paths with spaces
+                return saveHistory(args.join(" "));
 
             case "/pwd":
                 if (isFilesystemRestricted()) {
@@ -575,7 +577,8 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
                 if (!args.size()) {
                     return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/cd requires a directory"}};
                 }
-                return changeDirectory(args[0]);
+                # Join args to support paths with spaces
+                return changeDirectory(args.join(" "));
 
             default:
                 return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": sprintf("Unknown command: %s (try /help)", command)}};
