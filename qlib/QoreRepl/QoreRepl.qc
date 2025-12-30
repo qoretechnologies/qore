@@ -443,13 +443,20 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         #   - member access (.): object member continuation
         #   - assignment (=): right-hand side expected
         #   - line continuation (\): explicit continuation
-        # Note: This list should be maintained if Qore adds new binary operators that
-        # commonly appear at line endings in multi-line expressions.
+        #   - bitwise operators (&, |, ^): often split across lines in complex expressions
+        #   - ternary operator (?): right-hand side expected
+        # Operators NOT included (these typically end expressions):
+        #   - semicolon (;): statement terminator
+        #   - closing brackets/parens (], )): end of expression
+        #   - increment/decrement (++, --): unary postfix, usually end expressions
+        # Note: Two-character operators like && and || are not detected by single-char check,
+        # but the component chars (& and |) will trigger continuation when they appear alone.
         string trimmed = rtrim(code);
         if (trimmed.length() > 0) {
             string last = trimmed[trimmed.length() - 1];
             if (last == "," || last == "+" || last == "-" || last == "*" ||
-                last == "/" || last == "." || last == "=" || last == "\\") {
+                last == "/" || last == "." || last == "=" || last == "\\" ||
+                last == "&" || last == "|" || last == "^" || last == "?") {
                 return False;
             }
         }

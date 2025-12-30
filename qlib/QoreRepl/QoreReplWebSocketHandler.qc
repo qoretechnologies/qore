@@ -272,7 +272,7 @@ handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
     */
     setMaxConnections(int max) {
         if (max < 0) {
-            throw "INVALID-ARGUMENT", "max must be non-negative";
+            throw "INVALID-ARGUMENT", sprintf("'max' value %d is not a non-negative integer", max);
         }
         count_lock.lock();
         on_exit count_lock.unlock();

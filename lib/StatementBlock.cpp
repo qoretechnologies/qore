@@ -567,8 +567,8 @@ int TopLevelStatementBlock::parseInit() {
     }
 
     // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    int64 parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = parse_options & PO_ALLOW_REPARSE;
+    int64 current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = current_parse_options & PO_ALLOW_REPARSE;
 
     if (!first && lvars) {
         // push already-registered local variables on the stack

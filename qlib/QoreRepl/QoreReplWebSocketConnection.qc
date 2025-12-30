@@ -257,6 +257,8 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
         @param ex Optional exception info for location
     */
     private sendError(*string id, string error, string description, *hash<ExceptionInfo> ex) {
+        # Use += to initialize msg so that the variable type stays hash<auto> rather than
+        # being inferred as a more specific hash type that wouldn't allow adding .location
         hash<auto> msg += {
             "type": "error",
             "id": id,
