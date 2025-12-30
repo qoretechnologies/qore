@@ -35,7 +35,7 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
         - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
         - request processing is dispatched to ThreadPool for concurrent handler execution
-        - HTTP responses are sent asynchronously using \c Socket::startPollSend()
+        - HTTP responses are sent asynchronously using \c Socket::startPollSendHttpResponse()
         - enables handling many more concurrent connections with fewer threads
         - sub-millisecond response latency for simple requests
         - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
@@ -78,6 +78,8 @@
       - \c Class::tryGetConstant()
     - new builtin methods:
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
+      - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
+        response in non-blocking mode with proper \c Content-Length header handling
     - new functions:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers

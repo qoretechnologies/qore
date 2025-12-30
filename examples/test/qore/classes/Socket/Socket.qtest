@@ -145,6 +145,7 @@ class SocketTest inherits QUnit::Test {
         process_command_line();
 
         addTestCase("Accept poll test", \acceptPollTest());
+        addTestCase("HTTP response poll test", \httpResponsePollTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -225,6 +226,173 @@ class SocketTest inherits QUnit::Test {
         s1 = spop.getOutput();
         str0 = s1.recv(str.size());
         assertEq(str, str0);
+    }
+
+    httpResponsePollTest() {
+        # Test startPollSendHttpResponse method
+
+        # Test 1: Simple response with body
+        {
+            Socket server();
+            server.bind("localhost:0");
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            # Background thread to receive and verify the HTTP response
+            Counter cnt(1);
+            hash<auto> http_response;
+            background sub () {
+                Socket client();
+                client.connect("localhost:" + port);
+                # Send an HTTP request
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                # Read the response using HTTP-aware methods
+                http_response = client.readHTTPHeader(5s);
+                if (http_response."content-length") {
+                    http_response.body = client.recv(http_response."content-length", 1s);
+                }
+                cnt.dec();
+            }();
+
+            # Accept the connection
+            Socket conn = server.accept(5s);
+
+            # Read the request using HTTP-aware methods
+            hash<auto> req = conn.readHTTPHeader(5s);
+            assertEq("GET", req.method);
+
+            # Send response using poll method
+            string body = "Hello, World!";
+            hash<auto> headers = {
+                "Content-Type": "text/plain",
+                "X-Custom-Header": "test-value",
+            };
+
+            SocketPollOperation spop = conn.startPollSendHttpResponse(200, "OK", "1.1", headers, body);
+            assertEq("send-http-response", spop.getGoal());
+
+            # Complete the send
+            while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                Socket::poll((info,), 100ms);
+            }
+            assertTrue(spop.goalReached());
+
+            # Wait for client to receive and verify
+            cnt.waitForZero(5s);
+
+            # Verify the response
+            assertEq(200, http_response.status_code);
+            assertEq("text/plain", http_response."content-type");
+            assertEq("test-value", http_response."x-custom-header");
+            assertEq("13", http_response."content-length");
+            assertEq("Hello, World!", http_response.body);
+        }
+
+        # Test 2: Response without body (should have Content-Length: 0)
+        {
+            Socket server();
+            server.bind("localhost:0");
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            Counter cnt(1);
+            hash<auto> http_response;
+            background sub () {
+                Socket client();
+                client.connect("localhost:" + port);
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                http_response = client.readHTTPHeader(5s);
+                cnt.dec();
+            }();
+
+            Socket conn = server.accept(5s);
+            conn.readHTTPHeader(5s);
+
+            SocketPollOperation spop = conn.startPollSendHttpResponse(204, "No Content", "1.1", {}, NOTHING);
+            while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                Socket::poll((info,), 100ms);
+            }
+            assertTrue(spop.goalReached());
+
+            cnt.waitForZero(5s);
+            assertEq(204, http_response.status_code);
+            assertEq("0", http_response."content-length");
+        }
+
+        # Test 3: Response with binary body
+        {
+            Socket server();
+            server.bind("localhost:0");
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            Counter cnt(1);
+            hash<auto> http_response;
+            background sub () {
+                Socket client();
+                client.connect("localhost:" + port);
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                http_response = client.readHTTPHeader(5s);
+                if (http_response."content-length") {
+                    http_response.body = client.recvBinary(http_response."content-length", 1s);
+                }
+                cnt.dec();
+            }();
+
+            Socket conn = server.accept(5s);
+            conn.readHTTPHeader(5s);
+
+            binary bin_body = <48656c6c6f>; # "Hello" in hex
+            SocketPollOperation spop = conn.startPollSendHttpResponse(200, "OK", "1.1",
+                {"Content-Type": "application/octet-stream"}, bin_body);
+            while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                Socket::poll((info,), 100ms);
+            }
+            assertTrue(spop.goalReached());
+
+            cnt.waitForZero(5s);
+            assertEq(200, http_response.status_code);
+            assertEq("5", http_response."content-length");
+            assertEq(<48656c6c6f>, http_response.body);
+        }
+
+        # Test 4: Content-Length header in input should be ignored
+        {
+            Socket server();
+            server.bind("localhost:0");
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            Counter cnt(1);
+            hash<auto> http_response;
+            background sub () {
+                Socket client();
+                client.connect("localhost:" + port);
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                http_response = client.readHTTPHeader(5s);
+                if (http_response."content-length") {
+                    http_response.body = client.recv(http_response."content-length", 1s);
+                }
+                cnt.dec();
+            }();
+
+            Socket conn = server.accept(5s);
+            conn.readHTTPHeader(5s);
+
+            # Pass wrong Content-Length - should be ignored and replaced with correct value
+            SocketPollOperation spop = conn.startPollSendHttpResponse(200, "OK", "1.1",
+                {"Content-Length": "9999", "Content-Type": "text/plain"}, "test");
+            while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                Socket::poll((info,), 100ms);
+            }
+            assertTrue(spop.goalReached());
+
+            cnt.waitForZero(5s);
+            assertEq(200, http_response.status_code);
+            # Should have correct Content-Length (4), not the wrong one (9999)
+            assertEq("4", http_response."content-length");
+            assertEq("test", http_response.body);
+        }
     }
 
     sendBinaryTest() {
