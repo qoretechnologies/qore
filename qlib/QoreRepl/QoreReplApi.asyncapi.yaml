@@ -1,0 +1,455 @@
+asyncapi: 3.0.0
+info:
+  title: Qore REPL WebSocket API
+  version: 1.0.0
+  description: |
+    WebSocket API for remote access to the Qore REPL (Read-Eval-Print Loop).
+    Enables interactive code evaluation, command execution, and output streaming
+    over WebSocket connections.
+
+servers:
+  development:
+    host: localhost:8080
+    protocol: ws
+    description: Development server
+  production:
+    host: repl.example.com
+    protocol: wss
+    description: Production server (TLS)
+
+channels:
+  repl:
+    address: /ws/repl
+    description: Main REPL channel for code evaluation and commands
+    messages:
+      # Client -> Server
+      evalRequest:
+        $ref: '#/components/messages/EvalRequest'
+      commandRequest:
+        $ref: '#/components/messages/CommandRequest'
+      interruptRequest:
+        $ref: '#/components/messages/InterruptRequest'
+      pingRequest:
+        $ref: '#/components/messages/PingRequest'
+      # Server -> Client
+      resultResponse:
+        $ref: '#/components/messages/ResultResponse'
+      errorResponse:
+        $ref: '#/components/messages/ErrorResponse'
+      promptResponse:
+        $ref: '#/components/messages/PromptResponse'
+      outputResponse:
+        $ref: '#/components/messages/OutputResponse'
+      pongResponse:
+        $ref: '#/components/messages/PongResponse'
+      sessionResponse:
+        $ref: '#/components/messages/SessionResponse'
+      exitResponse:
+        $ref: '#/components/messages/ExitResponse'
+
+operations:
+  sendEval:
+    action: send
+    channel:
+      $ref: '#/channels/repl'
+    summary: Evaluate Qore code
+    description: Sends Qore code for evaluation in the REPL session
+    messages:
+      - $ref: '#/channels/repl/messages/evalRequest'
+
+  sendCommand:
+    action: send
+    channel:
+      $ref: '#/channels/repl'
+    summary: Execute REPL command
+    description: Sends a REPL special command (e.g., /help, /vars, /reset)
+    messages:
+      - $ref: '#/channels/repl/messages/commandRequest'
+
+  sendInterrupt:
+    action: send
+    channel:
+      $ref: '#/channels/repl'
+    summary: Interrupt execution
+    description: Requests interruption of current code execution
+    messages:
+      - $ref: '#/channels/repl/messages/interruptRequest'
+
+  sendPing:
+    action: send
+    channel:
+      $ref: '#/channels/repl'
+    summary: Send ping
+    description: Sends a ping for connection keepalive
+    messages:
+      - $ref: '#/channels/repl/messages/pingRequest'
+
+  receiveResult:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive evaluation result
+    description: Receives the result of code evaluation
+    messages:
+      - $ref: '#/channels/repl/messages/resultResponse'
+
+  receiveError:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive error
+    description: Receives an error response (parse error, runtime exception, etc.)
+    messages:
+      - $ref: '#/channels/repl/messages/errorResponse'
+
+  receivePrompt:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive prompt update
+    description: Receives the current prompt (indicates ready for input)
+    messages:
+      - $ref: '#/channels/repl/messages/promptResponse'
+
+  receiveOutput:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive output
+    description: Receives captured stdout/stderr output from code execution
+    messages:
+      - $ref: '#/channels/repl/messages/outputResponse'
+
+  receivePong:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive pong
+    description: Receives a pong response to a ping
+    messages:
+      - $ref: '#/channels/repl/messages/pongResponse'
+
+  receiveSession:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive session info
+    description: Receives session information on connection
+    messages:
+      - $ref: '#/channels/repl/messages/sessionResponse'
+
+  receiveExit:
+    action: receive
+    channel:
+      $ref: '#/channels/repl'
+    summary: Receive exit notification
+    description: Receives notification that the session is ending
+    messages:
+      - $ref: '#/channels/repl/messages/exitResponse'
+
+components:
+  schemas:
+    # Client -> Server payloads
+    EvalPayload:
+      type: object
+      required:
+        - type
+        - code
+      properties:
+        type:
+          type: string
+          const: eval
+          description: Message type identifier
+        id:
+          type: string
+          description: Optional request ID for correlation
+        code:
+          type: string
+          description: Qore code to evaluate
+          minLength: 1
+
+    CommandPayload:
+      type: object
+      required:
+        - type
+        - command
+      properties:
+        type:
+          type: string
+          const: command
+          description: Message type identifier
+        id:
+          type: string
+          description: Optional request ID for correlation
+        command:
+          type: string
+          description: >
+            REPL command to execute (e.g., /help, /vars). Commands may be sent
+            with or without the leading '/', and the server will add '/' if it
+            is missing.
+          pattern: ^/?\w+
+
+    InterruptPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: interrupt
+          description: Message type identifier
+        id:
+          type: string
+          description: Optional request ID for correlation
+
+    PingPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: ping
+          description: Message type identifier
+        id:
+          type: string
+          description: Optional request ID for correlation
+
+    # Server -> Client payloads
+    ResultPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: result
+          description: Message type identifier
+        id:
+          type: string
+          description: Correlation ID from request
+        value:
+          type: string
+          description: Formatted result value
+        valueType:
+          type: string
+          description: Qore type of the result value
+        duration:
+          type: number
+          description: Execution duration in milliseconds
+
+    ErrorPayload:
+      type: object
+      required:
+        - type
+        - error
+        - description
+      properties:
+        type:
+          type: string
+          const: error
+          description: Message type identifier
+        id:
+          type: string
+          description: Correlation ID from request
+        error:
+          type: string
+          description: Error code (e.g., PARSE-ERROR, RUNTIME-ERROR)
+        description:
+          type: string
+          description: Human-readable error description
+        location:
+          type: object
+          description: Source location of the error
+          properties:
+            file:
+              type: string
+              description: Source file name
+            line:
+              type: integer
+              description: Line number
+            column:
+              type: integer
+              description: Column number
+
+    PromptPayload:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          const: prompt
+          description: Message type identifier
+        value:
+          type: string
+          description: The prompt string to display
+        needsMoreInput:
+          type: boolean
+          description: Whether more input is needed (multi-line mode)
+
+    OutputPayload:
+      type: object
+      required:
+        - type
+        - stream
+        - text
+      properties:
+        type:
+          type: string
+          const: output
+          description: Message type identifier
+        stream:
+          type: string
+          enum:
+            - stdout
+            - stderr
+          description: Which output stream
+        text:
+          type: string
+          description: The output text
+
+    PongPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: pong
+          description: Message type identifier
+        id:
+          type: string
+          description: Correlation ID from ping request
+
+    SessionPayload:
+      type: object
+      required:
+        - type
+        - sessionId
+        - version
+      properties:
+        type:
+          type: string
+          const: session
+          description: Message type identifier
+        sessionId:
+          type: string
+          description: Unique session identifier
+        version:
+          type: string
+          description: REPL protocol version
+        qoreVersion:
+          type: string
+          description: Qore language version
+
+    ExitPayload:
+      type: object
+      required:
+        - type
+        - reason
+      properties:
+        type:
+          type: string
+          const: exit
+          description: Message type identifier
+        reason:
+          type: string
+          enum:
+            - user_request
+            - timeout
+            - error
+            - server_shutdown
+          description: Reason for session termination
+
+  messages:
+    # Client -> Server messages
+    EvalRequest:
+      name: EvalRequest
+      title: Evaluation Request
+      summary: Request to evaluate Qore code
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/EvalPayload'
+
+    CommandRequest:
+      name: CommandRequest
+      title: Command Request
+      summary: Request to execute a REPL command
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/CommandPayload'
+
+    InterruptRequest:
+      name: InterruptRequest
+      title: Interrupt Request
+      summary: Request to interrupt current execution
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/InterruptPayload'
+
+    PingRequest:
+      name: PingRequest
+      title: Ping Request
+      summary: Keepalive ping
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PingPayload'
+
+    # Server -> Client messages
+    ResultResponse:
+      name: ResultResponse
+      title: Result Response
+      summary: Successful evaluation result
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ResultPayload'
+
+    ErrorResponse:
+      name: ErrorResponse
+      title: Error Response
+      summary: Error from evaluation or command
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ErrorPayload'
+
+    PromptResponse:
+      name: PromptResponse
+      title: Prompt Response
+      summary: Current prompt state
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PromptPayload'
+
+    OutputResponse:
+      name: OutputResponse
+      title: Output Response
+      summary: Captured output from execution
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/OutputPayload'
+
+    PongResponse:
+      name: PongResponse
+      title: Pong Response
+      summary: Response to ping
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PongPayload'
+
+    SessionResponse:
+      name: SessionResponse
+      title: Session Response
+      summary: Session information on connect
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SessionPayload'
+
+    ExitResponse:
+      name: ExitResponse
+      title: Exit Response
+      summary: Session termination notification
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExitPayload'

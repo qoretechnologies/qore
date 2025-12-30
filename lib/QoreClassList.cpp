@@ -191,6 +191,17 @@ void QoreClassList::parseRollback() {
     }
 }
 
+void QoreClassList::parseRemove(const char* name, ExceptionSink* xsink) {
+    hm_qc_t::iterator i = hm.find(name);
+    if (i != hm.end()) {
+        // Roll back any pending variants first
+        qore_class_private::parseRollback(*(i->second.cls));
+        // Then delete the class
+        qore_class_private::get(*i->second.cls)->deref(!ns_const, !ns_vars);
+        hm.erase(i);
+    }
+}
+
 void QoreClassList::parseCommit() {
     for (auto& i : hm) {
         //printd(5, "QoreClassList::parseCommit() this: %p qc: %p '%s' pub: %d\n", this, i.second,
@@ -209,7 +220,8 @@ void QoreClassList::reset() {
     deleteAll();
 }
 
-void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns) {
+void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
+        std::vector<std::string>* pending_names) {
     for (auto& i : n.hm) {
         if (ns.hashDeclList.find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "hashdecl '%s' has already been defined in " \
@@ -235,6 +247,10 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns) {
             hm[i.first] = i.second;
             // move class to new namespace
             qore_class_private::get(*i.second.cls)->updateNamespace(&ns);
+            // track the new class name for rollback support
+            if (pending_names) {
+                pending_names->push_back(i.first);
+            }
         }
     }
     n.hm.clear();

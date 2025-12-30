@@ -49,10 +49,7 @@ void ParseOptionMap::static_init() {
     DO_MAP("no-thread-control",        PO_NO_THREAD_CONTROL);
     DO_MAP("no-thread-classes",        PO_NO_THREAD_CLASSES);
     DO_MAP("no-top-level",             PO_NO_TOP_LEVEL_STATEMENTS);
-    DO_MAP("no-class-defs",            PO_NO_CLASS_DEFS);
-    DO_MAP("no-namespace-defs",        PO_NO_NAMESPACE_DEFS);
-    DO_MAP("no-constant-defs",         PO_NO_CONSTANT_DEFS);
-    DO_MAP("no-new",                   PO_NO_NEW);
+    DO_MAP("allow-reparse",            PO_ALLOW_REPARSE);
     DO_MAP("no-system-classes",        PO_NO_INHERIT_SYSTEM_CLASSES);
     DO_MAP("no-user-classes",          PO_NO_INHERIT_USER_CLASSES);
     DO_MAP("no-child-restrictions",    PO_NO_CHILD_PO_RESTRICTIONS);

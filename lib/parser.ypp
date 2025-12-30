@@ -140,9 +140,6 @@ public:
     bool pub;
 
     DLLLOCAL ConstNode(const QoreProgramLocation* loc, char* n, QoreValue v, bool p = false) : loc(loc), name(n), value(v), pub(p) {
-        // see if constant definitions are allowed
-        if (parse_check_parse_option(PO_NO_CONSTANT_DEFS))
-            parse_error(*loc, "illegal constant definition \"%s\" (conflicts with parse option PO_NO_CONSTANT_DEFS)", n);
     }
     DLLLOCAL QoreValue takeValue() {
         QoreValue rv = value;
@@ -1885,9 +1882,6 @@ top_level_command:
     | class_def {
         qore_root_ns_private::parseAddClass($1->loc, *($1->name), $1->oc);
 
-        // see if class definitions are allowed
-        if (parse_check_parse_option(PO_NO_CLASS_DEFS))
-            parse_error(*$1->loc, "illegal class definition \"%s\" (conflicts with parse option NO_CLASS_DEFS)", $1->oc->getName());
         delete $1;
     }
     | hashdecl_def {
@@ -1923,11 +1917,10 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2);
     }
     | top_namespace_decl {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        // Note: PO_NO_NAMESPACE_DEFS restriction was removed as it was documented but
+        // never enforced. The PO_ALLOW_REPARSE design allows namespace definitions
+        // in interactive REPL mode where incremental parsing is needed.
         qore_root_ns_private::parseAddNamespace($1);
-        // see if ns declaration is legal
-        if (parse_check_parse_option(PO_NO_NAMESPACE_DEFS))
-            parse_error(*loc, "illegal namespace definition \"%s\" (conflicts with parse option PO_NO_NAMESPACE_DEFINITION)", $1->getName());
     }
     | TOK_MODULE '{' module_decls '}' {
         QoreModuleDefContext* qmd = get_module_def_context();
@@ -2142,11 +2135,6 @@ namespace_decl:
     }
     | class_def {
         $$ = new NSNode($1);
-        // see if class definitions are allowed
-        if (parse_check_parse_option(PO_NO_CLASS_DEFS)) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
-            parse_error(*loc, "illegal class definition \"%s\" (conflicts with parse option PO_NO_CLASS_DEFS)", $1->oc->getName());
-        }
     }
     | hashdecl_def {
         $$ = new NSNode($1);
@@ -2164,11 +2152,6 @@ namespace_decl:
     }
     | top_namespace_decl {
         $$ = new NSNode($1);
-        // see if ns declaration is legal
-        if (parse_check_parse_option(PO_NO_NAMESPACE_DEFS)) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
-            parse_error(*loc, "illegal namespace definition \"%s\" (conflicts with parse option PO_NO_NAMESPACE_DEFINITION)", $1->getName());
-        }
     }
     | outofline_methoddef {
         $$ = new NSNode($1);
@@ -3873,22 +3856,16 @@ exp_c:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$.set(new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
-        if (parse_check_parse_option(PO_NO_NEW))
-            parse_error(*loc, "illegal use of the 'new' operator (conflicts with parse option PO_NO_NEW)");
     }
     | TOK_NEW SCOPED_REF '(' myexp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$.set(new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
-        if (parse_check_parse_option(PO_NO_NEW))
-            parse_error(*loc, "illegal use of the 'new' operator (conflicts with parse option PO_NO_NEW)");
     }
     | TOK_NEW ANGLE_IDENTIFIER '(' myexp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$.set(new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), make_args(argsloc, $4)));
-        if (parse_check_parse_option(PO_NO_NEW))
-            parse_error(*loc, "illegal use of the 'new' operator (conflicts with parse option PO_NO_NEW)");
     }
     | TOK_BACKGROUND exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);

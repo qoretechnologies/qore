@@ -566,6 +566,10 @@ int TopLevelStatementBlock::parseInit() {
         return -1;
     }
 
+    // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
+    int64 current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = current_parse_options & PO_ALLOW_REPARSE;
+
     if (!first && lvars) {
         // push already-registered local variables on the stack
         for (unsigned i = 0; i < lvars->size(); ++i)
@@ -574,19 +578,13 @@ int TopLevelStatementBlock::parseInit() {
 
     QoreParseContext parse_context;
     parse_context.setFlags(PF_TOP_LEVEL);
-    if (!first) {
+    if (!first && !repl_mode) {
+        // In REPL mode, allow new local variables in subsequent parse transactions
         parse_context.setFlags(PF_NO_TOP_LEVEL_LVARS);
     }
     int err = parseInitIntern(parse_context, hwm);
 
     //printd(5, "TopLevelStatementBlock::parseInit(rns=%p) first=%d, lvids=%d\n", &rns, first, parse_context.lvids);
-
-    if (!first && parse_context.lvids) {
-        // discard variables immediately
-        for (int i = 0; i < parse_context.lvids; ++i) {
-            pop_local_var();
-        }
-    }
 
     // now initialize root namespace and functions before local variables are popped off the stack
     if (qore_root_ns_private::get(*getRootNS())->parseInit() && !err) {
@@ -603,8 +601,25 @@ int TopLevelStatementBlock::parseInit() {
         // this call will pop all local vars off the stack
         setupLVList(parse_context);
         first = false;
-    } else if (lvars) {
-        for (unsigned i = 0; i < lvars->size(); ++i) {
+    } else {
+        // Save count of existing local vars before adding new ones
+        unsigned existing_lvars = lvars ? lvars->size() : 0;
+
+        if (repl_mode) {
+            // In REPL mode, save new local variables to lvars instead of discarding
+            if (parse_context.lvids) {
+                // setupLVList pops new vars from vstack and adds them to lvars
+                setupLVList(parse_context);
+            }
+        } else if (parse_context.lvids) {
+            // In non-REPL mode, discard new variables immediately
+            for (int i = 0; i < parse_context.lvids; ++i) {
+                pop_local_var();
+            }
+        }
+
+        // pop existing local vars off the stack
+        for (unsigned i = 0; i < existing_lvars; ++i) {
             pop_local_var();
         }
     }
@@ -636,6 +651,57 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
 
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
+
+    // Get the parse options from the current program at runtime
+    // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
+    // before the program's pwo is initialized (due to C++ member initialization order)
+    int64 runtime_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+
+    // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
+    // This is determined by the execution high water mark (ehwm)
+    if (runtime_parse_options & PO_ALLOW_REPARSE) {
+        int rc = 0;
+
+        // Determine start position - one past the execution high water mark
+        statement_list_t::iterator start = ehwm;
+        if (start != statement_list.end()) {
+            ++start;
+        } else {
+            start = statement_list.begin();
+        }
+
+        // If nothing new to execute, return early
+        if (start == statement_list.end()) {
+            return 0;
+        }
+
+        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+        // Execute only new statements
+        for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
+            if (tlpd->runtimeCheck()) {
+                rc = tlpd->dbgStep(this, *i, xsink);
+                if (rc || *xsink) {
+                    break;
+                }
+            }
+            rc = (*i)->exec(return_value, xsink);
+            // Update ehwm to current statement after successful execution
+            // so that on exception, only successfully executed statements are marked
+            if (!rc && !*xsink) {
+                ehwm = i;
+            }
+            if (*xsink && tlpd->runtimeCheck()) {
+                tlpd->dbgException(*i, xsink);
+                if (*xsink) {
+                    break;
+                }
+            }
+            if (rc) break;
+        }
+        return rc;
+    }
+
+    // Normal mode - execute all statements
     return execIntern(return_value, xsink);
 }
 

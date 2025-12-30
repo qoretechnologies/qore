@@ -1,0 +1,963 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreRepl.qtest Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires QoreRepl
+%requires HttpServerUtil
+
+%exec-class QoreReplTest
+
+public class QoreReplTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreRepl", "1.0") {
+        # PO_ALLOW_REPARSE tests
+        addTestCase("PO_ALLOW_REPARSE basic tests", \testAllowReparseBasic());
+        addTestCase("PO_ALLOW_REPARSE negative tests", \testAllowReparseNegative());
+        addTestCase("PO_ALLOW_REPARSE thread safety tests", \testAllowReparseThreadSafety());
+        addTestCase("PO_ALLOW_REPARSE local variables", \testAllowReparseLocalVars());
+
+        # QoreRepl basic tests
+        addTestCase("QoreRepl basic tests", \testQoreReplBasic());
+
+        # Special command tests
+        addTestCase("Command: /help", \testCommandHelp());
+        addTestCase("Command: /vars", \testCommandVars());
+        addTestCase("Command: /reset", \testCommandReset());
+        addTestCase("Command: /clear", \testCommandClear());
+        addTestCase("Command: /quit, /exit, /q", \testCommandQuit());
+        addTestCase("Command: unknown", \testCommandUnknown());
+
+        # Multi-line input tests
+        addTestCase("Multi-line: block statement", \testMultiLineBlock());
+        addTestCase("Multi-line: function definition", \testMultiLineFunction());
+        addTestCase("Multi-line: class definition", \testMultiLineClass());
+        addTestCase("Multi-line: nested blocks", \testNestedBlocks());
+        addTestCase("Multi-line: trailing operators", \testTrailingOperators());
+
+        # Error handling tests
+        addTestCase("Error: parse error", \testParseError());
+        addTestCase("Error: runtime exception", \testRuntimeError());
+        addTestCase("Exception handling in REPARSE mode", \testExceptionHandling());
+        addTestCase("Parse failure behavior", \testParseFailureBehavior());
+
+        # Result formatting tests
+        addTestCase("Format: different types", \testResultFormatting());
+
+        # State persistence tests
+        addTestCase("State persistence across evals", \testStatePersistence());
+
+        # /load command tests
+        addTestCase("/load with active threads", \testLoadWithActiveThreads());
+
+        # WebSocket handler tests
+        addTestCase("setMaxConnections validation", \testMaxConnectionsValidation());
+
+        # Comprehensive rollback tests
+        addTestCase("Rollback: preserves all types", \testRollbackPreservesAllTypes());
+        addTestCase("Rollback: hashdecl", \testRollbackPreservesHashdecl());
+        addTestCase("Rollback: multiple consecutive", \testMultipleConsecutiveRollbacks());
+        addTestCase("Rollback: repeated cycles", \testRepeatedRollbackCycles());
+        addTestCase("Rollback: partial parse", \testPartialParseRollback());
+        addTestCase("Rollback: function variants", \testRollbackPreservesFunctionVariants());
+        addTestCase("Rollback: class hierarchy", \testRollbackPreservesClassHierarchy());
+        addTestCase("Rollback: closures", \testRollbackPreservesClosures());
+        addTestCase("Rollback: stress test", \testRollbackStressTest());
+
+        set_return_value(main());
+    }
+
+    #! Test basic PO_ALLOW_REPARSE functionality
+    testAllowReparseBasic() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        assertTrue((pgm.getParseOptions() & PO_ALLOW_REPARSE) != 0,
+            "PO_ALLOW_REPARSE should be set");
+
+        pgm.parse("our int x = 1;", "test1");
+        pgm.run();
+        assertEq(1, pgm.getGlobalVariable("x"), "First parse should set x=1");
+
+        pgm.parse("our int y = x + 10;", "test2");
+        pgm.run();
+        assertEq(11, pgm.getGlobalVariable("y"), "Second parse should set y=11");
+
+        # Test function definition (use 'sub' keyword for top-level functions)
+        pgm.parse("int sub double(int n) { return n * 2; }", "test3");
+        pgm.run();
+        pgm.parse("our int doubled = double(11);", "test4");
+        pgm.run();
+        assertEq(22, pgm.getGlobalVariable("doubled"), "Function should work");
+    }
+
+    #! Test negative cases - parsing without PO_ALLOW_REPARSE should fail
+    testAllowReparseNegative() {
+        Program pgm(PO_NEW_STYLE, True);
+        assertTrue((pgm.getParseOptions() & PO_ALLOW_REPARSE) == 0,
+            "PO_ALLOW_REPARSE should NOT be set");
+
+        pgm.parse("our int x = 1;", "test1");
+        pgm.run();
+        assertEq(1, pgm.getGlobalVariable("x"), "First parse should succeed");
+
+        bool caught = False;
+        try {
+            pgm.parse("our int y = 2;", "test2");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PARSE-ERROR", ex.err, "Should get PARSE-ERROR");
+        }
+        assertTrue(caught, "Second parse without PO_ALLOW_REPARSE should throw");
+    }
+
+    #! Test thread safety - parsing should be blocked when threads are active
+    testAllowReparseThreadSafety() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+
+        pgm.parse("
+            our bool stop = False;
+            sub worker() { while (!stop) usleep(10ms); }
+        ", "setup");
+        pgm.run();
+
+        pgm.parse("background worker();", "start");
+        pgm.run();
+
+        # Wait for thread to start
+        while (pgm.getThreadCount() == 0) usleep(10ms);
+        assertTrue(pgm.getThreadCount() > 0, "Thread should be running");
+
+        # Parsing while thread is active should fail
+        bool caught = False;
+        try {
+            pgm.parse("our int x = 1;", "fail");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PARSE-ERROR", ex.err, "Should get PARSE-ERROR");
+        }
+        assertTrue(caught, "Parse with active thread should throw");
+
+        # Stop the thread
+        pgm.setGlobalVarValue("stop", True);
+        while (pgm.getThreadCount() > 0) usleep(10ms);
+        assertEq(0, pgm.getThreadCount(), "Thread should have stopped");
+
+        # Parsing after thread stops should succeed
+        pgm.parse("our int ok = 42;", "after");
+        pgm.run();
+        assertEq(42, pgm.getGlobalVariable("ok"), "Parse should succeed after thread stops");
+    }
+
+    #! Test local variables in REPL mode
+    testAllowReparseLocalVars() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+
+        # First parse with a local variable
+        pgm.parse("int x = 5;", "test1");
+        pgm.run();
+
+        # Second parse with another local variable that uses the first
+        pgm.parse("int y = x + 10;", "test2");
+        pgm.run();
+
+        # Third parse to verify the variables are accessible
+        pgm.parse("our int result = x + y;", "test3");
+        pgm.run();
+        assertEq(20, pgm.getGlobalVariable("result"), "Local variables should persist: x=5, y=15, result=20");
+
+        # Test class instantiation with local variables
+        pgm.parse("class C { public { int val; } constructor(int v) { val = v; }}", "class");
+        pgm.run();
+
+        pgm.parse("C obj(42);", "obj");
+        pgm.run();
+
+        pgm.parse("our int objVal = obj.val;", "getVal");
+        pgm.run();
+        assertEq(42, pgm.getGlobalVariable("objVal"), "Object local variable should work");
+    }
+
+    #! Test basic QoreRepl functionality
+    testQoreReplBasic() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("1 + 1");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+
+        result = repl.eval("our int x = 10");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+        assertEq(10, repl.getProgram().getGlobalVariable("x"), "x should be 10");
+
+        result = repl.eval("int sub square(int n) { return n * n; }");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+
+        result = repl.eval("our int sq = square(5)");
+        assertTrue(!result.error, "Function call should succeed");
+        assertEq(25, repl.getProgram().getGlobalVariable("sq"), "square(5) = 25");
+
+        assertEq("qore> ", repl.getPrompt(), "Default prompt");
+        assertFalse(repl.needsMoreInput(), "Should not need more input");
+    }
+
+    #! Test /help command
+    testCommandHelp() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("/help");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.value, "Should have value");
+        assertRegex("Special commands", result.value, "Help should mention special commands");
+        assertRegex("/quit", result.value, "Help should mention /quit");
+        assertRegex("/vars", result.value, "Help should mention /vars");
+
+        # Test /? alias
+        result = repl.eval("/?");
+        assertTrue(exists result.value, "/?  should also return help");
+    }
+
+    #! Test /vars command
+    testCommandVars() {
+        QoreRepl repl();
+
+        # Initially - may have inherited system variables (ARGV, ENV, etc.)
+        *hash<auto> result = repl.eval("/vars");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.value, "/vars should return output");
+
+        # Add a user variable
+        repl.eval("our int x = 42");
+        result = repl.eval("/vars");
+        assertRegex("x", result.value, "Should show x variable");
+        assertRegex("42", result.value, "Should show x value");
+
+        # Add more variables
+        repl.eval("our string name = 'test'");
+        result = repl.eval("/vars");
+        assertRegex("x", result.value, "Should still show x");
+        assertRegex("name", result.value, "Should show name variable");
+    }
+
+    #! Test /reset command
+    testCommandReset() {
+        QoreRepl repl();
+
+        # Set up some state
+        repl.eval("our int x = 100");
+        assertEq(100, repl.getProgram().getGlobalVariable("x"), "x should be 100");
+
+        # Reset
+        *hash<auto> result = repl.eval("/reset");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("reset", result.value.lwr(), "Should confirm reset");
+
+        # User-defined variable should be gone
+        # Note: System variables like ARGV, ENV may still exist after reset
+        *hash<auto> vars = repl.eval("/vars");
+        assertFalse(exists vars.error, "/vars should not error after reset");
+        # x should no longer be in the output
+        assertFalse(vars.value =~ /\bx\b/, "Variable x should be cleared after reset");
+    }
+
+    #! Test /clear command
+    testCommandClear() {
+        QoreRepl repl();
+
+        # Start a multi-line input
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input");
+        assertTrue(repl.needsMoreInput(), "Should be in multi-line mode");
+        assertEq("...> ", repl.getPrompt(), "Should show continuation prompt");
+
+        # Clear the pending input
+        result = repl.eval("/clear");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertFalse(repl.needsMoreInput(), "Should no longer need more input");
+        assertEq("qore> ", repl.getPrompt(), "Should show normal prompt");
+    }
+
+    #! Test /quit, /exit, /q commands
+    testCommandQuit() {
+        QoreRepl repl();
+
+        # Test /quit
+        *hash<auto> result = repl.eval("/quit");
+        assertTrue(exists result, "Should return result");
+        assertTrue(result.exit, "/quit should set exit flag");
+
+        # Test /exit
+        repl.reset();
+        result = repl.eval("/exit");
+        assertTrue(result.exit, "/exit should set exit flag");
+
+        # Test /q
+        repl.reset();
+        result = repl.eval("/q");
+        assertTrue(result.exit, "/q should set exit flag");
+    }
+
+    #! Test unknown command
+    testCommandUnknown() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("/unknown");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("Unknown command", result.error.desc, "Should mention unknown command");
+    }
+
+    #! Test multi-line block statement
+    testMultiLineBlock() {
+        QoreRepl repl();
+
+        # Start if block
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input after opening brace");
+        assertTrue(repl.needsMoreInput(), "Should need more input");
+
+        # Add body
+        result = repl.eval("    our int x = 1;");
+        assertFalse(exists result, "Should still need more input");
+
+        # Close block
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete after closing brace");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(1, repl.getProgram().getGlobalVariable("x"), "Block should have executed");
+    }
+
+    #! Test multi-line function definition
+    testMultiLineFunction() {
+        QoreRepl repl();
+
+        # Start function
+        *hash<auto> result = repl.eval("int sub add(int a, int b) {");
+        assertFalse(exists result, "Should need more input");
+
+        # Add body
+        result = repl.eval("    return a + b;");
+        assertFalse(exists result, "Should still need more input");
+
+        # Close function
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Use the function
+        result = repl.eval("our int sum = add(3, 4)");
+        assertFalse(exists result.error, "Function call should succeed");
+        assertEq(7, repl.getProgram().getGlobalVariable("sum"), "add(3, 4) = 7");
+    }
+
+    #! Test multi-line class definition
+    testMultiLineClass() {
+        QoreRepl repl();
+
+        # Start class
+        *hash<auto> result = repl.eval("class Counter {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    private { int count = 0; }");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    int inc() { return ++count; }");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Use the class
+        result = repl.eval("our Counter c()");
+        assertFalse(exists result.error, "Should create instance");
+
+        result = repl.eval("our int n = c.inc()");
+        assertFalse(exists result.error, "Should call method");
+        assertEq(1, repl.getProgram().getGlobalVariable("n"), "c.inc() should return 1");
+    }
+
+    #! Test deeply nested blocks
+    testNestedBlocks() {
+        QoreRepl repl();
+
+        # Nested if blocks
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    if (True) {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("        our int deep = 42;");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    }");
+        assertFalse(exists result, "Should still need more input (outer block open)");
+
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete after all braces closed");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(42, repl.getProgram().getGlobalVariable("deep"), "Nested block should execute");
+    }
+
+    #! Test trailing operators indicate continuation
+    testTrailingOperators() {
+        QoreRepl repl();
+
+        # Trailing comma
+        *hash<auto> result = repl.eval("our list<auto> l = (1,");
+        assertFalse(exists result, "Trailing comma should need more input");
+
+        result = repl.eval("2, 3)");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Trailing plus
+        result = repl.eval("our int x = 1 +");
+        assertFalse(exists result, "Trailing + should need more input");
+
+        result = repl.eval("2");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(3, repl.getProgram().getGlobalVariable("x"), "1 + 2 = 3");
+    }
+
+    #! Test parse error handling
+    testParseError() {
+        QoreRepl repl();
+
+        # Syntax error - use a clearly invalid expression
+        *hash<auto> result = repl.eval("our int x = @#$");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        # Could be PARSE-EXCEPTION or PARSE-ERROR depending on the error
+        assertTrue(result.error.err =~ /PARSE/, "Should be a parse error");
+    }
+
+    #! Test runtime exception handling
+    testRuntimeError() {
+        QoreRepl repl();
+
+        # Runtime exception
+        *hash<auto> result = repl.eval("throw 'TEST-ERROR', 'test exception'");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        assertEq("TEST-ERROR", result.error.err, "Should be TEST-ERROR");
+        assertRegex("test exception", result.error.desc, "Should contain exception message");
+    }
+
+    #! Test result formatting for different types
+    testResultFormatting() {
+        # Integer
+        assertEq("42", QoreRepl::formatValue(42), "Integer formatting");
+
+        # Float
+        assertRegex("3\\.14", QoreRepl::formatValue(3.14), "Float formatting");
+
+        # String - should be quoted
+        assertEq("\"hello\"", QoreRepl::formatValue("hello"), "String formatting");
+
+        # Boolean
+        assertEq("True", QoreRepl::formatValue(True), "Boolean True formatting");
+        assertEq("False", QoreRepl::formatValue(False), "Boolean False formatting");
+
+        # NOTHING
+        assertEq("", QoreRepl::formatValue(NOTHING), "NOTHING formatting");
+
+        # List
+        string listFmt = QoreRepl::formatValue((1, 2, 3));
+        assertRegex("1", listFmt, "List should contain 1");
+        assertRegex("2", listFmt, "List should contain 2");
+
+        # Hash
+        string hashFmt = QoreRepl::formatValue({"a": 1, "b": 2});
+        assertRegex("a", hashFmt, "Hash should contain key a");
+        assertRegex("b", hashFmt, "Hash should contain key b");
+    }
+
+    #! Test state persistence across multiple evals
+    testStatePersistence() {
+        QoreRepl repl();
+
+        # Define variable
+        repl.eval("our int counter = 0");
+        assertEq(0, repl.getProgram().getGlobalVariable("counter"), "Initial counter");
+
+        # Modify in loop - use while loop for simplicity
+        repl.eval("{ int i = 0; while (i < 5) { counter++; i++; } }");
+        assertEq(5, repl.getProgram().getGlobalVariable("counter"), "Counter after loop");
+
+        # Define and use function
+        repl.eval("int sub getCounter() { return counter; }");
+        repl.eval("our int val = getCounter()");
+        assertEq(5, repl.getProgram().getGlobalVariable("val"), "Function should access variable");
+
+        # Modify via function
+        repl.eval("sub incCounter() { counter++; }");
+        repl.eval("incCounter()");
+        assertEq(6, repl.getProgram().getGlobalVariable("counter"), "Counter after incCounter");
+    }
+
+    #! Test that state persists across exceptions and program can continue after conditional throws
+    testExceptionHandling() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+
+        # Parse initial setup with conditional throw flag
+        pgm.parse("our int x = 1; our bool doThrow = True;", "setup1");
+        pgm.run();
+        assertEq(1, pgm.getGlobalVariable("x"), "x should be 1");
+
+        # Add a conditional throw statement that we can disable
+        pgm.parse("if (doThrow) throw 'TEST', 'error';", "throws");
+        try {
+            pgm.run();
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST", ex.err, "Should get TEST exception");
+        }
+
+        # Disable the throw and verify program is still usable
+        pgm.setGlobalVarValue("doThrow", False);
+        pgm.parse("our int y = 2;", "after");
+        pgm.run();
+        assertEq(2, pgm.getGlobalVariable("y"), "y should be 2 after recovery");
+    }
+
+    #! Test /load command with active threads
+    testLoadWithActiveThreads() {
+        QoreRepl repl();
+
+        # Start a background thread
+        repl.eval("our bool stop = False;");
+        repl.eval("sub worker() { while (!stop) usleep(10ms); }");
+        repl.eval("background worker();");
+
+        # Wait for thread to start
+        Program pgm = repl.getProgram();
+        while (pgm.getThreadCount() == 0) usleep(10ms);
+        assertTrue(pgm.getThreadCount() > 0, "Thread should be running");
+
+        # Try to /load a file - should fail with helpful message
+        *hash<auto> result = repl.eval("/load /nonexistent/file.q");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("background threads", result.error.desc, "Should mention background threads");
+
+        # Stop the thread
+        repl.getProgram().setGlobalVarValue("stop", True);
+        while (pgm.getThreadCount() > 0) usleep(10ms);
+    }
+
+    #! Test negative max_connections validation
+    testMaxConnectionsValidation() {
+        QoreReplWebSocketHandler handler();
+
+        # Valid values should work
+        handler.setMaxConnections(0);  # Unlimited
+        assertEq(0, handler.getMaxConnections(), "0 should work (unlimited)");
+
+        handler.setMaxConnections(10);
+        assertEq(10, handler.getMaxConnections(), "Positive values should work");
+
+        # Negative should throw
+        bool caught = False;
+        try {
+            handler.setMaxConnections(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("INVALID-ARGUMENT", ex.err, "Should get INVALID-ARGUMENT");
+            assertRegex("non-negative", ex.desc, "Should mention non-negative");
+        }
+        assertTrue(caught, "Negative max_connections should throw");
+    }
+
+    #! Test behavior after parse failure
+    /** Note: Parse failures in PO_ALLOW_REPARSE mode can roll back previously
+        committed state. This test documents the current behavior. */
+    testParseFailureBehavior() {
+        QoreRepl repl();
+
+        # Set up some state
+        repl.eval("our int x = 42;");
+        assertEq(42, repl.getProgram().getGlobalVariable("x"), "x should be 42");
+
+        # Try a parse error - clearly invalid syntax
+        *hash<auto> result = repl.eval("our int y = @invalid;");
+        assertTrue(exists result.error, "Should have error");
+        assertTrue(result.error.err =~ /PARSE/, "Should be a parse error");
+
+        # Verify that x is still defined after parse failure
+        # parseRollback now preserves previously committed state
+        assertEq(42, repl.getProgram().getGlobalVariable("x"),
+            "x should still be 42 after parse failure");
+
+        # Can continue using the REPL after parse error
+        result = repl.eval("our int z = x + 1;");
+        assertFalse(exists result.error, "Should be able to continue after parse error");
+        assertEq(43, repl.getProgram().getGlobalVariable("z"), "z should be 43");
+    }
+
+    #! Test that rollback preserves all types: variables, functions, classes, constants
+    testRollbackPreservesAllTypes() {
+        QoreRepl repl();
+
+        # Define a global variable
+        repl.eval("our int testVar = 100;");
+        assertEq(100, repl.getProgram().getGlobalVariable("testVar"), "testVar should be 100");
+
+        # Define a function (use 'sub' keyword for top-level functions)
+        repl.eval("int sub addNumbers(int a, int b) { return a + b; }");
+        repl.eval("our int funcResult = addNumbers(3, 7);");
+        assertEq(10, repl.getProgram().getGlobalVariable("funcResult"), "funcResult should be 10");
+
+        # Define a class (note: using block syntax for private section in REPL mode)
+        repl.eval("class TestCounter { private { int n = 0; } int inc() { return ++n; } int get() { return n; } }");
+        repl.eval("our TestCounter counter();");
+        repl.eval("our int c1 = counter.inc();");
+        assertEq(1, repl.getProgram().getGlobalVariable("c1"), "c1 should be 1");
+
+        # Define a constant
+        repl.eval("const MY_CONST = 42;");
+        repl.eval("our int constVal = MY_CONST;");
+        assertEq(42, repl.getProgram().getGlobalVariable("constVal"), "constVal should be 42");
+
+        # Now cause a parse error
+        *hash<auto> result = repl.eval("this is @#$ invalid syntax");
+        assertTrue(exists result.error, "Should have parse error");
+
+        # Verify all previously defined items still work
+        assertEq(100, repl.getProgram().getGlobalVariable("testVar"), "testVar should still be 100 after rollback");
+
+        # Function should still work
+        repl.eval("our int funcResult2 = addNumbers(20, 30);");
+        assertEq(50, repl.getProgram().getGlobalVariable("funcResult2"), "Function should still work after rollback");
+
+        # Class instance should still work with preserved state
+        repl.eval("our int c2 = counter.inc();");
+        assertEq(2, repl.getProgram().getGlobalVariable("c2"), "Class instance should preserve state after rollback");
+
+        # Constant should still be accessible
+        repl.eval("our int constVal2 = MY_CONST + 1;");
+        assertEq(43, repl.getProgram().getGlobalVariable("constVal2"), "Constant should still work after rollback");
+
+        # Can define new items after rollback
+        repl.eval("our string newVar = 'created after rollback';");
+        assertEq("created after rollback", repl.getProgram().getGlobalVariable("newVar"), "Should be able to create new vars after rollback");
+    }
+
+    #! Test rollback with hashdecl definitions
+    testRollbackPreservesHashdecl() {
+        QoreRepl repl();
+
+        # Define a hashdecl
+        repl.eval("hashdecl MyRecord { int id; string name; }");
+        repl.eval("our hash<MyRecord> rec = <MyRecord>{\"id\": 1, \"name\": \"test\"};");
+        assertEq(1, repl.getProgram().getGlobalVariable("rec").id, "rec.id should be 1");
+        assertEq("test", repl.getProgram().getGlobalVariable("rec").name, "rec.name should be 'test'");
+
+        # Cause a parse error
+        *hash<auto> result = repl.eval("invalid @#$ syntax here");
+        assertTrue(exists result.error, "Should have parse error");
+
+        # Hashdecl should still work after rollback
+        repl.eval("our hash<MyRecord> rec2 = <MyRecord>{\"id\": 2, \"name\": \"after rollback\"};");
+        assertEq(2, repl.getProgram().getGlobalVariable("rec2").id, "rec2.id should be 2");
+        assertEq("after rollback", repl.getProgram().getGlobalVariable("rec2").name, "rec2.name should be correct");
+
+        # Can create more hashdecls after rollback
+        repl.eval("hashdecl MyRecord2 { int x; int y; }");
+        repl.eval("our hash<MyRecord2> point = <MyRecord2>{\"x\": 10, \"y\": 20};");
+        assertEq(10, repl.getProgram().getGlobalVariable("point").x, "point.x should be 10");
+    }
+
+    #! Test multiple consecutive rollbacks
+    testMultipleConsecutiveRollbacks() {
+        QoreRepl repl();
+
+        # Initial setup
+        repl.eval("our int a = 1;");
+        repl.eval("our int b = 2;");
+        repl.eval("our int c = 3;");
+
+        # First rollback
+        *hash<auto> result = repl.eval("bad @#$ syntax 1");
+        assertTrue(exists result.error, "Should have error 1");
+
+        # Verify state preserved
+        assertEq(1, repl.getProgram().getGlobalVariable("a"), "a should be 1 after rollback 1");
+        assertEq(2, repl.getProgram().getGlobalVariable("b"), "b should be 2 after rollback 1");
+        assertEq(3, repl.getProgram().getGlobalVariable("c"), "c should be 3 after rollback 1");
+
+        # Add more state
+        repl.eval("our int d = 4;");
+
+        # Second rollback
+        result = repl.eval("bad @#$ syntax 2");
+        assertTrue(exists result.error, "Should have error 2");
+
+        # Verify all state preserved
+        assertEq(1, repl.getProgram().getGlobalVariable("a"), "a should be 1 after rollback 2");
+        assertEq(2, repl.getProgram().getGlobalVariable("b"), "b should be 2 after rollback 2");
+        assertEq(3, repl.getProgram().getGlobalVariable("c"), "c should be 3 after rollback 2");
+        assertEq(4, repl.getProgram().getGlobalVariable("d"), "d should be 4 after rollback 2");
+
+        # Third rollback
+        result = repl.eval("bad @#$ syntax 3");
+        assertTrue(exists result.error, "Should have error 3");
+
+        # All state should still be preserved
+        assertEq(1, repl.getProgram().getGlobalVariable("a"), "a should be 1 after rollback 3");
+        assertEq(4, repl.getProgram().getGlobalVariable("d"), "d should be 4 after rollback 3");
+
+        # Can still add more state
+        repl.eval("our int e = a + b + c + d;");
+        assertEq(10, repl.getProgram().getGlobalVariable("e"), "e should be 10");
+    }
+
+    #! Test repeated rollback cycles for memory stability
+    testRepeatedRollbackCycles() {
+        QoreRepl repl();
+
+        # Setup initial state
+        repl.eval("our int counter = 0;");
+        repl.eval("sub increment() { counter++; }");
+
+        # Run many rollback cycles
+        int cycles = 50;
+        for (int i = 0; i < cycles; i++) {
+            # Successful operation
+            repl.eval("increment();");
+
+            # Failed parse (triggers rollback)
+            *hash<auto> result = repl.eval("invalid @#$ " + string(i));
+            assertTrue(exists result.error, sprintf("Should have error in cycle %d", i));
+        }
+
+        # Counter should have been incremented 'cycles' times
+        assertEq(cycles, repl.getProgram().getGlobalVariable("counter"),
+            sprintf("counter should be %d after %d cycles", cycles, cycles));
+
+        # Function should still work
+        repl.eval("increment();");
+        assertEq(cycles + 1, repl.getProgram().getGlobalVariable("counter"),
+            "counter should be incremented after cycles");
+    }
+
+    #! Test rollback when error occurs mid-parse with multiple declarations
+    testPartialParseRollback() {
+        QoreRepl repl();
+
+        # Setup
+        repl.eval("our int existing = 100;");
+        assertEq(100, repl.getProgram().getGlobalVariable("existing"), "existing should be 100");
+
+        # Try to parse code with error in the middle
+        # The first declaration might be parsed before the error is detected
+        *hash<auto> result = repl.eval("our int newVar1 = 1; our int badVar = @invalid; our int newVar2 = 2;");
+        assertTrue(exists result.error, "Should have parse error");
+
+        # Original variable should be preserved
+        assertEq(100, repl.getProgram().getGlobalVariable("existing"), "existing should still be 100");
+
+        # newVar1 should NOT exist (rollback should remove pending items)
+        auto val = repl.getProgram().getGlobalVariable("newVar1");
+        assertTrue(val === NOTHING, "newVar1 should not exist after rollback");
+
+        # Can continue normally
+        repl.eval("our int afterError = existing + 50;");
+        assertEq(150, repl.getProgram().getGlobalVariable("afterError"), "afterError should be 150");
+    }
+
+    #! Test rollback preserves functions
+    /** Note: Function overloading across separate parse cycles is not supported in REPL mode.
+        This test verifies that existing functions survive rollback. */
+    testRollbackPreservesFunctionVariants() {
+        QoreRepl repl();
+
+        # Define several different functions (use 'sub' keyword)
+        repl.eval("string sub describeInt(int n) { return sprintf('int: %d', n); }");
+        repl.eval("our string r1 = describeInt(42);");
+        assertEq("int: 42", repl.getProgram().getGlobalVariable("r1"), "r1 should be 'int: 42'");
+
+        repl.eval("string sub describeStr(string s) { return sprintf('string: %s', s); }");
+        repl.eval("our string r2 = describeStr('hello');");
+        assertEq("string: hello", repl.getProgram().getGlobalVariable("r2"), "r2 should be 'string: hello'");
+
+        repl.eval("string sub describeBoth(int n, string s) { return sprintf('%d-%s', n, s); }");
+        repl.eval("our string r3 = describeBoth(99, 'test');");
+        assertEq("99-test", repl.getProgram().getGlobalVariable("r3"), "r3 should be '99-test'");
+
+        # Cause rollback
+        *hash<auto> result = repl.eval("invalid @#$ syntax");
+        assertTrue(exists result.error, "Should have error");
+
+        # All functions should still work after rollback
+        repl.eval("our string r4 = describeInt(100);");
+        assertEq("int: 100", repl.getProgram().getGlobalVariable("r4"), "describeInt should still work");
+
+        repl.eval("our string r5 = describeStr('world');");
+        assertEq("string: world", repl.getProgram().getGlobalVariable("r5"), "describeStr should still work");
+
+        repl.eval("our string r6 = describeBoth(1, 'abc');");
+        assertEq("1-abc", repl.getProgram().getGlobalVariable("r6"), "describeBoth should still work");
+
+        # Can define new functions after rollback
+        repl.eval("float sub multiply(float a, float b) { return a * b; }");
+        repl.eval("our float r7 = multiply(3.0, 4.0);");
+        assertEq(12.0, repl.getProgram().getGlobalVariable("r7"), "New function should work after rollback");
+    }
+
+    #! Test rollback with class inheritance
+    testRollbackPreservesClassHierarchy() {
+        QoreRepl repl();
+
+        # Define base class
+        repl.eval("class Animal { string speak() { return 'generic sound'; } }");
+
+        # Define derived class
+        repl.eval("class Dog inherits Animal { string speak() { return 'woof'; } }");
+        repl.eval("class Cat inherits Animal { string speak() { return 'meow'; } }");
+
+        # Create instances
+        repl.eval("our Animal a();");
+        repl.eval("our Dog d();");
+        repl.eval("our Cat c();");
+
+        # Verify they work
+        repl.eval("our string s1 = a.speak();");
+        repl.eval("our string s2 = d.speak();");
+        repl.eval("our string s3 = c.speak();");
+        assertEq("generic sound", repl.getProgram().getGlobalVariable("s1"), "Animal should speak");
+        assertEq("woof", repl.getProgram().getGlobalVariable("s2"), "Dog should woof");
+        assertEq("meow", repl.getProgram().getGlobalVariable("s3"), "Cat should meow");
+
+        # Cause rollback
+        *hash<auto> result = repl.eval("invalid @#$ syntax");
+        assertTrue(exists result.error, "Should have error");
+
+        # All classes should still work
+        repl.eval("our string s4 = d.speak();");
+        assertEq("woof", repl.getProgram().getGlobalVariable("s4"), "Dog should still woof after rollback");
+
+        # Can create new instances
+        repl.eval("our Cat c2();");
+        repl.eval("our string s5 = c2.speak();");
+        assertEq("meow", repl.getProgram().getGlobalVariable("s5"), "New Cat instance should work");
+
+        # Can add new derived class
+        repl.eval("class Bird inherits Animal { string speak() { return 'chirp'; } }");
+        repl.eval("our Bird b();");
+        repl.eval("our string s6 = b.speak();");
+        assertEq("chirp", repl.getProgram().getGlobalVariable("s6"), "Bird should chirp");
+    }
+
+    #! Test rollback with closures and references
+    testRollbackPreservesClosures() {
+        QoreRepl repl();
+
+        # Create a closure factory (use 'sub' keyword)
+        repl.eval("code sub makeCounter(int start) { int n = start; return int sub() { return n++; }; }");
+
+        # Create a counter
+        repl.eval("our code counter1 = makeCounter(10);");
+        repl.eval("our int v1 = counter1();");
+        repl.eval("our int v2 = counter1();");
+        assertEq(10, repl.getProgram().getGlobalVariable("v1"), "v1 should be 10");
+        assertEq(11, repl.getProgram().getGlobalVariable("v2"), "v2 should be 11");
+
+        # Cause rollback
+        *hash<auto> result = repl.eval("invalid @#$ syntax");
+        assertTrue(exists result.error, "Should have error");
+
+        # Counter should still work and preserve its state
+        repl.eval("our int v3 = counter1();");
+        assertEq(12, repl.getProgram().getGlobalVariable("v3"), "Counter should preserve state after rollback");
+
+        # Can create new counters
+        repl.eval("our code counter2 = makeCounter(100);");
+        repl.eval("our int v4 = counter2();");
+        assertEq(100, repl.getProgram().getGlobalVariable("v4"), "New counter should work");
+    }
+
+    #! Stress test with many types and operations
+    testRollbackStressTest() {
+        QoreRepl repl();
+
+        # Create many variables
+        for (int i = 0; i < 20; i++) {
+            repl.eval(sprintf("our int var%d = %d;", i, i * 10));
+        }
+
+        # Create several functions (use 'sub' keyword)
+        for (int i = 0; i < 5; i++) {
+            repl.eval(sprintf("int sub func%d(int x) { return x + %d; }", i, i));
+        }
+
+        # Create several classes (use public block for member declaration in REPL mode)
+        for (int i = 0; i < 5; i++) {
+            repl.eval(sprintf("class Class%d { public { int val = %d; } int getVal() { return val; } }", i, i * 100));
+        }
+
+        # Run multiple rollback cycles
+        for (int cycle = 0; cycle < 10; cycle++) {
+            # Verify some random items still work
+            repl.eval("our int checkVar = var5 + var10;");
+            assertEq(150, repl.getProgram().getGlobalVariable("checkVar"),
+                sprintf("Variables should work in cycle %d", cycle));
+
+            repl.eval("our int checkFunc = func2(100);");
+            assertEq(102, repl.getProgram().getGlobalVariable("checkFunc"),
+                sprintf("Functions should work in cycle %d", cycle));
+
+            repl.eval("our Class3 checkObj();");
+            repl.eval("our int checkClass = checkObj.getVal();");
+            assertEq(300, repl.getProgram().getGlobalVariable("checkClass"),
+                sprintf("Classes should work in cycle %d", cycle));
+
+            # Cause a rollback
+            *hash<auto> result = repl.eval(sprintf("syntax error @#$ cycle %d", cycle));
+            assertTrue(exists result.error, sprintf("Should have error in cycle %d", cycle));
+        }
+
+        # Final verification - everything should still work
+        assertEq(0, repl.getProgram().getGlobalVariable("var0"), "var0 should be 0");
+        assertEq(190, repl.getProgram().getGlobalVariable("var19"), "var19 should be 190");
+
+        repl.eval("our int finalFunc = func4(1000);");
+        assertEq(1004, repl.getProgram().getGlobalVariable("finalFunc"), "func4 should still work");
+
+        repl.eval("our Class0 finalObj();");
+        repl.eval("our int finalClass = finalObj.getVal();");
+        assertEq(0, repl.getProgram().getGlobalVariable("finalClass"), "Class0 should still work");
+    }
+}
+

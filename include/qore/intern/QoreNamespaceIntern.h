@@ -68,6 +68,16 @@ public:
     GlobalVariableList var_list;   // global variable map
     gvblist_t pend_gvblist;        // global variable declaration list
 
+    // Pending names for atomic rollback support
+    // These track names of items added in the current parse transaction
+    // so they can be selectively removed on parseRollback()
+    std::vector<std::string> pending_var_names;      // Global vars added in pending parse
+    std::vector<std::string> pending_func_names;     // Functions added in pending parse
+    std::vector<std::string> pending_class_names;    // Classes added in pending parse
+    std::vector<std::string> pending_const_names;    // Constants added in pending parse
+    std::vector<std::string> pending_hashdecl_names; // Hashdecls added in pending parse
+    std::vector<std::string> pending_ns_names;       // Child namespaces added in pending parse
+
     // 0 = root namespace, ...
     unsigned depth = 0;
 
@@ -411,7 +421,7 @@ public:
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
     DLLLOCAL int parseInitConstants();
-    DLLLOCAL void parseRollback(ExceptionSink* xsink);
+    DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false);
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
 
@@ -1812,24 +1822,32 @@ public:
         }
     }
 
-    DLLLOCAL void parseRollback(ExceptionSink* xsink) {
-        // roll back pending lookup entries
+    DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false) {
+        // roll back pending function lookup entries
         pend_fmap.clear();
-        cnmap.clear();
-
-        varmap.clear();
-        nsmap.clear();
 
         // roll back pending global variables
         pend_gvlist.clear();
 
-        clmap.clear();
-        thdmap.clear();
-
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
 
-        qore_ns_private::parseRollback(xsink);
+        // With atomic_rollback (PO_ALLOW_REPARSE), preserve committed items and only remove pending items.
+        // Without it, do a full destructive reset for backward compatibility.
+        qore_ns_private::parseRollback(xsink, atomic_rollback);
+
+        // clear all lookup indices
+        fmap.clear();
+        cnmap.clear();
+        varmap.clear();
+        clmap.clear();
+        thdmap.clear();
+        nsmap.clear();
+
+        // Only rebuild indexes for atomic rollback - with full reset, the program is unusable anyway
+        if (atomic_rollback) {
+            rebuildAllIndexes();
+        }
     }
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);

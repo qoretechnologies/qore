@@ -87,8 +87,11 @@ public:
     DLLLOCAL int parseInit();
 
     DLLLOCAL void reset();
+    //! Removes a specific hashdecl by name (for selective rollback support)
+    DLLLOCAL void parseRemove(const char* name);
 
-    DLLLOCAL void assimilate(HashDeclList& n, qore_ns_private& ns);
+    DLLLOCAL void assimilate(HashDeclList& n, qore_ns_private& ns,
+        std::vector<std::string>* pending_names = nullptr);
     DLLLOCAL QoreHashNode* getInfo();
 
     DLLLOCAL bool empty() const {

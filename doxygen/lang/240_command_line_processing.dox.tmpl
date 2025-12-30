@@ -8,6 +8,10 @@
 
     Usage: <tt>qore [</tt><em>options</em><tt>] [</tt><em>script_file_name</em><tt>]</tt>
 
+    @note When no script file is given and the \c --exec option is not used, %Qore will automatically enter
+    interactive REPL (Read-Eval-Print Loop) mode if standard input is a terminal. Use \c --no-repl to disable
+    this behavior and read from standard input instead.
+
     <b>Parse Option Command-Line Parameters</b>
     |!Long Param|!Short|!Description
     |<tt>--define=</tt><em>arg</em>|\c -D|Creates and optionally sets a value for a parse define
@@ -40,6 +44,8 @@
     |<tt>--disable-gc</tt>|\c -g|Disables the garbage collector
     |<tt>--exec=</tt><em>arg</em>|\c -e|parses and executes the argument text as a %Qore program. If this option is specified then any script given on the command-line will be ignored
     |<tt>--exec-class[=</tt><em>arg</em><tt>]</tt>|\c -x|instantiates the class with the same name as the program (with the directory path and extension stripped); also turns on --no-top-level. If the program is read from <tt>stdin</tt> or from the command line, an argument must be given specifying the class name
+    |<tt>--interactive</tt>|n/a|Forces interactive REPL mode, even when stdin is not a terminal or when input is being piped
+    |<tt>--no-repl</tt>|n/a|Disables automatic REPL mode when stdin is a terminal; forces reading from stdin instead
     |<tt>--show-module-errors</tt>|\c -m|Shows any errors loading %Qore modules
     |<tt>--charset=</tt><em>arg</em>|\c -c|Sets the @ref default_encoding "default character encoding" for the program
     |<tt>--show-charset=</tt><em>arg</em>|\c -s|Shows a list of all known @ref character_encoding "character encodings"

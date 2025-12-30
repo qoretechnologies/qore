@@ -717,6 +717,21 @@ const PO_ALLOW_WEAK_REFERENCES = PO_ALLOW_WEAK_REFERENCES;
  */
 const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 
+//! Allows a Program to be parsed multiple times (for REPL functionality)
+/** This option enables incremental parsing using parsePending()/parseCommit() cycles.
+    When set, parse() can be called multiple times on the same Program object,
+    with each parse cycle adding to the existing definitions.
+
+    @note Parsing is only allowed when no threads are active in the Program.
+
+    @see @ref parsePending() "Program::parsePending()"
+    @see @ref parseCommit() "Program::parseCommit()"
+    @see @ref parseRollback() "Program::parseRollback()"
+
+    @since %Qore 2.3
+ */
+const PO_ALLOW_REPARSE = PO_ALLOW_REPARSE;
+
 //! Allows for old pre-%Qore 0.9 top-level statements having no effect
 /**
     @since %Qore 0.9
@@ -1202,19 +1217,45 @@ while (exists wh) {
     return e->makeExceptionObjectAndDelete(xsink);
 }
 
-//! Removes all partially or fully-parsed code from the object along with other builtin objects; a %Program object is not usable after calling this method; do not use this method but instead destroy the %Program object
+//! Rolls back pending parse changes to preserve the Program object's committed state
 /**
+    When used with @ref PO_ALLOW_REPARSE, this method performs an atomic rollback of only the pending parse
+    transaction, preserving all previously committed program state (variables, functions, classes, etc.).
+    This enables REPL-style interactive programming where parse errors don't destroy the Program object.
+
+    Without @ref PO_ALLOW_REPARSE, this method clears all program state including committed items.
+
+    @par Example:
+    @code{.py}
+Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+pgm.parsePending("our int x = 1;", "setup");
+pgm.parseCommit();
+
+# Deliberate parse error
+try {
+    pgm.parsePending("invalid syntax @#$", "bad_code");
+} catch () {
+    pgm.parseRollback();  # x is still defined and equals 1
+}
+
+# Program is still usable
+pgm.parsePending("our int y = x + 1;", "next");
+pgm.parseCommit();
+    @endcode
+
     @see
     - Qore::Program::parse()
     - Qore::Program::parseCommit()
     - Qore::Program::parsePending()
-    - Qore::parse()
+    - @ref PO_ALLOW_REPARSE
 
-    @throw PROGRAM-PARSE-ERROR this exception is thrown if any parse actions are started while the Program object has running threads
+    @throw PROGRAM-PARSE-ERROR this exception is thrown if any parse actions are started while the Program
+    object has running threads
 
-    @deprecated if parsing fails or is rolled back, the %Program object is no longer usable
+    @since %Qore 2.3 This method has been un-deprecated and now provides atomic rollback preserving
+    committed state when used with @ref PO_ALLOW_REPARSE
  */
-nothing Program::parseRollback() [flags=DEPRECATED] {
+nothing Program::parseRollback() {
     p->parseRollback(xsink);
 }
 
@@ -2471,6 +2512,20 @@ list<int> l = pgm.getThreadList();
 */
 list<int> Program::getThreadList() [flags=CONSTANT] {
     return p->getThreadList();
+}
+
+//! returns the number of threads currently active in this Program
+/** @par Example:
+    @code{.py}
+int count = pgm.getThreadCount();
+    @endcode
+
+    @return the number of threads currently active in this Program
+
+    @since %Qore 2.3
+*/
+int Program::getThreadCount() [flags=CONSTANT] {
+    return p->getThreadCount();
 }
 
 //! Get @ref Qore::ProgramControl "ProgramControl"

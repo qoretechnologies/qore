@@ -116,10 +116,13 @@ public:
     // the "time zone set" flag
     bool tz_set : 1;
 
-    // top-level vars instantiated
+    // top-level vars instantiated (for backwards compatibility, true if inst_count > 0)
     bool inst : 1;
 
-    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false) {
+    // number of top-level local variables instantiated (for REPL mode)
+    unsigned inst_count = 0;
+
+    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), inst_count(0) {
         printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
     }
 
@@ -340,6 +343,10 @@ public:
 
     // unique program location storage
     pgmloc_vec_t pgmloc;
+
+    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
+    size_t str_vec_hwm = 0;   // committed size of str_vec
+    size_t pgmloc_hwm = 0;    // committed size of pgmloc
 
     // temporary while parsing: to ensure unique strings in parsing
     typedef std::set<const char*, ltstr> str_set_t;
@@ -757,6 +764,13 @@ public:
         }
     }
 
+    // returns the number of threads currently active in this Program
+    DLLLOCAL unsigned getThreadCount() const {
+        // grab program-level lock
+        AutoLocker al(plock);
+        return thread_count;
+    }
+
     DLLLOCAL int lockParsing(ExceptionSink* xsink) {
         int tid = q_gettid();
         // grab program-level lock
@@ -966,7 +980,17 @@ public:
     }
 
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
-        if (parsing_done) {
+        // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
+        // The calling thread (doing the parsing) is not attached to this Program,
+        // so any thread_count > 0 means background threads are still active
+        if (pwo.parse_options & PO_ALLOW_REPARSE) {
+            if (thread_count > 0) {
+                xsink->raiseException("PARSE-ERROR", "cannot parse while threads are active in the Program "
+                    "(for REPL mode, wait for all threads to finish before parsing)");
+                return -1;
+            }
+        } else if (parsing_done) {
+            // Without PO_ALLOW_REPARSE, parsing can only happen once
             xsink->raiseException("PARSE-ERROR", "parsing can only happen once for each Program container");
             return -1;
         }
@@ -1402,9 +1426,12 @@ public:
         // instantiate top-level vars for this thread
         const LVList* lvl = sb.getLVList();
         if (lvl) {
-            for (unsigned i = 0; i < lvl->size(); ++i) {
+            // In REPL mode, only instantiate new variables (those not yet instantiated)
+            unsigned start = tlpd.inst_count;
+            for (unsigned i = start; i < lvl->size(); ++i) {
                 lvl->lv[i]->instantiate(pwo.parse_options);
             }
+            tlpd.inst_count = lvl->size();
         }
 
         //printd(5, "qore_program_private::doTopLevelInstantiation() lvl: %p setup %ld local vars pgm: %p\n", lvl, lvl ? lvl->size() : 0, getProgram());
@@ -1456,8 +1483,16 @@ public:
 
         printd(5, "qore_program_private::setThreadVarData() (not first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
-        if (run && !tlpd->inst) {
-            doTopLevelInstantiation(*tlpd);
+        if (run) {
+            if (!tlpd->inst) {
+                doTopLevelInstantiation(*tlpd);
+            } else if (pwo.parse_options & PO_ALLOW_REPARSE) {
+                // In REPL mode, check if there are new local variables to instantiate
+                const LVList* lvl = sb.getLVList();
+                if (lvl && lvl->size() > tlpd->inst_count) {
+                    doTopLevelInstantiation(*tlpd);
+                }
+            }
         }
 
         return false;

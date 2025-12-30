@@ -98,10 +98,7 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_THREAD_CONTROL, "PO_NO_THREAD_CONTROL", "THREAD_CONTROL");
     doMap(PO_NO_THREAD_CLASSES, "PO_NO_THREAD_CLASSES", "THREAD_CLASS");
     doMap(PO_NO_TOP_LEVEL_STATEMENTS, "PO_NO_TOP_LEVEL_STATEMENTS");
-    doMap(PO_NO_CLASS_DEFS, "PO_NO_CLASS_DEFS");
-    doMap(PO_NO_NAMESPACE_DEFS, "PO_NO_NAMESPACE_DEFS");
-    doMap(PO_NO_CONSTANT_DEFS, "PO_NO_CONSTANT_DEFS");
-    doMap(PO_NO_NEW, "PO_NO_NEW");
+    doMap(PO_ALLOW_REPARSE, "PO_ALLOW_REPARSE");
     doMap(PO_NO_INHERIT_SYSTEM_CLASSES, "PO_NO_INHERIT_SYSTEM_CLASSES");
     doMap(PO_NO_INHERIT_USER_CLASSES, "PO_NO_INHERIT_USER_CLASSES");
     doMap(PO_NO_CHILD_PO_RESTRICTIONS, "PO_NO_CHILD_PO_RESTRICTIONS");
@@ -576,17 +573,38 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_opti
 }
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
+    bool atomic_rollback = pwo.parse_options & PO_ALLOW_REPARSE;
     // delete pending changes to namespaces
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink);
+    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
 
     // delete pending statements
     sb.parseRollback();
 
     // free temporary data structures
     str_set.clear();
-    str_vec.clear();
     loc_set.clear();
-    pgmloc.clear();
+
+    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
+    // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
+    // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
+    // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
+    // could still reference parse locations from failed parses.
+    if (pwo.parse_options & PO_ALLOW_REPARSE) {
+        // delete pending strings (those added after str_vec_hwm)
+        for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
+            free(str_vec[i]);
+        }
+        str_vec.resize(str_vec_hwm);
+
+        // delete pending locations (those added after pgmloc_hwm)
+        for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
+            delete pgmloc[i];
+        }
+        pgmloc.resize(pgmloc_hwm);
+    }
+    // Note: without PO_ALLOW_REPARSE, we don't clear str_vec/pgmloc - the memory will be freed
+    // when the Program object is destroyed. This is intentional to avoid use-after-free when
+    // error messages reference parse locations from the failed parse.
 
     // issue #2907 delete & clear statement index maps when doing a parse rollback
     for (auto& i : statementByFileIndex) {
@@ -739,7 +757,8 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     // changes to the QoreProgram atomically
     int rc;
     if (standard_parse) {
-        assert(!parsing_done);
+        // In REPL mode (PO_ALLOW_REPARSE), parsing_done may already be set
+        assert(!parsing_done || (pwo.parse_options & PO_ALLOW_REPARSE));
 
         // if the first stage of parsing has already failed,
         // then don't go forward
@@ -778,6 +797,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // free temporary data structures
             str_set.clear();
             loc_set.clear();
+
+            // update high water marks for atomic rollback support
+            str_vec_hwm = str_vec.size();
+            pgmloc_hwm = pgmloc.size();
 
             rc = 0;
         }
@@ -2188,6 +2211,10 @@ QoreListNode* QoreProgram::getThreadList() const {
    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), nullptr);
    priv->getThreadList(**rv);
    return rv.release();
+}
+
+unsigned QoreProgram::getThreadCount() const {
+   return priv->getThreadCount();
 }
 
 AbstractQoreProgramExternalData::~AbstractQoreProgramExternalData() {

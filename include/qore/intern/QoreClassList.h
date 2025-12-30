@@ -105,10 +105,13 @@ public:
     DLLLOCAL int parseInit();
     DLLLOCAL void parseResolveAbstract();
     DLLLOCAL void parseRollback();
+    //! Removes a specific class by name (for selective rollback support)
+    DLLLOCAL void parseRemove(const char* name, ExceptionSink* xsink);
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void reset();
-    DLLLOCAL void assimilate(QoreClassList& n, qore_ns_private& ns);
+    DLLLOCAL void assimilate(QoreClassList& n, qore_ns_private& ns,
+        std::vector<std::string>* pending_names = nullptr);
     DLLLOCAL QoreHashNode* getInfo();
 
     //DLLLOCAL QoreValue findConstant(const char* cname, const QoreTypeInfo*& typeInfo, bool& found);

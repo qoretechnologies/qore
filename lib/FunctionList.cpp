@@ -175,12 +175,25 @@ void FunctionList::parseRollback() {
     }
 }
 
-void FunctionList::assimilate(FunctionList& fl, qore_ns_private* ns) {
+void FunctionList::parseRemove(const char* name) {
+    fl_map_t::iterator i = fl_map_t::find(name);
+    if (i != end()) {
+        i->second->deref();
+        erase(i);
+    }
+}
+
+void FunctionList::assimilate(FunctionList& fl, qore_ns_private* ns,
+        std::vector<std::string>* pending_names) {
     for (fl_map_t::iterator i = fl.begin(), e = fl.end(); i != e;) {
         fl_map_t::const_iterator li = fl_map_t::find(i->first);
         if (li == end()) {
             insert(fl_map_t::value_type(i->first, i->second));
             i->second->updateNs(ns);
+            // track the new function name for rollback support
+            if (pending_names) {
+                pending_names->push_back(i->first);
+            }
         } else {
             li->second->getFunction()->parseAssimilate(*(i->second->getFunction()));
             i->second->deref();

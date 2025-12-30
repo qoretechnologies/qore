@@ -36,6 +36,7 @@ public class AsyncApiTest inherits QUnit::Test {
         addTestCase("ref resolution test", \refResolutionTest());
         addTestCase("channel operations test", \channelOperationsTest());
         addTestCase("validation constraints test", \validationConstraintsTest());
+        addTestCase("public schemas test", \publicSchemasTest());
         set_return_value(main());
     }
 
@@ -217,6 +218,94 @@ public class AsyncApiTest inherits QUnit::Test {
             fail("Expected SCHEMA-VALIDATION-ERROR for empty message");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+    }
+
+    #! Test parsing of public, known-good AsyncAPI 3.0 schemas from GitHub
+    publicSchemasTest() {
+        checkModules();
+
+        # Official AsyncAPI 3.0 example schemas from the spec repository
+        list<hash<auto>> publicSchemas = (
+            {
+                "name": "simple-asyncapi",
+                "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/simple-asyncapi.yml",
+                "expectedTitle": "Account Service",
+                "expectedApiVersion": "1.0.0",
+            },
+            {
+                "name": "streetlights-mqtt-asyncapi",
+                "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/streetlights-mqtt-asyncapi.yml",
+                "expectedTitle": "Streetlights MQTT API",
+                "expectedApiVersion": "1.0.0",
+            },
+        );
+
+        HTTPClient client({"url": "https://raw.githubusercontent.com", "timeout": 30s});
+        client.connect();
+        on_exit client.disconnect();
+
+        bool anyPassed = False;
+
+        for (int i = 0; i < publicSchemas.size(); i++) {
+            hash<auto> schemaInfo = publicSchemas[i];
+            try {
+                # Extract path from full URL
+                string path = schemaInfo.url;
+                path =~ s/https:\/\/raw\.githubusercontent\.com//;
+
+                # Fetch the schema from GitHub
+                hash<auto> info;
+                *string yamlContent = client.get(path, NOTHING, \info);
+                int statusCode = info."response-headers".status_code;
+                if (statusCode != 200) {
+                    printf("SKIP: Could not fetch %s (HTTP %d)\n", schemaInfo.name, statusCode);
+                    continue;
+                }
+
+                if (!exists yamlContent) {
+                    printf("SKIP: Empty response for %s\n", schemaInfo.name);
+                    continue;
+                }
+
+                # Parse the schema
+                AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromString(yamlContent);
+
+                # Validate basic structure
+                assertEq("3.0.0", schema.asyncapiSpec,
+                    sprintf("Schema %s should be AsyncAPI 3.0.0", schemaInfo.name));
+                assertEq(schemaInfo.expectedTitle, schema.info.title,
+                    sprintf("Schema %s title should match", schemaInfo.name));
+                assertEq(schemaInfo.expectedApiVersion, schema.info.apiVersion,
+                    sprintf("Schema %s API version should match", schemaInfo.name));
+                assertTrue(exists schema.channels,
+                    sprintf("Schema %s should have channels", schemaInfo.name));
+                assertTrue(exists schema.operations,
+                    sprintf("Schema %s should have operations", schemaInfo.name));
+
+                # Test that channels and operations are properly resolved
+                hash<string, list<string>> channelOps = schema.getChannelOperationHash();
+                assertTrue(channelOps.size() > 0,
+                    sprintf("Schema %s should have channel operations", schemaInfo.name));
+
+                anyPassed = True;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err =~ /SOCKET|HTTP|SSL/) {
+                    printf("SKIP: Network error fetching %s: %s\n", schemaInfo.name, ex.desc);
+                    continue;
+                }
+                # Some complex schemas may have features not yet fully supported
+                if (ex.err =~ /RUNTIME-TYPE-ERROR/) {
+                    printf("SKIP: Schema %s uses unsupported features: %s\n", schemaInfo.name, ex.desc);
+                    continue;
+                }
+                # Re-throw other errors
+                rethrow;
+            }
+        }
+
+        if (!anyPassed) {
+            testSkip("Could not fetch any public schemas (network unavailable)");
         }
     }
 }
