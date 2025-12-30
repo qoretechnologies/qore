@@ -39,7 +39,7 @@
 %enable-debug
 
 module HttpServer {
-    version = "1.5";
+    version = "1.5.1";
     desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -139,12 +139,17 @@ log("started listener on %s", lh.desc);
 
     @section http_relnotes HttpServer Module Release Notes
 
+    @subsection http1_5_1 HttpServer 1.5.1
+    - updated to use \c Socket::startPollSendHttpResponse() for non-chunked async HTTP responses
+      - fixes bug where duplicate \c Content-Length headers could be sent
+      - uses native Qore method for proper HTTP header handling
+
     @subsection http1_5 HttpServer 1.5
     - implemented async I/O mode for high-concurrency connection handling, enabled by default
       (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
       - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
       - request processing is dispatched to ThreadPool for concurrent handler execution
-      - HTTP responses are sent asynchronously using \c Socket::startPollSend()
+      - HTTP responses are sent asynchronously using \c Socket::startPollSendHttpResponse()
       - enables handling many more concurrent connections with fewer threads
       - sub-millisecond response latency for simple requests
       - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
@@ -4476,9 +4481,20 @@ class HttpServerIoController {
                     break;
 
                 case "sending_response": {
-                    # Format HTTP response and start async send
-                    binary data = formatHttpResponse(cinfo.response);
-                    cinfo.spop = connections{key}.spop = cinfo.sock.startPollSend(data);
+                    if (cinfo.response.chunked) {
+                        # Chunked responses need special formatting
+                        binary data = formatChunkedHttpResponse(cinfo.response);
+                        cinfo.spop = connections{key}.spop = cinfo.sock.startPollSend(data);
+                    } else {
+                        # Use native method for non-chunked responses - properly handles Content-Length
+                        cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttpResponse(
+                            cinfo.response.code,
+                            HttpServer::HttpCodes{cinfo.response.code} ?? "Unknown",
+                            "1.1",
+                            cinfo.response.hdr,
+                            cinfo.response.body,
+                        );
+                    }
                     break;
                 }
             }
@@ -4649,9 +4665,8 @@ class HttpServerIoController {
         }
     }
 
-    #! Closes a connection (called locked)
-    #! Formats an HTTP response as binary data for async sending
-    private binary formatHttpResponse(hash<HttpAsyncResponseInfo> response) {
+    #! Formats a chunked HTTP response as binary data for async sending
+    private binary formatChunkedHttpResponse(hash<HttpAsyncResponseInfo> response) {
         string status_line = sprintf("HTTP/1.1 %d %s\r\n", response.code,
             HttpServer::HttpCodes{response.code} ?? "Unknown");
 
@@ -4668,25 +4683,19 @@ class HttpServerIoController {
             }
         }
 
-        # Add Content-Length for non-chunked responses (including 0 for empty body)
-        if (!response.chunked) {
-            headers += sprintf("Content-Length: %d\r\n", response.body ? response.body.size() : 0);
-        }
-
         # End headers
         headers += "\r\n";
 
-        # Combine status line, headers, and body
+        # Combine status line, headers, and chunked body
         binary result = binary(status_line) + binary(headers);
         if (response.body) {
-            if (response.chunked) {
-                # Format as chunked transfer encoding
-                result += binary(sprintf("%x\r\n", response.body.size()));
-                result += response.body.typeCode() == NT_BINARY ? response.body : binary(response.body);
-                result += binary("\r\n0\r\n\r\n");
-            } else {
-                result += response.body.typeCode() == NT_BINARY ? response.body : binary(response.body);
-            }
+            # Format as chunked transfer encoding
+            result += binary(sprintf("%x\r\n", response.body.size()));
+            result += response.body.typeCode() == NT_BINARY ? response.body : binary(response.body);
+            result += binary("\r\n0\r\n\r\n");
+        } else {
+            # Empty chunked response
+            result += binary("0\r\n\r\n");
         }
 
         return result;
