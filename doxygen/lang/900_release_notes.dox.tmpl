@@ -52,15 +52,33 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
     - <a href="../../modules/WebSocketClient/html/index.html">WebSocketClient</a> module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
+      - added WebSocket extension support with permessage-deflate compression
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new \c extensions constructor option for extension negotiation
+        - automatic compression/decompression when extensions are active
+        - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
     - <a href="../../modules/WebSocketHandler/html/index.html">WebSocketHandler</a> module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
+    - <a href="../../modules/WebSocketUtil/html/index.html">WebSocketUtil</a> module
+      - added pluggable WebSocket extension framework
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new \c AbstractWebSocketExtension base class for extension implementations
+        - new \c WebSocketExtensionRegistry factory class for extension management
+        - new \c PerMessageDeflateExtension implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
+          permessage-deflate compression
     - updated module ABI and the Program container to allow for better sandboxing
     - new method in the <a href="../../modules/reflection/html/index.html">reflection</a> module:
       - \c Class::tryGetConstant()
     - new builtin methods:
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
-    - new function:
+    - new functions:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+      - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::inflate_raw_to_string() "inflate_raw_to_string()": raw DEFLATE decompression to string
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
     - new zero-cost assertion and debug statements

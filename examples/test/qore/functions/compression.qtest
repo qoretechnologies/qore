@@ -36,6 +36,7 @@ public class CompressionTest inherits QUnit::Test {
     constructor() : Test("CompressionTest", "1.0") {
         addTestCase("zlib tests", \zlibTest());
         addTestCase("bzip compression test", \bzip2Test());
+        addTestCase("raw deflate tests", \rawDeflateTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -88,5 +89,128 @@ public class CompressionTest inherits QUnit::Test {
         assertThrows("BZIP2-DECOMPRESS-ERROR", \bunzip2_to_string(), BadDeflate);
         assertThrows("BZIP2-DECOMPRESS-ERROR", sub() { bunzip2_to_binary(Bzip2CompressedString.substr(0, 20)); });
         assertThrows("BZIP2-DECOMPRESS-ERROR", sub() { bunzip2_to_binary(Bzip2CompressedString + <01>); });
+    }
+
+    rawDeflateTest() {
+        # Basic round-trip tests for string input
+        {
+            string original = "Hello, raw DEFLATE compression test!";
+            binary compressed = deflate_raw(original);
+            # Verify it's not the same as zlib format (no 0x78 0x9c header)
+            assertTrue(compressed[0] != 0x78 || compressed[1] != 0x9c,
+                "raw deflate should not have zlib header");
+            # Round-trip via binary
+            binary decompressed_bin = inflate_raw_to_binary(compressed);
+            assertEq(binary(original), decompressed_bin);
+            # Round-trip via string
+            string decompressed_str = inflate_raw_to_string(compressed, "utf-8");
+            assertEq(original, decompressed_str);
+        }
+
+        # Basic round-trip tests for binary input
+        {
+            binary original = <deadbeefcafebabe0123456789abcdef>;
+            binary compressed = deflate_raw(original);
+            binary decompressed = inflate_raw_to_binary(compressed);
+            assertEq(original, decompressed);
+        }
+
+        # Test with different compression levels
+        {
+            string original = "Test compression levels " + strmul("x", 1000);
+            binary level1 = deflate_raw(original, 1);
+            binary level9 = deflate_raw(original, 9);
+            # Both should decompress correctly
+            assertEq(original, inflate_raw_to_string(level1));
+            assertEq(original, inflate_raw_to_string(level9));
+            # Higher level should generally produce smaller output
+            assertTrue(level9.size() <= level1.size(),
+                "level 9 should compress as well as or better than level 1");
+        }
+
+        # Test empty string input - deflate_raw returns empty binary for empty input
+        {
+            binary empty_bin = deflate_raw("");
+            # Empty input produces empty compressed output
+            assertEq(0, empty_bin.size());
+        }
+
+        # Test empty binary input
+        {
+            binary empty_input = binary();
+            binary empty_bin2 = deflate_raw(empty_input);
+            assertEq(0, empty_bin2.size());
+        }
+
+        # Test large input (to test buffer resizing)
+        {
+            string large = strmul("Large data test with repetitive content. ", 1000);
+            binary compressed = deflate_raw(large);
+            assertTrue(compressed.size() < large.size(),
+                "large repetitive data should compress well");
+            string decompressed = inflate_raw_to_string(compressed);
+            assertEq(large, decompressed);
+        }
+
+        # Test binary data with all byte values
+        {
+            binary all_bytes;
+            for (int i = 0; i < 256; ++i) {
+                all_bytes += chr(i);
+            }
+            binary compressed = deflate_raw(all_bytes);
+            binary decompressed = inflate_raw_to_binary(compressed);
+            assertEq(all_bytes, decompressed);
+        }
+
+        # Negative tests: invalid compression level
+        assertThrows("ZLIB-LEVEL-ERROR", sub() { deflate_raw("test", 0); });
+        assertThrows("ZLIB-LEVEL-ERROR", sub() { deflate_raw("test", 10); });
+        assertThrows("ZLIB-LEVEL-ERROR", sub() { deflate_raw("test", -2); });
+        # Level -1 (Z_DEFAULT_COMPRESSION) should work
+        assertEq(True, deflate_raw("test", -1).size() > 0);
+
+        # Negative tests: corrupted/invalid data for decompression
+        assertThrows("ZLIB-ERROR", sub() { inflate_raw_to_binary(<deadbeef>); });
+        assertThrows("ZLIB-ERROR", sub() { inflate_raw_to_string(<deadbeef>); });
+
+        # Negative tests: truncated compressed data
+        {
+            binary compressed = deflate_raw("test data for truncation");
+            assertThrows("ZLIB-ERROR", sub() { inflate_raw_to_binary(compressed.substr(0, 5)); });
+        }
+
+        # Negative tests: zlib format data (with header) should fail
+        {
+            binary zlib_data = compress("test");
+            # Raw inflate expects raw deflate, not zlib format
+            assertThrows("ZLIB-ERROR", sub() { inflate_raw_to_binary(zlib_data); });
+        }
+
+        # Negative tests: gzip format data should fail
+        {
+            binary gzip_data = gzip("test");
+            assertThrows("ZLIB-ERROR", sub() { inflate_raw_to_binary(gzip_data); });
+        }
+
+        # Test encoding parameter for inflate_raw_to_string
+        {
+            string utf8_text = "UTF-8 text: äöü ß €";
+            binary compressed = deflate_raw(utf8_text);
+            string decompressed = inflate_raw_to_string(compressed, "utf-8");
+            assertEq(utf8_text, decompressed);
+        }
+
+        # Test that raw deflate output differs from zlib output
+        {
+            string test = "Compare raw deflate vs zlib";
+            binary raw = deflate_raw(test);
+            binary zlib = compress(test);
+            # zlib has 2-byte header + 4-byte Adler-32 trailer
+            # raw deflate has neither
+            assertTrue(raw.size() < zlib.size(),
+                "raw deflate should be smaller than zlib format");
+            assertNeq(raw, zlib, "raw deflate should differ from zlib format");
+        }
     }
 }

@@ -23,6 +23,7 @@ public class WebSocketUtilTest inherits QUnit::Test {
         addTestCase("Extension header parsing", \extensionHeaderTests());
         addTestCase("Extension registry", \extensionRegistryTests());
         addTestCase("PerMessageDeflate extension", \perMessageDeflateTests());
+        addTestCase("Extension corner cases and negative tests", \extensionNegativeTests());
         set_return_value(main());
     }
 
@@ -384,5 +385,201 @@ public class WebSocketUtilTest inherits QUnit::Test {
         *string config_offer = configured.getOfferString();
         assertTrue(config_offer.find("client_no_context_takeover") >= 0);
         assertTrue(config_offer.find("server_no_context_takeover") >= 0);
+    }
+
+    extensionNegativeTests() {
+        # --- Header parsing edge cases ---
+
+        # Empty/whitespace-only header
+        assertEq(0, WebSocketExtensionRegistry::parseExtensionHeader("").size());
+        assertEq(0, WebSocketExtensionRegistry::parseExtensionHeader("   ").size());
+
+        # Header with only commas
+        assertEq(0, WebSocketExtensionRegistry::parseExtensionHeader(",,,").size());
+
+        # Malformed parameters (missing name)
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader("ext; =value");
+            assertEq(1, exts.size());
+            assertEq("ext", exts[0].name);
+        }
+
+        # Quoted parameter values with spaces
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                'ext; param="value with spaces"'
+            );
+            assertEq(1, exts.size());
+            assertEq("value with spaces", exts[0].params[0].value);
+        }
+
+        # --- PerMessageDeflate invalid window bits ---
+
+        # Window bits too small (< 8)
+        {
+            PerMessageDeflateExtension ext();
+            list<hash<WsExtensionParamInfo>> params = (
+                <WsExtensionParamInfo>{"name": "server_max_window_bits", "value": "7"},
+            );
+            assertFalse(ext.parseServerResponse(params));
+        }
+
+        # Window bits too large (> 15)
+        {
+            PerMessageDeflateExtension ext();
+            list<hash<WsExtensionParamInfo>> params = (
+                <WsExtensionParamInfo>{"name": "client_max_window_bits", "value": "16"},
+            );
+            assertFalse(ext.parseServerResponse(params));
+        }
+
+        # Non-numeric window bits
+        {
+            PerMessageDeflateExtension ext();
+            list<hash<WsExtensionParamInfo>> params = (
+                <WsExtensionParamInfo>{"name": "server_max_window_bits", "value": "abc"},
+            );
+            # toInt() on "abc" returns 0, which is < 8, so should fail
+            assertFalse(ext.parseServerResponse(params));
+        }
+
+        # --- Compression/decompression error handling ---
+
+        # Decompression of invalid/corrupted data
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            hash<auto> ctx = {"op": WSOP_Text, "rsv1": True};
+            # Try to decompress garbage data
+            assertThrows("WEBSOCKET-EXTENSION-ERROR", sub () {
+                ext.transformIncoming(<deadbeefcafebabe>, ctx);
+            });
+        }
+
+        # --- RSV bit validation edge cases ---
+
+        # All RSV bits set (invalid for permessage-deflate)
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            assertFalse(ext.validateRsvBits(WS_RSV1 | WS_RSV2 | WS_RSV3, WSOP_Text));
+        }
+
+        # RSV1 on control frames (invalid)
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Close));
+            assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Ping));
+            assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Pong));
+        }
+
+        # RSV1 on continuation frames
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            # Per RFC 7692, RSV1 is only set on the first frame
+            assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Continuation));
+        }
+
+        # --- Transform behavior when inactive ---
+
+        # transformOutgoing when not active should pass through unchanged
+        {
+            PerMessageDeflateExtension ext();
+            assertFalse(ext.isActive());
+            string msg = "test message";
+            hash<auto> result = ext.transformOutgoing(msg, {"op": WSOP_Text});
+            assertEq(msg, result.data);
+            assertEq(0, result.rsv_bits);
+        }
+
+        # transformIncoming when not active should pass through unchanged
+        {
+            PerMessageDeflateExtension ext();
+            assertFalse(ext.isActive());
+            string msg = "test message";
+            data result = ext.transformIncoming(msg, {"op": WSOP_Text, "rsv1": False});
+            assertEq(msg, result);
+        }
+
+        # --- Compression that doesn't help ---
+
+        # When compression makes data larger, should return uncompressed
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            ext.setCompressionThreshold(0);
+            # Small random-like data typically doesn't compress well
+            string msg = "abc";  # Very short message
+            hash<auto> result = ext.transformOutgoing(msg, {"op": WSOP_Text});
+            # Since compression doesn't help for tiny data, RSV1 should not be set
+            assertEq(0, result.rsv_bits);
+            assertEq(msg, result.data);
+        }
+
+        # --- Binary message handling ---
+
+        # Binary messages should compress/decompress correctly
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            ext.setCompressionThreshold(0);
+
+            binary original = <0102030405060708090a0b0c0d0e0f>;
+            # Repeat to make it compressible
+            for (int i = 0; i < 10; ++i) {
+                original += original;
+            }
+
+            hash<auto> result = ext.transformOutgoing(original, {"op": WSOP_Binary});
+            if (result.rsv_bits == WS_RSV1) {
+                # Was compressed, verify decompression
+                data decompressed = ext.transformIncoming(result.data, {"op": WSOP_Binary, "rsv1": True});
+                assertEq(original, decompressed);
+            }
+        }
+
+        # --- Registry edge cases ---
+
+        # Creating extension that doesn't exist
+        {
+            WebSocketExtensionRegistry reg();
+            assertNothing(reg.createExtension("nonexistent-extension"));
+        }
+
+        # Registering with empty name
+        {
+            WebSocketExtensionRegistry reg(False);
+            reg.registerExtension("", AbstractWebSocketExtension sub () {
+                return new PerMessageDeflateExtension();
+            });
+            assertTrue(reg.hasExtension(""));
+            *AbstractWebSocketExtension ext = reg.createExtension("");
+            assertTrue(ext instanceof PerMessageDeflateExtension);
+        }
+
+        # --- Reset functionality ---
+        {
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            ext.reset();
+            # reset() should not affect active state in current implementation
+            assertTrue(ext.isActive());
+        }
+
+        # --- Clone preserves all settings ---
+        {
+            PerMessageDeflateExtension ext({
+                "compression_threshold": 100,
+                "server_no_context_takeover": True,
+                "client_no_context_takeover": True,
+            });
+
+            AbstractWebSocketExtension cloned = ext.clone();
+            assertEq(100, cloned.getCompressionThreshold());
+            # The cloned extension should have the same offer string
+            assertEq(ext.getOfferString(), cloned.getOfferString());
+        }
     }
 }
