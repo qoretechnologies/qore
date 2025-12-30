@@ -904,11 +904,25 @@ BinaryNode* qore_lz4(const void* ptr, unsigned long len, int acceleration, Excep
 }
 
 static char* qore_unlz4_intern(const BinaryNode* b, int& decoded_size, int max_output_size, ExceptionSink* xsink) {
-    // LZ4 needs to know the maximum decompressed size upfront
-    // We'll start with a reasonable estimate and grow if needed
-    int buf_size = max_output_size > 0 ? max_output_size : b->size() * 4;
-    if (buf_size < 1024) {
-        buf_size = 1024;
+    // LZ4 needs to know the maximum decompressed size upfront.
+    // If max_output_size is not provided, we use a conservative estimate based
+    // on the compressed size. For highly compressed data, the real size may be
+    // significantly larger; callers should pass max_output_size when known.
+    int buf_size;
+    if (max_output_size > 0) {
+        buf_size = max_output_size;
+    } else {
+        // Use a 16x safety factor to reduce the chance of failure on valid,
+        // highly compressed data, and guard against integer overflow.
+        size_t csize = b->size();
+        if (csize > static_cast<size_t>(INT_MAX / 16)) {
+            buf_size = INT_MAX;
+        } else {
+            buf_size = static_cast<int>(csize * 16);
+        }
+    }
+    if (buf_size < 4096) {
+        buf_size = 4096;
     }
 
     void* buf = malloc(buf_size);
