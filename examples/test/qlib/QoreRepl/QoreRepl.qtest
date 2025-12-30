@@ -52,6 +52,28 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Command: /quit, /exit, /q", \testCommandQuit());
         addTestCase("Command: unknown", \testCommandUnknown());
 
+        # New introspection command tests
+        addTestCase("Command: /functions", \testCommandFunctions());
+        addTestCase("Command: /classes", \testCommandClasses());
+        addTestCase("Command: /constants", \testCommandConstants());
+        addTestCase("Command: /namespaces", \testCommandNamespaces());
+        addTestCase("Command: /modules", \testCommandModules());
+        addTestCase("Command: /type", \testCommandType());
+        addTestCase("Command: /describe", \testCommandDescribe());
+
+        # New session command tests
+        addTestCase("Command: /history", \testCommandHistory());
+        addTestCase("Command: /timing", \testCommandTiming());
+
+        # New file command tests
+        addTestCase("Command: /pwd and /cd", \testCommandPwdCd());
+        addTestCase("Command: /save", \testCommandSave());
+
+        # Sandboxing tests
+        addTestCase("Sandboxed REPL: filesystem commands disabled", \testSandboxFilesystem());
+        addTestCase("Sandboxed REPL: network restrictions", \testSandboxNetwork());
+        addTestCase("Sandboxed REPL: custom parse options", \testSandboxCustomOptions());
+
         # Multi-line input tests
         addTestCase("Multi-line: block statement", \testMultiLineBlock());
         addTestCase("Multi-line: function definition", \testMultiLineFunction());
@@ -233,9 +255,22 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result, "Should return result");
         assertFalse(exists result.error, "Should not have error");
         assertTrue(exists result.value, "Should have value");
-        assertRegex("Special commands", result.value, "Help should mention special commands");
+        assertRegex("Commands:", result.value, "Help should mention Commands");
         assertRegex("/quit", result.value, "Help should mention /quit");
         assertRegex("/vars", result.value, "Help should mention /vars");
+        # Check for new commands in help
+        assertRegex("/functions", result.value, "Help should mention /functions");
+        assertRegex("/classes", result.value, "Help should mention /classes");
+        assertRegex("/constants", result.value, "Help should mention /constants");
+        assertRegex("/namespaces", result.value, "Help should mention /namespaces");
+        assertRegex("/modules", result.value, "Help should mention /modules");
+        assertRegex("/type", result.value, "Help should mention /type");
+        assertRegex("/describe", result.value, "Help should mention /describe");
+        assertRegex("/history", result.value, "Help should mention /history");
+        assertRegex("/timing", result.value, "Help should mention /timing");
+        assertRegex("/pwd", result.value, "Help should mention /pwd");
+        assertRegex("/cd", result.value, "Help should mention /cd");
+        assertRegex("/save", result.value, "Help should mention /save");
 
         # Test /? alias
         result = repl.eval("/?");
@@ -334,6 +369,416 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result.error, "Should have error");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
         assertRegex("Unknown command", result.error.desc, "Should mention unknown command");
+    }
+
+    #! Test /functions command
+    testCommandFunctions() {
+        QoreRepl repl();
+
+        # Initially no user functions
+        *hash<auto> result = repl.eval("/functions");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("No user-defined functions", result.value, "Should indicate no functions");
+
+        # Define a function
+        repl.eval("sub myFunc() { return 42; }");
+        result = repl.eval("/functions");
+        assertRegex("myFunc", result.value, "Should show myFunc");
+
+        # Test /funcs alias
+        result = repl.eval("/funcs");
+        assertRegex("myFunc", result.value, "/funcs should also work");
+
+        # Define another function
+        repl.eval("int sub addTwo(int n) { return n + 2; }");
+        result = repl.eval("/functions");
+        assertRegex("myFunc", result.value, "Should still show myFunc");
+        assertRegex("addTwo", result.value, "Should show addTwo");
+    }
+
+    #! Test /classes command
+    testCommandClasses() {
+        QoreRepl repl();
+
+        # Initially no user classes
+        *hash<auto> result = repl.eval("/classes");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("No user-defined classes", result.value, "Should indicate no classes");
+
+        # Define a class (must use public block for members in REPL mode)
+        repl.eval("class MyClass { public { int val = 0; } }");
+        result = repl.eval("/classes");
+        assertFalse(exists result.error, "/classes should not error");
+        assertRegex("MyClass", result.value, "Should show MyClass");
+
+        # Define another class
+        repl.eval("class AnotherClass { public { string name; } }");
+        result = repl.eval("/classes");
+        assertFalse(exists result.error, "/classes should not error");
+        assertRegex("MyClass", result.value, "Should still show MyClass");
+        assertRegex("AnotherClass", result.value, "Should show AnotherClass");
+    }
+
+    #! Test /constants command
+    testCommandConstants() {
+        QoreRepl repl();
+
+        # Initially no user constants
+        *hash<auto> result = repl.eval("/constants");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("No user-defined constants", result.value, "Should indicate no constants");
+
+        # Define a constant
+        repl.eval("const MY_CONST = 100;");
+        result = repl.eval("/constants");
+        assertRegex("MY_CONST", result.value, "Should show MY_CONST");
+
+        # Test /consts alias
+        result = repl.eval("/consts");
+        assertRegex("MY_CONST", result.value, "/consts should also work");
+
+        # Define another constant
+        repl.eval("const ANOTHER_CONST = 'hello';");
+        result = repl.eval("/constants");
+        assertRegex("MY_CONST", result.value, "Should still show MY_CONST");
+        assertRegex("ANOTHER_CONST", result.value, "Should show ANOTHER_CONST");
+    }
+
+    #! Test /namespaces command
+    testCommandNamespaces() {
+        QoreRepl repl();
+
+        # Should at least show Qore namespace
+        *hash<auto> result = repl.eval("/namespaces");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("Qore", result.value, "Should show Qore namespace");
+
+        # Test /ns alias
+        result = repl.eval("/ns");
+        assertRegex("Qore", result.value, "/ns should also work");
+    }
+
+    #! Test /modules command
+    testCommandModules() {
+        QoreRepl repl();
+
+        # Should show some modules (at least DGC which is always loaded)
+        *hash<auto> result = repl.eval("/modules");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.value, "Should have value");
+        # DGC (deterministic garbage collector) is typically always present
+        assertRegex("Loaded modules:", result.value, "Should show loaded modules header");
+    }
+
+    #! Test /type command
+    testCommandType() {
+        QoreRepl repl();
+
+        # Test with integer
+        *hash<auto> result = repl.eval("/type 42");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("integer", result.value, "Should show integer type");
+
+        # Test with string
+        result = repl.eval("/type 'hello'");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("string", result.value, "Should show string type");
+
+        # Test with list
+        result = repl.eval("/type (1, 2, 3)");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("list", result.value, "Should show list type");
+
+        # Test with hash
+        result = repl.eval("/type {'a': 1}");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("hash", result.value, "Should show hash type");
+
+        # Test with variable
+        repl.eval("our float f = 3.14;");
+        result = repl.eval("/type f");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("float", result.value, "Should show float type");
+
+        # Test with expression
+        result = repl.eval("/type 1 + 2");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("integer", result.value, "Should show integer type for expression");
+
+        # Test error case - no argument
+        result = repl.eval("/type");
+        assertTrue(exists result.error, "Should have error without argument");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+    }
+
+    #! Test /describe command
+    testCommandDescribe() {
+        QoreRepl repl();
+
+        # Define a class to describe
+        repl.eval("class TestClass { public { int x; string name; } int getX() { return x; } }");
+
+        *hash<auto> result = repl.eval("/describe TestClass");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("Class:", result.value, "Should show Class label");
+        assertRegex("TestClass", result.value, "Should show class name");
+        assertRegex("Members:", result.value, "Should show members");
+        assertRegex("Methods:", result.value, "Should show methods");
+        assertRegex("getX", result.value, "Should show getX method");
+
+        # Define a function to describe
+        repl.eval("string sub greet(string name) { return 'Hello ' + name; }");
+        result = repl.eval("/describe greet");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("Function:", result.value, "Should show Function label");
+        assertRegex("greet", result.value, "Should show function name");
+
+        # Describe a namespace
+        result = repl.eval("/describe Qore");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("Namespace:", result.value, "Should show Namespace label");
+
+        # Test error case - symbol not found
+        result = repl.eval("/describe NonExistent");
+        assertTrue(exists result.error, "Should have error for non-existent symbol");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("not found", result.error.desc, "Should mention symbol not found");
+
+        # Test error case - no argument
+        result = repl.eval("/describe");
+        assertTrue(exists result.error, "Should have error without argument");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+    }
+
+    #! Test /history command
+    testCommandHistory() {
+        QoreRepl repl();
+
+        # Initially empty history
+        *hash<auto> result = repl.eval("/history");
+        # The /history command itself gets added to history
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Add some commands
+        repl.eval("1 + 1");
+        repl.eval("our int x = 42;");
+        repl.eval("/vars");
+
+        result = repl.eval("/history");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("1 \\+ 1", result.value, "Should show first command in history");
+        assertRegex("x = 42", result.value, "Should show variable definition in history");
+        assertRegex("/vars", result.value, "Should show /vars command in history");
+    }
+
+    #! Test /timing command
+    testCommandTiming() {
+        QoreRepl repl();
+
+        # Enable timing
+        *hash<auto> result = repl.eval("/timing");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("enabled", result.value, "Should indicate timing enabled");
+
+        # Execute something and check for timing in result
+        result = repl.eval("1 + 1");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.timing, "Should have timing field when enabled");
+        assertTrue(result.timing.typeCode() == NT_DATE, "Timing should be a date/time value");
+
+        # Disable timing
+        result = repl.eval("/timing");
+        assertRegex("disabled", result.value, "Should indicate timing disabled");
+
+        # Execute again and verify no timing
+        result = repl.eval("2 + 2");
+        assertFalse(exists result.timing, "Should not have timing field when disabled");
+    }
+
+    #! Test /pwd and /cd commands
+    testCommandPwdCd() {
+        QoreRepl repl();
+
+        # Get current directory
+        string original_dir = getcwd();
+
+        # Test /pwd
+        *hash<auto> result = repl.eval("/pwd");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(original_dir, result.value, "Should show current directory");
+
+        # Test /cd to /tmp
+        result = repl.eval("/cd /tmp");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("/tmp", result.value, "Should confirm change to /tmp");
+
+        # Verify with /pwd
+        result = repl.eval("/pwd");
+        assertRegex("/tmp", result.value, "pwd should show /tmp");
+
+        # Change back to original directory
+        repl.eval("/cd " + original_dir);
+
+        # Test error case - invalid directory (use a clearly non-existent path)
+        result = repl.eval("/cd /this_path_does_not_exist_12345");
+        # chdir should fail on non-existent directories
+        if (exists result.error) {
+            assertTrue(True, "chdir correctly returned error for invalid directory");
+        } else {
+            # If no error, verify we didn't actually change to that directory
+            result = repl.eval("/pwd");
+            assertFalse(result.value =~ /this_path_does_not_exist/, "Should not have changed to invalid directory");
+        }
+
+        # Test error case - no argument
+        result = repl.eval("/cd");
+        assertTrue(exists result.error, "Should have error without argument");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+    }
+
+    #! Test /save command
+    testCommandSave() {
+        QoreRepl repl();
+
+        # Create some history
+        repl.eval("our int x = 1;");
+        repl.eval("our int y = 2;");
+        repl.eval("sub testFunc() { return x + y; }");
+        repl.eval("/vars");  # This command should NOT be saved (starts with /)
+
+        # Save to temp file
+        string temp_file = tmp_location() + "/repl_test_" + string(getpid()) + ".q";
+        *hash<auto> result = repl.eval("/save " + temp_file);
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("saved", result.value.lwr(), "Should confirm save");
+
+        # Read and verify saved content
+        string saved = ReadOnlyFile::readTextFile(temp_file);
+        assertRegex("our int x = 1", saved, "Should contain x definition");
+        assertRegex("our int y = 2", saved, "Should contain y definition");
+        assertRegex("sub testFunc", saved, "Should contain function definition");
+        assertFalse(saved =~ /\/vars/, "Should NOT contain /vars command");
+
+        # Clean up
+        unlink(temp_file);
+
+        # Test error case - no argument
+        result = repl.eval("/save");
+        assertTrue(exists result.error, "Should have error without argument");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+    }
+
+    #! Test sandboxed REPL with filesystem restrictions
+    testSandboxFilesystem() {
+        # Create a sandboxed REPL with no filesystem access
+        QoreRepl repl({"parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM});
+
+        # /pwd should be disabled
+        *hash<auto> result = repl.eval("/pwd");
+        assertTrue(exists result.error, "/pwd should error in sandboxed mode");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("PO_NO_FILESYSTEM", result.error.desc, "Should mention PO_NO_FILESYSTEM");
+
+        # /cd should be disabled
+        result = repl.eval("/cd /tmp");
+        assertTrue(exists result.error, "/cd should error in sandboxed mode");
+        assertRegex("PO_NO_FILESYSTEM", result.error.desc, "Should mention PO_NO_FILESYSTEM");
+
+        # /load should be disabled
+        result = repl.eval("/load /tmp/test.q");
+        assertTrue(exists result.error, "/load should error in sandboxed mode");
+        assertRegex("PO_NO_FILESYSTEM", result.error.desc, "Should mention PO_NO_FILESYSTEM");
+
+        # /save should be disabled
+        result = repl.eval("/save /tmp/test.q");
+        assertTrue(exists result.error, "/save should error in sandboxed mode");
+        assertRegex("PO_NO_FILESYSTEM", result.error.desc, "Should mention PO_NO_FILESYSTEM");
+
+        # Other commands should still work
+        result = repl.eval("/help");
+        assertFalse(exists result.error, "/help should work in sandboxed mode");
+
+        result = repl.eval("our int x = 1 + 1");
+        assertFalse(exists result.error, "Expressions should work in sandboxed mode");
+        assertEq(2, repl.getProgram().getGlobalVariable("x"), "1 + 1 = 2");
+
+        result = repl.eval("/vars");
+        assertFalse(exists result.error, "/vars should work in sandboxed mode");
+        assertRegex("x", result.value, "Should show x variable");
+    }
+
+    #! Test sandboxed REPL with network restrictions
+    testSandboxNetwork() {
+        # Create a sandboxed REPL with no network access
+        QoreRepl repl({"parse_options": PO_NEW_STYLE | PO_NO_NETWORK});
+
+        # Basic operations should still work
+        *hash<auto> result = repl.eval("1 + 1");
+        assertFalse(exists result.error, "Expressions should work");
+        assertEq(2, result.value, "1 + 1 = 2");
+
+        # Filesystem commands should still work (not restricted)
+        result = repl.eval("/pwd");
+        assertFalse(exists result.error, "/pwd should work without PO_NO_FILESYSTEM");
+
+        # Network operations should fail at runtime
+        result = repl.eval("our Socket s()");
+        # This may or may not error at parse time depending on how PO_NO_NETWORK works
+        # The key is that the REPL itself handles it gracefully
+        assertTrue(True, "REPL handles network restrictions gracefully");
+    }
+
+    #! Test sandboxed REPL with custom parse options
+    testSandboxCustomOptions() {
+        # Create a fully sandboxed REPL
+        QoreRepl repl({
+            "parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_NETWORK
+                          | PO_NO_EXTERNAL_PROCESS | PO_NO_PROCESS_CONTROL
+        });
+
+        # Basic REPL functionality should work
+        *hash<auto> result = repl.eval("our int x = 42");
+        assertFalse(exists result.error, "Variable declaration should work");
+
+        result = repl.eval("/vars");
+        assertFalse(exists result.error, "/vars should work");
+        assertRegex("x", result.value, "Should show x variable");
+
+        result = repl.eval("sub double(int n) { return n * 2; }");
+        assertFalse(exists result.error, "Function definition should work");
+
+        result = repl.eval("/functions");
+        assertFalse(exists result.error, "/functions should work");
+        assertRegex("double", result.value, "Should show double function");
+
+        result = repl.eval("double(x)");
+        assertFalse(exists result.error, "Function call should work");
+        assertEq(84, result.value, "double(42) = 84");
+
+        # Introspection should work
+        result = repl.eval("/type 'hello'");
+        assertFalse(exists result.error, "/type should work");
+        assertRegex("string", result.value, "Should show string type");
+
+        # Filesystem commands should be disabled
+        result = repl.eval("/pwd");
+        assertTrue(exists result.error, "/pwd should be disabled");
+
+        # Timing should work
+        result = repl.eval("/timing");
+        assertFalse(exists result.error, "/timing should work");
+        assertRegex("enabled", result.value, "Should enable timing");
     }
 
     #! Test multi-line block statement

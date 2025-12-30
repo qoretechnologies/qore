@@ -251,7 +251,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         string raw = msgs.get(5s);
         hash<auto> result_msg = parse_json(raw);
         assertEq("result", result_msg.type, "Should receive result");
-        assertRegex("Special commands", result_msg.value, "Help should mention special commands");
+        assertRegex("Commands:", result_msg.value, "Help should mention commands");
 
         msgs.get(5s);  # prompt
 

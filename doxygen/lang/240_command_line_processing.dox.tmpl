@@ -59,4 +59,141 @@
     |!Long Param|!Short|!Description
     |<tt>--debug=</tt><em>arg</em>|\c -d|Turns on %Qore debugging output (output to \c stderr). Higher arg numbers give more output. This option is only available with DEBUG builds
     |<tt>--trace</tt>|\c -t|Turns on %Qore tracing (output to \c stderr). This option is only available with DEBUG builds
+
+    @section repl_mode Interactive REPL Mode
+
+    When %Qore is started without a script file and standard input is a terminal, it automatically enters
+    interactive REPL (Read-Eval-Print Loop) mode. This provides an interactive shell for experimenting
+    with %Qore code, testing expressions, and exploring the language.
+
+    @code{.sh}
+    $ qore
+    Qore 2.0.0 Interactive Shell
+    Type /help for commands, /quit to exit
+    qore> 1 + 1
+    => 2
+    qore> our string name = "World"
+    qore> printf("Hello, %s!\n", name)
+    Hello, World!
+    qore>
+    @endcode
+
+    @subsection repl_commands REPL Commands
+
+    The REPL supports special commands that start with a forward slash (\c /). Type \c /help to see all
+    available commands.
+
+    <b>Basic Commands</b>
+    |!Command|!Description
+    |\c /help|Display help information about all available commands
+    |\c /quit|Exit the REPL (aliases: \c /exit, \c /q)
+
+    <b>Session Commands</b>
+    |!Command|!Description
+    |\c /reset|Reset the program state, clearing all defined variables, functions, and classes
+    |\c /clear|Clear pending multi-line input without executing it
+    |\c /history|Display the command history for the current session
+    |\c /timing|Toggle execution timing display; when enabled, shows how long each command takes to execute
+
+    <b>Introspection Commands</b>
+    |!Command|!Description
+    |\c /vars|List all user-defined global variables and their values
+    |\c /functions|List all user-defined functions (alias: \c /funcs)
+    |\c /classes|List all user-defined classes
+    |\c /constants|List all user-defined constants (alias: \c /consts)
+    |\c /namespaces|List all namespaces (alias: \c /ns)
+    |\c /modules|List all loaded modules
+    |<tt>/type </tt><em>expr</em>|Show the type of an expression or variable
+    |<tt>/describe </tt><em>name</em>|Show detailed information about a class, function, or namespace
+
+    <b>File Commands</b>
+    |!Command|!Description
+    |<tt>/load </tt><em>file</em>|Load and execute a %Qore source file
+    |<tt>/save </tt><em>file</em>|Save the session history (code only, not REPL commands) to a file
+    |\c /pwd|Show the current working directory
+    |<tt>/cd </tt><em>dir</em>|Change the current working directory
+
+    @subsection repl_multiline Multi-line Input
+
+    The REPL automatically detects when more input is needed for multi-line statements. The prompt
+    changes from \c "qore>" to \c "...>" to indicate that the REPL is waiting for more input:
+
+    @code{.sh}
+    qore> class Person {
+    ...>     public { string name; int age; }
+    ...>     constructor(string n, int a) {
+    ...>         name = n;
+    ...>         age = a;
+    ...>     }
+    ...> }
+    qore> Person p("Alice", 30)
+    qore> printf("%s is %d years old\n", p.name, p.age)
+    Alice is 30 years old
+    @endcode
+
+    Use the \c /clear command to cancel multi-line input if you make a mistake.
+
+    @subsection repl_examples REPL Examples
+
+    <b>Defining and using functions:</b>
+    @code{.sh}
+    qore> sub greet(string name) { return "Hello, " + name + "!"; }
+    qore> greet("World")
+    => "Hello, World!"
+    qore> /functions
+    User-defined functions:
+      greet()
+    @endcode
+
+    <b>Exploring types:</b>
+    @code{.sh}
+    qore> /type 42
+    Type: integer
+    qore> /type "hello"
+    Type: string
+    qore> /type (1, 2, 3)
+    Type: list
+    qore> /type {"name": "Alice", "age": 30}
+    Type: hash
+    @endcode
+
+    <b>Describing classes:</b>
+    @code{.sh}
+    qore> class Counter { private { int n = 0; } int inc() { return ++n; } int get() { return n; } }
+    qore> /describe Counter
+    Class: Counter
+      Methods:
+        inc()
+        get()
+      Members:
+        n
+    @endcode
+
+    <b>Using timing to measure performance:</b>
+    @code{.sh}
+    qore> /timing
+    Timing display enabled
+    qore> int sum = 0; for (int i = 0; i < 1000000; i++) sum += i;
+    => 499999500000
+       (00:00:00.15)
+    @endcode
+
+    <b>Saving your session:</b>
+    @code{.sh}
+    qore> our int x = 42
+    qore> sub double(int n) { return n * 2; }
+    qore> /save /tmp/my_session.q
+    Session saved to: /tmp/my_session.q
+    @endcode
+
+    @subsection repl_tips Tips for Using the REPL
+
+    - Use \c our to declare global variables that persist across statements
+    - Use \c sub (not \c int \c sub) for simple function definitions at the top level
+    - Class members must be declared in \c public or \c private blocks
+    - The REPL maintains state between commands, so you can build up complex programs incrementally
+    - Use \c /reset to start fresh if you want to clear all definitions
+    - Use \c /save to save your work before exiting
+
+    @see @ref QoreRepl::QoreRepl "QoreRepl" for programmatic REPL access
 */
