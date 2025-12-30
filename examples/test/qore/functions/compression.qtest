@@ -43,6 +43,9 @@ public class CompressionTest inherits QUnit::Test {
 %ifdef HAVE_ZSTD
         addTestCase("zstd compression tests", \zstdTest());
 %endif
+%ifdef HAVE_LZ4
+        addTestCase("lz4 compression tests", \lz4Test());
+%endif
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -688,6 +691,249 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(1, ZSTD_MIN_LEVEL);
         assertTrue(ZSTD_MAX_LEVEL >= 19, "max level should be at least 19");
         assertEq("zstd", COMPRESSION_ALG_ZSTD);
+    }
+%endif
+
+%ifdef HAVE_LZ4
+    lz4Test() {
+        # ========================================
+        # Basic Functionality Tests
+        # ========================================
+
+        # Basic round-trip test for string input
+        {
+            string original = "Hello, LZ4 compression test!";
+            binary compressed = lz4(original);
+            assertTrue(compressed.size() > 0, "compressed data should not be empty");
+            # LZ4 needs max_output_size hint since it doesn't store original size
+            string decompressed = unlz4_to_string(compressed, original.size() * 2);
+            assertEq(original, decompressed, "round-trip string compression");
+        }
+
+        # Basic round-trip test for binary input
+        {
+            binary original = <deadbeefcafebabe0123456789abcdef>;
+            binary compressed = lz4(original);
+            binary decompressed = unlz4_to_binary(compressed, original.size() * 2);
+            assertEq(original, decompressed, "round-trip binary compression");
+        }
+
+        # Test with UncompressedString constant (same as other compression tests)
+        {
+            binary compressed = lz4(UncompressedString);
+            assertEq(UncompressedString, unlz4_to_string(compressed, UncompressedString.size() * 2));
+            assertEq(UncompressedBinary, unlz4_to_binary(compressed, UncompressedBinary.size() * 2));
+        }
+
+        # ========================================
+        # Acceleration Parameter Tests
+        # ========================================
+
+        # Test various acceleration values
+        {
+            string original = "Test acceleration values " + strmul("x", 500);
+            # Test acceleration 1 (best compression)
+            {
+                binary compressed = lz4(original, 1);
+                string decompressed = unlz4_to_string(compressed, original.size() * 2);
+                assertEq(original, decompressed, "acceleration 1 round-trip");
+            }
+            # Test higher acceleration (faster but larger)
+            {
+                binary compressed = lz4(original, 10);
+                string decompressed = unlz4_to_string(compressed, original.size() * 2);
+                assertEq(original, decompressed, "acceleration 10 round-trip");
+            }
+        }
+
+        # Lower acceleration should produce smaller or equal output
+        {
+            string original = "Test acceleration comparison " + strmul("x", 1000);
+            binary a1 = lz4(original, 1);
+            binary a100 = lz4(original, 100);
+            assertTrue(a1.size() <= a100.size(),
+                "acceleration 1 should compress as well as or better than acceleration 100");
+            assertEq(original, unlz4_to_string(a1, original.size() * 2));
+            assertEq(original, unlz4_to_string(a100, original.size() * 2));
+        }
+
+        # Test default acceleration
+        {
+            string original = "Test default acceleration";
+            binary compressed = lz4(original);
+            assertEq(original, unlz4_to_string(compressed, original.size() * 2));
+            # Default should be equivalent to acceleration 1
+            binary default_compressed = lz4(original, 1);
+            assertEq(compressed.size(), default_compressed.size(),
+                "default acceleration should be equivalent to acceleration 1");
+        }
+
+        # ========================================
+        # Corner Case Tests
+        # ========================================
+
+        # Empty string input
+        {
+            binary compressed = lz4("");
+            assertEq(0, compressed.size(), "empty string should produce empty compressed output");
+        }
+
+        # Empty binary input
+        {
+            binary compressed = lz4(binary());
+            assertEq(0, compressed.size(), "empty binary should produce empty compressed output");
+        }
+
+        # Single byte input
+        {
+            string single = "X";
+            binary compressed = lz4(single);
+            assertEq(single, unlz4_to_string(compressed, 100));
+        }
+
+        # Binary data with null bytes
+        {
+            binary with_nulls = <00010203000405060007>;
+            binary compressed = lz4(with_nulls);
+            assertEq(with_nulls, unlz4_to_binary(compressed, 100));
+        }
+
+        # Unicode strings with multi-byte characters
+        {
+            string unicode = "UTF-8 text: äöü ß € 日本語 🎉";
+            binary compressed = lz4(unicode);
+            string decompressed = unlz4_to_string(compressed, 200, "utf-8");
+            assertEq(unicode, decompressed);
+        }
+
+        # Large input (to test buffer handling)
+        {
+            string large = strmul("Large data test with repetitive content. ", 1000);
+            binary compressed = lz4(large);
+            assertTrue(compressed.size() < large.size(),
+                "large repetitive data should compress well");
+            string decompressed = unlz4_to_string(compressed, large.size() * 2);
+            assertEq(large, decompressed);
+        }
+
+        # Highly compressible data
+        {
+            string repetitive = strmul("a", 10000);
+            binary compressed = lz4(repetitive);
+            assertTrue(compressed.size() < repetitive.size() / 5,
+                "highly repetitive data should have good compression ratio");
+            assertEq(repetitive, unlz4_to_string(compressed, repetitive.size() * 2));
+        }
+
+        # Low compressibility (random-like) data
+        {
+            binary all_bytes;
+            for (int i = 0; i < 256; ++i) {
+                all_bytes += chr(i);
+            }
+            binary compressed = lz4(all_bytes);
+            binary decompressed = unlz4_to_binary(compressed, all_bytes.size() * 2);
+            assertEq(all_bytes, decompressed);
+        }
+
+        # ========================================
+        # Negative Tests
+        # ========================================
+
+        # Invalid acceleration (below min)
+        assertThrows("LZ4-ACCELERATION-ERROR", sub() { lz4("test", 0); });
+        assertThrows("LZ4-ACCELERATION-ERROR", sub() { lz4("test", -1); });
+        assertThrows("LZ4-ACCELERATION-ERROR", sub() { lz4("test", -100); });
+
+        # Invalid acceleration (above max)
+        assertThrows("LZ4-ACCELERATION-ERROR", sub() { lz4("test", 65538); });
+        assertThrows("LZ4-ACCELERATION-ERROR", sub() { lz4("test", 100000); });
+
+        # Corrupted compressed data
+        assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(<deadbeef>, 100); });
+        assertThrows("LZ4-ERROR", sub() { unlz4_to_string(<deadbeef>, 100); });
+
+        # Random garbage data
+        assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(<0102030405060708090a0b0c0d0e0f>, 100); });
+
+        # Truncated compressed data
+        {
+            binary compressed = lz4("test data for truncation test");
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(compressed.substr(0, 5), 100); });
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_string(compressed.substr(0, 5), 100); });
+        }
+
+        # Wrong format data (gzip data to LZ4 decompressor)
+        {
+            binary gzip_data = gzip("test");
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(gzip_data, 100); });
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_string(gzip_data, 100); });
+        }
+
+        # Wrong format data (zlib data to LZ4 decompressor)
+        {
+            binary zlib_data = compress("test");
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(zlib_data, 100); });
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_string(zlib_data, 100); });
+        }
+
+        # Wrong format data (bzip2 data to LZ4 decompressor)
+        {
+            binary bzip2_data = bzip2("test");
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_binary(bzip2_data, 100); });
+            assertThrows("LZ4-ERROR", sub() { unlz4_to_string(bzip2_data, 100); });
+        }
+
+        # ========================================
+        # Encoding Tests
+        # ========================================
+
+        # Test different encodings for unlz4_to_string
+        {
+            string latin1_text = "Latin-1: café résumé";
+            binary compressed = lz4(latin1_text);
+            # Decompress with explicit encoding
+            string decompressed = unlz4_to_string(compressed, 100, "utf-8");
+            assertEq(latin1_text, decompressed);
+        }
+
+        # Test with ASCII encoding
+        {
+            string ascii_text = "Pure ASCII text 12345";
+            binary compressed = lz4(ascii_text);
+            string decompressed = unlz4_to_string(compressed, 100, "ascii");
+            assertEq(ascii_text, decompressed);
+        }
+
+        # ========================================
+        # Comparison with other algorithms
+        # ========================================
+
+        # Verify LZ4 output is different from gzip
+        {
+            string test = "Compare LZ4 vs gzip";
+            binary lz4_data = lz4(test);
+            binary gz = gzip(test);
+            assertNeq(lz4_data, gz, "LZ4 and gzip output should differ");
+        }
+
+        # Verify LZ4 output is different from zlib
+        {
+            string test = "Compare LZ4 vs zlib";
+            binary lz4_data = lz4(test);
+            binary zlib_data = compress(test);
+            assertNeq(lz4_data, zlib_data, "LZ4 and zlib output should differ");
+        }
+
+        # ========================================
+        # Constants Tests
+        # ========================================
+
+        # Verify constants exist and have expected values
+        assertEq(1, LZ4_DEFAULT_ACCELERATION);
+        assertEq(1, LZ4_MIN_ACCELERATION);
+        assertEq(65537, LZ4_MAX_ACCELERATION);
+        assertEq("lz4", COMPRESSION_ALG_LZ4);
     }
 %endif
 }

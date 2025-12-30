@@ -341,6 +341,17 @@ else()
     message(STATUS "Zstandard compression: disabled (libzstd not found)")
 endif()
 
+# LZ4
+pkg_check_modules(LZ4 liblz4)
+if(LZ4_FOUND)
+    set(HAVE_LZ4 TRUE)
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
+    message(STATUS "LZ4 compression: enabled")
+else()
+    message(STATUS "LZ4 compression: disabled (liblz4 not found)")
+endif()
+
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)

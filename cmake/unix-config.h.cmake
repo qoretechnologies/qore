@@ -213,6 +213,7 @@
 /* compression libraries */
 #cmakedefine HAVE_BROTLI
 #cmakedefine HAVE_ZSTD
+#cmakedefine HAVE_LZ4
 
 /* the rest */
 #cmakedefine HAVE_ATOMIC_COMPILE_ONLY

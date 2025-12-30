@@ -1041,6 +1041,32 @@ fi
 AC_SUBST([ZSTD_CPPFLAGS])
 AC_SUBST([ZSTD_LIBS])
 
+# Check for LZ4 compression library - optional
+AC_ARG_ENABLE([lz4],
+    [AS_HELP_STRING([--disable-lz4], [disable LZ4 compression support])],
+    [enable_lz4=$enableval],
+    [enable_lz4=yes])
+
+if test "x$enable_lz4" = "xyes"; then
+    AC_MSG_CHECKING([for LZ4 library and header files])
+    if pkg-config --exists liblz4 2>/dev/null; then
+        LZ4_CPPFLAGS="`pkg-config --cflags liblz4`"
+        LZ4_LIBS="`pkg-config --libs liblz4`"
+        have_lz4=yes
+        AC_DEFINE([HAVE_LZ4], [1], [Define if LZ4 compression is available])
+        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $LZ4_LIBS"
+        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $LZ4_CPPFLAGS"
+        AC_MSG_RESULT([yes (pkg-config)])
+    else
+        have_lz4=no
+        AC_MSG_RESULT([no])
+    fi
+else
+    have_lz4=no
+fi
+AC_SUBST([LZ4_CPPFLAGS])
+AC_SUBST([LZ4_LIBS])
+
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
         OPENSSL_CPPFLAGS=-I$1
@@ -2090,6 +2116,7 @@ AM_CONDITIONAL([COND_MINGWCC],                 [test "$mingw" = yes])
 AM_CONDITIONAL([COND_MONGODB],                 [test "$have_mongodb" = yes])
 AM_CONDITIONAL([COND_BROTLI],                  [test "$have_brotli" = yes])
 AM_CONDITIONAL([COND_ZSTD],                    [test "$have_zstd" = yes])
+AM_CONDITIONAL([COND_LZ4],                     [test "$have_lz4" = yes])
 
 # find prefix
 if test -n "${exec_prefix}" -a "${exec_prefix}" != NONE; then
@@ -2250,6 +2277,7 @@ show_library_feature "mongodb module" $have_mongodb
 echo "*** OPTIONAL COMPRESSION SUPPORT ***"
 show_library_feature "brotli compression" $have_brotli
 show_library_feature "zstd compression" $have_zstd
+show_library_feature "lz4 compression" $have_lz4
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"

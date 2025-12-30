@@ -42,6 +42,10 @@
 #include <zstd.h>
 #endif
 
+#ifdef HAVE_LZ4
+#include <lz4.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -618,6 +622,106 @@ private:
 };
 #endif // HAVE_ZSTD
 
+#ifdef HAVE_LZ4
+class Lz4CompressTransform : public Transform {
+
+public:
+    Lz4CompressTransform(int64 acceleration, ExceptionSink *xsink) : acceleration(acceleration), initialized(true) {
+        // LZ4 acceleration: 1 (default) to higher values (faster but worse compression)
+        // We use it in reverse: level 1 = fast, higher = slower but better
+        // So acceleration 1 = best compression, higher = faster
+        if (acceleration == CompressionTransforms::LEVEL_DEFAULT) {
+            this->acceleration = 1;  // LZ4_ACCELERATION_DEFAULT
+        } else if (acceleration < 1 || acceleration > 65537) {
+            xsink->raiseException("LZ4-LEVEL-ERROR",
+                "acceleration must be between 1 - 65537 or -1 (value passed: " QLLD ")", acceleration);
+            initialized = false;
+            return;
+        }
+    }
+
+    ~Lz4CompressTransform() {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!initialized) {
+            xsink->raiseException("LZ4-ERROR", "invalid LZ4 compressor state");
+            return std::make_pair(0, 0);
+        }
+
+        if (!src) {
+            // LZ4 doesn't have a separate flush - compression is done in one go
+            return std::make_pair(0, 0);
+        }
+
+        int compressed = LZ4_compress_fast(static_cast<const char*>(src),
+                                           static_cast<char*>(dst),
+                                           srcLen,
+                                           dstLen,
+                                           acceleration);
+
+        if (compressed == 0) {
+            xsink->raiseException("LZ4-ERROR", "LZ4 compression failed - destination buffer too small");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen, compressed);
+    }
+
+private:
+    int acceleration;
+    bool initialized;
+};
+
+class Lz4DecompressTransform : public Transform {
+
+public:
+    Lz4DecompressTransform(ExceptionSink *xsink) : finished(false), initialized(true) {
+    }
+
+    ~Lz4DecompressTransform() {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!initialized) {
+            xsink->raiseException("LZ4-ERROR", "invalid LZ4 decompressor state");
+            return std::make_pair(0, 0);
+        }
+
+        if (finished) {
+            if (src) {
+                xsink->raiseException("LZ4-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+            }
+            return std::make_pair(0, 0);
+        }
+
+        if (!src) {
+            // No more input, done
+            finished = true;
+            return std::make_pair(0, 0);
+        }
+
+        int decompressed = LZ4_decompress_safe(static_cast<const char*>(src),
+                                               static_cast<char*>(dst),
+                                               srcLen,
+                                               dstLen);
+
+        if (decompressed < 0) {
+            xsink->raiseException("LZ4-ERROR", "LZ4 decompression failed - corrupted data or buffer too small");
+            return std::make_pair(0, 0);
+        }
+
+        // LZ4 consumes all input in one go
+        finished = true;
+        return std::make_pair(srcLen, decompressed);
+    }
+
+private:
+    bool finished;
+    bool initialized;
+};
+#endif // HAVE_LZ4
+
 Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink) {
     if (*alg == ALG_ZLIB) {
         return new ZlibDeflateTransform(level, xsink, false);
@@ -634,6 +738,11 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
 #ifdef HAVE_ZSTD
     else if (*alg == ALG_ZSTD) {
         return new ZstdCompressTransform(level, xsink);
+    }
+#endif
+#ifdef HAVE_LZ4
+    else if (*alg == ALG_LZ4) {
+        return new Lz4CompressTransform(level, xsink);
     }
 #endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
@@ -656,6 +765,11 @@ Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, Exc
 #ifdef HAVE_ZSTD
     else if (*alg == ALG_ZSTD) {
         return new ZstdDecompressTransform(xsink);
+    }
+#endif
+#ifdef HAVE_LZ4
+    else if (*alg == ALG_LZ4) {
+        return new Lz4DecompressTransform(xsink);
     }
 #endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());

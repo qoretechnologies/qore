@@ -121,6 +121,12 @@
 #define QORE_CONST_HAVE_ZSTD 0
 #endif
 
+#ifdef HAVE_LZ4
+#define QORE_CONST_HAVE_LZ4 1
+#else
+#define QORE_CONST_HAVE_LZ4 0
+#endif
+
 #ifdef HAVE_PWD_H
 #define QORE_CONST_HAVE_PWD_H 1
 #else
@@ -307,6 +313,11 @@ const HAVE_BROTLI = bool(QORE_CONST_HAVE_BROTLI);
 /** @since %Qore 2.1
  */
 const HAVE_ZSTD = bool(QORE_CONST_HAVE_ZSTD);
+
+//! Indicates if LZ4 compression support is available (lz4(), unlz4_to_string(), unlz4_to_binary())
+/** @since %Qore 2.1
+ */
+const HAVE_LZ4 = bool(QORE_CONST_HAVE_LZ4);
 
 //! Indicates if the %Qore library supports the is_executable() function
 /** @note Currently this function is only available when running on UNIX or UNIX-like platforms

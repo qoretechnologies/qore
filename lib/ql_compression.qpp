@@ -43,6 +43,10 @@
 #include <zstd.h>
 #endif
 
+#ifdef HAVE_LZ4
+#include <lz4.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/ql_compression.h"
 #include "qore/intern/CompressionTransforms.h"
@@ -871,6 +875,79 @@ QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* e
 }
 #endif // HAVE_ZSTD
 
+#ifdef HAVE_LZ4
+BinaryNode* qore_lz4(const void* ptr, unsigned long len, int acceleration, ExceptionSink* xsink) {
+    // Calculate maximum compressed size
+    int max_compressed_size = LZ4_compressBound(len);
+
+    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+    if (b->preallocate(max_compressed_size)) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    int compressed_size = LZ4_compress_fast(
+        static_cast<const char*>(ptr),
+        static_cast<char*>(const_cast<void*>(b->getPtr())),
+        len,
+        max_compressed_size,
+        acceleration
+    );
+
+    if (compressed_size == 0) {
+        xsink->raiseException("LZ4-ERROR", "LZ4 compression failed");
+        return nullptr;
+    }
+
+    b->setSize(compressed_size);
+    return b.release();
+}
+
+static char* qore_unlz4_intern(const BinaryNode* b, int& decoded_size, int max_output_size, ExceptionSink* xsink) {
+    // LZ4 needs to know the maximum decompressed size upfront
+    // We'll start with a reasonable estimate and grow if needed
+    int buf_size = max_output_size > 0 ? max_output_size : b->size() * 4;
+    if (buf_size < 1024) {
+        buf_size = 1024;
+    }
+
+    void* buf = malloc(buf_size);
+    if (!buf) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    int result = LZ4_decompress_safe(
+        static_cast<const char*>(b->getPtr()),
+        static_cast<char*>(buf),
+        b->size(),
+        buf_size
+    );
+
+    if (result < 0) {
+        free(buf);
+        xsink->raiseException("LZ4-ERROR", "LZ4 decompression failed - corrupted data or buffer too small");
+        return nullptr;
+    }
+
+    decoded_size = result;
+    return static_cast<char*>(buf);
+}
+
+BinaryNode* qore_unlz4_to_binary(const BinaryNode* b, int max_output_size, ExceptionSink* xsink) {
+    int len;
+    char* buf = qore_unlz4_intern(b, len, max_output_size, xsink);
+    return buf ? new BinaryNode(buf, len) : nullptr;
+}
+
+QoreStringNode* qore_unlz4_to_string(const BinaryNode* b, int max_output_size, const QoreEncoding* enc, ExceptionSink* xsink) {
+    int len;
+    char* buf = qore_unlz4_intern(b, len, max_output_size, xsink);
+    // NOTE: the null terminator is added by the QoreStringNode constructor
+    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+}
+#endif // HAVE_LZ4
+
 /** @defgroup compression_constants Compression Constants
  */
 ///@{
@@ -916,6 +993,24 @@ const ZSTD_MIN_LEVEL = 1;
  */
 const ZSTD_MAX_LEVEL = qore(ZSTD_maxCLevel());
 #endif
+
+#ifdef HAVE_LZ4
+//! gives the default acceleration value for the lz4() function (value: \c 1)
+/** Higher acceleration values trade compression ratio for speed.
+    @since %Qore 2.1
+ */
+const LZ4_DEFAULT_ACCELERATION = 1;
+
+//! gives the minimum acceleration value for the lz4() function (value: \c 1)
+/** @since %Qore 2.1
+ */
+const LZ4_MIN_ACCELERATION = 1;
+
+//! gives the maximum acceleration value for the lz4() function (value: \c 65537)
+/** @since %Qore 2.1
+ */
+const LZ4_MAX_ACCELERATION = 65537;
+#endif
 ///@}
 
 /** @defgroup compression_transformations Compression Stream Transformations
@@ -954,6 +1049,16 @@ const COMPRESSION_ALG_BROTLI = str(CompressionTransforms::ALG_BROTLI);
 /** @since %Qore 2.1
  */
 const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
+#endif
+
+#ifdef HAVE_LZ4
+//! Identifies the <a href="https://github.com/lz4/lz4">LZ4</a> compression algorithm
+/** @note LZ4 does not store the original size in the compressed data, so decompression requires either a
+    max_output_size parameter or knowledge of the original size.
+
+    @since %Qore 2.1
+ */
+const COMPRESSION_ALG_LZ4 = str(CompressionTransforms::ALG_LZ4);
 #endif
 ///@}
 
@@ -1640,6 +1745,137 @@ string unzstd_to_string(binary bin, *string encoding) {
 nothing unzstd_to_string() [flags=RUNTIME_NOOP] {
 }
 #endif // HAVE_ZSTD
+
+#ifdef HAVE_LZ4
+//! Compresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the compressed data as a binary
+/** Strings are compressed without the trailing null character.
+
+    @note LZ4 does not store the original size in the compressed data, so decompression requires either a
+    max_output_size parameter or knowledge of the original size.
+
+    @param str the data to compress
+    @param acceleration the acceleration factor for faster compression at the cost of compression ratio, must be a value between 1 and 65537 inclusive, 1 = best compression ratio (default), higher values = faster compression but larger output. An invalid option passed to this argument will result in a \c LZ4-ACCELERATION-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = lz4(str);
+    @endcode
+
+    @throw LZ4-ACCELERATION-ERROR acceleration must be between 1 - 65537
+    @throw LZ4-ERROR the LZ4 library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary lz4(string str, int acceleration = 1) {
+   if (acceleration < 1 || acceleration > 65537)
+      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
+         1, 65537, acceleration);
+
+   if (!str->strlen())
+      return new BinaryNode;
+
+   return qore_lz4(str->getBuffer(), str->strlen(), acceleration, xsink);
+}
+
+//! Compresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the compressed data as a binary
+/** @note LZ4 does not store the original size in the compressed data, so decompression requires either a
+    max_output_size parameter or knowledge of the original size.
+
+    @param bin the data to compress
+    @param acceleration the acceleration factor for faster compression at the cost of compression ratio, must be a value between 1 and 65537 inclusive, 1 = best compression ratio (default), higher values = faster compression but larger output. An invalid option passed to this argument will result in a \c LZ4-ACCELERATION-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = lz4(data);
+    @endcode
+
+    @throw LZ4-ACCELERATION-ERROR acceleration must be between 1 - 65537
+    @throw LZ4-ERROR the LZ4 library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary lz4(binary bin, int acceleration = 1) {
+   if (acceleration < 1 || acceleration > 65537)
+      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
+         1, 65537, acceleration);
+
+   if (!bin->size())
+      return new BinaryNode;
+
+   return qore_lz4(bin->getPtr(), bin->size(), acceleration, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing lz4() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the decompressed data as a binary object
+/** @note LZ4 does not store the original size in the compressed data, so either max_output_size must be provided,
+    or it will be estimated (which may fail for highly compressed data).
+
+    @param bin the compressed data to decompress
+    @param max_output_size the maximum size of the decompressed output (default: 0 = estimate from input size)
+
+    @return the uncompressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = unlz4_to_binary(lz4_data, 1000000);
+    @endcode
+
+    @throw LZ4-ERROR the LZ4 library returned an internal error during processing (possibly due to corrupt input data or buffer too small)
+
+    @since %Qore 2.1
+*/
+binary unlz4_to_binary(binary bin, int max_output_size = 0) {
+   return qore_unlz4_to_binary(bin, max_output_size, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unlz4_to_binary() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the decompressed data as a string
+/** @note LZ4 does not store the original size in the compressed data, so either max_output_size must be provided,
+    or it will be estimated (which may fail for highly compressed data).
+
+    @param bin the compressed data to decompress
+    @param max_output_size the maximum size of the decompressed output (default: 0 = estimate from input size)
+    @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+
+    @return the uncompressed data as a string
+
+    @par Example:
+    @code{.py}
+string str = unlz4_to_string(lz4_data, 1000000, "utf-8");
+    @endcode
+
+    @throw LZ4-ERROR the LZ4 library returned an internal error during processing (possibly due to corrupt input data or buffer too small)
+
+    @since %Qore 2.1
+*/
+string unlz4_to_string(binary bin, int max_output_size = 0, *string encoding) {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
+   return qore_unlz4_to_string(bin, max_output_size, qe, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unlz4_to_string() [flags=RUNTIME_NOOP] {
+}
+#endif // HAVE_LZ4
 
 //! Returns a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 /** @par Example:
