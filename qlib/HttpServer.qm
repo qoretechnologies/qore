@@ -477,6 +477,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! content-encodings supported; this is a hash to simulate a set with O(ln(n)) access times
         const ContentEncodings = {
+            "br": "br",
+            "zstd": "zstd",
             "gzip": "gzip",
             "deflate": "deflate",
             "bzip2": "bzip2",
@@ -2099,6 +2101,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
             # compress body if eligible for compression
             if (rv.body && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold) {
+%ifdef HAVE_BROTLI
+                if (cx.encoding == "br") {
+                    rv.hdr."Content-Encoding" = "br";
+                    rv.body = brotli(rv.body);
+                } else
+%endif
+%ifdef HAVE_ZSTD
+                if (cx.encoding == "zstd") {
+                    rv.hdr."Content-Encoding" = "zstd";
+                    rv.body = zstd(rv.body);
+                } else
+%endif
                 if (cx.encoding == "deflate") {
                     rv.hdr."Content-Encoding" = "deflate";
                     rv.body = compress(rv.body);

@@ -1741,6 +1741,18 @@ public class AbstractHttpRequestHandler {
     #! decodes a message body with content-encoding
     static data decodeBody(string content_encoding, binary body, *string string_encoding) {
         switch (content_encoding) {
+%ifdef HAVE_BROTLI
+            case "br":
+                return string_encoding
+                    ? unbrotli_to_string(binary(body), string_encoding)
+                    : unbrotli_to_binary(body);
+%endif
+%ifdef HAVE_ZSTD
+            case "zstd":
+                return string_encoding
+                    ? unzstd_to_string(binary(body), string_encoding)
+                    : unzstd_to_binary(body);
+%endif
             case "deflate":
             case "x-deflate":
                 return string_encoding
@@ -1762,6 +1774,14 @@ public class AbstractHttpRequestHandler {
     #! encodes a message body with content-encoding
     static binary encodeBody(string content_encoding, data body) {
         switch (content_encoding) {
+%ifdef HAVE_BROTLI
+            case "br":
+                return brotli(body);
+%endif
+%ifdef HAVE_ZSTD
+            case "zstd":
+                return zstd(body);
+%endif
             case "deflate":
                 return compress(body);
             case "gzip":
