@@ -655,11 +655,11 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
     // Get the parse options from the current program at runtime
     // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
     // before the program's pwo is initialized (due to C++ member initialization order)
-    int64 parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    int64 runtime_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
     // This is determined by the execution high water mark (ehwm)
-    if (parse_options & PO_ALLOW_REPARSE) {
+    if (runtime_parse_options & PO_ALLOW_REPARSE) {
         int rc = 0;
 
         // Determine start position - one past the execution high water mark
@@ -685,6 +685,11 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
                 }
             }
             rc = (*i)->exec(return_value, xsink);
+            // Update ehwm to current statement after successful execution
+            // so that on exception, only successfully executed statements are marked
+            if (!rc && !*xsink) {
+                ehwm = i;
+            }
             if (*xsink && tlpd->runtimeCheck()) {
                 tlpd->dbgException(*i, xsink);
                 if (*xsink) {
@@ -693,9 +698,6 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
             }
             if (rc) break;
         }
-
-        // Update execution high water mark to last statement in list
-        ehwm = statement_list.last();
         return rc;
     }
 

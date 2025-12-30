@@ -369,6 +369,7 @@ static void do_no_gui(const char* arg) {
 }
 
 static void do_no_class_defs(const char* arg) {
+   fprintf(stderr, "WARNING: --no-class-defs is deprecated and has no effect (PO_NO_CLASS_DEFS was never enforced)\n");
    parse_options |= PO_NO_CLASS_DEFS;
 }
 

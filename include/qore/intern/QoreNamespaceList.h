@@ -167,10 +167,13 @@ public:
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* sink);
     DLLLOCAL void parseRollback(ExceptionSink* sink);
+    //! Removes a specific namespace by name (for selective rollback support)
+    DLLLOCAL void parseRemove(const char* name, ExceptionSink* xsink);
     DLLLOCAL void deleteAllConstants(ExceptionSink *xsink);
     DLLLOCAL void reset();
 
-    DLLLOCAL void parseAssimilate(QoreNamespaceList& n, qore_ns_private* parent);
+    DLLLOCAL void parseAssimilate(QoreNamespaceList& n, qore_ns_private* parent,
+        std::vector<std::string>* pending_names = nullptr);
     DLLLOCAL void runtimeAssimilate(QoreNamespaceList& n, qore_ns_private* parent);
 
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);

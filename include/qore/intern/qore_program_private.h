@@ -344,6 +344,10 @@ public:
     // unique program location storage
     pgmloc_vec_t pgmloc;
 
+    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
+    size_t str_vec_hwm = 0;   // committed size of str_vec
+    size_t pgmloc_hwm = 0;    // committed size of pgmloc
+
     // temporary while parsing: to ensure unique strings in parsing
     typedef std::set<const char*, ltstr> str_set_t;
     str_set_t str_set;

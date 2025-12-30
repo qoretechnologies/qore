@@ -291,7 +291,8 @@ public:
     DLLLOCAL void assimilate(ConstantList& n);
 
     // assimilate a constant list in a namespace with duplicate checking (also in pending list)
-    DLLLOCAL void assimilate(ConstantList& n, const char* type, const char* name);
+    DLLLOCAL void assimilate(ConstantList& n, const char* type, const char* name,
+        std::vector<std::string>* pending_names = nullptr);
 
     // copy all user/public elements of the source list to the target, assuming no duplicates
     DLLLOCAL void mergeUserPublic(const ConstantList& src);
@@ -310,6 +311,8 @@ public:
     DLLLOCAL void clear(QoreListNode& l);
     DLLLOCAL void deleteAll(ExceptionSink* xsink);
     DLLLOCAL void reset();
+    //! Removes a specific constant by name (for selective rollback support)
+    DLLLOCAL void parseRemove(const char* name, ExceptionSink* xsink);
 
     DLLLOCAL bool empty() const {
         return cnemap.empty();

@@ -154,6 +154,24 @@
     - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
       - returns the number of threads currently active in a Program object
       - useful for coordinating thread activity with parse operations when using PO_ALLOW_REPARSE
+    - @ref Qore::Program::parseRollback() "Program::parseRollback()" has been un-deprecated and enhanced
+      - when used with @ref PO_ALLOW_REPARSE, performs atomic rollback of only the pending parse transaction
+      - preserves all previously committed program state (variables, functions, classes, etc.)
+      - enables REPL-style interactive programming where parse errors don't destroy the Program object
+
+    @subsection qore_2_3_0_deprecated Deprecated Features
+    - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
+      produce a warning when used, as the underlying parse options were never enforced:
+      - \c --no-class-defs (PO_NO_CLASS_DEFS) - would have disallowed class definitions
+    - Note: @ref PO_NO_CLASS_DEFS, @ref PO_NO_CONSTANT_DEFS, @ref PO_NO_NAMESPACE_DEFS, and @ref PO_NO_NEW are
+      now defined as 0 (no-op). These parse options were documented but never enforced in the parser. Code that
+      set these options will continue to work but the restrictions will not be applied.
+
+    @subsection qore_2_3_0_known_limitations Known Limitations
+    - The integrated REPL in the \c qore binary provides basic readline functionality without advanced line
+      editing features. For enhanced editing (arrow key navigation, command history recall, etc.), consider:
+      - Using \c rlwrap: \c rlwrap \c qore (provides readline wrapper)
+      - Using the QoreRepl module with a custom frontend that provides line editing
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module

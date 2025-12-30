@@ -183,8 +183,11 @@ components:
           description: Optional request ID for correlation
         command:
           type: string
-          description: REPL command to execute (e.g., /help, /vars)
-          pattern: ^/\w+
+          description: >
+            REPL command to execute (e.g., /help, /vars). Commands may be sent
+            with or without the leading '/', and the server will add '/' if it
+            is missing.
+          pattern: ^/?\w+
 
     InterruptPayload:
       type: object

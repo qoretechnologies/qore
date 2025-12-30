@@ -392,10 +392,18 @@ public:
     DLLEXPORT void parseCommit(ExceptionSink* xsink, ExceptionSink* warn_sink = 0, int warn_mask = QP_WARN_ALL);
 
     //! rolls back changes to the program object that were added with QoreProgram::parsePending()
-    /** a Qore-language exception could be raised if the parse lock could not be acquired (Program has running threads)
+    /** When used with PO_ALLOW_REPARSE, this method performs an atomic rollback of only the pending parse
+        transaction, preserving all previously committed program state. This enables REPL-style interactive
+        programming where parse errors don't destroy the Program object.
+
+        Without PO_ALLOW_REPARSE, this method clears all program state including committed items.
+
+        A Qore-language exception could be raised if the parse lock could not be acquired (Program has running threads)
 
         @see QoreProgram::parsePending()
         @see QoreProgram::parseCommit()
+
+        @since Qore 2.3 provides atomic rollback preserving committed state when used with PO_ALLOW_REPARSE
     */
     DLLEXPORT int parseRollback(ExceptionSink* xsink);
 

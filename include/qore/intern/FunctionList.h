@@ -188,9 +188,12 @@ public:
     DLLLOCAL void del();
     DLLLOCAL int parseInit();
     DLLLOCAL void parseRollback();
+    //! Removes a specific function by name (for selective rollback support)
+    DLLLOCAL void parseRemove(const char* name);
     DLLLOCAL void parseCommit();
     DLLLOCAL QoreListNode* getList();
-    DLLLOCAL void assimilate(FunctionList& fl, qore_ns_private* ns);
+    DLLLOCAL void assimilate(FunctionList& fl, qore_ns_private* ns,
+        std::vector<std::string>* pending_names = nullptr);
 };
 
 #endif

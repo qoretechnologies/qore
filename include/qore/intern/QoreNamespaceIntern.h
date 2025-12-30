@@ -68,6 +68,16 @@ public:
     GlobalVariableList var_list;   // global variable map
     gvblist_t pend_gvblist;        // global variable declaration list
 
+    // Pending names for atomic rollback support
+    // These track names of items added in the current parse transaction
+    // so they can be selectively removed on parseRollback()
+    std::vector<std::string> pending_var_names;      // Global vars added in pending parse
+    std::vector<std::string> pending_func_names;     // Functions added in pending parse
+    std::vector<std::string> pending_class_names;    // Classes added in pending parse
+    std::vector<std::string> pending_const_names;    // Constants added in pending parse
+    std::vector<std::string> pending_hashdecl_names; // Hashdecls added in pending parse
+    std::vector<std::string> pending_ns_names;       // Child namespaces added in pending parse
+
     // 0 = root namespace, ...
     unsigned depth = 0;
 
@@ -1813,23 +1823,28 @@ public:
     }
 
     DLLLOCAL void parseRollback(ExceptionSink* xsink) {
-        // roll back pending lookup entries
+        // roll back pending function lookup entries
         pend_fmap.clear();
-        cnmap.clear();
-
-        varmap.clear();
-        nsmap.clear();
 
         // roll back pending global variables
         pend_gvlist.clear();
 
-        clmap.clear();
-        thdmap.clear();
-
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
 
+        // roll back pending items from collections (preserves committed items)
         qore_ns_private::parseRollback(xsink);
+
+        // clear all lookup indices - they will be rebuilt from remaining committed data
+        fmap.clear();
+        cnmap.clear();
+        varmap.clear();
+        clmap.clear();
+        thdmap.clear();
+        nsmap.clear();
+
+        // rebuild all lookup indices from the remaining committed data
+        rebuildAllIndexes();
     }
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);

@@ -149,29 +149,35 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         @return Response hash with code 101 to accept, or error code to reject
     */
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
-        # Check max connections
-        if (max_connections > 0) {
+        # Check max connections with lock held for the entire check-and-increment
+        # to prevent race conditions where multiple requests see the same count
+        {
             count_lock.lock();
             on_exit count_lock.unlock();
 
-            if (connection_count >= max_connections) {
+            if (max_connections > 0 && connection_count >= max_connections) {
                 return {
                     "code": 503,
                     "body": "Maximum connections reached",
                 };
             }
+            # Pre-increment connection count here while holding the lock
+            # to reserve our slot before the WebSocket upgrade
+            connection_count++;
         }
 
         # Custom authentication callback
         if (auth_callback) {
             try {
                 if (!auth_callback(cx, hdr)) {
+                    decrementConnectionCount();
                     return {
                         "code": 401,
                         "body": "Unauthorized",
                     };
                 }
             } catch (hash<ExceptionInfo> ex) {
+                decrementConnectionCount();
                 logError("Auth callback error: %s: %s", ex.err, ex.desc);
                 return {
                     "code": 500,
@@ -181,7 +187,19 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         }
 
         # Delegate to parent for WebSocket upgrade
-        return WebSocketHandler::handleRequest(cx, hdr, b);
+        hash<auto> result = WebSocketHandler::handleRequest(cx, hdr, b);
+        # If the upgrade fails, decrement the connection count
+        if (result.code != 101) {
+            decrementConnectionCount();
+        }
+        return result;
+    }
+
+    #! Decrements the connection count (thread-safe)
+    private decrementConnectionCount() {
+        count_lock.lock();
+        on_exit count_lock.unlock();
+        connection_count--;
     }
 
     #! Creates a new connection instance
@@ -192,13 +210,8 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         @return A new QoreReplWebSocketConnection instance
     */
     WebSocketHandler::WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        # Track connection count
-        {
-            count_lock.lock();
-            on_exit count_lock.unlock();
-            connection_count++;
-        }
-
+        # Note: connection_count was already incremented in handleRequest() to prevent
+        # race conditions between the max_connections check and the WebSocket upgrade
         logDebug("New REPL connection: %s from %s", cid, cx."peer-info".hostname_desc);
         return new QoreReplWebSocketConnection(self, repl_options);
     }
@@ -259,8 +272,10 @@ handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
     */
     setMaxConnections(int max) {
         if (max < 0) {
-            throw "INVALID-ARGUMENT", "max_connections must be non-negative";
+            throw "INVALID-ARGUMENT", "max must be non-negative";
         }
+        count_lock.lock();
+        on_exit count_lock.unlock();
         max_connections = max;
     }
 

@@ -421,7 +421,8 @@ void ConstantList::assimilate(ConstantList& n) {
 }
 
 // duplicate checking is done here
-void ConstantList::assimilate(ConstantList& n, const char* type, const char* name) {
+void ConstantList::assimilate(ConstantList& n, const char* type, const char* name,
+        std::vector<std::string>* pending_names) {
     // assimilate target list
     for (cnemap_t::iterator i = n.cnemap.begin(), e = n.cnemap.end(); i != e; ++i) {
         if (inList(i->first)) {
@@ -431,6 +432,10 @@ void ConstantList::assimilate(ConstantList& n, const char* type, const char* nam
         }
 
         cnemap[i->first] = i->second;
+        // track the new constant name for rollback support
+        if (pending_names) {
+            pending_names->push_back(i->first);
+        }
         i->second = nullptr;
     }
 
@@ -483,4 +488,12 @@ QoreHashNode* ConstantList::getInfo() {
         hp->setKeyValueIntern(i->first, i->second->val.refSelf());
 
     return h;
+}
+
+void ConstantList::parseRemove(const char* name, ExceptionSink* xsink) {
+    cnemap_t::iterator i = cnemap.find(name);
+    if (i != cnemap.end()) {
+        i->second->deref(xsink);
+        cnemap.erase(i);
+    }
 }

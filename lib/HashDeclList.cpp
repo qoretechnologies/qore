@@ -155,7 +155,8 @@ void HashDeclList::reset() {
     deleteAll();
 }
 
-void HashDeclList::assimilate(HashDeclList& n, qore_ns_private& ns) {
+void HashDeclList::assimilate(HashDeclList& n, qore_ns_private& ns,
+        std::vector<std::string>* pending_names) {
     hm_qth_t::iterator i = n.hm.begin();
     while (i != n.hm.end()) {
         if (ns.classList.find(i->first)) {
@@ -177,6 +178,10 @@ void HashDeclList::assimilate(HashDeclList& n, qore_ns_private& ns) {
             // "move" data to new list
             hm[i->first] = i->second;
             typed_hash_decl_private::get(*(i->second))->setNamespace(&ns);
+            // track the new hashdecl name for rollback support
+            if (pending_names) {
+                pending_names->push_back(i->first);
+            }
             n.hm.erase(i);
         }
         i = n.hm.begin();
@@ -197,4 +202,11 @@ bool ConstHashDeclListIterator::isPublic() const {
 
 bool ConstHashDeclListIterator::isUserPublic() const {
     return typed_hash_decl_private::get(*i->second)->isUserPublic();
+}
+
+void HashDeclList::parseRemove(const char* name) {
+    hm_qth_t::iterator i = hm.find(name);
+    if (i != hm.end()) {
+        remove(i);
+    }
 }

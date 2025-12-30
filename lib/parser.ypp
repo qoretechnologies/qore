@@ -1917,6 +1917,9 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2);
     }
     | top_namespace_decl {
+        // Note: PO_NO_NAMESPACE_DEFS restriction was removed as it was documented but
+        // never enforced. The PO_ALLOW_REPARSE design allows namespace definitions
+        // in interactive REPL mode where incremental parsing is needed.
         qore_root_ns_private::parseAddNamespace($1);
     }
     | TOK_MODULE '{' module_decls '}' {

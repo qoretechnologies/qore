@@ -159,6 +159,14 @@ void GlobalVariableList::parseAdd(Var* v) {
     vmap[v->getName()] = v;
 }
 
+void GlobalVariableList::parseRemove(const char* name, ExceptionSink* xsink) {
+    map_var_t::iterator i = vmap.find(name);
+    if (i != vmap.end()) {
+        i->second->deref(xsink);
+        vmap.erase(i);
+    }
+}
+
 void GlobalVariableList::getGlobalVars(const std::string& path, QoreHashNode& h) const {
     for (map_var_t::const_iterator i = vmap.begin(); i != vmap.end(); i++) {
         std::string n = path;

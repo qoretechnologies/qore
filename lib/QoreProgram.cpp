@@ -579,11 +579,21 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // delete pending statements
     sb.parseRollback();
 
-    // free temporary data structures
+    // free temporary data structures - only delete items added since last commit
     str_set.clear();
-    str_vec.clear();
     loc_set.clear();
-    pgmloc.clear();
+
+    // delete pending strings (those added after str_vec_hwm)
+    for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
+        free(str_vec[i]);
+    }
+    str_vec.resize(str_vec_hwm);
+
+    // delete pending locations (those added after pgmloc_hwm)
+    for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
+        delete pgmloc[i];
+    }
+    pgmloc.resize(pgmloc_hwm);
 
     // issue #2907 delete & clear statement index maps when doing a parse rollback
     for (auto& i : statementByFileIndex) {
@@ -776,6 +786,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // free temporary data structures
             str_set.clear();
             loc_set.clear();
+
+            // update high water marks for atomic rollback support
+            str_vec_hwm = str_vec.size();
+            pgmloc_hwm = pgmloc.size();
 
             rc = 0;
         }

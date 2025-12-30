@@ -90,6 +90,9 @@ public:
 
     DLLLOCAL void parseAdd(Var* v);
 
+    //! Removes a variable by name (for parseRollback support)
+    DLLLOCAL void parseRemove(const char* name, ExceptionSink* xsink);
+
     // xxx DLLLOCAL Var* parseFindCreateVar(const char* name, QoreParseTypeInfo* typeInfo, bool& new_var);
     // xxx DLLLOCAL Var* parseFindCreateVar(const char* name, const QoreTypeInfo* typeInfo, bool& new_var);
 

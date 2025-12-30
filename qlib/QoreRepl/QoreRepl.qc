@@ -163,9 +163,10 @@ if (!exists result) {
         string label = sprintf("<repl:%d>", ++eval_counter);
 
         # Parse the code - use parse() which combines parsePending + parseCommit
-        # Note: A parse failure will roll back all program state including
-        # previously committed code - this is why we use ensureTerminated()
-        # to avoid parse errors when possible.
+        # Note: With PO_ALLOW_REPARSE, parse failures perform atomic rollback that
+        # preserves previously committed program state (variables, functions, classes).
+        # The ensureTerminated() call above helps avoid common parse errors like
+        # "unexpected end of file" when users enter expressions without a trailing semicolon.
         try {
             pgm.parse(code, label);
         } catch (hash<ExceptionInfo> ex) {
@@ -330,8 +331,21 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
     }
 
     #! Loads and executes a file
+    /** @param filename The file path to load
+        @return A result hash with either 'value' (success message) or 'error' (exception info)
+
+        @note Parsing is only allowed when there are no active background threads
+        in the Program. If threads are active, an error is returned.
+    */
     private *hash<auto> loadFile(string filename) {
         try {
+            # Check for active threads before parsing
+            if (pgm.getThreadCount() > 0) {
+                return {"error": <ExceptionInfo>{
+                    "err": "REPL-ERROR",
+                    "desc": "Cannot load file while background threads are active. Wait for threads to complete first.",
+                }};
+            }
             string code = ReadOnlyFile::readTextFile(filename);
             pgm.parse(code, filename);
             pgm.run();
@@ -422,10 +436,18 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         }
 
         # Check for trailing operators that suggest continuation
+        # These operators at the end of a line typically indicate the expression continues
+        # on the next line. This list covers:
+        #   - comma (,): list/argument continuation
+        #   - arithmetic (+, -, *, /): binary operators
+        #   - member access (.): object member continuation
+        #   - assignment (=): right-hand side expected
+        #   - line continuation (\): explicit continuation
+        # Note: This list should be maintained if Qore adds new binary operators that
+        # commonly appear at line endings in multi-line expressions.
         string trimmed = rtrim(code);
         if (trimmed.length() > 0) {
             string last = trimmed[trimmed.length() - 1];
-            # These operators at end of line suggest continuation
             if (last == "," || last == "+" || last == "-" || last == "*" ||
                 last == "/" || last == "." || last == "=" || last == "\\") {
                 return False;

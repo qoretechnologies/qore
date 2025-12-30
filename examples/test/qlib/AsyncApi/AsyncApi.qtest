@@ -231,13 +231,13 @@ public class AsyncApiTest inherits QUnit::Test {
                 "name": "simple-asyncapi",
                 "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/simple-asyncapi.yml",
                 "expectedTitle": "Account Service",
-                "expectedVersion": "1.0.0",
+                "expectedApiVersion": "1.0.0",
             },
             {
                 "name": "streetlights-mqtt-asyncapi",
                 "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/streetlights-mqtt-asyncapi.yml",
                 "expectedTitle": "Streetlights MQTT API",
-                "expectedVersion": "1.0.0",
+                "expectedApiVersion": "1.0.0",
             },
         );
 
@@ -276,8 +276,8 @@ public class AsyncApiTest inherits QUnit::Test {
                     sprintf("Schema %s should be AsyncAPI 3.0.0", schemaInfo.name));
                 assertEq(schemaInfo.expectedTitle, schema.info.title,
                     sprintf("Schema %s title should match", schemaInfo.name));
-                assertEq(schemaInfo.expectedVersion, schema.info.apiVersion,
-                    sprintf("Schema %s version should match", schemaInfo.name));
+                assertEq(schemaInfo.expectedApiVersion, schema.info.apiVersion,
+                    sprintf("Schema %s API version should match", schemaInfo.name));
                 assertTrue(exists schema.channels,
                     sprintf("Schema %s should have channels", schemaInfo.name));
                 assertTrue(exists schema.operations,
