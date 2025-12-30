@@ -484,6 +484,8 @@ DLLEXPORT const char* tz_get_region_name(const AbstractQoreZoneInfo* tz);
 #define QORE_OPT_FUNC_GET_NETIF_LIST     "get_netif_list()"
 //! option: brotli() compression function available
 #define QORE_OPT_FUNC_BROTLI             "brotli()"
+//! option: zstd() compression function available
+#define QORE_OPT_FUNC_ZSTD               "zstd()"
 
 //! option type feature
 #define QO_OPTION     0

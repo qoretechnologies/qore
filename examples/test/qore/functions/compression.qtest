@@ -40,6 +40,9 @@ public class CompressionTest inherits QUnit::Test {
 %ifdef HAVE_BROTLI
         addTestCase("brotli compression tests", \brotliTest());
 %endif
+%ifdef HAVE_ZSTD
+        addTestCase("zstd compression tests", \zstdTest());
+%endif
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -451,6 +454,240 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(0, BROTLI_MIN_QUALITY);
         assertEq(11, BROTLI_MAX_QUALITY);
         assertEq("br", COMPRESSION_ALG_BROTLI);
+    }
+%endif
+
+%ifdef HAVE_ZSTD
+    zstdTest() {
+        # ========================================
+        # Basic Functionality Tests
+        # ========================================
+
+        # Basic round-trip test for string input
+        {
+            string original = "Hello, Zstandard compression test!";
+            binary compressed = zstd(original);
+            assertTrue(compressed.size() > 0, "compressed data should not be empty");
+            string decompressed = unzstd_to_string(compressed);
+            assertEq(original, decompressed, "round-trip string compression");
+        }
+
+        # Basic round-trip test for binary input
+        {
+            binary original = <deadbeefcafebabe0123456789abcdef>;
+            binary compressed = zstd(original);
+            binary decompressed = unzstd_to_binary(compressed);
+            assertEq(original, decompressed, "round-trip binary compression");
+        }
+
+        # Test with UncompressedString constant (same as other compression tests)
+        {
+            binary compressed = zstd(UncompressedString);
+            assertEq(UncompressedString, unzstd_to_string(compressed));
+            assertEq(UncompressedBinary, unzstd_to_binary(compressed));
+        }
+
+        # ========================================
+        # Compression Level Tests
+        # ========================================
+
+        # Test various compression levels
+        {
+            string original = "Test compression levels " + strmul("x", 500);
+            for (int l = 1; l <= 10; ++l) {
+                binary compressed = zstd(original, l);
+                string decompressed = unzstd_to_string(compressed);
+                assertEq(original, decompressed, sprintf("level %d round-trip", l));
+            }
+        }
+
+        # Higher level should produce smaller or equal output
+        {
+            string original = "Test level comparison " + strmul("x", 1000);
+            binary l1 = zstd(original, 1);
+            binary l10 = zstd(original, 10);
+            assertTrue(l10.size() <= l1.size(),
+                "level 10 should compress as well as or better than level 1");
+            assertEq(original, unzstd_to_string(l1));
+            assertEq(original, unzstd_to_string(l10));
+        }
+
+        # Test default level (-1)
+        {
+            string original = "Test default level";
+            binary compressed = zstd(original, -1);
+            assertEq(original, unzstd_to_string(compressed));
+            # Default should be equivalent to level 3
+            binary default_compressed = zstd(original);
+            assertEq(compressed.size(), default_compressed.size(),
+                "default level should be equivalent to level 3");
+        }
+
+        # ========================================
+        # Corner Case Tests
+        # ========================================
+
+        # Empty string input
+        {
+            binary compressed = zstd("");
+            assertEq(0, compressed.size(), "empty string should produce empty compressed output");
+        }
+
+        # Empty binary input
+        {
+            binary compressed = zstd(binary());
+            assertEq(0, compressed.size(), "empty binary should produce empty compressed output");
+        }
+
+        # Single byte input
+        {
+            string single = "X";
+            binary compressed = zstd(single);
+            assertEq(single, unzstd_to_string(compressed));
+        }
+
+        # Binary data with null bytes
+        {
+            binary with_nulls = <00010203000405060007>;
+            binary compressed = zstd(with_nulls);
+            assertEq(with_nulls, unzstd_to_binary(compressed));
+        }
+
+        # Unicode strings with multi-byte characters
+        {
+            string unicode = "UTF-8 text: äöü ß € 日本語 🎉";
+            binary compressed = zstd(unicode);
+            string decompressed = unzstd_to_string(compressed, "utf-8");
+            assertEq(unicode, decompressed);
+        }
+
+        # Large input (to test buffer resizing)
+        {
+            string large = strmul("Large data test with repetitive content. ", 1000);
+            binary compressed = zstd(large);
+            assertTrue(compressed.size() < large.size(),
+                "large repetitive data should compress well");
+            string decompressed = unzstd_to_string(compressed);
+            assertEq(large, decompressed);
+        }
+
+        # Highly compressible data
+        {
+            string repetitive = strmul("a", 10000);
+            binary compressed = zstd(repetitive);
+            assertTrue(compressed.size() < repetitive.size() / 10,
+                "highly repetitive data should have high compression ratio");
+            assertEq(repetitive, unzstd_to_string(compressed));
+        }
+
+        # Low compressibility (random-like) data
+        {
+            binary all_bytes;
+            for (int i = 0; i < 256; ++i) {
+                all_bytes += chr(i);
+            }
+            binary compressed = zstd(all_bytes);
+            binary decompressed = unzstd_to_binary(compressed);
+            assertEq(all_bytes, decompressed);
+        }
+
+        # ========================================
+        # Negative Tests
+        # ========================================
+
+        # Invalid compression level (below min)
+        assertThrows("ZSTD-LEVEL-ERROR", sub() { zstd("test", 0); });
+        assertThrows("ZSTD-LEVEL-ERROR", sub() { zstd("test", -2); });
+        assertThrows("ZSTD-LEVEL-ERROR", sub() { zstd("test", -100); });
+
+        # Invalid compression level (above max)
+        assertThrows("ZSTD-LEVEL-ERROR", sub() { zstd("test", 100); });
+
+        # Corrupted compressed data
+        assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(<deadbeef>); });
+        assertThrows("ZSTD-ERROR", sub() { unzstd_to_string(<deadbeef>); });
+
+        # Random garbage data
+        assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(<0102030405060708090a0b0c0d0e0f>); });
+
+        # Truncated compressed data
+        {
+            binary compressed = zstd("test data for truncation test");
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(compressed.substr(0, 5)); });
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_string(compressed.substr(0, 5)); });
+        }
+
+        # Wrong format data (gzip data to zstd decompressor)
+        {
+            binary gzip_data = gzip("test");
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(gzip_data); });
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_string(gzip_data); });
+        }
+
+        # Wrong format data (zlib data to zstd decompressor)
+        {
+            binary zlib_data = compress("test");
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(zlib_data); });
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_string(zlib_data); });
+        }
+
+        # Wrong format data (bzip2 data to zstd decompressor)
+        {
+            binary bzip2_data = bzip2("test");
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_binary(bzip2_data); });
+            assertThrows("ZSTD-ERROR", sub() { unzstd_to_string(bzip2_data); });
+        }
+
+        # ========================================
+        # Encoding Tests
+        # ========================================
+
+        # Test different encodings for unzstd_to_string
+        {
+            string latin1_text = "Latin-1: café résumé";
+            binary compressed = zstd(latin1_text);
+            # Decompress with explicit encoding
+            string decompressed = unzstd_to_string(compressed, "utf-8");
+            assertEq(latin1_text, decompressed);
+        }
+
+        # Test with ASCII encoding
+        {
+            string ascii_text = "Pure ASCII text 12345";
+            binary compressed = zstd(ascii_text);
+            string decompressed = unzstd_to_string(compressed, "ascii");
+            assertEq(ascii_text, decompressed);
+        }
+
+        # ========================================
+        # Comparison with other algorithms
+        # ========================================
+
+        # Verify Zstd output is different from gzip
+        {
+            string test = "Compare Zstd vs gzip";
+            binary zstd_data = zstd(test);
+            binary gz = gzip(test);
+            assertNeq(zstd_data, gz, "Zstd and gzip output should differ");
+        }
+
+        # Verify Zstd output is different from zlib
+        {
+            string test = "Compare Zstd vs zlib";
+            binary zstd_data = zstd(test);
+            binary zlib_data = compress(test);
+            assertNeq(zstd_data, zlib_data, "Zstd and zlib output should differ");
+        }
+
+        # ========================================
+        # Constants Tests
+        # ========================================
+
+        # Verify constants exist and have expected values
+        assertEq(3, ZSTD_DEFAULT_LEVEL);
+        assertEq(1, ZSTD_MIN_LEVEL);
+        assertTrue(ZSTD_MAX_LEVEL >= 19, "max level should be at least 19");
+        assertEq("zstd", COMPRESSION_ALG_ZSTD);
     }
 %endif
 }

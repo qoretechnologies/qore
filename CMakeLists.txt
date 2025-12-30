@@ -330,6 +330,17 @@ else()
     message(STATUS "Brotli compression: disabled (libbrotli not found)")
 endif()
 
+# Zstandard
+pkg_check_modules(ZSTD libzstd)
+if(ZSTD_FOUND)
+    set(HAVE_ZSTD TRUE)
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${ZSTD_INCLUDE_DIRS})
+    message(STATUS "Zstandard compression: enabled")
+else()
+    message(STATUS "Zstandard compression: disabled (libzstd not found)")
+endif()
+
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)

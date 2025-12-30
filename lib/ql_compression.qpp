@@ -39,6 +39,10 @@
 #include <brotli/decode.h>
 #endif
 
+#ifdef HAVE_ZSTD
+#include <zstd.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/ql_compression.h"
 #include "qore/intern/CompressionTransforms.h"
@@ -731,6 +735,142 @@ QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding*
 }
 #endif // HAVE_BROTLI
 
+#ifdef HAVE_ZSTD
+BinaryNode* qore_zstd(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
+    // Calculate maximum compressed size
+    size_t max_compressed_size = ZSTD_compressBound(len);
+
+    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+    if (b->preallocate(max_compressed_size)) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    size_t compressed_size = ZSTD_compress(
+        const_cast<void*>(b->getPtr()),
+        max_compressed_size,
+        ptr,
+        len,
+        level
+    );
+
+    if (ZSTD_isError(compressed_size)) {
+        xsink->raiseException("ZSTD-ERROR", "Zstd compression failed: %s",
+            ZSTD_getErrorName(compressed_size));
+        return nullptr;
+    }
+
+    b->setSize(compressed_size);
+    return b.release();
+}
+
+static char* qore_unzstd_intern(const BinaryNode* b, size_t& decoded_size, ExceptionSink* xsink) {
+    // Get the decompressed size from the frame header if available
+    unsigned long long decompressed_size = ZSTD_getFrameContentSize(b->getPtr(), b->size());
+
+    size_t buf_size;
+    if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+        // Unknown size, start with 4x compressed size
+        buf_size = b->size() * 4;
+        if (buf_size < 1024) {
+            buf_size = 1024;
+        }
+    } else if (decompressed_size == ZSTD_CONTENTSIZE_ERROR) {
+        xsink->raiseException("ZSTD-ERROR", "Invalid Zstd frame header");
+        return nullptr;
+    } else {
+        buf_size = decompressed_size;
+    }
+
+    void* buf = malloc(buf_size);
+    if (!buf) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    // Use streaming decompression for unknown sizes
+    if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+        ZSTD_DStream* dstream = ZSTD_createDStream();
+        if (!dstream) {
+            free(buf);
+            xsink->raiseException("ZSTD-ERROR", "failed to create Zstd decompression stream");
+            return nullptr;
+        }
+
+        size_t init_result = ZSTD_initDStream(dstream);
+        if (ZSTD_isError(init_result)) {
+            free(buf);
+            ZSTD_freeDStream(dstream);
+            xsink->raiseException("ZSTD-ERROR", "failed to initialize Zstd decompression: %s",
+                ZSTD_getErrorName(init_result));
+            return nullptr;
+        }
+
+        ZSTD_inBuffer input = { b->getPtr(), b->size(), 0 };
+        size_t total_out = 0;
+
+        while (input.pos < input.size) {
+            ZSTD_outBuffer output = { static_cast<char*>(buf) + total_out, buf_size - total_out, 0 };
+            size_t result = ZSTD_decompressStream(dstream, &output, &input);
+
+            if (ZSTD_isError(result)) {
+                free(buf);
+                ZSTD_freeDStream(dstream);
+                xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s",
+                    ZSTD_getErrorName(result));
+                return nullptr;
+            }
+
+            total_out += output.pos;
+
+            // If we need more output space
+            if (output.pos == output.size && result > 0) {
+                size_t new_size = buf_size * 2;
+                void* new_buf = realloc(buf, new_size);
+                if (!new_buf) {
+                    free(buf);
+                    ZSTD_freeDStream(dstream);
+                    xsink->outOfMemory();
+                    return nullptr;
+                }
+                buf = new_buf;
+                buf_size = new_size;
+            }
+        }
+
+        ZSTD_freeDStream(dstream);
+        decoded_size = total_out;
+    } else {
+        // Simple decompression when size is known
+        size_t result = ZSTD_decompress(buf, buf_size, b->getPtr(), b->size());
+
+        if (ZSTD_isError(result)) {
+            free(buf);
+            xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s",
+                ZSTD_getErrorName(result));
+            return nullptr;
+        }
+
+        decoded_size = result;
+    }
+
+    return static_cast<char*>(buf);
+}
+
+BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
+    size_t len;
+    char* buf = qore_unzstd_intern(b, len, xsink);
+    return buf ? new BinaryNode(buf, len) : nullptr;
+}
+
+QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
+    size_t len;
+    char* buf = qore_unzstd_intern(b, len, xsink);
+    // NOTE: the null terminator is added by the QoreStringNode constructor
+    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+}
+#endif // HAVE_ZSTD
+
 /** @defgroup compression_constants Compression Constants
  */
 ///@{
@@ -758,6 +898,23 @@ const BROTLI_MIN_QUALITY = 0;
 /** @since %Qore 2.1
  */
 const BROTLI_MAX_QUALITY = 11;
+#endif
+
+#ifdef HAVE_ZSTD
+//! gives the default compression level for the zstd() function (value: \c 3)
+/** @since %Qore 2.1
+ */
+const ZSTD_DEFAULT_LEVEL = qore(ZSTD_CLEVEL_DEFAULT);
+
+//! gives the minimum compression level for the zstd() function (value: \c 1)
+/** @since %Qore 2.1
+ */
+const ZSTD_MIN_LEVEL = 1;
+
+//! gives the maximum compression level for the zstd() function (typically 22)
+/** @since %Qore 2.1
+ */
+const ZSTD_MAX_LEVEL = qore(ZSTD_maxCLevel());
 #endif
 ///@}
 
@@ -790,6 +947,13 @@ const COMPRESSION_ALG_BZIP2 = str(CompressionTransforms::ALG_BZIP2);
 /** @since %Qore 2.1
  */
 const COMPRESSION_ALG_BROTLI = str(CompressionTransforms::ALG_BROTLI);
+#endif
+
+#ifdef HAVE_ZSTD
+//! Identifies the <a href="https://github.com/facebook/zstd">Zstandard</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>)
+/** @since %Qore 2.1
+ */
+const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
 #endif
 ///@}
 
@@ -1353,6 +1517,129 @@ string unbrotli_to_string(binary bin, *string encoding) {
 nothing unbrotli_to_string() [flags=RUNTIME_NOOP] {
 }
 #endif // HAVE_BROTLI
+
+#ifdef HAVE_ZSTD
+//! Compresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the compressed data as a binary
+/** Strings are compressed without the trailing null character
+
+    @param str the data to compress
+    @param level the compression level, must be a value between 1 and ZSTD_MAX_LEVEL (typically 22) inclusive, 1 = the least compression (and fastest), ZSTD_MAX_LEVEL = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c ZSTD-LEVEL-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = zstd(str);
+    @endcode
+
+    @throw ZSTD-LEVEL-ERROR level must be between 1 - ZSTD_MAX_LEVEL or -1
+    @throw ZSTD-ERROR the Zstd library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary zstd(string str, int level = 3) {
+   if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
+      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
+         1, ZSTD_maxCLevel(), level);
+
+   if (level == -1)
+      level = ZSTD_CLEVEL_DEFAULT;
+
+   if (!str->strlen())
+      return new BinaryNode;
+
+   return qore_zstd(str->getBuffer(), str->strlen(), level, xsink);
+}
+
+//! Compresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the compressed data as a binary
+/** @param bin the data to compress
+    @param level the compression level, must be a value between 1 and ZSTD_MAX_LEVEL (typically 22) inclusive, 1 = the least compression (and fastest), ZSTD_MAX_LEVEL = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c ZSTD-LEVEL-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = zstd(data);
+    @endcode
+
+    @throw ZSTD-LEVEL-ERROR level must be between 1 - ZSTD_MAX_LEVEL or -1
+    @throw ZSTD-ERROR the Zstd library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary zstd(binary bin, int level = 3) {
+   if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
+      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
+         1, ZSTD_maxCLevel(), level);
+
+   if (level == -1)
+      level = ZSTD_CLEVEL_DEFAULT;
+
+   if (!bin->size())
+      return new BinaryNode;
+
+   return qore_zstd(bin->getPtr(), bin->size(), level, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing zstd() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a binary object
+/** @param bin the compressed data to decompress
+
+    @return the uncompressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = unzstd_to_binary(zstd_data);
+    @endcode
+
+    @throw ZSTD-ERROR the Zstd library returned an internal error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.1
+*/
+binary unzstd_to_binary(binary bin) {
+   return qore_unzstd_to_binary(bin, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unzstd_to_binary() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a string
+/** @param bin the compressed data to decompress
+    @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+
+    @return the uncompressed data as a string
+
+    @par Example:
+    @code{.py}
+string str = unzstd_to_string(zstd_data, "utf-8");
+    @endcode
+
+    @throw ZSTD-ERROR the Zstd library returned an internal error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.1
+*/
+string unzstd_to_string(binary bin, *string encoding) {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
+   return qore_unzstd_to_string(bin, qe, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unzstd_to_string() [flags=RUNTIME_NOOP] {
+}
+#endif // HAVE_ZSTD
 
 //! Returns a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 /** @par Example:

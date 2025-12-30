@@ -115,6 +115,12 @@
 #define QORE_CONST_HAVE_BROTLI 0
 #endif
 
+#ifdef HAVE_ZSTD
+#define QORE_CONST_HAVE_ZSTD 1
+#else
+#define QORE_CONST_HAVE_ZSTD 0
+#endif
+
 #ifdef HAVE_PWD_H
 #define QORE_CONST_HAVE_PWD_H 1
 #else
@@ -296,6 +302,11 @@ const HAVE_SETSID = bool(QORE_CONST_HAVE_SETSID);
 /** @since %Qore 2.1
  */
 const HAVE_BROTLI = bool(QORE_CONST_HAVE_BROTLI);
+
+//! Indicates if Zstandard compression support is available (zstd(), unzstd_to_string(), unzstd_to_binary())
+/** @since %Qore 2.1
+ */
+const HAVE_ZSTD = bool(QORE_CONST_HAVE_ZSTD);
 
 //! Indicates if the %Qore library supports the is_executable() function
 /** @note Currently this function is only available when running on UNIX or UNIX-like platforms

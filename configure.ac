@@ -1015,6 +1015,32 @@ fi
 AC_SUBST([BROTLI_CPPFLAGS])
 AC_SUBST([BROTLI_LIBS])
 
+# Check for Zstandard compression library - optional
+AC_ARG_ENABLE([zstd],
+    [AS_HELP_STRING([--disable-zstd], [disable Zstandard compression support])],
+    [enable_zstd=$enableval],
+    [enable_zstd=yes])
+
+if test "x$enable_zstd" = "xyes"; then
+    AC_MSG_CHECKING([for Zstandard library and header files])
+    if pkg-config --exists libzstd 2>/dev/null; then
+        ZSTD_CPPFLAGS="`pkg-config --cflags libzstd`"
+        ZSTD_LIBS="`pkg-config --libs libzstd`"
+        have_zstd=yes
+        AC_DEFINE([HAVE_ZSTD], [1], [Define if Zstandard compression is available])
+        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $ZSTD_LIBS"
+        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $ZSTD_CPPFLAGS"
+        AC_MSG_RESULT([yes (pkg-config)])
+    else
+        have_zstd=no
+        AC_MSG_RESULT([no])
+    fi
+else
+    have_zstd=no
+fi
+AC_SUBST([ZSTD_CPPFLAGS])
+AC_SUBST([ZSTD_LIBS])
+
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
         OPENSSL_CPPFLAGS=-I$1
@@ -2063,6 +2089,7 @@ AM_CONDITIONAL([COND_HAVE_MPFR],               [test "$have_mpfr_h" = yes])
 AM_CONDITIONAL([COND_MINGWCC],                 [test "$mingw" = yes])
 AM_CONDITIONAL([COND_MONGODB],                 [test "$have_mongodb" = yes])
 AM_CONDITIONAL([COND_BROTLI],                  [test "$have_brotli" = yes])
+AM_CONDITIONAL([COND_ZSTD],                    [test "$have_zstd" = yes])
 
 # find prefix
 if test -n "${exec_prefix}" -a "${exec_prefix}" != NONE; then
@@ -2222,6 +2249,7 @@ echo "*** OPTIONAL BUILTIN MODULES ***"
 show_library_feature "mongodb module" $have_mongodb
 echo "*** OPTIONAL COMPRESSION SUPPORT ***"
 show_library_feature "brotli compression" $have_brotli
+show_library_feature "zstd compression" $have_zstd
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"
