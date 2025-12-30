@@ -34,8 +34,10 @@
 # assume local var scope, do not use "$" for vars, members, and method calls
 %new-style
 
+%requires Util
+
 module WebSocketUtil {
-    version = "1.5";
+    version = "1.6";
     desc = "user module providing common client and server support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -64,6 +66,16 @@ module WebSocketUtil {
     - @ref opcodes
 
     @section websocketutil_relnotes WebSocketUtil Module Release History
+
+    @subsection wsu_v16 v1.6
+    - added pluggable WebSocket extension framework
+      (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - added @ref WsExtensionParamInfo hashdecl for extension parameters
+      - added @ref WsExtensionInfo hashdecl for extension info
+      - added @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" base class
+      - added @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class
+      - added @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing
+        <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
 
     @subsection wsu_v15 v1.5
     - added RSV bit support for WebSocket extensions
@@ -399,5 +411,766 @@ hash<WsMsgInfo> h = ws_read_message(sock);
     */
     public string sub ws_get_response_key(string key) {
         return make_base64_string(SHA1_bin(key + WS_GUID));
+    }
+
+    #! Extension parameter info
+    /** @since WebSocketUtil 1.6
+    */
+    public hashdecl WsExtensionParamInfo {
+        #! Parameter name
+        string name;
+        #! Parameter value (NOTHING if no value)
+        *string value;
+    }
+
+    #! Extension offer/response info
+    /** @since WebSocketUtil 1.6
+    */
+    public hashdecl WsExtensionInfo {
+        #! Extension name
+        string name;
+        #! Extension parameters
+        *list<hash<WsExtensionParamInfo>> params;
+    }
+
+    #! Abstract base class for WebSocket extensions
+    /**
+        This class defines the interface for WebSocket extensions. Extensions can transform
+        outgoing messages before they are sent and incoming messages after they are received.
+
+        Extensions must:
+        - Have a unique name (e.g., "permessage-deflate")
+        - Declare which RSV bits they use
+        - Provide methods for client offer generation and server response parsing (client-side)
+        - Provide methods for server negotiation (server-side)
+        - Implement message transformation (compress/decompress)
+
+        @par Thread Safety
+        Extension instances are not thread-safe by default. Each connection should have its own
+        extension instance (use clone() for this purpose).
+
+        @since WebSocketUtil 1.6
+    */
+    public class AbstractWebSocketExtension {
+        public {
+            #! Default compression threshold in bytes; messages smaller than this are not compressed
+            const DefaultCompressionThreshold = 1024;
+        }
+
+        private {
+            #! Extension is active/negotiated
+            bool active = False;
+
+            #! Compression threshold; messages smaller than this are not compressed
+            int compression_threshold = DefaultCompressionThreshold;
+        }
+
+        #! Returns the extension name as used in the Sec-WebSocket-Extensions header
+        /** @return the extension name (e.g., "permessage-deflate")
+        */
+        abstract string getName();
+
+        #! Returns the string to send in the Sec-WebSocket-Extensions offer header (client-side)
+        /** This is called when the client is building the WebSocket handshake request.
+
+            @return the extension offer string including any parameters, or NOTHING if this
+                    extension should not be offered
+
+            @par Example
+            @code{.py}
+            # Returns: "permessage-deflate; client_max_window_bits"
+            string offer = extension.getOfferString();
+            @endcode
+        */
+        abstract *string getOfferString();
+
+        #! Parses the server's response and activates the extension if accepted (client-side)
+        /** This is called when the client receives the server's handshake response.
+
+            @param response_params the extension parameters from the server's Sec-WebSocket-Extensions
+                   response header
+
+            @return True if the extension was successfully activated, False otherwise
+
+            @par Example
+            @code{.py}
+            if (extension.parseServerResponse(params)) {
+                # Extension is now active
+            }
+            @endcode
+        */
+        abstract bool parseServerResponse(*list<hash<WsExtensionParamInfo>> response_params);
+
+        #! Negotiates and returns the response string for the server (server-side)
+        /** This is called when the server receives a client's extension offer.
+
+            @param offer_params the extension parameters from the client's Sec-WebSocket-Extensions
+                   offer header
+
+            @return the extension response string to include in Sec-WebSocket-Extensions, or NOTHING
+                    if the extension cannot be negotiated
+
+            @par Example
+            @code{.py}
+            *string response = extension.negotiateServerResponse(offer_params);
+            if (response) {
+                # Include response in Sec-WebSocket-Extensions header
+            }
+            @endcode
+        */
+        abstract *string negotiateServerResponse(*list<hash<WsExtensionParamInfo>> offer_params);
+
+        #! Returns the RSV bits used by this extension
+        /** @return a bitmask of RSV bits (WS_RSV1, WS_RSV2, WS_RSV3) that this extension uses
+
+            @par Example
+            @code{.py}
+            # permessage-deflate uses RSV1
+            int rsv = extension.getRsvBits();  # Returns WS_RSV1
+            @endcode
+        */
+        abstract int getRsvBits();
+
+        #! Transforms an outgoing message before sending
+        /** @param msg the message data to transform
+            @param ctx a context hash that may contain:
+                   - \c op: the WebSocket opcode
+                   - \c fin: True if this is the final frame
+                   - \c first: True if this is the first frame of a message
+
+            @return a hash with:
+                   - \c data: the transformed message data
+                   - \c rsv_bits: RSV bits to set on this frame (or 0)
+        */
+        abstract hash<auto> transformOutgoing(data msg, hash<auto> ctx);
+
+        #! Transforms an incoming message after receiving
+        /** @param msg the message data to transform
+            @param ctx a context hash that may contain:
+                   - \c op: the WebSocket opcode
+                   - \c fin: True if this is the final frame
+                   - \c rsv1, \c rsv2, \c rsv3: the RSV bits from the frame
+
+            @return the transformed message data
+
+            @throw WEBSOCKET-EXTENSION-ERROR if decompression fails or data is invalid
+        */
+        abstract data transformIncoming(data msg, hash<auto> ctx);
+
+        #! Validates that the RSV bits in a received frame are acceptable
+        /** @param rsv_bits the RSV bits received (bitmask of WS_RSV1, WS_RSV2, WS_RSV3)
+            @param op the frame opcode
+
+            @return True if the RSV bits are valid for this extension, False otherwise
+        */
+        abstract bool validateRsvBits(int rsv_bits, int op);
+
+        #! Resets the extension state (e.g., between messages or after an error)
+        abstract reset();
+
+        #! Creates a copy of this extension for use in a new connection
+        /** @return a new instance of this extension with the same configuration
+        */
+        abstract AbstractWebSocketExtension clone();
+
+        #! Returns True if this extension is active/negotiated
+        bool isActive() {
+            return active;
+        }
+
+        #! Sets the active state
+        setActive(bool val = True) {
+            active = val;
+        }
+
+        #! Returns the compression threshold
+        int getCompressionThreshold() {
+            return compression_threshold;
+        }
+
+        #! Sets the compression threshold
+        /** @param threshold messages smaller than this (in bytes) will not be compressed;
+                   set to 0 to compress all messages
+        */
+        setCompressionThreshold(int threshold) {
+            compression_threshold = threshold;
+        }
+    }
+
+    #! Registry for WebSocket extensions
+    /**
+        This class manages WebSocket extension factories and provides helper methods for
+        parsing and building extension headers.
+
+        @par Thread Safety
+        This class is thread-safe for registration and lookup operations.
+
+        @since WebSocketUtil 1.6
+    */
+    public class WebSocketExtensionRegistry {
+        private {
+            #! Map of extension name to factory closure
+            hash<string, code> factories;
+
+            #! Lock for thread safety
+            Mutex lock();
+        }
+
+        #! Creates a new registry with optional pre-registered extensions
+        /** @param register_defaults if True, registers the default extensions (permessage-deflate)
+        */
+        constructor(bool register_defaults = True) {
+            if (register_defaults) {
+                registerDefaults();
+            }
+        }
+
+        #! Registers the default extensions
+        private registerDefaults() {
+            registerExtension("permessage-deflate", AbstractWebSocketExtension sub () {
+                return new PerMessageDeflateExtension();
+            });
+        }
+
+        #! Registers an extension factory
+        /** @param name the extension name (e.g., "permessage-deflate")
+            @param factory a closure that creates a new extension instance
+
+            @par Example
+            @code{.py}
+            registry.registerExtension("my-extension", sub () { return new MyExtension(); });
+            @endcode
+        */
+        registerExtension(string name, code factory) {
+            lock.lock();
+            on_exit lock.unlock();
+            factories{name} = factory;
+        }
+
+        #! Unregisters an extension
+        /** @param name the extension name to unregister
+
+            @return True if the extension was unregistered, False if it wasn't registered
+        */
+        bool unregisterExtension(string name) {
+            lock.lock();
+            on_exit lock.unlock();
+            if (factories.hasKey(name)) {
+                remove factories{name};
+                return True;
+            }
+            return False;
+        }
+
+        #! Creates an extension instance by name
+        /** @param name the extension name
+
+            @return a new extension instance, or NOTHING if the extension is not registered
+        */
+        *AbstractWebSocketExtension createExtension(string name) {
+            lock.lock();
+            on_exit lock.unlock();
+            if (factories.hasKey(name)) {
+                return factories{name}();
+            }
+            return NOTHING;
+        }
+
+        #! Returns True if an extension is registered
+        bool hasExtension(string name) {
+            lock.lock();
+            on_exit lock.unlock();
+            return factories.hasKey(name);
+        }
+
+        #! Returns a list of registered extension names
+        list<string> getRegisteredExtensions() {
+            lock.lock();
+            on_exit lock.unlock();
+            return keys factories ?? ();
+        }
+
+        #! Parses a Sec-WebSocket-Extensions header value
+        /** @param header the header value (e.g., "permessage-deflate; client_max_window_bits=15, x-ext")
+
+            @return a list of extension info hashes, one for each extension in the header
+
+            @par Example
+            @code{.py}
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                "permessage-deflate; client_max_window_bits=15"
+            );
+            # Returns: ({"name": "permessage-deflate", "params": ({"name": "client_max_window_bits", "value": "15"})})
+            @endcode
+        */
+        static list<hash<WsExtensionInfo>> parseExtensionHeader(*string header) {
+            list<hash<WsExtensionInfo>> result = ();
+
+            if (!header) {
+                return result;
+            }
+
+            # Split by comma for multiple extensions
+            list<string> ext_strs = header.split(",");
+
+            foreach string ext_str in (ext_strs) {
+                ext_str = trim(ext_str);
+                if (!ext_str) {
+                    continue;
+                }
+
+                # Split by semicolon for extension name and parameters
+                list<string> parts = ext_str.split(";");
+                string name = trim(parts[0]);
+
+                list<hash<WsExtensionParamInfo>> params = ();
+                for (int i = 1; i < parts.size(); ++i) {
+                    string param_str = trim(parts[i]);
+                    if (!param_str) {
+                        continue;
+                    }
+
+                    # Split parameter by '=' for name and value
+                    int eq_pos = param_str.find("=");
+                    if (eq_pos >= 0) {
+                        string param_name = trim(param_str.substr(0, eq_pos));
+                        string param_value = trim(param_str.substr(eq_pos + 1));
+                        # Remove quotes if present
+                        if (param_value.size() >= 2 && param_value[0] == '"'
+                                && param_value[param_value.size() - 1] == '"') {
+                            param_value = param_value.substr(1, param_value.size() - 2);
+                        }
+                        params += <WsExtensionParamInfo>{
+                            "name": param_name,
+                            "value": param_value,
+                        };
+                    } else {
+                        # Parameter without value
+                        params += <WsExtensionParamInfo>{
+                            "name": param_str,
+                        };
+                    }
+                }
+
+                result += <WsExtensionInfo>{
+                    "name": name,
+                    "params": params ? params : NOTHING,
+                };
+            }
+
+            return result;
+        }
+
+        #! Builds a Sec-WebSocket-Extensions header value from extension info
+        /** @param extensions a list of extension info hashes
+
+            @return the header value string
+
+            @par Example
+            @code{.py}
+            string header = WebSocketExtensionRegistry::buildExtensionHeader((
+                {"name": "permessage-deflate", "params": ({"name": "client_max_window_bits", "value": "15"})},
+            ));
+            # Returns: "permessage-deflate; client_max_window_bits=15"
+            @endcode
+        */
+        static string buildExtensionHeader(list<hash<WsExtensionInfo>> extensions) {
+            list<string> ext_strs = ();
+
+            foreach hash<WsExtensionInfo> ext in (extensions) {
+                string ext_str = ext.name;
+
+                if (ext.params) {
+                    foreach hash<WsExtensionParamInfo> param in (ext.params) {
+                        ext_str += "; " + param.name;
+                        if (exists param.value) {
+                            # Quote if contains special characters
+                            if (param.value =~ /[,;= ]/) {
+                                ext_str += "=\"" + param.value + "\"";
+                            } else {
+                                ext_str += "=" + param.value;
+                            }
+                        }
+                    }
+                }
+
+                ext_strs += ext_str;
+            }
+
+            return ext_strs.join(", ");
+        }
+
+        #! Builds a Sec-WebSocket-Extensions offer header from a list of extensions
+        /** @param extensions a list of extension instances to offer
+
+            @return the header value string, or NOTHING if no extensions have offers
+        */
+        static *string buildOfferHeader(list<AbstractWebSocketExtension> extensions) {
+            list<string> offers = ();
+
+            foreach AbstractWebSocketExtension ext in (extensions) {
+                *string offer = ext.getOfferString();
+                if (offer) {
+                    offers += offer;
+                }
+            }
+
+            return offers ? offers.join(", ") : NOTHING;
+        }
+    }
+
+    #! Implementation of the permessage-deflate extension (RFC 7692)
+    /**
+        This class implements the permessage-deflate WebSocket extension as specified in
+        <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>.
+
+        The extension compresses WebSocket messages using the DEFLATE compression algorithm.
+        It uses RSV1 to indicate that a message is compressed.
+
+        This implementation uses raw DEFLATE format (RFC 1951) as required by RFC 7692, which
+        is fully interoperable with other WebSocket implementations.
+
+        Supported parameters:
+        - \c server_no_context_takeover: if present, the server will not reuse the LZ77 sliding window
+        - \c client_no_context_takeover: if present, the client will not reuse the LZ77 sliding window
+        - \c server_max_window_bits: the maximum window bits for the server (8-15)
+        - \c client_max_window_bits: the maximum window bits for the client (8-15)
+
+        @par Thread Safety
+        Each connection should have its own extension instance.
+
+        @since WebSocketUtil 1.6
+    */
+    public class PerMessageDeflateExtension inherits AbstractWebSocketExtension {
+        public {
+            #! Extension name
+            const ExtensionName = "permessage-deflate";
+
+            #! Default window bits (maximum compression, 32KB window)
+            const DefaultWindowBits = 15;
+
+            #! Minimum window bits
+            const MinWindowBits = 8;
+
+            #! Maximum window bits
+            const MaxWindowBits = 15;
+
+            #! Trailing bytes to remove from deflate output per RFC 7692 section 7.2.1
+            const DeflateTrailer = <0000ffff>;
+        }
+
+        private {
+            #! Server's maximum window bits (compression context size)
+            int server_max_window_bits = DefaultWindowBits;
+
+            #! Client's maximum window bits (compression context size)
+            int client_max_window_bits = DefaultWindowBits;
+
+            #! If True, the server resets compression context after each message
+            bool server_no_context_takeover = False;
+
+            #! If True, the client resets compression context after each message
+            bool client_no_context_takeover = False;
+
+            #! Client requests server_no_context_takeover
+            bool request_server_no_context_takeover = False;
+
+            #! Client requests client_no_context_takeover
+            bool request_client_no_context_takeover = False;
+
+            #! Client offers client_max_window_bits hint
+            bool offer_client_max_window_bits = True;
+
+            #! True if we are the client side
+            bool is_client = True;
+        }
+
+        #! Creates a new PerMessageDeflateExtension with default settings
+        constructor() {
+        }
+
+        #! Creates a PerMessageDeflateExtension with custom settings
+        /** @param opts a hash with optional keys:
+                - \c server_no_context_takeover: request server to not reuse compression context
+                - \c client_no_context_takeover: offer to not reuse client compression context
+                - \c client_max_window_bits: the client's maximum window bits (8-15)
+                - \c server_max_window_bits: request server's maximum window bits (8-15)
+                - \c compression_threshold: minimum message size for compression
+        */
+        constructor(hash<auto> opts) {
+            if (opts.server_no_context_takeover) {
+                request_server_no_context_takeover = True;
+            }
+            if (opts.client_no_context_takeover) {
+                request_client_no_context_takeover = True;
+                client_no_context_takeover = True;
+            }
+            if (opts.client_max_window_bits) {
+                int bits = opts.client_max_window_bits.toInt();
+                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                    client_max_window_bits = bits;
+                }
+            }
+            if (opts.server_max_window_bits) {
+                int bits = opts.server_max_window_bits.toInt();
+                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                    server_max_window_bits = bits;
+                }
+            }
+            if (opts.compression_threshold) {
+                compression_threshold = opts.compression_threshold.toInt();
+            }
+        }
+
+        #! Returns the extension name
+        string getName() {
+            return ExtensionName;
+        }
+
+        #! Returns the RSV bits used by this extension
+        /** @return WS_RSV1 - permessage-deflate uses RSV1 to indicate compressed messages
+        */
+        int getRsvBits() {
+            return WS_RSV1;
+        }
+
+        #! Returns the offer string for the client handshake
+        *string getOfferString() {
+            string offer = ExtensionName;
+
+            if (request_client_no_context_takeover) {
+                offer += "; client_no_context_takeover";
+            }
+            if (request_server_no_context_takeover) {
+                offer += "; server_no_context_takeover";
+            }
+            if (offer_client_max_window_bits) {
+                offer += "; client_max_window_bits";
+            }
+            if (server_max_window_bits < DefaultWindowBits) {
+                offer += sprintf("; server_max_window_bits=%d", server_max_window_bits);
+            }
+
+            return offer;
+        }
+
+        #! Parses the server's response and activates the extension
+        bool parseServerResponse(*list<hash<WsExtensionParamInfo>> response_params) {
+            is_client = True;
+
+            # Parse server response parameters
+            if (response_params) {
+                foreach hash<WsExtensionParamInfo> param in (response_params) {
+                    switch (param.name) {
+                        case "server_no_context_takeover":
+                            server_no_context_takeover = True;
+                            break;
+                        case "client_no_context_takeover":
+                            client_no_context_takeover = True;
+                            break;
+                        case "server_max_window_bits":
+                            if (param.value) {
+                                int bits = param.value.toInt();
+                                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                                    server_max_window_bits = bits;
+                                } else {
+                                    # Invalid value
+                                    return False;
+                                }
+                            }
+                            break;
+                        case "client_max_window_bits":
+                            if (param.value) {
+                                int bits = param.value.toInt();
+                                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                                    client_max_window_bits = bits;
+                                } else {
+                                    # Invalid value
+                                    return False;
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+
+            setActive(True);
+            return True;
+        }
+
+        #! Negotiates the server response for client offer
+        *string negotiateServerResponse(*list<hash<WsExtensionParamInfo>> offer_params) {
+            is_client = False;
+            string response = ExtensionName;
+
+            # Parse client offer and build response
+            if (offer_params) {
+                foreach hash<WsExtensionParamInfo> param in (offer_params) {
+                    switch (param.name) {
+                        case "server_no_context_takeover":
+                            server_no_context_takeover = True;
+                            response += "; server_no_context_takeover";
+                            break;
+                        case "client_no_context_takeover":
+                            client_no_context_takeover = True;
+                            response += "; client_no_context_takeover";
+                            break;
+                        case "server_max_window_bits":
+                            if (param.value) {
+                                int bits = param.value.toInt();
+                                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                                    server_max_window_bits = bits;
+                                    response += sprintf("; server_max_window_bits=%d", bits);
+                                }
+                            }
+                            break;
+                        case "client_max_window_bits":
+                            if (param.value) {
+                                int bits = param.value.toInt();
+                                if (bits >= MinWindowBits && bits <= MaxWindowBits) {
+                                    client_max_window_bits = bits;
+                                    response += sprintf("; client_max_window_bits=%d", bits);
+                                }
+                            } else {
+                                # Client offered without value; we can specify a value or omit
+                                response += sprintf("; client_max_window_bits=%d", client_max_window_bits);
+                            }
+                            break;
+                    }
+                }
+            }
+
+            setActive(True);
+            return response;
+        }
+
+        #! Transforms an outgoing message (compresses if appropriate)
+        hash<auto> transformOutgoing(data msg, hash<auto> ctx) {
+            # Only compress data frames (text/binary) that are large enough
+            bool should_compress = active
+                && (ctx.op == WSOP_Text || ctx.op == WSOP_Binary || !exists ctx.op)
+                && msg.size() >= compression_threshold;
+
+            if (!should_compress) {
+                return {
+                    "data": msg,
+                    "rsv_bits": 0,
+                };
+            }
+
+            # Compress the message
+            binary compressed = compressData(msg);
+
+            # Check if compression actually reduced size
+            if (compressed.size() >= msg.size()) {
+                # Compression didn't help, send uncompressed
+                return {
+                    "data": msg,
+                    "rsv_bits": 0,
+                };
+            }
+
+            return {
+                "data": compressed,
+                "rsv_bits": WS_RSV1,
+            };
+        }
+
+        #! Transforms an incoming message (decompresses if RSV1 is set)
+        data transformIncoming(data msg, hash<auto> ctx) {
+            if (!active) {
+                return msg;
+            }
+
+            # Check if this message is compressed (RSV1 set)
+            if (!ctx.rsv1) {
+                return msg;
+            }
+
+            # Decompress the message
+            return decompressData(msg);
+        }
+
+        #! Validates RSV bits for incoming frames
+        bool validateRsvBits(int rsv_bits, int op) {
+            if (!active) {
+                # When not active, no RSV bits should be set
+                return rsv_bits == 0;
+            }
+
+            # RSV2 and RSV3 should never be set by this extension
+            if (rsv_bits & (WS_RSV2 | WS_RSV3)) {
+                return False;
+            }
+
+            # RSV1 is valid for data frames (text/binary) when active
+            if (rsv_bits & WS_RSV1) {
+                # Only data frames can have RSV1 set
+                return op == WSOP_Text || op == WSOP_Binary;
+            }
+
+            return True;
+        }
+
+        #! Resets the extension state
+        reset() {
+            # Nothing to reset since we don't keep context
+        }
+
+        #! Creates a clone of this extension
+        AbstractWebSocketExtension clone() {
+            PerMessageDeflateExtension ext = new PerMessageDeflateExtension();
+            ext.server_max_window_bits = server_max_window_bits;
+            ext.client_max_window_bits = client_max_window_bits;
+            ext.server_no_context_takeover = server_no_context_takeover;
+            ext.client_no_context_takeover = client_no_context_takeover;
+            ext.request_server_no_context_takeover = request_server_no_context_takeover;
+            ext.request_client_no_context_takeover = request_client_no_context_takeover;
+            ext.offer_client_max_window_bits = offer_client_max_window_bits;
+            ext.compression_threshold = compression_threshold;
+            return ext;
+        }
+
+        #! Compresses data using raw DEFLATE (RFC 1951) for RFC 7692 compliance
+        /** Uses the deflate_raw() function which produces raw DEFLATE output without
+            zlib/gzip headers or trailers. Per RFC 7692 section 7.2.1, removes the
+            trailing 0x00 0x00 0xff 0xff bytes.
+        */
+        private binary compressData(data msg) {
+            binary input = msg.typeCode() == NT_STRING ? binary(msg) : msg;
+
+            # Use raw DEFLATE compression (no zlib header/trailer)
+            binary compressed = deflate_raw(input);
+
+            # RFC 7692 section 7.2.1: remove trailing 0x00 0x00 0xff 0xff
+            # These bytes represent the BFINAL=0 and BTYPE=00 (empty stored block)
+            # that signals Z_SYNC_FLUSH
+            if (compressed.size() >= 4) {
+                binary trailer = compressed.substr(compressed.size() - 4);
+                if (trailer == DeflateTrailer) {
+                    compressed = compressed.substr(0, compressed.size() - 4);
+                }
+            }
+
+            return compressed;
+        }
+
+        #! Decompresses data using raw INFLATE for RFC 7692 compliance
+        /** Uses the inflate_raw_to_binary() function which expects raw DEFLATE input.
+            Per RFC 7692 section 7.2.2, appends 0x00 0x00 0xff 0xff before decompression.
+        */
+        private data decompressData(data msg) {
+            binary input = msg.typeCode() == NT_STRING ? binary(msg) : msg;
+
+            # RFC 7692 section 7.2.2: append 0x00 0x00 0xff 0xff before decompression
+            input += DeflateTrailer;
+
+            try {
+                return inflate_raw_to_binary(input);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "WEBSOCKET-EXTENSION-ERROR",
+                    sprintf("permessage-deflate decompression failed: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 }

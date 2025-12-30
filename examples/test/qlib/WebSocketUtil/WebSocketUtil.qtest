@@ -20,6 +20,9 @@ public class WebSocketUtilTest inherits QUnit::Test {
     constructor() : Test("WebSocketUtilTest", "1.0") {
         addTestCase("WebSocketUtil tests", \webSocketUtilTests());
         addTestCase("RSV bit tests", \rsvBitTests());
+        addTestCase("Extension header parsing", \extensionHeaderTests());
+        addTestCase("Extension registry", \extensionRegistryTests());
+        addTestCase("PerMessageDeflate extension", \perMessageDeflateTests());
         set_return_value(main());
     }
 
@@ -177,5 +180,209 @@ public class WebSocketUtilTest inherits QUnit::Test {
         Socket s();
         s.connectINET("localhost", port);
         s.send(msg);
+    }
+
+    extensionHeaderTests() {
+        # Test parsing empty header
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(NOTHING);
+            assertEq(0, exts.size());
+        }
+
+        # Test parsing single extension without params
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader("permessage-deflate");
+            assertEq(1, exts.size());
+            assertEq("permessage-deflate", exts[0].name);
+            assertNothing(exts[0].params);
+        }
+
+        # Test parsing extension with valueless parameter
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                "permessage-deflate; client_max_window_bits"
+            );
+            assertEq(1, exts.size());
+            assertEq("permessage-deflate", exts[0].name);
+            assertEq(1, exts[0].params.size());
+            assertEq("client_max_window_bits", exts[0].params[0].name);
+            assertNothing(exts[0].params[0].value);
+        }
+
+        # Test parsing extension with valued parameter
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                "permessage-deflate; server_max_window_bits=12"
+            );
+            assertEq(1, exts.size());
+            assertEq("12", exts[0].params[0].value);
+        }
+
+        # Test parsing multiple parameters
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                "permessage-deflate; client_no_context_takeover; server_max_window_bits=10"
+            );
+            assertEq(1, exts.size());
+            assertEq(2, exts[0].params.size());
+            assertEq("client_no_context_takeover", exts[0].params[0].name);
+            assertEq("server_max_window_bits", exts[0].params[1].name);
+            assertEq("10", exts[0].params[1].value);
+        }
+
+        # Test parsing multiple extensions
+        {
+            list<hash<WsExtensionInfo>> exts = WebSocketExtensionRegistry::parseExtensionHeader(
+                "permessage-deflate; client_max_window_bits, x-custom-ext"
+            );
+            assertEq(2, exts.size());
+            assertEq("permessage-deflate", exts[0].name);
+            assertEq("x-custom-ext", exts[1].name);
+        }
+
+        # Test building header
+        {
+            string header = WebSocketExtensionRegistry::buildExtensionHeader((
+                <WsExtensionInfo>{
+                    "name": "permessage-deflate",
+                    "params": (
+                        <WsExtensionParamInfo>{"name": "client_max_window_bits", "value": "15"},
+                    ),
+                },
+            ));
+            assertTrue(header.find("permessage-deflate") >= 0);
+            assertTrue(header.find("client_max_window_bits=15") >= 0);
+        }
+    }
+
+    extensionRegistryTests() {
+        # Test default registry
+        WebSocketExtensionRegistry registry();
+        assertTrue(registry.hasExtension("permessage-deflate"));
+        assertFalse(registry.hasExtension("unknown-extension"));
+
+        # Test creating extension
+        *AbstractWebSocketExtension ext = registry.createExtension("permessage-deflate");
+        assertNothing(registry.createExtension("unknown-extension"));
+        assertTrue(ext instanceof PerMessageDeflateExtension);
+        assertEq("permessage-deflate", ext.getName());
+
+        # Test custom extension registration
+        registry.registerExtension("test-ext", AbstractWebSocketExtension sub () {
+            return new PerMessageDeflateExtension();
+        });
+        assertTrue(registry.hasExtension("test-ext"));
+
+        # Test unregistration
+        assertTrue(registry.unregisterExtension("test-ext"));
+        assertFalse(registry.hasExtension("test-ext"));
+        assertFalse(registry.unregisterExtension("nonexistent"));
+
+        # Test empty registry
+        WebSocketExtensionRegistry empty_reg(False);
+        assertFalse(empty_reg.hasExtension("permessage-deflate"));
+        assertEq(0, empty_reg.getRegisteredExtensions().size());
+    }
+
+    perMessageDeflateTests() {
+        # Test extension properties
+        PerMessageDeflateExtension ext();
+        assertEq("permessage-deflate", ext.getName());
+        assertEq(WS_RSV1, ext.getRsvBits());
+        assertFalse(ext.isActive());
+
+        # Test offer string
+        *string offer = ext.getOfferString();
+        assertTrue(offer.find("permessage-deflate") >= 0);
+        assertTrue(offer.find("client_max_window_bits") >= 0);
+
+        # Test server response parsing
+        list<hash<WsExtensionParamInfo>> params = (
+            <WsExtensionParamInfo>{"name": "server_no_context_takeover"},
+            <WsExtensionParamInfo>{"name": "client_max_window_bits", "value": "12"},
+        );
+        assertTrue(ext.parseServerResponse(params));
+        assertTrue(ext.isActive());
+
+        # Test invalid window bits
+        ext = new PerMessageDeflateExtension();
+        list<hash<WsExtensionParamInfo>> bad_params = (
+            <WsExtensionParamInfo>{"name": "server_max_window_bits", "value": "99"},
+        );
+        assertFalse(ext.parseServerResponse(bad_params));
+
+        # Test server-side negotiation
+        ext = new PerMessageDeflateExtension();
+        list<hash<WsExtensionParamInfo>> offer_params = (
+            <WsExtensionParamInfo>{"name": "client_max_window_bits"},
+            <WsExtensionParamInfo>{"name": "server_no_context_takeover"},
+        );
+        *string response = ext.negotiateServerResponse(offer_params);
+        assertTrue(response.find("permessage-deflate") >= 0);
+        assertTrue(response.find("server_no_context_takeover") >= 0);
+        assertTrue(ext.isActive());
+
+        # Test compression/decompression round-trip
+        ext = new PerMessageDeflateExtension();
+        ext.setCompressionThreshold(0);  # Compress all messages
+        ext.setActive(True);
+
+        string test_msg = "Hello, WebSocket permessage-deflate extension! This message should compress well with DEFLATE.";
+        hash<auto> ctx = {"op": WSOP_Text};
+
+        # Compress
+        hash<auto> result = ext.transformOutgoing(test_msg, ctx);
+        assertEq(WS_RSV1, result.rsv_bits);
+        assertTrue(result.data.size() < test_msg.size());
+
+        @debug {
+            printf("Original: %d bytes, Compressed: %d bytes\n", test_msg.size(), result.data.size());
+        }
+
+        # Decompress
+        hash<auto> in_ctx = {"op": WSOP_Text, "rsv1": True};
+        data decompressed = ext.transformIncoming(result.data, in_ctx);
+        string decompressed_str = decompressed.typeCode() == NT_BINARY
+            ? decompressed.toString("utf-8")
+            : decompressed;
+        assertEq(test_msg, decompressed_str);
+
+        # Test RSV bit validation
+        assertTrue(ext.validateRsvBits(WS_RSV1, WSOP_Text));
+        assertTrue(ext.validateRsvBits(WS_RSV1, WSOP_Binary));
+        assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Ping));  # Control frames can't be compressed
+        assertFalse(ext.validateRsvBits(WS_RSV2, WSOP_Text));  # RSV2 not used
+        assertFalse(ext.validateRsvBits(WS_RSV3, WSOP_Text));  # RSV3 not used
+        assertTrue(ext.validateRsvBits(0, WSOP_Text));  # Uncompressed is fine
+
+        # Test when inactive, no RSV bits should be allowed
+        ext = new PerMessageDeflateExtension();
+        assertFalse(ext.isActive());
+        assertFalse(ext.validateRsvBits(WS_RSV1, WSOP_Text));
+        assertTrue(ext.validateRsvBits(0, WSOP_Text));
+
+        # Test clone
+        ext = new PerMessageDeflateExtension();
+        ext.setCompressionThreshold(512);
+        AbstractWebSocketExtension cloned = ext.clone();
+        assertEq(512, cloned.getCompressionThreshold());
+
+        # Test small message doesn't compress (threshold)
+        ext = new PerMessageDeflateExtension();
+        ext.setCompressionThreshold(1024);
+        ext.setActive(True);
+        hash<auto> small_result = ext.transformOutgoing("small", {"op": WSOP_Text});
+        assertEq(0, small_result.rsv_bits);  # Not compressed
+
+        # Test constructor with options
+        PerMessageDeflateExtension configured = new PerMessageDeflateExtension({
+            "server_no_context_takeover": True,
+            "client_no_context_takeover": True,
+            "compression_threshold": 256,
+        });
+        assertEq(256, configured.getCompressionThreshold());
+        *string config_offer = configured.getOfferString();
+        assertTrue(config_offer.find("client_no_context_takeover") >= 0);
+        assertTrue(config_offer.find("server_no_context_takeover") >= 0);
     }
 }
