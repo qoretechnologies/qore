@@ -44,6 +44,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ql_compression.h"
 
 #include "qore/intern/qore_socket_private.h"
 
@@ -1348,12 +1349,23 @@ struct qore_httpclient_priv {
 };
 
 // setup default headers
+// Build Accept-Encoding string based on available compression libraries
+#if defined(HAVE_BROTLI) && defined(HAVE_ZSTD)
+#define QORE_HTTP_ACCEPT_ENCODING "br,zstd,deflate,gzip,bzip2"
+#elif defined(HAVE_BROTLI)
+#define QORE_HTTP_ACCEPT_ENCODING "br,deflate,gzip,bzip2"
+#elif defined(HAVE_ZSTD)
+#define QORE_HTTP_ACCEPT_ENCODING "zstd,deflate,gzip,bzip2"
+#else
+#define QORE_HTTP_ACCEPT_ENCODING "deflate,gzip,bzip2"
+#endif
+
 header_map_t qore_httpclient_priv::static_default_headers = {
     {"Accept", "text/html"},
     {"Content-Type", "text/html"},
     {"Connection", "Keep-Alive"},
     {"User-Agent", "Qore-HTTP-Client/" PACKAGE_VERSION},
-    {"Accept-Encoding", "deflate,gzip,bzip2"},
+    {"Accept-Encoding", QORE_HTTP_ACCEPT_ENCODING},
 };
 
 // RFC-1738: encode space, <, >, ", #, %, {, }, |, \, ^, ~, [, ], `
@@ -2330,6 +2342,14 @@ int HttpClientConnectSendRecvPollOperation::processReceivedBody(ExceptionSink* x
                 dec = qore_gunzip_to_binary;
             } else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2")) {
                 dec = qore_bunzip2_to_binary;
+#ifdef HAVE_BROTLI
+            } else if (!strcasecmp(content_encoding, "br")) {
+                dec = qore_unbrotli_to_binary;
+#endif
+#ifdef HAVE_ZSTD
+            } else if (!strcasecmp(content_encoding, "zstd")) {
+                dec = qore_unzstd_to_binary;
+#endif
             } else {
                 xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
                     "'%s'", content_encoding);
@@ -3561,6 +3581,14 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                     dec = qore_gunzip_to_string;
                 else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
                     dec = qore_bunzip2_to_string;
+#ifdef HAVE_BROTLI
+                else if (!strcasecmp(content_encoding, "br"))
+                    dec = qore_unbrotli_to_string;
+#endif
+#ifdef HAVE_ZSTD
+                else if (!strcasecmp(content_encoding, "zstd"))
+                    dec = qore_unzstd_to_string;
+#endif
                 // issue #2953 ignore unknown content encodings or a crash will result
                 else {
                     content_encoding = nullptr;

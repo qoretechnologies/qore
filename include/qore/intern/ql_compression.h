@@ -35,4 +35,15 @@
 
 DLLLOCAL void init_compression_functions(QoreNamespace& ns);
 
+// Decompression functions for HTTP content-encoding support
+#ifdef HAVE_BROTLI
+DLLLOCAL BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, ExceptionSink* xsink);
+DLLLOCAL QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink);
+#endif
+
+#ifdef HAVE_ZSTD
+DLLLOCAL BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, ExceptionSink* xsink);
+DLLLOCAL QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink);
+#endif
+
 #endif
