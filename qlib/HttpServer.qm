@@ -39,7 +39,7 @@
 %enable-debug
 
 module HttpServer {
-    version = "1.5.1";
+    version = "1.5.2";
     desc = "HttpServer module for a multi-threaded HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -138,6 +138,12 @@ log("started listener on %s", lh.desc);
     @endcode
 
     @section http_relnotes HttpServer Module Release Notes
+
+    @subsection http1_5_2 HttpServer 1.5.2
+    - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support
+      (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
+      - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
+      - requires Qore built with Brotli and/or Zstd support
 
     @subsection http1_5_1 HttpServer 1.5.1
     - updated to use \c Socket::startPollSendHttpResponse() for non-chunked async HTTP responses
@@ -477,6 +483,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! content-encodings supported; this is a hash to simulate a set with O(ln(n)) access times
         const ContentEncodings = {
+            "br": "br",
+            "zstd": "zstd",
             "gzip": "gzip",
             "deflate": "deflate",
             "bzip2": "bzip2",
@@ -2099,6 +2107,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
             # compress body if eligible for compression
             if (rv.body && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold) {
+%ifdef HAVE_BROTLI
+                if (cx.encoding == "br") {
+                    rv.hdr."Content-Encoding" = "br";
+                    rv.body = brotli(rv.body);
+                } else
+%endif
+%ifdef HAVE_ZSTD
+                if (cx.encoding == "zstd") {
+                    rv.hdr."Content-Encoding" = "zstd";
+                    rv.body = zstd(rv.body);
+                } else
+%endif
                 if (cx.encoding == "deflate") {
                     rv.hdr."Content-Encoding" = "deflate";
                     rv.body = compress(rv.body);

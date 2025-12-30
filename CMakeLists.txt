@@ -316,6 +316,42 @@ find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
+
+# Optional compression libraries
+# Brotli
+pkg_check_modules(BROTLI_ENC libbrotlienc)
+pkg_check_modules(BROTLI_DEC libbrotlidec)
+if(BROTLI_ENC_FOUND AND BROTLI_DEC_FOUND)
+    set(HAVE_BROTLI TRUE)
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARIES} ${BROTLI_DEC_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_ENC_INCLUDE_DIRS})
+    message(STATUS "Brotli compression: enabled")
+else()
+    message(STATUS "Brotli compression: disabled (libbrotli not found)")
+endif()
+
+# Zstandard
+pkg_check_modules(ZSTD libzstd)
+if(ZSTD_FOUND)
+    set(HAVE_ZSTD TRUE)
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${ZSTD_INCLUDE_DIRS})
+    message(STATUS "Zstandard compression: enabled")
+else()
+    message(STATUS "Zstandard compression: disabled (libzstd not found)")
+endif()
+
+# LZ4
+pkg_check_modules(LZ4 liblz4)
+if(LZ4_FOUND)
+    set(HAVE_LZ4 TRUE)
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
+    message(STATUS "LZ4 compression: enabled")
+else()
+    message(STATUS "LZ4 compression: disabled (liblz4 not found)")
+endif()
+
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)

@@ -39,6 +39,9 @@ public:
    static constexpr const char *ALG_ZLIB = "zlib";
    static constexpr const char *ALG_GZIP = "gzip";
    static constexpr const char *ALG_BZIP2 = "bzip2";
+   static constexpr const char *ALG_BROTLI = "br";
+   static constexpr const char *ALG_ZSTD = "zstd";
+   static constexpr const char *ALG_LZ4 = "lz4";
 
    static constexpr int64 LEVEL_DEFAULT = -1;
 

@@ -33,6 +33,19 @@
 #include <cerrno>
 #include <zlib.h>
 
+#ifdef HAVE_BROTLI
+#include <brotli/encode.h>
+#include <brotli/decode.h>
+#endif
+
+#ifdef HAVE_ZSTD
+#include <zstd.h>
+#endif
+
+#ifdef HAVE_LZ4
+#include <lz4.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -354,6 +367,361 @@ private:
     State state;
 };
 
+#ifdef HAVE_BROTLI
+class BrotliCompressTransform : public Transform {
+
+public:
+    BrotliCompressTransform(int64 quality, ExceptionSink *xsink) : state(nullptr) {
+        // Brotli quality: 0 (fastest) to 11 (best compression), default 11
+        if (quality == CompressionTransforms::LEVEL_DEFAULT) {
+            quality = 11;  // BROTLI_DEFAULT_QUALITY
+        } else if (quality < 0 || quality > 11) {
+            xsink->raiseException("BROTLI-LEVEL-ERROR",
+                "quality must be between 0 - 11 or -1 (value passed: " QLLD ")", quality);
+            return;
+        }
+
+        state = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "failed to create Brotli encoder instance");
+            return;
+        }
+
+        BrotliEncoderSetParameter(state, BROTLI_PARAM_QUALITY, quality);
+    }
+
+    ~BrotliCompressTransform() {
+        if (state) {
+            BrotliEncoderDestroyInstance(state);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "invalid Brotli encoder state");
+            return std::make_pair(0, 0);
+        }
+
+        const uint8_t* next_in = static_cast<const uint8_t*>(src);
+        size_t avail_in = src ? srcLen : 0;
+        uint8_t* next_out = static_cast<uint8_t*>(dst);
+        size_t avail_out = dstLen;
+
+        BrotliEncoderOperation op = src ? BROTLI_OPERATION_PROCESS : BROTLI_OPERATION_FINISH;
+
+        if (!BrotliEncoderCompressStream(state, op, &avail_in, &next_in, &avail_out, &next_out, nullptr)) {
+            xsink->raiseException("BROTLI-ERROR", "Brotli compression failed");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen - avail_in, dstLen - avail_out);
+    }
+
+private:
+    BrotliEncoderState* state;
+};
+
+class BrotliDecompressTransform : public Transform {
+
+public:
+    BrotliDecompressTransform(ExceptionSink *xsink) : state(nullptr), finished(false) {
+        state = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "failed to create Brotli decoder instance");
+            return;
+        }
+    }
+
+    ~BrotliDecompressTransform() {
+        if (state) {
+            BrotliDecoderDestroyInstance(state);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "invalid Brotli decoder state");
+            return std::make_pair(0, 0);
+        }
+
+        if (finished) {
+            if (src) {
+                xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+            }
+            return std::make_pair(0, 0);
+        }
+
+        const uint8_t* next_in = static_cast<const uint8_t*>(src);
+        size_t avail_in = src ? srcLen : 0;
+        uint8_t* next_out = static_cast<uint8_t*>(dst);
+        size_t avail_out = dstLen;
+
+        BrotliDecoderResult result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out, &next_out, nullptr);
+
+        if (result == BROTLI_DECODER_RESULT_ERROR) {
+            BrotliDecoderErrorCode error = BrotliDecoderGetErrorCode(state);
+            xsink->raiseException("BROTLI-ERROR", "Brotli decompression failed: %s",
+                BrotliDecoderErrorString(error));
+            return std::make_pair(0, 0);
+        }
+
+        if (result == BROTLI_DECODER_RESULT_SUCCESS) {
+            if (avail_in != 0) {
+                xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+                return std::make_pair(0, 0);
+            }
+            finished = true;
+        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT && !src) {
+            xsink->raiseException("BROTLI-ERROR", "Unexpected end of compressed data stream");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen - avail_in, dstLen - avail_out);
+    }
+
+private:
+    BrotliDecoderState* state;
+    bool finished;
+};
+#endif // HAVE_BROTLI
+
+#ifdef HAVE_ZSTD
+class ZstdCompressTransform : public Transform {
+
+public:
+    ZstdCompressTransform(int64 level, ExceptionSink *xsink) : cstream(nullptr) {
+        // Zstd compression levels: 1 (fastest) to ZSTD_maxCLevel() (best), default is 3
+        if (level == CompressionTransforms::LEVEL_DEFAULT) {
+            level = 3;  // ZSTD_CLEVEL_DEFAULT
+        } else if (level < 1 || level > ZSTD_maxCLevel()) {
+            xsink->raiseException("ZSTD-LEVEL-ERROR",
+                "level must be between 1 - %d or -1 (value passed: " QLLD ")",
+                ZSTD_maxCLevel(), level);
+            return;
+        }
+
+        cstream = ZSTD_createCStream();
+        if (!cstream) {
+            xsink->raiseException("ZSTD-ERROR", "failed to create Zstd compression stream");
+            return;
+        }
+
+        size_t result = ZSTD_initCStream(cstream, level);
+        if (ZSTD_isError(result)) {
+            xsink->raiseException("ZSTD-ERROR", "failed to initialize Zstd compression: %s",
+                ZSTD_getErrorName(result));
+            ZSTD_freeCStream(cstream);
+            cstream = nullptr;
+            return;
+        }
+    }
+
+    ~ZstdCompressTransform() {
+        if (cstream) {
+            ZSTD_freeCStream(cstream);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!cstream) {
+            xsink->raiseException("ZSTD-ERROR", "invalid Zstd compression stream state");
+            return std::make_pair(0, 0);
+        }
+
+        ZSTD_inBuffer input = { src, static_cast<size_t>(src ? srcLen : 0), 0 };
+        ZSTD_outBuffer output = { dst, static_cast<size_t>(dstLen), 0 };
+
+        size_t result;
+        if (src) {
+            result = ZSTD_compressStream(cstream, &output, &input);
+        } else {
+            result = ZSTD_endStream(cstream, &output);
+        }
+
+        if (ZSTD_isError(result)) {
+            xsink->raiseException("ZSTD-ERROR", "Zstd compression failed: %s",
+                ZSTD_getErrorName(result));
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(input.pos, output.pos);
+    }
+
+private:
+    ZSTD_CStream* cstream;
+};
+
+class ZstdDecompressTransform : public Transform {
+
+public:
+    ZstdDecompressTransform(ExceptionSink *xsink) : dstream(nullptr), finished(false) {
+        dstream = ZSTD_createDStream();
+        if (!dstream) {
+            xsink->raiseException("ZSTD-ERROR", "failed to create Zstd decompression stream");
+            return;
+        }
+
+        size_t result = ZSTD_initDStream(dstream);
+        if (ZSTD_isError(result)) {
+            xsink->raiseException("ZSTD-ERROR", "failed to initialize Zstd decompression: %s",
+                ZSTD_getErrorName(result));
+            ZSTD_freeDStream(dstream);
+            dstream = nullptr;
+            return;
+        }
+    }
+
+    ~ZstdDecompressTransform() {
+        if (dstream) {
+            ZSTD_freeDStream(dstream);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!dstream) {
+            xsink->raiseException("ZSTD-ERROR", "invalid Zstd decompression stream state");
+            return std::make_pair(0, 0);
+        }
+
+        if (finished) {
+            if (src) {
+                xsink->raiseException("ZSTD-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+            }
+            return std::make_pair(0, 0);
+        }
+
+        ZSTD_inBuffer input = { src, static_cast<size_t>(src ? srcLen : 0), 0 };
+        ZSTD_outBuffer output = { dst, static_cast<size_t>(dstLen), 0 };
+
+        size_t result = ZSTD_decompressStream(dstream, &output, &input);
+
+        if (ZSTD_isError(result)) {
+            xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s",
+                ZSTD_getErrorName(result));
+            return std::make_pair(0, 0);
+        }
+
+        // result == 0 means frame is completely decoded
+        if (result == 0) {
+            if (input.pos < input.size) {
+                xsink->raiseException("ZSTD-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+                return std::make_pair(0, 0);
+            }
+            finished = true;
+        } else if (!src && output.pos == 0) {
+            xsink->raiseException("ZSTD-ERROR", "Unexpected end of compressed data stream");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(input.pos, output.pos);
+    }
+
+private:
+    ZSTD_DStream* dstream;
+    bool finished;
+};
+#endif // HAVE_ZSTD
+
+#ifdef HAVE_LZ4
+class Lz4CompressTransform : public Transform {
+
+public:
+    Lz4CompressTransform(int64 acceleration, ExceptionSink *xsink) : acceleration(acceleration), initialized(true) {
+        // LZ4 acceleration: 1 (default) to higher values (faster but worse compression)
+        // We use it in reverse: level 1 = fast, higher = slower but better
+        // So acceleration 1 = best compression, higher = faster
+        if (acceleration == CompressionTransforms::LEVEL_DEFAULT) {
+            this->acceleration = 1;  // LZ4_ACCELERATION_DEFAULT
+        } else if (acceleration < 1 || acceleration > 65537) {
+            xsink->raiseException("LZ4-LEVEL-ERROR",
+                "acceleration must be between 1 - 65537 or -1 (value passed: " QLLD ")", acceleration);
+            initialized = false;
+            return;
+        }
+    }
+
+    ~Lz4CompressTransform() {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!initialized) {
+            xsink->raiseException("LZ4-ERROR", "invalid LZ4 compressor state");
+            return std::make_pair(0, 0);
+        }
+
+        if (!src) {
+            // LZ4 doesn't have a separate flush - compression is done in one go
+            return std::make_pair(0, 0);
+        }
+
+        int compressed = LZ4_compress_fast(static_cast<const char*>(src),
+                                           static_cast<char*>(dst),
+                                           srcLen,
+                                           dstLen,
+                                           acceleration);
+
+        if (compressed == 0) {
+            xsink->raiseException("LZ4-ERROR", "LZ4 compression failed - destination buffer too small");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen, compressed);
+    }
+
+private:
+    int acceleration;
+    bool initialized;
+};
+
+class Lz4DecompressTransform : public Transform {
+
+public:
+    Lz4DecompressTransform(ExceptionSink *xsink) : finished(false), initialized(true) {
+    }
+
+    ~Lz4DecompressTransform() {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!initialized) {
+            xsink->raiseException("LZ4-ERROR", "invalid LZ4 decompressor state");
+            return std::make_pair(0, 0);
+        }
+
+        if (finished) {
+            if (src) {
+                xsink->raiseException("LZ4-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+            }
+            return std::make_pair(0, 0);
+        }
+
+        if (!src) {
+            // No more input, done
+            finished = true;
+            return std::make_pair(0, 0);
+        }
+
+        int decompressed = LZ4_decompress_safe(static_cast<const char*>(src),
+                                               static_cast<char*>(dst),
+                                               srcLen,
+                                               dstLen);
+
+        if (decompressed < 0) {
+            xsink->raiseException("LZ4-ERROR", "LZ4 decompression failed - corrupted data or buffer too small");
+            return std::make_pair(0, 0);
+        }
+
+        // LZ4 consumes all input in one go
+        finished = true;
+        return std::make_pair(srcLen, decompressed);
+    }
+
+private:
+    bool finished;
+    bool initialized;
+};
+#endif // HAVE_LZ4
+
 Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink) {
     if (*alg == ALG_ZLIB) {
         return new ZlibDeflateTransform(level, xsink, false);
@@ -362,6 +730,21 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2CompressTransform(level, xsink);
     }
+#ifdef HAVE_BROTLI
+    else if (*alg == ALG_BROTLI) {
+        return new BrotliCompressTransform(level, xsink);
+    }
+#endif
+#ifdef HAVE_ZSTD
+    else if (*alg == ALG_ZSTD) {
+        return new ZstdCompressTransform(level, xsink);
+    }
+#endif
+#ifdef HAVE_LZ4
+    else if (*alg == ALG_LZ4) {
+        return new Lz4CompressTransform(level, xsink);
+    }
+#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }
@@ -374,6 +757,21 @@ Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, Exc
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2DecompressTransform(xsink);
     }
+#ifdef HAVE_BROTLI
+    else if (*alg == ALG_BROTLI) {
+        return new BrotliDecompressTransform(xsink);
+    }
+#endif
+#ifdef HAVE_ZSTD
+    else if (*alg == ALG_ZSTD) {
+        return new ZstdDecompressTransform(xsink);
+    }
+#endif
+#ifdef HAVE_LZ4
+    else if (*alg == ALG_LZ4) {
+        return new Lz4DecompressTransform(xsink);
+    }
+#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }

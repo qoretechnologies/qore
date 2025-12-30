@@ -109,6 +109,24 @@
 #define QORE_CONST_HAVE_SETSID 0
 #endif
 
+#ifdef HAVE_BROTLI
+#define QORE_CONST_HAVE_BROTLI 1
+#else
+#define QORE_CONST_HAVE_BROTLI 0
+#endif
+
+#ifdef HAVE_ZSTD
+#define QORE_CONST_HAVE_ZSTD 1
+#else
+#define QORE_CONST_HAVE_ZSTD 0
+#endif
+
+#ifdef HAVE_LZ4
+#define QORE_CONST_HAVE_LZ4 1
+#else
+#define QORE_CONST_HAVE_LZ4 0
+#endif
+
 #ifdef HAVE_PWD_H
 #define QORE_CONST_HAVE_PWD_H 1
 #else
@@ -285,6 +303,21 @@ const HAVE_STATVFS = bool(QORE_CONST_Q_HAVE_STATVFS);
 /** @note This constant is always @ref False on native Windows ports
  */
 const HAVE_SETSID = bool(QORE_CONST_HAVE_SETSID);
+
+//! Indicates if Brotli compression support is available (brotli(), unbrotli_to_string(), unbrotli_to_binary())
+/** @since %Qore 2.1
+ */
+const HAVE_BROTLI = bool(QORE_CONST_HAVE_BROTLI);
+
+//! Indicates if Zstandard compression support is available (zstd(), unzstd_to_string(), unzstd_to_binary())
+/** @since %Qore 2.1
+ */
+const HAVE_ZSTD = bool(QORE_CONST_HAVE_ZSTD);
+
+//! Indicates if LZ4 compression support is available (lz4(), unlz4_to_string(), unlz4_to_binary())
+/** @since %Qore 2.1
+ */
+const HAVE_LZ4 = bool(QORE_CONST_HAVE_LZ4);
 
 //! Indicates if the %Qore library supports the is_executable() function
 /** @note Currently this function is only available when running on UNIX or UNIX-like platforms

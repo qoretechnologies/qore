@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServerUtil.qm HTTP server base code
 
-/*  HttpServerUtil.qm Copyright (C) 2014 - 2024 Qore Technologies, s.r.o.
+/*  HttpServerUtil.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,7 @@
 %enable-all-warnings
 
 module HttpServerUtil {
-    version = "1.3";
+    version = "1.3.1";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -126,6 +126,10 @@ module HttpServerUtil {
     |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
 
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+
+    @subsection httputil1_3_1 HttpServerUtil 1.3.1
+    - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support in decodeBody() and encodeBody()
+      (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
 
     @subsection httputil1_3 HttpServerUtil 1.3
     - allow authentication methods to set the call context
@@ -1741,6 +1745,18 @@ public class AbstractHttpRequestHandler {
     #! decodes a message body with content-encoding
     static data decodeBody(string content_encoding, binary body, *string string_encoding) {
         switch (content_encoding) {
+%ifdef HAVE_BROTLI
+            case "br":
+                return string_encoding
+                    ? unbrotli_to_string(binary(body), string_encoding)
+                    : unbrotli_to_binary(body);
+%endif
+%ifdef HAVE_ZSTD
+            case "zstd":
+                return string_encoding
+                    ? unzstd_to_string(binary(body), string_encoding)
+                    : unzstd_to_binary(body);
+%endif
             case "deflate":
             case "x-deflate":
                 return string_encoding
@@ -1762,6 +1778,14 @@ public class AbstractHttpRequestHandler {
     #! encodes a message body with content-encoding
     static binary encodeBody(string content_encoding, data body) {
         switch (content_encoding) {
+%ifdef HAVE_BROTLI
+            case "br":
+                return brotli(body);
+%endif
+%ifdef HAVE_ZSTD
+            case "zstd":
+                return zstd(body);
+%endif
             case "deflate":
                 return compress(body);
             case "gzip":
