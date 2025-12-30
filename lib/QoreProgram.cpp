@@ -573,27 +573,38 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_opti
 }
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
+    bool atomic_rollback = pwo.parse_options & PO_ALLOW_REPARSE;
     // delete pending changes to namespaces
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink);
+    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
 
     // delete pending statements
     sb.parseRollback();
 
-    // free temporary data structures - only delete items added since last commit
+    // free temporary data structures
     str_set.clear();
     loc_set.clear();
 
-    // delete pending strings (those added after str_vec_hwm)
-    for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
-        free(str_vec[i]);
-    }
-    str_vec.resize(str_vec_hwm);
+    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
+    // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
+    // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
+    // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
+    // could still reference parse locations from failed parses.
+    if (pwo.parse_options & PO_ALLOW_REPARSE) {
+        // delete pending strings (those added after str_vec_hwm)
+        for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
+            free(str_vec[i]);
+        }
+        str_vec.resize(str_vec_hwm);
 
-    // delete pending locations (those added after pgmloc_hwm)
-    for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
-        delete pgmloc[i];
+        // delete pending locations (those added after pgmloc_hwm)
+        for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
+            delete pgmloc[i];
+        }
+        pgmloc.resize(pgmloc_hwm);
     }
-    pgmloc.resize(pgmloc_hwm);
+    // Note: without PO_ALLOW_REPARSE, we don't clear str_vec/pgmloc - the memory will be freed
+    // when the Program object is destroyed. This is intentional to avoid use-after-free when
+    // error messages reference parse locations from the failed parse.
 
     // issue #2907 delete & clear statement index maps when doing a parse rollback
     for (auto& i : statementByFileIndex) {

@@ -421,7 +421,7 @@ public:
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
     DLLLOCAL int parseInitConstants();
-    DLLLOCAL void parseRollback(ExceptionSink* xsink);
+    DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false);
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
 
@@ -1822,7 +1822,7 @@ public:
         }
     }
 
-    DLLLOCAL void parseRollback(ExceptionSink* xsink) {
+    DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false) {
         // roll back pending function lookup entries
         pend_fmap.clear();
 
@@ -1832,10 +1832,11 @@ public:
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
 
-        // roll back pending items from collections (preserves committed items)
-        qore_ns_private::parseRollback(xsink);
+        // With atomic_rollback (PO_ALLOW_REPARSE), preserve committed items and only remove pending items.
+        // Without it, do a full destructive reset for backward compatibility.
+        qore_ns_private::parseRollback(xsink, atomic_rollback);
 
-        // clear all lookup indices - they will be rebuilt from remaining committed data
+        // clear all lookup indices
         fmap.clear();
         cnmap.clear();
         varmap.clear();
@@ -1843,8 +1844,10 @@ public:
         thdmap.clear();
         nsmap.clear();
 
-        // rebuild all lookup indices from the remaining committed data
-        rebuildAllIndexes();
+        // Only rebuild indexes for atomic rollback - with full reset, the program is unusable anyway
+        if (atomic_rollback) {
+            rebuildAllIndexes();
+        }
     }
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);

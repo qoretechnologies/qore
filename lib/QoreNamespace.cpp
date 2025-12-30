@@ -812,9 +812,9 @@ void QoreNamespaceList::parseCommitRuntimeInit(ExceptionSink* xsink) {
     }
 }
 
-void QoreNamespaceList::parseRollback(ExceptionSink* xsink) {
+void QoreNamespaceList::parseRollback(ExceptionSink* xsink, bool atomic_rollback) {
     for (auto& i : nsmap) {
-        i.second->priv->parseRollback(xsink);
+        i.second->priv->parseRollback(xsink, atomic_rollback);
     }
 }
 
@@ -2546,51 +2546,84 @@ void qore_ns_private::parseCommitRuntimeInit(ExceptionSink* xsink) {
     nsl.parseCommitRuntimeInit(xsink);
 }
 
-void qore_ns_private::parseRollback(ExceptionSink* xsink) {
-    //printd(5, "qore_ns_private::parseRollback() '::%s' this: %p ns: %p\n", name.c_str(), this, ns);
+void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) {
+    //printd(5, "qore_ns_private::parseRollback() '::%s' this: %p ns: %p atomic: %d\n", name.c_str(), this, ns,
+    //    atomic_rollback);
 
     // delete pending global variable declarations
     pend_gvblist.clear();
 
-    // remove only global variables added in this pending transaction
-    for (const auto& name : pending_var_names) {
-        var_list.parseRemove(name.c_str(), xsink);
+    if (atomic_rollback) {
+        // Atomic rollback: only remove items tracked in pending_*_names (items committed in prior transactions are
+        // preserved)
+
+        // remove only global variables added in this pending transaction
+        for (const auto& name : pending_var_names) {
+            var_list.parseRemove(name.c_str(), xsink);
+        }
+        pending_var_names.clear();
+
+        // roll back pending function variants (also removes entirely new functions)
+        func_list.parseRollback();
+        pending_func_names.clear();
+
+        // roll back pending class members/methods
+        classList.parseRollback();
+
+        // remove only classes added in this pending transaction
+        for (const auto& name : pending_class_names) {
+            classList.parseRemove(name.c_str(), xsink);
+        }
+        pending_class_names.clear();
+
+        // remove only constants added in this pending transaction
+        for (const auto& name : pending_const_names) {
+            constant.parseRemove(name.c_str(), xsink);
+        }
+        pending_const_names.clear();
+
+        // remove only hashdecls added in this pending transaction
+        for (const auto& name : pending_hashdecl_names) {
+            hashDeclList.parseRemove(name.c_str());
+        }
+        pending_hashdecl_names.clear();
+
+        // remove only namespaces added in this pending transaction
+        for (const auto& name : pending_ns_names) {
+            nsl.parseRemove(name.c_str(), xsink);
+        }
+        pending_ns_names.clear();
+
+        // recursively rollback child namespaces that existed before this transaction
+        nsl.parseRollback(xsink, atomic_rollback);
+    } else {
+        // Full destructive reset: clear ALL state (original behavior for programs without PO_ALLOW_REPARSE)
+        // After this, the Program is unusable but memory is still valid until Program is destroyed
+
+        // delete global variables
+        var_list.reset();
+
+        // delete pending user functions
+        func_list.parseRollback();
+
+        // clear all constants
+        constant.deleteAll(xsink);
+        classList.clearConstants(xsink);
+        // clear all static class vars
+        classList.deleteClassData(true, xsink);
+
+        // delete pending constant list
+        constant.reset();
+
+        // delete classes
+        classList.reset();
+
+        // delete hashdecls
+        hashDeclList.reset();
+
+        // rollback namespaces
+        nsl.parseRollback(xsink, atomic_rollback);
     }
-    pending_var_names.clear();
-
-    // roll back pending function variants (also removes entirely new functions)
-    func_list.parseRollback();
-    pending_func_names.clear();
-
-    // roll back pending class members/methods
-    classList.parseRollback();
-
-    // remove only classes added in this pending transaction
-    for (const auto& name : pending_class_names) {
-        classList.parseRemove(name.c_str(), xsink);
-    }
-    pending_class_names.clear();
-
-    // remove only constants added in this pending transaction
-    for (const auto& name : pending_const_names) {
-        constant.parseRemove(name.c_str(), xsink);
-    }
-    pending_const_names.clear();
-
-    // remove only hashdecls added in this pending transaction
-    for (const auto& name : pending_hashdecl_names) {
-        hashDeclList.parseRemove(name.c_str());
-    }
-    pending_hashdecl_names.clear();
-
-    // remove only namespaces added in this pending transaction
-    for (const auto& name : pending_ns_names) {
-        nsl.parseRemove(name.c_str(), xsink);
-    }
-    pending_ns_names.clear();
-
-    // recursively rollback child namespaces that existed before this transaction
-    nsl.parseRollback(xsink);
 }
 
 bool qore_ns_private::addGlobalVars(qore_root_ns_private& rns) {

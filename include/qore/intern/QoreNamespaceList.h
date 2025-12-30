@@ -166,7 +166,7 @@ public:
     DLLLOCAL void parseResolveAbstract();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* sink);
-    DLLLOCAL void parseRollback(ExceptionSink* sink);
+    DLLLOCAL void parseRollback(ExceptionSink* sink, bool atomic_rollback = false);
     //! Removes a specific namespace by name (for selective rollback support)
     DLLLOCAL void parseRemove(const char* name, ExceptionSink* xsink);
     DLLLOCAL void deleteAllConstants(ExceptionSink *xsink);
