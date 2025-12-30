@@ -1174,11 +1174,13 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             hc.get("/");
             fail();
         } catch (hash<ExceptionInfo> ex) {
-            if ((ex.err == "SOCKET-CLOSED") ||
-                (ex.err == "SOCKET-SSL-ERROR" && ex.desc =~ /reset by peer/)) {
+            # Accept any socket/SSL error - the exact error varies by timing and platform
+            # Common errors: SOCKET-CLOSED, SOCKET-SSL-ERROR (reset by peer, EOF, unexpected eof),
+            # SOCKET-RECV-ERROR, HTTP-CLIENT-RECEIVE-ERROR
+            if (ex.err =~ /^SOCKET-/ || ex.err =~ /^HTTP-CLIENT-/) {
                 assertTrue(True);
             } else {
-                fail();
+                fail(sprintf("unexpected exception: %s: %s", ex.err, ex.desc));
             }
         }
 

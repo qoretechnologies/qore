@@ -404,7 +404,7 @@ hash<auto> h = ws.getInfo();
     }
 
     #! Handles WebSocket protocol messages
-    private int handleMessage(hash<WsMsgInfo> h, reference<data> buf) {
+    private int handleMessage(hash<WsMsgInfo> h, reference<data> buf, reference<hash<auto>> first_frame_rsv) {
         if (h.op == WSOP_Close) {
             if (!h.close) {
                 logDebug("Server sent OpClose without code; closing immediately");
@@ -421,7 +421,7 @@ hash<auto> h = ws.getInfo();
             return WSEDC_BREAK;
         }
 
-        return WebSocketClientWithSerialization::handleMessage(h, \buf);
+        return WebSocketClientWithSerialization::handleMessage(h, \buf, \first_frame_rsv);
     }
 
     #! Handles deserialized event data

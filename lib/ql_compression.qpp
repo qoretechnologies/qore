@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -466,6 +466,143 @@ BinaryNode* qore_gunzip_to_binary(const BinaryNode* bin, ExceptionSink* xsink) {
     return buf ? new BinaryNode(buf, len) : nullptr;
 }
 
+// Raw DEFLATE compression (windowBits = -15, no zlib/gzip header or trailer)
+// Used by RFC 7692 permessage-deflate WebSocket extension
+static BinaryNode* qore_deflate_raw_intern(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
+    z_stream c_stream; // compression stream
+    c_stream.zalloc = Z_NULL;
+    c_stream.zfree = Z_NULL;
+    c_stream.opaque = Z_NULL;
+    c_stream.next_in = (Bytef*)ptr;
+    c_stream.avail_in = len;
+
+    // windowBits = -15 produces raw deflate output (no zlib/gzip header or trailer)
+    int rc = deflateInit2(&c_stream, level, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY);
+    if (rc != Z_OK) {
+        do_zlib_exception(rc, "deflateInit2", xsink);
+        return nullptr;
+    }
+
+    ON_BLOCK_EXIT(do_deflate_end, &c_stream, xsink);
+
+    // allocate new buffer
+    unsigned long bsize = len / 5 + 100;
+    void* buf = malloc(bsize);
+
+    c_stream.next_out = (Bytef*)buf;
+    c_stream.avail_out = bsize;
+
+    while (c_stream.avail_in) {
+        rc = deflate(&c_stream, Z_NO_FLUSH);
+        if (rc != Z_OK && rc != Z_BUF_ERROR) {
+            free(buf);
+            do_zlib_exception(rc, "deflate", xsink);
+            return nullptr;
+        }
+
+        if (!c_stream.avail_out) {
+            int new_space = ((len / 3) + 100);
+            bsize += new_space;
+            c_stream.avail_out += new_space;
+            buf = realloc(buf, bsize);
+            c_stream.next_out = ((Bytef*)buf) + c_stream.total_out;
+        }
+    }
+
+    while (true) {
+        rc = deflate(&c_stream, Z_FINISH);
+        if (rc == Z_STREAM_END)
+            break;
+        if (rc != Z_OK && rc != Z_BUF_ERROR) {
+            free(buf);
+            do_zlib_exception(rc, "deflate", xsink);
+            return nullptr;
+        }
+        // resize buffer
+        int new_space = 2;
+        bsize += new_space;
+        c_stream.avail_out += new_space;
+        buf = realloc(buf, bsize);
+        c_stream.next_out = ((Bytef*)buf) + c_stream.total_out;
+    }
+
+    return new BinaryNode(buf, bsize - c_stream.avail_out);
+}
+
+// Raw DEFLATE decompression (windowBits = -15, no zlib/gzip header or trailer)
+// Used by RFC 7692 permessage-deflate WebSocket extension
+static char* qore_inflate_raw_intern(const BinaryNode* b, int &len, ExceptionSink* xsink) {
+    z_stream d_stream; // decompression stream
+    d_stream.zalloc = Z_NULL;
+    d_stream.zfree = Z_NULL;
+    d_stream.opaque = Z_NULL;
+    d_stream.next_in = (Bytef*)b->getPtr();
+    d_stream.avail_in = b->size();
+
+    // windowBits = -15 expects raw deflate input (no zlib/gzip header or trailer)
+    int rc = inflateInit2(&d_stream, -15);
+    if (rc != Z_OK) {
+        do_zlib_exception(rc, "inflateInit2", xsink);
+        return nullptr;
+    }
+
+    ON_BLOCK_EXIT(do_inflate_end, &d_stream, xsink);
+
+    // allocate new buffer
+    unsigned long bsize = b->size() * 2 + 100;
+    void* buf = malloc(bsize);
+
+    d_stream.next_out = (Bytef*)buf;
+    d_stream.avail_out = bsize;
+
+    while (true) {
+        rc = inflate(&d_stream, Z_NO_FLUSH);
+        if (rc == Z_STREAM_END)
+            break;
+        if (rc == Z_BUF_ERROR) {
+            if (d_stream.avail_in == 0 && d_stream.avail_out > 0) {
+                xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data");
+                free(buf);
+                return nullptr;
+            }
+            int new_space = ((b->size() * 3) + 100);
+            bsize += new_space;
+            d_stream.avail_out += new_space;
+            buf = realloc(buf, bsize);
+            d_stream.next_out = ((Bytef*)buf) + d_stream.total_out;
+        }
+        else if (rc != Z_OK) {
+            free(buf);
+            do_zlib_exception(rc, "inflate", xsink);
+            return nullptr;
+        }
+    }
+
+    // Note: For raw deflate, we don't check for trailing bytes since RFC 7692
+    // may append trailing bytes like 0x00 0x00 0xff 0xff
+
+    // how much data was decompressed
+    len = bsize - d_stream.avail_out;
+    return static_cast<char*>(buf);
+}
+
+BinaryNode* qore_deflate_raw(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
+    return qore_deflate_raw_intern(ptr, len, level, xsink);
+}
+
+QoreStringNode* qore_inflate_raw_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
+    int len;
+    char *buf = qore_inflate_raw_intern(b, len, xsink);
+    // NOTE: the null terminator is added by the QoreStringNode constructor
+    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+}
+
+BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
+    int len;
+    char* buf = qore_inflate_raw_intern(b, len, xsink);
+    return buf ? new BinaryNode(buf, len) : nullptr;
+}
+
 /** @defgroup compression_constants Compression Constants
  */
 ///@{
@@ -611,6 +748,136 @@ binary uncompress_to_binary(binary bin) {
 /**
  */
 nothing uncompress_to_binary() [flags=RUNTIME_NOOP] {
+}
+
+//! Performs raw DEFLATE compression without zlib/gzip headers or trailers
+/** This is the raw DEFLATE format as specified in <a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>,
+    without the zlib header/trailer from RFC 1950 or gzip header/trailer from RFC 1952.
+
+    This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
+
+    @param str The string to compress
+    @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest
+    compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
+
+    @return a binary object of the compressed data in raw DEFLATE format
+
+    @par Example:
+    @code{.py}
+binary bin = deflate_raw(str_data);
+    @endcode
+
+    @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
+    @throw ZLIB-ERROR zlib returned an error while processing
+
+    @since %Qore 2.3
+*/
+binary deflate_raw(string str, int level = Z_DEFAULT_COMPRESSION) {
+   if ((level < 1 && level != -1) || level > 9)
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+
+   if (!str->strlen())
+      return new BinaryNode;
+
+   return qore_deflate_raw(str->getBuffer(), str->strlen(), level, xsink);
+}
+
+//! Performs raw DEFLATE compression without zlib/gzip headers or trailers
+/** This is the raw DEFLATE format as specified in <a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>,
+    without the zlib header/trailer from RFC 1950 or gzip header/trailer from RFC 1952.
+
+    This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
+
+    @param bin The binary object to compress
+    @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest
+    compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
+
+    @return a binary object of the compressed data in raw DEFLATE format
+
+    @par Example:
+    @code{.py}
+binary bin = deflate_raw(bin_data);
+    @endcode
+
+    @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
+    @throw ZLIB-ERROR zlib returned an error while processing
+
+    @since %Qore 2.3
+*/
+binary deflate_raw(binary bin, int level = Z_DEFAULT_COMPRESSION) {
+   if ((level < 1 && level != -1) || level > 9)
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+
+   if (!bin->size())
+      return new BinaryNode;
+
+   return qore_deflate_raw(bin->getPtr(), bin->size(), level, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+ */
+nothing deflate_raw() [flags=RUNTIME_NOOP] {
+}
+
+//! Performs raw DEFLATE decompression and returns a string of the decompressed data
+/** This decompresses data in raw DEFLATE format as specified in <a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>,
+    without the zlib header/trailer from RFC 1950 or gzip header/trailer from RFC 1952.
+
+    This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
+
+    @param bin the compressed data to decompress (in raw DEFLATE format)
+    @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+
+    @return the uncompressed data as a string
+
+    @par Example:
+    @code{.py}
+string str = inflate_raw_to_string(bin, "utf-8");
+    @endcode
+
+    @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.3
+*/
+string inflate_raw_to_string(binary bin, *string encoding) {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
+   return qore_inflate_raw_to_string(bin, qe, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+ */
+nothing inflate_raw_to_string() [flags=RUNTIME_NOOP] {
+}
+
+//! Performs raw DEFLATE decompression and returns a binary object of the decompressed data
+/** This decompresses data in raw DEFLATE format as specified in <a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>,
+    without the zlib header/trailer from RFC 1950 or gzip header/trailer from RFC 1952.
+
+    This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
+
+    @param bin the compressed data to decompress (in raw DEFLATE format)
+
+    @return the uncompressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = inflate_raw_to_binary(data);
+    @endcode
+
+    @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.3
+*/
+binary inflate_raw_to_binary(binary bin) {
+   return qore_inflate_raw_to_binary(bin, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+ */
+nothing inflate_raw_to_binary() [flags=RUNTIME_NOOP] {
 }
 
 //! Performs <a href="http://zlib.net/">zlib</a>-based "gzip" data compression (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a binary object of the compressed data

@@ -32,7 +32,7 @@
 %enable-all-warnings
 
 %requires HttpServerUtil >= 1.0.12
-%requires WebSocketUtil >= 1.4.1
+%requires WebSocketUtil >= 1.6
 %requires Util
 %requires(reexport) Logger
 
@@ -44,7 +44,7 @@
 %new-style
 
 module WebSocketHandler {
-    version = "2.2";
+    version = "2.3";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -70,6 +70,16 @@ module WebSocketHandler {
     - @ref WebSocketHandler::WebSocketHandler
 
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_3 Version 2.3
+    - added WebSocket extension support (RFC 6455 Section 9) with permessage-deflate (RFC 7692)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+    - added @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor option \c "extensions" to enable
+      server-side extension support
+    - added @ref WebSocketHandler::WebSocketConnection::hasPerMessageDeflate()
+      "WebSocketConnection::hasPerMessageDeflate()" method
+    - added @ref WebSocketHandler::WebSocketConnection::getActiveExtensions()
+      "WebSocketConnection::getActiveExtensions()" method
 
     @subsection websockethandler_v2_2 Version 2.2
     - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
@@ -194,6 +204,16 @@ public class WebSocketConnection {
         #! AsyncAPI channel name for validation
         *string asyncapi_channel;
 %endif
+
+        #! Active WebSocket extensions for this connection
+        /** @since WebSocketHandler 2.3
+        */
+        *list<AbstractWebSocketExtension> active_extensions;
+
+        #! RSV bit mask for active extensions
+        /** @since WebSocketHandler 2.3
+        */
+        int extension_rsv_mask = 0;
     }
 
     private:internal {
@@ -258,7 +278,7 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
-        queue.push(ws_encode_message(msg));
+        queue.push(sendWithExtensions(msg));
     }
 
     #! Pushes an unencoded message on the connection's message queue
@@ -273,7 +293,37 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
-        queue.push(ws_encode_message(msg, op, NOTHING, fin));
+        queue.push(sendWithExtensions(msg, op, fin));
+    }
+
+    #! Applies extension transforms to outgoing message and encodes it
+    /** @param msg the message data to send
+        @param op the opcode to use (defaults to WSOP_Text for string, WSOP_Binary for binary)
+        @param fin the FIN bit (default True)
+
+        @return the encoded WebSocket frame with extension transforms applied
+
+        @since WebSocketHandler 2.3
+    */
+    private binary sendWithExtensions(data msg, *int op, bool fin = True) {
+        int rsv_bits = 0;
+
+        # Apply outgoing transforms from active extensions
+        # Extensions are applied in forward order (first extension first) for outgoing messages,
+        # as specified in RFC 6455 Section 9.2 and RFC 7692 Section 8
+        if (active_extensions) {
+            hash<auto> ctx = {
+                "op": op ?? (msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary),
+                "fin": fin,
+            };
+            foreach AbstractWebSocketExtension ext in (active_extensions) {
+                hash<auto> result = ext.transformOutgoing(msg, ctx);
+                msg = result.data;
+                rsv_bits |= result.rsv_bits;
+            }
+        }
+
+        return ws_encode_message(msg, op, NOTHING, fin, rsv_bits);
     }
 
     #! This method is called when messages from the client are received
@@ -414,6 +464,85 @@ public class WebSocketConnection {
         }
     }
 %endif
+
+    #! Sets the active extensions for this connection
+    /** @param extensions the list of negotiated extensions
+        @param rsv_mask the combined RSV bit mask for all active extensions
+
+        @note Called by the handler after extension negotiation
+
+        @since WebSocketHandler 2.3
+    */
+    setExtensions(*list<AbstractWebSocketExtension> extensions, int rsv_mask = 0) {
+        active_extensions = extensions;
+        extension_rsv_mask = rsv_mask;
+    }
+
+    #! Applies incoming extension transforms to message data
+    /** @param msg reference to the message data (will be modified in place)
+        @param ctx the message context with RSV bits and opcode
+
+        @note Extensions are applied in reverse order (last extension first)
+
+        @since WebSocketHandler 2.3
+    */
+    applyIncomingExtensions(reference<auto> msg, hash<auto> ctx) {
+        if (!active_extensions) {
+            return;
+        }
+
+        # Apply transforms in reverse order
+        ListIterator i(active_extensions);
+        i.last();
+        while (i.prev()) {
+            AbstractWebSocketExtension ext = i.getValue();
+            msg = ext.transformIncoming(msg, ctx);
+        }
+    }
+
+    #! Validates that the RSV bits in an incoming frame are valid for active extensions
+    /** @param rsv1 RSV1 bit from the frame
+        @param rsv2 RSV2 bit from the frame
+        @param rsv3 RSV3 bit from the frame
+
+        @return True if the RSV bits are valid, False otherwise
+
+        @since WebSocketHandler 2.3
+    */
+    bool validateRsvBits(bool rsv1, bool rsv2, bool rsv3) {
+        int rsv_bits = (rsv1 ? WS_RSV1 : 0) | (rsv2 ? WS_RSV2 : 0) | (rsv3 ? WS_RSV3 : 0);
+        # RSV bits must be covered by active extensions
+        return (rsv_bits & ~extension_rsv_mask) == 0;
+    }
+
+    #! Returns True if permessage-deflate extension is active
+    /** @return True if permessage-deflate is active, False otherwise
+
+        @since WebSocketHandler 2.3
+    */
+    bool hasPerMessageDeflate() {
+        if (!active_extensions) {
+            return False;
+        }
+        foreach AbstractWebSocketExtension ext in (active_extensions) {
+            if (ext.getName() == "permessage-deflate") {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the list of active extension names
+    /** @return list of extension names or NOTHING if no extensions are active
+
+        @since WebSocketHandler 2.3
+    */
+    *list<string> getActiveExtensions() {
+        if (!active_extensions) {
+            return NOTHING;
+        }
+        return map $1.getName(), active_extensions;
+    }
 }
 
 #! the main web socket handler class
@@ -453,6 +582,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         const Options = (
             "heartbeat",
             "heartbeat_msg",
+            "extensions",
         );
     }
 
@@ -471,6 +601,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! Send timeout
         date send_timeout = DefaultSocketSendTimeout;
+
+        #! Extension registry for supported extensions
+        /** @since WebSocketHandler 2.3
+        */
+        *WebSocketExtensionRegistry extension_registry;
+
+        #! List of supported extension names
+        /** @since WebSocketHandler 2.3
+        */
+        *list<string> supported_extensions;
     }
 
     private:internal {
@@ -491,6 +631,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         - \c logger: a @ref Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
           (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
+        - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
+          @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" instance (since WebSocketHandler
+          2.3)
 
         @throw WEBSOCKETHANDLER-OPTION-ERROR unknown or invalid option
     */
@@ -539,6 +682,19 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             "non-negative relative date/time value", h.key, h.value);
                     }
                     send_timeout = h.value;
+                    break;
+                }
+                case "extensions": {
+                    if (h.value instanceof WebSocketExtensionRegistry) {
+                        extension_registry = h.value;
+                        supported_extensions = extension_registry.getRegisteredExtensions();
+                    } else if (h.value.typeCode() == NT_LIST) {
+                        supported_extensions = h.value;
+                        extension_registry = new WebSocketExtensionRegistry();
+                    } else if (h.value.val()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting a list of "
+                            "extension names or a WebSocketExtensionRegistry instance", h.key, h.value.fullType());
+                    }
                     break;
                 }
                 default:
@@ -664,6 +820,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "Sec-WebSocket-Accept": ws_get_response_key(hdr."sec-websocket-key"),
         };
 
+        # Negotiate extensions if supported
+        *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+        if (ext_result.response_header) {
+            rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
+        }
+        # Store negotiated extensions in hdr for startImpl to access
+        if (ext_result.extensions) {
+            hdr."_ws_negotiated_extensions" = ext_result.extensions;
+            hdr."_ws_extension_rsv_mask" = ext_result.rsv_mask;
+        }
+
         return {
             "code": 101,
             "hdr": rhdr,
@@ -699,6 +866,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
+
+        # Set negotiated extensions on the connection
+        if (hdr."_ws_negotiated_extensions") {
+            wsc.setExtensions(hdr."_ws_negotiated_extensions", hdr."_ws_extension_rsv_mask" ?? 0);
+            logDebug("WebSocketHandler::startImpl() cid: %y extensions: %y", cx.id,
+                (map $1.getName(), hdr."_ws_negotiated_extensions"));
+        }
+
         try {
             # issue #3225: handle exceptions in WebSocketHandler and remove the connection
             wsc.registered();
@@ -729,6 +904,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         # data buffer for fragmented frames
         data buf;
+        # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
+        hash<auto> first_frame_rsv;
         while (True) {
             #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
             if (stop || lsh{lid} || wsc.stop_flag) {
@@ -802,6 +979,24 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
 
+                # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
+                bool any_rsv_set = h.rsv1 || h.rsv2 || h.rsv3;
+                if (h.op == WSOP_Ping || h.op == WSOP_Pong || h.op == WSOP_Close) {
+                    if (any_rsv_set) {
+                        logError("invalid RSV bits on control frame: op=%d rsv1=%y rsv2=%y rsv3=%y",
+                            h.op, h.rsv1, h.rsv2, h.rsv3);
+                        sendClose(sock, WSCC_ProtocolError);
+                        break;
+                    }
+                } else {
+                    # For non-control frames, validate RSV bits against active extensions
+                    if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
+                        logError("invalid RSV bits received: rsv1=%y rsv2=%y rsv3=%y", h.rsv1, h.rsv2, h.rsv3);
+                        sendClose(sock, WSCC_ProtocolError);
+                        break;
+                    }
+                }
+
                 # issue #2887 update timestamp for incoming traffic
                 timestamp = clock_getmillis() / 1000;
 
@@ -821,6 +1016,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (!exists buf) {
                         if (h.op == WSOP_Text || h.op == WSOP_Binary) {
                             buf = h.msg;
+                            # RFC 7692 Section 6.2.1: Store RSV bits from first frame
+                            first_frame_rsv = {
+                                "rsv1": h.rsv1,
+                                "rsv2": h.rsv2,
+                                "rsv3": h.rsv3,
+                                "op": h.op,
+                            };
                         } else {
                             logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
                             sendClose(sock, WSCC_ProtocolError);
@@ -842,17 +1044,43 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     }
                     continue;
                 } else if (exists buf && h.op == WSOP_Continuation) {
-                    if (buf.typeCode() == NT_STRING) {
+                    bool is_text = buf.typeCode() == NT_STRING;
+                    if (is_text) {
                         buf += h.msg.toString();
                     } else {
                         buf += h.msg;
                     }
                     auto msg = remove buf;
+                    # RFC 7692 Section 6.2.1: Use RSV bits from first frame, not continuation
+                    hash<auto> ext_ctx = {
+                        "op": is_text ? WSOP_Text : WSOP_Binary,
+                        "rsv1": h.rsv1,
+                        "rsv2": h.rsv2,
+                        "rsv3": h.rsv3,
+                        "fin": h.fin,
+                    };
+                    if (first_frame_rsv) {
+                        ext_ctx.op = first_frame_rsv.op ?? ext_ctx.op;
+                        ext_ctx.rsv1 = first_frame_rsv.rsv1;
+                        ext_ctx.rsv2 = first_frame_rsv.rsv2;
+                        ext_ctx.rsv3 = first_frame_rsv.rsv3;
+                        remove first_frame_rsv;
+                    }
+                    wsc.applyIncomingExtensions(\msg, ext_ctx);
                     wsc.validateIncomingMessage(\msg);
                     wsc.gotMessage(msg);
                     continue;
                 } else if (h.op == WSOP_Text || h.op == WSOP_Binary) {
                     auto msg = h.msg;
+                    # Apply incoming extension transforms
+                    hash<auto> ext_ctx = {
+                        "op": h.op,
+                        "rsv1": h.rsv1,
+                        "rsv2": h.rsv2,
+                        "rsv3": h.rsv3,
+                        "fin": h.fin,
+                    };
+                    wsc.applyIncomingExtensions(\msg, ext_ctx);
                     wsc.validateIncomingMessage(\msg);
                     wsc.gotMessage(msg);
                     continue;
@@ -990,6 +1218,80 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         if (!d)
             return "n/a";
         return sprintf("type: %s: %y", d.type(), d);
+    }
+
+    #! Negotiates extensions with the client
+    /** @param client_header the client's Sec-WebSocket-Extensions header value
+
+        @return a hash with the following keys:
+        - \c extensions: list of negotiated extension objects
+        - \c response_header: the Sec-WebSocket-Extensions response header value
+        - \c rsv_mask: the combined RSV bit mask for all negotiated extensions
+
+        @since WebSocketHandler 2.3
+    */
+    private *hash<auto> negotiateExtensions(*string client_header) {
+        if (!extension_registry || !supported_extensions || !client_header) {
+            return NOTHING;
+        }
+
+        # Parse client's extension offers
+        list<hash<WsExtensionInfo>> client_extensions = WebSocketExtensionRegistry::parseExtensionHeader(client_header);
+        if (!client_extensions) {
+            return NOTHING;
+        }
+
+        list<AbstractWebSocketExtension> negotiated;
+        list<string> response_parts;
+        int rsv_mask = 0;
+
+        foreach hash<WsExtensionInfo> ext_info in (client_extensions) {
+            # Check if we support this extension
+            if (!inlist_hard(ext_info.name, supported_extensions)) {
+                continue;
+            }
+
+            # Try to create and negotiate the extension
+            try {
+                AbstractWebSocketExtension ext = extension_registry.createExtension(ext_info.name);
+                *string response = ext.negotiateServerResponse(ext_info.params);
+                if (response.val()) {
+                    negotiated += ext;
+                    response_parts += response;
+                    rsv_mask |= ext.getRsvBits();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                logDebug("Extension %y negotiation failed: %s", ext_info.name, ex.desc);
+            }
+        }
+
+        if (!negotiated) {
+            return NOTHING;
+        }
+
+        return {
+            "extensions": negotiated,
+            "response_header": response_parts.join(", "),
+            "rsv_mask": rsv_mask,
+        };
+    }
+
+    #! Returns True if extension support is enabled
+    /** @return True if extensions are configured, False otherwise
+
+        @since WebSocketHandler 2.3
+    */
+    bool hasExtensionSupport() {
+        return extension_registry.val() && supported_extensions.val();
+    }
+
+    #! Returns the list of supported extension names
+    /** @return list of supported extension names or NOTHING if no extensions are configured
+
+        @since WebSocketHandler 2.3
+    */
+    *list<string> getSupportedExtensions() {
+        return supported_extensions;
     }
 
     #! Log to the logger

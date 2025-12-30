@@ -176,6 +176,25 @@ class MyWsHandler inherits WebSocketHandler {
     }
 }
 
+#! WebSocket handler with extension support for testing
+class MyWsHandlerWithExtensions inherits WebSocketHandler {
+    public {
+        Queue errs();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new MyWsConnection(self);
+    }
+
+    logError(string fmt) {
+        errs.push(vsprintf(fmt, argv));
+        logArgs(LoggerLevel::ERROR, fmt, argv);
+    }
+}
+
 class MyWsClient inherits WebSocketClient {
     private {
         Counter cnt;
@@ -205,6 +224,8 @@ class WebSocketHandlerTest inherits QUnit::Test {
     constructor() : Test("WebSocketHandlerTest", "1.0") {
         addTestCase("disconnect test", \disconnectTest());
         addTestCase("WebSocketHandler tests", \webSocketHandlerTests());
+        addTestCase("extension tests", \extensionTests());
+        addTestCase("extension negative tests", \extensionNegativeTests());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -344,6 +365,132 @@ class WebSocketHandlerTest inherits QUnit::Test {
 
         wsHandler.errs.get(10s);
         assertEq(0, wsHandler.errs.size());
+    }
+
+    extensionTests() {
+        # Test handler constructor with extensions option
+        {
+            MyWsHandlerWithExtensions wsh({
+                "extensions": ("permessage-deflate",),
+                "logger": logger,
+            });
+            assertTrue(wsh.hasExtensionSupport());
+            assertEq(("permessage-deflate",), wsh.getSupportedExtensions());
+        }
+
+        # Test handler constructor with registry
+        {
+            WebSocketExtensionRegistry reg();
+            MyWsHandlerWithExtensions wsh({
+                "extensions": reg,
+                "logger": logger,
+            });
+            assertTrue(wsh.hasExtensionSupport());
+            assertEq(("permessage-deflate",), wsh.getSupportedExtensions());
+        }
+
+        # Test handler without extensions
+        {
+            MyWsHandlerWithExtensions wsh({
+                "logger": logger,
+            });
+            assertFalse(wsh.hasExtensionSupport());
+            assertEq(NOTHING, wsh.getSupportedExtensions());
+        }
+
+        # Create a server with extension support
+        MyWsHandlerWithExtensions extHandler({
+            "extensions": ("permessage-deflate",),
+            "logger": logger,
+            "heartbeat": 30,
+        });
+
+        # Add handler to server
+        mServer.setHandler("ws-ext-handler", "/ext", NOTHING, extHandler);
+
+        # Test client without extensions connecting to server with extensions
+        {
+            Queue msgs();
+            code callback = sub (*data msg) {
+                msgs.push(msg);
+            };
+            WebSocketClient wsc(callback, {
+                "url": "ws://localhost:" + port + "/ext",
+                "logger": logger,
+            });
+            wsc.connect();
+            assertTrue(wsc.isOpen());
+            wsc.send("ECHO test");
+            *string resp = msgs.get(5s);
+            assertEq(" test", resp);
+            wsc.disconnect();
+        }
+
+        # Test client with extensions connecting to server with extensions
+        {
+            Queue msgs();
+            code callback = sub (*data msg) {
+                msgs.push(msg);
+            };
+            PerMessageDeflateExtension ext();
+            WebSocketClient wsc(callback, {
+                "url": "ws://localhost:" + port + "/ext",
+                "extensions": (ext,),
+                "logger": logger,
+            });
+            wsc.connect();
+            assertTrue(wsc.isOpen());
+            assertTrue(wsc.hasPerMessageDeflate());
+            assertEq(("permessage-deflate",), wsc.getActiveExtensions());
+
+            # Test small message (below compression threshold)
+            wsc.send("ECHO small");
+            *string resp = msgs.get(5s);
+            assertEq(" small", resp);
+
+            wsc.disconnect();
+        }
+    }
+
+    extensionNegativeTests() {
+        # Test invalid extensions option type
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandlerWithExtensions({"extensions": "invalid"});
+        });
+
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandlerWithExtensions({"extensions": 123});
+        });
+
+        # Test WebSocketConnection extension methods
+        {
+            WebSocketConnection conn(wsHandler);
+
+            # Connection without extensions
+            assertFalse(conn.hasPerMessageDeflate());
+            assertEq(NOTHING, conn.getActiveExtensions());
+            assertTrue(conn.validateRsvBits(False, False, False));
+            assertFalse(conn.validateRsvBits(True, False, False));  # RSV1 not allowed without extension
+
+            # Set extensions
+            PerMessageDeflateExtension ext();
+            ext.setActive(True);
+            conn.setExtensions((ext,), WS_RSV1);
+
+            assertTrue(conn.hasPerMessageDeflate());
+            assertEq(("permessage-deflate",), conn.getActiveExtensions());
+            assertTrue(conn.validateRsvBits(True, False, False));  # RSV1 allowed with permessage-deflate
+            assertFalse(conn.validateRsvBits(False, True, False));  # RSV2 not allowed
+            assertFalse(conn.validateRsvBits(True, True, False));   # RSV2 not allowed even with RSV1
+        }
+
+        # Test empty extension list
+        {
+            WebSocketConnection conn(wsHandler);
+            conn.setExtensions((), 0);
+            assertFalse(conn.hasPerMessageDeflate());
+            assertEq(NOTHING, conn.getActiveExtensions());
+        }
     }
 
     private log(string str) {
