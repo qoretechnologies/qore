@@ -650,12 +650,13 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 }
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send an HTTP response in non-blocking mode
-/** @param status_code the HTTP status code (e.g. 200, 404, 500)
+/** @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
     @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; any \c "Content-Length" header here will be
     ignored and replaced with the actual body size
-    @param body optional message body to send with the response
+    @param body optional message body to send with the response; must be a @ref string or @ref binary value if
+    provided
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the HTTP response in
     non-blocking mode
@@ -671,6 +672,8 @@ AbstractPollOperation Socket::startPollSend(binary data) {
     }
     @endcode
 
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR invalid status code or unsupported body type
+
     @note This method properly handles the \c Content-Length header by calculating it from the body size, ignoring
     any \c Content-Length header passed in the \a headers argument.
 
@@ -680,6 +683,13 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 */
 AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string status_desc, string http_version,
         *hash<auto> headers, *data body) {
+    // Validate status code (must be between 100 and 599)
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
     // Build the HTTP response in a buffer
     QoreString hdr(s->getEncoding());
 
@@ -699,6 +709,10 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
             const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
             body_ptr = str->c_str();
             body_size = str->size();
+        } else {
+            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
+                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
+            return QoreValue();
         }
     }
 
