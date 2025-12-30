@@ -116,6 +116,7 @@ DOX_SPLIT_MODULES = \
     qlib/HttpClientDataProvider \
     qlib/GmailDataProvider \
     qlib/GoogleCalendarDataProvider \
+    qlib/MemcachedDataProvider \
     qlib/MewsRestDataProvider \
     qlib/OpenAiDataProvider \
     qlib/Pop3ClientDataProvider \
@@ -150,6 +151,7 @@ GoogleDataProvider_modverdir = $(modverdir)/GoogleDataProvider
 GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
 HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 HttpServerAsyncIo_modverdir = $(modverdir)/HttpServerAsyncIo
+MemcachedDataProvider_modverdir = $(modverdir)/MemcachedDataProvider
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 MongoDbDataProvider_modverdir = $(modverdir)/MongoDbDataProvider
 OpenAiDataProvider_modverdir = $(modverdir)/OpenAiDataProvider
@@ -187,6 +189,7 @@ dist_GoogleDataProvider_modver_DATA = $(wildcard qlib/GoogleDataProvider/*.q[cm]
 dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarDataProvider/*.q[cm])
 dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
 dist_HttpServerAsyncIo_modver_DATA = $(wildcard qlib/HttpServerAsyncIo/*.q[cm])
+dist_MemcachedDataProvider_modver_DATA = $(wildcard qlib/MemcachedDataProvider/*.q[cm])
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
 dist_MongoDbDataProvider_modver_DATA = $(wildcard qlib/MongoDbDataProvider/*.q[cm])
 dist_OpenAiDataProvider_modver_DATA = $(wildcard qlib/OpenAiDataProvider/*.q[cm]) $(wildcard qlib/OpenAiDataProvider/*-swagger-2.0.yaml)
@@ -1340,6 +1343,23 @@ doxygen/qlib/Doxyfile.MewsRestDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP
 # to provide the graphic file
 doxygen/qlib/Doxyfile.RedisDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/RedisDataProvider:doxygen/qlib/RedisDataProvider -tDataProvider.tag=../../DataProvider/html -tConnectionProvider.tag=../../ConnectionProvider/html -X=doxygen/ -E=redis-logo.svg $< $@
+
+doxygen/qlib/Doxyfile.DebugCmdLine: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/DebugCmdLine.qm:doxygen/qlib/DebugCmdLine.qm -tConnectionProvider.tag=../../ConnectionProvider/html -tDebugUtil.tag=../../DebugUtil/html -tDebugProgramControl.tag=../../DebugProgramControl/html $< $@
+
+doxygen/qlib/Doxyfile.DebugLinenoiseCmdLine: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/DebugLinenoiseCmdLine.qm:doxygen/qlib/DebugLinenoiseCmdLine.qm -tDebugUtil.tag=../../DebugUtil/html -tDebugCmdLine.tag=../../DebugCmdLine/html $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.MemcachedDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/MemcachedDataProvider:doxygen/qlib/MemcachedDataProvider -tDataProvider.tag=../../DataProvider/html -X=doxygen/ -E=memcached-logo.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.MongoDbDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/MongoDbDataProvider:doxygen/qlib/MongoDbDataProvider -tDataProvider.tag=../../DataProvider/html -tConnectionProvider.tag=../../ConnectionProvider/html -X=doxygen/ -E=mongodb-logo.svg $< $@
+
+doxygen/qlib/Doxyfile.RestSchemaDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/RestSchemaDataProvider:doxygen/qlib/RestSchemaDataProvider -tSwagger.tag=../../Swagger/html -tOpenApi3.tag=../../OpenApi3/html -tRestClient.tag=../../RestClient/html -tRestSchemaValidator.tag=../../RestSchemaValidator/html -tDataProvider.tag=../../DataProvider/html $< $@
 
 doxygen/modules/Doxyfile.astparser: doxygen/modules/Doxyfile.in
 	sed -e s/@QORE_MOD_NAME@/astparser/ \

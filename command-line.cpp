@@ -129,7 +129,7 @@ static const char helpstr[] =
    "      --module-apis            show all qore module API versions\n"
    "      --latest-module-api      show most recent module API version and exit\n"
    "  -o, --list-parse-options     list all parse options\n"
-   "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
+   "  -p, --set-parse-option=arg   set parse option (ex: -penable-debug)\n"
    "  -r, --warnings-are-errors    treat warnings as errors\n"
    "      --only-first-exception   don't write all parsing exceptions\n"
    "                               stop after 1st one\n"
@@ -153,6 +153,7 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
    "\n PARSE OPTIONS:\n"
    "  -A, --lock-warnings          do not allow changes in warning levels\n"
+   "      --enable-debug           enable @debug and @assert statements\n"
    "      --lockdown               only allow single-threaded code execution with\n"
    "                               no external access or terminal or GUI I/O\n"
    "      --allow-bare-refs        allow refs to vars without '$' and refs to\n"
@@ -444,6 +445,10 @@ static void new_style(const char* arg) {
    parse_options |= PO_NEW_STYLE;
 }
 
+static void do_enable_debug(const char* arg) {
+   parse_options |= PO_ENABLE_DEBUG;
+}
+
 static void short_version(const char* arg) {
    printf("%s\n", qore_version_string);
    exit(0);
@@ -623,6 +628,7 @@ static struct opt_struct_s {
    { '\0', "assume-local",         ARG_NONE, assume_local },
    { 'n', "new-style",             ARG_NONE, new_style },
    { '\0', "no-class-defs",        ARG_NONE, do_no_class_defs },
+   { '\0', "enable-debug",         ARG_NONE, do_enable_debug },
    { '\0', "no-database",          ARG_NONE, do_no_database },
    { 'D', "define",                ARG_MAND, set_define },
    { 'E', "no-external-process",   ARG_NONE, do_no_external_process },
