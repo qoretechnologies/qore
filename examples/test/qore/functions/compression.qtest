@@ -37,6 +37,9 @@ public class CompressionTest inherits QUnit::Test {
         addTestCase("zlib tests", \zlibTest());
         addTestCase("bzip compression test", \bzip2Test());
         addTestCase("raw deflate tests", \rawDeflateTest());
+%ifdef HAVE_BROTLI
+        addTestCase("brotli compression tests", \brotliTest());
+%endif
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -49,7 +52,10 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(UncompressedString, gunzip_to_string(GzippedString));
         assertEq(UncompressedBinary, gunzip_to_binary(GzippedString));
 
-        assertEq(CompressedData, compress(UncompressedString));
+        # Note: We don't test assertEq(CompressedData, compress(UncompressedString)) because
+        # different zlib implementations (e.g., zlib-ng) can produce different valid compressed
+        # output. Instead we verify round-trip and that the known CompressedData decompresses.
+        assertEq(UncompressedString, uncompress_to_string(compress(UncompressedString)));
         assertEq(UncompressedString, uncompress_to_string(CompressedData));
         assertEq(binary(UncompressedString), uncompress_to_binary(CompressedData));
 
@@ -213,4 +219,238 @@ public class CompressionTest inherits QUnit::Test {
             assertNeq(raw, zlib, "raw deflate should differ from zlib format");
         }
     }
+
+%ifdef HAVE_BROTLI
+    brotliTest() {
+        # ========================================
+        # Basic Functionality Tests
+        # ========================================
+
+        # Basic round-trip test for string input
+        {
+            string original = "Hello, Brotli compression test!";
+            binary compressed = brotli(original);
+            assertTrue(compressed.size() > 0, "compressed data should not be empty");
+            string decompressed = unbrotli_to_string(compressed);
+            assertEq(original, decompressed, "round-trip string compression");
+        }
+
+        # Basic round-trip test for binary input
+        {
+            binary original = <deadbeefcafebabe0123456789abcdef>;
+            binary compressed = brotli(original);
+            binary decompressed = unbrotli_to_binary(compressed);
+            assertEq(original, decompressed, "round-trip binary compression");
+        }
+
+        # Test with UncompressedString constant (same as other compression tests)
+        {
+            binary compressed = brotli(UncompressedString);
+            assertEq(UncompressedString, unbrotli_to_string(compressed));
+            assertEq(UncompressedBinary, unbrotli_to_binary(compressed));
+        }
+
+        # ========================================
+        # Compression Quality Level Tests
+        # ========================================
+
+        # Test all valid quality levels (0-11)
+        {
+            string original = "Test quality levels " + strmul("x", 500);
+            for (int q = 0; q <= 11; ++q) {
+                binary compressed = brotli(original, q);
+                string decompressed = unbrotli_to_string(compressed);
+                assertEq(original, decompressed, sprintf("quality level %d round-trip", q));
+            }
+        }
+
+        # Higher quality should produce smaller or equal output
+        {
+            string original = "Test quality comparison " + strmul("x", 1000);
+            binary q0 = brotli(original, 0);
+            binary q11 = brotli(original, 11);
+            assertTrue(q11.size() <= q0.size(),
+                "quality 11 should compress as well as or better than quality 0");
+            assertEq(original, unbrotli_to_string(q0));
+            assertEq(original, unbrotli_to_string(q11));
+        }
+
+        # Test default quality (-1)
+        {
+            string original = "Test default quality";
+            binary compressed = brotli(original, -1);
+            assertEq(original, unbrotli_to_string(compressed));
+            # Default should be equivalent to quality 11
+            binary default_compressed = brotli(original);
+            assertEq(compressed.size(), default_compressed.size(),
+                "default quality should be equivalent to quality 11");
+        }
+
+        # ========================================
+        # Corner Case Tests
+        # ========================================
+
+        # Empty string input
+        {
+            binary compressed = brotli("");
+            assertEq(0, compressed.size(), "empty string should produce empty compressed output");
+        }
+
+        # Empty binary input
+        {
+            binary compressed = brotli(binary());
+            assertEq(0, compressed.size(), "empty binary should produce empty compressed output");
+        }
+
+        # Single byte input
+        {
+            string single = "X";
+            binary compressed = brotli(single);
+            assertEq(single, unbrotli_to_string(compressed));
+        }
+
+        # Binary data with null bytes
+        {
+            binary with_nulls = <00010203000405060007>;
+            binary compressed = brotli(with_nulls);
+            assertEq(with_nulls, unbrotli_to_binary(compressed));
+        }
+
+        # Unicode strings with multi-byte characters
+        {
+            string unicode = "UTF-8 text: äöü ß € 日本語 🎉";
+            binary compressed = brotli(unicode);
+            string decompressed = unbrotli_to_string(compressed, "utf-8");
+            assertEq(unicode, decompressed);
+        }
+
+        # Large input (to test buffer resizing)
+        {
+            string large = strmul("Large data test with repetitive content. ", 1000);
+            binary compressed = brotli(large);
+            assertTrue(compressed.size() < large.size(),
+                "large repetitive data should compress well");
+            string decompressed = unbrotli_to_string(compressed);
+            assertEq(large, decompressed);
+        }
+
+        # Highly compressible data
+        {
+            string repetitive = strmul("a", 10000);
+            binary compressed = brotli(repetitive);
+            assertTrue(compressed.size() < repetitive.size() / 10,
+                "highly repetitive data should have high compression ratio");
+            assertEq(repetitive, unbrotli_to_string(compressed));
+        }
+
+        # Low compressibility (random-like) data
+        {
+            binary all_bytes;
+            for (int i = 0; i < 256; ++i) {
+                all_bytes += chr(i);
+            }
+            binary compressed = brotli(all_bytes);
+            binary decompressed = unbrotli_to_binary(compressed);
+            assertEq(all_bytes, decompressed);
+        }
+
+        # ========================================
+        # Negative Tests
+        # ========================================
+
+        # Invalid quality level (below min)
+        assertThrows("BROTLI-LEVEL-ERROR", sub() { brotli("test", -2); });
+        assertThrows("BROTLI-LEVEL-ERROR", sub() { brotli("test", -100); });
+
+        # Invalid quality level (above max)
+        assertThrows("BROTLI-LEVEL-ERROR", sub() { brotli("test", 12); });
+        assertThrows("BROTLI-LEVEL-ERROR", sub() { brotli("test", 100); });
+
+        # Corrupted compressed data
+        assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(<deadbeef>); });
+        assertThrows("BROTLI-ERROR", sub() { unbrotli_to_string(<deadbeef>); });
+
+        # Random garbage data
+        assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(<0102030405060708090a0b0c0d0e0f>); });
+
+        # Truncated compressed data
+        {
+            binary compressed = brotli("test data for truncation test");
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(compressed.substr(0, 5)); });
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_string(compressed.substr(0, 5)); });
+        }
+
+        # Wrong format data (gzip data to brotli decompressor)
+        {
+            binary gzip_data = gzip("test");
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(gzip_data); });
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_string(gzip_data); });
+        }
+
+        # Wrong format data (zlib data to brotli decompressor)
+        {
+            binary zlib_data = compress("test");
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(zlib_data); });
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_string(zlib_data); });
+        }
+
+        # Wrong format data (bzip2 data to brotli decompressor)
+        {
+            binary bzip2_data = bzip2("test");
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_binary(bzip2_data); });
+            assertThrows("BROTLI-ERROR", sub() { unbrotli_to_string(bzip2_data); });
+        }
+
+        # ========================================
+        # Encoding Tests
+        # ========================================
+
+        # Test different encodings for unbrotli_to_string
+        {
+            string latin1_text = "Latin-1: café résumé";
+            binary compressed = brotli(latin1_text);
+            # Decompress with explicit encoding
+            string decompressed = unbrotli_to_string(compressed, "utf-8");
+            assertEq(latin1_text, decompressed);
+        }
+
+        # Test with ASCII encoding
+        {
+            string ascii_text = "Pure ASCII text 12345";
+            binary compressed = brotli(ascii_text);
+            string decompressed = unbrotli_to_string(compressed, "ascii");
+            assertEq(ascii_text, decompressed);
+        }
+
+        # ========================================
+        # Comparison with other algorithms
+        # ========================================
+
+        # Verify Brotli output is different from gzip
+        {
+            string test = "Compare Brotli vs gzip";
+            binary br = brotli(test);
+            binary gz = gzip(test);
+            assertNeq(br, gz, "Brotli and gzip output should differ");
+        }
+
+        # Verify Brotli output is different from zlib
+        {
+            string test = "Compare Brotli vs zlib";
+            binary br = brotli(test);
+            binary zlib_data = compress(test);
+            assertNeq(br, zlib_data, "Brotli and zlib output should differ");
+        }
+
+        # ========================================
+        # Constants Tests
+        # ========================================
+
+        # Verify constants exist and have expected values
+        assertEq(11, BROTLI_DEFAULT_QUALITY);
+        assertEq(0, BROTLI_MIN_QUALITY);
+        assertEq(11, BROTLI_MAX_QUALITY);
+        assertEq("br", COMPRESSION_ALG_BROTLI);
+    }
+%endif
 }
