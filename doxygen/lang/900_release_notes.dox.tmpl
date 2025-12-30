@@ -59,6 +59,13 @@
         - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
     - <a href="../../modules/WebSocketHandler/html/index.html">WebSocketHandler</a> module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
+      - added server-side WebSocket extension support with permessage-deflate compression
+        (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+        - new \c extensions constructor option to enable supported extensions
+        - automatic negotiation with clients via Sec-WebSocket-Extensions headers
+        - compression/decompression of messages when extensions are negotiated
+        - new \c hasExtensionSupport() and \c getSupportedExtensions() handler methods
+        - new \c hasPerMessageDeflate() and \c getActiveExtensions() connection methods
     - <a href="../../modules/WebSocketUtil/html/index.html">WebSocketUtil</a> module
       - added pluggable WebSocket extension framework
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
