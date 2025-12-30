@@ -81,6 +81,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/Pop3Client.qm \
 	qlib/Qdx.qm \
 	qlib/Qorize.qm \
+	qlib/QoreRepl.qm \
 	qlib/QUnit.qm \
 	qlib/MysqlSqlUtil.qm \
 	qlib/RestHandler.qm \
@@ -158,6 +159,7 @@ Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 ProviderIndex_modverdir = $(modverdir)/ProviderIndex
 RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
+QoreRepl_modverdir = $(modverdir)/QoreRepl
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 RestSchemaDataProvider_modverdir = $(modverdir)/RestSchemaDataProvider
 SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
@@ -194,6 +196,7 @@ dist_OpenApi3DataProvider_modver_DATA = $(wildcard qlib/OpenApi3DataProvider/*.q
 dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider/*.q[cm])
 dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
 dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
+dist_QoreRepl_modver_DATA = $(wildcard qlib/QoreRepl/*.q[cm])
 dist_RedisDataProvider_modver_DATA = $(wildcard qlib/RedisDataProvider/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_RestSchemaDataProvider_modver_DATA = $(wildcard qlib/RestSchemaDataProvider/*.q[cm])

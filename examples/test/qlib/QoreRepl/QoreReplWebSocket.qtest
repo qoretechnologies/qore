@@ -1,0 +1,388 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreReplWebSocket.qtest Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketClient
+%requires QoreRepl
+%requires json
+
+%exec-class QoreReplWebSocketTest
+
+public class QoreReplWebSocketTest inherits QUnit::Test {
+    public {
+        HttpServer server;
+        QoreReplWebSocketHandler wsHandler;
+        Logger logger;
+        int port;
+    }
+
+    constructor() : Test("QoreReplWebSocketTest", "1.0") {
+        addTestCase("Handler options", \testHandlerOptions());
+        addTestCase("Session connection", \testSessionConnection());
+        addTestCase("Eval simple expression", \testEvalSimple());
+        addTestCase("Eval with error", \testEvalError());
+        addTestCase("Multi-line input", \testMultiLine());
+        addTestCase("Commands", \testCommands());
+        addTestCase("Ping/Pong", \testPingPong());
+        addTestCase("Authentication callback", \testAuthCallback());
+        addTestCase("Max connections", \testMaxConnections());
+
+        # Setup logger
+        logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        # Create handler
+        wsHandler = new QoreReplWebSocketHandler(NOTHING, {
+            "logger": logger,
+        });
+
+        # Create server
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setHandler("repl", "/ws/repl", NOTHING, wsHandler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+
+        server.stop();
+    }
+
+    testHandlerOptions() {
+        # Test default values
+        QoreReplWebSocketHandler h();
+        assertEq(0, h.getMaxConnections(), "Default max connections should be 0");
+        assertFalse(exists h.getReplOptions(), "Default REPL options should be NOTHING");
+
+        # Test setting options
+        h.setMaxConnections(5);
+        assertEq(5, h.getMaxConnections(), "Max connections should be 5");
+
+        h.setReplOptions({"parse_options": PO_NEW_STYLE});
+        assertTrue(exists h.getReplOptions(), "REPL options should be set");
+
+        # Test invalid options
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new QoreReplWebSocketHandler(NOTHING, {"auth_callback": "not a code"});
+        });
+
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new QoreReplWebSocketHandler(NOTHING, {"max_connections": -1});
+        });
+    }
+
+    testSessionConnection() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "Connection should be open");
+
+        # Wait for session message
+        string raw = msgs.get(5s);
+        hash<auto> session_msg = parse_json(raw);
+        assertEq("session", session_msg.type, "First message should be session");
+        assertTrue(exists session_msg.sessionId, "Session should have ID");
+        assertEq("1.0", session_msg.version, "Session version should be 1.0");
+        assertTrue(exists session_msg.qoreVersion, "Session should have Qore version");
+
+        # Wait for prompt
+        raw = msgs.get(5s);
+        hash<auto> prompt_msg = parse_json(raw);
+        assertEq("prompt", prompt_msg.type, "Should receive prompt");
+        assertEq("qore> ", prompt_msg.value, "Default prompt");
+        assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
+
+        wsc.disconnect();
+    }
+
+    testEvalSimple() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        # Consume session and initial prompt
+        msgs.get(5s);  # session
+        msgs.get(5s);  # prompt
+
+        # Send eval request - use a variable declaration that returns a value
+        wsc.send(make_json({"type": "eval", "id": "req1", "code": "our int x = 42"}));
+
+        # Should get result
+        string raw = msgs.get(5s);
+        hash<auto> result_msg = parse_json(raw);
+        assertEq("result", result_msg.type, "Should receive result");
+        assertEq("req1", result_msg.id, "Should have correlation ID");
+        assertTrue(exists result_msg.duration, "Should have duration");
+
+        # Should get prompt after result
+        raw = msgs.get(5s);
+        hash<auto> prompt_msg = parse_json(raw);
+        assertEq("prompt", prompt_msg.type, "Should receive prompt");
+
+        wsc.disconnect();
+    }
+
+    testEvalError() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        msgs.get(5s);  # session
+        msgs.get(5s);  # prompt
+
+        # Small delay to ensure connection is fully ready
+        usleep(50ms);
+
+        # Send code that throws
+        wsc.send(make_json({"type": "eval", "id": "err1", "code": "throw 'TEST', 'test error'"}));
+
+        # Wait for error response with longer timeout
+        *string raw;
+        try {
+            raw = msgs.get(10s);
+        } catch (hash<ExceptionInfo> ex) {
+            # Queue timeout
+        }
+        assertTrue(exists raw, "Should receive message");
+        hash<auto> error_msg = parse_json(raw);
+        assertEq("error", error_msg.type, "Should receive error");
+        assertEq("err1", error_msg.id, "Should have correlation ID");
+        assertEq("TEST", error_msg.error, "Should have error code");
+        assertRegex("test error", error_msg.description, "Should have description");
+
+        wsc.disconnect();
+    }
+
+    testMultiLine() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        msgs.get(5s);  # session
+        msgs.get(5s);  # prompt
+
+        # Send incomplete code
+        wsc.send(make_json({"type": "eval", "code": "if (True) {"}));
+
+        # Should get continuation prompt
+        string raw = msgs.get(5s);
+        hash<auto> prompt_msg = parse_json(raw);
+        assertEq("prompt", prompt_msg.type, "Should receive prompt");
+        assertEq("...> ", prompt_msg.value, "Should show continuation prompt");
+        assertTrue(prompt_msg.needsMoreInput, "Should need more input");
+
+        # Complete the statement
+        wsc.send(make_json({"type": "eval", "code": "}"}));
+
+        # Should get result and normal prompt
+        raw = msgs.get(5s);  # result
+        hash<auto> result_msg = parse_json(raw);
+        assertEq("result", result_msg.type, "Should receive result");
+
+        raw = msgs.get(5s);  # prompt
+        prompt_msg = parse_json(raw);
+        assertEq("qore> ", prompt_msg.value, "Should return to normal prompt");
+        assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
+
+        wsc.disconnect();
+    }
+
+    testCommands() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        msgs.get(5s);  # session
+        msgs.get(5s);  # prompt
+
+        # Test /help command
+        wsc.send(make_json({"type": "command", "command": "/help"}));
+
+        string raw = msgs.get(5s);
+        hash<auto> result_msg = parse_json(raw);
+        assertEq("result", result_msg.type, "Should receive result");
+        assertRegex("Special commands", result_msg.value, "Help should mention special commands");
+
+        msgs.get(5s);  # prompt
+
+        # Test unknown command
+        wsc.send(make_json({"type": "command", "command": "/unknown"}));
+
+        raw = msgs.get(5s);
+        hash<auto> error_msg = parse_json(raw);
+        assertEq("error", error_msg.type, "Unknown command should return error");
+        assertRegex("Unknown command", error_msg.description, "Should mention unknown command");
+
+        wsc.disconnect();
+    }
+
+    testPingPong() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + port + "/ws/repl",
+            "logger": logger,
+        });
+
+        wsc.connect();
+        msgs.get(5s);  # session
+        msgs.get(5s);  # prompt
+
+        # Send ping
+        wsc.send(make_json({"type": "ping", "id": "ping1"}));
+
+        string raw = msgs.get(5s);
+        hash<auto> pong_msg = parse_json(raw);
+        assertEq("pong", pong_msg.type, "Should receive pong");
+        assertEq("ping1", pong_msg.id, "Should have correlation ID");
+
+        wsc.disconnect();
+    }
+
+    testAuthCallback() {
+        # Create handler with auth callback
+        QoreReplWebSocketHandler authHandler(NOTHING, {
+            "logger": logger,
+            "auth_callback": bool sub (hash<auto> cx, hash<auto> hdr) {
+                return hdr."x-api-key" == "secret123";
+            },
+        });
+
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        int authPort = server.addListener(linfo).port;
+        server.setHandler("auth-repl", "/ws/auth-repl", NOTHING, authHandler);
+
+        # Try without auth header - should fail
+        bool connected = False;
+        try {
+            WebSocketClient badClient(sub (*data msg) {}, {
+                "url": "ws://localhost:" + authPort + "/ws/auth-repl",
+                "logger": logger,
+            });
+            badClient.connect();
+            connected = badClient.isOpen();
+            if (connected) badClient.disconnect();
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - connection should fail
+        }
+        assertFalse(connected, "Connection without auth should fail");
+
+        # Try with correct auth header - should succeed
+        Queue msgs();
+        WebSocketClient goodClient(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + authPort + "/ws/auth-repl",
+            "logger": logger,
+        });
+        goodClient.connect({"hdr": {"X-API-Key": "secret123"}});
+        assertTrue(goodClient.isOpen(), "Connection with auth should succeed");
+
+        # Should receive session message
+        string raw = msgs.get(5s);
+        hash<auto> session_msg = parse_json(raw);
+        assertEq("session", session_msg.type, "Should receive session");
+
+        goodClient.disconnect();
+    }
+
+    testMaxConnections() {
+        # Create handler with max 1 connection
+        QoreReplWebSocketHandler limitHandler(NOTHING, {
+            "logger": logger,
+            "max_connections": 1,
+        });
+
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        int limitPort = server.addListener(linfo).port;
+        server.setHandler("limit-repl", "/ws/limit-repl", NOTHING, limitHandler);
+
+        # First connection should succeed
+        Queue msgs1();
+        WebSocketClient client1(sub (*data msg) { msgs1.push(msg); }, {
+            "url": "ws://localhost:" + limitPort + "/ws/limit-repl",
+            "logger": logger,
+        });
+        client1.connect();
+        assertTrue(client1.isOpen(), "First connection should succeed");
+        msgs1.get(5s);  # session
+
+        # Second connection should fail with 503
+        bool got_error = False;
+        try {
+            WebSocketClient client2(sub (*data msg) {}, {
+                "url": "ws://localhost:" + limitPort + "/ws/limit-repl",
+                "logger": logger,
+            });
+            client2.connect();
+            if (client2.isOpen()) client2.disconnect();
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - should get HTTP 503
+            got_error = True;
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, "Should get HTTP error");
+            assertTrue(ex.arg.status_code == 503, "Should get 503 status");
+        }
+        assertTrue(got_error, "Second connection should fail with error when max reached");
+
+        # Close first, then third should succeed
+        client1.disconnect();
+        # Wait longer for server to process disconnect and decrement connection count
+        usleep(500ms);
+
+        Queue msgs3();
+        WebSocketClient client3(sub (*data msg) { msgs3.push(msg); }, {
+            "url": "ws://localhost:" + limitPort + "/ws/limit-repl",
+            "logger": logger,
+        });
+        client3.connect();
+        assertTrue(client3.isOpen(), "Connection after disconnect should succeed");
+        client3.disconnect();
+    }
+}

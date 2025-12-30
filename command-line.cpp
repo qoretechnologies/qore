@@ -44,6 +44,7 @@
 #include <libgen.h>
 #include <ctype.h>
 #include <strings.h>
+#include <unistd.h>
 
 #include <string>
 #include <map>
@@ -86,8 +87,41 @@ static bool warnings_are_errors = false;
 // stop writing parse exceptions after 1st one
 static bool only_first_except = false;
 
+// force interactive REPL mode
+static bool interactive_mode = false;
+
+// disable automatic REPL mode when stdin is a tty
+static bool no_repl = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
+
+// REPL program that is executed when entering interactive mode
+static const char repl_pgm[] =
+   "%new-style\n"
+   "%require-types\n"
+   "%strict-args\n"
+   "%requires QoreRepl\n"
+   "\n"
+   "QoreRepl::QoreRepl repl();\n"
+   "\n"
+   "while (True) {\n"
+   "    stdout.printf(repl.getPrompt());\n"
+   "    stdout.sync();\n"
+   "    *string line = stdin.readLine(False);\n"
+   "    if (!exists line) {\n"
+   "        break;\n"
+   "    }\n"
+   "    *hash<auto> result = repl.eval(line);\n"
+   "    if (result.exit) {\n"
+   "        break;\n"
+   "    }\n"
+   "    if (result.error) {\n"
+   "        stderr.printf(\"Error: %s\\n\", QoreRepl::QoreRepl::formatError(result.error));\n"
+   "    } else if (exists result.value) {\n"
+   "        stdout.printf(\"=> %s\\n\", QoreRepl::QoreRepl::formatValue(result.value));\n"
+   "    }\n"
+   "}\n";
 
 // argument to evaluate given on the command-line
 static const char* eval_arg = 0;
@@ -145,6 +179,10 @@ static const char helpstr[] =
    "                               either a region name (ex: 'Europe/Prague') or a\n"
    "                               UTC offset with format S[DD[:DD[:DD]]], S=+ or -\n"
    "\n"
+   " REPL OPTIONS:\n"
+   "      --interactive            force interactive REPL mode\n"
+   "      --no-repl                disable automatic REPL when stdin is a terminal\n"
+   "\n"
    " PARSE OPTIONS:\n"
    "  -H, --parse-option-help      display options controlling parse options";
 
@@ -157,9 +195,9 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "                               no external access or terminal or GUI I/O\n"
    "      --allow-bare-refs        allow refs to vars without '$' and refs to\n"
    "                               class members without '$.'\n"
+   "      --allow-reparse          allow multiple parse cycles (for REPL)\n"
    "      --assume-local           assume local scope for variables declared\n"
    "                               without 'my' or 'our'\n"
-   "      --no-class-defs          make class definitions illegal\n"
    "      --no-database            disallow access to database functionality\n"
    "      --no-external-access     disallow all external access (filesystem,\n"
    "                               network, external processes, etc)\n"
@@ -170,11 +208,8 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "      --no-gui                 do not allow access to GUI functionality\n"
    "      --no-io                  do not allow any I/O of any sort,\n"
    "  -I, --no-child-restrictions  do not restrict subprograms' parse options\n"
-   "      --no-constant-defs       make constant definitions illegal\n"
    "  -K, --lock-options           disable changes to parse options in program\n"
    "  -L, --no-top-level           make top-level statements illegal\n"
-   "  -M, --no-namespace-defs      make namespace declarations illegal\n"
-   "  -N, --no-new                 make using the 'new' operator illegal\n"
    "  -n, --new-style              turns on 'allow-bare-refs' and 'assume-local'\n"
    "                               for programming style more similar to C++/Java\n"
    "  -O, --require-our            require 'our' with global vars (recommended)\n"
@@ -266,6 +301,14 @@ static void set_parse_option(const char* arg) {
 
 static void only_first_exception(const char* arg) {
    only_first_except = true;
+}
+
+static void do_interactive(const char* arg) {
+   interactive_mode = true;
+}
+
+static void do_no_repl(const char* arg) {
+   no_repl = true;
 }
 
 static void list_parse_options(const char* arg) {
@@ -364,24 +407,12 @@ static void do_no_top_level(const char* arg) {
    parse_options |= PO_NO_TOP_LEVEL_STATEMENTS;
 }
 
-static void do_no_class_defs(const char* arg) {
-   parse_options |= PO_NO_CLASS_DEFS;
-}
-
-static void do_no_namespace_defs(const char* arg) {
-   parse_options |= PO_NO_NAMESPACE_DEFS;
-}
-
-static void do_no_constant_defs(const char* arg) {
-   parse_options |= PO_NO_CONSTANT_DEFS;
+static void do_allow_reparse(const char* arg) {
+   parse_options |= PO_ALLOW_REPARSE;
 }
 
 static void do_no_filesystem(const char* arg) {
    parse_options |= PO_NO_FILESYSTEM;
-}
-
-static void do_no_new(const char* arg) {
-   parse_options |= PO_NO_NEW;
 }
 
 static void do_no_child_po_restrictions(const char* arg) {
@@ -613,6 +644,8 @@ static struct opt_struct_s {
    { 'o', "list-parse-options",    ARG_NONE, list_parse_options },
    { 'p', "set-parse-option",      ARG_MAND, set_parse_option },
    { '\0', "only-first-exception", ARG_NONE, only_first_exception },
+   { '\0', "interactive",          ARG_NONE, do_interactive },
+   { '\0', "no-repl",              ARG_NONE, do_no_repl },
    { 'r', "warnings-are-errors",   ARG_NONE, warn_to_err },
    { 's', "show-charsets",         ARG_NONE, show_charsets },
    { 'w', "enable-warning",        ARG_MAND, enable_warning },
@@ -620,9 +653,9 @@ static struct opt_struct_s {
    { '\0', "lockdown",             ARG_NONE, do_lockdown },
    { 'A', "lock-warnings",         ARG_NONE, do_lock_warnings },
    { '\0', "allow-bare-refs",      ARG_NONE, allow_bare_refs },
+   { '\0', "allow-reparse",        ARG_NONE, do_allow_reparse },
    { '\0', "assume-local",         ARG_NONE, assume_local },
    { 'n', "new-style",             ARG_NONE, new_style },
-   { '\0', "no-class-defs",        ARG_NONE, do_no_class_defs },
    { '\0', "no-database",          ARG_NONE, do_no_database },
    { 'D', "define",                ARG_MAND, set_define },
    { 'E', "no-external-process",   ARG_NONE, do_no_external_process },
@@ -632,11 +665,8 @@ static struct opt_struct_s {
    { 'G', "no-global-vars",        ARG_NONE, do_no_global_vars },
    { 'H', "parse-option-help",     ARG_NONE, show_parse_option_help },
    { 'I', "no-child-restrictions", ARG_NONE, do_no_child_po_restrictions },
-   { '\0', "no-constant-defs",     ARG_NONE, do_no_constant_defs },
    { 'K', "lock-options",          ARG_NONE, do_lock_options },
    { 'L', "no-top-level",          ARG_NONE, do_no_top_level },
-   { 'M', "no-namespace-defs",     ARG_NONE, do_no_namespace_defs },
-   { 'N', "no-new",                ARG_NONE, do_no_new },
    { 'O', "require-our",           ARG_NONE, do_require_our },
    { '\0', "require-types",        ARG_NONE, do_require_types },
    { '\0', "no-locale-controle",   ARG_NONE, do_no_locale_control },
@@ -961,6 +991,10 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             qpgm->parse(cl_pgm, "<command-line>", &xsink, &wsink, warnings);
          else if (program_file_name)
             qpgm->parseFile(program_file_name, &xsink, &wsink, warnings, only_first_except);
+         else if (interactive_mode || (!no_repl && isatty(STDIN_FILENO))) {
+            // enter REPL mode
+            qpgm->parse(repl_pgm, "<repl>", &xsink, &wsink, warnings);
+         }
          else
             qpgm->parse(stdin, "<stdin>", &xsink, &wsink, warnings);
       }

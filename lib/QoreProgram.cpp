@@ -98,10 +98,7 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_THREAD_CONTROL, "PO_NO_THREAD_CONTROL", "THREAD_CONTROL");
     doMap(PO_NO_THREAD_CLASSES, "PO_NO_THREAD_CLASSES", "THREAD_CLASS");
     doMap(PO_NO_TOP_LEVEL_STATEMENTS, "PO_NO_TOP_LEVEL_STATEMENTS");
-    doMap(PO_NO_CLASS_DEFS, "PO_NO_CLASS_DEFS");
-    doMap(PO_NO_NAMESPACE_DEFS, "PO_NO_NAMESPACE_DEFS");
-    doMap(PO_NO_CONSTANT_DEFS, "PO_NO_CONSTANT_DEFS");
-    doMap(PO_NO_NEW, "PO_NO_NEW");
+    doMap(PO_ALLOW_REPARSE, "PO_ALLOW_REPARSE");
     doMap(PO_NO_INHERIT_SYSTEM_CLASSES, "PO_NO_INHERIT_SYSTEM_CLASSES");
     doMap(PO_NO_INHERIT_USER_CLASSES, "PO_NO_INHERIT_USER_CLASSES");
     doMap(PO_NO_CHILD_PO_RESTRICTIONS, "PO_NO_CHILD_PO_RESTRICTIONS");
@@ -739,7 +736,8 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     // changes to the QoreProgram atomically
     int rc;
     if (standard_parse) {
-        assert(!parsing_done);
+        // In REPL mode (PO_ALLOW_REPARSE), parsing_done may already be set
+        assert(!parsing_done || (pwo.parse_options & PO_ALLOW_REPARSE));
 
         // if the first stage of parsing has already failed,
         // then don't go forward
@@ -2188,6 +2186,10 @@ QoreListNode* QoreProgram::getThreadList() const {
    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), nullptr);
    priv->getThreadList(**rv);
    return rv.release();
+}
+
+unsigned QoreProgram::getThreadCount() const {
+   return priv->getThreadCount();
 }
 
 AbstractQoreProgramExternalData::~AbstractQoreProgramExternalData() {

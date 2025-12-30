@@ -42,10 +42,8 @@
 #define PO_NO_THREAD_CONTROL                (1 <<  2)    //!< cannot launch new threads) use thread_exit) or access thread data
 #define PO_NO_THREAD_CLASSES                (1 <<  3)    //!< no access to thread classes
 #define PO_NO_TOP_LEVEL_STATEMENTS          (1 <<  4)    //!< cannot define new top-level statements (outside of sub or class defs)
-#define PO_NO_CLASS_DEFS                    (1 <<  5)    //!< cannot define new object classes
-#define PO_NO_NAMESPACE_DEFS                (1 <<  6)    //!< cannot define new namespaces
-#define PO_NO_CONSTANT_DEFS                 (1 <<  7)    //!< cannot define new constants
-#define PO_NO_NEW                           (1 <<  8)    //!< cannot use the new operator (DEPRECATED: this option is not useful anymore because objects can be declared and created without "new")
+#define PO_ALLOW_REPARSE                    (1 <<  5)    //!< allow multiple parse/commit cycles (for REPL support); requires no other threads active in Program
+// bits 6, 7, 8 are available for future use
 #define PO_NO_INHERIT_SYSTEM_CLASSES        (1 <<  9)    //!< do not inherit system classes into this program space
 #define PO_NO_INHERIT_USER_CLASSES          (1 << 10)    //!< do not inherit public user classes into this program space
 #define PO_NO_CHILD_PO_RESTRICTIONS         (1 << 11)    //!< turn off parse option inheritance restrictions
@@ -107,6 +105,12 @@
 #define PO_NO_SYSTEM_CLASSES                PO_NO_INHERIT_SYSTEM_CLASSES
 #define PO_NO_USER_CLASSES                  PO_NO_INHERIT_USER_CLASSES
 
+// TODO: these are documented but unimplemented parse options (no bits available)
+#define PO_NO_CLASS_DEFS                    0  //!< placeholder: would disallow class definitions
+#define PO_NO_CONSTANT_DEFS                 0  //!< placeholder: would disallow constant definitions
+#define PO_NO_NAMESPACE_DEFS                0  //!< placeholder: would disallow namespace definitions
+#define PO_NO_NEW                           0  //!< placeholder: would disallow the 'new' keyword
+
 #define PO_DEFAULT 0            //!< no parse options set by default
 
 //! all options that are set by the system
@@ -135,7 +139,7 @@
 
 //! mask of all options allowing for more freedom (instead of less)
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \
-    |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG)
+    |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG|PO_ALLOW_REPARSE)
 
 //! mask of options that have no effect on code access or code safety
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \

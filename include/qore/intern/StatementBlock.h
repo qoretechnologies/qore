@@ -188,7 +188,7 @@ protected:
 class TopLevelStatementBlock : public StatementBlock {
 public:
     DLLLOCAL TopLevelStatementBlock(qore_program_private_base* p) : StatementBlock(p), hwm(statement_list.end()),
-            first(true) {
+            ehwm(statement_list.end()), first(true) {
     }
 
     DLLLOCAL virtual ~TopLevelStatementBlock() {
@@ -236,8 +236,10 @@ public:
     }
 
 protected:
-    // iterator to last commit element in statement list
+    // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
+    // iterator to last executed element in statement list (for REPARSE mode execution)
+    statement_list_t::iterator ehwm;
     // true only the first time parseInit() is called
     bool first;
 };

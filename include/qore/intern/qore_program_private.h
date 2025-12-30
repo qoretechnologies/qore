@@ -757,6 +757,13 @@ public:
         }
     }
 
+    // returns the number of threads currently active in this Program
+    DLLLOCAL unsigned getThreadCount() const {
+        // grab program-level lock
+        AutoLocker al(plock);
+        return thread_count;
+    }
+
     DLLLOCAL int lockParsing(ExceptionSink* xsink) {
         int tid = q_gettid();
         // grab program-level lock
@@ -966,7 +973,17 @@ public:
     }
 
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
-        if (parsing_done) {
+        // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
+        // The calling thread (doing the parsing) is not attached to this Program,
+        // so any thread_count > 0 means background threads are still active
+        if (pwo.parse_options & PO_ALLOW_REPARSE) {
+            if (thread_count > 0) {
+                xsink->raiseException("PARSE-ERROR", "cannot parse while threads are active in the Program "
+                    "(for REPL mode, wait for all threads to finish before parsing)");
+                return -1;
+            }
+        } else if (parsing_done) {
+            // Without PO_ALLOW_REPARSE, parsing can only happen once
             xsink->raiseException("PARSE-ERROR", "parsing can only happen once for each Program container");
             return -1;
         }

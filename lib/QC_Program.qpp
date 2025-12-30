@@ -717,6 +717,21 @@ const PO_ALLOW_WEAK_REFERENCES = PO_ALLOW_WEAK_REFERENCES;
  */
 const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 
+//! Allows a Program to be parsed multiple times (for REPL functionality)
+/** This option enables incremental parsing using parsePending()/parseCommit() cycles.
+    When set, parse() can be called multiple times on the same Program object,
+    with each parse cycle adding to the existing definitions.
+
+    @note Parsing is only allowed when no threads are active in the Program.
+
+    @see @ref parsePending() "Program::parsePending()"
+    @see @ref parseCommit() "Program::parseCommit()"
+    @see @ref parseRollback() "Program::parseRollback()"
+
+    @since %Qore 2.3
+ */
+const PO_ALLOW_REPARSE = PO_ALLOW_REPARSE;
+
 //! Allows for old pre-%Qore 0.9 top-level statements having no effect
 /**
     @since %Qore 0.9
@@ -2471,6 +2486,20 @@ list<int> l = pgm.getThreadList();
 */
 list<int> Program::getThreadList() [flags=CONSTANT] {
     return p->getThreadList();
+}
+
+//! returns the number of threads currently active in this Program
+/** @par Example:
+    @code{.py}
+int count = pgm.getThreadCount();
+    @endcode
+
+    @return the number of threads currently active in this Program
+
+    @since %Qore 2.3
+*/
+int Program::getThreadCount() [flags=CONSTANT] {
+    return p->getThreadCount();
 }
 
 //! Get @ref Qore::ProgramControl "ProgramControl"

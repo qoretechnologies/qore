@@ -1,0 +1,480 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreRepl.qtest Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires QoreRepl
+
+%exec-class QoreReplTest
+
+public class QoreReplTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreRepl", "1.0") {
+        # PO_ALLOW_REPARSE tests
+        addTestCase("PO_ALLOW_REPARSE basic tests", \testAllowReparseBasic());
+        addTestCase("PO_ALLOW_REPARSE negative tests", \testAllowReparseNegative());
+        addTestCase("PO_ALLOW_REPARSE thread safety tests", \testAllowReparseThreadSafety());
+
+        # QoreRepl basic tests
+        addTestCase("QoreRepl basic tests", \testQoreReplBasic());
+
+        # Special command tests
+        addTestCase("Command: /help", \testCommandHelp());
+        addTestCase("Command: /vars", \testCommandVars());
+        addTestCase("Command: /reset", \testCommandReset());
+        addTestCase("Command: /clear", \testCommandClear());
+        addTestCase("Command: /quit, /exit, /q", \testCommandQuit());
+        addTestCase("Command: unknown", \testCommandUnknown());
+
+        # Multi-line input tests
+        addTestCase("Multi-line: block statement", \testMultiLineBlock());
+        addTestCase("Multi-line: function definition", \testMultiLineFunction());
+        addTestCase("Multi-line: class definition", \testMultiLineClass());
+        addTestCase("Multi-line: nested blocks", \testNestedBlocks());
+        addTestCase("Multi-line: trailing operators", \testTrailingOperators());
+
+        # Error handling tests
+        addTestCase("Error: parse error", \testParseError());
+        addTestCase("Error: runtime exception", \testRuntimeError());
+
+        # Result formatting tests
+        addTestCase("Format: different types", \testResultFormatting());
+
+        # State persistence tests
+        addTestCase("State persistence across evals", \testStatePersistence());
+
+        set_return_value(main());
+    }
+
+    #! Test basic PO_ALLOW_REPARSE functionality
+    testAllowReparseBasic() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        assertTrue((pgm.getParseOptions() & PO_ALLOW_REPARSE) != 0,
+            "PO_ALLOW_REPARSE should be set");
+
+        pgm.parse("our int x = 1;", "test1");
+        pgm.run();
+        assertEq(1, pgm.getGlobalVariable("x"), "First parse should set x=1");
+
+        pgm.parse("our int y = x + 10;", "test2");
+        pgm.run();
+        assertEq(11, pgm.getGlobalVariable("y"), "Second parse should set y=11");
+
+        # Test function definition (use 'sub' keyword for top-level functions)
+        pgm.parse("int sub double(int n) { return n * 2; }", "test3");
+        pgm.run();
+        pgm.parse("our int doubled = double(11);", "test4");
+        pgm.run();
+        assertEq(22, pgm.getGlobalVariable("doubled"), "Function should work");
+    }
+
+    #! Test negative cases - parsing without PO_ALLOW_REPARSE should fail
+    testAllowReparseNegative() {
+        Program pgm(PO_NEW_STYLE, True);
+        assertTrue((pgm.getParseOptions() & PO_ALLOW_REPARSE) == 0,
+            "PO_ALLOW_REPARSE should NOT be set");
+
+        pgm.parse("our int x = 1;", "test1");
+        pgm.run();
+        assertEq(1, pgm.getGlobalVariable("x"), "First parse should succeed");
+
+        bool caught = False;
+        try {
+            pgm.parse("our int y = 2;", "test2");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PARSE-ERROR", ex.err, "Should get PARSE-ERROR");
+        }
+        assertTrue(caught, "Second parse without PO_ALLOW_REPARSE should throw");
+    }
+
+    #! Test thread safety - parsing should be blocked when threads are active
+    testAllowReparseThreadSafety() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+
+        pgm.parse("
+            our bool stop = False;
+            sub worker() { while (!stop) usleep(10ms); }
+        ", "setup");
+        pgm.run();
+
+        pgm.parse("background worker();", "start");
+        pgm.run();
+
+        # Wait for thread to start
+        while (pgm.getThreadCount() == 0) usleep(10ms);
+        assertTrue(pgm.getThreadCount() > 0, "Thread should be running");
+
+        # Parsing while thread is active should fail
+        bool caught = False;
+        try {
+            pgm.parse("our int x = 1;", "fail");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PARSE-ERROR", ex.err, "Should get PARSE-ERROR");
+        }
+        assertTrue(caught, "Parse with active thread should throw");
+
+        # Stop the thread
+        pgm.setGlobalVarValue("stop", True);
+        while (pgm.getThreadCount() > 0) usleep(10ms);
+        assertEq(0, pgm.getThreadCount(), "Thread should have stopped");
+
+        # Parsing after thread stops should succeed
+        pgm.parse("our int ok = 42;", "after");
+        pgm.run();
+        assertEq(42, pgm.getGlobalVariable("ok"), "Parse should succeed after thread stops");
+    }
+
+    #! Test basic QoreRepl functionality
+    testQoreReplBasic() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("1 + 1");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+
+        result = repl.eval("our int x = 10");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+        assertEq(10, repl.getProgram().getGlobalVariable("x"), "x should be 10");
+
+        result = repl.eval("int sub square(int n) { return n * n; }");
+        assertTrue(exists result, "Should return result");
+        assertTrue(!result.error, "Should not have error");
+
+        result = repl.eval("our int sq = square(5)");
+        assertTrue(!result.error, "Function call should succeed");
+        assertEq(25, repl.getProgram().getGlobalVariable("sq"), "square(5) = 25");
+
+        assertEq("qore> ", repl.getPrompt(), "Default prompt");
+        assertFalse(repl.needsMoreInput(), "Should not need more input");
+    }
+
+    #! Test /help command
+    testCommandHelp() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("/help");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.value, "Should have value");
+        assertRegex("Special commands", result.value, "Help should mention special commands");
+        assertRegex("/quit", result.value, "Help should mention /quit");
+        assertRegex("/vars", result.value, "Help should mention /vars");
+
+        # Test /? alias
+        result = repl.eval("/?");
+        assertTrue(exists result.value, "/?  should also return help");
+    }
+
+    #! Test /vars command
+    testCommandVars() {
+        QoreRepl repl();
+
+        # Initially - may have inherited system variables (ARGV, ENV, etc.)
+        *hash<auto> result = repl.eval("/vars");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertTrue(exists result.value, "/vars should return output");
+
+        # Add a user variable
+        repl.eval("our int x = 42");
+        result = repl.eval("/vars");
+        assertRegex("x", result.value, "Should show x variable");
+        assertRegex("42", result.value, "Should show x value");
+
+        # Add more variables
+        repl.eval("our string name = 'test'");
+        result = repl.eval("/vars");
+        assertRegex("x", result.value, "Should still show x");
+        assertRegex("name", result.value, "Should show name variable");
+    }
+
+    #! Test /reset command
+    testCommandReset() {
+        QoreRepl repl();
+
+        # Set up some state
+        repl.eval("our int x = 100");
+        assertEq(100, repl.getProgram().getGlobalVariable("x"), "x should be 100");
+
+        # Reset
+        *hash<auto> result = repl.eval("/reset");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("reset", result.value.lwr(), "Should confirm reset");
+
+        # User-defined variable should be gone
+        # Note: System variables like ARGV, ENV may still exist after reset
+        *hash<auto> vars = repl.eval("/vars");
+        assertFalse(exists vars.error, "/vars should not error after reset");
+        # x should no longer be in the output
+        assertFalse(vars.value =~ /\bx\b/, "Variable x should be cleared after reset");
+    }
+
+    #! Test /clear command
+    testCommandClear() {
+        QoreRepl repl();
+
+        # Start a multi-line input
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input");
+        assertTrue(repl.needsMoreInput(), "Should be in multi-line mode");
+        assertEq("...> ", repl.getPrompt(), "Should show continuation prompt");
+
+        # Clear the pending input
+        result = repl.eval("/clear");
+        assertTrue(exists result, "Should return result");
+        assertFalse(exists result.error, "Should not have error");
+        assertFalse(repl.needsMoreInput(), "Should no longer need more input");
+        assertEq("qore> ", repl.getPrompt(), "Should show normal prompt");
+    }
+
+    #! Test /quit, /exit, /q commands
+    testCommandQuit() {
+        QoreRepl repl();
+
+        # Test /quit
+        *hash<auto> result = repl.eval("/quit");
+        assertTrue(exists result, "Should return result");
+        assertTrue(result.exit, "/quit should set exit flag");
+
+        # Test /exit
+        repl.reset();
+        result = repl.eval("/exit");
+        assertTrue(result.exit, "/exit should set exit flag");
+
+        # Test /q
+        repl.reset();
+        result = repl.eval("/q");
+        assertTrue(result.exit, "/q should set exit flag");
+    }
+
+    #! Test unknown command
+    testCommandUnknown() {
+        QoreRepl repl();
+
+        *hash<auto> result = repl.eval("/unknown");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("Unknown command", result.error.desc, "Should mention unknown command");
+    }
+
+    #! Test multi-line block statement
+    testMultiLineBlock() {
+        QoreRepl repl();
+
+        # Start if block
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input after opening brace");
+        assertTrue(repl.needsMoreInput(), "Should need more input");
+
+        # Add body
+        result = repl.eval("    our int x = 1;");
+        assertFalse(exists result, "Should still need more input");
+
+        # Close block
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete after closing brace");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(1, repl.getProgram().getGlobalVariable("x"), "Block should have executed");
+    }
+
+    #! Test multi-line function definition
+    testMultiLineFunction() {
+        QoreRepl repl();
+
+        # Start function
+        *hash<auto> result = repl.eval("int sub add(int a, int b) {");
+        assertFalse(exists result, "Should need more input");
+
+        # Add body
+        result = repl.eval("    return a + b;");
+        assertFalse(exists result, "Should still need more input");
+
+        # Close function
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Use the function
+        result = repl.eval("our int sum = add(3, 4)");
+        assertFalse(exists result.error, "Function call should succeed");
+        assertEq(7, repl.getProgram().getGlobalVariable("sum"), "add(3, 4) = 7");
+    }
+
+    #! Test multi-line class definition
+    testMultiLineClass() {
+        QoreRepl repl();
+
+        # Start class
+        *hash<auto> result = repl.eval("class Counter {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    private { int count = 0; }");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    int inc() { return ++count; }");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Use the class
+        result = repl.eval("our Counter c()");
+        assertFalse(exists result.error, "Should create instance");
+
+        result = repl.eval("our int n = c.inc()");
+        assertFalse(exists result.error, "Should call method");
+        assertEq(1, repl.getProgram().getGlobalVariable("n"), "c.inc() should return 1");
+    }
+
+    #! Test deeply nested blocks
+    testNestedBlocks() {
+        QoreRepl repl();
+
+        # Nested if blocks
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    if (True) {");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("        our int deep = 42;");
+        assertFalse(exists result, "Should need more input");
+
+        result = repl.eval("    }");
+        assertFalse(exists result, "Should still need more input (outer block open)");
+
+        result = repl.eval("}");
+        assertTrue(exists result, "Should complete after all braces closed");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(42, repl.getProgram().getGlobalVariable("deep"), "Nested block should execute");
+    }
+
+    #! Test trailing operators indicate continuation
+    testTrailingOperators() {
+        QoreRepl repl();
+
+        # Trailing comma
+        *hash<auto> result = repl.eval("our list<auto> l = (1,");
+        assertFalse(exists result, "Trailing comma should need more input");
+
+        result = repl.eval("2, 3)");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+
+        # Trailing plus
+        result = repl.eval("our int x = 1 +");
+        assertFalse(exists result, "Trailing + should need more input");
+
+        result = repl.eval("2");
+        assertTrue(exists result, "Should complete");
+        assertFalse(exists result.error, "Should not have error");
+        assertEq(3, repl.getProgram().getGlobalVariable("x"), "1 + 2 = 3");
+    }
+
+    #! Test parse error handling
+    testParseError() {
+        QoreRepl repl();
+
+        # Syntax error - use a clearly invalid expression
+        *hash<auto> result = repl.eval("our int x = @#$");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        # Could be PARSE-EXCEPTION or PARSE-ERROR depending on the error
+        assertTrue(result.error.err =~ /PARSE/, "Should be a parse error");
+    }
+
+    #! Test runtime exception handling
+    testRuntimeError() {
+        QoreRepl repl();
+
+        # Runtime exception
+        *hash<auto> result = repl.eval("throw 'TEST-ERROR', 'test exception'");
+        assertTrue(exists result, "Should return result");
+        assertTrue(exists result.error, "Should have error");
+        assertEq("TEST-ERROR", result.error.err, "Should be TEST-ERROR");
+        assertRegex("test exception", result.error.desc, "Should contain exception message");
+    }
+
+    #! Test result formatting for different types
+    testResultFormatting() {
+        # Integer
+        assertEq("42", QoreRepl::formatValue(42), "Integer formatting");
+
+        # Float
+        assertRegex("3\\.14", QoreRepl::formatValue(3.14), "Float formatting");
+
+        # String - should be quoted
+        assertEq("\"hello\"", QoreRepl::formatValue("hello"), "String formatting");
+
+        # Boolean
+        assertEq("True", QoreRepl::formatValue(True), "Boolean True formatting");
+        assertEq("False", QoreRepl::formatValue(False), "Boolean False formatting");
+
+        # NOTHING
+        assertEq("", QoreRepl::formatValue(NOTHING), "NOTHING formatting");
+
+        # List
+        string listFmt = QoreRepl::formatValue((1, 2, 3));
+        assertRegex("1", listFmt, "List should contain 1");
+        assertRegex("2", listFmt, "List should contain 2");
+
+        # Hash
+        string hashFmt = QoreRepl::formatValue({"a": 1, "b": 2});
+        assertRegex("a", hashFmt, "Hash should contain key a");
+        assertRegex("b", hashFmt, "Hash should contain key b");
+    }
+
+    #! Test state persistence across multiple evals
+    testStatePersistence() {
+        QoreRepl repl();
+
+        # Define variable
+        repl.eval("our int counter = 0");
+        assertEq(0, repl.getProgram().getGlobalVariable("counter"), "Initial counter");
+
+        # Modify in loop - use while loop for simplicity
+        repl.eval("{ int i = 0; while (i < 5) { counter++; i++; } }");
+        assertEq(5, repl.getProgram().getGlobalVariable("counter"), "Counter after loop");
+
+        # Define and use function
+        repl.eval("int sub getCounter() { return counter; }");
+        repl.eval("our int val = getCounter()");
+        assertEq(5, repl.getProgram().getGlobalVariable("val"), "Function should access variable");
+
+        # Modify via function
+        repl.eval("sub incCounter() { counter++; }");
+        repl.eval("incCounter()");
+        assertEq(6, repl.getProgram().getGlobalVariable("counter"), "Counter after incCounter");
+    }
+}
+

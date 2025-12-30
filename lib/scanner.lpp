@@ -955,8 +955,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%no-thread-control{WS}*$               parse_set_parse_options(yylloc, PO_NO_THREAD_CONTROL);
 ^%no-thread-info{WS}*$                  parse_set_parse_options(yylloc, PO_NO_THREAD_INFO);
 ^%no-top-level{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TOP_LEVEL_STATEMENTS);
-^%no-class-defs{WS}*$                   parse_set_parse_options(yylloc, PO_NO_CLASS_DEFS);
-^%no-namespace-defs{WS}*$               parse_set_parse_options(yylloc, PO_NO_NAMESPACE_DEFS);
+^%allow-reparse{WS}*$                   parse_set_parse_options(yylloc, PO_ALLOW_REPARSE);
 ^%no-external-process{WS}*$             parse_set_parse_options(yylloc, PO_NO_EXTERNAL_PROCESS);
 ^%no-external-info{WS}*$                parse_set_parse_options(yylloc, PO_NO_EXTERNAL_INFO);
 ^%no-external-access{WS}*$              parse_set_parse_options(yylloc, PO_NO_EXTERNAL_ACCESS);
@@ -967,8 +966,6 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%lock-warnings{WS}*$                   parse_set_parse_options(yylloc, PO_LOCK_WARNINGS);
 ^%no-locale-control{WS}*$               parse_set_parse_options(yylloc, PO_NO_LOCALE_CONTROL);
 ^%no-process-control{WS}*$              parse_set_parse_options(yylloc, PO_NO_PROCESS_CONTROL);
-^%no-constant-defs{WS}*$                parse_set_parse_options(yylloc, PO_NO_CONSTANT_DEFS);
-^%no-new{WS}*$                          parse_set_parse_options(yylloc, PO_NO_NEW);
 ^%no-network{WS}*$                      parse_set_parse_options(yylloc, PO_NO_NETWORK);
 ^%no-child-restrictions{WS}*$           parse_set_parse_options(yylloc, PO_NO_CHILD_PO_RESTRICTIONS);
 ^%allow-injection{WS}*$                 parse_set_parse_options(yylloc, PO_ALLOW_INJECTION);

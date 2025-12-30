@@ -113,6 +113,21 @@
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
       - @ref Qore::RegexExtract "RegexExtract" - pre-compiled regex extraction with global mode support
+    - <a href="../../modules/QoreRepl/html/index.html">QoreRepl</a> module
+      - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
+      - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
+      - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
+    - integrated REPL mode in the \c qore binary
+      - automatically enters REPL mode when run interactively in a terminal with no script file
+      - new \c --interactive command-line option to force REPL mode
+      - new \c --no-repl command-line option to disable automatic REPL mode when stdin is a terminal
+      - uses the QoreRepl module for the interactive session
+    - new parse option @ref PO_ALLOW_REPARSE
+      - enables multiple parse/commit cycles on a Program object for REPL functionality
+      - parsing is blocked when threads are active in the Program to ensure thread safety
+    - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
+      - returns the number of threads currently active in a Program object
+      - useful for coordinating thread activity with parse operations when using PO_ALLOW_REPARSE
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/RestClient/html/index.html">RestClient</a> module

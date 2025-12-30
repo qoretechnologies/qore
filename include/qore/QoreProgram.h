@@ -665,6 +665,13 @@ public:
     */
     DLLEXPORT QoreListNode* getThreadList() const;
 
+    //! returns the number of threads currently active in this Program object
+    /** @return the number of threads currently active in this Program object
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT unsigned getThreadCount() const;
+
     //! search for the given class in the program; can be a simple class name or a namespace-prefixed path (ex: "NamespaceName::ClassName")
     /** @since %Qore 0.9
     */
