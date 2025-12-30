@@ -144,15 +144,15 @@ server.start();
 
 # Create a sandboxed REPL that cannot access filesystem, network, or external processes
 int sandbox_options = PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS;
-QoreRepl repl(NOTHING, sandbox_options);
+QoreRepl repl({"parse_options": sandbox_options});
 
 # Filesystem commands will show graceful error messages
 *hash<auto> result = repl.eval("/pwd");
-# Result: {"output": "Error: Filesystem access is restricted in this session\n"}
+# Result: {"error": {"err": "SANDBOX-ERROR", "desc": "filesystem access is restricted..."}}
 
 # Code that tries to access restricted resources will fail
 result = repl.eval("File::readTextFile('/etc/passwd')");
-# Result: {"exception": "PARSE-EXCEPTION", ...}
+# Result: {"error": {"err": "PARSE-EXCEPTION", "desc": "..."}}
     @endcode
 
     @subsection qorerepl_sandbox_options Available Parse Options for Sandboxing
@@ -172,10 +172,10 @@ result = repl.eval("File::readTextFile('/etc/passwd')");
     When filesystem access is restricted (@ref Qore::PO_NO_FILESYSTEM), the following
     REPL commands will display helpful error messages instead of failing silently:
 
-    - @c /pwd - Shows "Filesystem access is restricted in this session"
-    - @c /cd - Shows "Filesystem access is restricted in this session"
-    - @c /load - Shows "Filesystem access is restricted in this session"
-    - @c /save - Shows "Filesystem access is restricted in this session"
+    - @c /pwd - Shows "filesystem access is restricted (PO_NO_FILESYSTEM)"
+    - @c /cd - Shows "filesystem access is restricted (PO_NO_FILESYSTEM)"
+    - @c /load - Shows "filesystem access is restricted (PO_NO_FILESYSTEM)"
+    - @c /save - Shows "filesystem access is restricted (PO_NO_FILESYSTEM)"
 
     All other REPL commands continue to work normally in sandboxed mode, including
     introspection commands (/vars, /functions, /classes, etc.) and session commands
@@ -191,7 +191,7 @@ result = repl.eval("File::readTextFile('/etc/passwd')");
 
 # Create a sandboxed WebSocket REPL handler
 int sandbox_options = PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS;
-QoreReplWebSocketHandler handler(NOTHING, sandbox_options);
+QoreReplWebSocketHandler handler({"parse_options": sandbox_options});
 
 # Add authentication for additional security
 handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {

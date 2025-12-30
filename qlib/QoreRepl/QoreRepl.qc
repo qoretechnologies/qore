@@ -132,6 +132,32 @@ public class QoreRepl {
         "final": True,
         "synchronized": True,
         "deprecated": True,
+        "module": True,
+        # Type declarations (used in typed function/variable declarations)
+        "int": True,
+        "float": True,
+        "number": True,
+        "string": True,
+        "bool": True,
+        "date": True,
+        "binary": True,
+        "hash": True,
+        "list": True,
+        "object": True,
+        "auto": True,
+        "any": True,
+        "nothing": True,
+        "softint": True,
+        "softfloat": True,
+        "softnumber": True,
+        "softstring": True,
+        "softbool": True,
+        "softdate": True,
+        "softlist": True,
+        "timeout": True,
+        "code": True,
+        "reference": True,
+        "data": True,
         # Control flow
         "if": True,
         "while": True,
@@ -175,7 +201,7 @@ public class QoreRepl {
     private string wrapExpressionIfNeeded(string code) {
         string trimmed = trim(code);
 
-        # Empty or already empty
+        # Empty or just semicolon
         if (trimmed == "" || trimmed == ";") {
             return code;
         }
@@ -507,7 +533,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
                 if (!args.size()) {
                     return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/describe requires a name"}};
                 }
-                return describeSymbol(args[0]);
+                # Join args to support namespace-qualified names like "Qore::File" typed with spaces
+                string name = args.size() == 1 ? args[0] : args.join("");
+                return describeSymbol(name);
 
             case "/history":
                 return {"value": formatHistory()};
