@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebSocketUtil.qm WebSocket common client/server code
 
-/*  WebSocketUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  WebSocketUtil.qm Copyright 2013 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,7 +35,7 @@
 %new-style
 
 module WebSocketUtil {
-    version = "1.4.1";
+    version = "1.5";
     desc = "user module providing common client and server support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -65,6 +65,14 @@ module WebSocketUtil {
 
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
+    @subsection wsu_v15 v1.5
+    - added RSV bit support for WebSocket extensions
+      (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - added @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3 constants
+      - added \c rsv1, \c rsv2, \c rsv3 fields to @ref WsMsgInfo
+      - added optional \c rsv_bits parameter to @ref ws_encode_message()
+      - @ref ws_read_message() now extracts RSV bits
+
     @subsection wsu_v141 v1.4.1
     - added support for continuation frames
       (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
@@ -89,11 +97,22 @@ module WebSocketUtil {
 public namespace WebSocketUtil {
     #! WebSocket message info
     public hashdecl WsMsgInfo {
+        #! Frame opcode (one of @ref opcodes)
         int op;
+        #! True if the frame was masked
         bool masked;
+        #! Close code (one of @ref closecodes); only set if op is @ref WSOP_Close
         int close;
+        #! True if this is the final frame in a message
         bool fin;
+        #! Message data
         *data msg;
+        #! RSV1 bit (used by extensions like permessage-deflate)
+        bool rsv1 = False;
+        #! RSV2 bit (reserved for extensions)
+        bool rsv2 = False;
+        #! RSV3 bit (reserved for extensions)
+        bool rsv3 = False;
     }
 
     #! WebSocket GUID
@@ -101,6 +120,21 @@ public namespace WebSocketUtil {
 
     #! the final fragment in a message
     public const WS_FIN = (1 << 7);
+
+    #! RSV1 bit - used by permessage-deflate extension
+    /** @since WebSocketUtil 1.5
+    */
+    public const WS_RSV1 = (1 << 6);
+
+    #! RSV2 bit - reserved for extensions
+    /** @since WebSocketUtil 1.5
+    */
+    public const WS_RSV2 = (1 << 5);
+
+    #! RSV3 bit - reserved for extensions
+    /** @since WebSocketUtil 1.5
+    */
+    public const WS_RSV3 = (1 << 4);
 
     /** @defgroup opcodes WebSocket OpCodes
      */
@@ -191,7 +225,18 @@ public namespace WebSocketUtil {
     #/@}
 
     #! encodes a message for sending over a websocket socket
-    public binary sub ws_encode_message(data msg, int op = -1, *bool masked, bool fin = True) {
+    /** @param msg the message to encode
+        @param op the opcode to use; if -1 (the default), the opcode is determined from the message type
+        @param masked if True, the message is masked with a random mask
+        @param fin if True (the default), the FIN bit is set
+        @param rsv_bits optional RSV bits to set (bitmask of @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3);
+               these are used by extensions like permessage-deflate
+
+        @return the encoded WebSocket frame as binary data
+
+        @since WebSocketUtil 1.5 added the \c rsv_bits parameter
+    */
+    public binary sub ws_encode_message(data msg, int op = -1, *bool masked, bool fin = True, int rsv_bits = 0) {
         if (op == -1)
             op = msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary;
 
@@ -202,14 +247,18 @@ public namespace WebSocketUtil {
             } while (mask == <00000000>);
         }
 
-        #printf("ws_encode_message() d: %y op: %d/%y masked: %y fin: %y\n", msg, op, WSOPMap{op}, masked, fin);
+        #printf("ws_encode_message() d: %y op: %d/%y masked: %y fin: %y rsv: %d\n", msg, op, WSOPMap{op}, masked, fin, rsv_bits);
+
+        # Build first byte: FIN + RSV bits + opcode
+        int b0 = op;
+        if (fin) {
+            b0 |= WS_FIN;
+        }
+        # Apply RSV bits (mask to ensure only RSV bits are set)
+        b0 |= (rsv_bits & (WS_RSV1 | WS_RSV2 | WS_RSV3));
 
         binary frame;
-        if (fin) {
-            frame += chr(WS_FIN | op);
-        } else {
-            frame += chr(op);
-        }
+        frame += chr(b0);
 
         # encode frames with a message size < 126 directly in the second byte
         switch (msg.size()) {
@@ -261,6 +310,12 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c masked a boolean flag indicating if the message was masked or not
         - \c msg: the message received; if a CLOSE opcode is received (see @ref WSOP_Close) then any close message is decoded and included here in text form
         - \c close: the close code (one of @ref closecodes); only included if \a op is @ref WSOP_Close
+        - \c fin: True if this is the final frame in a message
+        - \c rsv1: the RSV1 bit (used by extensions like permessage-deflate)
+        - \c rsv2: the RSV2 bit (reserved for extensions)
+        - \c rsv3: the RSV3 bit (reserved for extensions)
+
+        @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
     */
     public hash<WsMsgInfo> sub ws_read_message(Socket sock, *timeout to) {
         int b0 = sock.recvu1(to);
@@ -268,6 +323,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         # get opcode
         int op = b0 & 0xf;
         softbool fin = b0 & WS_FIN;
+
+        # extract RSV bits
+        softbool rsv1 = b0 & WS_RSV1;
+        softbool rsv2 = b0 & WS_RSV2;
+        softbool rsv3 = b0 & WS_RSV3;
 
         # get next byte
         int b1 = sock.recvu1(to);
@@ -305,6 +365,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             "op": op,
             "masked": masked,
             "fin": fin,
+            "rsv1": rsv1,
+            "rsv2": rsv2,
+            "rsv3": rsv3,
         });
         if (h.op == WSOP_Close) {
             if (data) {

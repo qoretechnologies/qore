@@ -19,6 +19,7 @@ public class WebSocketUtilTest inherits QUnit::Test {
 
     constructor() : Test("WebSocketUtilTest", "1.0") {
         addTestCase("WebSocketUtil tests", \webSocketUtilTests());
+        addTestCase("RSV bit tests", \rsvBitTests());
         set_return_value(main());
     }
 
@@ -44,6 +45,132 @@ public class WebSocketUtilTest inherits QUnit::Test {
         assertEq(False, h.masked);
         assertEq(WSCC_NoStatusRcvd, h.close);
         assertEq(Msg, h.msg);
+        # RSV bits should default to False for backwards compatibility
+        assertEq(False, h.rsv1);
+        assertEq(False, h.rsv2);
+        assertEq(False, h.rsv3);
+    }
+
+    rsvBitTests() {
+        srand(clock_getmicros());
+
+        # Test RSV bit constants
+        assertEq(0x40, WS_RSV1);
+        assertEq(0x20, WS_RSV2);
+        assertEq(0x10, WS_RSV3);
+
+        # Test encoding with RSV1 bit (used by permessage-deflate)
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, True, WS_RSV1);
+            # First byte should be: 0x80 (FIN) | 0x40 (RSV1) | 0x01 (TEXT) = 0xC1
+            assertEq(0xC1, b[0]);
+            assertEq(5, b[1]);  # length
+        }
+
+        # Test encoding with RSV2 bit
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, True, WS_RSV2);
+            # First byte should be: 0x80 (FIN) | 0x20 (RSV2) | 0x01 (TEXT) = 0xA1
+            assertEq(0xA1, b[0]);
+        }
+
+        # Test encoding with RSV3 bit
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, True, WS_RSV3);
+            # First byte should be: 0x80 (FIN) | 0x10 (RSV3) | 0x01 (TEXT) = 0x91
+            assertEq(0x91, b[0]);
+        }
+
+        # Test encoding with multiple RSV bits
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, True, WS_RSV1 | WS_RSV2 | WS_RSV3);
+            # First byte should be: 0x80 (FIN) | 0x70 (all RSV) | 0x01 (TEXT) = 0xF1
+            assertEq(0xF1, b[0]);
+        }
+
+        # Test encoding without FIN but with RSV1
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, False, WS_RSV1);
+            # First byte should be: 0x40 (RSV1) | 0x01 (TEXT) = 0x41
+            assertEq(0x41, b[0]);
+        }
+
+        # Test encoding without RSV bits (backwards compatibility)
+        {
+            binary b = ws_encode_message("hello", WSOP_Text, False, True);
+            # First byte should be: 0x80 (FIN) | 0x01 (TEXT) = 0x81
+            assertEq(0x81, b[0]);
+        }
+
+        # Test decoding RSV bits via socket
+        int port = 0;
+        Socket server();
+        server.bind(port);
+        port = server.getSocketInfo().port;
+        server.listen();
+
+        # Test RSV1 bit decoding
+        {
+            # Build a frame with RSV1 set: 0xC1 (FIN + RSV1 + TEXT), 0x05 (len), "hello"
+            binary frame = <c105> + binary("hello");
+            background doSend(frame, port);
+            Socket client = server.accept(10s);
+            hash<WsMsgInfo> h = ws_read_message(client, 10s);
+            assertEq(WSOP_Text, h.op);
+            assertEq(True, h.fin);
+            assertEq(True, h.rsv1);
+            assertEq(False, h.rsv2);
+            assertEq(False, h.rsv3);
+            assertEq("hello", h.msg);
+        }
+
+        # Test RSV2 bit decoding
+        {
+            # Build a frame with RSV2 set: 0xA1 (FIN + RSV2 + TEXT), 0x05 (len), "hello"
+            binary frame = <a105> + binary("hello");
+            background doSend(frame, port);
+            Socket client = server.accept(10s);
+            hash<WsMsgInfo> h = ws_read_message(client, 10s);
+            assertEq(True, h.rsv2);
+            assertEq(False, h.rsv1);
+            assertEq(False, h.rsv3);
+        }
+
+        # Test RSV3 bit decoding
+        {
+            # Build a frame with RSV3 set: 0x91 (FIN + RSV3 + TEXT), 0x05 (len), "hello"
+            binary frame = <9105> + binary("hello");
+            background doSend(frame, port);
+            Socket client = server.accept(10s);
+            hash<WsMsgInfo> h = ws_read_message(client, 10s);
+            assertEq(True, h.rsv3);
+            assertEq(False, h.rsv1);
+            assertEq(False, h.rsv2);
+        }
+
+        # Test all RSV bits set
+        {
+            # Build a frame with all RSV bits: 0xF1 (FIN + RSV1-3 + TEXT), 0x05 (len), "hello"
+            binary frame = <f105> + binary("hello");
+            background doSend(frame, port);
+            Socket client = server.accept(10s);
+            hash<WsMsgInfo> h = ws_read_message(client, 10s);
+            assertEq(True, h.rsv1);
+            assertEq(True, h.rsv2);
+            assertEq(True, h.rsv3);
+        }
+
+        # Test no RSV bits set (backwards compatibility)
+        {
+            # Build a normal frame: 0x81 (FIN + TEXT), 0x05 (len), "hello"
+            binary frame = <8105> + binary("hello");
+            background doSend(frame, port);
+            Socket client = server.accept(10s);
+            hash<WsMsgInfo> h = ws_read_message(client, 10s);
+            assertEq(False, h.rsv1);
+            assertEq(False, h.rsv2);
+            assertEq(False, h.rsv3);
+        }
     }
 
     private doSend(binary msg, int port) {
