@@ -989,6 +989,32 @@ fi
 AC_SUBST([MONGODB_CPPFLAGS])
 AC_SUBST([MONGODB_LIBS])
 
+# Check for Brotli compression library - optional
+AC_ARG_ENABLE([brotli],
+    [AS_HELP_STRING([--disable-brotli], [disable Brotli compression support])],
+    [enable_brotli=$enableval],
+    [enable_brotli=yes])
+
+if test "x$enable_brotli" = "xyes"; then
+    AC_MSG_CHECKING([for Brotli libraries and header files])
+    if pkg-config --exists libbrotlienc libbrotlidec 2>/dev/null; then
+        BROTLI_CPPFLAGS="`pkg-config --cflags libbrotlienc libbrotlidec`"
+        BROTLI_LIBS="`pkg-config --libs libbrotlienc libbrotlidec`"
+        have_brotli=yes
+        AC_DEFINE([HAVE_BROTLI], [1], [Define if Brotli compression is available])
+        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $BROTLI_LIBS"
+        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $BROTLI_CPPFLAGS"
+        AC_MSG_RESULT([yes (pkg-config)])
+    else
+        have_brotli=no
+        AC_MSG_RESULT([no])
+    fi
+else
+    have_brotli=no
+fi
+AC_SUBST([BROTLI_CPPFLAGS])
+AC_SUBST([BROTLI_LIBS])
+
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
         OPENSSL_CPPFLAGS=-I$1
@@ -2036,6 +2062,7 @@ AM_CONDITIONAL([COND_NEED_GETOPT_LONG],        [test "$ac_cv_header_getopt_h" !=
 AM_CONDITIONAL([COND_HAVE_MPFR],               [test "$have_mpfr_h" = yes])
 AM_CONDITIONAL([COND_MINGWCC],                 [test "$mingw" = yes])
 AM_CONDITIONAL([COND_MONGODB],                 [test "$have_mongodb" = yes])
+AM_CONDITIONAL([COND_BROTLI],                  [test "$have_brotli" = yes])
 
 # find prefix
 if test -n "${exec_prefix}" -a "${exec_prefix}" != NONE; then
@@ -2193,6 +2220,8 @@ show_library_feature profiling $enable_profile
 show_library_feature debug $enable_debug
 echo "*** OPTIONAL BUILTIN MODULES ***"
 show_library_feature "mongodb module" $have_mongodb
+echo "*** OPTIONAL COMPRESSION SUPPORT ***"
+show_library_feature "brotli compression" $have_brotli
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"

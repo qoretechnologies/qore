@@ -33,6 +33,11 @@
 #include <cerrno>
 #include <zlib.h>
 
+#ifdef HAVE_BROTLI
+#include <brotli/encode.h>
+#include <brotli/decode.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -354,6 +359,124 @@ private:
     State state;
 };
 
+#ifdef HAVE_BROTLI
+class BrotliCompressTransform : public Transform {
+
+public:
+    BrotliCompressTransform(int64 quality, ExceptionSink *xsink) : state(nullptr) {
+        // Brotli quality: 0 (fastest) to 11 (best compression), default 11
+        if (quality == CompressionTransforms::LEVEL_DEFAULT) {
+            quality = 11;  // BROTLI_DEFAULT_QUALITY
+        } else if (quality < 0 || quality > 11) {
+            xsink->raiseException("BROTLI-LEVEL-ERROR",
+                "quality must be between 0 - 11 or -1 (value passed: " QLLD ")", quality);
+            return;
+        }
+
+        state = BrotliEncoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "failed to create Brotli encoder instance");
+            return;
+        }
+
+        BrotliEncoderSetParameter(state, BROTLI_PARAM_QUALITY, quality);
+    }
+
+    ~BrotliCompressTransform() {
+        if (state) {
+            BrotliEncoderDestroyInstance(state);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "invalid Brotli encoder state");
+            return std::make_pair(0, 0);
+        }
+
+        const uint8_t* next_in = static_cast<const uint8_t*>(src);
+        size_t avail_in = src ? srcLen : 0;
+        uint8_t* next_out = static_cast<uint8_t*>(dst);
+        size_t avail_out = dstLen;
+
+        BrotliEncoderOperation op = src ? BROTLI_OPERATION_PROCESS : BROTLI_OPERATION_FINISH;
+
+        if (!BrotliEncoderCompressStream(state, op, &avail_in, &next_in, &avail_out, &next_out, nullptr)) {
+            xsink->raiseException("BROTLI-ERROR", "Brotli compression failed");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen - avail_in, dstLen - avail_out);
+    }
+
+private:
+    BrotliEncoderState* state;
+};
+
+class BrotliDecompressTransform : public Transform {
+
+public:
+    BrotliDecompressTransform(ExceptionSink *xsink) : state(nullptr), finished(false) {
+        state = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "failed to create Brotli decoder instance");
+            return;
+        }
+    }
+
+    ~BrotliDecompressTransform() {
+        if (state) {
+            BrotliDecoderDestroyInstance(state);
+        }
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        if (!state) {
+            xsink->raiseException("BROTLI-ERROR", "invalid Brotli decoder state");
+            return std::make_pair(0, 0);
+        }
+
+        if (finished) {
+            if (src) {
+                xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+            }
+            return std::make_pair(0, 0);
+        }
+
+        const uint8_t* next_in = static_cast<const uint8_t*>(src);
+        size_t avail_in = src ? srcLen : 0;
+        uint8_t* next_out = static_cast<uint8_t*>(dst);
+        size_t avail_out = dstLen;
+
+        BrotliDecoderResult result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out, &next_out, nullptr);
+
+        if (result == BROTLI_DECODER_RESULT_ERROR) {
+            BrotliDecoderErrorCode error = BrotliDecoderGetErrorCode(state);
+            xsink->raiseException("BROTLI-ERROR", "Brotli decompression failed: %s",
+                BrotliDecoderErrorString(error));
+            return std::make_pair(0, 0);
+        }
+
+        if (result == BROTLI_DECODER_RESULT_SUCCESS) {
+            if (avail_in != 0) {
+                xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
+                return std::make_pair(0, 0);
+            }
+            finished = true;
+        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT && !src) {
+            xsink->raiseException("BROTLI-ERROR", "Unexpected end of compressed data stream");
+            return std::make_pair(0, 0);
+        }
+
+        return std::make_pair(srcLen - avail_in, dstLen - avail_out);
+    }
+
+private:
+    BrotliDecoderState* state;
+    bool finished;
+};
+#endif // HAVE_BROTLI
+
 Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink) {
     if (*alg == ALG_ZLIB) {
         return new ZlibDeflateTransform(level, xsink, false);
@@ -362,6 +485,11 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2CompressTransform(level, xsink);
     }
+#ifdef HAVE_BROTLI
+    else if (*alg == ALG_BROTLI) {
+        return new BrotliCompressTransform(level, xsink);
+    }
+#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }
@@ -374,6 +502,11 @@ Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, Exc
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2DecompressTransform(xsink);
     }
+#ifdef HAVE_BROTLI
+    else if (*alg == ALG_BROTLI) {
+        return new BrotliDecompressTransform(xsink);
+    }
+#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }

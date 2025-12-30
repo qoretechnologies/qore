@@ -34,6 +34,11 @@
 #include <climits>
 #include <zlib.h>
 
+#ifdef HAVE_BROTLI
+#include <brotli/encode.h>
+#include <brotli/decode.h>
+#endif
+
 #include "qore/Qore.h"
 #include "qore/intern/ql_compression.h"
 #include "qore/intern/CompressionTransforms.h"
@@ -603,6 +608,129 @@ BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, ExceptionSink* xsink
     return buf ? new BinaryNode(buf, len) : nullptr;
 }
 
+#ifdef HAVE_BROTLI
+BinaryNode* qore_brotli(const void* ptr, unsigned long len, int quality, ExceptionSink* xsink) {
+    // Calculate maximum compressed size
+    size_t max_compressed_size = BrotliEncoderMaxCompressedSize(len);
+    if (max_compressed_size == 0) {
+        // For very large inputs, use a reasonable estimate
+        max_compressed_size = len + (len >> 2) + 10240;
+    }
+
+    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+    if (b->preallocate(max_compressed_size)) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    size_t encoded_size = max_compressed_size;
+    BROTLI_BOOL result = BrotliEncoderCompress(
+        quality,
+        BROTLI_DEFAULT_WINDOW,
+        BROTLI_DEFAULT_MODE,
+        len,
+        static_cast<const uint8_t*>(ptr),
+        &encoded_size,
+        static_cast<uint8_t*>(const_cast<void*>(b->getPtr()))
+    );
+
+    if (!result) {
+        xsink->raiseException("BROTLI-ERROR", "Brotli compression failed");
+        return nullptr;
+    }
+
+    b->setSize(encoded_size);
+    return b.release();
+}
+
+static char* qore_unbrotli_intern(const BinaryNode* b, size_t& decoded_size, ExceptionSink* xsink) {
+    // Start with a buffer 4x the compressed size
+    size_t buf_size = b->size() * 4;
+    if (buf_size < 1024) {
+        buf_size = 1024;
+    }
+
+    void* buf = malloc(buf_size);
+    if (!buf) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+
+    BrotliDecoderState* state = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+    if (!state) {
+        free(buf);
+        xsink->raiseException("BROTLI-ERROR", "failed to create Brotli decoder instance");
+        return nullptr;
+    }
+
+    const uint8_t* next_in = static_cast<const uint8_t*>(b->getPtr());
+    size_t avail_in = b->size();
+    uint8_t* next_out = static_cast<uint8_t*>(buf);
+    size_t avail_out = buf_size;
+    size_t total_out = 0;
+
+    BrotliDecoderResult result;
+    while (true) {
+        result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out, &next_out, &total_out);
+
+        if (result == BROTLI_DECODER_RESULT_SUCCESS) {
+            break;
+        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) {
+            // Expand buffer
+            size_t new_size = buf_size * 2;
+            void* new_buf = realloc(buf, new_size);
+            if (!new_buf) {
+                free(buf);
+                BrotliDecoderDestroyInstance(state);
+                xsink->outOfMemory();
+                return nullptr;
+            }
+            buf = new_buf;
+            next_out = static_cast<uint8_t*>(buf) + total_out;
+            avail_out = new_size - total_out;
+            buf_size = new_size;
+        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT) {
+            free(buf);
+            BrotliDecoderDestroyInstance(state);
+            xsink->raiseException("BROTLI-ERROR", "Unexpected end of compressed data");
+            return nullptr;
+        } else {
+            // Error
+            BrotliDecoderErrorCode error = BrotliDecoderGetErrorCode(state);
+            free(buf);
+            BrotliDecoderDestroyInstance(state);
+            xsink->raiseException("BROTLI-ERROR", "Brotli decompression failed: %s",
+                BrotliDecoderErrorString(error));
+            return nullptr;
+        }
+    }
+
+    if (avail_in > 0) {
+        free(buf);
+        BrotliDecoderDestroyInstance(state);
+        xsink->raiseException("BROTLI-ERROR", "Unexpected bytes at the end of compressed data");
+        return nullptr;
+    }
+
+    BrotliDecoderDestroyInstance(state);
+    decoded_size = total_out;
+    return static_cast<char*>(buf);
+}
+
+BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
+    size_t len;
+    char* buf = qore_unbrotli_intern(b, len, xsink);
+    return buf ? new BinaryNode(buf, len) : nullptr;
+}
+
+QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
+    size_t len;
+    char* buf = qore_unbrotli_intern(b, len, xsink);
+    // NOTE: the null terminator is added by the QoreStringNode constructor
+    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+}
+#endif // HAVE_BROTLI
+
 /** @defgroup compression_constants Compression Constants
  */
 ///@{
@@ -614,6 +742,23 @@ const BZ2_DEFAULT_COMPRESSION = BZ2_DEFAULT_COMPRESSION;
 
 //! Identifies the default compression level appropriate for given algorithm
 const COMPRESSION_LEVEL_DEFAULT = COMPRESSION_LEVEL_DEFAULT;
+
+#ifdef HAVE_BROTLI
+//! gives the default quality level for the brotli() function (value: \c 11)
+/** @since %Qore 2.1
+ */
+const BROTLI_DEFAULT_QUALITY = 11;
+
+//! gives the minimum quality level for the brotli() function (value: \c 0)
+/** @since %Qore 2.1
+ */
+const BROTLI_MIN_QUALITY = 0;
+
+//! gives the maximum quality level for the brotli() function (value: \c 11)
+/** @since %Qore 2.1
+ */
+const BROTLI_MAX_QUALITY = 11;
+#endif
 ///@}
 
 /** @defgroup compression_transformations Compression Stream Transformations
@@ -639,6 +784,13 @@ const COMPRESSION_ALG_GZIP = str(CompressionTransforms::ALG_GZIP);
 
 //! Identifies the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a>
 const COMPRESSION_ALG_BZIP2 = str(CompressionTransforms::ALG_BZIP2);
+
+#ifdef HAVE_BROTLI
+//! Identifies the <a href="https://github.com/google/brotli">Brotli</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>)
+/** @since %Qore 2.1
+ */
+const COMPRESSION_ALG_BROTLI = str(CompressionTransforms::ALG_BROTLI);
+#endif
 ///@}
 
 /** @defgroup compresssion_functions Compression Functions
@@ -1078,6 +1230,129 @@ string bunzip2_to_string(binary bin, *string encoding) {
 */
 nothing bunzip2_to_string() [flags=RUNTIME_NOOP] {
 }
+
+#ifdef HAVE_BROTLI
+//! Compresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the compressed data as a binary
+/** Strings are compressed without the trailing null character
+
+    @param str the data to compress
+    @param quality the compression quality level, must be a value between 0 and 11 inclusive, 0 = the least compression (and fastest), 11 = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c BROTLI-LEVEL-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = brotli(str);
+    @endcode
+
+    @throw BROTLI-LEVEL-ERROR quality must be between 0 - 11 or -1
+    @throw BROTLI-ERROR the Brotli library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary brotli(string str, int quality = BROTLI_DEFAULT_QUALITY) {
+   if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
+      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
+         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
+
+   if (quality == -1)
+      quality = BROTLI_DEFAULT_QUALITY;
+
+   if (!str->strlen())
+      return new BinaryNode;
+
+   return qore_brotli(str->getBuffer(), str->strlen(), quality, xsink);
+}
+
+//! Compresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the compressed data as a binary
+/** @param bin the data to compress
+    @param quality the compression quality level, must be a value between 0 and 11 inclusive, 0 = the least compression (and fastest), 11 = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c BROTLI-LEVEL-ERROR exception being raised.
+
+    @return the compressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = brotli(data);
+    @endcode
+
+    @throw BROTLI-LEVEL-ERROR quality must be between 0 - 11 or -1
+    @throw BROTLI-ERROR the Brotli library returned an error during processing
+
+    @since %Qore 2.1
+*/
+binary brotli(binary bin, int quality = BROTLI_DEFAULT_QUALITY) {
+   if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
+      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
+         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
+
+   if (quality == -1)
+      quality = BROTLI_DEFAULT_QUALITY;
+
+   if (!bin->size())
+      return new BinaryNode;
+
+   return qore_brotli(bin->getPtr(), bin->size(), quality, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing brotli() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a binary object
+/** @param bin the compressed data to decompress
+
+    @return the uncompressed data as a binary object
+
+    @par Example:
+    @code{.py}
+binary bin = unbrotli_to_binary(brotli_data);
+    @endcode
+
+    @throw BROTLI-ERROR the Brotli library returned an internal error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.1
+*/
+binary unbrotli_to_binary(binary bin) {
+   return qore_unbrotli_to_binary(bin, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unbrotli_to_binary() [flags=RUNTIME_NOOP] {
+}
+
+//! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a string
+/** @param bin the compressed data to decompress
+    @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+
+    @return the uncompressed data as a string
+
+    @par Example:
+    @code{.py}
+string str = unbrotli_to_string(brotli_data, "utf-8");
+    @endcode
+
+    @throw BROTLI-ERROR the Brotli library returned an internal error during processing (possibly due to corrupt input data)
+
+    @since %Qore 2.1
+*/
+string unbrotli_to_string(binary bin, *string encoding) {
+   const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
+   return qore_unbrotli_to_string(bin, qe, xsink);
+}
+
+//! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
+/**
+    @since %Qore 2.1
+*/
+nothing unbrotli_to_string() [flags=RUNTIME_NOOP] {
+}
+#endif // HAVE_BROTLI
 
 //! Returns a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 /** @par Example:

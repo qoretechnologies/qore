@@ -210,6 +210,9 @@
 #cmakedefine HPUX
 #cmakedefine SOLARIS
 
+/* compression libraries */
+#cmakedefine HAVE_BROTLI
+
 /* the rest */
 #cmakedefine HAVE_ATOMIC_COMPILE_ONLY
 #cmakedefine HAVE_CXX11
