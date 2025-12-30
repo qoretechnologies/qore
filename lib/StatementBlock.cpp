@@ -605,13 +605,20 @@ int TopLevelStatementBlock::parseInit() {
         // Save count of existing local vars before adding new ones
         unsigned existing_lvars = lvars ? lvars->size() : 0;
 
-        // In REPL mode, save new local variables to lvars instead of discarding
-        if (repl_mode && parse_context.lvids) {
-            // setupLVList pops new vars from vstack and adds them to lvars
-            setupLVList(parse_context);
+        if (repl_mode) {
+            // In REPL mode, save new local variables to lvars instead of discarding
+            if (parse_context.lvids) {
+                // setupLVList pops new vars from vstack and adds them to lvars
+                setupLVList(parse_context);
+            }
+        } else if (parse_context.lvids) {
+            // In non-REPL mode, discard new variables immediately
+            for (int i = 0; i < parse_context.lvids; ++i) {
+                pop_local_var();
+            }
         }
 
-        // pop existing local vars off the stack (new ones already popped by setupLVList)
+        // pop existing local vars off the stack
         for (unsigned i = 0; i < existing_lvars; ++i) {
             pop_local_var();
         }

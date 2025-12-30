@@ -9,6 +9,7 @@
 %enable-debug
 
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
 
 %exec-class AssertDebugTest
 
@@ -20,6 +21,7 @@ class AssertDebugTest inherits QUnit::Test {
         addTestCase("disabled tests", \disabledTests());
         addTestCase("parse error tests", \parseErrorTests());
         addTestCase("sprintf corner case tests", \sprintfCornerCaseTests());
+        addTestCase("command-line enable-debug tests", \commandLineEnableDebugTests());
         set_return_value(main());
     }
 
@@ -172,6 +174,30 @@ class AssertDebugTest inherits QUnit::Test {
                 @debug(hash.key = (1 + 2));
             }
         ", "test");
+
+        # Test invalid @debug(exp) {...} syntax - this is a common mistake
+        # The syntax @debug(1) { ... } looks valid but is not; it should use either:
+        # - @debug(exp); for expression form
+        # - @debug { ... } for block form
+        # This should be caught when debug is DISABLED (scanner level)
+        Program p3(PO_NEW_STYLE);  # No PO_ENABLE_DEBUG
+        assertThrows("PARSE-EXCEPTION", "invalid @debug/@assert syntax",
+            \p3.parse(), ("sub t() { @debug(1) { int x = 1; } }", "test"));
+
+        # Same test for @assert(exp) {...}
+        Program p4(PO_NEW_STYLE);  # No PO_ENABLE_DEBUG
+        assertThrows("PARSE-EXCEPTION", "invalid @debug/@assert syntax",
+            \p4.parse(), ("sub t() { @assert(True) { int x = 1; } }", "test"));
+
+        # Test invalid syntax when debug is ENABLED (parser level)
+        Program p5(PO_NEW_STYLE | PO_ENABLE_DEBUG);
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p5.parse(), ("sub t() { @debug(1) { int x = 1; } }", "test"));
+
+        # Same for @assert when enabled
+        Program p6(PO_NEW_STYLE | PO_ENABLE_DEBUG);
+        assertThrows("PARSE-EXCEPTION", "syntax error",
+            \p6.parse(), ("sub t() { @assert(True) { int x = 1; } }", "test"));
     }
 
     sprintfCornerCaseTests() {
@@ -250,5 +276,37 @@ class AssertDebugTest inherits QUnit::Test {
             assertEq("ASSERTION-ERROR", ex.err);
             assertEq("hash value: 42, calc: 6", ex.desc);
         }
+    }
+
+    commandLineEnableDebugTests() {
+        # Test --enable-debug command-line option
+        # Create a temp file with @debug that prints something
+        string tmpfile = tmp_location() + "/test_enable_debug_" + getpid() + ".q";
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style\nour int counter = 0;\n@debug(++counter);\nprintf(\"%d\\n\", counter);\n");
+        }
+        on_exit unlink(tmpfile);
+
+        # Find qore executable - ENV._ points to the current interpreter
+        # Skip test if running under valgrind or other wrappers
+        string qore_bin = ENV._;
+        if (qore_bin !~ /qore/) {
+            testSkip("skipping command-line test: running under wrapper (valgrind, etc.)");
+            return;
+        }
+
+        # Test without --enable-debug: @debug should be skipped, counter stays 0
+        string output = backquote(sprintf("%s '%s' 2>&1", qore_bin, tmpfile));
+        assertEq("0\n", output, "without --enable-debug, @debug should be skipped");
+
+        # Test with --enable-debug: @debug should execute, counter becomes 1
+        output = backquote(sprintf("%s --enable-debug '%s' 2>&1", qore_bin, tmpfile));
+        assertEq("1\n", output, "with --enable-debug, @debug should execute");
+
+        # Test with -p enable-debug (equivalent to --enable-debug)
+        output = backquote(sprintf("%s -penable-debug '%s' 2>&1", qore_bin, tmpfile));
+        assertEq("1\n", output, "with -penable-debug, @debug should execute");
     }
 }

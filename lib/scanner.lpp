@@ -1522,6 +1522,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 --assert_paren_depth;
                                                 if (assert_paren_depth == 0) {
                                                     // finished skipping assert expression
+                                                    // Check for invalid @debug(exp) {...} or @assert(exp) {...} syntax
+                                                    int c;
+                                                    while ((c = yyinput(yyscanner)) != EOF && (c == ' ' || c == '\t'));
+                                                    if (c == '{') {
+                                                        parse_error(*get_loc(yylloc),
+                                                            "invalid @debug/@assert syntax; use '@debug(exp);' or "
+                                                            "'@debug { ... }', not '@debug(exp) { ... }'");
+                                                    }
+                                                    if (c != EOF) unput(c);
                                                     BEGIN(INITIAL);
                                                 }
                                             }
