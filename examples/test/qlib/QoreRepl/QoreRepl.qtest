@@ -38,6 +38,7 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("PO_ALLOW_REPARSE basic tests", \testAllowReparseBasic());
         addTestCase("PO_ALLOW_REPARSE negative tests", \testAllowReparseNegative());
         addTestCase("PO_ALLOW_REPARSE thread safety tests", \testAllowReparseThreadSafety());
+        addTestCase("PO_ALLOW_REPARSE local variables", \testAllowReparseLocalVars());
 
         # QoreRepl basic tests
         addTestCase("QoreRepl basic tests", \testQoreReplBasic());
@@ -148,6 +149,35 @@ public class QoreReplTest inherits QUnit::Test {
         pgm.parse("our int ok = 42;", "after");
         pgm.run();
         assertEq(42, pgm.getGlobalVariable("ok"), "Parse should succeed after thread stops");
+    }
+
+    #! Test local variables in REPL mode
+    testAllowReparseLocalVars() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+
+        # First parse with a local variable
+        pgm.parse("int x = 5;", "test1");
+        pgm.run();
+
+        # Second parse with another local variable that uses the first
+        pgm.parse("int y = x + 10;", "test2");
+        pgm.run();
+
+        # Third parse to verify the variables are accessible
+        pgm.parse("our int result = x + y;", "test3");
+        pgm.run();
+        assertEq(20, pgm.getGlobalVariable("result"), "Local variables should persist: x=5, y=15, result=20");
+
+        # Test class instantiation with local variables
+        pgm.parse("class C { public { int val; } constructor(int v) { val = v; }}", "class");
+        pgm.run();
+
+        pgm.parse("C obj(42);", "obj");
+        pgm.run();
+
+        pgm.parse("our int objVal = obj.val;", "getVal");
+        pgm.run();
+        assertEq(42, pgm.getGlobalVariable("objVal"), "Object local variable should work");
     }
 
     #! Test basic QoreRepl functionality

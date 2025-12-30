@@ -566,6 +566,10 @@ int TopLevelStatementBlock::parseInit() {
         return -1;
     }
 
+    // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
+    int64 parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = parse_options & PO_ALLOW_REPARSE;
+
     if (!first && lvars) {
         // push already-registered local variables on the stack
         for (unsigned i = 0; i < lvars->size(); ++i)
@@ -574,19 +578,13 @@ int TopLevelStatementBlock::parseInit() {
 
     QoreParseContext parse_context;
     parse_context.setFlags(PF_TOP_LEVEL);
-    if (!first) {
+    if (!first && !repl_mode) {
+        // In REPL mode, allow new local variables in subsequent parse transactions
         parse_context.setFlags(PF_NO_TOP_LEVEL_LVARS);
     }
     int err = parseInitIntern(parse_context, hwm);
 
     //printd(5, "TopLevelStatementBlock::parseInit(rns=%p) first=%d, lvids=%d\n", &rns, first, parse_context.lvids);
-
-    if (!first && parse_context.lvids) {
-        // discard variables immediately
-        for (int i = 0; i < parse_context.lvids; ++i) {
-            pop_local_var();
-        }
-    }
 
     // now initialize root namespace and functions before local variables are popped off the stack
     if (qore_root_ns_private::get(*getRootNS())->parseInit() && !err) {
@@ -603,8 +601,18 @@ int TopLevelStatementBlock::parseInit() {
         // this call will pop all local vars off the stack
         setupLVList(parse_context);
         first = false;
-    } else if (lvars) {
-        for (unsigned i = 0; i < lvars->size(); ++i) {
+    } else {
+        // Save count of existing local vars before adding new ones
+        unsigned existing_lvars = lvars ? lvars->size() : 0;
+
+        // In REPL mode, save new local variables to lvars instead of discarding
+        if (repl_mode && parse_context.lvids) {
+            // setupLVList pops new vars from vstack and adds them to lvars
+            setupLVList(parse_context);
+        }
+
+        // pop existing local vars off the stack (new ones already popped by setupLVList)
+        for (unsigned i = 0; i < existing_lvars; ++i) {
             pop_local_var();
         }
     }

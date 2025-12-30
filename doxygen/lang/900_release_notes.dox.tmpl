@@ -149,6 +149,7 @@
       - uses the QoreRepl module for the interactive session
     - new parse option @ref PO_ALLOW_REPARSE
       - enables multiple parse/commit cycles on a Program object for REPL functionality
+      - allows local variables to be declared in subsequent parse transactions (essential for REPL)
       - parsing is blocked when threads are active in the Program to ensure thread safety
     - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
       - returns the number of threads currently active in a Program object
