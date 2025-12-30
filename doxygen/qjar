@@ -47,7 +47,14 @@ class QJar {
         }
 
         if (!is_dir(opts.input)) {
-            mkdir_ex(opts.input, 0755, True);
+            try {
+                mkdir_ex(opts.input, 0755, True);
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore "File exists" errors (race condition with parallel builds)
+                if (ex.err != "DIR-CREATE-FAILURE" || !is_dir(opts.input)) {
+                    rethrow;
+                }
+            }
         }
 
 %ifndef NO_JNI
@@ -96,8 +103,6 @@ class QJar {
     }
 
     private getClasses(Program p, Namespace ns) {
-        bool dir;
-
         foreach Class cls in (ns.getClasses()) {
             *string mod = cls.getModuleName();
             if ((opts."module" != "qore" && mod != opts."module")
@@ -126,12 +131,16 @@ class QJar {
             }
 
             # make directory if needed
-            if (!dir) {
-                string dn = dirname(ofn);
-                if (!is_dir(dn)) {
+            string dn = dirname(ofn);
+            if (!is_dir(dn)) {
+                try {
                     mkdir_ex(dn, 0755, True);
+                } catch (hash<ExceptionInfo> ex) {
+                    # ignore "File exists" errors (race condition with parallel builds)
+                    if (ex.err != "DIR-CREATE-FAILURE" || !is_dir(dn)) {
+                        rethrow;
+                    }
                 }
-                dir = True;
             }
 
             File f();
