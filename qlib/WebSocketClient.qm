@@ -1312,6 +1312,8 @@ ws.setEventQueue();
 
         # data buffer for fragmented frames
         data buf;
+        # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
+        hash<auto> first_frame_rsv;
         while (True) {
             # issue #4697: went out of scope in event loop
             if (!self) {
@@ -1350,7 +1352,7 @@ ws.setEventQueue();
                         break;
                     }
                 }
-                int disp = handleMessage(h, \buf);
+                int disp = handleMessage(h, \buf, \first_frame_rsv);
                 if (disp == WSEDC_CONTINUE) {
                     continue;
                 } else if (disp == WSEDC_BREAK) {
@@ -1482,7 +1484,7 @@ ws.setEventQueue();
     }
 
     #! Handles WebSocket protocol messages
-    private int handleMessage(hash<WsMsgInfo> h, reference<data> buf) {
+    private int handleMessage(hash<WsMsgInfo> h, reference<data> buf, reference<hash<auto>> first_frame_rsv) {
         if (h.op == WSOP_Close) {
             if (!h.close) {
                 logDebug("Server sent OpClose without code; closing immediately");
@@ -1537,6 +1539,13 @@ ws.setEventQueue();
             if (!exists buf) {
                 if (h.op == WSOP_Text || h.op == WSOP_Binary) {
                     buf = h.msg;
+                    # RFC 7692 Section 6.2.1: Store RSV bits from first frame
+                    first_frame_rsv = {
+                        "rsv1": h.rsv1,
+                        "rsv2": h.rsv2,
+                        "rsv3": h.rsv3,
+                        "op": h.op,
+                    };
                 } else {
                     logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
                     sendClose(WSCC_ProtocolError);
@@ -1563,7 +1572,16 @@ ws.setEventQueue();
             } else {
                 buf += h.msg;
             }
-            return handleEvent(applyIncomingExtensions(remove buf, h));
+            # RFC 7692 Section 6.2.1: Use RSV bits from first frame, not continuation
+            hash<WsMsgInfo> ext_h = h;
+            if (first_frame_rsv) {
+                ext_h.rsv1 = first_frame_rsv.rsv1;
+                ext_h.rsv2 = first_frame_rsv.rsv2;
+                ext_h.rsv3 = first_frame_rsv.rsv3;
+                ext_h.op = first_frame_rsv.op;
+                remove first_frame_rsv;
+            }
+            return handleEvent(applyIncomingExtensions(remove buf, ext_h));
         } else if (h.op == WSOP_Text || h.op == WSOP_Binary) {
             return handleEvent(applyIncomingExtensions(h.msg, h));
         } else if (h.op == WSOP_Pong) {

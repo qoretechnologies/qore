@@ -736,8 +736,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                         string param_name = trim(param_str.substr(0, eq_pos));
                         string param_value = trim(param_str.substr(eq_pos + 1));
                         # Remove quotes if present
-                        if (param_value.size() >= 2 && param_value[0] == '"'
-                                && param_value[param_value.size() - 1] == '"') {
+                        if (param_value.size() >= 2
+                                && param_value.substr(0, 1) == "\""
+                                && param_value.substr(param_value.size() - 1, 1) == "\"") {
                             param_value = param_value.substr(1, param_value.size() - 2);
                         }
                         params += <WsExtensionParamInfo>{
@@ -1117,7 +1118,17 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             # Nothing to reset since we don't keep context
         }
 
-        #! Creates a clone of this extension
+        #! Creates a clone of this extension for use with a new connection
+        /** Creates a new extension instance with the same configuration parameters.
+
+            @note The cloned extension is intentionally created in an inactive state
+            (\c active = False) and without the \c is_client flag set, as clones are
+            typically used for new connections that need to negotiate from scratch.
+            The \c active flag will be set when the extension is successfully negotiated,
+            and \c is_client will be set based on the negotiation role.
+
+            @return A new PerMessageDeflateExtension with the same configuration
+        */
         AbstractWebSocketExtension clone() {
             PerMessageDeflateExtension ext = new PerMessageDeflateExtension();
             ext.server_max_window_bits = server_max_window_bits;

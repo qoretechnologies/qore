@@ -309,6 +309,8 @@ public class WebSocketConnection {
         int rsv_bits = 0;
 
         # Apply outgoing transforms from active extensions
+        # Extensions are applied in forward order (first extension first) for outgoing messages,
+        # as specified in RFC 6455 Section 9.2 and RFC 7692 Section 8
         if (active_extensions) {
             hash<auto> ctx = {
                 "op": op ?? (msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary),
@@ -689,7 +691,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     } else if (h.value.typeCode() == NT_LIST) {
                         supported_extensions = h.value;
                         extension_registry = new WebSocketExtensionRegistry();
-                    } else if (h.value) {
+                    } else if (h.value.val()) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting a list of "
                             "extension names or a WebSocketExtensionRegistry instance", h.key, h.value.fullType());
                     }
@@ -902,6 +904,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         # data buffer for fragmented frames
         data buf;
+        # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
+        hash<auto> first_frame_rsv;
         while (True) {
             #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
             if (stop || lsh{lid} || wsc.stop_flag) {
@@ -975,11 +979,22 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
 
-                # Validate RSV bits against active extensions
-                if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
-                    logError("invalid RSV bits received: rsv1=%y rsv2=%y rsv3=%y", h.rsv1, h.rsv2, h.rsv3);
-                    sendClose(sock, WSCC_ProtocolError);
-                    break;
+                # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
+                bool any_rsv_set = h.rsv1 || h.rsv2 || h.rsv3;
+                if (h.op == WSOP_Ping || h.op == WSOP_Pong || h.op == WSOP_Close) {
+                    if (any_rsv_set) {
+                        logError("invalid RSV bits on control frame: op=%d rsv1=%y rsv2=%y rsv3=%y",
+                            h.op, h.rsv1, h.rsv2, h.rsv3);
+                        sendClose(sock, WSCC_ProtocolError);
+                        break;
+                    }
+                } else {
+                    # For non-control frames, validate RSV bits against active extensions
+                    if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
+                        logError("invalid RSV bits received: rsv1=%y rsv2=%y rsv3=%y", h.rsv1, h.rsv2, h.rsv3);
+                        sendClose(sock, WSCC_ProtocolError);
+                        break;
+                    }
                 }
 
                 # issue #2887 update timestamp for incoming traffic
@@ -1001,6 +1016,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (!exists buf) {
                         if (h.op == WSOP_Text || h.op == WSOP_Binary) {
                             buf = h.msg;
+                            # RFC 7692 Section 6.2.1: Store RSV bits from first frame
+                            first_frame_rsv = {
+                                "rsv1": h.rsv1,
+                                "rsv2": h.rsv2,
+                                "rsv3": h.rsv3,
+                                "op": h.op,
+                            };
                         } else {
                             logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
                             sendClose(sock, WSCC_ProtocolError);
@@ -1029,7 +1051,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         buf += h.msg;
                     }
                     auto msg = remove buf;
-                    # Apply incoming extension transforms
+                    # RFC 7692 Section 6.2.1: Use RSV bits from first frame, not continuation
                     hash<auto> ext_ctx = {
                         "op": is_text ? WSOP_Text : WSOP_Binary,
                         "rsv1": h.rsv1,
@@ -1037,6 +1059,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         "rsv3": h.rsv3,
                         "fin": h.fin,
                     };
+                    if (first_frame_rsv) {
+                        ext_ctx.op = first_frame_rsv.op ?? ext_ctx.op;
+                        ext_ctx.rsv1 = first_frame_rsv.rsv1;
+                        ext_ctx.rsv2 = first_frame_rsv.rsv2;
+                        ext_ctx.rsv3 = first_frame_rsv.rsv3;
+                        remove first_frame_rsv;
+                    }
                     wsc.applyIncomingExtensions(\msg, ext_ctx);
                     wsc.validateIncomingMessage(\msg);
                     wsc.gotMessage(msg);
