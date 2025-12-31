@@ -973,12 +973,12 @@ public namespace RestSchemaValidator {
     public class NullRestSchemaValidator inherits AbstractRestSchemaValidator {
         public {
             #! Data serialization support mapping codes to MIME types and de/serialization functions
-            const DataSerializationSupport = (
+            const DataSerializationSupport =
 %ifndef NoJson
-                # JSON-compatible MIME types from centralized list
-                map {$1: \make_json()}, keys MimeTypesJson,
+                # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
+                (foldl $1 + $2, (map {$1: \make_json()}, keys MimeTypesJson)) +
 %endif
-            ) + {
+            {
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
                 MimeTypeYaml: \make_yaml(),
@@ -1063,12 +1063,12 @@ public namespace RestSchemaValidator {
                     "code": "url",
                     "in": \mime_parse_form_urlencoded_string(),
                 ),
-            } + (
+            } +
 %ifndef NoJson
-                # JSON-compatible MIME types from centralized list
-                map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson,
+                # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
+                (foldl $1 + $2, (map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson)) +
 %endif
-            ) + {
+            {
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,
                 MimeTypeYaml: DeserializeYaml,

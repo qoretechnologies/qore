@@ -370,11 +370,11 @@ public const ParameterCollectionFormats = CollectionFormats + (
 );
 
 #! A hash of valid integer type formats
-public const ValidIntFormatsHash = map {$1: True}, ValidIntFormats;
+public const ValidIntFormatsHash = foldl $1 + $2, (map {$1: True}, ValidIntFormats);
 #! A hash of valid number type formats
-public const ValidNumberFormatsHash = map {$1: True}, ValidNumberFormats;
+public const ValidNumberFormatsHash = foldl $1 + $2, (map {$1: True}, ValidNumberFormats);
 #! A hash of valid string type formats
-public const ValidStringFormatsHash = map {$1: True}, ValidStringFormats;
+public const ValidStringFormatsHash = foldl $1 + $2, (map {$1: True}, ValidStringFormats);
 
 %ifndef NoYaml
 #! Yaml serialization
@@ -396,12 +396,12 @@ const JsonSerialization = {
 %endif
 
 #! supported mime types for de/serializing data
-public const MimeDataTypes = (
+public const MimeDataTypes =
 %ifndef NoJson
-    # JSON-compatible MIME types from centralized list
-    map {$1: JsonSerialization}, keys MimeTypesJson,
+    # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
+    (foldl $1 + $2, (map {$1: JsonSerialization}, keys MimeTypesJson)) +
 %endif
-) + {
+{
 %ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
     MimeTypeYaml: YamlSerialization,
@@ -435,7 +435,7 @@ public const MimeContentTypes = keys MimeDataTypes;
 
 #! Valid transfer protocol schemes.
 public const ValidSchemes = ("http", "https", "ws", "wss");
-public const ValidSchemesHash = map {$1: True}, ValidSchemes;
+public const ValidSchemesHash = foldl $1 + $2, (map {$1: True}, ValidSchemes);
 
 #! Base class for the %Swagger specification objects, wrapping the vendor extensions.
 class ObjectBase inherits Qore::Serializable {
