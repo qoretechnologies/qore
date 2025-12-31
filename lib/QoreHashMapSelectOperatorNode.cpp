@@ -32,7 +32,6 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
-#include "qore/intern/QoreDotEvalOperatorNode.h"
 
 QoreString QoreHashMapSelectOperatorNode::map_str("map operator expression");
 
@@ -60,29 +59,8 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     const QoreTypeInfo* expTypeInfo2;
     {
         // set implicit argv arg type
-        const QoreTypeInfo* implicitArgType = QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo);
-
-        // If not a list, check if it's an iterator class and get element type from source type
-        if (!implicitArgType) {
-            const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
-            if (qc) {
-                // Try to get the source type from the iterator expression if it's a method call
-                const QoreTypeInfo* sourceType = nullptr;
-                if (e[2].getType() == NT_OPERATOR) {
-                    const QoreDotEvalOperatorNode* dotOp =
-                        dynamic_cast<const QoreDotEvalOperatorNode*>(e[2].getInternalNode());
-                    if (dotOp) {
-                        MethodCallNode* mcn = dotOp->getMethodCall();
-                        if (mcn) {
-                            sourceType = mcn->getSourceType();
-                        }
-                    }
-                }
-                if (sourceType) {
-                    implicitArgType = QoreTypeInfo::getIteratorElementType(qc, sourceType);
-                }
-            }
-        }
+        const QoreTypeInfo* implicitArgType =
+            QoreTypeInfo::getImplicitArgTypeForIterator(e[2], iteratorTypeInfo);
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
 

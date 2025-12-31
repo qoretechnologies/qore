@@ -34,7 +34,6 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 #include "qore/intern/qore_list_private.h"
-#include "qore/intern/QoreDotEvalOperatorNode.h"
 
 #include <memory>
 
@@ -61,30 +60,9 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
-    // get list element type, if any
-    const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo);
-
-    // If not a list, check if it's an iterator class and get element type from source type
-    if (!elementTypeInfo) {
-        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
-        if (qc) {
-            // Try to get the source type from the iterator expression if it's a method call
-            const QoreTypeInfo* sourceType = nullptr;
-            if (left.getType() == NT_OPERATOR) {
-                const QoreDotEvalOperatorNode* dotOp =
-                    dynamic_cast<const QoreDotEvalOperatorNode*>(left.getInternalNode());
-                if (dotOp) {
-                    MethodCallNode* mcn = dotOp->getMethodCall();
-                    if (mcn) {
-                        sourceType = mcn->getSourceType();
-                    }
-                }
-            }
-            if (sourceType) {
-                elementTypeInfo = QoreTypeInfo::getIteratorElementType(qc, sourceType);
-            }
-        }
-    }
+    // get element type for the iterator (works for both list<T> and iterator classes)
+    const QoreTypeInfo* elementTypeInfo =
+        QoreTypeInfo::getImplicitArgTypeForIterator(left, iteratorTypeInfo);
 
     parse_context.typeInfo = nullptr;
     {

@@ -38,6 +38,8 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/FunctionCallNode.h"
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
@@ -2209,4 +2211,34 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
     }
 
     return nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
+        const QoreTypeInfo* iteratorTypeInfo) {
+    // First try list element type (existing behavior for list<T> sources)
+    const QoreTypeInfo* implicitArgType = getUniqueReturnComplexList(iteratorTypeInfo);
+
+    // If not a list, check if it's an iterator class and get element type from source type
+    if (!implicitArgType) {
+        const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
+        if (qc) {
+            // Try to get the source type from the iterator expression if it's a method call
+            const QoreTypeInfo* sourceType = nullptr;
+            if (iteratorExpr.getType() == NT_OPERATOR) {
+                const QoreDotEvalOperatorNode* dotOp =
+                    dynamic_cast<const QoreDotEvalOperatorNode*>(iteratorExpr.getInternalNode());
+                if (dotOp) {
+                    MethodCallNode* mcn = dotOp->getMethodCall();
+                    if (mcn) {
+                        sourceType = mcn->getSourceType();
+                    }
+                }
+            }
+            if (sourceType) {
+                implicitArgType = getIteratorElementType(qc, sourceType);
+            }
+        }
+    }
+
+    return implicitArgType;
 }
