@@ -13,6 +13,9 @@
     <b>Support for Embedded Logic</b>\n
     %Qore was designed to support embedding logic in applications; this also applies to applications written in %Qore as well as applications using the %Qore library's public C++ API. By using the @ref Qore::Program "Program" class, discrete objects can be created and destroyed at will containing embedded code to extend or modify the behavior of your application in user-defined ways. The @ref Qore::Program "Program" class allows the capabilities of embedded code to be arbitrarily restricted as well.
 
+    <b>Comprehensive Sandboxing</b>\n
+    %Qore provides extensive @ref sandboxing "sandboxing capabilities" for safely executing untrusted code. Parse options like @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" can completely disable access to system resources. For more granular control, the @ref Qore::SandboxManager "SandboxManager" class provides fine-grained restrictions including filesystem path allow/deny lists, network access control with CIDR-based IP filtering and SSRF prevention, resource limits (memory, CPU time, threads), and safe interruption of runaway code. This makes %Qore ideal for multi-tenant platforms, plugin systems, and online code execution environments (see @ref sandboxing).
+
     <b>Thread Safety and SMP Scalability</b>\n
     All elements of %Qore are thread-safe, and the language in general has been designed with SMP scalability in mind. The internal design and implementation of %Qore favors multithreaded performance over single-threaded performance, so multithreaded %Qore programs can count on an efficient and stable execution platform, and do not have to limit themselves to a subset of %Qore's functionality (see @ref threading). Additionally, %Qore includes optimizations designed to reduce the number of SMP cache invalidations that provide a substantial performance boost on SMP machines.
 

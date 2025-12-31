@@ -1,0 +1,538 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SandboxManager.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+
+/** @defgroup sandbox_fs_access Filesystem Access Mode Constants
+    These constants are used with the FilesystemSecurityManager class to specify access modes.
+*/
+///@{
+//! Read access to files
+const QSEC_READ = QSEC_READ;
+
+//! Write access to files
+const QSEC_WRITE = QSEC_WRITE;
+
+//! Execute access to files
+const QSEC_EXECUTE = QSEC_EXECUTE;
+
+//! Delete access to files
+const QSEC_DELETE = QSEC_DELETE;
+
+//! Create new files
+const QSEC_CREATE = QSEC_CREATE;
+
+//! All filesystem access modes
+const QSEC_ALL = QSEC_ALL;
+///@}
+
+/** @defgroup sandbox_net_proto Network Protocol Constants
+    These constants are used with the NetworkSecurityManager class to specify protocols.
+*/
+///@{
+//! TCP protocol
+const QSEC_NET_TCP = QSEC_NET_TCP;
+
+//! UDP protocol
+const QSEC_NET_UDP = QSEC_NET_UDP;
+
+//! Unix domain sockets
+const QSEC_NET_UNIX = QSEC_NET_UNIX;
+
+//! All network protocols
+const QSEC_NET_ALL = QSEC_NET_ALL;
+///@}
+
+//! Unified sandbox manager combining filesystem, network, and resource controls
+/** The SandboxManager class provides a unified interface for all
+    sandboxing features including:
+
+    - Resource limits (memory, CPU time, wall time, threads)
+    - Safe interruption of sandboxed code
+
+    @par Example:
+    @code{.py}
+SandboxManager sm();
+sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB
+sm.setWallTimeLimit(30000);            # 30 seconds
+sm.setMaxThreads(4);
+    @endcode
+
+    @since Qore 2.1
+*/
+qclass SandboxManager [arg=QoreSandboxManager* sm; ns=Qore];
+
+//! Creates a new sandbox manager with default settings
+/** @par Example:
+    @code{.py}
+SandboxManager sm();
+    @endcode
+*/
+SandboxManager::constructor() {
+    self->setPrivate(CID_SANDBOXMANAGER, new QoreSandboxManager());
+}
+
+//! Destroys the sandbox manager
+/** Called automatically when the object is destroyed
+*/
+SandboxManager::destructor() {
+    sm->deref(xsink);
+}
+
+//! Creates a copy of this sandbox manager
+/** @return A new SandboxManager with the same configuration
+*/
+SandboxManager::copy() {
+    self->setPrivate(CID_SANDBOXMANAGER, sm->copy());
+}
+
+//! Sets maximum memory usage in bytes
+/** @param bytes Maximum memory allocation in bytes (0 = unlimited)
+
+    @par Example:
+    @code{.py}
+sm.setMemoryLimit(100 * 1024 * 1024);  # 100 MB
+    @endcode
+*/
+nothing SandboxManager::setMemoryLimit(int bytes) {
+    sm->setMemoryLimit(bytes);
+}
+
+//! Gets the memory limit
+/** @return Maximum memory in bytes, or 0 for unlimited
+*/
+int SandboxManager::getMemoryLimit() {
+    return sm->getMemoryLimit();
+}
+
+//! Sets maximum CPU time in milliseconds
+/** @param ms Maximum CPU time in milliseconds (0 = unlimited)
+
+    @par Example:
+    @code{.py}
+sm.setCPUTimeLimit(10000);  # 10 seconds
+    @endcode
+*/
+nothing SandboxManager::setCPUTimeLimit(int ms) {
+    sm->setCPUTimeLimit(ms);
+}
+
+//! Gets the CPU time limit
+/** @return Maximum CPU time in milliseconds, or 0 for unlimited
+*/
+int SandboxManager::getCPUTimeLimit() {
+    return sm->getCPUTimeLimit();
+}
+
+//! Sets maximum wall clock time in milliseconds
+/** @param ms Maximum wall clock time in milliseconds (0 = unlimited)
+
+    @par Example:
+    @code{.py}
+sm.setWallTimeLimit(30000);  # 30 seconds
+    @endcode
+*/
+nothing SandboxManager::setWallTimeLimit(int ms) {
+    sm->setWallTimeLimit(ms);
+}
+
+//! Gets the wall time limit
+/** @return Maximum wall clock time in milliseconds, or 0 for unlimited
+*/
+int SandboxManager::getWallTimeLimit() {
+    return sm->getWallTimeLimit();
+}
+
+//! Sets maximum number of threads
+/** @param count Maximum number of threads (0 = unlimited)
+
+    @par Example:
+    @code{.py}
+sm.setMaxThreads(4);
+    @endcode
+*/
+nothing SandboxManager::setMaxThreads(int count) {
+    sm->setMaxThreads(count);
+}
+
+//! Gets the max threads limit
+/** @return Maximum number of threads, or 0 for unlimited
+*/
+int SandboxManager::getMaxThreads() {
+    return sm->getMaxThreads();
+}
+
+//! Sets maximum recursion depth
+/** @param depth Maximum recursion depth (0 = unlimited)
+
+    @par Example:
+    @code{.py}
+sm.setMaxRecursionDepth(100);
+    @endcode
+*/
+nothing SandboxManager::setMaxRecursionDepth(int depth) {
+    sm->setMaxRecursionDepth(depth);
+}
+
+//! Gets the max recursion depth
+/** @return Maximum recursion depth, or 0 for unlimited
+*/
+int SandboxManager::getMaxRecursionDepth() {
+    return sm->getMaxRecursionDepth();
+}
+
+//! Requests graceful interruption of sandboxed code
+/** This sets an interrupt flag that is checked at various points
+    during execution. Interrupted code receives a PROGRAM-INTERRUPTED exception.
+
+    @par Example:
+    @code{.py}
+# From another thread:
+sm.requestInterrupt();
+    @endcode
+*/
+nothing SandboxManager::requestInterrupt() {
+    sm->requestInterrupt();
+}
+
+//! Clears the interrupt request
+/** Resets the interrupt flag to allow continued execution
+*/
+nothing SandboxManager::clearInterrupt() {
+    sm->clearInterrupt();
+}
+
+//! Checks if interrupt has been requested
+/** @return True if an interrupt has been requested
+*/
+bool SandboxManager::isInterruptRequested() {
+    return sm->isInterruptRequested();
+}
+
+//! Returns the full configuration as a hash
+/** @return A hash containing all sandbox configuration
+*/
+hash<auto> SandboxManager::getConfiguration() {
+    return sm->getConfiguration();
+}
+
+//! Creates a preset for maximum restrictions ("lockdown" mode)
+/** @return A new SandboxManager configured for maximum security
+
+    Lockdown mode settings:
+    - No filesystem access (empty allow list)
+    - No network access (empty allow list)
+    - Memory limit: 10MB
+    - CPU time limit: 1000ms
+    - Wall time limit: 5000ms
+    - Max threads: 1
+    - Max recursion: 100
+
+    @par Example:
+    @code{.py}
+SandboxManager sm = SandboxManager::createLockdown();
+    @endcode
+*/
+static SandboxManager SandboxManager::createLockdown() {
+    QoreObject* obj = new QoreObject(QC_SANDBOXMANAGER, getProgram());
+    obj->setPrivate(CID_SANDBOXMANAGER, QoreSandboxManager::createLockdown());
+    return obj;
+}
+
+//! Creates a preset safe for web application sandboxing
+/** @return A new SandboxManager with web-safe defaults
+
+    Web-safe mode settings:
+    - No filesystem access
+    - Network allowed but private networks blocked
+    - Memory limit: 100MB
+    - CPU time limit: 10000ms
+    - Wall time limit: 30000ms
+    - Max threads: 4
+    - Max recursion: 200
+
+    @par Example:
+    @code{.py}
+SandboxManager sm = SandboxManager::createWebSafe();
+    @endcode
+*/
+static SandboxManager SandboxManager::createWebSafe() {
+    QoreObject* obj = new QoreObject(QC_SANDBOXMANAGER, getProgram());
+    obj->setPrivate(CID_SANDBOXMANAGER, QoreSandboxManager::createWebSafe());
+    return obj;
+}
+
+//! Adds an allowed filesystem path with specific access modes
+/** @param path The filesystem path to allow (will be canonicalized)
+    @param mode Bitmask of QSEC_* flags specifying allowed access modes
+
+    @par Example:
+    @code{.py}
+sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE);
+    @endcode
+
+    @note The path is canonicalized using realpath(). The path must exist
+    for canonicalization to succeed.
+
+    @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
+*/
+nothing SandboxManager::addFilesystemAllowedPath(string path, int mode) {
+    sm->filesystem().addAllowedPath(path->c_str(), mode, xsink);
+}
+
+//! Adds a denied filesystem path (takes precedence over allowed paths)
+/** @param path The filesystem path to deny (will be canonicalized)
+
+    @note Denied paths always take precedence over allowed paths.
+    This allows for fine-grained "allow all except" patterns.
+
+    @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
+*/
+nothing SandboxManager::addFilesystemDeniedPath(string path) {
+    sm->filesystem().addDeniedPath(path->c_str(), xsink);
+}
+
+//! Sets a sandbox root directory (chroot-like restriction)
+/** All path access will be restricted to within this directory.
+    Symlinks pointing outside the sandbox root will be blocked.
+
+    @param path The root directory for the sandbox
+
+    @par Example:
+    @code{.py}
+sm.setFilesystemSandboxRoot("/home/user/sandbox");
+    @endcode
+
+    @note When a sandbox root is set, all allowed paths must be within
+    this root, and the root itself is implicitly allowed with QSEC_ALL.
+
+    @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
+*/
+nothing SandboxManager::setFilesystemSandboxRoot(string path) {
+    sm->filesystem().setSandboxRoot(path->c_str(), xsink);
+}
+
+//! Clears the sandbox root directory
+/** Removes any previously set sandbox root restriction
+*/
+nothing SandboxManager::clearFilesystemSandboxRoot() {
+    sm->filesystem().clearSandboxRoot();
+}
+
+//! Gets the sandbox root directory
+/** @return The sandbox root path or NOTHING if not set
+*/
+*string SandboxManager::getFilesystemSandboxRoot() {
+    QoreHashNode* config = sm->filesystem().getConfiguration();
+    if (!config) {
+        return QoreValue();
+    }
+    QoreValue v = config->getKeyValue("sandbox_root");
+    if (v.isNullOrNothing()) {
+        config->deref(xsink);
+        return QoreValue();
+    }
+    QoreStringNode* str = v.get<QoreStringNode>();
+    str->ref();
+    config->deref(xsink);
+    return str;
+}
+
+//! Sets whether unlisted filesystem paths are allowed or denied by default
+/** @param allow If @ref Qore::True "True", unlisted paths are allowed; if @ref Qore::False "False" (default), denied
+
+    @note The default policy is "deny" for maximum security. Setting this
+    to @ref Qore::True "True" means only explicitly denied paths will be blocked.
+*/
+nothing SandboxManager::setFilesystemDefaultPolicy(bool allow) {
+    sm->filesystem().setDefaultPolicy(allow);
+}
+
+//! Gets the current filesystem default policy
+/** @return @ref Qore::True "True" if default is allow, @ref Qore::False "False" if default is deny
+*/
+bool SandboxManager::getFilesystemDefaultPolicy() {
+    return sm->filesystem().getDefaultPolicy();
+}
+
+//! Returns the filesystem security configuration as a hash
+/** @return A hash containing:
+    - \c "sandbox_root": The sandbox root path or NOTHING
+    - \c "default_policy": "allow" or "deny"
+    - \c "allowed_paths": List of hashes with "path" and "mode" keys
+    - \c "denied_paths": List of denied path strings
+*/
+hash<auto> SandboxManager::getFilesystemConfiguration() {
+    return sm->filesystem().getConfiguration();
+}
+
+//! Adds an allowed hostname pattern for network connections
+/** @param pattern Hostname pattern with optional wildcards (e.g., "*.example.com")
+
+    @par Example:
+    @code{.py}
+sm.addNetworkAllowedHost("api.example.com");
+sm.addNetworkAllowedHost("*.trusted-domain.org");
+    @endcode
+
+    @note Wildcards only match single domain components.
+    "*.example.com" matches "api.example.com" but not "api.sub.example.com".
+*/
+nothing SandboxManager::addNetworkAllowedHost(string pattern) {
+    sm->network().addAllowedHost(pattern->c_str(), xsink);
+}
+
+//! Adds an allowed IP range in CIDR notation
+/** @param cidr IP range in CIDR notation (e.g., "10.0.0.0/8" or "2001:db8::/32")
+
+    @par Example:
+    @code{.py}
+sm.addNetworkAllowedIPRange("203.0.113.0/24");   # IPv4
+sm.addNetworkAllowedIPRange("2001:db8::/32");    # IPv6
+    @endcode
+*/
+nothing SandboxManager::addNetworkAllowedIPRange(string cidr) {
+    sm->network().addAllowedIPRange(cidr->c_str(), xsink);
+}
+
+//! Adds a denied IP range in CIDR notation (takes precedence over allowed)
+/** @param cidr IP range in CIDR notation
+
+    @par Example:
+    @code{.py}
+sm.addNetworkDeniedIPRange("192.168.0.0/16");
+    @endcode
+*/
+nothing SandboxManager::addNetworkDeniedIPRange(string cidr) {
+    sm->network().addDeniedIPRange(cidr->c_str(), xsink);
+}
+
+//! Adds an allowed port for network connections
+/** @param port Port number to allow (1-65535)
+    @param proto Protocol flags (QSEC_NET_TCP, QSEC_NET_UDP, QSEC_NET_ALL)
+
+    @par Example:
+    @code{.py}
+sm.addNetworkAllowedPort(443, QSEC_NET_TCP);  # HTTPS only
+sm.addNetworkAllowedPort(53, QSEC_NET_ALL);   # DNS on both TCP and UDP
+    @endcode
+*/
+nothing SandboxManager::addNetworkAllowedPort(int port, int proto = QSEC_NET_ALL) {
+    sm->network().addAllowedPort(port, proto);
+}
+
+//! Adds an allowed port range for network connections
+/** @param low Lower bound of port range (inclusive)
+    @param high Upper bound of port range (inclusive)
+    @param proto Protocol flags
+
+    @par Example:
+    @code{.py}
+sm.addNetworkAllowedPortRange(80, 443, QSEC_NET_TCP);  # HTTP and HTTPS
+    @endcode
+*/
+nothing SandboxManager::addNetworkAllowedPortRange(int low, int high, int proto = QSEC_NET_ALL) {
+    sm->network().addAllowedPortRange(low, high, proto);
+}
+
+//! Blocks all private/internal networks (SSRF prevention)
+/** Blocks the following ranges:
+    - 127.0.0.0/8 (localhost)
+    - 10.0.0.0/8 (RFC 1918 Class A)
+    - 172.16.0.0/12 (RFC 1918 Class B)
+    - 192.168.0.0/16 (RFC 1918 Class C)
+    - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
+    - ::1/128 (IPv6 localhost)
+    - fe80::/10 (IPv6 link-local)
+    - fc00::/7 (IPv6 unique local)
+
+    @note This is essential for SSRF prevention in web applications.
+
+    @par Example:
+    @code{.py}
+sm.blockPrivateNetworks();
+    @endcode
+*/
+nothing SandboxManager::blockPrivateNetworks() {
+    sm->network().blockPrivateNetworks();
+}
+
+//! Blocks localhost only (127.0.0.0/8 and ::1/128)
+/** @par Example:
+    @code{.py}
+sm.blockLocalhost();
+    @endcode
+*/
+nothing SandboxManager::blockLocalhost() {
+    sm->network().blockLocalhost();
+}
+
+//! Allows only HTTPS connections (port 443 TCP)
+/** @par Example:
+    @code{.py}
+sm.allowHTTPSOnly();
+    @endcode
+*/
+nothing SandboxManager::allowHTTPSOnly() {
+    sm->network().allowHTTPSOnly();
+}
+
+//! Sets whether unlisted network destinations are allowed or denied by default
+/** @param allow If @ref Qore::True "True", unlisted destinations are allowed; if @ref Qore::False "False" (default), denied
+
+    @par Example:
+    @code{.py}
+sm.setNetworkDefaultPolicy(True);  # Allow by default, only deny listed
+    @endcode
+*/
+nothing SandboxManager::setNetworkDefaultPolicy(bool allow) {
+    sm->network().setDefaultPolicy(allow);
+}
+
+//! Gets the current network default policy
+/** @return @ref Qore::True "True" if default is allow, @ref Qore::False "False" if default is deny
+*/
+bool SandboxManager::getNetworkDefaultPolicy() {
+    return sm->network().getDefaultPolicy();
+}
+
+//! Returns the network security configuration as a hash
+/** @return A hash containing:
+    - \c "default_policy": "allow" or "deny"
+    - \c "allowed_hosts": List of allowed hostname patterns
+    - \c "allowed_ip_ranges": List of allowed IP ranges in CIDR notation
+    - \c "denied_ip_ranges": List of denied IP ranges in CIDR notation
+    - \c "allowed_ports": List of allowed port configurations
+*/
+hash<auto> SandboxManager::getNetworkConfiguration() {
+    return sm->network().getConfiguration();
+}

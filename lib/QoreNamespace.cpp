@@ -66,6 +66,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_FilePollOperation.h"
+#include "qore/intern/QC_SandboxManager.h"
 
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -1178,6 +1179,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLCertificateClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     qns.addSystemClass(initSocketClass(qns));
+    qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class
     qns.addSystemClass(initExpressionClass(qns));
     preinitBreakpointClass();  // to resolve circular dependency Program/Breakpoint class

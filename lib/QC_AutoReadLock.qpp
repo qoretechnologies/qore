@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_AutoReadLock.h"
 #include "qore/intern/QC_RWLock.h"
 
@@ -68,8 +69,33 @@ AutoReadLock arl(rwlock);
 
     @throw THREAD-DEADLOCK A deadlock was detected while trying to acquire the lock
     @throw LOCK-ERROR RWLock::readLock() called while already holding the write lock, object deleted in another thread, etc.
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoReadLock::constructor(RWLock[RWLock] rwl) {
+   // Check for sandbox interrupt - use polling if sandbox manager exists
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      const int poll_ms = 500;  // 500ms polling interval
+      while (true) {
+         if (sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
+            return;
+         }
+         int rc = rwl->readLock(xsink, poll_ms);
+         if (*xsink) {
+            return;  // Error occurred
+         }
+         if (rc == 0) {
+            // Lock acquired - create the AutoReadLock object with already-locked rwl
+            QoreAutoReadLock *arwl = new QoreAutoReadLock(rwl);
+            self->setPrivate(CID_AUTOREADLOCK, arwl);
+            return;
+         }
+         // rc != 0 means timeout, loop and check interrupt again
+      }
+   }
    ReferenceHolder<QoreAutoReadLock> arwl(new QoreAutoReadLock(rwl, xsink), xsink);
    if (!*xsink)
       self->setPrivate(CID_AUTOREADLOCK, arwl.release());

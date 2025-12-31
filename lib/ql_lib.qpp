@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_lib.h"
 #include "qore/intern/ExecArgList.h"
 #include "qore/intern/QoreSignal.h"
@@ -462,18 +463,43 @@ nothing setgroups(softlist<softint> gids) [dom=PROCESS] {
 //! Causes the current thread to sleep for a certain number of seconds
 /** @param seconds The amount of time in seconds to sleep; integer arguments are interpreted literally as a number of seconds to sleep, however a @ref relative_dates "relative date/time value" can be given instead of an integer to make the source more readable (ex: \c 5s), however as this function only supports a resolution of 1 second, milliseconds and microseconds are ignored if passed in a @ref relative_dates "relative date/time value"
 
-    @return should always return 0 for success
+    @return should always return 0 for success, -1 if interrupted
 
     @par Example:
     @code{.py}
 sleep(10s);
     @endcode
 
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+
     @see usleep() for a similar function supporting microsecond resolution
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int sleep(softint seconds) [dom=PROCESS] {
    if (!seconds)
       return 0;
+
+   // Check for sandbox interrupt support - break into 100ms chunks
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      int64 remaining_usecs = seconds * 1000000ll;
+      const int64 chunk_usecs = 100000ll; // 100ms chunks
+
+      while (remaining_usecs > 0) {
+         if (sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during sleep");
+            return -1;
+         }
+
+         int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
+         int rc = qore_usleep(sleep_time);
+         if (rc != 0)
+            return rc;
+         remaining_usecs -= sleep_time;
+      }
+      return 0;
+   }
 
    return qore_usleep(seconds * 1000000ll);
 }
@@ -487,20 +513,45 @@ nothing sleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
 //! Causes the current thread to sleep for a certain number of microseconds
 /** @param usecs The amount of time in microseconds to sleep; integer arguments are interpreted literally as a number of microseconds to sleep
 
-    @return should always return 0 for success
+    @return should always return 0 for success, -1 if interrupted
 
     @par Example:
     @code{.py}
 usleep(5000);
     @endcode
 
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+
     @see sleep() for a similar function supporting second resolution
 
     @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int usleep(softint usecs) [dom=PROCESS] {
    if (!usecs)
       return 0;
+
+   // Check for sandbox interrupt support - break into 100ms chunks
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      int64 remaining_usecs = usecs;
+      const int64 chunk_usecs = 100000ll; // 100ms chunks
+
+      while (remaining_usecs > 0) {
+         if (sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
+            return -1;
+         }
+
+         int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
+         int rc = qore_usleep(sleep_time);
+         if (rc != 0)
+            return rc;
+         remaining_usecs -= sleep_time;
+      }
+      return 0;
+   }
 
    return qore_usleep(usecs);
 }
@@ -508,19 +559,48 @@ int usleep(softint usecs) [dom=PROCESS] {
 //! Causes the current thread to sleep for a certain number of microseconds
 /** @param d A time value giving the amount of time in microseconds to sleep; this should be a @ref relative_dates "relative date/time value" to make the source more readable (ex: \c 250ms)
 
-    @return should always return 0 for success
+    @return should always return 0 for success, -1 if interrupted
 
     @par Example:
     @code{.py}
 usleep(250ms);
     @endcode
 
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+
     @see sleep() for a similar function supporting second resolution
 
     @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int usleep(date d) [dom=PROCESS] {
-   return qore_usleep(d->getRelativeMicroseconds());
+   int64 usecs = d->getRelativeMicroseconds();
+   if (!usecs)
+      return 0;
+
+   // Check for sandbox interrupt support - break into 100ms chunks
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      int64 remaining_usecs = usecs;
+      const int64 chunk_usecs = 100000ll; // 100ms chunks
+
+      while (remaining_usecs > 0) {
+         if (sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
+            return -1;
+         }
+
+         int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
+         int rc = qore_usleep(sleep_time);
+         if (rc != 0)
+            return rc;
+         remaining_usecs -= sleep_time;
+      }
+      return 0;
+   }
+
+   return qore_usleep(usecs);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

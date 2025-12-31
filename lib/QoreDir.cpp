@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreDir.h"
 #include <sstream>
 #include <fstream>
@@ -87,6 +88,20 @@ QoreStringNode *QoreDir::dirname() const {
 // change directory from current location on
 // return 0 if directory exists and is openable
 int QoreDir::chdir(const char* ndir, ExceptionSink* xsink) {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        // If absolute path, check directly; otherwise, combine with current dir
+        std::string path;
+        if (q_absolute_path(ndir)) {
+            path = ndir;
+        } else {
+            path = priv->getPath(ndir);
+        }
+        if (!sm->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+            return -1;
+        }
+    }
     return priv->chdir(ndir, xsink);
 }
 
@@ -99,6 +114,19 @@ int QoreDir::chdir(const char* ndir) {
 // create the directory with all the parent directories if they do not exist
 // return amount of created directories, -1 if error
 int QoreDir::create(int mode, ExceptionSink* xsink) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        // Get the directory name
+        QoreStringNode* dir = priv->get_dir_string();
+        if (dir) {
+            if (!sm->checkFilesystemAccess(dir->c_str(), QSEC_CREATE, xsink)) {
+                dir->deref();
+                return -1;
+            }
+            dir->deref();
+        }
+    }
     return priv->create(mode, xsink);
 }
 
@@ -112,14 +140,52 @@ int QoreDir::create(int mode) const {
 // the filter will be applied to the file's mode for filtering.
 // directories '.' and '..' will be skipped
 QoreListNode* QoreDir::list(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options, bool full) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        QoreStringNode* dir = priv->get_dir_string();
+        if (dir) {
+            if (!sm->checkFilesystemAccess(dir->c_str(), QSEC_READ, xsink)) {
+                dir->deref();
+                return nullptr;
+            }
+            dir->deref();
+        }
+    }
     return priv->list(xsink, stat_filter, regex, regex_options, full);
 }
 
 int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        std::string path;
+        if (q_absolute_path(subdir)) {
+            path = subdir;
+        } else {
+            path = priv->getPath(subdir);
+        }
+        if (!sm->checkFilesystemAccess(path.c_str(), QSEC_CREATE, xsink)) {
+            return -1;
+        }
+    }
     return priv->mkdir(subdir, mode, xsink);
 }
 
 int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        std::string path;
+        if (q_absolute_path(subdir)) {
+            path = subdir;
+        } else {
+            path = priv->getPath(subdir);
+        }
+        if (!sm->checkFilesystemAccess(path.c_str(), QSEC_DELETE, xsink)) {
+            return -1;
+        }
+    }
     return priv->rmdir(subdir, xsink);
 }
 
@@ -132,11 +198,35 @@ int QoreDir::checkPath() const {
 }
 
 int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        QoreStringNode* dir = priv->get_dir_string();
+        if (dir) {
+            if (!sm->checkFilesystemAccess(dir->c_str(), QSEC_WRITE, xsink)) {
+                dir->deref();
+                return -1;
+            }
+            dir->deref();
+        }
+    }
     return priv->chmod(mode, xsink);
 }
 
 #ifdef HAVE_PWD_H
 int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        QoreStringNode* dir = priv->get_dir_string();
+        if (dir) {
+            if (!sm->checkFilesystemAccess(dir->c_str(), QSEC_WRITE, xsink)) {
+                dir->deref();
+                return -1;
+            }
+            dir->deref();
+        }
+    }
     return priv->chown(uid, gid, xsink);
 }
 #endif

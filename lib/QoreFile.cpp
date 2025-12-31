@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreFile.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_qf_private.h"
 #include "qore/intern/qore_encoding_private.h"
@@ -540,6 +541,27 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
     if (priv->special_file) {
         xsink->raiseException("FILE-OPEN2-ERROR", "system files cannot be reopened");
         return -1;
+    }
+
+    // Check sandbox security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        // Determine access mode based on flags
+        int access_mode = 0;
+        if ((flags & O_ACCMODE) == O_RDONLY) {
+            access_mode = QSEC_READ;
+        } else if ((flags & O_ACCMODE) == O_WRONLY) {
+            access_mode = QSEC_WRITE;
+        } else if ((flags & O_ACCMODE) == O_RDWR) {
+            access_mode = QSEC_READ | QSEC_WRITE;
+        }
+        if (flags & O_CREAT) {
+            access_mode |= QSEC_CREATE;
+        }
+
+        if (!sm->checkFilesystemAccess(fn, access_mode, xsink)) {
+            return -1;
+        }
     }
 
     int rc;

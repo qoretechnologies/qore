@@ -50,6 +50,10 @@ public:
       m->grab(xsink);
    }
 
+   // Constructor for when lock is already held (used by polling implementation)
+   DLLLOCAL QoreAutoLock(class SmartMutex *mt) : m(mt) {
+   }
+
    using AbstractPrivateData::deref;
    DLLLOCAL virtual void deref(class ExceptionSink *xsink) {
       if (ROdereference()) {

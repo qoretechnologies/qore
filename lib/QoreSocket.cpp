@@ -1044,6 +1044,17 @@ int SocketConnectInetPollState::next(ExceptionSink* xsink) {
 //! Setup socket with next address
 int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
+
+    // Check sandbox network security restrictions
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
+                    (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
+        if (!sm->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+            return -1;
+        }
+    }
+
     sock->do_connect_event(p->ai_family, p->ai_addr, host.c_str(), service.c_str(), prt);
     // make sure and close the socket if it is already open
     sock->close_internal();
@@ -1070,6 +1081,16 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     // copy path and terminate if necessary
     strncpy(addr.sun_path, name, sizeof(addr.sun_path) - 1);
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
+
+    // Check sandbox network security restrictions for UNIX sockets
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        if (!sm->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
+                QSEC_NET_UNIX, xsink)) {
+            return;
+        }
+    }
+
     if ((sock->sock = socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;

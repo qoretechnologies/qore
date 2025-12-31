@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/StatementBlock.h"
 
@@ -60,6 +61,13 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
     // execute "for" body
     while (!*xsink) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
             ValueEvalOptimizedRefHolder val(cond, xsink);

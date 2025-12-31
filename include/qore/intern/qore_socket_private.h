@@ -36,6 +36,7 @@
 #include "qore/QoreSocket.h"
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
+#include "qore/QoreSandboxManager.h"
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
@@ -1171,6 +1172,16 @@ struct qore_socket_private {
             return -1;
         }
 
+        // Check sandbox network security restrictions for UNIX sockets
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm) {
+            if (!sm->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
+                    QSEC_NET_UNIX, xsink)) {
+                close_and_reset();
+                return -1;
+            }
+        }
+
         do_connect_event(AF_UNIX, (sockaddr*)&addr, p);
         while (true) {
             if (!::connect(sock, (const sockaddr *)&addr, sizeof(struct sockaddr_un)))
@@ -1523,6 +1534,16 @@ struct qore_socket_private {
         int prt = q_get_port_from_addr(aip->ai_addr);
 
         for (struct addrinfo* p = aip; p; p = p->ai_next) {
+            // Check sandbox network security restrictions
+            QoreSandboxManager* sm = runtime_get_sandbox_manager();
+            if (sm) {
+                int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
+                            (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
+                if (!sm->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+                    return -1;
+                }
+            }
+
             if (!connectINETIntern(host, service, p->ai_family, p->ai_addr, p->ai_addrlen, p->ai_socktype,
                 p->ai_protocol, prt, timeout_ms, xsink, true)) {
                 return 0;
@@ -1678,6 +1699,18 @@ struct qore_socket_private {
 
     // the only place where xsink is optional
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
+        // Check sandbox network security restrictions for bind
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && xsink) {
+            int proto = (stype == SOCK_STREAM) ? QSEC_NET_TCP :
+                        (stype == SOCK_DGRAM) ? QSEC_NET_UDP :
+                        (ai_addr->sa_family == AF_UNIX) ? QSEC_NET_UNIX : QSEC_NET_ALL;
+            if (!sm->network().checkBind(ai_addr, ai_addrlen, proto, xsink)) {
+                close();
+                return -1;
+            }
+        }
+
         reuse(reuseaddr);
 
         if ((::bind(sock, ai_addr, ai_addrlen)) == QORE_SOCKET_ERROR) {

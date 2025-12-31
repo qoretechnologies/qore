@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ForEachStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/AbstractIteratorHelper.h"
@@ -64,6 +65,13 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
     while (true) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
         {
             // get first value
             ValueOptionalRefHolder iv(xsink);
@@ -134,6 +142,13 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     //printd(5, "ForEachStatement::execRef() l_tlist: %p ln: %s\n", l_tlist, ln->getFullTypeName());
 
     while (true) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
         {
             LValueHelper n(var, xsink);
             if (!n) {

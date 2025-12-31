@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Mutex.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 
@@ -109,8 +110,31 @@ mutex.lock();
 
     @throw LOCK-ERROR lock called twice in the same thread, object deleted in another thread, etc
     @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 nothing Mutex::lock() {
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        const int poll_ms = 500;  // 500ms polling interval
+        while (true) {
+            if (sm->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
+                return QoreValue();
+            }
+            // Try to acquire lock with timeout
+            int rc = m->grab(xsink, poll_ms);
+            if (*xsink) {
+                return QoreValue();  // Error occurred
+            }
+            if (rc == 0) {
+                return QoreValue();  // Lock acquired
+            }
+            // rc != 0 means timeout, loop and check interrupt again
+        }
+    }
     m->grab(xsink);
 }
 
@@ -131,8 +155,49 @@ if (mutex.lock(1250ms))
 
     @throw LOCK-ERROR lock called twice in the same thread, object deleted in another thread, etc
     @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int Mutex::lock(timeout timeout_ms) {
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        const int poll_ms = 500;  // 500ms polling interval
+        int64 remaining = timeout_ms;
+        bool infinite = (timeout_ms <= 0);
+
+        while (true) {
+            if (sm->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
+                return -1;
+            }
+
+            // Calculate this iteration's timeout
+            int this_timeout;
+            if (infinite) {
+                this_timeout = poll_ms;
+            } else {
+                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+            }
+
+            int rc = m->grab(xsink, this_timeout);
+            if (*xsink) {
+                return -1;  // Error occurred
+            }
+            if (rc == 0) {
+                return 0;  // Lock acquired
+            }
+
+            // Timeout on this iteration
+            if (!infinite) {
+                remaining -= this_timeout;
+                if (remaining <= 0) {
+                    return -1;  // Overall timeout exceeded
+                }
+            }
+        }
+    }
     return m->grab(xsink, timeout_ms);
 }
 

@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class ExternalInfoRestrictionTest
+
+class ExternalInfoRestrictionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ExternalInfoRestrictionTest", "1.0", \ARGV) {
+        addTestCase("PO_NO_EXTERNAL_INFO ARGV test", \testArgvRestriction());
+        addTestCase("PO_NO_EXTERNAL_INFO QORE_ARGV test", \testQoreArgvRestriction());
+        addTestCase("PO_NO_EXTERNAL_INFO ENV test", \testEnvRestriction());
+        addTestCase("PO_NO_EXTERNAL_INFO getenv() test", \testGetenvRestriction());
+        addTestCase("PO_LOCKDOWN includes external info restriction", \testLockdownRestriction());
+        addTestCase("Without restriction test", \testWithoutRestriction());
+        set_return_value(main());
+    }
+
+    testArgvRestriction() {
+        # Test that ARGV is empty with PO_NO_EXTERNAL_INFO
+        Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        p.parse("
+int sub getArgvCount() {
+    return elements ARGV;
+}
+
+*string sub getFirstArg() {
+    return ARGV[0];
+}
+", "argv-test");
+
+        int count = p.callFunction("getArgvCount");
+        assertEq(0, count, "ARGV should be empty with PO_NO_EXTERNAL_INFO");
+
+        auto first = p.callFunction("getFirstArg");
+        assertEq(NOTHING, first, "ARGV[0] should be NOTHING with PO_NO_EXTERNAL_INFO");
+    }
+
+    testQoreArgvRestriction() {
+        # Test that QORE_ARGV is empty with PO_NO_EXTERNAL_INFO
+        Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        p.parse("
+int sub getQoreArgvCount() {
+    return elements QORE_ARGV;
+}
+
+*string sub getFirstQoreArg() {
+    return QORE_ARGV[0];
+}
+", "qore-argv-test");
+
+        int count = p.callFunction("getQoreArgvCount");
+        assertEq(0, count, "QORE_ARGV should be empty with PO_NO_EXTERNAL_INFO");
+
+        auto first = p.callFunction("getFirstQoreArg");
+        assertEq(NOTHING, first, "QORE_ARGV[0] should be NOTHING with PO_NO_EXTERNAL_INFO");
+    }
+
+    testEnvRestriction() {
+        # Test that ENV is empty with PO_NO_EXTERNAL_INFO
+        Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        p.parse("
+int sub getEnvCount() {
+    return elements ENV;
+}
+
+*string sub getPath() {
+    return ENV.PATH;
+}
+
+*string sub getHome() {
+    return ENV.HOME;
+}
+", "env-test");
+
+        int count = p.callFunction("getEnvCount");
+        assertEq(0, count, "ENV should be empty with PO_NO_EXTERNAL_INFO");
+
+        auto path = p.callFunction("getPath");
+        assertEq(NOTHING, path, "ENV.PATH should be NOTHING with PO_NO_EXTERNAL_INFO");
+
+        auto home = p.callFunction("getHome");
+        assertEq(NOTHING, home, "ENV.HOME should be NOTHING with PO_NO_EXTERNAL_INFO");
+    }
+
+    testGetenvRestriction() {
+        # Test that getenv() returns NOTHING with PO_NO_EXTERNAL_INFO
+        # The getenv() function is restricted by QDOM_EXTERNAL_INFO domain
+        Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+
+        # Try to parse code using getenv - should throw a parse exception
+        bool threw = False;
+        try {
+            p.parse("
+*string sub testGetenv() {
+    return getenv('PATH');
+}
+", "getenv-test");
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            # Check that it's a parse exception about restricted function
+            assertEq("PARSE-EXCEPTION", ex.err, "getenv() should throw PARSE-EXCEPTION with PO_NO_EXTERNAL_INFO");
+        }
+        assertTrue(threw, "getenv() should be rejected at parse time with PO_NO_EXTERNAL_INFO");
+    }
+
+    testLockdownRestriction() {
+        # Test that PO_LOCKDOWN also blocks ARGV/ENV (since it includes PO_NO_EXTERNAL_INFO)
+        Program p(PO_NEW_STYLE | PO_LOCKDOWN);
+        p.parse("
+int sub getArgvCount() {
+    return elements ARGV;
+}
+
+int sub getEnvCount() {
+    return elements ENV;
+}
+", "lockdown-test");
+
+        int argvCount = p.callFunction("getArgvCount");
+        assertEq(0, argvCount, "ARGV should be empty with PO_LOCKDOWN");
+
+        int envCount = p.callFunction("getEnvCount");
+        assertEq(0, envCount, "ENV should be empty with PO_LOCKDOWN");
+    }
+
+    testWithoutRestriction() {
+        # Test that without PO_NO_EXTERNAL_INFO, ARGV and ENV are accessible
+        # Note: In this context, ARGV may be empty but ENV should have values
+
+        Program p(PO_NEW_STYLE);
+        p.parse("
+int sub getEnvCount() {
+    return elements ENV;
+}
+
+bool sub hasPath() {
+    return exists ENV.PATH;
+}
+", "no-restriction-test");
+
+        int envCount = p.callFunction("getEnvCount");
+        assertTrue(envCount > 0, "ENV should have entries without PO_NO_EXTERNAL_INFO");
+
+        bool hasPath = p.callFunction("hasPath");
+        assertTrue(hasPath, "ENV.PATH should exist without PO_NO_EXTERNAL_INFO");
+    }
+}
