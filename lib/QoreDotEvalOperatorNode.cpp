@@ -97,6 +97,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* typeInfo = parse_context.typeInfo;
 
+    // Store the source type for iterator element type inference in map operators
+    m->setSourceType(typeInfo);
+
     QoreClass* qc = const_cast<QoreClass*>(QoreTypeInfo::getUniqueReturnClass(typeInfo));
 
     const QoreMethod* meth = nullptr;
