@@ -151,7 +151,7 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
     }
 
     #! Handles errors from a bulk response
-    /** @param response the bulk API response body (caller guarantees non-NOTHING via response.errors check)
+    /** @param response the bulk API response body
     */
     private handleBulkErrors(*hash<auto> response) {
         list<hash<auto>> failures = ();

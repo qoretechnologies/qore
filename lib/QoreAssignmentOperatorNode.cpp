@@ -201,32 +201,22 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     // Update narrowed type for auto-typed variables
+    // Direct assignment replaces the narrowed type completely (use parseSetNarrowedType)
+    // Branch merging is handled by NarrowedTypeHelper which uses parseMergeNarrowedType
     if (!err && left.getType() == NT_VARREF) {
         VarRefNode* vrn = left.get<VarRefNode>();
         qore_var_t vtype = vrn->getType();
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
             if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
-                // For initial assignment (declaration with initializer), set the narrowed type directly
-                bool initial_assignment = vrn->parseIsDecl();
-                if (initial_assignment) {
-                    lvar->parseSetNarrowedType(parse_context.typeInfo);
-                } else {
-                    // For subsequent assignments, merge types
-                    lvar->parseMergeNarrowedType(parse_context.typeInfo);
-                }
+                // Direct assignment replaces the narrowed type
+                lvar->parseSetNarrowedType(parse_context.typeInfo);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
             if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
-                // For initial assignment (declaration with initializer), set the narrowed type directly
-                bool initial_assignment = vrn->parseIsDecl();
-                if (initial_assignment) {
-                    gvar->parseSetNarrowedType(parse_context.typeInfo);
-                } else {
-                    // For subsequent assignments, merge types
-                    gvar->parseMergeNarrowedType(parse_context.typeInfo);
-                }
+                // Direct assignment replaces the narrowed type
+                gvar->parseSetNarrowedType(parse_context.typeInfo);
             }
         }
     }
