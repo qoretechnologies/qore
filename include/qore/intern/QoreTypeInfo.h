@@ -605,6 +605,29 @@ public:
             : ti->return_vec[0].spec.getComplexList();
     }
 
+    //! Returns the element type for an iterator class based on source type
+    /** For HashPairIterator with source hash<string, int>: returns hash<HashPairInfo> with value: int
+        For HashKeyIterator with source hash<string, int>: returns string
+        For HashIterator with source hash<string, int>: returns int (value type)
+        For ListIterator with source list<T>: returns T
+
+        @param iteratorClass the iterator class (e.g., HashPairIterator)
+        @param sourceTypeInfo the type of the source expression (e.g., hash<string, int>)
+        @return the element type, or nullptr if unknown
+
+        @since Qore 2.1
+    */
+    DLLLOCAL static const QoreTypeInfo* getIteratorElementType(const QoreClass* iteratorClass,
+        const QoreTypeInfo* sourceTypeInfo);
+
+    //! Returns or creates a HashPairInfo type with the given value type
+    /** @param valueType the type for the "value" member
+        @return the HashPairInfo type with the specified value type
+
+        @since Qore 2.1
+    */
+    DLLLOCAL static const QoreTypeInfo* getHashPairType(const QoreTypeInfo* valueType);
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getUniqueReturnComplexSoftList(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.size() > 1 || !hasType(ti))

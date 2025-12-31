@@ -134,6 +134,7 @@ QoreValue QoreParseListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
     for (size_t i = 0; i < values.size(); ++i) {
         ValueEvalOptimizedRefHolder v(values[i], xsink);
         if (xsink && *xsink) {
+            needs_deref = false;
             return QoreValue();
         }
 

@@ -34,6 +34,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 
 #include <memory>
 
@@ -90,7 +91,32 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     // check iterated expression
     {
         // set implicit argument type
-        ParseImplicitArgTypeHelper pia(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo));
+        // First try list element type (existing behavior)
+        const QoreTypeInfo* implicitArgType = QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo);
+
+        // If not a list, check if it's an iterator class and get element type from source type
+        if (!implicitArgType) {
+            const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
+            if (qc) {
+                // Try to get the source type from the iterator expression if it's a method call
+                const QoreTypeInfo* sourceType = nullptr;
+                if (right.getType() == NT_OPERATOR) {
+                    const QoreDotEvalOperatorNode* dotOp =
+                        dynamic_cast<const QoreDotEvalOperatorNode*>(right.getInternalNode());
+                    if (dotOp) {
+                        MethodCallNode* mcn = dotOp->getMethodCall();
+                        if (mcn) {
+                            sourceType = mcn->getSourceType();
+                        }
+                    }
+                }
+                if (sourceType) {
+                    implicitArgType = QoreTypeInfo::getIteratorElementType(qc, sourceType);
+                }
+            }
+        }
+
+        ParseImplicitArgTypeHelper pia(implicitArgType);
         parse_context.typeInfo = nullptr;
         if (parse_init_value(left, parse_context) && !err) {
             err = -1;

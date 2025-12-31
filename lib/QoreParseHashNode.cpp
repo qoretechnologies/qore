@@ -159,12 +159,16 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 
     for (size_t i = 0; i < keys.size(); ++i) {
         ValueEvalOptimizedRefHolder k(keys[i], xsink);
-        if (xsink && *xsink)
+        if (xsink && *xsink) {
+            needs_deref = false;
             return QoreValue();
+        }
 
         ValueEvalOptimizedRefHolder v(values[i], xsink);
-        if (xsink && *xsink)
+        if (xsink && *xsink) {
+            needs_deref = false;
             return QoreValue();
+        }
 
         const QoreTypeInfo* vt = v->getTypeInfo();
 
@@ -189,6 +193,7 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 
         h->setKeyValue(key->c_str(), val, xsink);
         if (xsink && *xsink) {
+            needs_deref = false;
             return QoreValue();
         }
     }

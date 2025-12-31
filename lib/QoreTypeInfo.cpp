@@ -257,6 +257,10 @@ tmap_t ch_map,          // complex hash map
    csl_map,             // complex softlist map
    cslon_map;           // complex softlist or nothing map
 
+// Cache for parameterized HashPairInfo types based on value type
+typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
+static hp_decl_map_t hp_decl_map;
+
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
 
@@ -363,6 +367,9 @@ void delete_qore_types() {
         delete i.second;
     for (auto& i : cslon_map)
         delete i.second;
+    // Clean up hash pair info decl cache
+    for (auto& i : hp_decl_map)
+        typed_hash_decl_private::get(*i.second)->deref();
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
@@ -2117,4 +2124,89 @@ void map_get_plain_hash(QoreValue& n, ExceptionSink* xsink) {
 void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> l(n.get<QoreListNode>(), xsink);
     n.assign(copy_strip_complex_types(*l));
+}
+
+const QoreTypeInfo* QoreTypeInfo::getHashPairType(const QoreTypeInfo* valueType) {
+    // For auto/any value types, return autoHashTypeInfo as the element type
+    if (!valueType || valueType == autoTypeInfo || valueType == anyTypeInfo) {
+        return autoHashTypeInfo;
+    }
+
+    // Check cache under lock
+    {
+        AutoLocker al(ctl);
+        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
+        if (i != hp_decl_map.end() && i->first == valueType) {
+            return i->second->getTypeInfo();
+        }
+    }
+
+    // Create a new TypedHashDecl for this value type
+    // HashPairInfo has "key" (string) and "value" (valueType)
+    TypedHashDecl* hd = new TypedHashDecl("HashPairInfo", "Qore::HashPairInfo");
+    typed_hash_decl_private::get(*hd)->addMember("key", stringTypeInfo, QoreValue());
+    typed_hash_decl_private::get(*hd)->addMember("value", valueType, QoreValue());
+    typed_hash_decl_private::get(*hd)->setSystemPublic();
+
+    // Cache it under lock
+    {
+        AutoLocker al(ctl);
+        // Check again in case another thread added it
+        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
+        if (i != hp_decl_map.end() && i->first == valueType) {
+            // Another thread added it - clean up and use theirs
+            typed_hash_decl_private::get(*hd)->deref();
+            return i->second->getTypeInfo();
+        }
+        hp_decl_map.insert(i, hp_decl_map_t::value_type(valueType, hd));
+    }
+
+    return hd->getTypeInfo();
+}
+
+const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iteratorClass,
+        const QoreTypeInfo* sourceTypeInfo) {
+    if (!iteratorClass || !sourceTypeInfo) {
+        return nullptr;
+    }
+
+    const char* className = iteratorClass->getName();
+
+    // Handle hash iterators
+    const QoreTypeInfo* hashValueType = getUniqueReturnComplexHash(sourceTypeInfo);
+    if (!hashValueType) {
+        // Also try hash-or-nothing types
+        hashValueType = getReturnComplexHashOrNothing(sourceTypeInfo);
+    }
+
+    if (hashValueType) {
+        // HashPairIterator / HashPairReverseIterator: return hash with key: string, value: T
+        if (!strcmp(className, "HashPairIterator") || !strcmp(className, "HashPairReverseIterator")) {
+            return getHashPairType(hashValueType);
+        }
+        // HashKeyIterator / HashKeyReverseIterator: return string
+        if (!strcmp(className, "HashKeyIterator") || !strcmp(className, "HashKeyReverseIterator")) {
+            return stringTypeInfo;
+        }
+        // HashIterator / HashReverseIterator: return value type
+        if (!strcmp(className, "HashIterator") || !strcmp(className, "HashReverseIterator")) {
+            return hashValueType;
+        }
+    }
+
+    // Handle list iterators
+    const QoreTypeInfo* listElementType = getUniqueReturnComplexList(sourceTypeInfo);
+    if (!listElementType) {
+        // Also try list-or-nothing types
+        listElementType = getReturnComplexListOrNothing(sourceTypeInfo);
+    }
+
+    if (listElementType) {
+        // ListIterator / ListReverseIterator: return element type
+        if (!strcmp(className, "ListIterator") || !strcmp(className, "ListReverseIterator")) {
+            return listElementType;
+        }
+    }
+
+    return nullptr;
 }

@@ -32,6 +32,7 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 
 #include <memory>
 
@@ -61,7 +62,31 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     {
         // set implicit argument type
-        ParseImplicitArgTypeHelper pia(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo));
+        const QoreTypeInfo* implicitArgType = QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo);
+
+        // If not a list, check if it's an iterator class and get element type from source type
+        if (!implicitArgType) {
+            const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
+            if (qc) {
+                // Try to get the source type from the iterator expression if it's a method call
+                const QoreTypeInfo* sourceType = nullptr;
+                if (e[1].getType() == NT_OPERATOR) {
+                    const QoreDotEvalOperatorNode* dotOp =
+                        dynamic_cast<const QoreDotEvalOperatorNode*>(e[1].getInternalNode());
+                    if (dotOp) {
+                        MethodCallNode* mcn = dotOp->getMethodCall();
+                        if (mcn) {
+                            sourceType = mcn->getSourceType();
+                        }
+                    }
+                }
+                if (sourceType) {
+                    implicitArgType = QoreTypeInfo::getIteratorElementType(qc, sourceType);
+                }
+            }
+        }
+
+        ParseImplicitArgTypeHelper pia(implicitArgType);
         // check iterated expression
         parse_context.typeInfo = nullptr;
         if (parse_init_value(e[0], parse_context) && !err) {
