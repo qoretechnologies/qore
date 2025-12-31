@@ -584,25 +584,34 @@ public:
     }
 
     //! Returns the value as the given type (for pointer types, returns T directly)
+    //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     template<typename T>
     DLLLOCAL typename std::enable_if<std::is_pointer<T>::value, T>::type get() {
-        assert(isPointer());
+        if (!isPointer()) {
+            return nullptr;
+        }
         assert(!getPointerUnsafe() || dynamic_cast<T>(getPointerUnsafe()));
         return reinterpret_cast<T>(getPointerUnsafe());
     }
 
     //! Returns the value as T* (for non-pointer types like const ReferenceNode, returns pointer to T)
+    //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() {
-        assert(isPointer());
+        if (!isPointer()) {
+            return nullptr;
+        }
         assert(!getPointerUnsafe() || dynamic_cast<T*>(getPointerUnsafe()));
         return reinterpret_cast<T*>(getPointerUnsafe());
     }
 
     //! Returns the value as T* const version (for non-pointer types like const ReferenceNode)
+    //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() const {
-        assert(isPointer());
+        if (!isPointer()) {
+            return nullptr;
+        }
         assert(!getPointerUnsafe() || dynamic_cast<T*>(const_cast<AbstractQoreNode*>(getPointerUnsafe())));
         return reinterpret_cast<T*>(const_cast<AbstractQoreNode*>(getPointerUnsafe()));
     }
