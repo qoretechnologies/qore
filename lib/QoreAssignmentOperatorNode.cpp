@@ -31,6 +31,8 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/LocalVar.h"
+#include "qore/intern/Variable.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
@@ -45,6 +47,8 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_FOR_ASSIGNMENT);
         err = parse_init_value(left, parse_context);
+        // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
+        fh0.preserveFlags(PF_NARROWED_TYPE);
     }
     // return type info is the same as the lvalue's typeinfo
     ti = parse_context.typeInfo;
@@ -109,7 +113,43 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         res = QTI_AMBIGUOUS;
     }
 
-    if (parse_context.pgm->getParseExceptionSink() && !res) {
+    // Check for type mismatch - either with parse exception sink enabled, or for narrowed types
+    bool type_mismatch = !res;
+
+    // Check if the lvalue involves a narrowed auto-type (via PF_NARROWED_TYPE flag)
+    bool has_narrowed_type = (parse_context.pflag & PF_NARROWED_TYPE) != 0;
+
+    // Check if this is a direct assignment to an auto-type variable
+    // Direct assignment to auto-type variables should NOT raise narrowed type errors
+    // because the assignment updates the narrowed type (not a member assignment)
+    bool is_direct_auto_assignment = false;
+    if (left.getType() == NT_VARREF) {
+        VarRefNode* vrn = left.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar && lvar->isAutoType()) {
+                is_direct_auto_assignment = true;
+            }
+        } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+            Var* gvar = vrn->ref.var;
+            if (gvar && gvar->isAutoType()) {
+                is_direct_auto_assignment = true;
+            }
+        }
+    }
+
+    // Raise parse exception for type mismatch
+    // - Always raise for narrowed types (unless PO_BROKEN_NARROWED_TYPES is set)
+    // - But NOT for direct assignment to auto-type variables (reassignment updates the type)
+    // - Otherwise only raise if parse exception sink is enabled
+    bool raise_exception = type_mismatch && (
+        parse_context.pgm->getParseExceptionSink() ||
+        (has_narrowed_type && !is_direct_auto_assignment &&
+         !(parse_context.pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES))
+    );
+
+    if (raise_exception) {
         QoreStringNode* edesc = new QoreStringNodeMaker("lvalue for %sassignment operator '%s' expects ",
             weak_assignment ? "weak " : "", weak_assignment ? ":=" : "=");
         QoreTypeInfo::getThisType(ti, *edesc);
@@ -118,6 +158,37 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);
         if (!err) {
             err = -1;
+        }
+    }
+
+    // Update narrowed type for auto-typed variables
+    if (!err && left.getType() == NT_VARREF) {
+        VarRefNode* vrn = left.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+                // For initial assignment (declaration with initializer), set the narrowed type directly
+                bool initial_assignment = vrn->parseIsDecl();
+                if (initial_assignment) {
+                    lvar->parseSetNarrowedType(parse_context.typeInfo);
+                } else {
+                    // For subsequent assignments, merge types
+                    lvar->parseMergeNarrowedType(parse_context.typeInfo);
+                }
+            }
+        } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+            Var* gvar = vrn->ref.var;
+            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+                // For initial assignment (declaration with initializer), set the narrowed type directly
+                bool initial_assignment = vrn->parseIsDecl();
+                if (initial_assignment) {
+                    gvar->parseSetNarrowedType(parse_context.typeInfo);
+                } else {
+                    // For subsequent assignments, merge types
+                    gvar->parseMergeNarrowedType(parse_context.typeInfo);
+                }
+            }
         }
     }
 

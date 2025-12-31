@@ -541,12 +541,12 @@ class ServiceNowTest inherits QUnit::Test {
 
             monitor.add(snrc);
 
-            info = monitor.waitForResult();
-            assertEq(info.name, "test");
-            on_error if (info.ex) {
-                printf("%s\n", get_exception_string(info.ex));
+            hash<auto> poll_info = monitor.waitForResult();
+            assertEq(poll_info.name, "test");
+            on_error if (poll_info.ex) {
+                printf("%s\n", get_exception_string(poll_info.ex));
             }
-            assertEq("OK", info.result);
+            assertEq("OK", poll_info.result);
         }
 
         if (snopts.oauth2_client_id && snopts.oauth2_client_secret && snopts.username && snopts.password
@@ -573,12 +573,12 @@ class ServiceNowTest inherits QUnit::Test {
 
             monitor.add(snrc);
 
-            info = monitor.waitForResult();
-            assertEq(info.name, "test");
-            on_error if (info.ex) {
-                printf("%s\n", get_exception_string(info.ex));
+            hash<auto> poll_info = monitor.waitForResult();
+            assertEq(poll_info.name, "test");
+            on_error if (poll_info.ex) {
+                printf("%s\n", get_exception_string(poll_info.ex));
             }
-            assertEq("OK", info.result);
+            assertEq("OK", poll_info.result);
         }
     }
 

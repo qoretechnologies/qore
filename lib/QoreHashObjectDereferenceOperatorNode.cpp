@@ -45,6 +45,9 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* lti = parse_context.typeInfo;
 
+    // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
+    fh.preserveFlags(PF_NARROWED_TYPE);
+
     bool for_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
     if (!err && for_assignment && check_lvalue(left)) {
         parse_error(*loc, "expression used for assignment requires an lvalue, got '%s' instead", left.getTypeName());

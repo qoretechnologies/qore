@@ -43,7 +43,8 @@
 #define PO_NO_THREAD_CLASSES                (1 <<  3)    //!< no access to thread classes
 #define PO_NO_TOP_LEVEL_STATEMENTS          (1 <<  4)    //!< cannot define new top-level statements (outside of sub or class defs)
 #define PO_ALLOW_REPARSE                    (1 <<  5)    //!< allow multiple parse/commit cycles (for REPL support); requires no other threads active in Program
-// bits 6, 7, 8 are available for future use
+#define PO_BROKEN_NARROWED_TYPES            (1 <<  6)    //!< allows parse-time type narrowing violations to be warnings instead of errors
+// bits 7, 8 are available for future use
 #define PO_NO_INHERIT_SYSTEM_CLASSES        (1 <<  9)    //!< do not inherit system classes into this program space
 #define PO_NO_INHERIT_USER_CLASSES          (1 << 10)    //!< do not inherit public user classes into this program space
 #define PO_NO_CHILD_PO_RESTRICTIONS         (1 << 11)    //!< turn off parse option inheritance restrictions
@@ -145,7 +146,7 @@
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
     |PO_BROKEN_LIST_PARSING|PO_BROKEN_LOGIC_PRECEDENCE|PO_BROKEN_INT_ASSIGNMENTS|PO_BROKEN_OPERATORS \
     |PO_BROKEN_LOOP_STATEMENT|PO_BROKEN_REFERENCES|PO_BROKEN_SPRINTF|PO_BROKEN_RANGE|PO_BROKEN_VARARGS \
-    |PO_BROKEN_LIST_RANGE)
+    |PO_BROKEN_LIST_RANGE|PO_BROKEN_NARROWED_TYPES)
 
 //! mask of options related to style but not capabilities
 #define PO_STYLE_OPTIONS              (PO_NO_TOP_LEVEL_STATEMENTS|PO_REQUIRE_PROTOTYPES|PO_REQUIRE_TYPES \

@@ -218,6 +218,13 @@ public:
         parse_context.pflag |= flags;
     }
 
+    //! Copies specified flags from the current parse_context.pflag to the saved pflag
+    /** This ensures that specified flags set during parsing are preserved when the helper destructs.
+    */
+    DLLLOCAL void preserveFlags(int flags) {
+        pflag |= (parse_context.pflag & flags);
+    }
+
 private:
     QoreParseContext& parse_context;
     int pflag;

@@ -133,6 +133,10 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     parse_context.typeInfo = nullptr;
     int err = parse_init_value(sexp, parse_context);
 
+    // Track narrowed types across switch branches
+    NarrowedTypeHelper nth;
+    nth.saveState();
+
     CaseNode* w = head;
     ExceptionSink xsink;
     while (w) {
@@ -199,9 +203,19 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             if (w->code->parseInitImpl(parse_context) && !err) {
                 err = -1;
             }
+            // Record narrowed types after this case block and restore for next case
+            nth.recordBranchAndRestore();
         }
         w = w->next;
     }
+
+    // If there's no default case, the implicit "no match" path preserves original types
+    if (!deflt) {
+        nth.recordSavedAsImplicitBranch();
+    }
+
+    // Merge types from all branches
+    nth.mergeAndApply();
 
     return err;
 }

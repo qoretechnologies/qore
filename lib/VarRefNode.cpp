@@ -36,6 +36,7 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/LocalVar.h"
 
 bool VarRefNode::parseEqualTo(const VarRefNode& other) const {
     if (type != other.type) {
@@ -209,6 +210,18 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
             parse_context.typeInfo = parseGetTypeInfo();
         }
     }
+
+    // Set PF_NARROWED_TYPE flag if this variable has a narrowed type
+    if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+        if (ref.id && ref.id->isAutoType() && ref.id->parseGetNarrowedType()) {
+            parse_context.pflag |= PF_NARROWED_TYPE;
+        }
+    } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+        if (ref.var && ref.var->isAutoType() && ref.var->parseGetNarrowedType()) {
+            parse_context.pflag |= PF_NARROWED_TYPE;
+        }
+    }
+
     return err;
 }
 
@@ -322,6 +335,17 @@ int VarRefDeclNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
             parse_context.typeInfo = parseGetTypeInfoForInitialAssignment();
         } else {
             parse_context.typeInfo = parseGetTypeInfo();
+        }
+    }
+
+    // Set PF_NARROWED_TYPE flag if this variable has a narrowed type
+    if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+        if (ref.id && ref.id->isAutoType() && ref.id->parseGetNarrowedType()) {
+            parse_context.pflag |= PF_NARROWED_TYPE;
+        }
+    } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+        if (ref.var && ref.var->isAutoType() && ref.var->parseGetNarrowedType()) {
+            parse_context.pflag |= PF_NARROWED_TYPE;
         }
     }
 

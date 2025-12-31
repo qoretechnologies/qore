@@ -711,3 +711,107 @@ QoreParseContextLvarHelper::~QoreParseContextLvarHelper() {
     }
     parse_context.lvids = lvids;
 }
+
+// NarrowedTypeHelper implementation
+
+void NarrowedTypeHelper::saveState() {
+    saved_types.clear();
+    VNode* vnode = getVStack();
+    while (vnode) {
+        if (vnode->lvar && vnode->lvar->isAutoType()) {
+            saved_types.push_back({vnode->lvar, vnode->lvar->parseGetNarrowedType()});
+        }
+        vnode = vnode->nextSearch();
+    }
+}
+
+void NarrowedTypeHelper::restoreState() {
+    for (const auto& entry : saved_types) {
+        // Reset or set the narrowed type
+        if (entry.second) {
+            entry.first->parseSetNarrowedType(entry.second);
+        } else {
+            entry.first->parseResetNarrowedType();
+        }
+    }
+}
+
+void NarrowedTypeHelper::recordBranchAndRestore() {
+    // Record current narrowed types for this branch
+    type_map_t branch;
+    VNode* vnode = getVStack();
+    while (vnode) {
+        if (vnode->lvar && vnode->lvar->isAutoType()) {
+            branch.push_back({vnode->lvar, vnode->lvar->parseGetNarrowedType()});
+        }
+        vnode = vnode->nextSearch();
+    }
+    branch_types.push_back(std::move(branch));
+
+    // Restore to pre-branch state
+    restoreState();
+}
+
+void NarrowedTypeHelper::recordSavedAsImplicitBranch() {
+    // Record the saved types as an implicit branch
+    // This represents the code path where the if condition was false
+    branch_types.push_back(saved_types);
+}
+
+void NarrowedTypeHelper::mergeAndApply() {
+    if (branch_types.empty()) {
+        return;
+    }
+
+    // For each saved variable, find the common type across all branches
+    for (const auto& saved_entry : saved_types) {
+        LocalVar* lvar = saved_entry.first;
+        const QoreTypeInfo* common_type = nullptr;
+        bool found_in_all = true;
+        bool first = true;
+
+        for (const auto& branch : branch_types) {
+            bool found = false;
+            for (const auto& branch_entry : branch) {
+                if (branch_entry.first == lvar) {
+                    found = true;
+                    if (first) {
+                        common_type = branch_entry.second;
+                        first = false;
+                    } else if (branch_entry.second != common_type) {
+                        // Merge types using matchCommonType
+                        if (common_type && branch_entry.second) {
+                            const QoreTypeInfo* merged = common_type;
+                            if (!QoreTypeInfo::matchCommonType(merged, branch_entry.second)) {
+                                // Types incompatible, reset to original (un-narrowed)
+                                common_type = nullptr;
+                            } else {
+                                common_type = merged;
+                            }
+                        } else {
+                            // One branch has null (reset), use null
+                            common_type = nullptr;
+                        }
+                    }
+                    break;
+                }
+            }
+            if (!found) {
+                found_in_all = false;
+                break;
+            }
+        }
+
+        // Apply the merged type
+        if (found_in_all && common_type) {
+            lvar->parseSetNarrowedType(common_type);
+        } else if (found_in_all) {
+            // All branches found but no common type - keep original
+            if (saved_entry.second) {
+                lvar->parseSetNarrowedType(saved_entry.second);
+            } else {
+                lvar->parseResetNarrowedType();
+            }
+        }
+    }
+}

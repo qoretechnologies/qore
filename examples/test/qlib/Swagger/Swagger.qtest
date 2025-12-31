@@ -903,7 +903,8 @@ public class SwaggerTest inherits QUnit::Test {
             {
                 SwaggerSchema so("", soh);
                 string uri_path = "/test?float=1.1&dt=1726733382";
-                hash<auto> hdr = {"Test-Header": "Test"};
+                # Use += to avoid type narrowing; parseRequest takes reference<hash<auto>>
+                hash<auto> hdr += {"Test-Header": "Test"};
                 hash<RestRequestServerInfo> req = so.parseRequest("GET", uri_path, NOTHING, \hdr);
                 assertEq(Type::Float, req.query."float".type());
                 assertEq(2024-09-19T08:09:42Z, req.query.dt);
@@ -1191,7 +1192,8 @@ public class SwaggerTest inherits QUnit::Test {
         hash oh = SwaggerLoader::parseSchemaContent(filePath, ReadOnlyFile::readTextFile(filePath));
         OperationObject op = new OperationObject("/create", "post", oh.paths."/create".post, swagger);
         string body = "body";
-        hash<auto> headers = {"header": "header"};
+        # Use += to avoid type narrowing; validateRequest takes reference<hash>
+        hash<auto> headers += {"header": "header"};
 
         assertThrows("SCHEMA-VALIDATION-ERROR",
             'Parameter \"formData.upfile\".*expected type is \"file\"',
@@ -2663,7 +2665,8 @@ public class SwaggerTest inherits QUnit::Test {
             #printf("h: %y\n", h);
 
             {
-                hash<auto> hdr = ("content-type": h.content);
+                # Use += to avoid type narrowing; parseRequest takes reference<hash<auto>>
+                hash<auto> hdr += ("content-type": h.content);
                 hash<RestRequestServerInfo> sh = so.parseRequest("post", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);
