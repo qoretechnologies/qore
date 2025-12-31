@@ -29,6 +29,8 @@
   information.
 */
 
+#include "qore/Qore.h"
+
 #include <bzlib.h>
 #include <cerrno>
 #include <climits>
@@ -46,8 +48,6 @@
 #ifdef HAVE_LZ4
 #include <lz4.h>
 #endif
-
-#include "qore/Qore.h"
 #include "qore/intern/ql_compression.h"
 #include "qore/intern/CompressionTransforms.h"
 
