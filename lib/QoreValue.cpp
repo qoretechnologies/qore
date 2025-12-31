@@ -358,8 +358,13 @@ bool QoreValue::derefCanThrowException() const {
 // ============================================================================
 
 bool QoreValue::isEqualHard(const QoreValue& other) const {
-    // Fast path: identical bits
+    // Fast path: identical bits (but not for floats due to NaN != NaN)
     if (bits == other.bits) {
+        // Must check for NaN - two identical NaN values are not equal per IEEE 754
+        if (isFloat()) {
+            double v = getAsFloat();
+            return v == v;  // NaN != NaN, so this returns false for NaN
+        }
         return true;
     }
 
