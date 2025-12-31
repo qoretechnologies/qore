@@ -108,7 +108,7 @@ public:
 template <class T = QoreOperatorNode>
 class QoreSingleExpressionOperatorNode : public T {
 protected:
-    QoreValue exp;
+    QoreValue exp{};
 
     DLLLOCAL ~QoreSingleExpressionOperatorNode() {
         exp.discard(nullptr);
@@ -159,7 +159,7 @@ public:
 template <class T = QoreOperatorNode>
 class QoreSingleValueExpressionOperatorNode : public T {
 protected:
-    QoreValue exp;
+    QoreValue exp{};
 
     DLLLOCAL ~QoreSingleValueExpressionOperatorNode() {
         exp.discard(nullptr);

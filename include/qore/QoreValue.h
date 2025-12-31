@@ -272,7 +272,9 @@ public:
     // ========================================================================
 
     //! Default constructor: trivial for use in unions (bits are uninitialized)
-    //! Use makeNothing() or explicit initialization for a valid NOTHING value
+    //! IMPORTANT: For local variables, use QoreValue{} or makeNothing() for a valid NOTHING value
+    //! The NaN-boxing encoding requires bits = 0 for NOTHING, which only happens with
+    //! value-initialization (brace init) or zero-initialization (static storage)
     QoreValue() noexcept = default;
 
     //! Creates a boolean value
@@ -725,7 +727,7 @@ using QoreSimpleValue = QoreValue;
 class ValueHolderBase {
 protected:
     //! the value held
-    QoreValue v;
+    QoreValue v{};
     //! for possible Qore-language exceptions
     ExceptionSink* xsink;
 

@@ -50,7 +50,7 @@ public:
     }
 
 private:
-    QoreValue exp;
+    QoreValue exp{};
     bool is_declaration;
     bool is_parse_declaration;
 

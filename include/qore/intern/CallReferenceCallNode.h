@@ -37,7 +37,7 @@
 
 class CallReferenceCallNode : public ParseNode {
 private:
-    QoreValue exp;    // must evaluate to an AbstractCallReference
+    QoreValue exp{};    // must evaluate to an AbstractCallReference
     QoreParseListNode* parse_args = nullptr;
     QoreListNode* args = nullptr;
 

@@ -37,7 +37,7 @@
 
 class SummarizeStatement : public ContextStatement {
 public:
-    QoreValue summarize;
+    QoreValue summarize{};
 
     DLLLOCAL SummarizeStatement(int start_line, int end_line, char* n, QoreValue expr, ContextModList* cm,
             StatementBlock* cd, QoreValue summ_exp = QoreValue())

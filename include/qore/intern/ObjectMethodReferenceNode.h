@@ -71,7 +71,7 @@ public:
 
 class ParseObjectMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {
 private:
-    QoreValue exp;
+    QoreValue exp{};
     std::string method;
     const QoreClass *qc;
     mutable const QoreMethod* m;

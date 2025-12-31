@@ -135,7 +135,7 @@ public:
 
 protected:
     const QoreMapOperatorNode* map;
-    QoreValue v;
+    QoreValue v{};
     bool done = false;
     ExceptionSink* xsink;
 };

@@ -40,7 +40,7 @@ class QoreSquareBracketsRangeOperatorNode : public QoreNOperatorNodeBase<3>, pub
 public:
     DLLLOCAL QoreSquareBracketsRangeOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
             QoreValue p2)
-            : QoreNOperatorNodeBase<3>(loc, p0, QoreSimpleValue().assign(p1), QoreSimpleValue().assign(p2)) {
+            : QoreNOperatorNodeBase<3>(loc, p0, p1, p2) {
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {

@@ -82,7 +82,7 @@ public:
 
 class QoreFunctionalSingleValueOperator : public FunctionalOperatorInterface {
 protected:
-    QoreValue v;
+    QoreValue v{};
     bool done = false;
     ExceptionSink* xsink;
 

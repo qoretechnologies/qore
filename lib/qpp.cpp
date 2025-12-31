@@ -1701,7 +1701,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             size_t len = qv.size();
             char lc = qv[len - 1];
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "DateTimeNode::makeRelative(0, 0, 0, 0, ";
             if (qv[len - 2] == 'm' && lc == 's') {
@@ -1734,7 +1734,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_INT: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
             v += "((int64)";
             v += qv;
@@ -1744,7 +1744,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_FLOAT: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
             v += "((double)";
             v += qv;
@@ -1754,7 +1754,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_STRING: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "new QoreStringNode(";
             v += qv;
@@ -1767,7 +1767,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_CSTRING: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "new QoreStringNode(";
             v.append(qv, 4, qv.size() - 5);
@@ -1780,9 +1780,9 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_BOOL: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
-            v = "((bool)";
+            v += "((bool)";
             v.append(qv, 5, qv.size() - 6);
             v += ")";
             return 0;
@@ -1790,7 +1790,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_QORE: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
                 v.append(qv, 4, qv.size() - 4);
                 v += ")";
             }
@@ -1891,7 +1891,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
         strmap_t::iterator i = qppval.find(qv);
         if (i != qppval.end()) {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += i->second;
             if (force_node) {
@@ -5443,11 +5443,13 @@ void init() {
     valmap["False"] = "false";
 
     // initialize qore value to QoreSimpleValue map
-    simple_valmap["0"] = "QoreSimpleValue().assign((int64)0)";
-    simple_valmap["0.0"] = "QoreSimpleValue().assign((double)0.0)";
-    simple_valmap["binary()"] = "QoreSimpleValue().assign(new BinaryNode)";
-    simple_valmap["True"] = "QoreSimpleValue().assign(true)";
-    simple_valmap["False"] = "QoreSimpleValue().assign(false)";
+    // Use constructors instead of .assign() because QoreValue::assign() returns AbstractQoreNode*
+    // not a reference, so the expression value would be the wrong type for va_arg
+    simple_valmap["0"] = "QoreSimpleValue((int64)0)";
+    simple_valmap["0.0"] = "QoreSimpleValue((double)0.0)";
+    simple_valmap["binary()"] = "QoreSimpleValue(new BinaryNode)";
+    simple_valmap["True"] = "QoreSimpleValue(true)";
+    simple_valmap["False"] = "QoreSimpleValue(false)";
 
     // initialize domain maps
     dmap["DEFAULT"] = "PO_DEFAULT";

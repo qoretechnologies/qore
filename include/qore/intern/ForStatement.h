@@ -49,9 +49,9 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 private:
-    QoreValue assignment;
-    QoreValue cond;
-    QoreValue iterator;
+    QoreValue assignment{};
+    QoreValue cond{};
+    QoreValue iterator{};
     StatementBlock* code;
     LVList* lvars = nullptr;
 

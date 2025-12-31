@@ -46,7 +46,7 @@ class LVList;
 class ContextMod {
 public:
     int type;
-    QoreValue exp;
+    QoreValue exp{};
 
     DLLLOCAL ContextMod(int t, QoreValue e) : type(t), exp(e) {
     }

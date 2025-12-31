@@ -56,7 +56,7 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 private:
-    QoreValue expression;           //!< The expression to evaluate (if expression form)
+    QoreValue expression{};           //!< The expression to evaluate (if expression form)
     class StatementBlock* code;     //!< The statement block to execute (if block form)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);

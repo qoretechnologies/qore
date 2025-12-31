@@ -552,9 +552,9 @@ struct qore_socket_private {
         ;
 
     //! callback argument for the warning queue
-    QoreValue warn_callback_arg;
+    QoreValue warn_callback_arg{};
     //! argument for the event queue
-    QoreValue event_arg;
+    QoreValue event_arg{};
     bool del = false,
         http_exp_chunked_body = false,
         ssl_accept_all_certs = false,
