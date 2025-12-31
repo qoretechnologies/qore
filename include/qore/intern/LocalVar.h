@@ -503,9 +503,16 @@ public:
         }
         // If this is an auto type with a narrowed type, return the narrowed type
         // unless PO_BROKEN_NARROWED_TYPES is set
+        // NOTE: For or-nothing types (types that can return NOTHING), we don't return
+        // the narrowed type because narrowing loses the or-nothing semantics which are
+        // important for type checking
         if (is_auto_type && narrowedTypeInfo) {
             QoreProgram* pgm = getProgram();
             if (!pgm || !(pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES)) {
+                // Don't return narrowed type if declared type is or-nothing
+                if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
+                    return typeInfo;
+                }
                 return narrowedTypeInfo;
             }
         }

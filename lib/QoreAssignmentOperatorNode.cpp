@@ -140,19 +140,58 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     // Raise parse exception for type mismatch
+    // - For direct auto-type assignments, check against declared type (not narrowed)
     // - Always raise for narrowed types (unless PO_BROKEN_NARROWED_TYPES is set)
     // - But NOT for direct assignment to auto-type variables (reassignment updates the type)
     // - Otherwise only raise if parse exception sink is enabled
-    bool raise_exception = type_mismatch && (
-        parse_context.pgm->getParseExceptionSink() ||
-        (has_narrowed_type && !is_direct_auto_assignment &&
-         !(parse_context.pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES))
-    );
+    bool raise_exception = false;
+    const QoreTypeInfo* error_ti = ti;  // Type info to use in error message
+
+    if (type_mismatch) {
+        if (is_direct_auto_assignment) {
+            // For direct auto-type assignments, re-check against the declared type
+            // The narrowed type will be updated by this assignment, so we only need
+            // to verify compatibility with the declared type
+            const QoreTypeInfo* declared_ti = nullptr;
+            VarRefNode* vrn = left.get<VarRefNode>();
+            qore_var_t vtype = vrn->getType();
+            if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+                LocalVar* lvar = vrn->ref.id;
+                if (lvar) {
+                    declared_ti = lvar->getTypeInfo();
+                }
+            } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+                Var* gvar = vrn->ref.var;
+                if (gvar) {
+                    declared_ti = gvar->getTypeInfo();
+                }
+            }
+
+            if (declared_ti) {
+                // Re-check compatibility against declared type
+                bool may_not_match = false;
+                bool may_need_filter = false;
+                qore_type_result_e max_result = QTI_NOT_EQUAL;
+                qore_type_result_e declared_res = QoreTypeInfo::parseAccepts(declared_ti,
+                    parse_context.typeInfo, may_not_match, may_need_filter, max_result);
+                // Only raise error if incompatible with declared type and parse exception sink is enabled
+                if (!declared_res && parse_context.pgm->getParseExceptionSink()) {
+                    raise_exception = true;
+                    error_ti = declared_ti;
+                }
+            }
+        } else {
+            // Not a direct auto assignment - use normal logic
+            raise_exception = parse_context.pgm->getParseExceptionSink() ||
+                (has_narrowed_type &&
+                 !(parse_context.pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES));
+        }
+    }
 
     if (raise_exception) {
         QoreStringNode* edesc = new QoreStringNodeMaker("lvalue for %sassignment operator '%s' expects ",
             weak_assignment ? "weak " : "", weak_assignment ? ":=" : "=");
-        QoreTypeInfo::getThisType(ti, *edesc);
+        QoreTypeInfo::getThisType(error_ti, *edesc);
         edesc->concat(", but right-hand side is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);
