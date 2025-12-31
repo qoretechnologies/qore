@@ -614,26 +614,34 @@ public:
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {
-        AbstractQoreNode** p;
+        if (makeNumber(desc))
+            return nullptr;
+
         if (val) {
-            if (makeNumber(desc))
-                return nullptr;
-            p = &val->v.n;
+            // For QoreLValue, we can use direct access to v.n
+            AbstractQoreNode** p = &val->v.n;
+            assert(get_node_type(*p) == NT_NUMBER);
+            if (!(*p)->is_unique()) {
+                AbstractQoreNode* old = (*p);
+                (*p) = (*p)->realCopy();
+                saveTemp(old);
+            }
+            return reinterpret_cast<QoreNumberNode*>(*p);
         }
         else {
+            // For QoreValue, we need to use accessor methods
             assert(qv);
-            if (makeNumber(desc))
-                return nullptr;
-            p = &qv->v.n;
+            AbstractQoreNode* node = qv->getInternalNode();
+            assert(get_node_type(node) == NT_NUMBER);
+            if (!node->is_unique()) {
+                AbstractQoreNode* old = node;
+                node = node->realCopy();
+                saveTemp(old);
+                // Update qv to point to the new node
+                qv->set(node);
+            }
+            return reinterpret_cast<QoreNumberNode*>(node);
         }
-
-        assert(get_node_type(*p) == NT_NUMBER);
-        if (!(*p)->is_unique()) {
-            AbstractQoreNode* old = (*p);
-            (*p) = (*p)->realCopy();
-            saveTemp(old);
-        }
-        return reinterpret_cast<QoreNumberNode*>(*p);
     }
 
     DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true, bool weak_assignment = false);

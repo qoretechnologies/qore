@@ -110,7 +110,7 @@ int typed_hash_decl_private::parseInitHashDeclInitialization(const QoreProgramLo
     runtime_check = false;
 
     parse_context.typeInfo = nullptr;
-    QoreValue arg;
+    QoreValue arg{};
     int err = 0;
     if (!qore_hash_private::parseInitHashInitialization(loc, parse_context, args, arg, err)) {
         if (parseCheckHashDeclInitialization(loc, parse_context.typeInfo, arg, "initializer value", runtime_check,

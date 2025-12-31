@@ -169,6 +169,11 @@
       - when used with @ref PO_ALLOW_REPARSE, performs atomic rollback of only the pending parse transaction
       - preserves all previously committed program state (variables, functions, classes, etc.)
       - enables REPL-style interactive programming where parse errors don't destroy the Program object
+    - implemented NaN-boxing optimization for internal value representation
+      (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
+      - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction)
+      - uses IEEE 754 NaN bit patterns to encode multiple value types in a single 64-bit word
+      - improves cache utilization and value passing performance
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now

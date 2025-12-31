@@ -2021,7 +2021,7 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
                 QoreComplexSoftListTypeSpec(vti),
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
                     if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
-                        QoreValue val;
+                        QoreValue val{};
                         n.swap(val);
                         n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
                             xsink));
@@ -2032,7 +2032,7 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
             {
                 NT_LIST,
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
-                    QoreValue val;
+                    QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }
@@ -2060,7 +2060,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                         case NT_NOTHING:
                             break;
                         case NT_NULL: {
-                            QoreValue val;
+                            QoreValue val{};
                             n.swap(val);
                             n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
                                 xsink));
@@ -2068,7 +2068,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                         }
                         default:
                            if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
-                                QoreValue val;
+                                QoreValue val{};
                                 n.swap(val);
                                 n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti),
                                     val, xsink));
@@ -2081,7 +2081,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
             {
                 NT_LIST,
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
-                    QoreValue val;
+                    QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }

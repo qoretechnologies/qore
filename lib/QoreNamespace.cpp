@@ -1377,7 +1377,7 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
 
     // try to resolve constant
     // first try to find a namespace context
-    QoreValue rv;
+    QoreValue rv{};
 
     qore_ns_private* nscx = parse_get_ns();
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() bword: %s nscx: %p ('%s' root: %d)\n", bword,
@@ -1408,7 +1408,7 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     assert(!found);
 
     unsigned m = 0;
-    QoreValue rv;
+    QoreValue rv{};
 
     bool abr = (bool)(parse_get_parse_options() & PO_ALLOW_BARE_REFS);
 
@@ -1689,7 +1689,7 @@ QoreValue qore_root_ns_private::parseFindReferencedConstantValueIntern(const Qor
         return found ? rv.refSelf() : QoreValue();
     }
 
-    QoreValue rv;
+    QoreValue rv{};
     unsigned m = 0;
 
     // iterate all namespaces with the initial name and look for the match

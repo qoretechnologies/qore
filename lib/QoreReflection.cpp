@@ -453,7 +453,7 @@ const QoreExternalProgramLocation* QoreExternalGlobalVar::getSourceLocation() co
 int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) const {
     LValueHelper lvh(xsink);
     if (const_cast<Var*>(reinterpret_cast<const Var*>(this))->getLValue(lvh, false)) {
-        return QoreValue();
+        return -1;
     }
 
     lvh.assign(val.refSelf(), "<value arugment to GlobalVar::setValue()>");

@@ -1433,7 +1433,6 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreVal
     AbstractQoreNode* $$;
     const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(sline, eline);
 
-    //printd(5, "1: %s, 3: %s\n", $1.getTypeName(), $3.getTypeName());
     qore_type_t t = $1.getType();
     if (t == NT_BAREWORD) {
         BarewordNode* b = $1.get<BarewordNode>();

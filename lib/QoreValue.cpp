@@ -2,6 +2,8 @@
 /*
     QoreValue.cpp
 
+    NaN-boxed QoreValue implementation - 8 bytes instead of 16
+
     Qore Programming Language
 
     Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
@@ -30,231 +32,43 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreBigIntNode.h>
 
-#include "qore/intern/ParseNode.h"
-#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
-#ifndef DEBUG
-#define QOREVALUE_USE_MEMCPY 1
-#endif
-
+// Type name constants
 const char* qoreBoolTypeName = "bool";
 const char* qoreIntTypeName = "integer";
 const char* qoreFloatTypeName = "float";
 
-void QoreSimpleValue::set(const QoreSimpleValue& n) {
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreSimpleValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
-    }
-#endif
+// ============================================================================
+// Constructors
+// ============================================================================
+
+// Note: QoreValue() and QoreValue(bool) are now constexpr inline in header
+
+QoreValue::QoreValue(int i) {
+    set(static_cast<int64>(i));
 }
 
-void QoreSimpleValue::set(AbstractQoreNode* n) {
-    type = QV_Node;
-    v.n = (n == &Nothing ? nullptr : n);
+QoreValue::QoreValue(unsigned int i) {
+    set(static_cast<int64>(i));
 }
 
-AbstractQoreNode* QoreSimpleValue::takeNode() {
-    assert(type == QV_Node);
-    return takeNodeIntern();
+QoreValue::QoreValue(long i) {
+    set(static_cast<int64>(i));
 }
 
-AbstractQoreNode* QoreSimpleValue::takeNodeIntern() {
-    assert(type == QV_Node);
-    AbstractQoreNode* rv = v.n;
-    v.n = nullptr;
-    return rv;
+QoreValue::QoreValue(unsigned long i) {
+    set(static_cast<int64>(i));
 }
 
-void QoreSimpleValue::clear() {
-#ifdef DEBUG
-    // this makes valgrind happier, but is functionally equivalent to the below,
-    // which is more efficient as it doesn't write to memory unnecessarily
-    type = QV_Node;
-    v.n = nullptr;
-#else
-    if (type != QV_Node)
-        type = QV_Node;
-    if (v.n)
-        v.n = nullptr;
-#endif
-}
-
-void QoreSimpleValue::discard(ExceptionSink* xsink) {
-    if (type == QV_Node && v.n) {
-        v.n->deref(xsink);
-        v.n = nullptr;
-    }
-}
-
-bool QoreSimpleValue::getAsBool() const {
-    switch (type) {
-        case QV_Bool: return v.b;
-        case QV_Int: return (bool)v.i;
-        case QV_Float: return (bool)v.f;
-        case QV_Node: return v.n ? v.n->getAsBool() : false;
-        default: assert(false);
-            // no break
-    }
-    return false;
-}
-
-int64 QoreSimpleValue::getAsBigInt() const {
-    switch (type) {
-        case QV_Bool: return (int64)v.b;
-        case QV_Int: return v.i;
-        case QV_Float: return (int64)v.f;
-        case QV_Node: return v.n ? v.n->getAsBigInt() : 0;
-        default: assert(false);
-            // no break
-    }
-    return 0;
-}
-
-double QoreSimpleValue::getAsFloat() const {
-    switch (type) {
-        case QV_Bool: return (double)v.b;
-        case QV_Int: return (double)v.i;
-        case QV_Float: return v.f;
-        case QV_Node: return v.n ? v.n->getAsFloat() : 0.0;
-        default: assert(false);
-            // no break
-    }
-    return 0.0;
-}
-
-qore_type_t QoreSimpleValue::getType() const {
-    switch (type) {
-        case QV_Bool: return NT_BOOLEAN;
-        case QV_Int: return NT_INT;
-        case QV_Float: return NT_FLOAT;
-        case QV_Node: return v.n ? v.n->getType() : NT_NOTHING;
-        default: assert(false);
-            // no break
-    }
-    // to avoid a warning
-    return NT_NOTHING;
-}
-
-const char* QoreSimpleValue::getTypeName() const {
-    switch (type) {
-        case QV_Bool: return qoreBoolTypeName;
-        case QV_Int: return qoreIntTypeName;
-        case QV_Float: return qoreFloatTypeName;
-        case QV_Node: return get_type_name(v.n);
-        default: assert(false);
-            // no break
-    }
-    return nullptr;
-}
-
-AbstractQoreNode* QoreSimpleValue::getInternalNode() {
-    return type == QV_Node ? v.n : nullptr;
-}
-
-const AbstractQoreNode* QoreSimpleValue::getInternalNode() const {
-    return type == QV_Node ? v.n : nullptr;
-}
-
-bool QoreSimpleValue::hasEffect() const {
-    return type == QV_Node && v.n && node_has_effect(v.n);
-}
-
-bool QoreSimpleValue::isEqualHard(const QoreValue n) const {
-    qore_type_t t = getType();
-    if (t != n.getType())
-        return false;
-    switch (t) {
-        case NT_INT: return getAsBigInt() == n.getAsBigInt();
-        case NT_BOOLEAN: return getAsBool() == n.getAsBool();
-        case NT_FLOAT: return getAsFloat() == n.getAsFloat();
-        case NT_NOTHING:
-        case NT_NULL:
-            return true;
-    }
-    ExceptionSink xsink;
-    bool rv = !compareHard(v.n, n.v.n, &xsink);
-    xsink.clear();
-    return rv;
-}
-
-bool QoreSimpleValue::isNothing() const {
-    return type == QV_Node && is_nothing(v.n);
-}
-
-bool QoreSimpleValue::isNull() const {
-    return type == QV_Node && is_null(v.n);
-}
-
-bool QoreSimpleValue::isNullOrNothing() const {
-    return type == QV_Node && (is_nothing(v.n) || is_null(v.n));
-}
-
-bool QoreSimpleValue::isValue() const {
-    return type != QV_Node || (v.n && v.n->is_value());
-}
-
-bool QoreSimpleValue::isConstant() const {
-    qore_type_t t = getType();
-    return t >= NT_NOTHING && t <= NT_NUMBER;
-}
-
-bool QoreSimpleValue::needsEval() const {
-    return type == QV_Node && v.n && v.n->needs_eval();
-}
-
-bool QoreSimpleValue::isScalar() const {
-    if (type != QV_Node) {
-        return true;
-    }
-    qore_type_t t = getType();
-    return t == NT_STRING || t == NT_NUMBER;
-}
-
-QoreSimpleValue::operator bool() const {
-    return !isNothing();
-}
-
-QoreValue::QoreValue() {
-    set(nullptr);
-}
-
-QoreValue::QoreValue(bool b) {
-    set(b);
+QoreValue::QoreValue(unsigned long long i) {
+    set(static_cast<int64>(i));
 }
 
 QoreValue::QoreValue(int64 i) {
     set(i);
-}
-
-QoreValue::QoreValue(unsigned long long i) {
-    set((int64)i);
-}
-
-QoreValue::QoreValue(int i) {
-    set((int64)i);
-}
-
-QoreValue::QoreValue(unsigned int i) {
-    set((int64)i);
-}
-
-QoreValue::QoreValue(long i) {
-    set((int64)i);
-}
-
-QoreValue::QoreValue(unsigned long i) {
-    set((int64)i);
 }
 
 QoreValue::QoreValue(double f) {
@@ -266,195 +80,548 @@ QoreValue::QoreValue(AbstractQoreNode* n) {
 }
 
 QoreValue::QoreValue(const AbstractQoreNode* n) {
-    type = QV_Node;
-    v.n = get_node_type(n) == NT_NOTHING ? nullptr : const_cast<AbstractQoreNode*>(n);
-}
-
-QoreValue::QoreValue(const QoreSimpleValue& n) {
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
+    if (!n || n->getType() == NT_NOTHING) {
+        bits = VAL_NOTHING;
+    } else {
+        bits = TAG_POINTER | (reinterpret_cast<uint64_t>(const_cast<AbstractQoreNode*>(n)) & PAYLOAD_MASK);
     }
-#endif
 }
 
-QoreValue::QoreValue(const QoreValue& n) {
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
+// Note: Copy constructor is now constexpr defaulted in header
+
+// ============================================================================
+// Type checking
+// ============================================================================
+
+bool QoreValue::isNothing() const {
+    if (bits == VAL_NOTHING) {
+        return true;
     }
-#endif
-}
-
-void QoreValue::swap(QoreValue& val) {
-    QoreValue v1(*this);
-    *this = val;
-    val = v1;
-}
-
-QoreValue& QoreValue::operator=(const QoreValue& n) {
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
+    if (isPointer()) {
+        return is_nothing(getPointerUnsafe());
     }
-#endif
-    return *this;
+    return false;
 }
 
-QoreValue& QoreValue::operator=(const QoreSimpleValue& n) {
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
+bool QoreValue::isNull() const {
+    if (bits == VAL_NULL) {
+        return true;
     }
-#endif
-    return *this;
+    if (isPointer()) {
+        return is_null(getPointerUnsafe());
+    }
+    return false;
 }
 
-void QoreValue::ref() const {
-    if (type == QV_Node && v.n)
-        v.n->ref();
+bool QoreValue::isNullOrNothing() const {
+    if (bits == VAL_NOTHING || bits == VAL_NULL) {
+        return true;
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return is_nothing(n) || is_null(n);
+    }
+    return false;
 }
 
-QoreValue QoreValue::refSelf() const {
-    ref();
-    return const_cast<QoreValue&>(*this);
+// ============================================================================
+// Short string operations
+// ============================================================================
+
+bool QoreValue::tryMakeShortString(QoreValue& out, const char* str, size_t len) {
+    if (len > SHORTSTR_MAX_BYTES) {
+        return false;
+    }
+
+    // Encoding: bits 63-52 = 0xFFC (base tag), bits 51-48 = length (0-6)
+    uint64_t tagWithLen = (0xFFCULL << 52) | (static_cast<uint64_t>(len) << 48);
+
+    // Pack string bytes into bits 0-47 (big-endian for lexicographic comparison)
+    uint64_t strBits = 0;
+    for (size_t i = 0; i < len; i++) {
+        strBits |= static_cast<uint64_t>(static_cast<unsigned char>(str[i])) << (40 - i * 8);
+    }
+
+    out.bits = tagWithLen | strBits;
+    return true;
+}
+
+QoreValue QoreValue::makeShortString(const char* str, size_t len) {
+    QoreValue v{};
+    bool ok = tryMakeShortString(v, str, len);
+    assert(ok && "String too long for inline storage");
+    (void)ok;
+    return v;
+}
+
+void QoreValue::getShortString(char* buf) const {
+    assert(isShortString());
+    size_t len = shortStringLen();
+    for (size_t i = 0; i < len; i++) {
+        buf[i] = static_cast<char>((bits >> (40 - i * 8)) & 0xFF);
+    }
+    buf[len] = '\0';
+}
+
+// ============================================================================
+// Type conversions
+// ============================================================================
+
+int64 QoreValue::getAsBigInt() const {
+    if (isInt()) {
+        return getInt();
+    }
+    if (isFloat()) {
+        return static_cast<int64>(getDouble());
+    }
+    if (isBool()) {
+        return getBool() ? 1 : 0;
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getAsBigInt() : 0;
+    }
+    if (isShortString()) {
+        // Convert short string to int
+        char buf[8];
+        getShortString(buf);
+        return strtoll(buf, nullptr, 10);
+    }
+    return 0;
+}
+
+double QoreValue::getAsFloat() const {
+    if (isFloat()) {
+        return getDouble();
+    }
+    if (isInt()) {
+        return static_cast<double>(getInt());
+    }
+    if (isBool()) {
+        return getBool() ? 1.0 : 0.0;
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getAsFloat() : 0.0;
+    }
+    if (isShortString()) {
+        char buf[8];
+        getShortString(buf);
+        return strtod(buf, nullptr);
+    }
+    return 0.0;
+}
+
+bool QoreValue::getAsBool() const {
+    if (isBool()) {
+        return getBool();
+    }
+    if (isInt()) {
+        return getInt() != 0;
+    }
+    if (isFloat()) {
+        return getDouble() != 0.0;
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getAsBool() : false;
+    }
+    if (isShortString()) {
+        return shortStringLen() > 0;
+    }
+    if (isNothing() || isNull()) {
+        return false;
+    }
+    return false;
+}
+
+// ============================================================================
+// QoreValue API
+// ============================================================================
+
+qore_type_t QoreValue::getType() const {
+    if (isFloat()) {
+        return NT_FLOAT;
+    }
+    if (isInt()) {
+        return NT_INT;
+    }
+    if (isBool()) {
+        return NT_BOOLEAN;
+    }
+    if (isNothing()) {
+        return NT_NOTHING;
+    }
+    if (isNull()) {
+        return NT_NULL;
+    }
+    if (isShortString()) {
+        return NT_STRING;
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getType() : NT_NOTHING;
+    }
+    return NT_NOTHING;
+}
+
+const char* QoreValue::getTypeName() const {
+    if (isFloat()) {
+        return qoreFloatTypeName;
+    }
+    if (isInt()) {
+        return qoreIntTypeName;
+    }
+    if (isBool()) {
+        return qoreBoolTypeName;
+    }
+    if (isShortString()) {
+        return "string";
+    }
+    if (isPointer()) {
+        return get_type_name(getPointerUnsafe());
+    }
+    return "nothing";
+}
+
+AbstractQoreNode* QoreValue::getInternalNode() {
+    return isPointer() ? getPointerUnsafe() : nullptr;
+}
+
+const AbstractQoreNode* QoreValue::getInternalNode() const {
+    return isPointer() ? getPointerUnsafe() : nullptr;
+}
+
+bool QoreValue::isValue() const {
+    if (!isPointer()) {
+        return true;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    return !n || n->is_value();
+}
+
+bool QoreValue::needsEval() const {
+    if (!isPointer()) {
+        return false;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    return n && n->needs_eval();
+}
+
+bool QoreValue::hasEffect() const {
+    if (!isPointer()) {
+        return false;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    return n && node_has_effect(n);
+}
+
+bool QoreValue::isScalar() const {
+    if (!isPointer()) {
+        return true;  // int, float, bool, short string are all scalar
+    }
+    qore_type_t t = getType();
+    return t == NT_STRING || t == NT_NUMBER;
+}
+
+bool QoreValue::isConstant() const {
+    qore_type_t t = getType();
+    return t >= NT_NOTHING && t <= NT_NUMBER;
+}
+
+bool QoreValue::hasNode() const {
+    return isPointer() && getPointerUnsafe() != nullptr;
+}
+
+bool QoreValue::isReferenceCounted() const {
+    if (!isPointer()) {
+        return false;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    return n && n->isReferenceCounted();
+}
+
+bool QoreValue::derefCanThrowException() const {
+    if (!isPointer()) {
+        return false;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        return false;
+    }
+    qore_type_t t = n->getType();
+    return t == NT_OBJECT || t == NT_HASH || t == NT_LIST || t == NT_CLOSURE || t == NT_RUNTIME_CLOSURE;
+}
+
+// ============================================================================
+// Comparison operations
+// ============================================================================
+
+bool QoreValue::isEqualHard(const QoreValue& other) const {
+    // Fast path: identical bits
+    if (bits == other.bits) {
+        return true;
+    }
+
+    // Get types
+    qore_type_t t = getType();
+    if (t != other.getType()) {
+        return false;
+    }
+
+    switch (t) {
+        case NT_INT:
+            return getAsBigInt() == other.getAsBigInt();
+        case NT_BOOLEAN:
+            return getAsBool() == other.getAsBool();
+        case NT_FLOAT: {
+            // Handle -0.0 == 0.0 and NaN != NaN
+            double a = getAsFloat();
+            double b = other.getAsFloat();
+            return a == b;
+        }
+        case NT_STRING:
+            // Short strings would have equal bits if equal, so must be node comparison
+            if (isShortString() && other.isShortString()) {
+                return bits == other.bits;
+            }
+            break;
+        case NT_NOTHING:
+        case NT_NULL:
+            return true;
+        default:
+            break;
+    }
+
+    // Node comparison
+    if (isPointer() && other.isPointer()) {
+        ExceptionSink xsink;
+        bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), &xsink);
+        xsink.clear();
+        return rv;
+    }
+
+    return false;
+}
+
+bool QoreValue::isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const {
+    return QoreLogicalEqualsOperatorNode::softEqual(*this, other, xsink);
+}
+
+bool QoreValue::isEqualValue(const QoreValue& other) {
+    // Check if exactly the same value (for nodes, same pointer)
+    return bits == other.bits;
+}
+
+// ============================================================================
+// Value assignment and manipulation
+// ============================================================================
+
+void QoreValue::set(const QoreValue& val) {
+    bits = val.bits;
+}
+
+void QoreValue::set(AbstractQoreNode* n) {
+    if (!n || n == &Nothing || n->getType() == NT_NOTHING) {
+        bits = VAL_NOTHING;
+    } else {
+        bits = TAG_POINTER | (reinterpret_cast<uint64_t>(n) & PAYLOAD_MASK);
+    }
+}
+
+void QoreValue::setLargeInt(int64 i) {
+    // Allocate a QoreBigIntNode for large integers
+    QoreBigIntNode* n = new QoreBigIntNode(i);
+    bits = TAG_POINTER | (reinterpret_cast<uint64_t>(n) & PAYLOAD_MASK);
+}
+
+void QoreValue::clear() {
+    bits = VAL_NOTHING;
+}
+
+void QoreValue::discard(ExceptionSink* xsink) {
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        if (n) {
+            n->deref(xsink);
+        }
+    }
+    bits = VAL_NOTHING;
+}
+
+AbstractQoreNode* QoreValue::assign(const QoreValue& n) {
+    AbstractQoreNode* rv = takeIfNode();
+    bits = n.bits;
+    return rv;
 }
 
 AbstractQoreNode* QoreValue::assign(AbstractQoreNode* n) {
     AbstractQoreNode* rv = takeIfNode();
-    type = QV_Node;
-    v.n = n && n->getType() == NT_NOTHING ? nullptr : n;
-    return rv;
-}
-
-AbstractQoreNode* QoreValue::assign(const QoreValue n) {
-    AbstractQoreNode* rv = takeIfNode();
-#ifdef QOREVALUE_USE_MEMCPY
-    memcpy((void*)this, (void*)&n, sizeof(QoreValue));
-#else
-    type = n.type;
-    switch (type) {
-        case QV_Bool: v.b = n.v.b; break;
-        case QV_Int: v.i = n.v.i; break;
-        case QV_Float: v.f = n.v.f; break;
-        case QV_Node: v.n = n.v.n; break;
-        default:
-            assert(false);
-            // no break
-    }
-#endif
+    set(n);
     return rv;
 }
 
 AbstractQoreNode* QoreValue::assign(int64 n) {
     AbstractQoreNode* rv = takeIfNode();
-    type = QV_Int;
-    v.i = n;
+    set(n);
     return rv;
 }
 
 AbstractQoreNode* QoreValue::assign(double n) {
     AbstractQoreNode* rv = takeIfNode();
-    type = QV_Float;
-    v.f = n;
+    set(n);
     return rv;
 }
 
 AbstractQoreNode* QoreValue::assign(bool n) {
     AbstractQoreNode* rv = takeIfNode();
-    type = QV_Bool;
-    v.b = n;
+    set(n);
     return rv;
 }
 
 AbstractQoreNode* QoreValue::assignNothing() {
     AbstractQoreNode* rv = takeIfNode();
-    type = QV_Node;
-    v.n = nullptr;
+    bits = VAL_NOTHING;
     return rv;
 }
 
-bool QoreValue::isEqualSoft(const QoreValue v, ExceptionSink* xsink) const {
-    return QoreLogicalEqualsOperatorNode::softEqual(*this, v, xsink);
+void QoreValue::swap(QoreValue& val) {
+    uint64_t tmp = bits;
+    bits = val.bits;
+    val.bits = tmp;
 }
 
-bool QoreValue::isEqualValue(const QoreValue n) {
-    if (type != n.type) {
-        return false;
+void QoreValue::sanitize() {
+    if (!isPointer()) {
+        return;
     }
-    switch (type) {
-        case QV_Bool: return n.v.b == v.b;
-        case QV_Float: return n.v.f == v.f;
-        case QV_Int: return n.v.i == v.i;
-        case QV_Node: return n.v.n == v.n;
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        bits = VAL_NOTHING;
+        return;
+    }
+
+    // Try to convert node to inline representation
+    qore_type_t t = n->getType();
+    switch (t) {
+        case NT_INT: {
+            int64 i = n->getAsBigInt();
+            if (fitsInline(i)) {
+                n->deref(nullptr);
+                set(i);
+            }
+            break;
+        }
+        case NT_FLOAT: {
+            double f = n->getAsFloat();
+            n->deref(nullptr);
+            set(f);
+            break;
+        }
+        case NT_BOOLEAN: {
+            bool b = n->getAsBool();
+            n->deref(nullptr);
+            set(b);
+            break;
+        }
+        case NT_NOTHING: {
+            n->deref(nullptr);
+            bits = VAL_NOTHING;
+            break;
+        }
+        case NT_NULL: {
+            n->deref(nullptr);
+            bits = VAL_NULL;
+            break;
+        }
+        case NT_STRING: {
+            // Try to convert short strings to inline
+            QoreStringNode* str = reinterpret_cast<QoreStringNode*>(n);
+            size_t len = str->size();
+            if (len <= SHORTSTR_MAX_BYTES && str->getEncoding() == QCS_UTF8) {
+                QoreValue shortStr;
+                if (tryMakeShortString(shortStr, str->c_str(), len)) {
+                    n->deref(nullptr);
+                    bits = shortStr.bits;
+                }
+            }
+            break;
+        }
         default:
-            assert(false);
-    }
-    return false;
-}
-
-void QoreValue::discard(ExceptionSink* xsink) {
-    if (type == QV_Node && v.n) {
-        v.n->deref(xsink);
-        v.n = nullptr;
+            // Keep as pointer
+            break;
     }
 }
 
-int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink *xsink) const {
+// ============================================================================
+// Reference counting
+// ============================================================================
+
+void QoreValue::ref() const {
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        if (n) {
+            n->ref();
+        }
+    }
+}
+
+QoreValue QoreValue::refSelf() const {
+    ref();
+    return *this;
+}
+
+// ============================================================================
+// Node operations
+// ============================================================================
+
+AbstractQoreNode* QoreValue::takeNode() {
+    assert(isPointer());
+    return takeNodeIntern();
+}
+
+AbstractQoreNode* QoreValue::takeNodeIntern() {
+    assert(isPointer());
+    AbstractQoreNode* rv = getPointerUnsafe();
+    bits = VAL_NOTHING;
+    return rv;
+}
+
+AbstractQoreNode* QoreValue::takeIfNode() {
+    if (isPointer()) {
+        return takeNodeIntern();
+    }
+    return nullptr;
+}
+
+// ============================================================================
+// String conversion
+// ============================================================================
+
+int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xsink) const {
     if (isNothing()) {
         str.concat((format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
             ? &YamlNullString : &NothingTypeString);
         return 0;
     }
-    switch (type) {
-        case QV_Int: str.sprintf(QLLD, v.i); break;
-        case QV_Bool: str.concat(v.b ? &TrueString : &FalseString); break;
-        case QV_Float: {
-            size_t offset = str.size();
-            str.sprintf("%.9g", v.f);
-            q_fix_decimal(&str, offset);
-            break;
+
+    if (isInt()) {
+        str.sprintf(QLLD, getInt());
+    } else if (isBool()) {
+        str.concat(getBool() ? &TrueString : &FalseString);
+    } else if (isFloat()) {
+        size_t offset = str.size();
+        str.sprintf("%.9g", getDouble());
+        q_fix_decimal(&str, offset);
+    } else if (isShortString()) {
+        char buf[8];
+        getShortString(buf);
+        str.concat(buf);
+    } else if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        if (n) {
+            return n->getAsString(str, format_offset, xsink);
         }
-        case QV_Node: return v.n->getAsString(str, format_offset, xsink);
-        default:
-            assert(false);
-            // no break;
     }
     return 0;
 }
@@ -465,121 +632,179 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
         return (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
             ? &YamlNullString : &NothingTypeString;
     }
-    switch (type) {
-        case QV_Int: del = true; return new QoreStringMaker(QLLD, v.i);
-        case QV_Bool: del = false; return v.b ? &TrueString : &FalseString;
-        case QV_Float: {
-            del = true;
-            return q_fix_decimal(new QoreStringMaker("%.9g", v.f), 0);
-        }
-        case QV_Node: return v.n->getAsString(del, format_offset, xsink);
-        default:
-            assert(false);
-            // no break;
+
+    if (isInt()) {
+        del = true;
+        return new QoreStringMaker(QLLD, getInt());
     }
-    return nullptr;
+    if (isBool()) {
+        del = false;
+        return getBool() ? &TrueString : &FalseString;
+    }
+    if (isFloat()) {
+        del = true;
+        return q_fix_decimal(new QoreStringMaker("%.9g", getDouble()), 0);
+    }
+    if (isShortString()) {
+        del = true;
+        char buf[8];
+        getShortString(buf);
+        return new QoreString(buf);
+    }
+    if (isPointer()) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        if (n) {
+            return n->getAsString(del, format_offset, xsink);
+        }
+    }
+    del = false;
+    return &NothingTypeString;
 }
 
+// ============================================================================
+// Evaluation
+// ============================================================================
+
 QoreValue QoreValue::eval(ExceptionSink* xsink) const {
-    if (type != QV_Node || !v.n) {
+    if (!isPointer()) {
         return *this;
     }
-
-    return v.n->eval(xsink);
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        return *this;
+    }
+    // Need to use internal evaluation - AbstractQoreNode::eval returns QoreValue
+    // which is now the new NaN-boxed type
+    bool needs_deref = true;
+    return n->eval(needs_deref, xsink);
 }
 
 QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref == true);
-    if (type != QV_Node || !v.n) {
+    if (!isPointer()) {
         needs_deref = false;
         return *this;
     }
-
-    return v.n->eval(needs_deref, xsink);
-}
-
-AbstractQoreNode* QoreValue::takeIfNode() {
-    return type == QV_Node ? takeNodeIntern() : nullptr;
-}
-
-const char* QoreValue::getFullTypeName() const {
-    switch (type) {
-        case QV_Bool: return qoreBoolTypeName;
-        case QV_Int: return qoreIntTypeName;
-        case QV_Float: return qoreFloatTypeName;
-        case QV_Node: return get_full_type_name(v.n);
-        default: assert(false);
-            // no break
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        needs_deref = false;
+        return *this;
     }
-    return nullptr;
+    return n->eval(needs_deref, xsink);
 }
 
-const char* QoreValue::getFullTypeName(bool with_namespaces) const {
-    switch (type) {
-        case QV_Bool: return qoreBoolTypeName;
-        case QV_Int: return qoreIntTypeName;
-        case QV_Float: return qoreFloatTypeName;
-        case QV_Node: return get_full_type_name(v.n, with_namespaces);
-        default: assert(false);
-            // no break
-    }
-    return nullptr;
-}
-
-const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch) const {
-    switch (type) {
-        case QV_Bool: return qoreBoolTypeName;
-        case QV_Int: return qoreIntTypeName;
-        case QV_Float: return qoreFloatTypeName;
-        case QV_Node: return get_full_type_name(v.n, with_namespaces, scratch);
-        default: assert(false);
-            // no break
-    }
-    return nullptr;
-}
-
-bool QoreValue::hasNode() const {
-    return type == QV_Node && v.n;
-}
-
-bool QoreValue::isReferenceCounted() const {
-    return type == QV_Node && v.n && v.n->isReferenceCounted();
-}
-
-bool QoreValue::derefCanThrowException() const {
-    return needs_scan(*this);
-}
+// ============================================================================
+// Type information
+// ============================================================================
 
 const QoreTypeInfo* QoreValue::getTypeInfo() const {
-    switch (type) {
-        case QV_Bool: return boolTypeInfo;
-        case QV_Int: return bigIntTypeInfo;
-        case QV_Float: return floatTypeInfo;
-        case QV_Node: return getTypeInfoForValue(v.n);
-        default: assert(false);
+    if (isFloat()) {
+        return floatTypeInfo;
     }
-    return nullptr;
+    if (isInt()) {
+        return bigIntTypeInfo;
+    }
+    if (isBool()) {
+        return boolTypeInfo;
+    }
+    if (isShortString()) {
+        return stringTypeInfo;
+    }
+    if (isPointer()) {
+        return getTypeInfoForValue(getPointerUnsafe());
+    }
+    return nothingTypeInfo;
 }
 
 const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
-    switch (getType()) {
-        case NT_OBJECT: return get<const QoreObject>()->getClass()->getTypeInfo();
-        case NT_HASH: {
-            const QoreHashNode* h = get<const QoreHashNode>();
+    qore_type_t t = getType();
+    if (t == NT_OBJECT && isPointer()) {
+        const QoreObject* obj = reinterpret_cast<const QoreObject*>(getPointerUnsafe());
+        if (obj) {
+            return obj->getClass()->getTypeInfo();
+        }
+    }
+    if (t == NT_HASH && isPointer()) {
+        const QoreHashNode* h = reinterpret_cast<const QoreHashNode*>(getPointerUnsafe());
+        if (h) {
             const TypedHashDecl* thd = h->getHashDecl();
             if (thd) {
                 return thd->getTypeInfo();
             }
-            break;
         }
-        default:
-            break;
     }
     return getTypeInfo();
 }
 
+const char* QoreValue::getFullTypeName() const {
+    if (isFloat()) {
+        return qoreFloatTypeName;
+    }
+    if (isInt()) {
+        return qoreIntTypeName;
+    }
+    if (isBool()) {
+        return qoreBoolTypeName;
+    }
+    if (isShortString()) {
+        return "string";
+    }
+    if (isPointer()) {
+        return get_full_type_name(getPointerUnsafe());
+    }
+    return "nothing";
+}
+
+const char* QoreValue::getFullTypeName(bool with_namespaces) const {
+    if (isFloat()) {
+        return qoreFloatTypeName;
+    }
+    if (isInt()) {
+        return qoreIntTypeName;
+    }
+    if (isBool()) {
+        return qoreBoolTypeName;
+    }
+    if (isShortString()) {
+        return "string";
+    }
+    if (isPointer()) {
+        return get_full_type_name(getPointerUnsafe(), with_namespaces);
+    }
+    return "nothing";
+}
+
+const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch) const {
+    if (isFloat()) {
+        return qoreFloatTypeName;
+    }
+    if (isInt()) {
+        return qoreIntTypeName;
+    }
+    if (isBool()) {
+        return qoreBoolTypeName;
+    }
+    if (isShortString()) {
+        return "string";
+    }
+    if (isPointer()) {
+        return get_full_type_name(getPointerUnsafe(), with_namespaces, scratch);
+    }
+    return "nothing";
+}
+
+// ============================================================================
+// Operators
+// ============================================================================
+
+// Note: operator= and operator bool are now inline in header
+
+// ============================================================================
+// RAII Helper Classes
+// ============================================================================
+
 ValueHolder::~ValueHolder() {
-    discard(v.getInternalNode(), xsink);
+    v.discard(xsink);
 }
 
 QoreValue ValueHolder::getReferencedValue() {
@@ -587,10 +812,12 @@ QoreValue ValueHolder::getReferencedValue() {
 }
 
 QoreValue ValueHolder::release() {
-    //printd(5, "ValueHolder::takeReferencedValue() %s\n", v.getTypeName());
-    if (v.type == QV_Node)
-        return v.takeNodeIntern();
-    return v;
+    if (v.isPointer()) {
+        return QoreValue(v.takeNodeIntern());
+    }
+    QoreValue rv = v;
+    v.clear();
+    return rv;
 }
 
 ValueOptionalRefHolder::~ValueOptionalRefHolder() {
@@ -601,12 +828,12 @@ ValueOptionalRefHolder::~ValueOptionalRefHolder() {
 
 void ValueOptionalRefHolder::ensureReferencedValue() {
     if (!needs_deref) {
-        // update the flag unconditionally in case the object will be updated as a QoreValue and a dereferencable
-        // value will be stored here
         needs_deref = true;
-        // reference any node value
-        if (v.type == QV_Node && v.v.n) {
-            v.v.n->ref();
+        if (v.isPointer()) {
+            AbstractQoreNode* n = v.getPointerUnsafe();
+            if (n) {
+                n->ref();
+            }
         }
     }
 }
@@ -620,15 +847,16 @@ QoreValue ValueOptionalRefHolder::getReferencedValue() {
 }
 
 QoreValue ValueOptionalRefHolder::takeReferencedValue() {
-    if (v.type == QV_Node) {
+    if (v.isPointer()) {
         if (needs_deref) {
             needs_deref = false;
-            return v.takeNodeIntern();
+            return QoreValue(v.takeNodeIntern());
         }
-        if (v.v.n) {
-            v.v.n->ref();
+        AbstractQoreNode* n = v.getPointerUnsafe();
+        if (n) {
+            n->ref();
         }
-        return v.takeNodeIntern();
+        return QoreValue(v.takeNodeIntern());
     }
     if (needs_deref) {
         needs_deref = false;
@@ -636,28 +864,18 @@ QoreValue ValueOptionalRefHolder::takeReferencedValue() {
     return v;
 }
 
-ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)
-        : ValueEvalRefHolder(xs) {
+ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
     evalIntern(exp);
 }
 
-ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(ExceptionSink* xs) : ValueEvalRefHolder(xs) {
-}
-
-int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
-    v.discard(xsink);
-    return evalIntern(exp);
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs) : ValueOptionalRefHolder(xs) {
+ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
     evalIntern(exp);
 }
 
-ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs) : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs) : ValueOptionalRefHolder(xs) {
+ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
 }
 
 int ValueEvalRefHolder::evalIntern(const AbstractQoreNode* exp) {
@@ -665,7 +883,6 @@ int ValueEvalRefHolder::evalIntern(const AbstractQoreNode* exp) {
         needs_deref = false;
         return 0;
     }
-
     needs_deref = true;
     v = exp->eval(needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
@@ -685,4 +902,24 @@ int ValueEvalRefHolder::eval(const AbstractQoreNode* exp) {
 int ValueEvalRefHolder::eval(const QoreValue exp) {
     v.discard(xsink);
     return evalIntern(exp);
+}
+
+ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)
+    : ValueEvalRefHolder(xs) {
+    eval(exp);
+}
+
+ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(ExceptionSink* xs)
+    : ValueEvalRefHolder(xs) {
+}
+
+int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
+    if (!exp.needsEval()) {
+        needs_deref = false;
+        v = exp;
+        return 0;
+    }
+    needs_deref = true;
+    v = exp.eval(needs_deref, xsink);
+    return xsink && *xsink ? -1 : 0;
 }

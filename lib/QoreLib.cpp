@@ -844,7 +844,7 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
         if (pstr[i] == '%' && (!broken_sprintf || arg_offset < arg_size)) {
             bool arg_used = true;
             bool use_arg;
-            QoreValue param_value;
+            QoreValue param_value{};
             if (arg_offset < arg_size) {
                 param_value = get_param_value(arg_list, arg_offset++);
                 use_arg = true;

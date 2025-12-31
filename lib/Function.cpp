@@ -377,7 +377,7 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
             }
         } else if (i < typeList.size()) {
             if (arg_type & ARG_OTHER) {
-                QoreValue n;
+                QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (tmp) {
                     n = tmp->retrieveEntry(i);
                 }
@@ -1123,7 +1123,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             bool ok = true;
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                 const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
-                QoreValue n;
+                QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (args) {
                     n = args->retrieveEntry(pi);
                 }
@@ -2035,7 +2035,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     unsigned num_params = signature.numParams();
 
     for (unsigned i = 0; i < num_params; ++i) {
-        QoreValue np;
+        // np is unused, kept for reference
         if (args && *args) {
             if (args->canEdit()) {
                 assert(**args);
@@ -2063,7 +2063,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
             if (args->canEdit()) {
                 argv->push(qore_list_private::get(***args)->takeExists(i + num_params), nullptr);
             } else {
-                QoreValue n;
+                QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (args)
                     n = (*args)->retrieveEntry(i + num_params);
                 //AbstractQoreNode* n = args ? const_cast<AbstractQoreNode*>(args->get_referenced_entry(i + num_params)) : 0;
@@ -2077,7 +2077,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
 
 QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
-    QoreValue val;
+    QoreValue val{};  // value-initialized to NOTHING (bits=0)
     if (statements) {
         // self might be 0 if instantiated by a constructor call
         if (self && signature.selfid)

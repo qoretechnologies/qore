@@ -141,7 +141,7 @@ void QoreGetOpt::doOption(class QoreGetOptNode* n, class QoreHashNode* h, const 
         return;
     }
 
-    QoreValue v;
+    QoreValue v{};
     if (n->argtype == NT_STRING)
         v = new QoreStringNode(val);
     else if (n->argtype == NT_INT)
@@ -174,10 +174,10 @@ void QoreGetOpt::doOption(class QoreGetOptNode* n, class QoreHashNode* h, const 
     // additive
     if (!(*ha).isNothing()) {
         if (n->argtype == NT_INT) {
-            ha.om->val.v.i += v.v.i;
+            ha.om->val.set(ha.om->val.getAsBigInt() + v.getAsBigInt());
         }
         else { // float
-            ha.om->val.v.f += v.v.f;
+            ha.om->val.set(ha.om->val.getAsFloat() + v.getAsFloat());
         }
         v.discard(nullptr);
         return;

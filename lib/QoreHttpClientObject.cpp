@@ -1260,7 +1260,7 @@ struct qore_httpclient_priv {
         if (proxy_connection.username.empty())
             return;
 
-        QoreValue pauth;
+        QoreValue pauth{};
         // check for "Proxy-Authorization" header
         if (headers) {
             ConstHashIterator hi(headers);
