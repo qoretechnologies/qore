@@ -1871,6 +1871,19 @@ public:
     */
     DLLEXPORT bool isHttp2() const;
 
+    //! Submits an HTTP/2 PUSH_PROMISE frame for server push
+    /** @param stream_id the HTTP/2 stream ID of the associated request
+        @param path the path of the resource being pushed
+        @param headers hash of headers for the pushed resource
+        @param xsink exception sink for error reporting
+
+        @return the promised stream ID on success (positive integer), or -1 on error
+
+        @since Qore 2.2
+    */
+    DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;
 

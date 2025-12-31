@@ -130,10 +130,22 @@ struct Http2Settings {
 class Http2Session {
 public:
     //! Create a client-side HTTP/2 session
-    DLLLOCAL static Http2Session* createClient(qore_socket_private* sock, ExceptionSink* xsink);
+    /** @param sock Socket for the connection
+        @param xsink Exception sink for error reporting
+        @param scheme URL scheme - "https" for h2 (default), "http" for h2c
+        @return New Http2Session or nullptr on error
+    */
+    DLLLOCAL static Http2Session* createClient(qore_socket_private* sock, ExceptionSink* xsink,
+        const char* scheme = "https");
 
     //! Create a server-side HTTP/2 session
-    DLLLOCAL static Http2Session* createServer(qore_socket_private* sock, ExceptionSink* xsink);
+    /** @param sock Socket for the connection
+        @param xsink Exception sink for error reporting
+        @param scheme URL scheme - "https" for h2 (default), "http" for h2c
+        @return New Http2Session or nullptr on error
+    */
+    DLLLOCAL static Http2Session* createServer(qore_socket_private* sock, ExceptionSink* xsink,
+        const char* scheme = "https");
 
     DLLLOCAL ~Http2Session();
 
@@ -191,6 +203,18 @@ public:
 
     //! Submit a WINDOW_UPDATE frame
     DLLLOCAL int submitWindowUpdate(int32_t stream_id, int32_t increment, ExceptionSink* xsink);
+
+    //! Submit a PRIORITY frame to set stream priority
+    /** @param stream_id Stream ID to prioritize
+        @param dependency Stream ID this depends on (0 for root)
+        @param weight Priority weight (1-256, default 16)
+        @param exclusive If true, becomes exclusive dependency
+        @return 0 on success, -1 on error
+
+        @since Qore 2.2
+    */
+    DLLLOCAL int submitPriority(int32_t stream_id, int32_t dependency, int32_t weight,
+        bool exclusive, ExceptionSink* xsink);
 
     //! Send data on a stream without closing it (for SSE/WebSocket streaming)
     /** @param stream_id Stream ID to send data on
@@ -263,7 +287,7 @@ public:
     DLLLOCAL Http2Settings getRemoteSettings() const { return remote_settings; }
 
 private:
-    DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server);
+    DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);
 
     // nghttp2 callbacks
@@ -291,6 +315,7 @@ private:
     qore_socket_private* sock;
     nghttp2_session* session = nullptr;
     bool is_server;
+    std::string scheme;  //!< "https" for h2, "http" for h2c
 
     // Stream management
     std::map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;

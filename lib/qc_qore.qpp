@@ -434,6 +434,16 @@ const HTTP2_MODE_AUTO = HTTP2_MODE_AUTO;
 
 //! HTTP/2 required mode - require HTTP/2, fail if the server doesn't support it
 const HTTP2_MODE_REQUIRED = HTTP2_MODE_REQUIRED;
+
+//! h2c (HTTP/2 cleartext) direct mode - starts HTTP/2 directly on non-TLS connections using prior knowledge
+/** @since %Qore 2.2
+*/
+const HTTP2_MODE_H2C_DIRECT = HTTP2_MODE_H2C_DIRECT;
+
+//! h2c via HTTP/1.1 Upgrade header (not yet implemented)
+/** @since %Qore 2.2
+*/
+const HTTP2_MODE_H2C_UPGRADE = HTTP2_MODE_H2C_UPGRADE;
 ///@}
 
 /** @defgroup io_constants I/O Constants

@@ -62,7 +62,9 @@ class Queue;
 enum Http2Mode {
     HTTP2_MODE_DISABLED = 0,  //!< HTTP/1.x only, never use HTTP/2
     HTTP2_MODE_AUTO = 1,      //!< Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
-    HTTP2_MODE_REQUIRED = 2   //!< Require HTTP/2, fail if unavailable
+    HTTP2_MODE_REQUIRED = 2,  //!< Require HTTP/2, fail if unavailable
+    HTTP2_MODE_H2C_DIRECT = 3,    //!< h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
+    HTTP2_MODE_H2C_UPGRADE = 4    //!< h2c via HTTP/1.1 Upgrade header
 };
 
 //! provides a way to communicate with HTTP servers using Qore data structures
@@ -228,6 +230,18 @@ public:
         @since %Qore 2.2
     */
     DLLEXPORT void setHttp2Settings(const QoreHashNode* settings, ExceptionSink* xsink);
+
+    //! Sets HTTP/2 stream priority
+    /** @param stream_id the stream ID to set priority for
+        @param weight priority weight (1-256, default 16)
+        @param dependency stream ID this stream depends on (0 for root)
+        @param exclusive if true, becomes exclusive dependency
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2StreamPriority(int32_t stream_id, int32_t weight, int32_t dependency,
+        bool exclusive, ExceptionSink* xsink);
 
     //! Returns the negotiated HTTP protocol version string
     /** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"

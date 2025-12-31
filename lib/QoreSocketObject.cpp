@@ -718,6 +718,12 @@ bool QoreSocketObject::isHttp2() const {
     return priv->socket->isHttp2();
 }
 
+int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->submitHttp2PushPromise(stream_id, path, headers, xsink);
+}
+
 long QoreSocketObject::verifyPeerCertificate() {
     AutoLocker al(priv->m);
     return priv->socket->verifyPeerCertificate();

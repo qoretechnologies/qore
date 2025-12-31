@@ -4161,4 +4161,41 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     }
     return rv.release();
 }
+
+//! Submits an HTTP/2 PUSH_PROMISE frame for server push
+/** HTTP/2 Server Push allows a server to preemptively send resources to the client
+    before the client requests them. This is useful for pushing CSS, JavaScript, or
+    images that the server knows the client will need.
+
+    @par Example:
+    @code{.py}
+    # After receiving a request for index.html, push the CSS file
+    int promised_id = sock.submitHttp2PushPromise(
+        request.stream_id,
+        "/style.css",
+        {"content-type": "text/css"}
+    );
+    if (promised_id > 0) {
+        # Now send the pushed response on the promised stream
+        sock.startPollSendHttp2Response(promised_id, 200, {"content-type": "text/css"}, css_content);
+    }
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID of the associated request
+    @param path the path of the resource being pushed
+    @param headers hash of headers for the pushed resource
+
+    @return the promised stream ID on success (positive integer), or -1 on error
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode
+
+    @note Server Push can be disabled by clients; check if the push was successful by verifying
+    the return value is positive.
+
+    @since %Qore 2.2
+*/
+int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+    return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
+}
 #endif // HAVE_HTTP2

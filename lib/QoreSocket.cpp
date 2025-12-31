@@ -2920,6 +2920,31 @@ bool QoreSocket::isHttp2() const {
     return priv->ssl->isHttp2();
 }
 
+#ifdef HAVE_HTTP2
+int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
+}
+#endif
+
 long QoreSocket::verifyPeerCertificate() const {
     if (!priv->ssl) {
         return -1;

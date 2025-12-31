@@ -209,6 +209,98 @@ public class Http2PollOperation inherits AbstractPollOperation {
         return keep_alive && state != STATE_CLOSED && !error_info;
     }
 
+    #! Pushes a resource to the client using HTTP/2 Server Push (PUSH_PROMISE)
+    /** @param path the path of the resource to push
+        @param headers response headers for the pushed resource
+        @param body the body of the pushed resource
+
+        @return the promised stream ID on success, -1 if push failed or not supported
+
+        @note This must be called after the request is ready (goalReached() returns True)
+        and before or during response sending. The pushed resource is sent as a separate
+        stream, allowing the client to receive it before or alongside the main response.
+
+        @par Example:
+        @code{.py}
+# Push CSS and JS files when serving an HTML page
+int css_stream = h2op.pushResource("/style.css", {"content-type": "text/css"}, css_data);
+int js_stream = h2op.pushResource("/app.js", {"content-type": "application/javascript"}, js_data);
+
+# Send the main HTML response
+h2op.startSendResponse(200, {"content-type": "text/html"}, html_body);
+        @endcode
+
+        @since HttpServerAsyncIo 1.1
+    */
+    int pushResource(string path, *hash<auto> headers) {
+        if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
+            throw "HTTP2-STATE-ERROR", sprintf("cannot push resource in state: %y", state);
+        }
+        if (!request || !request.stream_id) {
+            throw "HTTP2-ERROR", "no stream_id available for push promise";
+        }
+
+        # Submit PUSH_PROMISE - returns the promised stream ID
+        # The caller should then use startPollSendHttp2Response() to send the pushed content
+        return sock.submitHttp2PushPromise(request.stream_id, path, headers ?? {});
+    }
+
+    #! Creates a poll operation to send a pushed response
+    /** @param promised_stream_id the stream ID returned by pushResource()
+        @param status_code the HTTP status code (typically 200)
+        @param headers response headers for the pushed resource
+        @param body the body of the pushed resource
+
+        @return a poll operation for sending the pushed response
+
+        @par Example:
+        @code{.py}
+# Push a CSS file
+int css_stream = h2op.pushResource("/style.css", {"content-type": "text/css"});
+if (css_stream > 0) {
+    AbstractPollOperation push_op = h2op.startSendPushedResponse(css_stream, 200,
+        {"content-type": "text/css"}, css_data);
+    # Drive push_op alongside main response...
+}
+        @endcode
+
+        @since HttpServerAsyncIo 1.1
+    */
+    AbstractPollOperation startSendPushedResponse(int promised_stream_id, int status_code,
+            *hash<auto> headers, *data body) {
+        return sock.startPollSendHttp2Response(promised_stream_id, status_code, headers, body);
+    }
+
+    #! Returns a callback for pushing resources (for use in handler context)
+    /** @return a closure that can be called to push resources
+
+        The callback takes (string path, *hash<auto> headers) and returns the promised stream ID.
+        Use startSendPushedResponse() to send the actual content on the returned stream ID.
+
+        @par Example:
+        @code{.py}
+# In HttpServer handler context
+code push = h2op.getPushResourceCallback();
+if (push) {
+    int stream_id = push("/style.css", {"content-type": "text/css"});
+    if (stream_id > 0) {
+        # Send the pushed content
+        h2op.startSendPushedResponse(stream_id, 200, {"content-type": "text/css"}, css_data);
+    }
+}
+        @endcode
+
+        @since HttpServerAsyncIo 1.1
+    */
+    *code getPushResourceCallback() {
+        if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
+            return NOTHING;
+        }
+        return int sub (string path, *hash<auto> headers) {
+            return pushResource(path, headers);
+        };
+    }
+
     #! Starts sending an HTTP/2 response
     /** @param status_code the HTTP status code
         @param headers response headers

@@ -340,6 +340,12 @@ public:
     */
     DLLEXPORT bool isHttp2() const;
 
+    //! Submits an HTTP/2 PUSH_PROMISE frame for server push
+    /** @since %Qore 2.2
+    */
+    DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);

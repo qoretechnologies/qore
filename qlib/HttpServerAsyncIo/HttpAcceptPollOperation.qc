@@ -90,7 +90,8 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         @param key SSL private key (SSLPrivateKey object or PEM data, required if ssl is True)
         @param ssl_verify_flags SSL verification flags for client certificate verification (e.g. SSL_VERIFY_PEER)
         @param ssl_accept_all_certs if True, accept all client certificates including self-signed ones
-        @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", or "2.0"
+        @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", "2.0", or "h2c"
+                           - "h2c" enables HTTP/2 cleartext (prior knowledge) on non-SSL connections
     */
     constructor(Qore::Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
@@ -189,7 +190,13 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                         # Continue loop to poll the new operation
                         continue;
                     } else {
-                        # No SSL - accept complete, return NOTHING
+                        # No SSL - check for h2c (HTTP/2 cleartext) mode
+                        if (http_version == "h2c") {
+                            # h2c direct mode - start HTTP/2 with prior knowledge
+                            is_http2 = True;
+                            negotiated_protocol = "h2c";
+                        }
+                        # Accept complete, return NOTHING
                         state = STATE_COMPLETE;
                         return NOTHING;
                     }

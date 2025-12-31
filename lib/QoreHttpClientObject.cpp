@@ -288,10 +288,12 @@ struct qore_httpclient_priv {
         // if URLs are pre-encoded
         pre_encoded_urls = false,
         // HTTP/2 is currently active on the connection
-        http2_active = false
+        http2_active = false,
+        // h2c upgrade is pending (for HTTP2_MODE_H2C_UPGRADE)
+        h2c_upgrade_pending = false
         ;
 
-    // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED)
+    // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED, HTTP2_MODE_H2C_*)
     int http2_mode = HTTP2_MODE_AUTO
         ;
 
@@ -555,7 +557,38 @@ struct qore_httpclient_priv {
 
         if (!rc) {
             setNoDelay();
-            // Check if HTTP/2 was negotiated via ALPN
+#ifdef HAVE_HTTP2
+            // Handle h2c (HTTP/2 cleartext) modes
+            if (http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
+                // Direct h2c: start HTTP/2 immediately with prior knowledge
+                http2_active = true;
+                h2_session.reset(Http2Session::createClient(msock->socket->priv, xsink, "http"));
+                if (*xsink) {
+                    msock->socket->close();
+                    http2_active = false;
+                    return -1;
+                }
+                // Send connection preface
+                if (h2_session->sendConnectionPreface(xsink)) {
+                    h2_session.reset();
+                    msock->socket->close();
+                    http2_active = false;
+                    return -1;
+                }
+            } else if (http2_mode == HTTP2_MODE_H2C_UPGRADE && !connect_ssl) {
+                // TODO: h2c upgrade via HTTP/1.1 Upgrade header is not yet implemented
+                // This requires:
+                // 1. Sending HTTP/1.1 request with Upgrade: h2c and HTTP2-Settings headers
+                // 2. Handling 101 Switching Protocols response
+                // 3. Using nghttp2_session_upgrade2() to complete upgrade
+                // For now, raise an exception
+                xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not yet implemented; "
+                    "use h2c (h2c-direct) mode for HTTP/2 cleartext with prior knowledge");
+                msock->socket->close();
+                return -1;
+            } else
+#endif
+            // Check if HTTP/2 was negotiated via ALPN (for TLS connections)
             if (http2_mode != HTTP2_MODE_DISABLED && connect_ssl) {
                 http2_active = msock->socket->isHttp2();
                 // If HTTP/2 is required but not available, raise an exception
@@ -3212,6 +3245,20 @@ void QoreHttpClientObject::setHttp2Settings(const QoreHashNode* settings, Except
     // Settings validation would go here
 }
 
+void QoreHttpClientObject::setHttp2StreamPriority(int32_t stream_id, int32_t weight, int32_t dependency,
+        bool exclusive, ExceptionSink* xsink) {
+#ifdef HAVE_NGHTTP2
+    SafeLocker sl(priv->m);
+    if (!http_priv->http2_active || !http_priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+        return;
+    }
+    http_priv->h2_session->submitPriority(stream_id, dependency, weight, exclusive, xsink);
+#else
+    xsink->raiseException("HTTP2-ERROR", "HTTP/2 support not available; Qore was not built with nghttp2");
+#endif
+}
+
 QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
     if (http_priv->http2_active) {
         return new QoreStringNode("HTTP/2");
@@ -3869,6 +3916,85 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     }
 
     // code >= 300 && < 400 is already handled above
+#ifdef HAVE_HTTP2
+    // For HTTP/2, the body is already in the response hash (as binary)
+    // We need to extract it and convert to string if appropriate
+    if (http2_active && !os && !recv_callback) {
+        QoreValue h2_body = ans->getKeyValue("body");
+        if (h2_body.getType() == NT_BINARY) {
+            const BinaryNode* bin = h2_body.get<const BinaryNode>();
+            if (bin && bin->size()) {
+                // Get charset from content-type header
+                const QoreEncoding* body_enc = msock->socket->getEncoding();
+                const char* ct = get_string_header(xsink, **ans, "content-type", true);
+                if (!*xsink && ct) {
+                    // Look for charset parameter
+                    const char* charset = strstr(ct, "charset=");
+                    if (charset) {
+                        charset += 8;
+                        // Skip quotes if present
+                        if (*charset == '"' || *charset == '\'') {
+                            ++charset;
+                        }
+                        // Extract charset name
+                        QoreString charset_str;
+                        while (*charset && *charset != '"' && *charset != '\'' && *charset != ';' && *charset != ' ') {
+                            charset_str.concat(*charset++);
+                        }
+                        if (!charset_str.empty()) {
+                            body_enc = QEM.findCreate(charset_str.c_str());
+                        }
+                    }
+                }
+                if (!*xsink) {
+                    // Check content-encoding for compression
+                    content_encoding = get_string_header(xsink, **ans, "content-encoding");
+                    if (!*xsink && content_encoding && !encoding_passthru) {
+                        qore_uncompress_to_string_t dec = nullptr;
+                        if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
+                            dec = qore_inflate_to_string;
+                        else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
+                            dec = qore_gunzip_to_string;
+                        else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
+                            dec = qore_bunzip2_to_string;
+#ifdef HAVE_BROTLI
+                        else if (!strcasecmp(content_encoding, "br"))
+                            dec = qore_unbrotli_to_string;
+#endif
+#ifdef HAVE_ZSTD
+                        else if (!strcasecmp(content_encoding, "zstd"))
+                            dec = qore_unzstd_to_string;
+#endif
+                        if (dec) {
+                            QoreStringNode* decoded = dec(bin, body_enc, xsink);
+                            if (!*xsink && decoded) {
+                                ans->setKeyValue("body", decoded, xsink);
+                            }
+                        }
+                    } else if (!*xsink) {
+                        // Convert binary to string with detected encoding
+                        QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+                        ans->setKeyValue("body", str_body, xsink);
+                    }
+                }
+                if (*xsink) {
+                    disconnect_unlocked();
+                    return nullptr;
+                }
+            }
+        }
+        // For HTTP/2, set response-body in info if needed
+        if (info) {
+            QoreValue body_val = ans->getKeyValue("body");
+            if (body_val) {
+                info->setKeyValue("response-body", body_val.refSelf(), xsink);
+            }
+        }
+        // Skip the HTTP/1.x body reading logic
+        goto http2_body_done;
+    }
+#endif
+
     if (bodyp && (code < 100 || code >= 200) && code != 204) {
         // see if we should do a binary or string read
         content_encoding = get_string_header(xsink, **ans, "content-encoding");
@@ -4024,6 +4150,9 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         }
     }
 
+#ifdef HAVE_HTTP2
+http2_body_done:
+#endif
     if (*xsink) {
         disconnect_unlocked();
         return nullptr;

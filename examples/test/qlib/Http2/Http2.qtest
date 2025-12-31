@@ -103,6 +103,7 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("Socket HTTP/2 poll test", \testSocketHttp2PollOperations());
         addTestCase("HTTP/2 SSE stream test", \testHttp2SseStream());
         addTestCase("HTTP/2 WebSocket stream test", \testHttp2WebSocketStream());
+        addTestCase("HTTP/2 connection persistence test", \testHttp2ConnectionPersistence());
 
         set_return_value(main());
     }
@@ -860,5 +861,51 @@ public class Http2Test inherits QUnit::Test {
             # Just verify the class hierarchy compiles
             assertTrue(True, "AbstractWebSocketConnection interface exists");
         }
+    }
+
+    testHttp2ConnectionPersistence() {
+        # Test HTTP/2 connection persistence using external server test
+        # This verifies that HTTPClient can make multiple HTTP/2 requests
+        # Note: this test uses an external test server (httpbin.org)
+
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "error_passthru": True,
+        });
+        client.acceptAllCertificates(True);
+        client.setHttp2Mode("auto");
+
+        # Send first request
+        hash<auto> info1;
+        *string resp1;
+        try {
+            resp1 = client.get("/get?seq=1", NOTHING, \info1);
+        } catch (hash<ExceptionInfo> ex) {
+            # Skip test if we can't connect to external server
+            testSkip("Cannot connect to test server: " + ex.desc);
+            return;
+        }
+
+        # Check first request
+        assertEq(200, info1."response-headers".status_code ?? 0, "first request should succeed");
+        bool http2_active = client.isHttp2Active();
+
+        if (!http2_active) {
+            # Server might not support HTTP/2, skip the rest
+            testSkip("Server doesn't support HTTP/2 via ALPN");
+            return;
+        }
+
+        # Send second request on same connection
+        hash<auto> info2;
+        string resp2 = client.get("/get?seq=2", NOTHING, \info2);
+        assertEq(200, info2."response-headers".status_code ?? 0, "second request should succeed");
+
+        # Verify both responses are strings
+        assertEq("string", type(resp1), "first response should be string");
+        assertEq("string", type(resp2), "second response should be string");
+
+        # Verify HTTP/2 is still active
+        assertTrue(client.isHttp2Active(), "HTTP/2 should still be active after multiple requests");
     }
 }

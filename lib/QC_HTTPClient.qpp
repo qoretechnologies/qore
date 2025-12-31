@@ -459,18 +459,23 @@ nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
     - \c "disabled" or 0: HTTP/1.x only, never use HTTP/2
     - \c "auto" or 1: Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
     - \c "required" or 2: Require HTTP/2, fail if unavailable
+    - \c "h2c" or "h2c-direct" or 3: h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
+    - \c "h2c-upgrade" or 4: h2c via HTTP/1.1 Upgrade header (not yet implemented)
 
-    @param mode the HTTP/2 mode: "disabled", "auto", "required" (or 0, 1, 2)
+    @param mode the HTTP/2 mode: "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
 
     @par Example:
     @code{.py}
 httpclient.setHttp2Mode("auto");
 # or
 httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
+# For h2c (cleartext HTTP/2) with prior knowledge:
+httpclient.setHttp2Mode("h2c");
     @endcode
 
-    @note HTTP/2 requires TLS; the mode setting only takes effect on TLS connections
-    @note This is a convenience method; the same effect can be achieved with setHTTPVersion()
+    @note For h2 (encrypted HTTP/2), a TLS connection is required
+    @note h2c modes work on non-TLS connections only
+    @note h2c-upgrade mode is not yet implemented; use h2c mode (prior knowledge) instead
 
     @throw HTTP2-MODE-ERROR invalid mode value
 
@@ -480,40 +485,33 @@ httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
     @see setHTTPVersion()
 */
 nothing HTTPClient::setHttp2Mode(auto mode) {
-    const char* version;
+    int mode_int;
     if (mode.getType() == NT_STRING) {
         const QoreStringNode* mode_str = mode.get<const QoreStringNode>();
         const char* str = mode_str->c_str();
         if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
-            version = "1.1";
+            mode_int = HTTP2_MODE_DISABLED;
         } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
-            version = "auto";
+            mode_int = HTTP2_MODE_AUTO;
         } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
-            version = "2.0";
+            mode_int = HTTP2_MODE_REQUIRED;
+        } else if (!strcasecmp(str, "h2c") || !strcasecmp(str, "h2c-direct") || !strcmp(str, "3")) {
+            mode_int = HTTP2_MODE_H2C_DIRECT;
+        } else if (!strcasecmp(str, "h2c-upgrade") || !strcmp(str, "4")) {
+            mode_int = HTTP2_MODE_H2C_UPGRADE;
         } else {
             xsink->raiseException("HTTP2-MODE-ERROR", "invalid value '%s' for HTTP/2 mode; "
-                "valid values are: \"disabled\", \"auto\", \"required\" (or 0, 1, 2)", str);
+                "valid values are: \"disabled\", \"auto\", \"required\", \"h2c\", \"h2c-upgrade\" (or 0-4)", str);
             return QoreValue();
         }
     } else {
-        int mode_int = (int)mode.getAsBigInt();
-        switch (mode_int) {
-            case HTTP2_MODE_DISABLED:
-                version = "1.1";
-                break;
-            case HTTP2_MODE_AUTO:
-                version = "auto";
-                break;
-            case HTTP2_MODE_REQUIRED:
-                version = "2.0";
-                break;
-            default:
-                xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0, 1, 2",
-                    mode_int);
-                return QoreValue();
+        mode_int = (int)mode.getAsBigInt();
+        if (mode_int < HTTP2_MODE_DISABLED || mode_int > HTTP2_MODE_H2C_UPGRADE) {
+            xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0-4", mode_int);
+            return QoreValue();
         }
     }
-    client->setHTTPVersion(version, xsink);
+    client->setHttp2Mode(mode_int, xsink);
 }
 
 //! Returns the current HTTP/2 protocol mode
@@ -539,6 +537,10 @@ string HTTPClient::getHttp2Mode() [flags=CONSTANT] {
             return new QoreStringNode("disabled");
         case HTTP2_MODE_REQUIRED:
             return new QoreStringNode("required");
+        case HTTP2_MODE_H2C_DIRECT:
+            return new QoreStringNode("h2c");
+        case HTTP2_MODE_H2C_UPGRADE:
+            return new QoreStringNode("h2c-upgrade");
         case HTTP2_MODE_AUTO:
         default:
             return new QoreStringNode("auto");
@@ -601,6 +603,27 @@ httpclient.setHttp2Settings({
 */
 nothing HTTPClient::setHttp2Settings(*hash<auto> settings) {
     client->setHttp2Settings(settings, xsink);
+}
+
+//! Sets HTTP/2 stream priority
+/** @param stream_id the stream ID to set priority for
+    @param weight priority weight (1-256, default 16)
+    @param dependency stream ID this stream depends on (0 for root)
+    @param exclusive if @ref True, becomes exclusive dependency
+
+    @par Example:
+    @code{.py}
+# Make stream 5 depend on stream 3 with weight 32
+httpclient.setHttp2StreamPriority(5, 32, 3);
+    @endcode
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int dependency = 0,
+        softbool exclusive = False) {
+    client->setHttp2StreamPriority(stream_id, weight, dependency, exclusive, xsink);
 }
 
 //! Returns the negotiated HTTP protocol version string

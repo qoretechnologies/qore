@@ -40,8 +40,8 @@
 
 #include <cstring>
 
-Http2Session::Http2Session(qore_socket_private* sock, bool is_server)
-    : sock(sock), is_server(is_server) {
+Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
+    : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
 }
 
 Http2Session::~Http2Session() {
@@ -50,16 +50,18 @@ Http2Session::~Http2Session() {
     }
 }
 
-Http2Session* Http2Session::createClient(qore_socket_private* sock, ExceptionSink* xsink) {
-    std::unique_ptr<Http2Session> h2(new Http2Session(sock, false));
+Http2Session* Http2Session::createClient(qore_socket_private* sock, ExceptionSink* xsink,
+        const char* scheme) {
+    std::unique_ptr<Http2Session> h2(new Http2Session(sock, false, scheme));
     if (h2->init(xsink)) {
         return nullptr;
     }
     return h2.release();
 }
 
-Http2Session* Http2Session::createServer(qore_socket_private* sock, ExceptionSink* xsink) {
-    std::unique_ptr<Http2Session> h2(new Http2Session(sock, true));
+Http2Session* Http2Session::createServer(qore_socket_private* sock, ExceptionSink* xsink,
+        const char* scheme) {
+    std::unique_ptr<Http2Session> h2(new Http2Session(sock, true, scheme));
     if (h2->init(xsink)) {
         return nullptr;
     }
@@ -187,13 +189,14 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 
     // Build pseudo-headers
     std::vector<nghttp2_nv> nva;
-    nva.reserve(headers.size() + 4);
+    nva.reserve(headers.size() + 5);  // +5 for :method, :path, :scheme, :authority, :protocol
 
     // Add pseudo-headers first
     std::string method_str(method);
     std::string path_str(path);
-    std::string scheme_str("https");
+    std::string scheme_str(scheme);  // Use stored scheme for h2c support
     std::string authority;
+    std::string protocol;  // RFC 8441: :protocol pseudo-header for extended CONNECT
 
     // Get authority from headers if present
     auto it = headers.find("host");
@@ -206,6 +209,12 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         }
     }
 
+    // RFC 8441: Get :protocol for extended CONNECT (e.g., "websocket")
+    it = headers.find(":protocol");
+    if (it != headers.end()) {
+        protocol = it->second;
+    }
+
     nghttp2_nv nv_method = {
         reinterpret_cast<uint8_t*>(const_cast<char*>(":method")),
         reinterpret_cast<uint8_t*>(const_cast<char*>(method_str.c_str())),
@@ -213,6 +222,7 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     };
     nva.push_back(nv_method);
 
+    // RFC 8441: For extended CONNECT, :path and :scheme are still required (unlike regular CONNECT)
     nghttp2_nv nv_path = {
         reinterpret_cast<uint8_t*>(const_cast<char*>(":path")),
         reinterpret_cast<uint8_t*>(const_cast<char*>(path_str.c_str())),
@@ -234,6 +244,16 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
             10, authority.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv_authority);
+    }
+
+    // RFC 8441: Add :protocol pseudo-header for extended CONNECT (e.g., WebSocket over HTTP/2)
+    if (!protocol.empty()) {
+        nghttp2_nv nv_protocol = {
+            reinterpret_cast<uint8_t*>(const_cast<char*>(":protocol")),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(protocol.c_str())),
+            9, protocol.size(), NGHTTP2_NV_FLAG_NONE
+        };
+        nva.push_back(nv_protocol);
     }
 
     // Add regular headers (excluding pseudo-headers, host, and connection-specific headers)
@@ -407,7 +427,7 @@ int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
     // Add pseudo-headers
     std::string method_str("GET");
     std::string path_str(path);
-    std::string scheme_str("https");
+    std::string scheme_str(scheme);  // Use stored scheme for h2c support
 
     nghttp2_nv nv_method = {
         reinterpret_cast<uint8_t*>(const_cast<char*>(":method")),
@@ -504,6 +524,31 @@ int Http2Session::submitWindowUpdate(int32_t stream_id, int32_t increment, Excep
         }
         return -1;
     }
+    return 0;
+}
+
+int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t weight,
+        bool exclusive, ExceptionSink* xsink) {
+    nghttp2_priority_spec pri_spec;
+    nghttp2_priority_spec_init(&pri_spec, dependency, weight, exclusive ? 1 : 0);
+
+    int rv = nghttp2_submit_priority(session, NGHTTP2_FLAG_NONE, stream_id, &pri_spec);
+    if (rv != 0) {
+        if (xsink) {
+            xsink->raiseException("HTTP2-ERROR", "failed to submit PRIORITY: %s",
+                nghttp2_strerror(rv));
+        }
+        return -1;
+    }
+
+    // Update stream info
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (stream) {
+        stream->weight = weight;
+        stream->dependency = dependency;
+        stream->exclusive = exclusive;
+    }
+
     return 0;
 }
 
@@ -681,6 +726,17 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
             h2->goaway_received = true;
             h2->last_stream_id = frame->goaway.last_stream_id;
             break;
+
+        case NGHTTP2_PRIORITY: {
+            // Update stream priority info
+            Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
+            if (stream) {
+                stream->weight = frame->priority.pri_spec.weight;
+                stream->dependency = frame->priority.pri_spec.stream_id;
+                stream->exclusive = frame->priority.pri_spec.exclusive != 0;
+            }
+            break;
+        }
 
         default:
             break;

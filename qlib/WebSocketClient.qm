@@ -180,6 +180,12 @@ c.waitForZero();
 
     @section websocketclient_relnotes WebSocketClient Module Release History
 
+    @subsection wsc_v2_6 v2.6
+    - added support for WebSocket over HTTP/2 (RFC 8441)
+      - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
+      - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
+        HTTP/2 WebSocket is being used
+
     @subsection wsc_v2_5 v2.5
     - added WebSocket extension support with permessage-deflate compression
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
@@ -413,7 +419,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const DefaultTimeout = 15s;
 
         #! module version
-        const Version = "2.5";
+        const Version = "2.6";
 
         #! default user agent string for HTTP requests
         const DefaultUserAgent = sprintf("Qore-WebSocketClient/%s", WebSocketClient::Version);
@@ -507,6 +513,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! RSV bits used by active extensions (bitmask)
         int extension_rsv_mask = 0;
+
+        #! True if using HTTP/2 WebSocket (RFC 8441)
+        bool http2_websocket = False;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -727,6 +736,18 @@ ws.connect();
         on_exit m.unlock();
 
         return hc.isOpen();
+    }
+
+    #! Returns @ref True "True" if the connection is using HTTP/2 WebSocket (RFC 8441)
+    /** @return @ref True "True" if connected via HTTP/2 extended CONNECT, @ref False "False" if using HTTP/1.1 Upgrade
+
+        @since WebSocketClient 2.6
+    */
+    bool isHttp2() {
+        m.lock();
+        on_exit m.unlock();
+
+        return http2_websocket;
     }
 
     #! Initiate a server reconnect immediately
@@ -1689,6 +1710,30 @@ ws.setEventQueue();
             "User-Agent": DefaultUserAgent,
         } + hdr0;
 
+        # Connect first to determine HTTP version
+        {
+            on_error {
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                    (url, info));
+                hc = new HTTPClient(http_opts);
+                rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
+            }
+            hc.connect();
+        }
+
+        # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
+        if (hc.isHttp2Active()) {
+            return connectHttp2WebSocket(hdr, \info, reconnect);
+        }
+
+        # HTTP/1.1 WebSocket handshake
+        return connectHttp1WebSocket(hdr, \info, reconnect);
+    }
+
+    #! HTTP/1.1 WebSocket handshake with Upgrade header
+    private hash<auto> connectHttp1WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        http2_websocket = False;
+
         string key = get_random_string(16).toBase64();
         hdr += {
             "Upgrade": "websocket",
@@ -1712,12 +1757,11 @@ ws.setEventQueue();
         hash<auto> rh;
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/1.1 WebSocket handshake to %s: %N",
                     (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }
-            hc.connect();
             rh = hc.send(NOTHING, "GET", NOTHING, hdr, NOTHING, \info);
         }
 
@@ -1739,7 +1783,62 @@ ws.setEventQueue();
             }
         }
 
-        # Process server's extension response
+        processExtensions(rh);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! RFC 8441: HTTP/2 WebSocket handshake using extended CONNECT
+    /** @since WebSocketClient 2.6
+    */
+    private hash<auto> connectHttp2WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        http2_websocket = True;
+        logDebug("Using HTTP/2 WebSocket handshake (RFC 8441)");
+
+        # RFC 8441: Use extended CONNECT with :protocol pseudo-header
+        # The :protocol header tells the server we want a WebSocket tunnel
+        hdr.":protocol" = "websocket";
+
+        # Add extension offers if configured (extensions work the same in HTTP/2)
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+                logDebug("Offering extensions: %s", ext_header);
+            }
+        }
+
+        hash<auto> rh;
+        {
+            on_error {
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/2 WebSocket CONNECT to %s: %N",
+                    (url, info));
+                hc = new HTTPClient(http_opts);
+                rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
+            }
+            # RFC 8441: Use CONNECT method instead of GET
+            # The path is still provided (unlike regular CONNECT which uses authority)
+            rh = hc.send(NOTHING, "CONNECT", NOTHING, hdr, NOTHING, \info);
+        }
+
+        # RFC 8441: Expect 200 OK for successful WebSocket over HTTP/2
+        if (rh.status_code != 200) {
+            raiseError("HTTP/2 server at URL %y returned status code '%d %s' to our WebSocket CONNECT request; "
+                "expecting '200 OK' (RFC 8441)", hc.getURL(), rh.status_code, rh.status_message);
+        }
+
+        # Note: HTTP/2 WebSocket does NOT use Sec-WebSocket-Accept header
+        # The CONNECT response is simpler - just 200 OK means success
+
+        processExtensions(rh);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! Process server's extension response (shared between HTTP/1.1 and HTTP/2)
+    private processExtensions(hash<auto> rh) {
         active_extensions = NOTHING;
         extension_rsv_mask = 0;
         if (offered_extensions && rh."sec-websocket-extensions") {
@@ -1772,12 +1871,13 @@ ws.setEventQueue();
                 active_extensions = NOTHING;
             }
         }
+    }
 
-        logInfo("Connected to %y (open: %y)", hc.getURL(), hc.isOpen());
+    #! Finalize connection (shared between HTTP/1.1 and HTTP/2)
+    private finishConnect() {
+        logInfo("Connected to %y (open: %y, http2: %y)", hc.getURL(), hc.isOpen(), http2_websocket);
         ++num_connects;
         cid = seq.next();
-
-        return rh;
     }
 
     #! throws an exception due to an error

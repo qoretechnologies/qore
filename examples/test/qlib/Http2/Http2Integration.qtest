@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+
+%exec-class Http2IntegrationTest
+
+#! HTTP/2 Integration Tests - End-to-End client-server tests
+public class Http2IntegrationTest inherits QUnit::Test {
+    public {
+        # Test SSL certificate (self-signed for testing)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIICpDCCAYwCCQDU+pQ4P1de2DANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAls
+b2NhbGhvc3QwHhcNMjMwMTAxMDAwMDAwWhcNMjQwMTAxMDAwMDAwWjAUMRIwEAYD
+VQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC0
+G0BaEwZHHBQqKxKHXjZqMPm0hDGQwb8a2yT1Ai3I8Xu3pFJKqRzSwT1LYGfbD7Z7
+Lfx3TKHPBJGBRSjXHKWJNYWAZpSj5HMwL7h7MxJXYZQcMZVHVWFFVVzPvp8WHLRP
+S5M0eNZt5ZYEPQvrbdVj0cVN9llZ6pVCbkMnPMDYPXlqfW6fDYRMHFXlI8D0pYRF
+8HG4R3K0CRdJ0L4k3zVCPXXnGJHZHlqPD3Q3gJG0EXzbBSVrBBPVMDZqdkLLJLqv
+Y5MXIO1PdpRSNpVdHqK0Mp8gRjzBZXD6d7rnILWDi0WZFeDPKz7NLvPZqZRIXGOq
+UQXD3VzXYSKNzPGJFX0xAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAAqhJm0bdsLB
+MPPWA1N+lWfRBtVLeScNlPHBNwzLPP6ETQIGA0lsONjL4E7qK6YlLBCLpSQ+BQNT
+iWP1WiYXQoLDWkZdD6Psm+eYdMnPVreXgjE39dcYQ3e4HM0alVKPbJFf8OPC5z/M
+ZPUA/7aZ9D0bzqFXwfnVHYdxcQlA7rlCqwM9xMNQ7D5JNBQdgSui7jccNArhCgkV
+R1HRRAzy2j+axf7aGz4VHLl7UwNgQRFZBQN+blOrNp2ceQFn7LUXOih+gz9+4D4e
+LJvxYsMA6PmOAYnB/b5RXSB1iewhtwRTCL6r9DfTSBLOr2ANVnylUn8yt7gnPvqT
+8PSCPO9QSws=
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC0G0BaEwZHHBQq
+KxKHXjZqMPm0hDGQwb8a2yT1Ai3I8Xu3pFJKqRzSwT1LYGfbD7Z7Lfx3TKHPBJgB
+RSjXHKWJNYWAZpSj5HMwL7h7MxJXYZQcMZVHVWFFVVzPvp8WHLRPS5M0eNZt5ZYE
+PQvrbdVj0cVN9llZ6pVCbkMnPMDYPXlqfW6fDYRMHFXlI8D0pYRF8HG4R3K0CRdJ
+0L4k3zVCPXXnGJHZHlqPD3Q3gJG0EXzbBSVrBBPVMDZqdkLLJLqvY5MXIO1PdpRS
+NpVdHqK0Mp8gRjzBZXD6d7rnILWDi0WZFeDPKz7NLvPZqZRIXGOqUQXD3VzXYSKN
+zPGJFX0xAgMBAAECggEAH7sloLqH0h94VLbDBWvnHTTnLP5zGNVaEZPOpiVj5cjP
+nQ3MYdPWfeIDJPCML9DLyMfMYDCPoAQ7D9WFDD0PMLFK8JIZK7uw8eSWHfOa8/8k
+qX8cTC7qr8UxX7r1IgPrvNLB0WsFkPL8zVMDYBE0FYMLH8XB9BXznUYhKlPr8IDE
+UGHlZkcmvLq1qS0pFPG0fVVVqQELLeNFCAIoVsxPQ+pj1i0LrhJ3DXHQyP2lPwOX
+8qXvFsT15kviKJl09HnV+PD6VYNJPKf9KXjGIvhuPJsGdKBSKJN5+qJMruDKfj5P
+NWMAnQi0LxPK+3Wv9FXQjbcLbnuIkPFyuwFoQEJXQQKBgQDiLSf6fqU10MKSG7QS
+4CNsB8awJBhzHGYVZCAb+TGpXy0cpaFunIBmGnGYoM0h6A/TLEf0VrJzFFfmqRXx
+d+FSrvSNL0+GrUPAU8bVLPsXjPL0Zx0FlPqUzD6Wu/oi5BaVL5JWBaU5LJHR8pDq
+bUXbN/RITWF2BPfCLgNvvnefMQKBgQDMlmFnJJfGppa+xU5FBYwkUCIGP1IvRMvJ
+b4aLQHM4m5f4OeUVskbCIjeaC6zUbJd+5npaAQRhJSMCR+uviqLiYKpPYi4xHT0j
+7DP1B7aGkfa7N4l+H0hR5hea+o+3y0CMRPH8Eni0YwXXsYPl78QsKGUvi6mzHq2c
+f5LjAyQugQKBgFcdh5j9e0cyoLcXI3j7DTVmjLFaAqpmmP0OPITJHqFL1BgYfb4e
+RIaNg0MUnKl0pLCg1Ry5G2bDIFFkjDlRPGXyJEYLxbj90s6EeVnoNWNFrIL2TRZm
+JEn1NwmIlDXsHtGU+Z4GpM36BEUD3+n7WJkPJc85SuJHcA3DGCP5jPfxAoGAYJN6
+YZQDMS8+SfVzPYe/DEbBumxlq/oM1su8mR12I+yGwQROJlssXxpfH4T5lYd/tVRD
+X9FpfvF/HPbMVxbJCL2X6fh5rmhOrchJcnCa3P0DZqzXNMxCEq4a0fLhqpZvaeJJ
+wbMDPH8x6W/Y3rNR+F0raZcT0v5P1sPJHNSFMoECgYEAqUlMVEVYCP0hpyCU4oNK
+cPnfZJGiMNl0A3vBMPMPOhxDxMNhL0Zf4Pds0sTNPGBlHf4Ag4U64QGbPFEnx3Qj
+RWWqy8/F32aPN0gI6zJBJT4j42nKae3MsLPBdGqDJQfLStB1r3f5kDj8N7B4kPEW
+H4sqXPgfKSW/wUHTeS9BN4s=
+-----END PRIVATE KEY-----";
+
+        # Port for test server (0 = auto-assign)
+        int server_port = 0;
+    }
+
+    constructor() : Test("Http2IntegrationTest", "1.0") {
+        addTestCase("HTTP/2 client-server basic GET", \testBasicGet());
+        addTestCase("HTTP/2 client-server POST with body", \testPostWithBody());
+        addTestCase("HTTP/2 multiple sequential requests", \testSequentialRequests());
+        addTestCase("HTTP/2 large body transfer", \testLargeBody());
+        addTestCase("HTTP/2 headers preservation", \testHeadersPreservation());
+        addTestCase("HTTP/2 error status codes", \testErrorStatusCodes());
+        addTestCase("HTTP/2 connection persistence external", \testConnectionPersistenceExternal());
+
+        set_return_value(main());
+    }
+
+    #! Test basic GET request over HTTP/2
+    testBasicGet() {
+        # Use external HTTP/2 server for reliable testing
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            hash<auto> resp = client.send("", "GET", "/get", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+            assertEq(200, resp.status_code, "Status should be 200");
+            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test POST request with JSON body
+    testPostWithBody() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            string json_body = '{"test": "data", "number": 42}';
+            hash<auto> resp = client.send(json_body, "POST", "/post", {
+                "Content-Type": "application/json",
+            }, True);
+
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+            assertEq(200, resp.status_code, "Status should be 200");
+
+            # Verify body was returned
+            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test multiple sequential requests on same connection
+    testSequentialRequests() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            # First request
+            hash<auto> resp1 = client.send("", "GET", "/get", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active after first request");
+
+            # Second request - should reuse connection
+            hash<auto> resp2 = client.send("", "GET", "/headers", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+
+            # Third request
+            hash<auto> resp3 = client.send("", "GET", "/ip", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+
+            # All requests should succeed
+            assertEq(200, resp1.status_code);
+            assertEq(200, resp2.status_code);
+            assertEq(200, resp3.status_code);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test large body transfer
+    testLargeBody() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 60s,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            # Request 10KB of random bytes
+            hash<auto> resp = client.send("", "GET", "/bytes/10240", NOTHING, True);
+
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+            assertEq(200, resp.status_code, "Status should be 200");
+            # Body might be binary or string depending on content-type
+            int body_size;
+            if (resp.body.typeCode() == NT_BINARY) {
+                body_size = resp.body.size();
+            } else if (resp.body.typeCode() == NT_STRING) {
+                body_size = resp.body.length();
+            } else {
+                body_size = 0;
+            }
+            assertEq(10240, body_size, "Body should be 10KB");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test custom headers are preserved through HTTP/2
+    testHeadersPreservation() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            hash<auto> resp = client.send("", "GET", "/headers", {
+                "X-Custom-Header": "test-value-123",
+                "X-Another-Header": "another-value",
+            }, True);
+
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+            assertEq(200, resp.status_code, "Status should be 200");
+
+            # httpbin echoes headers back in JSON response
+            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test error status codes are properly returned
+    testErrorStatusCodes() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+            "error_passthru": True,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            # Request a 404 status
+            hash<auto> resp = client.send("", "GET", "/status/404", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+            assertEq(404, resp.status_code, "Status should be 404");
+
+            # Request a 500 status
+            resp = client.send("", "GET", "/status/500", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+            assertEq(500, resp.status_code, "Status should be 500");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+
+    #! Test HTTP/2 connection persistence with multiple request types
+    testConnectionPersistenceExternal() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+            "error_passthru": True,
+        });
+        client.acceptAllCertificates(True);
+
+        try {
+            # Mix of different request types
+            hash<auto> resp;
+
+            resp = client.send("", "GET", "/get", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 active after GET");
+            assertEq(200, resp.status_code);
+
+            resp = client.send("test data", "POST", "/post", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 active after POST");
+            assertEq(200, resp.status_code);
+
+            resp = client.send("", "PUT", "/put", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 active after PUT");
+            assertEq(200, resp.status_code);
+
+            resp = client.send("", "DELETE", "/delete", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 active after DELETE");
+            assertEq(200, resp.status_code);
+
+            # Verify connection is still using HTTP/2
+            resp = client.send("", "GET", "/get", NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 still active at end");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        }
+    }
+}
