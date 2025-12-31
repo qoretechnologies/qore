@@ -93,6 +93,9 @@ int IfStatement::parseInitImpl(QoreParseContext& parse_context) {
         }
         // Record narrowed types after if branch and restore for else branch
         nth.recordBranchAndRestore();
+    } else {
+        // Empty if block (e.g., "if (cond) ;") - record saved state as this branch
+        nth.recordSavedAsImplicitBranch();
     }
     if (else_code) {
         if (else_code->parseInitImpl(parse_context) && !err) {
