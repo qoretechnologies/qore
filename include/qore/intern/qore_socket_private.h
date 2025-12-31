@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,10 @@
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
+
+#ifdef HAVE_HTTP2
+#include "qore/intern/Http2Session.h"
+#endif
 
 #include <cctype>
 #include <cctype>
@@ -515,6 +519,8 @@ struct qore_socket_private {
     // issue #3053: client target for SNI
     std::string client_target;
     SSLSocketHelper* ssl = nullptr;
+    //! ALPN protocols for TLS negotiation (HTTP/2 support)
+    std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
 
@@ -569,6 +575,14 @@ struct qore_socket_private {
 
     // issue #3818: verbose certificate verification error info
     QoreStringNode* ssl_err_str = nullptr;
+
+#ifdef HAVE_HTTP2
+    //! HTTP/2 session for persistent HTTP/2 connections
+    /** The session is created during startPollReadHttp2Request() and reused
+        for subsequent operations on the same connection.
+    */
+    Http2Session* h2_session = nullptr;
+#endif
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -646,6 +660,12 @@ struct qore_socket_private {
             remote_cert->deref(nullptr);
             remote_cert = nullptr;
         }
+#ifdef HAVE_HTTP2
+        if (h2_session) {
+            delete h2_session;
+            h2_session = nullptr;
+        }
+#endif
         if (sock >= 0) {
             // if an SSL connection has been established, shut it down first
             if (ssl) {
@@ -1632,11 +1652,19 @@ struct qore_socket_private {
         if (!sni_target_host && !client_target.empty()) {
             sni_target_host = client_target.c_str();
         }
-        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey))
-            || ssl->connect(mname, timeout_ms,
-            xsink)) {
+        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey))) {
             sshh.error();
-            return rc ? rc : -1;
+            return rc;
+        }
+
+        // Set ALPN protocols if configured (for HTTP/2 support)
+        if (!alpn_protocols.empty()) {
+            ssl->setAlpnProtocols(alpn_protocols);
+        }
+
+        if (ssl->connect(mname, timeout_ms, xsink)) {
+            sshh.error();
+            return -1;
         }
         do_ssl_established_event();
 
@@ -1650,7 +1678,17 @@ struct qore_socket_private {
         SSLSocketHelperHelper sshh(this, true);
 
         do_start_ssl_event();
-        if (ssl->setServer(xsink, mname, sock, cert, pkey) || ssl->accept(mname, timeout_ms, xsink)) {
+        if (ssl->setServer(xsink, mname, sock, cert, pkey)) {
+            sshh.error();
+            return -1;
+        }
+
+        // Set ALPN protocols if configured (for HTTP/2 support)
+        if (!alpn_protocols.empty()) {
+            ssl->setServerAlpnProtocols(alpn_protocols);
+        }
+
+        if (ssl->accept(mname, timeout_ms, xsink)) {
             sshh.error();
             return -1;
         }

@@ -146,8 +146,10 @@ public class HttpAsyncSocketIoController {
         @param ssl True if this is an HTTPS listener
         @param cert SSL certificate data (required if ssl)
         @param key SSL private key data (required if ssl)
+        @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", or "2.0"
     */
-    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, *data cert, *data key) {
+    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, *data cert, *data key,
+            string http_version = "auto") {
         string uh = listener.uniqueHash();
         {
             AutoLock al(m);
@@ -160,10 +162,11 @@ public class HttpAsyncSocketIoController {
                 "ssl": ssl,
                 "cert": cert,
                 "key": key,
+                "http_version": http_version,
             };
             sendCmd(CMD_ADD_LISTENER, uh);
         }
-        log(LoggerLevel::INFO, "Added listener %y (SSL: %y)", uh, ssl);
+        log(LoggerLevel::INFO, "Added listener %y (SSL: %y, HTTP version: %y)", uh, ssl, http_version);
     }
 
     #! Removes a listener
@@ -254,14 +257,14 @@ public class HttpAsyncSocketIoController {
                             try {
                                 log(LoggerLevel::DEBUG, "Starting accept op for listener %s", key);
                                 HttpAcceptPollOperation op(linfo.listener, linfo.ssl,
-                                    linfo.cert, linfo.key);
+                                    linfo.cert, linfo.key, SSL_VERIFY_NONE, True, linfo.http_version);
                                 active_polls{key} = <HttpPollInfo>{
                                     "type": "accept",
                                     "op": op,
                                     "listener_key": key,
                                     "linfo": linfo,
                                 };
-                                log(LoggerLevel::DEBUG, "Accept op created for listener %s", key);
+                                log(LoggerLevel::DEBUG, "Accept op created for listener %s (HTTP version: %s)", key, linfo.http_version);
                             } catch (hash<ExceptionInfo> ex) {
                                 log(LoggerLevel::ERROR, "Failed to start accept: %s: %s",
                                     ex.err, ex.desc);
@@ -309,6 +312,41 @@ public class HttpAsyncSocketIoController {
                                     if (cinfo.stream_op) {
                                         active_polls{key} = <HttpPollInfo>{
                                             "type": "websocket",
+                                            "op": cinfo.stream_op,
+                                            "conn_key": key,
+                                            "cinfo": cinfo,
+                                        };
+                                    }
+                                    break;
+                                }
+                                case "http2": {
+                                    if (cinfo.stream_op) {
+                                        active_polls{key} = <HttpPollInfo>{
+                                            "type": "http2",
+                                            "op": cinfo.stream_op,
+                                            "conn_key": key,
+                                            "cinfo": cinfo,
+                                        };
+                                    }
+                                    break;
+                                }
+
+                                case "http2_sse": {
+                                    if (cinfo.stream_op) {
+                                        active_polls{key} = <HttpPollInfo>{
+                                            "type": "http2_sse",
+                                            "op": cinfo.stream_op,
+                                            "conn_key": key,
+                                            "cinfo": cinfo,
+                                        };
+                                    }
+                                    break;
+                                }
+
+                                case "http2_websocket": {
+                                    if (cinfo.stream_op) {
+                                        active_polls{key} = <HttpPollInfo>{
+                                            "type": "http2_websocket",
                                             "op": cinfo.stream_op,
                                             "conn_key": key,
                                             "cinfo": cinfo,
@@ -404,6 +442,32 @@ public class HttpAsyncSocketIoController {
                 }
                 break;
             }
+
+            case "http2": {
+                Http2PollOperation h2op = pinfo.op;
+                if (h2op.goalReached()) {
+                    handleHttp2RequestReady(pinfo, h2op);
+                } else if (h2op.isClosed() || h2op.hasError()) {
+                    handleHttp2ConnectionClosed(pinfo, h2op);
+                }
+                break;
+            }
+
+            case "http2_sse": {
+                Http2SseStream sse_stream = cast<Http2SseStream>(pinfo.op);
+                if (sse_stream.isDisconnected()) {
+                    handleHttp2SseDisconnect(pinfo, sse_stream);
+                }
+                break;
+            }
+
+            case "http2_websocket": {
+                Http2WebSocketStream ws_stream = cast<Http2WebSocketStream>(pinfo.op);
+                if (!ws_stream.isOpen()) {
+                    handleHttp2WebSocketClose(pinfo, ws_stream);
+                }
+                break;
+            }
         }
     }
 
@@ -412,32 +476,56 @@ public class HttpAsyncSocketIoController {
         Socket sock = output.sock;
         string uh = sock.uniqueHash();
 
-        # Create connection info
-        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
-            "sock": sock,
-            "hdr": output.hdr,
-            "header_info": output.header_info,
-            "listener": linfo.listener,
-            "cx": {
+        log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
+
+        # Check if this is an HTTP/2 connection
+        if (output.is_http2) {
+            # For HTTP/2, we need to set up the connection for frame processing
+            log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
+            hash<auto> cx = {
                 "peer": sock.getPeerInfo(),
                 "socket": sock.getSocketInfo(),
-            },
-            "keep_alive": False,
-            "ssl": output.ssl,
+            };
+
+            # Create HTTP/2 poll operation
+            Http2PollOperation h2op(sock);
+
+            # Register this connection
+            {
+                AutoLock al(m);
+                connections{uh} = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": linfo.target,
+                    "state": "http2",
+                    "stream_op": h2op,
+                    "is_http2": True,
+                };
+            }
+            return;
+        }
+
+        # HTTP/1.x path: the accept poll operation doesn't read HTTP headers yet,
+        # so we need to start header reading for new connections
+        hash<auto> cx = {
+            "peer": sock.getPeerInfo(),
+            "socket": sock.getSocketInfo(),
         };
 
-        log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y)", uh, output.ssl);
+        log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
 
-        # Call the target
-        try {
-            hash<HttpRequestResultInfo> result = linfo.target.onHttpRequest(conn_info);
-            handleRequestResult(sock, linfo, conn_info.cx, result, linfo.target);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Error handling request: %s: %s", ex.err, ex.desc);
-            linfo.target.onError(sock, ex, linfo.listener, conn_info.cx);
-            try {
-                sock.close();
-            } catch () {}
+        # Register connection for header reading
+        {
+            AutoLock al(m);
+            connections{uh} = <HttpActiveConnectionInfo>{
+                "sock": sock,
+                "listener": linfo.listener,
+                "cx": cx,
+                "target": linfo.target,
+                "state": "read_header",
+                "is_http2": False,
+            };
         }
     }
 
@@ -585,6 +673,188 @@ public class HttpAsyncSocketIoController {
             op.getCloseReason(), cinfo.listener, cinfo.cx);
     }
 
+    #! Handles HTTP/2 request ready
+    private handleHttp2RequestReady(hash<HttpPollInfo> pinfo, Http2PollOperation h2op) {
+        hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
+        string uh = cinfo.sock.uniqueHash();
+        hash<auto> request = h2op.getOutput();
+
+        log(LoggerLevel::DEBUG, "HTTP/2 request ready: %y stream=%d %s %s",
+            uh, request.stream_id, request.method, request.path);
+
+        # Check for RFC 8441 WebSocket over HTTP/2 (CONNECT with :protocol=websocket)
+        bool is_websocket_connect = request.method == "CONNECT" &&
+            request.headers.":protocol" == "websocket";
+
+        # Convert HTTP/2 request to HttpConnectionInfo format
+        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
+            "sock": cinfo.sock,
+            "hdr": request.headers + {
+                "method": request.method,
+                "path": request.path,
+                ":authority": request.authority,
+                ":scheme": request.scheme,
+            },
+            "header_info": {
+                "http2": True,
+                "stream_id": request.stream_id,
+                "is_websocket_connect": is_websocket_connect,
+            },
+            "listener": cinfo.listener,
+            "cx": cinfo.cx,
+            "keep_alive": True,  # HTTP/2 is always keep-alive
+            "ssl": cinfo.sock.isSecure(),
+        };
+
+        # Call the target to handle the request
+        try {
+            hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+            handleHttp2RequestResult(h2op, cinfo, request, result, is_websocket_connect);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error handling HTTP/2 request: %s: %s", ex.err, ex.desc);
+            cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+            # Close the connection on error
+            {
+                AutoLock al(m);
+                remove connections{uh};
+            }
+            try {
+                cinfo.sock.close();
+            } catch () {}
+        }
+    }
+
+    #! Handles the result of an HTTP/2 request
+    private handleHttp2RequestResult(Http2PollOperation h2op, hash<HttpActiveConnectionInfo> cinfo,
+            hash<auto> request, hash<HttpRequestResultInfo> result, bool is_websocket_connect = False) {
+        string uh = cinfo.sock.uniqueHash();
+
+        if (result.close) {
+            # Close the connection
+            {
+                AutoLock al(m);
+                remove connections{uh};
+            }
+            try {
+                cinfo.sock.close();
+            } catch () {}
+            return;
+        }
+
+        # Handle streaming modes for HTTP/2
+        if (result.streaming && result.stream_type) {
+            switch (result.stream_type) {
+                case "websocket": {
+                    if (!is_websocket_connect) {
+                        log(LoggerLevel::WARN, "WebSocket streaming requested but not a CONNECT request");
+                        break;
+                    }
+                    log(LoggerLevel::DEBUG, "HTTP/2 WebSocket stream started: %y stream=%d",
+                        uh, request.stream_id);
+                    # Create HTTP/2 WebSocket stream handler
+                    Http2WebSocketStream ws_stream(h2op, request.stream_id);
+                    {
+                        AutoLock al(m);
+                        connections{uh}.stream_op = result.stream_operation ?? ws_stream;
+                        connections{uh}.state = "http2_websocket";
+                    }
+                    return;
+                }
+
+                case "sse": {
+                    log(LoggerLevel::DEBUG, "HTTP/2 SSE stream started: %y stream=%d",
+                        uh, request.stream_id);
+                    # Create HTTP/2 SSE stream handler
+                    Http2SseStream sse_stream(h2op, request.stream_id);
+                    {
+                        AutoLock al(m);
+                        connections{uh}.stream_op = result.stream_operation ?? sse_stream;
+                        connections{uh}.state = "http2_sse";
+                    }
+                    return;
+                }
+            }
+        }
+
+        # For HTTP/2, we keep the connection alive for more requests
+        # The response should already have been sent by the handler
+
+        # Prepare for next request
+        if (h2op.shouldKeepAlive()) {
+            log(LoggerLevel::DEBUG, "HTTP/2 connection %y waiting for next request", uh);
+            h2op.startReadNextRequest();
+            {
+                AutoLock al(m);
+                connections{uh}.stream_op = h2op;
+                connections{uh}.state = "http2";
+            }
+        } else {
+            log(LoggerLevel::DEBUG, "HTTP/2 connection %y closing", uh);
+            {
+                AutoLock al(m);
+                remove connections{uh};
+            }
+            try {
+                cinfo.sock.close();
+            } catch () {}
+        }
+    }
+
+    #! Handles HTTP/2 connection closed
+    private handleHttp2ConnectionClosed(hash<HttpPollInfo> pinfo, Http2PollOperation h2op) {
+        hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
+        string uh = cinfo.sock.uniqueHash();
+
+        *hash<auto> error = h2op.getError();
+        if (error) {
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
+                uh, error.err, error.desc);
+            cinfo.target.onError(cinfo.sock, cast<hash<ExceptionInfo>>(error),
+                cinfo.listener, cinfo.cx);
+        } else {
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
+        }
+
+        {
+            AutoLock al(m);
+            remove connections{uh};
+        }
+    }
+
+    #! Handles HTTP/2 SSE disconnect
+    private handleHttp2SseDisconnect(hash<HttpPollInfo> pinfo, Http2SseStream sse_stream) {
+        hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
+        string uh = cinfo.sock.uniqueHash();
+
+        log(LoggerLevel::DEBUG, "HTTP/2 SSE disconnect: %y stream=%d", uh, sse_stream.getStreamId());
+
+        {
+            AutoLock al(m);
+            remove connections{uh};
+        }
+
+        # Notify the target of SSE disconnect
+        cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
+    }
+
+    #! Handles HTTP/2 WebSocket close
+    private handleHttp2WebSocketClose(hash<HttpPollInfo> pinfo, Http2WebSocketStream ws_stream) {
+        hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
+        string uh = cinfo.sock.uniqueHash();
+
+        log(LoggerLevel::DEBUG, "HTTP/2 WebSocket close: %y stream=%d (code: %d)",
+            uh, ws_stream.getStreamId(), ws_stream.getCloseCode());
+
+        {
+            AutoLock al(m);
+            remove connections{uh};
+        }
+
+        # Notify the target of WebSocket close
+        cinfo.target.onWebSocketClose(cinfo.sock, ws_stream.getCloseCode(),
+            ws_stream.getCloseReason(), cinfo.listener, cinfo.cx);
+    }
+
     #! Handles poll error
     private handlePollError(hash<HttpPollInfo> pinfo, hash<ExceptionInfo> ex) {
         switch (pinfo.type) {
@@ -596,7 +866,10 @@ public class HttpAsyncSocketIoController {
             case "idle":
             case "header":
             case "sse":
-            case "websocket": {
+            case "websocket":
+            case "http2":
+            case "http2_sse":
+            case "http2_websocket": {
                 hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
                 string uh = cinfo.sock.uniqueHash();
 
@@ -688,6 +961,9 @@ hashdecl HttpListenerInfo {
 
     #! SSL private key
     *data key;
+
+    #! HTTP version mode: "auto", "1.0", "1.1", or "2.0"
+    string http_version = "auto";
 }
 
 #! Internal hashdecl for active connection info
@@ -704,19 +980,22 @@ hashdecl HttpActiveConnectionInfo {
     #! Target for callbacks
     HttpAsyncTarget target;
 
-    #! Connection state: "idle", "read_header", "sse", "websocket"
+    #! Connection state: "idle", "read_header", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
     string state = "idle";
 
-    #! Stream operation (for SSE/WebSocket)
+    #! Stream operation (for SSE/WebSocket/HTTP2)
     *AbstractPollOperation stream_op;
 
     #! Keep-alive timeout
     timeout ttl = DefaultIdleTimeout;
+
+    #! True if this is an HTTP/2 connection
+    bool is_http2 = False;
 }
 
 #! Internal hashdecl for poll operation tracking
 hashdecl HttpPollInfo {
-    #! Poll type: "accept", "idle", "header", "sse", "websocket"
+    #! Poll type: "accept", "idle", "header", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
     string type;
 
     #! The poll operation

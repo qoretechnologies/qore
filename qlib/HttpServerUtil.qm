@@ -504,6 +504,19 @@ public hashdecl HttpListenerOptionInfo {
     */
     bool ssl_accept_all_certs = True;
 
+    #! HTTP version mode for this listener
+    /** Controls HTTP/2 support for incoming connections:
+        - \c "auto": Use HTTP/2 if client negotiates via ALPN, fall back to HTTP/1.1 (default)
+        - \c "1.0": HTTP/1.0 only
+        - \c "1.1": HTTP/1.1 only
+        - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
+
+        @note HTTP/2 requires TLS; non-TLS connections always use HTTP/1.x
+
+        @since HttpServer 1.6
+    */
+    string http_version = "auto";
+
     #! Additional info added to the notification callback when listeners are started
     hash<auto> ext_info;
 

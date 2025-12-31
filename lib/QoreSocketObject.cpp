@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     provides a thread-safe interface to the QoreSocket object
 
@@ -701,6 +701,21 @@ const char* QoreSocketObject::getSSLCipherVersion() {
 bool QoreSocketObject::isSecure() {
     AutoLocker al(priv->m);
     return priv->socket->isSecure();
+}
+
+void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    priv->socket->setAlpnProtocols(protocols, xsink);
+}
+
+QoreStringNode* QoreSocketObject::getAlpnProtocol() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getAlpnProtocol();
+}
+
+bool QoreSocketObject::isHttp2() const {
+    AutoLocker al(priv->m);
+    return priv->socket->isHttp2();
 }
 
 long QoreSocketObject::verifyPeerCertificate() {

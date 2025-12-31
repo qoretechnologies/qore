@@ -203,6 +203,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode persistent concurrent", \asyncModePersistentConcurrentTest());
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
+        addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1053,6 +1054,80 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # End persistent mode
         hash<auto> resp3 = client.send("end", "POST", "/persistent/end");
         assertEq(200, resp3.status_code);
+    }
+
+    asyncModeHttp2Test() {
+        # Test HTTP/2 support in async mode
+        # This test requires:
+        # 1. HTTPClient with HTTP/2 enabled
+        # 2. HTTPS connection (HTTP/2 requires TLS for ALPN)
+
+        # Create HTTPClient with HTTP/2 auto mode
+        HTTPClient h2client({
+            "url": asyncSslUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "auto",    # Enable HTTP/2 if available
+        });
+
+        # Check if HTTP/2 mode is supported
+        if (!h2client.isHttp2Enabled()) {
+            testSkip("HTTP/2 not compiled in");
+            return;
+        }
+
+        # Verify HTTP/2 mode settings
+        assertEq("auto", h2client.getHttp2Mode());
+        assertTrue(h2client.isHttp2Enabled());
+
+        # Connect and make request
+        h2client.connect();
+        on_exit h2client.disconnect();
+
+        # Make a request - protocol negotiation happens during TLS handshake
+        string resp = h2client.get("/http2-test");
+
+        # Check what HTTP version was negotiated
+        string version = h2client.getHttpVersion();
+
+        # The response should be successful regardless of protocol
+        assertEq("GET, http2-test, /http2-test", resp);
+
+        # Log which protocol was used
+        if (m_options.verbose > 0) {
+            printf("HTTP/2 test: negotiated version = %s, isHttp2Active = %y\n",
+                version, h2client.isHttp2Active());
+        }
+
+        # Test keep-alive with multiple requests
+        assertEq("GET, test1, /test1", h2client.get("/test1"));
+        assertEq("GET, test2, /test2", h2client.get("/test2"));
+
+        # Test POST request
+        hash<auto> postResp = h2client.send("http2-data", "POST", "/http2-post");
+        assertEq(200, postResp.status_code);
+        assertEq("POST, http2-data, http2-post, /http2-post", postResp.body);
+
+        # Test HTTP/2 disabled mode
+        HTTPClient h1client({
+            "url": asyncSslUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "1.1",    # Force HTTP/1.1
+        });
+
+        if (h1client.isHttp2Enabled()) {
+            # If HTTP/2 is compiled in, "1.1" mode should disable it
+            assertEq("disabled", h1client.getHttp2Mode());
+            assertFalse(h1client.isHttp2Enabled());
+        }
+
+        h1client.connect();
+        on_exit h1client.disconnect();
+
+        # This should work with HTTP/1.1
+        assertEq("GET, h1test, /h1test", h1client.get("/h1test"));
+        assertFalse(h1client.isHttp2Active());
     }
 }
 

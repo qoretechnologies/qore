@@ -156,6 +156,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Random Port tests", \randomPortSocketTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
+        addTestCase("ALPN test", \alpnTest());
         set_return_value(main());
     }
 
@@ -1091,6 +1092,67 @@ class SocketTest inherits QUnit::Test {
         s.setPrivateKey(TestCert);
         q.push(s.getSocketInfo().port);
         s.acceptSSL(15s);
+    }
+
+    alpnTest() {
+        # Test ALPN (Application-Layer Protocol Negotiation) support
+        Queue q();
+
+        # Server side
+        background sub () {
+            Socket server();
+            server.bind(0);
+            server.listen();
+            server.setCertificate(TestCert);
+            server.setPrivateKey(TestCert);
+            # Set ALPN protocols on server - prefer h2, then http/1.1
+            server.setAlpnProtocols(("h2", "http/1.1"));
+            q.push(server.getSocketInfo().port);
+
+            try {
+                Socket client = server.acceptSSL(15s);
+                # Server should have negotiated ALPN
+                *string proto = client.getAlpnProtocol();
+                q.push(proto);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+
+        # Client side
+        Socket client();
+        # Set ALPN protocols on client - prefer h2
+        client.setAlpnProtocols(("h2", "http/1.1"));
+        client.connectSSL("127.0.0.1:" + port);
+
+        # Check negotiated protocol on client side
+        *string client_proto = client.getAlpnProtocol();
+        # Get server's view of the negotiated protocol
+        auto server_result = q.get();
+        if (server_result.typeCode() == NT_HASH) {
+            # Exception was thrown
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        *string server_proto = server_result;
+
+        # Both should have negotiated the same protocol
+        assertEq(client_proto, server_proto);
+        # Should have negotiated h2 (HTTP/2) as it's the first preference
+        if (client_proto) {
+            assertEq("h2", client_proto);
+        }
+
+        # Test isHttp2() method
+        if (client_proto == "h2") {
+            assertTrue(client.isHttp2());
+        }
+
+        # Test with no ALPN support - protocols should be NOTHING
+        Socket s2();
+        assertNothing(s2.getAlpnProtocol());
+        assertFalse(s2.isHttp2());
     }
 
     randomPortSocketTest() {

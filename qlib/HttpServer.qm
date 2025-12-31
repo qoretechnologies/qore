@@ -2758,6 +2758,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return ssl_accept_all_certs;
     }
 
+    #! Returns the HTTP version mode for this listener
+    /** @return the HTTP version mode: "auto", "1.0", "1.1", or "2.0"
+
+        @since HttpServer 1.6
+    */
+    string getHttpVersion() {
+        return opts.http_version ?? "auto";
+    }
+
     auto removeUserThreadContext(*string k) {
         if (!exists k) {
             remove_thread_data("uctx");
@@ -3962,6 +3971,9 @@ hashdecl HttpListenerPollInfo {
 
     #! Whether the listener uses SSL
     bool ssl;
+
+    #! HTTP version mode ("auto", "1.0", "1.1", "2.0")
+    string http_version = "auto";
 }
 
 #! Internal hashdecl for async response data
@@ -4033,6 +4045,12 @@ hashdecl HttpConnectionPollInfo {
 
     #! Response data for async sending (set when in sending_response state)
     *hash<HttpAsyncResponseInfo> response;
+
+    #! True if this connection is using HTTP/2
+    bool is_http2 = False;
+
+    #! The ALPN negotiated protocol (e.g., "h2", "http/1.1")
+    *string negotiated_protocol;
 }
 
 #! Async I/O controller for HttpServer
@@ -4206,6 +4224,7 @@ class HttpServerIoController {
             "accept_op": NOTHING,  # Will be set when poll starts
             "id": id,
             "ssl": listener.isSecure(),
+            "http_version": listener.getHttpVersion(),
         };
         @assert(listeners{key}.listener, "listener poll info must have listener");
 
@@ -4383,6 +4402,7 @@ class HttpServerIoController {
                                         linfo.listener.getSslPrivateKeyObject(),
                                         linfo.listener.getSslVerifyFlags(),
                                         linfo.listener.getSslAcceptAllCerts(),
+                                        linfo.http_version,
                                     );
                                 @debug(log(LoggerLevel::DEBUG, "ioThread: accept op created for listener %s", key));
                             } catch (hash<ExceptionInfo> ex) {
@@ -4500,6 +4520,15 @@ class HttpServerIoController {
                     cinfo.spop = connections{key}.spop = cinfo.sock.startPollReadHttpHeader();
                     break;
 
+                case "http2":
+                    # HTTP/2 connection - use HTTP/2 poll operation
+                    cinfo.spop = connections{key}.spop = cinfo.sock.startPollReadHttp2Request();
+                    break;
+
+                case "http2_sending":
+                    # HTTP/2 response sending is handled via h2_poll_op
+                    break;
+
                 case "sending_response": {
                     if (cinfo.response.chunked) {
                         # Chunked responses need special formatting
@@ -4585,8 +4614,12 @@ class HttpServerIoController {
             return;
         }
 
-        log(LoggerLevel::DEBUG, "Accepted connection on listener %d from %y (SSL: %y)",
-            linfo.id, peer_info.address_desc, output.ssl);
+        # Extract HTTP/2 negotiation info
+        bool is_http2 = output.is_http2 ?? False;
+        *string negotiated_protocol = output.negotiated_protocol;
+
+        log(LoggerLevel::DEBUG, "Accepted connection on listener %d from %y (SSL: %y, HTTP/2: %y, protocol: %y)",
+            linfo.id, peer_info.address_desc, output.ssl, is_http2, negotiated_protocol);
 
         # Create connection context
         hash<auto> cx = linfo.listener.getContextTemplate({
@@ -4595,19 +4628,28 @@ class HttpServerIoController {
             "port": peer_info.port,
         });
         cx."socket-info" = new_sock.getSocketInfo();
+        cx."is_http2" = is_http2;
+        cx."negotiated_protocol" = negotiated_protocol;
 
         # Add connection to tracking - header will be read in the next poll iteration
         string conn_key = new_sock.uniqueHash();
         hash<HttpConnectionPollInfo> cinfo = <HttpConnectionPollInfo>{
             "sock": new_sock,
-            "state": "read_header",
+            "state": is_http2 ? "http2" : "read_header",
             "start": now_us(),
             "timeout_date": now_us() + DefaultHeaderReadTimeout,
             "listener_id": linfo.id,
             "listener": linfo.listener,
             "cx": cx,
+            "is_http2": is_http2,
+            "negotiated_protocol": negotiated_protocol,
         };
         connections{conn_key} = cinfo;
+
+        # For HTTP/2 connections, log that we're starting HTTP/2 mode
+        if (is_http2) {
+            log(LoggerLevel::INFO, "HTTP/2 connection established from %y", peer_info.address_desc);
+        }
 
         # Reset accept operation for next connection immediately
         # This allows accepting new connections while reading header from this one
@@ -4652,7 +4694,53 @@ class HttpServerIoController {
                 # Response sent - check if we should keep alive or close
                 handleSendComplete(key, cinfo);
                 break;
+
+            case "http2":
+                # HTTP/2 request complete - dispatch to ThreadPool
+                @assert(cinfo.spop, "http2 state must have poll operation");
+                auto h2_output = cinfo.spop.getOutput();
+                if (h2_output.typeCode() == NT_HASH) {
+                    hash<auto> request = h2_output;
+                    log(LoggerLevel::DEBUG, "HTTP/2 request complete for %y: %s %s (stream %d)",
+                        key, request.method, request.path, request.stream_id);
+
+                    # Build HTTP headers hash in standard format
+                    hash<auto> hdr = request.headers ?? {};
+                    hdr.method = request.method;
+                    hdr.path = request.path;
+                    hdr.":authority" = request.authority;
+                    hdr.":scheme" = request.scheme;
+
+                    # Store request info
+                    connections{key}.hdr = hdr;
+                    connections{key}.header_info = {
+                        "http2": True,
+                        "stream_id": request.stream_id,
+                    };
+
+                    # Dispatch to ThreadPool for handling
+                    dispatchToThreadPool(key);
+                } else {
+                    log(LoggerLevel::ERROR, "Unexpected HTTP/2 result type for %y: %y", key, h2_output.type());
+                    closeConnectionIntern(key);
+                }
+                break;
+
+            case "http2_sending":
+                # HTTP/2 response sent - prepare for next request
+                handleHttp2SendComplete(key, cinfo);
+                break;
         }
+    }
+
+    #! Handles completion of sending an HTTP/2 response
+    private handleHttp2SendComplete(string key, hash<HttpConnectionPollInfo> cinfo) {
+        log(LoggerLevel::DEBUG, "HTTP/2 response sent for %y, waiting for next request", key);
+
+        # Reset poll operation and wait for next request
+        remove connections{key}.spop;
+        connections{key}.state = "http2";
+        connections{key}.timeout_date = now_us() + server.getTtl();
     }
 
     #! Dispatches a connection to the ThreadPool for request processing

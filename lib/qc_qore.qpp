@@ -420,6 +420,22 @@ const EVENT_SOCKET_DATA_SENT = QORE_EVENT_SOCKET_DATA_SENT;
 const EVENT_HTTP_HEADERS_READ = QORE_EVENT_HTTP_HEADERS_READ;
 ///@}
 
+/** @defgroup http2_mode_constants HTTP/2 Mode Constants
+    These constants can be used with HTTPClient::setHttp2Mode() to control HTTP/2 behavior
+
+    @since %Qore 2.2
+ */
+///@{
+//! HTTP/2 disabled mode - only use HTTP/1.x, never attempt HTTP/2
+const HTTP2_MODE_DISABLED = HTTP2_MODE_DISABLED;
+
+//! HTTP/2 auto mode - use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)
+const HTTP2_MODE_AUTO = HTTP2_MODE_AUTO;
+
+//! HTTP/2 required mode - require HTTP/2, fail if the server doesn't support it
+const HTTP2_MODE_REQUIRED = HTTP2_MODE_REQUIRED;
+///@}
+
 /** @defgroup io_constants I/O Constants
     These constants are all instantiations of the @ref File "File class"
 

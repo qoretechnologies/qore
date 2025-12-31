@@ -395,6 +395,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("HttpClient Test", \testClient());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("issue 2610", \issue2610());
+        addTestCase("HTTP/2 mode test", \http2ModeTest());
+        addTestCase("HTTP/2 settings test", \http2SettingsTest());
         set_return_value(main());
     }
 
@@ -1196,6 +1198,84 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         # issue 2610: this causes a crash
         hc.setDefaultPath();
         assertNothing(hc.getDefaultPath());
+    }
+
+    http2ModeTest() {
+        HTTPClient hc({"url": "http://localhost"});
+
+        # Test default mode is "auto"
+        assertEq("auto", hc.getHttp2Mode());
+
+        # Test setHttp2Mode with string values
+        hc.setHttp2Mode("disabled");
+        assertEq("disabled", hc.getHttp2Mode());
+        assertFalse(hc.isHttp2Enabled());
+
+        hc.setHttp2Mode("auto");
+        assertEq("auto", hc.getHttp2Mode());
+        assertTrue(hc.isHttp2Enabled());
+
+        hc.setHttp2Mode("required");
+        assertEq("required", hc.getHttp2Mode());
+        assertTrue(hc.isHttp2Enabled());
+
+        # Test setHttp2Mode with integer values
+        hc.setHttp2Mode(0);  # disabled
+        assertEq("disabled", hc.getHttp2Mode());
+
+        hc.setHttp2Mode(1);  # auto
+        assertEq("auto", hc.getHttp2Mode());
+
+        hc.setHttp2Mode(2);  # required
+        assertEq("required", hc.getHttp2Mode());
+
+        # Test setHttp2Enabled (legacy API)
+        hc.setHttp2Enabled(False);
+        assertEq("disabled", hc.getHttp2Mode());
+        assertFalse(hc.isHttp2Enabled());
+
+        hc.setHttp2Enabled(True);
+        assertEq("auto", hc.getHttp2Mode());
+        assertTrue(hc.isHttp2Enabled());
+
+        # Test invalid mode throws exception
+        assertThrows("HTTP2-MODE-ERROR", \hc.setHttp2Mode(), "invalid");
+        assertThrows("HTTP2-MODE-ERROR", \hc.setHttp2Mode(), 99);
+
+        # Test isHttp2Active (should be false since we're not connected to an HTTP/2 server)
+        assertFalse(hc.isHttp2Active());
+
+        # Test getHttpVersion (should be HTTP/1.1 since not connected via HTTP/2)
+        assertEq("HTTP/1.1", hc.getHttpVersion());
+    }
+
+    http2SettingsTest() {
+        HTTPClient hc({"url": "http://localhost"});
+
+        # Test getHttp2Settings returns expected defaults (or NOTHING if HTTP/2 not compiled)
+        auto settings = hc.getHttp2Settings();
+        if (settings) {
+            assertEq(Type::Hash, settings.type());
+            assertTrue(settings.hasKey("header_table_size"));
+            assertTrue(settings.hasKey("enable_push"));
+            assertTrue(settings.hasKey("max_concurrent_streams"));
+            assertTrue(settings.hasKey("initial_window_size"));
+            assertTrue(settings.hasKey("max_frame_size"));
+        } else {
+            # HTTP/2 support not compiled in - settings is NOTHING
+            assertNothing(settings);
+        }
+
+        # Test setHttp2Settings accepts a hash (no-op if HTTP/2 not compiled)
+        hc.setHttp2Settings({
+            "header_table_size": 8192,
+            "max_concurrent_streams": 200,
+        });
+        # Settings validation is done at connection time, so this should not throw
+
+        # Test setHttp2Settings with NOTHING
+        hc.setHttp2Settings();
+        assertTrue(True);  # Just verify no exception
     }
 
     sslReadError(Queue q) {

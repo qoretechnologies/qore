@@ -64,6 +64,9 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         #! Accept all client certificates (including self-signed)
         bool ssl_accept_all_certs = True;
 
+        #! HTTP version mode ("auto", "1.0", "1.1", "2.0")
+        string http_version = "auto";
+
         #! Current poll operation being executed
         SocketPollOperation spop;
 
@@ -72,18 +75,26 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
 
         #! The accepted client socket
         Socket client_sock;
+
+        #! The negotiated protocol after ALPN (e.g., "h2", "http/1.1")
+        *string negotiated_protocol;
+
+        #! True if the connection is using HTTP/2
+        bool is_http2 = False;
     }
 
     #! Creates the poll operation
-    /** @param listener the server socket to accept connections from
+    /** @param listener the server socket to accept connections from (Socket or any subclass like HttpListener)
         @param ssl if True, perform SSL handshake after accept
         @param cert SSL certificate (SSLCertificate object or PEM data, required if ssl is True)
         @param key SSL private key (SSLPrivateKey object or PEM data, required if ssl is True)
         @param ssl_verify_flags SSL verification flags for client certificate verification (e.g. SSL_VERIFY_PEER)
         @param ssl_accept_all_certs if True, accept all client certificates including self-signed ones
+        @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", or "2.0"
     */
-    constructor(Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
-            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True) {
+    constructor(Qore::Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
+            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
+            string http_version = "auto") {
         @assert(listener, "listener socket cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
         self.listener = listener;
@@ -92,6 +103,7 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         self.key = key;
         self.ssl_verify_flags = ssl_verify_flags;
         self.ssl_accept_all_certs = ssl_accept_all_certs;
+        self.http_version = http_version;
         # Start the accept poll operation
         spop = listener.startPollAccept();
         @assert(spop, "startPollAccept must return poll operation");
@@ -161,6 +173,17 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                         }
                         # Configure client certificate acceptance behavior
                         client_sock.acceptAllCertificates(ssl_accept_all_certs);
+                        # Set ALPN protocols based on http_version mode
+                        if (http_version == "auto") {
+                            # Prefer HTTP/2, fall back to HTTP/1.1
+                            client_sock.setAlpnProtocols(("h2", "http/1.1"));
+                        } else if (http_version == "2.0" || http_version == "2") {
+                            # HTTP/2 only
+                            client_sock.setAlpnProtocols(("h2",));
+                        } else {
+                            # HTTP/1.x only - advertise http/1.1
+                            client_sock.setAlpnProtocols(("http/1.1",));
+                        }
                         spop = client_sock.startPollUpgradeServerToSSL();
                         @assert(spop, "startPollUpgradeServerToSSL must return poll operation");
                         # Continue loop to poll the new operation
@@ -173,7 +196,17 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                 }
 
                 case STATE_SSL_HANDSHAKE: {
-                    # SSL handshake complete - done
+                    # SSL handshake complete - detect negotiated protocol
+                    negotiated_protocol = client_sock.getAlpnProtocol();
+                    is_http2 = (negotiated_protocol == "h2");
+
+                    # If HTTP/2 is required but not negotiated, reject the connection
+                    if ((http_version == "2.0" || http_version == "2") && !is_http2) {
+                        client_sock.close();
+                        throw "HTTP2-REQUIRED-ERROR", sprintf("HTTP/2 required but client negotiated: %y",
+                            negotiated_protocol ?? "none");
+                    }
+
                     state = STATE_COMPLETE;
                     return NOTHING;
                 }
@@ -196,16 +229,36 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
     }
 
     #! Returns the output of the operation
+    /** The returned hash contains:
+        - \c sock: the accepted Socket
+        - \c ssl: True if this is an SSL connection
+        - \c is_http2: True if HTTP/2 was negotiated via ALPN
+        - \c negotiated_protocol: the ALPN negotiated protocol (e.g., "h2", "http/1.1"), or NOTHING
+        - \c http_version: the configured HTTP version mode
+    */
     auto getOutput() {
         return {
             "sock": client_sock,
             "ssl": ssl,
+            "is_http2": is_http2,
+            "negotiated_protocol": negotiated_protocol,
+            "http_version": http_version,
         };
     }
 
     #! Returns True if this is an SSL connection
     bool isSsl() {
         return ssl;
+    }
+
+    #! Returns True if HTTP/2 was negotiated
+    bool isHttp2() {
+        return is_http2;
+    }
+
+    #! Returns the negotiated ALPN protocol
+    *string getNegotiatedProtocol() {
+        return negotiated_protocol;
     }
 
     #! Aborts the operation

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,6 +55,15 @@ constexpr int64 URL_NORMAL         = UC_TARGET | UC_USERNAME | UC_PASSWORD | UC_
 constexpr int64 URL_MASK_PASSWORD  = URL_NORMAL | UC_MASK_PASSWORD;
 
 class Queue;
+
+//! HTTP/2 protocol mode options
+/** @since %Qore 2.2
+*/
+enum Http2Mode {
+    HTTP2_MODE_DISABLED = 0,  //!< HTTP/1.x only, never use HTTP/2
+    HTTP2_MODE_AUTO = 1,      //!< Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
+    HTTP2_MODE_REQUIRED = 2   //!< Require HTTP/2, fail if unavailable
+};
 
 //! provides a way to communicate with HTTP servers using Qore data structures
 /** thread-safe, uses QoreSocket for socket communication
@@ -170,6 +179,79 @@ public:
 
     //! returns true if HTTP 1.1 protocol compliance has been set
     DLLEXPORT bool isHTTP11() const;
+
+    //! Returns true if HTTP/2 support is enabled
+    /** @return true if HTTP/2 support is enabled (will try to use h2 via ALPN)
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT bool isHttp2Enabled() const;
+
+    //! Enables or disables HTTP/2 support
+    /** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+        If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+        @param enable true to enable HTTP/2, false to disable
+
+        @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Enabled(bool enable);
+
+    //! Returns true if the connection is currently using HTTP/2
+    /** @return true if HTTP/2 is active on the current connection
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT bool isHttp2Active() const;
+
+    //! Returns the current HTTP/2 settings
+    /** @return a hash with HTTP/2 settings, or nullptr if HTTP/2 is not active
+
+        The returned hash may contain:
+        - \c header_table_size: HPACK header table size
+        - \c enable_push: whether server push is enabled
+        - \c max_concurrent_streams: maximum concurrent streams
+        - \c initial_window_size: initial flow control window size
+        - \c max_frame_size: maximum frame size
+        - \c max_header_list_size: maximum header list size
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreHashNode* getHttp2Settings() const;
+
+    //! Sets HTTP/2 settings to be used for new connections
+    /** @param settings a hash with HTTP/2 settings to apply
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Settings(const QoreHashNode* settings, ExceptionSink* xsink);
+
+    //! Returns the negotiated HTTP protocol version string
+    /** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreStringNode* getHttpVersion() const;
+
+    //! Sets the HTTP/2 protocol mode
+    /** @param mode the HTTP/2 mode: HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, or HTTP2_MODE_REQUIRED
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @note The default mode is HTTP2_MODE_AUTO, which uses HTTP/2 if available via ALPN
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Mode(int mode, ExceptionSink* xsink);
+
+    //! Returns the current HTTP/2 protocol mode
+    /** @return the current HTTP/2 mode: HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, or HTTP2_MODE_REQUIRED
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int getHttp2Mode() const;
 
     //! sets the connection URL
     /** @param url the URL to use for connection parameters

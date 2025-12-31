@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -162,6 +162,32 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     |@ref EVENT_HTTP_FOOTERS_RECEIVED|Raised when HTTP footers are received.
     |@ref EVENT_HTTP_CHUNKED_DATA_RECEIVED|Raised when a block of HTTP chunked data is received.
     |@ref EVENT_HTTP_CHUNK_SIZE|Raised when the next chunk size for HTTP chunked data is known.
+
+    @section httpclient_http2 HTTP/2 Support
+
+    The %Qore HTTPClient class supports HTTP/2 over TLS via ALPN (Application-Layer Protocol Negotiation).
+    By default, HTTP/2 mode is \c "auto", meaning HTTP/2 will be used if the server supports it, with
+    automatic fallback to HTTP/1.1 otherwise.
+
+    HTTP/2 modes:
+    - \c "auto" (default): Use HTTP/2 if available via ALPN, fallback to HTTP/1.1
+    - \c "disabled": Use HTTP/1.x only, never attempt HTTP/2
+    - \c "required": Require HTTP/2, fail if the server doesn't support it
+
+    Use @ref setHttp2Mode() to control the HTTP/2 mode, or set the \c http_version constructor option.
+
+    @note
+    - HTTP/2 requires TLS; non-TLS connections will always use HTTP/1.x
+    - <b>Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2 are
+      not currently supported. WebSocket and SSE connections will use HTTP/1.x regardless of the HTTP/2 mode
+
+    @see
+    - @ref setHttp2Mode()
+    - @ref getHttp2Mode()
+    - @ref isHttp2Active()
+    - @ref isHttp2Enabled()
+
+    @since %Qore 2.2
 
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
@@ -388,6 +414,208 @@ string version = httpclient.getHTTPVersion();
  */
 string HTTPClient::getHTTPVersion() [flags=CONSTANT] {
     return new QoreStringNode(client->getHTTPVersion());
+}
+
+//! Returns @ref True if HTTP/2 support is enabled
+/** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+    If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+    @return @ref True if HTTP/2 support is enabled
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2Enabled()) {
+    printf("HTTP/2 support is enabled\n");
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+bool HTTPClient::isHttp2Enabled() [flags=CONSTANT] {
+    return client->isHttp2Enabled();
+}
+
+//! Enables or disables HTTP/2 support
+/** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+    If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+    @param enable @ref True to enable HTTP/2, @ref False to disable
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Enabled(True);
+    @endcode
+
+    @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
+    client->setHttp2Enabled(enable);
+}
+
+//! Sets the HTTP/2 protocol mode
+/** The HTTP/2 mode controls how HTTP/2 is used:
+    - \c "disabled" or 0: HTTP/1.x only, never use HTTP/2
+    - \c "auto" or 1: Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
+    - \c "required" or 2: Require HTTP/2, fail if unavailable
+
+    @param mode the HTTP/2 mode: "disabled", "auto", "required" (or 0, 1, 2)
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Mode("auto");
+# or
+httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
+    @endcode
+
+    @note HTTP/2 requires TLS; the mode setting only takes effect on TLS connections
+    @note This is a convenience method; the same effect can be achieved with setHTTPVersion()
+
+    @throw HTTP2-MODE-ERROR invalid mode value
+
+    @since %Qore 2.2
+
+    @see getHttp2Mode()
+    @see setHTTPVersion()
+*/
+nothing HTTPClient::setHttp2Mode(auto mode) {
+    const char* version;
+    if (mode.getType() == NT_STRING) {
+        const QoreStringNode* mode_str = mode.get<const QoreStringNode>();
+        const char* str = mode_str->c_str();
+        if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
+            version = "1.1";
+        } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
+            version = "auto";
+        } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
+            version = "2.0";
+        } else {
+            xsink->raiseException("HTTP2-MODE-ERROR", "invalid value '%s' for HTTP/2 mode; "
+                "valid values are: \"disabled\", \"auto\", \"required\" (or 0, 1, 2)", str);
+            return QoreValue();
+        }
+    } else {
+        int mode_int = (int)mode.getAsBigInt();
+        switch (mode_int) {
+            case HTTP2_MODE_DISABLED:
+                version = "1.1";
+                break;
+            case HTTP2_MODE_AUTO:
+                version = "auto";
+                break;
+            case HTTP2_MODE_REQUIRED:
+                version = "2.0";
+                break;
+            default:
+                xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0, 1, 2",
+                    mode_int);
+                return QoreValue();
+        }
+    }
+    client->setHTTPVersion(version, xsink);
+}
+
+//! Returns the current HTTP/2 protocol mode
+/** @return the current HTTP/2 mode as a string: "disabled", "auto", or "required"
+
+    @par Example:
+    @code{.py}
+string mode = httpclient.getHttp2Mode();
+printf("HTTP/2 mode: %s\n", mode);
+    @endcode
+
+    @note This is a convenience method; the same information can be obtained from getHTTPVersion()
+
+    @since %Qore 2.2
+
+    @see setHttp2Mode()
+    @see getHTTPVersion()
+*/
+string HTTPClient::getHttp2Mode() [flags=CONSTANT] {
+    int mode = client->getHttp2Mode();
+    switch (mode) {
+        case HTTP2_MODE_DISABLED:
+            return new QoreStringNode("disabled");
+        case HTTP2_MODE_REQUIRED:
+            return new QoreStringNode("required");
+        case HTTP2_MODE_AUTO:
+        default:
+            return new QoreStringNode("auto");
+    }
+}
+
+//! Returns @ref True if the connection is currently using HTTP/2
+/** @return @ref True if HTTP/2 is active on the current connection
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2Active()) {
+    printf("Using HTTP/2\n");
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+bool HTTPClient::isHttp2Active() [flags=CONSTANT] {
+    return client->isHttp2Active();
+}
+
+//! Returns the current HTTP/2 settings
+/** @return a hash with HTTP/2 settings, or @ref nothing if HTTP/2 is not active
+
+    The returned hash may contain:
+    - \c header_table_size: HPACK header table size
+    - \c enable_push: whether server push is enabled
+    - \c max_concurrent_streams: maximum concurrent streams
+    - \c initial_window_size: initial flow control window size
+    - \c max_frame_size: maximum frame size
+    - \c max_header_list_size: maximum header list size
+
+    @par Example:
+    @code{.py}
+*hash<auto> settings = httpclient.getHttp2Settings();
+if (settings) {
+    printf("HTTP/2 max concurrent streams: %d\n", settings.max_concurrent_streams);
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+*hash<auto> HTTPClient::getHttp2Settings() [flags=CONSTANT] {
+    return client->getHttp2Settings();
+}
+
+//! Sets HTTP/2 settings to be used for new connections
+/** @param settings a hash with HTTP/2 settings to apply
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Settings({
+    "max_concurrent_streams": 200,
+    "initial_window_size": 131072,
+});
+    @endcode
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2Settings(*hash<auto> settings) {
+    client->setHttp2Settings(settings, xsink);
+}
+
+//! Returns the negotiated HTTP protocol version string
+/** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
+
+    @par Example:
+    @code{.py}
+string proto = httpclient.getHttpVersion();
+printf("Using protocol: %s\n", proto);
+    @endcode
+
+    @since %Qore 2.2
+*/
+string HTTPClient::getHttpVersion() [flags=CONSTANT] {
+    return client->getHttpVersion();
 }
 
 //! Sets the object to make a secure SSL/TLS connection on the next connect if the passed argument is @ref True, or an unencrypted cleartext connection if it is @ref False
