@@ -370,11 +370,11 @@ public const ParameterCollectionFormats = CollectionFormats + (
 );
 
 #! A hash of valid integer type formats
-public const ValidIntFormatsHash = foldl $1 + $2, (map {$1: True}, ValidIntFormats);
+public const ValidIntFormatsHash = map {$1: True}, ValidIntFormats;
 #! A hash of valid number type formats
-public const ValidNumberFormatsHash = foldl $1 + $2, (map {$1: True}, ValidNumberFormats);
+public const ValidNumberFormatsHash = map {$1: True}, ValidNumberFormats;
 #! A hash of valid string type formats
-public const ValidStringFormatsHash = foldl $1 + $2, (map {$1: True}, ValidStringFormats);
+public const ValidStringFormatsHash = map {$1: True}, ValidStringFormats;
 
 %ifndef NoYaml
 #! Yaml serialization
@@ -435,7 +435,7 @@ public const MimeContentTypes = keys MimeDataTypes;
 
 #! Valid transfer protocol schemes.
 public const ValidSchemes = ("http", "https", "ws", "wss");
-public const ValidSchemesHash = foldl $1 + $2, (map {$1: True}, ValidSchemes);
+public const ValidSchemesHash = map {$1: True}, ValidSchemes;
 
 #! Base class for the %Swagger specification objects, wrapping the vendor extensions.
 class ObjectBase inherits Qore::Serializable {
