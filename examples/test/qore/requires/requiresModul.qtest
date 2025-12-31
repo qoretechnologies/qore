@@ -18,13 +18,16 @@ class IncludeModuleTest inherits QUnit::Test {
     }
 
     testIncludeWholeModule() {
+        # Get the directory where this test script is located
+        string script_dir = get_script_dir();
+
         Program p(PO_NEW_STYLE|PO_REQUIRE_TYPES);
         p.parse(
-            "#!/usr/bin/env /home/tpetr/devel_release/bin/qore\n"
+            "#!/usr/bin/env qore\n"
             "# -*- mode: qore; indent-tabs-mode: nil -*-\n"
 
-            "# examples path is for Jenkins; '.' is for manual runs\n"
-            "%append-module-path examples/test/qore/requires:.\n"
+            # Use absolute path based on script location
+            "%append-module-path " + script_dir + "\n"
             "%requires MyModule\n"
 
             "MyModule::mfunc(\"\");\n"

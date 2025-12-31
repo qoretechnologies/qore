@@ -681,7 +681,14 @@ QoreValue QoreValue::eval(ExceptionSink* xsink) const {
     // Need to use internal evaluation - AbstractQoreNode::eval returns QoreValue
     // which is now the new NaN-boxed type
     bool needs_deref = true;
-    return n->eval(needs_deref, xsink);
+    QoreValue result = n->eval(needs_deref, xsink);
+    // If needs_deref is false, the node returned itself without adding a reference.
+    // Since the caller of this single-arg version expects a referenced value,
+    // we need to add a reference.
+    if (!needs_deref) {
+        result.ref();
+    }
+    return result;
 }
 
 QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
