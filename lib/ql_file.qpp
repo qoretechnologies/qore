@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_file.h"
 #include "qore/intern/QoreDir.h"
 
@@ -456,6 +457,19 @@ nothing rename(string old_path, string new_path) [dom=FILESYSTEM] {
    if (new_path->empty())
       return xsink->raiseException("RENAME-ERROR", "empty new file path given as second argument");
 
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      // Need delete access to source
+      if (!sm->checkFilesystemAccess(old_path->c_str(), QSEC_DELETE, xsink)) {
+         return QoreValue();
+      }
+      // Need create and delete access to destination (delete because rename can overwrite existing files)
+      if (!sm->checkFilesystemAccess(new_path->c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
+         return QoreValue();
+      }
+   }
+
    int rc = rename(old_path->getBuffer(), new_path->getBuffer());
    if (rc)
       xsink->raiseErrnoException("RENAME-ERROR", errno, "rename('%s', '%s') failed", old_path->getBuffer(), new_path->getBuffer());
@@ -667,6 +681,13 @@ if (unlink(path))
     @endcode
  */
 int unlink(string path) [dom=FILESYSTEM] {
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_DELETE, xsink)) {
+         return -1;
+      }
+   }
    return unlink(path->getBuffer());
 }
 
@@ -722,6 +743,14 @@ if (mkdir("/tmp/newdir", 0755)) {
     - %Qore 0.9.5 fixed error-handling and the return value to be sane and consistent independently of the args
  */
 int mkdir(string path, softint mode = 0777, bool parents = False) [dom=FILESYSTEM] {
+    // Check sandbox security restrictions (for non-parent case; parent case checked by QoreDir)
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm && !parents) {
+        if (!sm->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
+            return -1;
+        }
+    }
+
     if (parents) {
         QoreDir dir(xsink);
         if (dir.chdir(path->c_str()) == -1) {
@@ -798,6 +827,13 @@ if (rmdir("/tmp/newdir"))
     @see @ref Qore::Dir::rmdir()
  */
 int rmdir(string path) [dom=FILESYSTEM] {
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_DELETE, xsink)) {
+         return -1;
+      }
+   }
    return rmdir(path->getBuffer());
 }
 
@@ -814,6 +850,13 @@ if (chmod("/bin/login", 0755))
     @endcode
  */
 int chmod(string path, softint mode) [dom=FILESYSTEM] {
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+         return -1;
+      }
+   }
    return chmod(path->getBuffer(), (int)mode);
 }
 
@@ -832,6 +875,13 @@ if (chdir(dir))
     @since %Qore 0.8.4 this function is tagged with @ref Qore::PO_NO_PROCESS_CONTROL
  */
 int chdir(string path) [dom=PROCESS,FILESYSTEM] {
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+         return -1;
+      }
+   }
    return chdir(path->getBuffer());
 }
 
@@ -884,6 +934,13 @@ if (mkfifo("/tmp/pipe"))
  */
 int mkfifo(string path, softint mode = 0600) [dom=FILESYSTEM] {
 #ifdef HAVE_MKFIFO
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
+         return -1;
+      }
+   }
    return mkfifo(path->getBuffer(), mode);
 #else
    return missing_function_error("mkfifo", "UNIX_FILEMGT", xsink);
@@ -910,6 +967,13 @@ if (chown("/bin/login", 0, 0))
  */
 int chown(string path, softint owner = -1, softint group = -1) [dom=FILESYSTEM] {
 #ifdef HAVE_CHOWN
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+         return -1;
+      }
+   }
    return chown(path->getBuffer(), (uid_t)owner, (uid_t)group);
 #else
    return missing_function_error("chown", "UNIX_FILEMGT", xsink);
@@ -936,6 +1000,13 @@ if (lchown("/tmp/socket", 0, 0))
  */
 int lchown(string path, softint uid = -1, softint gid = -1) [dom=FILESYSTEM] {
 #ifdef HAVE_LCHOWN
+   // Check sandbox security restrictions
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      if (!sm->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+         return -1;
+      }
+   }
    return lchown(path->getBuffer(), (uid_t)uid, (uid_t)gid);
 #else
    return missing_function_error("lchown", "UNIX_FILEMGT", xsink);

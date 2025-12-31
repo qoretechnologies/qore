@@ -1,0 +1,548 @@
+/** @page sandboxing Sandboxing and Security
+
+    @tableofcontents
+
+    %Qore provides comprehensive sandboxing capabilities for safely executing untrusted or semi-trusted code.
+    This is essential for applications that need to run user-provided code, such as:
+
+    - Multi-tenant SaaS platforms
+    - Plugin and extension systems
+    - Online code execution environments
+    - Web application scripting engines
+    - Workflow and automation systems
+
+    %Qore offers two complementary approaches to sandboxing:
+
+    1. **Parse Options** - Binary on/off restrictions that completely disable categories of functionality
+    2. **SandboxManager** - Fine-grained, configurable restrictions with allow/deny lists and resource limits
+
+    @section sandbox_parse_options Parse Option Restrictions
+
+    Parse options provide a simple way to completely disable access to certain system capabilities.
+    These are enforced at parse time, meaning code that attempts to use restricted features will
+    fail to parse rather than failing at runtime.
+
+    @subsection sandbox_po_overview Overview of Security Parse Options
+
+    The following parse options restrict system access:
+
+    | Parse Option | Description |
+    |--------------|-------------|
+    | @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" | Disables all filesystem access |
+    | @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" | Disables all network access |
+    | @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" | Disables thread creation and control |
+    | @ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES" | Disables thread synchronization classes |
+    | @ref Qore::PO_NO_THREADS "PO_NO_THREADS" | Combines PO_NO_THREAD_CONTROL and PO_NO_THREAD_CLASSES |
+    | @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" | Disables process control (exit, fork, etc.) |
+    | @ref Qore::PO_NO_EXTERNAL_PROCESS "PO_NO_EXTERNAL_PROCESS" | Disables spawning external processes |
+    | @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" | Disables access to external system information |
+    | @ref Qore::PO_NO_EXTERNAL_ACCESS "PO_NO_EXTERNAL_ACCESS" | Combines multiple restrictions for external access |
+    | @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" | Disables database access |
+    | @ref Qore::PO_NO_MODULES "PO_NO_MODULES" | Disables loading modules |
+    | @ref Qore::PO_NO_IO "PO_NO_IO" | Disables all I/O operations |
+    | @ref Qore::PO_NO_GUI "PO_NO_GUI" | Disables GUI functionality |
+    | @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" | Disables APIs that could bypass sandboxing |
+
+    @subsection sandbox_po_usage Using Parse Options
+
+    Parse options can be set when creating a @ref Qore::Program "Program" object:
+
+    @code{.py}
+%new-style
+%require-types
+%strict-args
+
+# Create a program with no filesystem or network access
+Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_NETWORK);
+
+# Parse user code - any filesystem/network calls will cause parse errors
+try {
+    p.parse(user_code, "user_script");
+} catch (hash<ExceptionInfo> ex) {
+    printf("Parse error: %s\n", ex.desc);
+}
+    @endcode
+
+    Parse options can also be set via parse directives in the code itself:
+
+    @code{.py}
+%no-filesystem
+%no-network
+
+# This code cannot access files or network
+    @endcode
+
+    Or via command-line options:
+
+    @verbatim
+qore --no-filesystem --no-network script.q
+    @endverbatim
+
+    @subsection sandbox_po_lockdown Lockdown Parse Option
+
+    The @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" parse option combines many restrictions for maximum security:
+
+    @code{.py}
+# PO_LOCKDOWN includes:
+# - PO_NO_PROCESS_CONTROL
+# - PO_NO_THREAD_CONTROL
+# - PO_NO_TOP_LEVEL_STATEMENTS
+# - PO_NO_GLOBAL_VARS
+# - PO_NO_SUBROUTINE_DEFS
+# - PO_NO_EXTERNAL_ACCESS (which includes PO_NO_FILESYSTEM, PO_NO_NETWORK, etc.)
+
+Program p(PO_LOCKDOWN);
+    @endcode
+
+    @subsection sandbox_po_limitations Parse Option Limitations
+
+    While parse options are effective for completely disabling functionality, they have limitations:
+
+    - **Binary**: Cannot allow partial access (e.g., allow some files but not others)
+    - **No resource limits**: Cannot limit memory, CPU time, or thread count
+    - **No interruption**: Cannot stop runaway code (infinite loops)
+    - **No SSRF prevention**: Cannot block specific IP ranges
+
+    For these advanced use cases, use the @ref Qore::SandboxManager "SandboxManager" class.
+
+    @section sandbox_manager SandboxManager Class
+
+    The @ref Qore::SandboxManager "SandboxManager" class provides fine-grained, configurable sandboxing
+    with support for:
+
+    - @ref sandbox_filesystem "Filesystem access control" with allow/deny path lists
+    - @ref sandbox_network "Network access control" with IP range and hostname filtering
+    - @ref sandbox_resources "Resource limits" for memory, CPU time, and threads
+    - @ref sandbox_interrupt "Safe code interruption" for stopping runaway code
+
+    @subsection sandbox_manager_usage Basic Usage
+
+    @code{.py}
+%new-style
+%require-types
+%strict-args
+
+# Create and configure sandbox
+SandboxManager sm();
+sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB memory limit
+sm.setWallTimeLimit(30000);             # 30 second timeout
+sm.setMaxThreads(4);                    # Max 4 threads
+sm.blockPrivateNetworks();              # SSRF prevention
+sm.setFilesystemDefaultPolicy(False);   # Deny filesystem by default
+
+# Create sandboxed program
+Program p(PO_NEW_STYLE | PO_STRICT_ARGS);
+p.setSandboxManager(sm);
+
+# Parse and run untrusted code
+p.parse(user_code, "user_script");
+auto result = p.callFunction("main");
+    @endcode
+
+    @section sandbox_filesystem Filesystem Security
+
+    The filesystem security system controls which paths can be accessed by sandboxed code. It supports:
+
+    - **Sandbox root**: Restrict all access to within a specific directory (chroot-like)
+    - **Allow/deny lists**: Fine-grained path-based access control
+    - **Access modes**: Control read, write, execute, delete, and create permissions separately
+
+    @subsection sandbox_fs_comparison Parse Options vs SandboxManager
+
+    | Feature | PO_NO_FILESYSTEM | SandboxManager |
+    |---------|------------------|----------------|
+    | Block all filesystem access | Yes | Yes (default deny policy) |
+    | Allow specific directories | No | Yes |
+    | Deny specific directories | No | Yes |
+    | Different read/write permissions | No | Yes |
+    | Sandbox root (chroot-like) | No | Yes |
+
+    @subsection sandbox_fs_root Sandbox Root
+
+    Setting a sandbox root restricts all filesystem access to within that directory:
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
+
+# Now all filesystem operations are restricted to /home/sandbox/userdata
+# Attempts to access paths outside will raise FILESYSTEM-ACCESS-DENIED
+    @endcode
+
+    The sandbox root:
+    - Automatically resolves symlinks to prevent escapes
+    - Blocks path traversal attacks (../)
+    - Uses realpath() for canonical path resolution
+
+    @subsection sandbox_fs_allow_deny Allow and Deny Lists
+
+    For more granular control, use allow and deny lists:
+
+    @code{.py}
+SandboxManager sm();
+
+# Allow read access to data directory
+sm.addFilesystemAllowedPath("/data/public", QSEC_READ);
+
+# Allow read/write to uploads directory
+sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+
+# Deny access to secrets (takes precedence over allow)
+sm.addFilesystemDeniedPath("/data/uploads/secrets");
+    @endcode
+
+    @note Denied paths always take precedence over allowed paths.
+
+    @subsection sandbox_fs_modes Access Mode Constants
+
+    The following constants control filesystem access modes:
+
+    | Constant | Value | Description |
+    |----------|-------|-------------|
+    | @ref QSEC_READ | 1 | Read access to files |
+    | @ref QSEC_WRITE | 2 | Write/modify access to files |
+    | @ref QSEC_EXECUTE | 4 | Execute access to files |
+    | @ref QSEC_DELETE | 8 | Delete files |
+    | @ref QSEC_CREATE | 16 | Create new files |
+    | @ref QSEC_ALL | 31 | All access modes combined |
+
+    @subsection sandbox_fs_policy Default Policy
+
+    By default, unlisted paths are denied. You can change this behavior:
+
+    @code{.py}
+# Default: deny unlisted paths (most secure)
+sm.setFilesystemDefaultPolicy(False);
+
+# Alternative: allow unlisted paths, only deny explicitly listed
+sm.setFilesystemDefaultPolicy(True);
+    @endcode
+
+    @section sandbox_network Network Security
+
+    The network security system controls socket connections and provides SSRF (Server-Side Request Forgery)
+    prevention.
+
+    @subsection sandbox_net_comparison Parse Options vs SandboxManager
+
+    | Feature | PO_NO_NETWORK | SandboxManager |
+    |---------|---------------|----------------|
+    | Block all network access | Yes | Yes (default deny policy) |
+    | Allow specific hosts | No | Yes |
+    | Allow specific IP ranges | No | Yes |
+    | Block private networks (SSRF) | No | Yes |
+    | Port restrictions | No | Yes |
+    | Protocol filtering (TCP/UDP/UNIX) | No | Yes |
+
+    @subsection sandbox_net_ssrf SSRF Prevention
+
+    Server-Side Request Forgery (SSRF) attacks trick applications into making requests to internal
+    resources. The @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" method
+    blocks all private and internal network ranges:
+
+    @code{.py}
+SandboxManager sm();
+
+# Block all private networks (essential for SSRF prevention)
+sm.blockPrivateNetworks();
+
+# This blocks:
+# - 127.0.0.0/8 (localhost)
+# - 10.0.0.0/8 (RFC 1918 Class A)
+# - 172.16.0.0/12 (RFC 1918 Class B)
+# - 192.168.0.0/16 (RFC 1918 Class C)
+# - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
+# - ::1/128 (IPv6 localhost)
+# - fe80::/10 (IPv6 link-local)
+# - fc00::/7 (IPv6 unique local)
+
+# Allow public internet access
+sm.setNetworkDefaultPolicy(True);
+    @endcode
+
+    @note Security checks occur AFTER DNS resolution to prevent attacks using hostnames that
+    resolve to internal IP addresses.
+
+    @subsection sandbox_net_hosts Host and IP Restrictions
+
+    Control access by hostname patterns and IP ranges:
+
+    @code{.py}
+SandboxManager sm();
+
+# Allow specific hosts (supports wildcards)
+sm.addNetworkAllowedHost("api.example.com");
+sm.addNetworkAllowedHost("*.trusted-domain.org");
+
+# Allow specific IP ranges (CIDR notation)
+sm.addNetworkAllowedIPRange("203.0.113.0/24");      # IPv4
+sm.addNetworkAllowedIPRange("2001:db8::/32");       # IPv6
+
+# Deny specific ranges (takes precedence over allow)
+sm.addNetworkDeniedIPRange("192.168.0.0/16");
+    @endcode
+
+    @subsection sandbox_net_ports Port Restrictions
+
+    Control which ports can be connected to:
+
+    @code{.py}
+SandboxManager sm();
+
+# Allow only HTTPS (convenience method)
+sm.allowHTTPSOnly();
+
+# Or configure manually
+sm.addNetworkAllowedPort(443, QSEC_NET_TCP);        # HTTPS
+sm.addNetworkAllowedPort(80, QSEC_NET_TCP);         # HTTP
+sm.addNetworkAllowedPort(53, QSEC_NET_ALL);         # DNS (TCP and UDP)
+sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
+    @endcode
+
+    @subsection sandbox_net_protocols Protocol Constants
+
+    The following constants control network protocols:
+
+    | Constant | Value | Description |
+    |----------|-------|-------------|
+    | @ref QSEC_NET_TCP | 1 | TCP protocol |
+    | @ref QSEC_NET_UDP | 2 | UDP protocol |
+    | @ref QSEC_NET_UNIX | 4 | UNIX domain sockets |
+    | @ref QSEC_NET_ALL | 7 | All protocols |
+
+    @section sandbox_resources Resource Limits
+
+    Resource limits prevent denial-of-service attacks and runaway code. Unlike parse options,
+    SandboxManager can limit resources rather than completely disable features.
+
+    @code{.py}
+SandboxManager sm();
+
+# Memory limit (bytes) - prevents memory exhaustion
+sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB
+
+# CPU time limit (milliseconds) - prevents CPU-bound infinite loops
+sm.setCPUTimeLimit(10000);  # 10 seconds of CPU time
+
+# Wall clock time limit (milliseconds) - prevents I/O-bound hangs
+sm.setWallTimeLimit(30000);  # 30 seconds total
+
+# Thread limit - prevents fork bombs
+sm.setMaxThreads(4);
+
+# Recursion depth limit - prevents stack overflow
+sm.setMaxRecursionDepth(100);
+    @endcode
+
+    When limits are exceeded, appropriate exceptions are raised:
+
+    | Exception | Cause |
+    |-----------|-------|
+    | \c SANDBOX-MEMORY-LIMIT | Memory limit exceeded |
+    | \c SANDBOX-TIMEOUT | CPU or wall time limit exceeded |
+    | \c SANDBOX-THREAD-LIMIT | Thread limit exceeded |
+    | \c SANDBOX-RECURSION-LIMIT | Recursion depth exceeded |
+
+    @section sandbox_interrupt Safe Code Interruption
+
+    The interrupt mechanism allows safely stopping sandboxed code that is stuck in loops
+    or blocking operations. This is unique to SandboxManager - parse options cannot stop
+    running code.
+
+    @code{.py}
+SandboxManager sm();
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+p.parse(untrusted_code, "user_script");
+
+# Start execution in background thread
+Counter done(1);
+background sub() {
+    try {
+        p.callFunction("main");
+    } catch (hash<ExceptionInfo> ex) {
+        # Will catch PROGRAM-INTERRUPTED
+    }
+    done.dec();
+}();
+
+# If execution takes too long, interrupt it
+usleep(5s);
+if (done.getCount() > 0) {
+    sm.requestInterrupt();
+}
+
+# Wait for completion
+done.waitForZero();
+
+# Clear interrupt for reuse
+sm.clearInterrupt();
+    @endcode
+
+    @subsection sandbox_interrupt_check_points Interrupt Check Points
+
+    The interrupt mechanism is checked at:
+    - **Loop boundaries**: while, for, foreach, do-while (checked before each iteration)
+    - **Sleep functions**: sleep(), usleep() (polled every 100ms)
+    - **Lock acquisition**: Mutex::lock(), RWLock::readLock(), RWLock::writeLock() (polled every 500ms)
+    - **Auto-lock constructors**: AutoLock, AutoReadLock, AutoWriteLock (polled every 500ms)
+    - **Queue operations**: Queue::get(), Queue::pop() (polled every 500ms)
+    - **Thread synchronization**: Counter::waitForZero(), Condition::wait(), Gate::enter() (polled every 500ms)
+
+    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
+
+    @subsection sandbox_interrupt_polling Polling Mechanism
+
+    For blocking operations, the interrupt mechanism uses a polling approach where the operation
+    is performed with a timeout, then the interrupt status is checked, and the operation is
+    retried if no interrupt was requested. This ensures that blocked threads can be interrupted
+    even when waiting on locks or I/O operations.
+
+    | Operation Type | Polling Interval | Latency |
+    |----------------|------------------|---------|
+    | sleep(), usleep() | 100ms | Fast response for timed waits |
+    | Threading primitives | 500ms | Lower overhead for lock contention |
+
+    @note The polling mechanism only incurs overhead when a @ref Qore::SandboxManager "SandboxManager"
+    is attached to the Program. Normal programs without a SandboxManager have zero polling overhead.
+
+    @section sandbox_presets Security Presets
+
+    Two convenience presets are available for common use cases:
+
+    @subsection sandbox_lockdown Lockdown Mode
+
+    Maximum security for completely untrusted code:
+
+    @code{.py}
+SandboxManager sm = SandboxManager::createLockdown();
+# - No filesystem access
+# - No network access
+# - Memory limit: 10MB
+# - CPU time: 1 second
+# - Wall time: 5 seconds
+# - Max threads: 1
+# - Max recursion: 100
+    @endcode
+
+    @subsection sandbox_websafe Web-Safe Mode
+
+    Suitable for web application sandboxing where some network access is needed:
+
+    @code{.py}
+SandboxManager sm = SandboxManager::createWebSafe();
+# - No filesystem access
+# - Network allowed but private networks blocked (SSRF prevention)
+# - Memory limit: 100MB
+# - CPU time: 10 seconds
+# - Wall time: 30 seconds
+# - Max threads: 4
+# - Max recursion: 200
+    @endcode
+
+    @section sandbox_combining Combining Parse Options and SandboxManager
+
+    Parse options and SandboxManager can be used together for defense in depth:
+
+    @code{.py}
+# Use parse options to disable features entirely
+Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_PROCESS | PO_NO_DATABASE);
+
+# Use SandboxManager for fine-grained control
+SandboxManager sm();
+sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE);
+sm.blockPrivateNetworks();
+sm.setNetworkDefaultPolicy(True);
+sm.setMemoryLimit(50 * 1024 * 1024);
+sm.setWallTimeLimit(10000);
+
+p.setSandboxManager(sm);
+    @endcode
+
+    @section sandbox_configuration Configuration Inspection
+
+    You can inspect the current sandbox configuration:
+
+    @code{.py}
+SandboxManager sm();
+sm.blockPrivateNetworks();
+sm.setMemoryLimit(100 * 1024 * 1024);
+
+# Get full configuration
+hash<auto> config = sm.getConfiguration();
+printf("Config: %N\n", config);
+
+# Get filesystem-specific configuration
+hash<auto> fs_config = sm.getFilesystemConfiguration();
+
+# Get network-specific configuration
+hash<auto> net_config = sm.getNetworkConfiguration();
+    @endcode
+
+    @section sandbox_exceptions Security Exceptions
+
+    The following exceptions may be raised by the sandbox system:
+
+    | Exception | Source | Description |
+    |-----------|--------|-------------|
+    | \c FILESYSTEM-ACCESS-DENIED | SandboxManager | Filesystem access blocked by security policy |
+    | \c NETWORK-ACCESS-DENIED | SandboxManager | Network connection blocked by security policy |
+    | \c PROGRAM-INTERRUPTED | SandboxManager | Execution interrupted via requestInterrupt() |
+    | \c SANDBOX-MEMORY-LIMIT | SandboxManager | Memory limit exceeded |
+    | \c SANDBOX-TIMEOUT | SandboxManager | CPU or wall time limit exceeded |
+    | \c SANDBOX-THREAD-LIMIT | SandboxManager | Thread limit exceeded |
+    | \c SANDBOX-RECURSION-LIMIT | SandboxManager | Recursion depth exceeded |
+    | Parse error | Parse Options | Code uses disabled functionality |
+
+    @section sandbox_best_practices Best Practices
+
+    1. **Defense in depth**: Combine parse options with SandboxManager
+       - Use parse options to completely disable unneeded features
+       - Use SandboxManager for fine-grained control of allowed features
+
+    2. **Always use blockPrivateNetworks()** for web-facing applications
+       - Essential for SSRF prevention
+       - Blocks access to cloud metadata endpoints (169.254.169.254)
+       - Blocks access to internal services
+
+    3. **Set reasonable resource limits**
+       - Memory limits prevent memory exhaustion
+       - Time limits prevent infinite loops
+       - Thread limits prevent fork bombs
+
+    4. **Use deny-by-default policies**
+       - Only explicitly allow what is needed
+       - Denied paths/IPs take precedence over allowed
+
+    5. **Implement interrupt handling** for long-running operations
+       - Use background threads with timeout monitoring
+       - Call requestInterrupt() if execution exceeds expected time
+
+    6. **Validate paths before adding to allow lists**
+       - Use absolute canonical paths
+       - Be aware of symlink escapes
+       - Test with edge cases
+
+    7. **Use lockdown mode for pure computation**
+       - When code doesn't need external access, use createLockdown()
+       - Provides maximum security with minimal configuration
+
+    @section sandbox_security_checklist Security Checklist
+
+    Before deploying sandboxed code execution:
+
+    - [ ] Define maximum resource limits (memory, CPU, wall time, threads)
+    - [ ] Block private networks if any network access is allowed
+    - [ ] Use deny-by-default for filesystem access
+    - [ ] Implement timeout monitoring with interrupt handling
+    - [ ] Disable unneeded features with parse options
+    - [ ] Test with malicious input (infinite loops, memory bombs, SSRF attempts)
+    - [ ] Log security exceptions for monitoring
+
+    @see @ref Qore::SandboxManager "SandboxManager"
+    @see @ref Qore::Program "Program"
+    @see @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN"
+    @see @ref Qore::PO_NO_EXTERNAL_ACCESS "PO_NO_EXTERNAL_ACCESS"
+
+    @since %Qore 2.3 (SandboxManager class)
+*/

@@ -167,6 +167,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_RegexExtract.qpp
     lib/QC_Queue.qpp
     lib/QC_RWLock.qpp
+    lib/QC_SandboxManager.qpp
     lib/QC_SQLStatement.qpp
     lib/QC_Sequence.qpp
     lib/QC_Socket.qpp
@@ -566,6 +567,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
     lib/QoreTimeZoneManager.cpp
@@ -828,6 +830,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTimeZoneManager.cpp\"
@@ -1044,6 +1047,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Mutex.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Condition.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_RWLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxManager.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Gate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Sequence.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"

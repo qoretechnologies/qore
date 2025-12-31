@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 #include <qore/Restrictions.h>
 #include <qore/QoreCounter.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/qore_program_private.h"
@@ -724,6 +725,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // clear any exec-class return value
         exec_class_rv.discard(xsink);
         exec_class_rv = QoreValue();
+
+        // clear sandbox manager if set
+        if (sandbox_manager) {
+            sandbox_manager->deref(xsink);
+            sandbox_manager = nullptr;
+        }
 
         // delete code
         // method call can be repeated
@@ -2372,6 +2379,17 @@ QoreListNode* QoreProgram::getAllQoreObjects(ExceptionSink* xsink) {
 
 bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
    return priv->checkAllowDebugging(xsink);
+}
+
+void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
+    if (priv->sandbox_manager) {
+        priv->sandbox_manager->deref(nullptr);
+    }
+    priv->sandbox_manager = sm;
+}
+
+QoreSandboxManager* QoreProgram::getSandboxManager() const {
+    return priv->sandbox_manager;
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {

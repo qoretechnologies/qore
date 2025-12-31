@@ -108,6 +108,7 @@ class QoreRWLock;
 class QoreExternalFunction;
 class QoreExternalGlobalVar;
 class QoreExternalConstant;
+class QoreSandboxManager;
 
 typedef std::list<QoreBreakpoint*> bkp_list_t;
 
@@ -897,6 +898,20 @@ public:
 
     //! check if program can provide debugging stuff
     DLLEXPORT bool checkAllowDebugging(ExceptionSink* xsink);
+
+    //! sets the sandbox manager for this program
+    /** @param sm the sandbox manager to set; the program takes ownership of the reference
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setSandboxManager(QoreSandboxManager* sm);
+
+    //! gets the sandbox manager for this program
+    /** @return the sandbox manager or nullptr if not set
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT QoreSandboxManager* getSandboxManager() const;
 
 protected:
     //! the destructor is private in order to prohibit the object from being allocated on the stack

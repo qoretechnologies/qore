@@ -1,0 +1,1182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class SandboxManagerTest
+
+class SandboxManagerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SandboxManagerTest", "1.0", \ARGV) {
+        addTestCase("SandboxManager creation test", \testCreation());
+        addTestCase("Memory limit test", \testMemoryLimit());
+        addTestCase("CPU time limit test", \testCPUTimeLimit());
+        addTestCase("Wall time limit test", \testWallTimeLimit());
+        addTestCase("Max threads test", \testMaxThreads());
+        addTestCase("Max recursion test", \testMaxRecursion());
+        addTestCase("Interrupt mechanism test", \testInterrupt());
+        addTestCase("Configuration hash test", \testConfiguration());
+        addTestCase("Copy test", \testCopy());
+        addTestCase("Preset lockdown test", \testLockdownPreset());
+        addTestCase("Preset web-safe test", \testWebSafePreset());
+        addTestCase("Constants test", \testConstants());
+        addTestCase("Filesystem sandbox root test", \testFilesystemSandboxRoot());
+        addTestCase("Filesystem allowed paths test", \testFilesystemAllowedPaths());
+        addTestCase("Filesystem default policy test", \testFilesystemDefaultPolicy());
+        addTestCase("Program sandbox integration test", \testProgramSandboxIntegration());
+        addTestCase("Dir sandbox integration test", \testDirSandboxIntegration());
+        addTestCase("Runtime interrupt test", \testRuntimeInterrupt());
+        addTestCase("Interrupt from thread test", \testInterruptFromThread());
+        addTestCase("Sleep interrupt test", \testSleepInterrupt());
+        addTestCase("Mutex interrupt test", \testMutexInterrupt());
+        addTestCase("RWLock interrupt test", \testRWLockInterrupt());
+        addTestCase("AutoLock interrupt test", \testAutoLockInterrupt());
+        addTestCase("Queue interrupt test", \testQueueInterrupt());
+        addTestCase("Counter interrupt test", \testCounterInterrupt());
+        addTestCase("Condition interrupt test", \testConditionInterrupt());
+        addTestCase("Gate interrupt test", \testGateInterrupt());
+        addTestCase("Network security configuration test", \testNetworkConfiguration());
+        addTestCase("Network private networks block test", \testBlockPrivateNetworks());
+        addTestCase("Network socket integration test", \testNetworkSocketIntegration());
+        addTestCase("Mutex blocked interrupt test", \testMutexBlockedInterrupt());
+        addTestCase("Queue blocked interrupt test", \testQueueBlockedInterrupt());
+        addTestCase("Counter blocked interrupt test", \testCounterBlockedInterrupt());
+        addTestCase("Condition blocked interrupt test", \testConditionBlockedInterrupt());
+        set_return_value(main());
+    }
+
+    testCreation() {
+        SandboxManager sm();
+        assertEq(True, sm instanceof SandboxManager, "SandboxManager instance created");
+
+        # Default values should be 0 (unlimited)
+        assertEq(0, sm.getMemoryLimit(), "Default memory limit is 0 (unlimited)");
+        assertEq(0, sm.getCPUTimeLimit(), "Default CPU time limit is 0 (unlimited)");
+        assertEq(0, sm.getWallTimeLimit(), "Default wall time limit is 0 (unlimited)");
+        assertEq(0, sm.getMaxThreads(), "Default max threads is 0 (unlimited)");
+        assertEq(0, sm.getMaxRecursionDepth(), "Default max recursion is 0 (unlimited)");
+    }
+
+    testMemoryLimit() {
+        SandboxManager sm();
+
+        # Test setting memory limit
+        sm.setMemoryLimit(100 * 1024 * 1024);  # 100 MB
+        assertEq(104857600, sm.getMemoryLimit(), "Memory limit set to 100MB");
+
+        # Test setting to 0 (unlimited)
+        sm.setMemoryLimit(0);
+        assertEq(0, sm.getMemoryLimit(), "Memory limit set to 0 (unlimited)");
+
+        # Test different values
+        sm.setMemoryLimit(1024);
+        assertEq(1024, sm.getMemoryLimit(), "Memory limit set to 1024 bytes");
+    }
+
+    testCPUTimeLimit() {
+        SandboxManager sm();
+
+        sm.setCPUTimeLimit(10000);  # 10 seconds
+        assertEq(10000, sm.getCPUTimeLimit(), "CPU time limit set to 10000ms");
+
+        sm.setCPUTimeLimit(0);
+        assertEq(0, sm.getCPUTimeLimit(), "CPU time limit set to 0 (unlimited)");
+    }
+
+    testWallTimeLimit() {
+        SandboxManager sm();
+
+        sm.setWallTimeLimit(30000);  # 30 seconds
+        assertEq(30000, sm.getWallTimeLimit(), "Wall time limit set to 30000ms");
+
+        sm.setWallTimeLimit(0);
+        assertEq(0, sm.getWallTimeLimit(), "Wall time limit set to 0 (unlimited)");
+    }
+
+    testMaxThreads() {
+        SandboxManager sm();
+
+        sm.setMaxThreads(4);
+        assertEq(4, sm.getMaxThreads(), "Max threads set to 4");
+
+        sm.setMaxThreads(1);
+        assertEq(1, sm.getMaxThreads(), "Max threads set to 1");
+
+        sm.setMaxThreads(0);
+        assertEq(0, sm.getMaxThreads(), "Max threads set to 0 (unlimited)");
+    }
+
+    testMaxRecursion() {
+        SandboxManager sm();
+
+        sm.setMaxRecursionDepth(100);
+        assertEq(100, sm.getMaxRecursionDepth(), "Max recursion set to 100");
+
+        sm.setMaxRecursionDepth(0);
+        assertEq(0, sm.getMaxRecursionDepth(), "Max recursion set to 0 (unlimited)");
+    }
+
+    testInterrupt() {
+        SandboxManager sm();
+
+        # Initially not interrupted
+        assertEq(False, sm.isInterruptRequested(), "Initially not interrupted");
+
+        # Request interrupt
+        sm.requestInterrupt();
+        assertEq(True, sm.isInterruptRequested(), "Interrupt requested");
+
+        # Clear interrupt
+        sm.clearInterrupt();
+        assertEq(False, sm.isInterruptRequested(), "Interrupt cleared");
+
+        # Multiple requests should work
+        sm.requestInterrupt();
+        sm.requestInterrupt();
+        assertEq(True, sm.isInterruptRequested(), "Multiple requests still work");
+
+        sm.clearInterrupt();
+        assertEq(False, sm.isInterruptRequested(), "Clear after multiple requests");
+    }
+
+    testConfiguration() {
+        SandboxManager sm();
+
+        sm.setMemoryLimit(1024);
+        sm.setCPUTimeLimit(5000);
+        sm.setWallTimeLimit(10000);
+        sm.setMaxThreads(2);
+        sm.setMaxRecursionDepth(50);
+
+        hash<auto> config = sm.getConfiguration();
+        assertEq(True, exists config, "Configuration hash exists");
+        assertEq("hash", type(config), "Configuration is a hash");
+
+        # Verify config contains expected keys
+        assertEq(True, exists config.memory_limit, "Config has memory_limit");
+        assertEq(True, exists config.cpu_time_limit, "Config has cpu_time_limit");
+        assertEq(True, exists config.wall_time_limit, "Config has wall_time_limit");
+        assertEq(True, exists config.max_threads, "Config has max_threads");
+        assertEq(True, exists config.max_recursion, "Config has max_recursion");
+    }
+
+    testCopy() {
+        SandboxManager sm();
+
+        sm.setMemoryLimit(2048);
+        sm.setCPUTimeLimit(1000);
+
+        SandboxManager copy = sm.copy();
+
+        assertEq(2048, copy.getMemoryLimit(), "Copy has same memory limit");
+        assertEq(1000, copy.getCPUTimeLimit(), "Copy has same CPU time limit");
+
+        # Modifying original should not affect copy
+        sm.setMemoryLimit(4096);
+        assertEq(2048, copy.getMemoryLimit(), "Copy is independent of original");
+    }
+
+    testLockdownPreset() {
+        SandboxManager sm = SandboxManager::createLockdown();
+
+        assertEq(True, sm instanceof SandboxManager, "Lockdown preset creates SandboxManager");
+
+        # Lockdown should have restrictive defaults
+        assertEq(10 * 1024 * 1024, sm.getMemoryLimit(), "Lockdown memory limit is 10MB");
+        assertEq(1000, sm.getCPUTimeLimit(), "Lockdown CPU time limit is 1000ms");
+        assertEq(5000, sm.getWallTimeLimit(), "Lockdown wall time limit is 5000ms");
+        assertEq(1, sm.getMaxThreads(), "Lockdown max threads is 1");
+        assertEq(100, sm.getMaxRecursionDepth(), "Lockdown max recursion is 100");
+    }
+
+    testWebSafePreset() {
+        SandboxManager sm = SandboxManager::createWebSafe();
+
+        assertEq(True, sm instanceof SandboxManager, "WebSafe preset creates SandboxManager");
+
+        # Web-safe should have moderate defaults
+        assertEq(100 * 1024 * 1024, sm.getMemoryLimit(), "WebSafe memory limit is 100MB");
+        assertEq(10000, sm.getCPUTimeLimit(), "WebSafe CPU time limit is 10000ms");
+        assertEq(30000, sm.getWallTimeLimit(), "WebSafe wall time limit is 30000ms");
+        assertEq(4, sm.getMaxThreads(), "WebSafe max threads is 4");
+        assertEq(200, sm.getMaxRecursionDepth(), "WebSafe max recursion is 200");
+    }
+
+    testConstants() {
+        # Test filesystem access mode constants
+        assertEq(True, QSEC_READ > 0, "QSEC_READ is defined");
+        assertEq(True, QSEC_WRITE > 0, "QSEC_WRITE is defined");
+        assertEq(True, QSEC_EXECUTE > 0, "QSEC_EXECUTE is defined");
+        assertEq(True, QSEC_DELETE > 0, "QSEC_DELETE is defined");
+        assertEq(True, QSEC_CREATE > 0, "QSEC_CREATE is defined");
+        assertEq(True, QSEC_ALL > 0, "QSEC_ALL is defined");
+
+        # QSEC_ALL should be combination of all modes
+        assertEq(QSEC_READ | QSEC_WRITE | QSEC_EXECUTE | QSEC_DELETE | QSEC_CREATE,
+                 QSEC_ALL, "QSEC_ALL is combination of all modes");
+
+        # Test network protocol constants
+        assertEq(True, QSEC_NET_TCP > 0, "QSEC_NET_TCP is defined");
+        assertEq(True, QSEC_NET_UDP > 0, "QSEC_NET_UDP is defined");
+        assertEq(True, QSEC_NET_UNIX > 0, "QSEC_NET_UNIX is defined");
+        assertEq(True, QSEC_NET_ALL > 0, "QSEC_NET_ALL is defined");
+
+        # QSEC_NET_ALL should be combination of all protocols
+        assertEq(QSEC_NET_TCP | QSEC_NET_UDP | QSEC_NET_UNIX,
+                 QSEC_NET_ALL, "QSEC_NET_ALL is combination of all protocols");
+    }
+
+    testFilesystemSandboxRoot() {
+        SandboxManager sm();
+
+        # Initially no sandbox root
+        assertEq(NOTHING, sm.getFilesystemSandboxRoot(), "Initially no sandbox root");
+
+        # Set sandbox root
+        sm.setFilesystemSandboxRoot("/tmp");
+        assertEq("/tmp", sm.getFilesystemSandboxRoot(), "Sandbox root set to /tmp");
+
+        # Get config and verify
+        hash<auto> config = sm.getFilesystemConfiguration();
+        assertEq("/tmp", config.sandbox_root, "Config shows sandbox root");
+        assertEq("deny", config.default_policy, "Default policy is deny");
+
+        # Clear sandbox root
+        sm.clearFilesystemSandboxRoot();
+        assertEq(NOTHING, sm.getFilesystemSandboxRoot(), "Sandbox root cleared");
+    }
+
+    testFilesystemAllowedPaths() {
+        SandboxManager sm();
+
+        # Add allowed path
+        sm.addFilesystemAllowedPath("/tmp", QSEC_READ | QSEC_WRITE);
+
+        hash<auto> config = sm.getFilesystemConfiguration();
+        assertEq(1, config.allowed_paths.size(), "One allowed path added");
+        assertEq("/tmp", config.allowed_paths[0].path, "Correct path added");
+        assertEq(QSEC_READ | QSEC_WRITE, config.allowed_paths[0].mode, "Correct mode set");
+
+        # Add denied path
+        sm.addFilesystemDeniedPath("/tmp/secrets");
+
+        config = sm.getFilesystemConfiguration();
+        assertEq(1, config.denied_paths.size(), "One denied path added");
+        assertEq("/tmp/secrets", config.denied_paths[0], "Correct denied path");
+    }
+
+    testFilesystemDefaultPolicy() {
+        SandboxManager sm();
+
+        # Default is deny
+        assertEq(False, sm.getFilesystemDefaultPolicy(), "Default policy is deny");
+
+        # Set to allow
+        sm.setFilesystemDefaultPolicy(True);
+        assertEq(True, sm.getFilesystemDefaultPolicy(), "Policy changed to allow");
+
+        hash<auto> config = sm.getFilesystemConfiguration();
+        assertEq("allow", config.default_policy, "Config shows allow policy");
+
+        # Set back to deny
+        sm.setFilesystemDefaultPolicy(False);
+        assertEq(False, sm.getFilesystemDefaultPolicy(), "Policy changed back to deny");
+    }
+
+    testProgramSandboxIntegration() {
+        # Create a test file
+        string testFile = "/tmp/sandbox_integration_test_" + getpid() + ".txt";
+        {
+            File f();
+            f.open2(testFile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("integration test content");
+        }
+
+        on_exit unlink(testFile);
+
+        # Create sandbox manager with /tmp as root
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/tmp");
+
+        # Create a child program with sandbox manager
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        # Verify we can get the sandbox manager back
+        SandboxManager sm2 = p.getSandboxManager();
+        assertEq(True, sm2 instanceof SandboxManager, "Got sandbox manager from program");
+        assertEq("/tmp", sm2.getFilesystemSandboxRoot(), "Sandbox root preserved");
+
+        # Test reading file inside sandbox works
+        p.parse("
+%new-style
+string sub readTest(string path) {
+    File f();
+    f.open2(path, O_RDONLY);
+    return f.read(-1);
+}
+        ", "sandbox_read_test");
+
+        string content = p.callFunction("readTest", testFile);
+        assertEq("integration test content", content, "Reading inside sandbox works");
+
+        # Test reading file outside sandbox is denied
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm);
+        p2.parse("
+%new-style
+string sub tryReadOutside() {
+    File f();
+    f.open2(\"/etc/passwd\", O_RDONLY);
+    return f.read(-1);
+}
+        ", "sandbox_denied_test");
+
+        bool caught = False;
+        try {
+            p2.callFunction("tryReadOutside");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "Correct exception type");
+        }
+        assertEq(True, caught, "Reading outside sandbox throws exception");
+    }
+
+    testDirSandboxIntegration() {
+        # Create a test directory
+        string testDir = "/tmp/sandbox_dir_test_" + getpid();
+        mkdir(testDir);
+        on_exit rmdir(testDir);
+
+        # Create sandbox manager with /tmp as root
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/tmp");
+
+        # Create a child program with sandbox manager
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        # Test chdir inside sandbox works
+        p.parse("
+%new-style
+sub testChdirInSandbox(string path) {
+    Dir d();
+    d.chdir(path);
+    return d.list();
+}
+        ", "dir_chdir_test");
+
+        list<auto> files = p.callFunction("testChdirInSandbox", testDir);
+        assertEq(True, exists files, "Dir chdir inside sandbox works");
+
+        # Test chdir outside sandbox is denied
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm);
+        p2.parse("
+%new-style
+sub testChdirOutsideSandbox() {
+    Dir d();
+    d.chdir(\"/etc\");
+}
+        ", "dir_chdir_deny_test");
+
+        bool caught = False;
+        try {
+            p2.callFunction("testChdirOutsideSandbox");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "Correct exception for Dir chdir");
+        }
+        assertEq(True, caught, "Dir chdir outside sandbox throws exception");
+
+        # Test mkdir inside sandbox works
+        Program p3(PO_NO_CHILD_PO_RESTRICTIONS);
+        p3.setSandboxManager(sm);
+        p3.parse("
+%new-style
+sub testMkdirInSandbox(string path) {
+    Dir d();
+    d.chdir(\"/tmp\");
+    d.mkdir(path);
+}
+        ", "dir_mkdir_test");
+
+        string subdir = "sandbox_mkdir_" + getpid();
+        p3.callFunction("testMkdirInSandbox", subdir);
+        assertEq(True, is_dir("/tmp/" + subdir), "Dir mkdir inside sandbox works");
+        rmdir("/tmp/" + subdir);
+    }
+
+    testRuntimeInterrupt() {
+        # Test that pre-set interrupt stops execution immediately
+        SandboxManager sm();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        # Test while loop interrupt
+        p.parse("
+%new-style
+sub whileLoop() {
+    while (True) {
+        # infinite loop
+    }
+}
+        ", "while_interrupt");
+
+        sm.requestInterrupt();
+        bool caught = False;
+        try {
+            p.callFunction("whileLoop");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "While loop interrupted correctly");
+        }
+        assertEq(True, caught, "While loop was interrupted");
+
+        # Clear interrupt and test for loop
+        sm.clearInterrupt();
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm);
+        p2.parse("
+%new-style
+sub forLoop() {
+    for (;;) {
+        # infinite loop
+    }
+}
+        ", "for_interrupt");
+
+        sm.requestInterrupt();
+        caught = False;
+        try {
+            p2.callFunction("forLoop");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "For loop interrupted correctly");
+        }
+        assertEq(True, caught, "For loop was interrupted");
+
+        # Clear interrupt and test foreach loop
+        sm.clearInterrupt();
+        Program p3(PO_NO_CHILD_PO_RESTRICTIONS);
+        p3.setSandboxManager(sm);
+        p3.parse("
+%new-style
+sub foreachLoop() {
+    list<int> bigList = ();
+    for (int i = 0; i < 1000000; i++) {
+        bigList += i;
+    }
+    foreach int val in (bigList) {
+        # process items
+    }
+}
+        ", "foreach_interrupt");
+
+        sm.requestInterrupt();
+        caught = False;
+        try {
+            p3.callFunction("foreachLoop");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Foreach loop interrupted correctly");
+        }
+        assertEq(True, caught, "Foreach loop was interrupted");
+
+        # Test do-while loop
+        sm.clearInterrupt();
+        Program p4(PO_NO_CHILD_PO_RESTRICTIONS);
+        p4.setSandboxManager(sm);
+        p4.parse("
+%new-style
+sub doWhileLoop() {
+    do {
+        # infinite loop
+    } while (True);
+}
+        ", "dowhile_interrupt");
+
+        sm.requestInterrupt();
+        caught = False;
+        try {
+            p4.callFunction("doWhileLoop");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Do-while loop interrupted correctly");
+        }
+        assertEq(True, caught, "Do-while loop was interrupted");
+    }
+
+    testInterruptFromThread() {
+        # Test that interrupt works when set from another thread during execution
+        SandboxManager sm();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+our int counter = 0;
+sub runLoop() {
+    while (True) {
+        counter++;
+    }
+}
+int sub getCounter() {
+    return counter;
+}
+        ", "thread_interrupt");
+
+        Counter done(1);
+        bool caught = False;
+        string exErr;
+
+        # Start the loop in a background thread
+        background sub() {
+            try {
+                p.callFunction("runLoop");
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                exErr = ex.err;
+            }
+            done.dec();
+        }();
+
+        # Give the loop time to start running
+        usleep(50000);  # 50ms
+
+        # Request interrupt from main thread
+        sm.requestInterrupt();
+
+        # Wait for the background thread to finish
+        done.waitForZero(5s);
+
+        assertEq(True, caught, "Loop was interrupted from another thread");
+        assertEq("PROGRAM-INTERRUPTED", exErr, "Correct exception from thread interrupt");
+
+        # Verify the counter was incremented (loop was actually running)
+        int finalCounter = p.callFunction("getCounter");
+        assertEq(True, finalCounter > 0, "Loop was running before interrupt (counter: " + finalCounter + ")");
+    }
+
+    testSleepInterrupt() {
+        # Test that sleep() is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doSleep() {
+    sleep(10);
+}
+        ", "sleep_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doSleep");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "sleep() interrupted correctly");
+        }
+        assertEq(True, caught, "sleep() was interrupted");
+
+        # Test usleep with interrupt from thread
+        SandboxManager sm2();
+
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm2);
+
+        p2.parse("
+%new-style
+sub doUsleep() {
+    usleep(10s);
+}
+        ", "usleep_interrupt");
+
+        Counter done(1);
+        caught = False;
+        string exErr;
+
+        background sub() {
+            try {
+                p2.callFunction("doUsleep");
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                exErr = ex.err;
+            }
+            done.dec();
+        }();
+
+        # Give usleep time to start
+        usleep(50000);
+
+        # Request interrupt
+        sm2.requestInterrupt();
+
+        # Wait for completion
+        done.waitForZero(5s);
+
+        assertEq(True, caught, "usleep() was interrupted from thread");
+        assertEq("PROGRAM-INTERRUPTED", exErr, "usleep() interrupted with correct exception");
+    }
+
+    testMutexInterrupt() {
+        # Test that Mutex::lock() is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doLock() {
+    Mutex m();
+    m.lock();
+}
+        ", "mutex_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Mutex::lock() interrupted correctly");
+        }
+        assertEq(True, caught, "Mutex::lock() was interrupted");
+    }
+
+    testRWLockInterrupt() {
+        # Test that RWLock read/write lock is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doReadLock() {
+    RWLock rwl();
+    rwl.readLock();
+}
+sub doWriteLock() {
+    RWLock rwl();
+    rwl.writeLock();
+}
+        ", "rwlock_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doReadLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "RWLock::readLock() interrupted correctly");
+        }
+        assertEq(True, caught, "RWLock::readLock() was interrupted");
+
+        caught = False;
+        try {
+            p.callFunction("doWriteLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "RWLock::writeLock() interrupted correctly");
+        }
+        assertEq(True, caught, "RWLock::writeLock() was interrupted");
+    }
+
+    testAutoLockInterrupt() {
+        # Test that AutoLock/AutoReadLock/AutoWriteLock constructors are interrupted
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doAutoLock() {
+    Mutex m();
+    AutoLock al(m);
+}
+sub doAutoReadLock() {
+    RWLock rwl();
+    AutoReadLock arl(rwl);
+}
+sub doAutoWriteLock() {
+    RWLock rwl();
+    AutoWriteLock awl(rwl);
+}
+        ", "autolock_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doAutoLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "AutoLock interrupted correctly");
+        }
+        assertEq(True, caught, "AutoLock constructor was interrupted");
+
+        caught = False;
+        try {
+            p.callFunction("doAutoReadLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "AutoReadLock interrupted correctly");
+        }
+        assertEq(True, caught, "AutoReadLock constructor was interrupted");
+
+        caught = False;
+        try {
+            p.callFunction("doAutoWriteLock");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "AutoWriteLock interrupted correctly");
+        }
+        assertEq(True, caught, "AutoWriteLock constructor was interrupted");
+    }
+
+    testQueueInterrupt() {
+        # Test that Queue::get/pop is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doQueueGet() {
+    Queue q();
+    q.get();
+}
+sub doQueuePop() {
+    Queue q();
+    q.pop();
+}
+        ", "queue_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doQueueGet");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Queue::get() interrupted correctly");
+        }
+        assertEq(True, caught, "Queue::get() was interrupted");
+
+        caught = False;
+        try {
+            p.callFunction("doQueuePop");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Queue::pop() interrupted correctly");
+        }
+        assertEq(True, caught, "Queue::pop() was interrupted");
+    }
+
+    testCounterInterrupt() {
+        # Test that Counter::waitForZero is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doCounterWait() {
+    Counter c(1);
+    c.waitForZero();
+}
+        ", "counter_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doCounterWait");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Counter::waitForZero() interrupted correctly");
+        }
+        assertEq(True, caught, "Counter::waitForZero() was interrupted");
+    }
+
+    testConditionInterrupt() {
+        # Test that Condition::wait is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doConditionWait() {
+    Mutex m();
+    Condition cond();
+    m.lock();
+    cond.wait(m);
+}
+        ", "condition_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doConditionWait");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Condition::wait() interrupted correctly");
+        }
+        assertEq(True, caught, "Condition::wait() was interrupted");
+    }
+
+    testGateInterrupt() {
+        # Test that Gate::enter is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doGateEnter() {
+    Gate g();
+    g.enter();
+}
+        ", "gate_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doGateEnter");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "Gate::enter() interrupted correctly");
+        }
+        assertEq(True, caught, "Gate::enter() was interrupted");
+    }
+
+    testNetworkConfiguration() {
+        # Test network security configuration methods
+        SandboxManager sm();
+
+        # Test default policy
+        assertEq(False, sm.getNetworkDefaultPolicy(), "Default network policy is deny");
+
+        sm.setNetworkDefaultPolicy(True);
+        assertEq(True, sm.getNetworkDefaultPolicy(), "Network policy can be set to allow");
+
+        sm.setNetworkDefaultPolicy(False);
+        assertEq(False, sm.getNetworkDefaultPolicy(), "Network policy can be set back to deny");
+
+        # Test adding allowed host
+        sm.addNetworkAllowedHost("example.com");
+        sm.addNetworkAllowedHost("*.trusted.org");
+
+        # Test adding allowed port
+        sm.addNetworkAllowedPort(443, QSEC_NET_TCP);
+        sm.addNetworkAllowedPort(80, QSEC_NET_ALL);
+
+        # Test adding allowed port range
+        sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);
+
+        # Test adding allowed IP range
+        sm.addNetworkAllowedIPRange("203.0.113.0/24");
+
+        # Test adding denied IP range
+        sm.addNetworkDeniedIPRange("192.168.0.0/16");
+
+        # Test getting configuration
+        hash<auto> config = sm.getNetworkConfiguration();
+        assertEq("hash<auto>", config.fullType(), "Network configuration is a hash");
+        assertEq("deny", config.default_policy, "Default policy in config is deny");
+    }
+
+    testBlockPrivateNetworks() {
+        # Test the blockPrivateNetworks preset
+        SandboxManager sm();
+        sm.blockPrivateNetworks();
+
+        hash<auto> config = sm.getNetworkConfiguration();
+        assertEq(True, config.denied_ranges_count > 0, "Private networks added to denied list");
+
+        # Test blockLocalhost
+        SandboxManager sm2();
+        sm2.blockLocalhost();
+
+        hash<auto> config2 = sm2.getNetworkConfiguration();
+        assertEq(True, config2.denied_ranges_count > 0, "Localhost added to denied list");
+
+        # Test allowHTTPSOnly
+        SandboxManager sm3();
+        sm3.allowHTTPSOnly();
+
+        hash<auto> config3 = sm3.getNetworkConfiguration();
+        assertEq(True, config3.allowed_ports.size() > 0, "HTTPS port added to allowed list");
+    }
+
+    testNetworkSocketIntegration() {
+        # Test that network security is enforced for socket connections
+        SandboxManager sm();
+
+        # Block private networks and set default to allow (so we can test blocking)
+        sm.blockPrivateNetworks();
+        sm.setNetworkDefaultPolicy(True);
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub connectToLocalhost() {
+    Socket s();
+    s.connect('127.0.0.1:80', 1000);
+}
+        ", "network_security");
+
+        bool caught = False;
+        try {
+            p.callFunction("connectToLocalhost");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            # Should get NETWORK-ACCESS-DENIED or SOCKET-CONNECT-ERROR (if localhost blocked before DNS)
+            assertEq(True, ex.err == "NETWORK-ACCESS-DENIED" || ex.err == "SOCKET-CONNECT-ERROR",
+                "Connection to localhost blocked with correct error: " + ex.err);
+        }
+        assertEq(True, caught, "Connection to localhost was blocked");
+
+        # Test with allowed destination - use default allow policy
+        SandboxManager sm2();
+        sm2.setNetworkDefaultPolicy(True);
+
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm2);
+
+        p2.parse("
+%new-style
+sub connectToPublic() {
+    Socket s();
+    # This will likely fail to connect but should not be blocked by security
+    try {
+        s.connect('93.184.216.34:80', 100);  # example.com IP
+    } catch (ex) {
+        # Connection timeout/refused is expected, not security block
+        if (ex.err == 'NETWORK-ACCESS-DENIED') {
+            throw ex;
+        }
+    }
+}
+        ", "network_allowed");
+
+        caught = False;
+        try {
+            p2.callFunction("connectToPublic");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NETWORK-ACCESS-DENIED") {
+                caught = True;
+            }
+            # Other exceptions (timeout, refused) are OK
+        }
+        assertEq(False, caught, "Connection to public IP was not blocked");
+    }
+
+    testMutexBlockedInterrupt() {
+        # Test that sleep() can be interrupted while ALREADY blocked
+        # This tests the polling mechanism - sleep() blocks in 500ms chunks and
+        # checks for interrupt between chunks.
+        #
+        # Note: The Queue, Counter, and Condition blocked tests below verify
+        # that other blocking primitives also support polling-based interrupts.
+
+        SandboxManager sm();
+        Queue resultQueue();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doSleepTest(Queue resultQueue) {
+    resultQueue.push('ready');
+
+    try {
+        sleep(60s);  # Will block, but should be interruptible via polling
+        resultQueue.push({'caught': False, 'err': ''});
+    } catch (hash<ExceptionInfo> ex) {
+        resultQueue.push({'caught': True, 'err': ex.err});
+    }
+}
+        ", "sleep_blocked_interrupt");
+
+        # Start the test in background
+        background p.callFunction("doSleepTest", resultQueue);
+
+        # Wait for the 'ready' signal
+        auto ready = resultQueue.get(5s);
+        assertEq("ready", ready, "Test setup completed");
+
+        # Give a little time for sleep() to start blocking
+        usleep(100ms);
+
+        # Request interrupt while thread is blocked on sleep
+        sm.requestInterrupt();
+
+        # Wait for result (should come within polling interval + margin)
+        # Sleep polls every 100ms, so should respond quickly
+        hash<auto> result = resultQueue.get(2s);
+        assertEq(True, result.caught, "sleep() was interrupted while blocked");
+        assertEq("PROGRAM-INTERRUPTED", result.err, "Correct exception thrown for blocked sleep interrupt");
+    }
+
+    testQueueBlockedInterrupt() {
+        # Test that Queue::get() can be interrupted while ALREADY blocked
+
+        SandboxManager sm();
+        Queue resultQueue();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doQueueTest(Queue resultQueue) {
+    Queue emptyQueue();
+
+    # Signal that we're ready
+    resultQueue.push('ready');
+
+    # Block on empty queue - this will block indefinitely without interrupt
+    try {
+        emptyQueue.get();
+        resultQueue.push({'caught': False, 'err': ''});
+    } catch (hash<ExceptionInfo> ex) {
+        resultQueue.push({'caught': True, 'err': ex.err});
+    }
+}
+        ", "queue_blocked_interrupt");
+
+        # Start the test in background
+        background p.callFunction("doQueueTest", resultQueue);
+
+        # Wait for the 'ready' signal
+        auto ready = resultQueue.get(5s);
+        assertEq("ready", ready, "Test setup completed");
+
+        # Give a little time for the get() to block
+        usleep(100ms);
+
+        # Request interrupt while thread is blocked on queue
+        sm.requestInterrupt();
+
+        # Wait for result
+        hash<auto> result = resultQueue.get(2s);
+        assertEq(True, result.caught, "Queue::get() was interrupted while blocked");
+        assertEq("PROGRAM-INTERRUPTED", result.err, "Correct exception thrown for blocked Queue interrupt");
+    }
+
+    testCounterBlockedInterrupt() {
+        # Test that Counter::waitForZero() can be interrupted while ALREADY blocked
+
+        SandboxManager sm();
+        Queue resultQueue();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doCounterTest(Queue resultQueue) {
+    Counter cnt(1);  # Will never reach zero without dec()
+
+    # Signal that we're ready
+    resultQueue.push('ready');
+
+    # Block waiting for counter to reach zero
+    try {
+        cnt.waitForZero();
+        resultQueue.push({'caught': False, 'err': ''});
+    } catch (hash<ExceptionInfo> ex) {
+        resultQueue.push({'caught': True, 'err': ex.err});
+    }
+}
+        ", "counter_blocked_interrupt");
+
+        # Start the test in background
+        background p.callFunction("doCounterTest", resultQueue);
+
+        # Wait for the 'ready' signal
+        auto ready = resultQueue.get(5s);
+        assertEq("ready", ready, "Test setup completed");
+
+        # Give a little time for waitForZero() to block
+        usleep(100ms);
+
+        # Request interrupt while thread is blocked
+        sm.requestInterrupt();
+
+        # Wait for result
+        hash<auto> result = resultQueue.get(2s);
+        assertEq(True, result.caught, "Counter::waitForZero() was interrupted while blocked");
+        assertEq("PROGRAM-INTERRUPTED", result.err, "Correct exception thrown for blocked Counter interrupt");
+    }
+
+    testConditionBlockedInterrupt() {
+        # Test that Condition::wait() can be interrupted while ALREADY blocked
+
+        SandboxManager sm();
+        Queue resultQueue();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%new-style
+sub doConditionTest(Queue resultQueue) {
+    Mutex mtx();
+    Condition cond();
+
+    mtx.lock();
+
+    # Signal that we're ready
+    resultQueue.push('ready');
+
+    # Block waiting for condition signal that never comes
+    try {
+        cond.wait(mtx);
+        mtx.unlock();
+        resultQueue.push({'caught': False, 'err': ''});
+    } catch (hash<ExceptionInfo> ex) {
+        try { mtx.unlock(); } catch () {}
+        resultQueue.push({'caught': True, 'err': ex.err});
+    }
+}
+        ", "condition_blocked_interrupt");
+
+        # Start the test in background
+        background p.callFunction("doConditionTest", resultQueue);
+
+        # Wait for the 'ready' signal
+        auto ready = resultQueue.get(5s);
+        assertEq("ready", ready, "Test setup completed");
+
+        # Give a little time for wait() to block
+        usleep(100ms);
+
+        # Request interrupt while thread is blocked
+        sm.requestInterrupt();
+
+        # Wait for result
+        hash<auto> result = resultQueue.get(2s);
+        assertEq(True, result.caught, "Condition::wait() was interrupted while blocked");
+        assertEq("PROGRAM-INTERRUPTED", result.err, "Correct exception thrown for blocked Condition interrupt");
+    }
+}

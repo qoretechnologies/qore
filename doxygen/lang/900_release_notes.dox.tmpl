@@ -74,6 +74,15 @@
         - new \c PerMessageDeflateExtension implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
     - updated module ABI and the Program container to allow for better sandboxing
+    - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
+      - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
+      - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
+      - SSRF prevention with @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" preset
+      - @ref sandbox_resources "resource limits" for memory, CPU time, wall time, threads, and recursion
+      - @ref sandbox_interrupt "safe interrupt mechanism" for stopping runaway code in loops and blocking operations
+      - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
+        @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
+      - see @ref sandboxing "Sandboxing and Security" for full documentation
     - new method in the <a href="../../modules/reflection/html/index.html">reflection</a> module:
       - \c Class::tryGetConstant()
     - new builtin methods:

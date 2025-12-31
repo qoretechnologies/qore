@@ -52,6 +52,9 @@ extern QoreHashNode* ENV;
 #include "qore/vector_map"
 #include "qore/vector_set"
 
+// Forward declaration to avoid circular includes
+class QoreSandboxManager;
+
 #include <cerrno>
 #include <cstdarg>
 #include <map>
@@ -426,6 +429,9 @@ public:
     // time zone setting for the program
     const AbstractQoreZoneInfo* TZ;
 
+    // sandbox manager for security restrictions
+    QoreSandboxManager* sandbox_manager = nullptr;
+
     // define map
     dmap_t dmap;
 
@@ -471,17 +477,38 @@ public:
         }
 
         // initialize global vars
+        // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
+        bool no_external_info = (n_parse_options & PO_NO_EXTERNAL_INFO);
+
         Var *var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "ARGV", listTypeInfo, true);
-        if (var && ARGV)
-            var->setInitial(ARGV->copy());
+        if (var) {
+            if (no_external_info) {
+                // provide empty list when PO_NO_EXTERNAL_INFO is set
+                var->setInitial(new QoreListNode(stringTypeInfo));
+            } else if (ARGV) {
+                var->setInitial(ARGV->copy());
+            }
+        }
 
         var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "QORE_ARGV", listTypeInfo, true);
-        if (var && QORE_ARGV)
-            var->setInitial(QORE_ARGV->copy());
+        if (var) {
+            if (no_external_info) {
+                // provide empty list when PO_NO_EXTERNAL_INFO is set
+                var->setInitial(new QoreListNode(stringTypeInfo));
+            } else if (QORE_ARGV) {
+                var->setInitial(QORE_ARGV->copy());
+            }
+        }
 
         var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "ENV", hashTypeInfo, true);
-        if (var)
-            var->setInitial(ENV->copy());
+        if (var) {
+            if (no_external_info) {
+                // provide empty hash when PO_NO_EXTERNAL_INFO is set
+                var->setInitial(new QoreHashNode(autoTypeInfo));
+            } else {
+                var->setInitial(ENV->copy());
+            }
+        }
         setDefines();
     }
 

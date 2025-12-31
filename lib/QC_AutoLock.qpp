@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_AutoLock.h"
 #include "qore/intern/QC_Mutex.h"
 
@@ -64,7 +65,7 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
 
 //! Creates the AutoLock object based on the @ref Qore::Thread::Mutex "Mutex" argument passed and immediately calls Mutex::lock()
 /** The AutoLock object immediately calls Mutex::lock() on the @ref Qore::Thread::Mutex "Mutex" object passed, and saves it; Mutex::unlock() is called in the destructor if the lock is still held by the current thread.
- 
+
     @par Example:
     @code{.py}
 {
@@ -77,8 +78,33 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
 
     @throw LOCK-ERROR lock called twice in the same thread, @ref Qore::Thread::Mutex "Mutex" object has already been deleted in another thread, etc
     @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoLock::constructor(Mutex[SmartMutex] mutex) {
+   // Check for sandbox interrupt - use polling if sandbox manager exists
+   QoreSandboxManager* sm = runtime_get_sandbox_manager();
+   if (sm) {
+      const int poll_ms = 500;  // 500ms polling interval
+      while (true) {
+         if (sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
+            return;
+         }
+         int rc = mutex->grab(xsink, poll_ms);
+         if (*xsink) {
+            return;  // Error occurred
+         }
+         if (rc == 0) {
+            // Lock acquired - create the AutoLock object with already-locked mutex
+            QoreAutoLock *qsl = new QoreAutoLock(mutex);
+            self->setPrivate(CID_AUTOLOCK, qsl);
+            return;
+         }
+         // rc != 0 means timeout, loop and check interrupt again
+      }
+   }
    QoreAutoLock *qsl = new QoreAutoLock(mutex, xsink);
    if (*xsink)
       qsl->deref(xsink);

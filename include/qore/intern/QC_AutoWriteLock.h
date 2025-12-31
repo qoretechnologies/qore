@@ -49,6 +49,10 @@ public:
       rwl->grab(xsink);
    }
 
+   // Constructor for when lock is already held (used by polling implementation)
+   DLLLOCAL QoreAutoWriteLock(RWLock *n_rwl) : rwl(n_rwl) {
+   }
+
    using AbstractPrivateData::deref;
    DLLLOCAL virtual void deref(ExceptionSink *xsink) {
       if (ROdereference()) {
