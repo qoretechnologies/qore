@@ -1,0 +1,749 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypeNarrowingTest
+
+public class TypeNarrowingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TypeNarrowingTest", "1.0") {
+        addTestCase("hash<auto> basic narrowing", \hashAutoBasicTest());
+        addTestCase("list<auto> basic narrowing", \listAutoBasicTest());
+        addTestCase("hash<auto> compatible assignment", \hashAutoCompatibleTest());
+        addTestCase("list<auto> compatible assignment", \listAutoCompatibleTest());
+        addTestCase("pure auto not narrowed", \pureAutoNotNarrowedTest());
+        addTestCase("hash<auto> multiple assignments", \hashAutoMultipleAssignmentsTest());
+        addTestCase("list<auto> multiple assignments", \listAutoMultipleAssignmentsTest());
+        addTestCase("nested hash<auto>", \nestedHashAutoTest());
+        addTestCase("hash<auto> with different value types", \hashAutoDifferentValuesTest());
+        addTestCase("list<auto> append operations", \listAutoAppendTest());
+        addTestCase("softlist<auto> narrowing", \softlistAutoTest());
+        addTestCase("hash<auto> slice operations", \hashAutoSliceTest());
+        addTestCase("empty hash<auto> initialization", \emptyHashAutoTest());
+        addTestCase("empty list<auto> initialization", \emptyListAutoTest());
+        addTestCase("hash<auto> with complex values", \hashAutoComplexValuesTest());
+        addTestCase("type narrowing parse error detection", \parseErrorDetectionTest());
+        addTestCase("broken-narrowed-types option", \brokenNarrowedTypesTest());
+        addTestCase("hash<auto> with nothing values", \hashAutoNothingTest());
+        addTestCase("list<auto> with nothing values", \listAutoNothingTest());
+        addTestCase("*hash<auto> or-nothing type", \hashAutoOrNothingTest());
+        addTestCase("*list<auto> or-nothing type", \listAutoOrNothingTest());
+        addTestCase("hash<auto> key deletion", \hashAutoKeyDeletionTest());
+        addTestCase("list<auto> element operations", \listAutoElementOpsTest());
+        addTestCase("global hash<auto> variable", \globalHashAutoTest());
+        addTestCase("branch type reset", \branchTypeResetTest());
+        addTestCase("branch type merge same", \branchTypeMergeSameTest());
+        addTestCase("branch type merge compatible", \branchTypeMergeCompatibleTest());
+        addTestCase("branch type merge incompatible", \branchTypeMergeIncompatibleTest());
+        addTestCase("branch no else", \branchNoElseTest());
+        addTestCase("switch type merge same", \switchTypeMergeSameTest());
+        addTestCase("switch type merge incompatible", \switchTypeMergeIncompatibleTest());
+        addTestCase("switch no default", \switchNoDefaultTest());
+        addTestCase("switch with default", \switchWithDefaultTest());
+        addTestCase("closure variable narrowing", \closureVarNarrowingTest());
+
+        set_return_value(main());
+    }
+
+    # Basic hash<auto> narrowing - value type should be tracked
+    hashAutoBasicTest() {
+        hash<auto> h = {"a": "b", "c": "d"};
+        assertEq("string", h.a.type());
+        assertEq("b", h.a);
+
+        # Compatible assignment should work
+        h.e = "f";
+        assertEq("f", h.e);
+    }
+
+    # Basic list<auto> narrowing - element type should be tracked
+    listAutoBasicTest() {
+        list<auto> l = (1, 2, 3);
+        assertEq("integer", l[0].type());
+        assertEq(1, l[0]);
+
+        # Compatible assignment should work
+        l[0] = 100;
+        assertEq(100, l[0]);
+    }
+
+    # Hash with compatible string assignments
+    hashAutoCompatibleTest() {
+        hash<auto> h = {"key1": "value1"};
+        h.key2 = "value2";
+        h{"key3"} = "value3";
+
+        assertEq("value1", h.key1);
+        assertEq("value2", h.key2);
+        assertEq("value3", h.key3);
+        assertEq(3, h.size());
+    }
+
+    # List with compatible int assignments
+    listAutoCompatibleTest() {
+        list<auto> l = (10, 20, 30);
+        l[0] = 100;
+        l[1] = 200;
+        l += 40;
+
+        assertEq(100, l[0]);
+        assertEq(200, l[1]);
+        assertEq(30, l[2]);
+        assertEq(40, l[3]);
+    }
+
+    # Pure auto should NOT be narrowed - can hold any type
+    pureAutoNotNarrowedTest() {
+        auto v;
+        v = {"a": "b"};
+        assertEq("hash", v.type());
+
+        v = (1, 2, 3);
+        assertEq("list", v.type());
+
+        v = "string";
+        assertEq("string", v.type());
+
+        v = 42;
+        assertEq("integer", v.type());
+    }
+
+    # Multiple assignments to hash<auto> should work if compatible
+    hashAutoMultipleAssignmentsTest() {
+        hash<auto> h = {"a": "first"};
+        h.a = "second";
+        h.a = "third";
+        h.b = "new";
+
+        assertEq("third", h.a);
+        assertEq("new", h.b);
+    }
+
+    # Multiple assignments to list<auto> should work if compatible
+    listAutoMultipleAssignmentsTest() {
+        list<auto> l = (1,);
+        l[0] = 2;
+        l[0] = 3;
+        l += 4;
+        l += 5;
+
+        assertEq(3, l[0]);
+        assertEq(4, l[1]);
+        assertEq(5, l[2]);
+    }
+
+    # Nested hash structures
+    nestedHashAutoTest() {
+        hash<auto> outer = {
+            "inner": {
+                "key": "value"
+            }
+        };
+
+        assertEq("hash", outer.inner.type());
+        assertEq("value", outer.inner.key);
+
+        # Assign to nested key
+        outer.inner.key2 = "value2";
+        assertEq("value2", outer.inner.key2);
+    }
+
+    # Hash with different initial value types
+    hashAutoDifferentValuesTest() {
+        # Hash with int values
+        hash<auto> h1 = {"a": 1, "b": 2};
+        assertEq(1, h1.a);
+        h1.c = 3;
+        assertEq(3, h1.c);
+
+        # Hash with float values
+        hash<auto> h2 = {"x": 1.5, "y": 2.5};
+        assertEq(1.5, h2.x);
+        h2.z = 3.5;
+        assertEq(3.5, h2.z);
+
+        # Hash with bool values
+        hash<auto> h3 = {"t": True, "f": False};
+        assertEq(True, h3.t);
+        h3.u = True;
+        assertEq(True, h3.u);
+    }
+
+    # List append operations
+    listAutoAppendTest() {
+        list<auto> l = (1, 2);
+        l += 3;
+        l += (4, 5);
+        push l, 6;
+
+        assertEq((1, 2, 3, 4, 5, 6), l);
+    }
+
+    # softlist<auto> is NOT narrowed at parse time because it accepts scalar values
+    # that get automatically converted to lists, making type narrowing incorrect.
+    # However, runtime type checking still applies.
+    softlistAutoTest() {
+        softlist<auto> sl = (1, 2, 3);
+        assertEq(1, sl[0]);
+
+        # Compatible assignment works
+        sl[0] = 100;
+        assertEq(100, sl[0]);
+
+        # Note: runtime type checking still enforces element types
+        # even though parse-time narrowing is disabled for softlist<auto>
+    }
+
+    # Hash slice operations
+    hashAutoSliceTest() {
+        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+        hash slice = h{("a", "b")};
+
+        assertEq(1, slice.a);
+        assertEq(2, slice.b);
+        assertFalse(slice.hasKey("c"));
+    }
+
+    # Empty hash initialization
+    emptyHashAutoTest() {
+        hash<auto> h = {};
+        assertEq(0, h.size());
+
+        # Can assign any type to empty hash
+        h.a = "string";
+        assertEq("string", h.a);
+    }
+
+    # Empty list initialization
+    emptyListAutoTest() {
+        list<auto> l = ();
+        assertEq(0, l.size());
+
+        # Can assign any type to empty list
+        l += 1;
+        assertEq(1, l[0]);
+    }
+
+    # Hash with complex value types
+    hashAutoComplexValuesTest() {
+        # Hash of lists
+        hash<auto> h1 = {"a": (1, 2, 3), "b": (4, 5, 6)};
+        assertEq((1, 2, 3), h1.a);
+        h1.c = (7, 8, 9);
+        assertEq((7, 8, 9), h1.c);
+
+        # Hash of hashes
+        hash<auto> h2 = {"a": {"x": 1}, "b": {"y": 2}};
+        assertEq(1, h2.a.x);
+        h2.c = {"z": 3};
+        assertEq(3, h2.c.z);
+    }
+
+    # Test that parse errors are detected for type mismatches
+    parseErrorDetectionTest() {
+        # This test verifies that parse errors are raised for incompatible assignments
+        # We use Program to test parse-time behavior
+
+        # Should fail: assigning int to hash<string, string>
+        string code1 = "%new-style
+sub test() {
+    hash<auto> h = {\"a\": \"b\"};
+    h.c = 1;
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() { Program p(); p.parse(code1, "test1"); });
+
+        # Should fail: assigning string to list<int>
+        string code2 = "%new-style
+sub test() {
+    list<auto> l = (1, 2, 3);
+    l[0] = \"x\";
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() { Program p(); p.parse(code2, "test2"); });
+
+        # Should succeed: compatible assignment
+        string code3 = "%new-style
+sub test() {
+    hash<auto> h = {\"a\": \"b\"};
+    h.c = \"d\";
+}
+";
+        {
+            Program p();
+            p.parse(code3, "test3");
+            # No exception means success
+        }
+
+        # Should succeed: compatible list assignment
+        string code4 = "%new-style
+sub test() {
+    list<auto> l = (1, 2, 3);
+    l[0] = 100;
+}
+";
+        {
+            Program p();
+            p.parse(code4, "test4");
+            # No exception means success
+        }
+    }
+
+    # Test %broken-narrowed-types option
+    brokenNarrowedTypesTest() {
+        # With %broken-narrowed-types, parse errors should not be raised
+        string code = "%new-style
+%broken-narrowed-types
+sub test() {
+    hash<auto> h = {\"a\": \"b\"};
+    h.c = 1;
+}
+";
+
+        # Should parse without error (runtime error would occur if executed)
+        {
+            Program p();
+            p.parse(code, "test_broken");
+            # No exception means the parse succeeded
+        }
+
+        # Verify the directive is recognized
+        string code2 = "%new-style
+%broken-narrowed-types
+%correct-narrowed-types
+sub test() {
+    hash<auto> h = {\"a\": \"b\"};
+    h.c = 1;
+}
+";
+        # With %correct-narrowed-types after %broken-narrowed-types, error should be raised
+        assertThrows("PARSE-TYPE-ERROR", sub() { Program p(); p.parse(code2, "test_correct"); });
+    }
+
+    hashAutoNothingTest() {
+        # Hash with only string values should narrow to hash<string, string>
+        hash<auto> h = {"a": "x", "b": "y"};
+        assertEq("x", h.a);
+        assertEq("y", h.b);
+
+        # NOTHING is accepted by any type in Qore (converts to default value at runtime)
+        # So this should parse successfully
+        string code = "%new-style
+sub test() {
+    hash<auto> h = {\"a\": \"b\"};
+    h.c = NOTHING;
+}
+";
+        # Should parse without error - NOTHING is compatible with any type
+        {
+            Program p();
+            p.parse(code, "test_nothing");
+        }
+    }
+
+    listAutoNothingTest() {
+        # List with ints should narrow to list<int>
+        list<auto> l = (1, 2, 3);
+        assertEq(1, l[0]);
+        assertEq(2, l[1]);
+        assertEq(3, l[2]);
+
+        # NOTHING is accepted by any type in Qore
+        string code = "%new-style
+sub test() {
+    list<auto> l = (1, 2, 3);
+    l[0] = NOTHING;
+}
+";
+        # Should parse without error - NOTHING is compatible with any type
+        {
+            Program p();
+            p.parse(code, "test_list_nothing");
+        }
+    }
+
+    hashAutoOrNothingTest() {
+        # Test or-nothing hash variable
+        *hash<auto> h;
+        assertEq(NOTHING, h);
+
+        # After assignment, can still read values
+        h = {"a": "b"};
+        assertEq("b", h.a);
+
+        # Note: assigning NOTHING to *hash<auto> after narrowing requires
+        # preserving the or-nothing aspect during narrowing (future enhancement)
+    }
+
+    listAutoOrNothingTest() {
+        # Test or-nothing list variable
+        *list<auto> l;
+        assertEq(NOTHING, l);
+
+        # After assignment, can still read values
+        l = (1, 2, 3);
+        assertEq(1, l[0]);
+
+        # Note: assigning NOTHING to *list<auto> after narrowing requires
+        # preserving the or-nothing aspect during narrowing (future enhancement)
+    }
+
+    hashAutoKeyDeletionTest() {
+        hash<auto> h = {"a": "x", "b": "y", "c": "z"};
+        assertEq(3, h.size());
+
+        remove h.b;
+        assertEq(2, h.size());
+        assertFalse(h.hasKey("b"));
+
+        # Can still add keys after deletion
+        h.d = "w";
+        assertEq(3, h.size());
+        assertEq("w", h.d);
+    }
+
+    listAutoElementOpsTest() {
+        list<auto> l = (1, 2, 3);
+
+        # pop element
+        int popped = pop l;
+        assertEq(3, popped);
+        assertEq(2, l.size());
+
+        # shift element
+        int shifted = shift l;
+        assertEq(1, shifted);
+        assertEq(1, l.size());
+
+        # push element
+        push l, 10;
+        assertEq(2, l.size());
+        assertEq(10, l[1]);
+
+        # unshift element
+        unshift l, 0;
+        assertEq(3, l.size());
+        assertEq(0, l[0]);
+    }
+
+    globalHashAutoTest() {
+        # Test that global variable narrowing works via the VT_GLOBAL code path
+        # Note: Static class members use a different code path and are not currently narrowed
+        # This test verifies the behavior with function-scope variables which ARE narrowed
+
+        # Test that narrowing works properly in a function context
+        # Should fail: assigning string to hash<string, int>
+        string code1 = "%new-style
+sub test() {
+    hash<auto> gh = {\"x\": 1, \"y\": 2};
+    gh.z = \"invalid\";
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse(code1, "global_test1");
+        });
+
+        # Should succeed: compatible int assignment
+        string code2 = "%new-style
+sub test() {
+    hash<auto> gh = {\"x\": 1, \"y\": 2};
+    gh.z = 3;
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code2, "global_test2");
+            # No exception means success
+        }
+    }
+
+    # Test branch type tracking - variable narrowed in if branch resets after
+    branchTypeResetTest() {
+        # Test that narrowing inside a branch doesn't affect code after
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    if (True) {
+        h = {\"a\": \"b\"};
+        # Inside branch, h is narrowed to hash<string, string>
+    }
+    # After branch, h should be back to hash<auto>
+    h.x = 1;  # Should work - hash<auto> accepts any value
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "branch_reset_test");
+            # No parse error means the narrowing was reset after the branch
+        }
+    }
+
+    # Test branch type merging - same type in both branches
+    branchTypeMergeSameTest() {
+        # When both branches narrow to same type, that type should persist
+        string code = "%new-style
+sub test() {
+    hash<auto> h;
+    if (True) {
+        h = {\"a\": \"x\"};
+    } else {
+        h = {\"b\": \"y\"};
+    }
+    # Both branches narrowed to hash<string, string>
+    # After merge, should still be hash<string, string>
+    h.c = 1;  # Should fail - int not compatible with string
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "branch_merge_same_test");
+        });
+    }
+
+    # Test compatible branch merge
+    branchTypeMergeCompatibleTest() {
+        # When both branches narrow to compatible types, the common type should persist
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    if (True) {
+        h = {\"a\": \"x\"};
+    } else {
+        h = {\"b\": \"y\"};
+    }
+    # Both branches narrowed to hash<string, string>
+    h.c = \"z\";  # Should work - string compatible
+    return h.c;
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "branch_merge_compatible_test");
+            # No parse error means merge worked correctly
+        }
+    }
+
+    # Test incompatible branch type merge - should reset to original type
+    branchTypeMergeIncompatibleTest() {
+        # When branches narrow to incompatible types, should reset to original
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    if (True) {
+        h = {\"a\": \"x\"};  # narrows to hash<string, string>
+    } else {
+        h = {\"b\": 1};  # narrows to hash<string, int>
+    }
+    # Branches have incompatible types, should reset to hash<auto>
+    h.c = True;  # Should work - hash<auto> accepts any value
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "branch_merge_incompatible_test");
+            # No parse error means narrowing was reset
+        }
+    }
+
+    # Test no else branch - original narrowing persists
+    branchNoElseTest() {
+        # With no else branch, the original narrowed type persists
+        # because the "else" path (implicit) doesn't change the type
+        string code = "%new-style
+string sub test() {
+    hash<auto> h = {\"x\": 1};  # initially narrowed to hash<string, int>
+    if (True) {
+        h.y = 2;  # compatible assignment inside if branch
+    }
+    # No else branch - original narrowing persists
+    h.z = 3;  # Should work - still hash<string, int>
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "branch_no_else_test");
+        }
+
+        # Test that original narrowing blocks incompatible assignments after if
+        string code2 = "%new-style
+sub test() {
+    hash<auto> h = {\"x\": 1};  # initially narrowed to hash<string, int>
+    if (True) {
+        h.y = 2;
+    }
+    h.z = \"wrong\";  # Should fail - type is still hash<string, int>
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse(code2, "branch_no_else_test2");
+        });
+    }
+
+    # Test switch - all cases narrow to same type
+    switchTypeMergeSameTest() {
+        # When all cases narrow to same type, that type should persist after switch
+        string code = "%new-style
+sub test() {
+    hash<auto> h;
+    int x = 1;
+    switch (x) {
+        case 1:
+            h = {\"a\": \"x\"};
+            break;
+        case 2:
+            h = {\"b\": \"y\"};
+            break;
+        default:
+            h = {\"c\": \"z\"};
+            break;
+    }
+    # All cases narrowed to hash<string, string>
+    h.d = 1;  # Should fail - int not compatible with string
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "switch_merge_same_test");
+        });
+    }
+
+    # Test switch - cases narrow to incompatible types
+    switchTypeMergeIncompatibleTest() {
+        # When cases narrow to incompatible types, should reset to original
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    int x = 1;
+    switch (x) {
+        case 1:
+            h = {\"a\": \"x\"};  # narrows to hash<string, string>
+            break;
+        case 2:
+            h = {\"b\": 1};  # narrows to hash<string, int>
+            break;
+        default:
+            h = {\"c\": True};  # narrows to hash<string, bool>
+            break;
+    }
+    # Cases have incompatible types, should reset to hash<auto>
+    h.d = 42;  # Should work - hash<auto> accepts any value
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "switch_merge_incompatible_test");
+            # No parse error means narrowing was reset
+        }
+    }
+
+    # Test switch without default - original narrowing preserved
+    switchNoDefaultTest() {
+        # With no default case, the implicit "no match" path preserves original type
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    int x = 1;
+    switch (x) {
+        case 1:
+            h = {\"a\": \"x\"};
+            break;
+        case 2:
+            h = {\"b\": \"y\"};
+            break;
+    }
+    # No default - implicit path preserves hash<auto>
+    # Even though cases narrowed to hash<string, string>, overall is hash<auto>
+    h.d = 42;  # Should work - hash<auto> accepts any value
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "switch_no_default_test");
+            # No parse error means type was reset due to implicit branch
+        }
+    }
+
+    # Test switch with default - only explicit branches matter
+    switchWithDefaultTest() {
+        # With default case, all paths are covered by explicit branches
+        string code = "%new-style
+string sub test() {
+    hash<auto> h;
+    int x = 1;
+    switch (x) {
+        case 1:
+            h = {\"a\": \"x\"};
+            break;
+        case 2:
+            h = {\"b\": \"y\"};
+            break;
+        default:
+            h = {\"c\": \"z\"};
+            break;
+    }
+    # With default, all paths narrow to hash<string, string>
+    h.d = \"w\";  # Should work - string compatible
+    return \"ok\";
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code, "switch_with_default_test");
+            # No parse error means merge worked correctly
+        }
+    }
+
+    # Test closure variable narrowing
+    closureVarNarrowingTest() {
+        # Closure variables should be narrowed correctly
+        string code1 = "%new-style
+auto sub test() {
+    code c;
+    {
+        hash<auto> h = {\"a\": \"b\"};
+        c = auto sub() {
+            h.c = \"d\";  # should work - string compatible
+            return h;
+        };
+    }
+    return c();
+}
+";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(code1, "closure_narrowing_ok");
+            # No parse error means narrowing works in closures
+        }
+
+        # Type error in closure should be caught at parse time
+        string code2 = "%new-style
+auto sub test() {
+    code c;
+    {
+        hash<auto> h = {\"a\": \"b\"};
+        c = auto sub() {
+            h.c = 1;  # should fail - int not compatible with string
+            return h;
+        };
+    }
+    return c();
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse(code2, "closure_narrowing_error");
+        });
+    }
+}

@@ -109,6 +109,8 @@ private:
     QoreParseTypeInfo* parseTypeInfo = nullptr;
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
+    const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment
+    bool is_auto_type = false;          // true if declared type is an auto type
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
     bool is_thread_local;               // is this a thread_local var?
@@ -261,12 +263,17 @@ public:
             val.set(typeInfo);
         }
 
+        // Set is_auto_type flag based on the resolved typeInfo
+        is_auto_type = isAutoTypeInfo(typeInfo);
+
         if ((getProgram()->getParseOptions64() & PO_STRICT_TYPES) && !val.hasValue()) {
             discard(val.assignInitial(QoreTypeInfo::getDefaultQoreValue(typeInfo)), nullptr);
         }
 
         return err;
     }
+
+    DLLLOCAL static bool isAutoTypeInfo(const QoreTypeInfo* ti);
 
     DLLLOCAL QoreParseTypeInfo* copyParseTypeInfo() const {
         return parseTypeInfo ? parseTypeInfo->copy() : nullptr;
@@ -296,6 +303,21 @@ public:
 
     DLLLOCAL const QoreProgramLocation* getParseLocation() const {
         return loc;
+    }
+
+    DLLLOCAL bool isAutoType() const {
+        return is_auto_type;
+    }
+
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+    DLLLOCAL void parseMergeNarrowedType(const QoreTypeInfo* ti);
+
+    DLLLOCAL const QoreTypeInfo* parseGetNarrowedType() const {
+        return narrowedTypeInfo;
+    }
+
+    DLLLOCAL void parseResetNarrowedType() {
+        narrowedTypeInfo = nullptr;
     }
 };
 

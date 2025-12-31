@@ -1032,7 +1032,8 @@ public class OpenApi3Test inherits QUnit::Test {
             {
                 OpenApi3Schema so("", soh);
                 string uri_path = "/test?float=1.1&dt=1726733382";
-                hash<auto> hdr = {"Test-Header": "Test"};
+                # Use += to avoid type narrowing; parseRequest takes reference<hash<auto>>
+                hash<auto> hdr += {"Test-Header": "Test"};
                 hash<RestRequestServerInfo> req = so.parseRequest("GET", uri_path, NOTHING, \hdr);
                 assertEq(Type::Float, req.query."float".type());
                 assertEq(2024-09-19T10:09:42, req.query.dt);
@@ -1316,7 +1317,8 @@ public class OpenApi3Test inherits QUnit::Test {
         hash oh = OpenApi3Loader::parseSchemaContent(filePath, ReadOnlyFile::readTextFile(filePath));
         OperationObject op = new OperationObject("/create", "post", oh.paths."/create".post, openapi3);
         string body = "body";
-        hash<auto> headers = {"header": "header"};
+        # Use += to avoid type narrowing; validateRequest takes reference<hash>
+        hash<auto> headers += {"header": "header"};
 
         assertThrows("SCHEMA-VALIDATION-ERROR",
             'Parameter \"formData.upfile\".*expected type is \"string\"',
@@ -3249,7 +3251,8 @@ public class OpenApi3Test inherits QUnit::Test {
             #printf("h: %y\n", h);
 
             {
-                hash<auto> hdr = ("content-type": h.content);
+                # Use += to avoid type narrowing; parseRequest takes reference<hash<auto>>
+                hash<auto> hdr += ("content-type": h.content);
                 hash<RestRequestServerInfo> sh = so.parseRequest("post", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);

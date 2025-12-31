@@ -282,9 +282,12 @@ public class OverloadTest inherits QUnit::Test {
     }
 
     issue3441() {
+        # With type narrowing, hash<auto> h = <StatInfo>{} narrows to hash<StatInfo>
+        # and the type mismatch is caught at parse time, not runtime
         Program p(PO_NEW_STYLE);
-        p.parse("sub t(hash<string, bool> h) {} sub t(int x) {} hash<auto> h = <StatInfo>{}; t(h);", "");
-        assertThrows("RUNTIME-OVERLOAD-ERROR", "t\\(hash<.*StatInfo>\\)", \p.run());
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            p.parse("sub t(hash<string, bool> h) {} sub t(int x) {} hash<auto> h = <StatInfo>{}; t(h);", "");
+        });
     }
 
     testValues() {

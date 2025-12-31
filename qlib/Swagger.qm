@@ -396,12 +396,12 @@ const JsonSerialization = {
 %endif
 
 #! supported mime types for de/serializing data
-public const MimeDataTypes = (
+public const MimeDataTypes =
 %ifndef NoJson
-    # JSON-compatible MIME types from centralized list
-    map {$1: JsonSerialization}, keys MimeTypesJson,
+    # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
+    (foldl $1 + $2, (map {$1: JsonSerialization}, keys MimeTypesJson)) +
 %endif
-) + {
+{
 %ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
     MimeTypeYaml: YamlSerialization,

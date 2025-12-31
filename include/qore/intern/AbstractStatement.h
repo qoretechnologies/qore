@@ -48,6 +48,7 @@
 #define PF_BREAK_OK              (1 << 6)
 #define PF_CONTINUE_OK           (1 << 7)
 #define PF_NO_TOP_LEVEL_LVARS    (1 << 8)
+#define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 
 // all definitions in this file are private to the library and subject to change
 // forward references

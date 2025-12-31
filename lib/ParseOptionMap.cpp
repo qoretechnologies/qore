@@ -82,6 +82,7 @@ void ParseOptionMap::static_init() {
     DO_MAP("broken-int-assignments",   PO_BROKEN_INT_ASSIGNMENTS);
     DO_MAP("broken-operators",         PO_BROKEN_OPERATORS);
     DO_MAP("broken-loop-statement",    PO_BROKEN_LOOP_STATEMENT);
+    DO_MAP("broken-narrowed-types",    PO_BROKEN_NARROWED_TYPES);
     DO_MAP("strong-encapsulation",     PO_STRONG_ENCAPSULATION);
     DO_MAP("no-uncontrolled-apis",     PO_NO_UNCONTROLLED_APIS);
     DO_MAP("no-debugging",             PO_NO_DEBUGGING);

@@ -311,4 +311,44 @@ public:
     }
 };
 
+//! Helper class to save and restore narrowed types for branch tracking
+/** This class is used during if/else and switch statement parsing to track
+    narrowed types across branches. It saves the current narrowed types before
+    parsing a branch and can restore them after, allowing each branch to
+    have independent type narrowing while ensuring the correct merged type
+    is used after the branching statement.
+*/
+class NarrowedTypeHelper {
+private:
+    typedef std::vector<std::pair<LocalVar*, const QoreTypeInfo*>> type_map_t;
+    type_map_t saved_types;
+    std::vector<type_map_t> branch_types;
+
+public:
+    //! Save the current narrowed types of all local auto variables
+    DLLLOCAL void saveState();
+
+    //! Restore the narrowed types to the saved state
+    DLLLOCAL void restoreState();
+
+    //! Record current branch types and restore to saved state
+    /** Call this after parsing each branch to record its final types
+        and restore to the pre-branch state for the next branch
+    */
+    DLLLOCAL void recordBranchAndRestore();
+
+    //! Merge all recorded branch types and apply the common type
+    /** Call this after all branches have been parsed to compute and
+        apply the common type across all branches
+    */
+    DLLLOCAL void mergeAndApply();
+
+    //! Record the saved state as an implicit branch (for if without else)
+    /** When there is no else branch, the implicit else path preserves the
+        original types. This method records the saved types as a branch so
+        that mergeAndApply() considers both paths.
+    */
+    DLLLOCAL void recordSavedAsImplicitBranch();
+};
+
 #endif // _QORE_STATEMENT_BLOCK_H

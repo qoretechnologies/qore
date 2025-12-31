@@ -156,11 +156,11 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         list<string> l = FileLocationHandler::getHandlerNames();
         assertGt(0, l.size());
 
-        hash<auto> h = FileLocationHandler::getHandlers();
-        assertGt(0, h.size());
+        hash<auto> handlers = FileLocationHandler::getHandlers();
+        assertGt(0, handlers.size());
 
-        h = FileLocationHandler::getHandlerInfo("http");
-        assertEq("http", h.scheme);
+        hash<auto> info = FileLocationHandler::getHandlerInfo("http");
+        assertEq("http", info.scheme);
     }
 
     private dataTests() {

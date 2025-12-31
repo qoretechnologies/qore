@@ -349,12 +349,13 @@ public:
 class LocalVar {
 public:
     DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti)
-            : name(n_name), typeInfo(ti), refTypeInfo(QoreTypeInfo::getReferenceTarget(ti)) {
+            : name(n_name), is_auto_type(isAutoTypeInfo(ti)), typeInfo(ti),
+              refTypeInfo(QoreTypeInfo::getReferenceTarget(ti)) {
     }
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
-            parse_assigned(old.parse_assigned), is_self(old.is_self), typeInfo(old.typeInfo),
-            refTypeInfo(old.refTypeInfo) {
+            parse_assigned(old.parse_assigned), is_self(old.is_self), is_auto_type(old.is_auto_type),
+            typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo), narrowedTypeInfo(old.narrowedTypeInfo) {
     }
 
     DLLLOCAL ~LocalVar() {
@@ -496,7 +497,26 @@ public:
     }
 
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
-        return parse_assigned && refTypeInfo ? refTypeInfo : typeInfo;
+        // If this is a reference type with a target type, return that
+        if (parse_assigned && refTypeInfo) {
+            return refTypeInfo;
+        }
+        // If this is an auto type with a narrowed type, return the narrowed type
+        // unless PO_BROKEN_NARROWED_TYPES is set
+        // NOTE: For or-nothing types (types that can return NOTHING), we don't return
+        // the narrowed type because narrowing loses the or-nothing semantics which are
+        // important for type checking
+        if (is_auto_type && narrowedTypeInfo) {
+            QoreProgram* pgm = getProgram();
+            if (!pgm || !(pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES)) {
+                // Don't return narrowed type if declared type is or-nothing
+                if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
+                    return typeInfo;
+                }
+                return narrowedTypeInfo;
+            }
+        }
+        return typeInfo;
     }
 
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfoForInitialAssignment() const {
@@ -521,17 +541,50 @@ public:
         is_self = true;
     }
 
+    //! Returns true if the variable has an auto type that can be narrowed
+    DLLLOCAL bool isAutoType() const {
+        return is_auto_type;
+    }
+
+    //! Sets the narrowed type for the variable (called during assignment parsing)
+    /** Only sets if this is an auto-typed variable and the new type is more specific
+        @param ti the type from the right-hand side of the assignment
+    */
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+
+    //! Merges the given type with the current narrowed type (for branch handling)
+    /** Uses matchCommonType to find the union type between the current narrowed type
+        and the new type
+        @param ti the type to merge with the current narrowed type
+    */
+    DLLLOCAL void parseMergeNarrowedType(const QoreTypeInfo* ti);
+
+    //! Returns the narrowed type if set, otherwise nullptr
+    DLLLOCAL const QoreTypeInfo* parseGetNarrowedType() const {
+        return narrowedTypeInfo;
+    }
+
+    //! Resets the narrowed type (e.g., when entering a new scope)
+    DLLLOCAL void parseResetNarrowedType() {
+        narrowedTypeInfo = nullptr;
+    }
+
 private:
     std::string name;
     bool closure_use = false,
         parse_assigned = false,
-        is_self = false;
+        is_self = false,
+        is_auto_type = false;       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
+    const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_find_lvar(name.c_str());
     }
+
+    //! Helper to detect if a type is an auto type that can be narrowed
+    DLLLOCAL static bool isAutoTypeInfo(const QoreTypeInfo* ti);
 };
 
 typedef LocalVar* lvar_ptr_t;

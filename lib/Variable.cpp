@@ -133,6 +133,22 @@ const QoreTypeInfo* Var::parseGetTypeInfo() {
         return val.v.getPtr()->getTypeInfo();
 
     parseInit();
+
+    // Return narrowed type if available for auto-typed variables
+    // unless PO_BROKEN_NARROWED_TYPES is set
+    // NOTE: For or-nothing types (types that can return NOTHING), we don't return
+    // the narrowed type because narrowing loses the or-nothing semantics which are
+    // important for type checking
+    if (is_auto_type && narrowedTypeInfo) {
+        QoreProgram* pgm = getProgram();
+        if (!pgm || !(pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES)) {
+            // Don't return narrowed type if declared type is or-nothing
+            if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
+                return refTypeInfo ? refTypeInfo : typeInfo;
+            }
+            return narrowedTypeInfo;
+        }
+    }
     return refTypeInfo ? refTypeInfo : typeInfo;
 }
 
@@ -2217,4 +2233,109 @@ AbstractQoreNode* ClosureVarValue::getReference(const QoreProgramLocation* loc, 
 
     //printd(5, "ClosureVarValue::getReference() this: %p '%s' closure lvalue_id: %p\n", this, name, lvalue_id);
     return new VarRefImmediateNode(loc, strdup(name), this, typeInfo);
+}
+
+// LocalVar type narrowing methods
+
+bool LocalVar::isAutoTypeInfo(const QoreTypeInfo* ti) {
+    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Note: softlist<auto> is excluded because it accepts scalar values that get
+    // automatically converted to lists, making straightforward type narrowing incorrect
+    if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
+        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
+        return true;
+    }
+    // Check for complex types with auto element type (hash only, not list)
+    // List types are excluded because softlist accepts scalars
+    const QoreTypeInfo* elementType = QoreTypeInfo::getComplexHashValueType(ti);
+    if (elementType == autoTypeInfo) {
+        return true;
+    }
+    return false;
+}
+
+void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti) {
+    if (!is_auto_type) {
+        return;  // Only narrow auto types
+    }
+    // Don't narrow if the new type is also auto or unspecified
+    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+        return;
+    }
+    narrowedTypeInfo = ti;
+}
+
+void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
+    if (!is_auto_type) {
+        return;  // Only narrow auto types
+    }
+    // Don't merge if the new type is unspecified
+    if (!QoreTypeInfo::hasType(ti)) {
+        return;
+    }
+    if (!narrowedTypeInfo) {
+        narrowedTypeInfo = ti;
+        return;
+    }
+    // Use matchCommonType to find union type
+    // Note: matchCommonType modifies the first argument in place
+    const QoreTypeInfo* common = narrowedTypeInfo;
+    if (!QoreTypeInfo::matchCommonType(common, ti)) {
+        // Types are incompatible, fall back to auto
+        narrowedTypeInfo = nullptr;
+    } else {
+        narrowedTypeInfo = common;
+    }
+}
+
+// Var (global variable) narrowed type methods
+
+bool Var::isAutoTypeInfo(const QoreTypeInfo* ti) {
+    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Note: softlist<auto> is excluded because it accepts scalar values that get
+    // automatically converted to lists, making straightforward type narrowing incorrect
+    if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
+        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
+        return true;
+    }
+    // Check for complex types with auto element type (hash only, not list)
+    // List types are excluded because softlist accepts scalars
+    const QoreTypeInfo* elementType = QoreTypeInfo::getComplexHashValueType(ti);
+    if (elementType == autoTypeInfo) {
+        return true;
+    }
+    return false;
+}
+
+void Var::parseSetNarrowedType(const QoreTypeInfo* ti) {
+    if (!is_auto_type) {
+        return;  // Only narrow auto types
+    }
+    // Don't narrow if the new type is also auto or unspecified
+    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+        return;
+    }
+    narrowedTypeInfo = ti;
+}
+
+void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {
+    if (!is_auto_type) {
+        return;  // Only narrow auto types
+    }
+    // Don't merge if the new type is unspecified
+    if (!QoreTypeInfo::hasType(ti)) {
+        return;
+    }
+    if (!narrowedTypeInfo) {
+        narrowedTypeInfo = ti;
+        return;
+    }
+    // Use matchCommonType to find union type
+    const QoreTypeInfo* common = narrowedTypeInfo;
+    if (!QoreTypeInfo::matchCommonType(common, ti)) {
+        // Types are incompatible, fall back to auto
+        narrowedTypeInfo = nullptr;
+    } else {
+        narrowedTypeInfo = common;
+    }
 }

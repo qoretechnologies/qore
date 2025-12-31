@@ -995,11 +995,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%broken-loop-statement{WS}*$           parse_set_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT);
 ^%broken-int-assignments{WS}*$          parse_set_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
 ^%broken-operators{WS}*$                parse_set_parse_options(yylloc, PO_BROKEN_OPERATORS);
+^%broken-narrowed-types{WS}*$           parse_set_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
 ^%correct-list-parsing{WS}*$            parse_disable_parse_options(yylloc, PO_BROKEN_LIST_PARSING);
 ^%correct-logic-precedence{WS}*$        parse_disable_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE);
 ^%correct-loop-statement{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT);
 ^%correct-int-assignments{WS}*$         parse_disable_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
 ^%correct-operators{WS}*$               parse_disable_parse_options(yylloc, PO_BROKEN_OPERATORS);
+^%correct-narrowed-types{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
 ^%loose-args{WS}*$                      parse_disable_parse_options(yylloc, PO_STRICT_ARGS);
 ^%broken-range{WS}*$                    parse_set_parse_options(yylloc, PO_BROKEN_RANGE);
 ^%correct-range{WS}*$                   parse_disable_parse_options(yylloc, PO_BROKEN_RANGE);
