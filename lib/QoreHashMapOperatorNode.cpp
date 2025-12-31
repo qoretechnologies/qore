@@ -84,7 +84,10 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     const QoreTypeInfo* expTypeInfo2;
     {
         // set implicit argv arg type
-        ParseImplicitArgTypeHelper pia(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo));
+        const QoreTypeInfo* implicitArgType =
+            QoreTypeInfo::getImplicitArgTypeForIterator(e[2], iteratorTypeInfo);
+
+        ParseImplicitArgTypeHelper pia(implicitArgType);
 
         // check key expression
         parse_context.typeInfo = nullptr;

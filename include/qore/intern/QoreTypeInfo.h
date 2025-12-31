@@ -605,6 +605,43 @@ public:
             : ti->return_vec[0].spec.getComplexList();
     }
 
+    //! Returns the element type info for an iterator class based on source type
+    /** For HashPairIterator with source hash<string, int>: returns the type info for
+        hash<HashPairInfo> where HashPairInfo has key: string and value: int
+        For HashKeyIterator with source hash<string, int>: returns the type info for string
+        For HashIterator with source hash<string, int>: returns the type info for int (value type)
+        For ListIterator with source list<T>: returns the type info for T
+
+        @param iteratorClass the iterator class (e.g., HashPairIterator)
+        @param sourceTypeInfo the type of the source expression (e.g., hash<string, int>)
+        @return the element type info (QoreTypeInfo pointer), or nullptr if unknown
+
+        @since Qore 2.1
+    */
+    DLLLOCAL static const QoreTypeInfo* getIteratorElementType(const QoreClass* iteratorClass,
+        const QoreTypeInfo* sourceTypeInfo);
+
+    //! Returns the implicit argument type for a functional operator's iterator expression
+    /** This helper function extracts the implicit argument type from an iterator expression,
+        checking both list element types and iterator class element types.
+
+        @param iteratorExpr the iterator expression value (e.g., h.pairIterator())
+        @param iteratorTypeInfo the type info of the iterator expression
+        @return the implicit argument type for the iterator, or nullptr if unknown
+
+        @since Qore 2.1
+    */
+    DLLLOCAL static const QoreTypeInfo* getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
+        const QoreTypeInfo* iteratorTypeInfo);
+
+    //! Returns or creates a HashPairInfo type with the given value type
+    /** @param valueType the type for the "value" member
+        @return the HashPairInfo type with the specified value type
+
+        @since Qore 2.1
+    */
+    DLLLOCAL static const QoreTypeInfo* getHashPairType(const QoreTypeInfo* valueType);
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getUniqueReturnComplexSoftList(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.size() > 1 || !hasType(ti))

@@ -62,7 +62,10 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     {
         // set implicit argv arg type
         // FIXME: only works if the result of the fold operation results in the exact same type as the argument type
-        ParseImplicitArgTypeHelper pia(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo));
+        const QoreTypeInfo* implicitArgType =
+            QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
+
+        ParseImplicitArgTypeHelper pia(implicitArgType);
 
         parse_context.typeInfo = nullptr;
         if (parse_init_value(left, parse_context) && !err) {

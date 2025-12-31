@@ -66,6 +66,11 @@ public:
         return left;
     }
 
+    //! Returns the method call node
+    DLLLOCAL MethodCallNode* getMethodCall() const {
+        return m;
+    }
+
     DLLLOCAL void replaceExpression(QoreValue n_left) {
         left.discard(nullptr);
         left = n_left;

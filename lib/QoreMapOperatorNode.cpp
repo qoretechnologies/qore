@@ -90,7 +90,10 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     // check iterated expression
     {
         // set implicit argument type
-        ParseImplicitArgTypeHelper pia(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo));
+        const QoreTypeInfo* implicitArgType =
+            QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
+
+        ParseImplicitArgTypeHelper pia(implicitArgType);
         parse_context.typeInfo = nullptr;
         if (parse_init_value(left, parse_context) && !err) {
             err = -1;

@@ -60,8 +60,9 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
-    // get list element type, if any
-    const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo);
+    // get element type for the iterator (works for both list<T> and iterator classes)
+    const QoreTypeInfo* elementTypeInfo =
+        QoreTypeInfo::getImplicitArgTypeForIterator(left, iteratorTypeInfo);
 
     parse_context.typeInfo = nullptr;
     {
@@ -104,8 +105,9 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         parse_context.typeInfo = nullptr;
     }
 
+    // If we have element type info, create a properly typed list
     if (parse_context.typeInfo == listTypeInfo && elementTypeInfo) {
-        parse_context.typeInfo = iteratorTypeInfo;
+        parse_context.typeInfo = qore_get_complex_list_type(elementTypeInfo);
     }
 
     return err;

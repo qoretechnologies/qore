@@ -363,7 +363,7 @@ public:
 
     DLLLOCAL MethodCallNode(const MethodCallNode& old, QoreListNode* n_args)
             : AbstractMethodCallNode(old, n_args), c_str(old.c_str ? strdup(old.c_str) : nullptr),
-            pseudo(old.pseudo) {
+            pseudo(old.pseudo), sourceTypeInfo(old.sourceTypeInfo) {
     }
 
     DLLLOCAL virtual ~MethodCallNode() {
@@ -434,9 +434,22 @@ public:
         return pseudoTypeInfo;
     }
 
+    //! Sets the source type info (type of object the method is called on)
+    /** Used for iterator element type inference in map operators
+    */
+    DLLLOCAL void setSourceType(const QoreTypeInfo* ti) {
+        sourceTypeInfo = ti;
+    }
+
+    //! Returns the source type info (type of object the method is called on)
+    DLLLOCAL const QoreTypeInfo* getSourceType() const {
+        return sourceTypeInfo;
+    }
+
 protected:
     char* c_str;
     const QoreTypeInfo* pseudoTypeInfo = nullptr;
+    const QoreTypeInfo* sourceTypeInfo = nullptr;  //!< type of object the method is called on
     bool pseudo = false;
 
     using AbstractFunctionCallNode::evalImpl;
