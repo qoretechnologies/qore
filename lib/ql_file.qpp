@@ -460,11 +460,12 @@ nothing rename(string old_path, string new_path) [dom=FILESYSTEM] {
    // Check sandbox security restrictions
    QoreSandboxManager* sm = runtime_get_sandbox_manager();
    if (sm) {
-      // Need write access to source (for delete) and destination (for create)
+      // Need delete access to source
       if (!sm->checkFilesystemAccess(old_path->c_str(), QSEC_DELETE, xsink)) {
          return QoreValue();
       }
-      if (!sm->checkFilesystemAccess(new_path->c_str(), QSEC_CREATE, xsink)) {
+      // Need create and delete access to destination (delete because rename can overwrite existing files)
+      if (!sm->checkFilesystemAccess(new_path->c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
          return QoreValue();
       }
    }
