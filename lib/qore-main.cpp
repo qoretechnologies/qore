@@ -324,6 +324,18 @@ DLLEXPORT int JNI_OnLoad(void* vm, void* reserved) {
     ExceptionSink xsink;
     QoreProgramHelper qpgm(0, xsink);
     if (MM.runTimeLoadModule("jni", *qpgm, &xsink)) {
+        // output error information to help diagnose module loading failures
+        if (xsink.isException()) {
+            QoreStringNode* err = xsink.getExceptionErr();
+            QoreStringNode* desc = xsink.getExceptionDesc();
+            fprintf(stderr, "JNI_OnLoad: failed to load jni module: %s: %s\n",
+                err ? err->c_str() : "unknown error",
+                desc ? desc->c_str() : "no description");
+            fflush(stderr);
+        } else {
+            fprintf(stderr, "JNI_OnLoad: failed to load jni module (no exception info)\n");
+            fflush(stderr);
+        }
         return 0;
     }
 
