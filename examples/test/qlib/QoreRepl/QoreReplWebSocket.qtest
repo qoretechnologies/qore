@@ -29,22 +29,39 @@
 
 %requires QUnit
 %requires Logger
-%requires HttpServerUtil
-%requires HttpServerAsyncIo
-%requires HttpServer
-%requires WebSocketClient
-%requires QoreRepl
 
 %try-module json
 %define NoJson
+%endtry
+
+%try-module HttpServerUtil
+%define NoHttpServerUtil
+%endtry
+
+%try-module HttpServerAsyncIo
+%define NoHttpServerAsyncIo
+%endtry
+
+%try-module HttpServer
+%define NoHttpServer
+%endtry
+
+%try-module WebSocketClient
+%define NoWebSocketClient
+%endtry
+
+%try-module QoreRepl
+%define NoQoreRepl
 %endtry
 
 %exec-class QoreReplWebSocketTest
 
 public class QoreReplWebSocketTest inherits QUnit::Test {
     public {
+%if !defined(NoQoreRepl) && !defined(NoHttpServer)
         HttpServer server;
         QoreReplWebSocketHandler wsHandler;
+%endif
         Logger logger;
         int port;
     }
@@ -52,6 +69,21 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     private checkModule() {
 %ifdef NoJson
         testSkip("no json module");
+%endif
+%ifdef NoHttpServerUtil
+        testSkip("no HttpServerUtil module");
+%endif
+%ifdef NoHttpServerAsyncIo
+        testSkip("no HttpServerAsyncIo module");
+%endif
+%ifdef NoHttpServer
+        testSkip("no HttpServer module");
+%endif
+%ifdef NoWebSocketClient
+        testSkip("no WebSocketClient module");
+%endif
+%ifdef NoQoreRepl
+        testSkip("no QoreRepl module");
 %endif
     }
 
@@ -72,6 +104,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
             logger.addAppender(new StdoutAppender());
         }
 
+%if !defined(NoQoreRepl) && !defined(NoHttpServer)
         # Create handler
         wsHandler = new QoreReplWebSocketHandler(NOTHING, {
             "logger": logger,
@@ -85,14 +118,15 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("repl", "/ws/repl", NOTHING, wsHandler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit server.stop();
+%endif
 
         set_return_value(main());
-
-        server.stop();
     }
 
     testHandlerOptions() {
         checkModule();
+%if !defined(NoQoreRepl)
         # Test default values
         QoreReplWebSocketHandler h();
         assertEq(0, h.getMaxConnections(), "Default max connections should be 0");
@@ -113,10 +147,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
             new QoreReplWebSocketHandler(NOTHING, {"max_connections": -1});
         });
+%endif
     }
 
     testSessionConnection() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -142,10 +178,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
 
         wsc.disconnect();
+%endif
     }
 
     testEvalSimple() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -173,10 +211,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertEq("prompt", prompt_msg.type, "Should receive prompt");
 
         wsc.disconnect();
+%endif
     }
 
     testEvalError() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -208,10 +248,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertRegex("test error", error_msg.description, "Should have description");
 
         wsc.disconnect();
+%endif
     }
 
     testMultiLine() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -246,10 +288,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
 
         wsc.disconnect();
+%endif
     }
 
     testCommands() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -279,10 +323,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertRegex("Unknown command", error_msg.description, "Should mention unknown command");
 
         wsc.disconnect();
+%endif
     }
 
     testPingPong() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoWebSocketClient)
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -302,10 +348,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertEq("ping1", pong_msg.id, "Should have correlation ID");
 
         wsc.disconnect();
+%endif
     }
 
     testAuthCallback() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoHttpServer) && !defined(NoWebSocketClient)
         # Create handler with auth callback
         QoreReplWebSocketHandler authHandler(NOTHING, {
             "logger": logger,
@@ -348,10 +396,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         assertEq("session", session_msg.type, "Should receive session");
 
         goodClient.disconnect();
+%endif
     }
 
     testMaxConnections() {
         checkModule();
+%if !defined(NoQoreRepl) && !defined(NoHttpServer) && !defined(NoWebSocketClient)
         # Create handler with max 1 connection
         QoreReplWebSocketHandler limitHandler(NOTHING, {
             "logger": logger,
@@ -402,5 +452,6 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         client3.connect();
         assertTrue(client3.isOpen(), "Connection after disconnect should succeed");
         client3.disconnect();
+%endif
     }
 }
