@@ -23,7 +23,9 @@
 */
 
 # for the manual processing of the file API with a raw HTTP call
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
@@ -84,7 +86,11 @@ public class OpenAiFileUploadDataProvider inherits OpenAiDataProviderCommon {
         hash<auto> info;
         #on_error printf("INFO: %N\n", info);
         hash<auto> h = rest.send(msg, "POST", "/v1/files", hdr, False, \info);
+%ifdef NoJson
+        throw "JSON-ERROR", "the json module is required for this operation";
+%else
         return parse_json(h.body);
+%endif
     }
 
     #! Returns the description of a successful request message, if any
