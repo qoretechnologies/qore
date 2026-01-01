@@ -35,6 +35,11 @@
 %define NoYaml
 %endtry
 
+%ifdef NoYaml
+# Stub function when yaml module is not available
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%endif
+
 %exec-class RestHandlerTest
 
 class MyStaticRestClass inherits AbstractRestClass {
@@ -612,8 +617,7 @@ public class RestHandlerTest inherits QUnit::Test {
 %ifdef NoJson
         # cannot test serialization with no binary modules present
         testSkip("no json module present");
-%endif
-
+%else
         # test direct interface (no Swagger validation performed); base path must be removed
         auto val = swaggerHandler.handleExternalRequest("GET", "/test?action=echo", LargerHashValue);
         assertEq(LargerHashValue, val);
@@ -671,6 +675,7 @@ public class RestHandlerTest inherits QUnit::Test {
             m.mapData({"action": "test", "a": "1"});
             assertEq(++cnt, TestRestClass::test_cnt);
         }
+%endif
     }
 
     urlTest() {
@@ -710,8 +715,7 @@ public class RestHandlerTest inherits QUnit::Test {
     issue2543() {
 %ifdef NoJson
         testSkip("no json module present");
-%endif
-
+%else
         SwaggerSchema schema = swaggerHandler.getRestSchemaValidator();
 
         # dummy HttpListenerInterface object
@@ -746,6 +750,7 @@ public class RestHandlerTest inherits QUnit::Test {
         # this would throw exception before fix
         auto result = swaggerHandler.handleRequest(listener, s, cx, hdr, body_str);
         assertEq(200, result."code");
+%endif
     }
 
     issue2893() {

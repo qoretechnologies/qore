@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
-%requires uuid
+%try-module uuid
+%define NoUuid
+%endtry
 
 module EmpathicBuildingDataProvider {
     version = "1.1";

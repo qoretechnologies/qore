@@ -31,6 +31,9 @@
 # requires the RestClient module
 %requires RestClient
 
+# assume local var scope, do not use "$" for vars, members, and method calls
+%new-style
+
 # requires json module for make_json()
 %try-module json
 %define NoJson
@@ -41,9 +44,6 @@
 auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
 auto sub parse_json(string val) { throw "JSON-ERROR", "the json module is required for this operation"; }
 %endif
-
-# assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
 %strict-args
 %require-types
 %enable-all-warnings

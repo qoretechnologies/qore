@@ -41,6 +41,11 @@
 %define NoJson
 %endtry
 
+%ifdef NoJson
+# Stub function when json module is not available
+auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+%endif
+
 module ElasticSearchDataProvider {
     version = "1.2";
     desc = "user module providing a data provider API for ElasticSearch instances";
