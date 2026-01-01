@@ -199,7 +199,8 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         if (has_narrowed_type && !is_direct_auto_assignment) {
             edesc->concat("; the container's element type was inferred from the initial value; "
                 "to use mixed types, include values of all needed types in the initial assignment, "
-                "or use %broken-narrowed-types to disable type narrowing");
+                "or use hash<auto!> or list<auto!> to disable type narrowing for the variable; "
+                "note: %broken-narrowed-types will suppress this error but move it to runtime");
         }
 
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);

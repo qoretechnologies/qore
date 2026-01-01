@@ -2129,7 +2129,7 @@ hash\<{WORD}\>\{                        {
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
-{WORD}<[a-zA-Z\*<:_0-9 \t,]+>           {
+{WORD}<[a-zA-Z\*<:_0-9 \t,!]+>          {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;

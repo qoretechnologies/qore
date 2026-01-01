@@ -1699,6 +1699,14 @@ protected:
    }
 };
 
+// Marker type for auto! - same behavior as auto but signals no type narrowing
+// This type is only used during parsing to detect the auto! syntax
+class QoreAutoNoNarrowTypeInfo : public QoreAutoTypeInfo {
+public:
+    DLLLOCAL QoreAutoNoNarrowTypeInfo() : QoreAutoTypeInfo() {
+    }
+};
+
 class QoreClassTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path)
@@ -1920,6 +1928,19 @@ public:
    }
 };
 
+// Marker types for hash<auto!> - same as hash<auto> but signals no type narrowing
+class QoreAutoNoNarrowHashTypeInfo : public QoreComplexHashTypeInfo {
+public:
+   DLLLOCAL QoreAutoNoNarrowHashTypeInfo() : QoreComplexHashTypeInfo(autoNoNarrowTypeInfo) {
+   }
+};
+
+class QoreAutoNoNarrowHashOrNothingTypeInfo : public QoreComplexHashOrNothingTypeInfo {
+public:
+   DLLLOCAL QoreAutoNoNarrowHashOrNothingTypeInfo() : QoreComplexHashOrNothingTypeInfo(autoNoNarrowTypeInfo) {
+   }
+};
+
 class QoreComplexListTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreComplexListTypeInfo(const QoreTypeInfo* vti)
@@ -1995,6 +2016,19 @@ public:
 class QoreAutoListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
 public:
     DLLLOCAL QoreAutoListOrNothingTypeInfo() : QoreComplexListOrNothingTypeInfo(autoTypeInfo) {
+    }
+};
+
+// Marker types for list<auto!> - same as list<auto> but signals no type narrowing
+class QoreAutoNoNarrowListTypeInfo : public QoreComplexListTypeInfo {
+public:
+    DLLLOCAL QoreAutoNoNarrowListTypeInfo() : QoreComplexListTypeInfo(autoNoNarrowTypeInfo) {
+    }
+};
+
+class QoreAutoNoNarrowListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
+public:
+    DLLLOCAL QoreAutoNoNarrowListOrNothingTypeInfo() : QoreComplexListOrNothingTypeInfo(autoNoNarrowTypeInfo) {
     }
 };
 

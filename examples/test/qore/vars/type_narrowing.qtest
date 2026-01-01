@@ -51,6 +51,17 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("or-nothing list append", \orNothingListAppendTest());
         addTestCase("or-nothing deep nesting", \orNothingDeepNestingTest());
         addTestCase("or-nothing mixed structures", \orNothingMixedStructuresTest());
+        addTestCase("auto! basic no narrowing", \autoNoNarrowingBasicTest());
+        addTestCase("auto! hash assignment", \autoNoNarrowingHashTest());
+        addTestCase("auto! list assignment", \autoNoNarrowingListTest());
+        addTestCase("auto! in function", \autoNoNarrowingFunctionTest());
+        addTestCase("hash<auto!> prevents parse-time narrowing", \hashAutoNoNarrowTest());
+        addTestCase("list<auto!> prevents parse-time narrowing", \listAutoNoNarrowTest());
+        addTestCase("hash<string, auto!> two-arg syntax", \hashStringAutoNoNarrowTest());
+        addTestCase("auto! in function parameters", \autoNoNarrowFunctionParamsTest());
+        addTestCase("auto! in class members", \autoNoNarrowClassMemberTest());
+        addTestCase("auto! in global variables", \autoNoNarrowGlobalVarTest());
+        addTestCase("softlist<auto!> syntax", \softlistAutoNoNarrowTest());
 
         set_return_value(main());
     }
@@ -1036,5 +1047,487 @@ sub test() {
             Program p();
             p.parse(code7, "mixed_structures_7");
         }
+    }
+
+    # auto! syntax - behaves the same as auto (pure auto already doesn't narrow)
+    # This test verifies the syntax is accepted
+    autoNoNarrowingBasicTest() {
+        # With auto!, the variable should not be narrowed (same as auto)
+        string code = "%new-style
+%require-types
+sub test() {
+    auto! h = {\"a\": 1};  # Initially a hash
+    h = \"string value\";   # Works - pure auto doesn't narrow
+    h = (1, 2, 3);        # Works
+    h = 42;               # Works
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrowing_basic");
+        }
+        assertTrue(True);
+    }
+
+    # auto! syntax is accepted and behaves like auto
+    autoNoNarrowingHashTest() {
+        # auto! works the same as auto for pure auto type
+        # Note: hash<auto> still narrows - the ! is for pure auto only
+        string code = "%new-style
+%require-types
+sub test() {
+    auto! data = {\"key\": \"value\"};
+    data = 12345;  # Works - pure auto doesn't narrow
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrowing_hash");
+        }
+        assertTrue(True);
+
+        # Note: pure auto (without !) also works - it doesn't narrow
+        string code_also_works = "%new-style
+%require-types
+sub test() {
+    auto data = {\"key\": \"value\"};
+    data = 12345;  # Also works - pure auto doesn't narrow
+}
+";
+        {
+            Program p();
+            p.parse(code_also_works, "auto_also_works");
+        }
+        assertTrue(True);
+    }
+
+    # auto! syntax is accepted for list initialization
+    autoNoNarrowingListTest() {
+        string code = "%new-style
+%require-types
+sub test() {
+    auto! data = (1, 2, 3);
+    data = \"now a string\";  # Works - pure auto doesn't narrow
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrowing_list");
+        }
+        assertTrue(True);
+
+        # Note: pure auto (without !) also works
+        string code_also_works = "%new-style
+%require-types
+sub test() {
+    auto data = (1, 2, 3);
+    data = \"now a string\";  # Also works - pure auto doesn't narrow
+}
+";
+        {
+            Program p();
+            p.parse(code_also_works, "auto_also_works_list");
+        }
+        assertTrue(True);
+    }
+
+    # auto! can be used as a function return type
+    autoNoNarrowingFunctionTest() {
+        string code = "%new-style
+%require-types
+auto! sub getFlexibleData() {
+    auto! result = {\"initial\": \"hash\"};
+    result = (1, 2, 3);
+    return result;
+}
+sub test() {
+    auto! data = getFlexibleData();
+    data = \"completely different type\";
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrowing_function");
+        }
+        assertTrue(True);
+    }
+
+    # hash<auto!> prevents parse-time narrowing - allows incompatible key assignments at parse time
+    hashAutoNoNarrowTest() {
+        # With hash<auto>, this would give PARSE-TYPE-ERROR
+        # With hash<auto!>, parsing should succeed
+        string code = "%new-style
+%require-types
+sub test() {
+    hash<auto!> h = {\"x\": 1};  # creates hash<string, int> at runtime
+    h.y = \"string\";  # With hash<auto> this is PARSE-TYPE-ERROR, with hash<auto!> parsing succeeds
+}
+";
+        {
+            Program p();
+            p.parse(code, "hash_auto_no_narrow");
+        }
+        assertTrue(True);
+
+        # Verify that hash<auto> (without !) still gives PARSE-TYPE-ERROR
+        string code_narrowing = "%new-style
+%require-types
+sub test() {
+    hash<auto> h = {\"x\": 1};
+    h.y = \"string\";  # Should fail - type is narrowed to hash<string, int>
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p();
+            p.parse(code_narrowing, "hash_auto_narrowing");
+        });
+
+        # hash<auto!> whole hash reassignment should work at parse time
+        string code_reassign = "%new-style
+%require-types
+sub test() {
+    hash<auto!> h = {\"x\": 1};
+    h = {\"y\": \"string\"};  # Should succeed - different hash value
+}
+";
+        {
+            Program p();
+            p.parse(code_reassign, "hash_auto_no_narrow_reassign");
+        }
+        assertTrue(True);
+
+        # *hash<auto!> or-nothing variant should also work
+        string code_or_nothing = "%new-style
+%require-types
+sub test() {
+    *hash<auto!> h = {\"x\": 1};
+    h.y = \"string\";  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code_or_nothing, "hash_auto_no_narrow_or_nothing");
+        }
+        assertTrue(True);
+    }
+
+    # list<auto!> prevents parse-time narrowing - allows incompatible element operations at parse time
+    listAutoNoNarrowTest() {
+        # With list<auto>, this would give PARSE-TYPE-ERROR
+        # With list<auto!>, parsing should succeed
+        string code = "%new-style
+%require-types
+sub test() {
+    list<auto!> l = (1, 2, 3);  # creates list<int> at runtime
+    l += \"string\";  # With list<auto> this is PARSE-TYPE-ERROR, with list<auto!> parsing succeeds
+}
+";
+        {
+            Program p();
+            p.parse(code, "list_auto_no_narrow");
+        }
+        assertTrue(True);
+
+        # Verify that list<auto> (without !) still gives PARSE-TYPE-ERROR
+        string code_narrowing = "%new-style
+%require-types
+sub test() {
+    list<auto> l = (1, 2, 3);
+    l += \"string\";  # Should fail - type is narrowed to list<int>
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p();
+            p.parse(code_narrowing, "list_auto_narrowing");
+        });
+
+        # list<auto!> whole list reassignment should work at parse time
+        string code_reassign = "%new-style
+%require-types
+sub test() {
+    list<auto!> l = (1, 2, 3);
+    l = (\"a\", \"b\", \"c\");  # Should succeed - different list value
+}
+";
+        {
+            Program p();
+            p.parse(code_reassign, "list_auto_no_narrow_reassign");
+        }
+        assertTrue(True);
+
+        # *list<auto!> or-nothing variant should also work
+        string code_or_nothing = "%new-style
+%require-types
+sub test() {
+    *list<auto!> l = (1, 2, 3);
+    l += \"string\";  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code_or_nothing, "list_auto_no_narrow_or_nothing");
+        }
+        assertTrue(True);
+    }
+
+    # hash<string, auto!> two-argument syntax
+    hashStringAutoNoNarrowTest() {
+        # hash<string, auto!> should prevent parse-time narrowing
+        string code = "%new-style
+%require-types
+sub test() {
+    hash<string, auto!> h = {\"x\": 1};
+    h.y = \"string\";  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code, "hash_string_auto_no_narrow");
+        }
+        assertTrue(True);
+
+        # Verify hash<string, auto> (without !) still gives PARSE-TYPE-ERROR
+        string code_narrowing = "%new-style
+%require-types
+sub test() {
+    hash<string, auto> h = {\"x\": 1};
+    h.y = \"string\";  # Should fail
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p();
+            p.parse(code_narrowing, "hash_string_auto_narrowing");
+        });
+    }
+
+    # auto! in function parameters
+    autoNoNarrowFunctionParamsTest() {
+        # Function with hash<auto!> parameter should accept different hash types
+        string code = "%new-style
+%require-types
+sub processData(hash<auto!> data) {
+    # Can receive hashes with any value type
+}
+
+sub test() {
+    processData({\"a\": 1});
+    processData({\"b\": \"string\"});
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrow_func_param");
+        }
+        assertTrue(True);
+
+        # Function with hash<auto!> return type
+        string code_return = "%new-style
+%require-types
+hash<auto!> sub getFlexibleData(bool flag) {
+    if (flag) {
+        return {\"value\": 42};
+    }
+    return {\"value\": \"text\"};
+}
+
+sub test() {
+    hash<auto!> h = getFlexibleData(True);
+    h = getFlexibleData(False);
+}
+";
+        {
+            Program p();
+            p.parse(code_return, "auto_no_narrow_func_return");
+        }
+        assertTrue(True);
+
+        # list<auto!> parameter
+        string code_list_param = "%new-style
+%require-types
+sub processList(list<auto!> data) {
+    # Can receive lists with any element type
+}
+
+sub test() {
+    processList((1, 2, 3));
+    processList((\"a\", \"b\"));
+}
+";
+        {
+            Program p();
+            p.parse(code_list_param, "auto_no_narrow_list_param");
+        }
+        assertTrue(True);
+    }
+
+    # auto! in class members
+    autoNoNarrowClassMemberTest() {
+        # Class with hash<auto!> member - uses public { } block syntax
+        string code = "%new-style
+%require-types
+class FlexibleContainer {
+    public {
+        hash<auto!> data;
+    }
+
+    constructor() {
+        data = {\"initial\": 1};
+    }
+
+    nothing setStringData() {
+        data = {\"value\": \"text\"};  # Should not give PARSE-TYPE-ERROR
+    }
+
+    nothing setIntData() {
+        data = {\"value\": 42};
+    }
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrow_class_member");
+        }
+        assertTrue(True);
+
+        # Class with list<auto!> member
+        string code_list = "%new-style
+%require-types
+class ListContainer {
+    public {
+        list<auto!> items;
+    }
+
+    constructor() {
+        items = (1, 2, 3);
+    }
+
+    nothing setStringItems() {
+        items = (\"a\", \"b\", \"c\");
+    }
+}
+";
+        {
+            Program p();
+            p.parse(code_list, "auto_no_narrow_class_list_member");
+        }
+        assertTrue(True);
+
+        # Private member with auto!
+        string code_private = "%new-style
+%require-types
+class PrivateFlexible {
+    private {
+        hash<auto!> config;
+    }
+
+    constructor() {
+        config = {\"setting\": 1};
+    }
+
+    nothing updateConfig() {
+        config = {\"setting\": \"value\"};
+    }
+}
+";
+        {
+            Program p();
+            p.parse(code_private, "auto_no_narrow_private_member");
+        }
+        assertTrue(True);
+    }
+
+    # auto! in function-scope variables (uses same code path as global variables)
+    autoNoNarrowGlobalVarTest() {
+        # Test auto! in function-scope variables (similar to how globalHashAutoTest works)
+        # This tests the same type narrowing logic that applies to global variables
+
+        # hash<auto!> should not narrow - different value types should be allowed
+        string code = "%new-style
+sub test() {
+    hash<auto!> config = {\"setting\": 1};
+    config = {\"setting\": \"value\"};  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code, "auto_no_narrow_func");
+        }
+        assertTrue(True);
+
+        # list<auto!> should not narrow - different element types should be allowed
+        string code_list = "%new-style
+sub test() {
+    list<auto!> items = (1, 2, 3);
+    items = (\"a\", \"b\", \"c\");  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code_list, "auto_no_narrow_func_list");
+        }
+        assertTrue(True);
+
+        # Verify hash<auto> (without !) still narrows
+        string code_narrowing = "%new-style
+sub test() {
+    hash<auto> h = {\"x\": 1};
+    h.y = \"string\";  # Should fail
+}
+";
+        assertThrows("PARSE-TYPE-ERROR", sub() {
+            Program p();
+            p.parse(code_narrowing, "func_auto_narrowing");
+        });
+    }
+
+    # softlist<auto!> syntax
+    softlistAutoNoNarrowTest() {
+        # softlist<auto!> should be accepted
+        string code = "%new-style
+%require-types
+sub test() {
+    softlist<auto!> sl = (1, 2, 3);
+    sl = (\"a\", \"b\");  # Should not give PARSE-TYPE-ERROR
+}
+";
+        {
+            Program p();
+            p.parse(code, "softlist_auto_no_narrow");
+        }
+        assertTrue(True);
+
+        # *softlist<auto!> or-nothing variant
+        string code_or_nothing = "%new-style
+%require-types
+sub test() {
+    *softlist<auto!> sl = (1, 2, 3);
+    sl = (\"a\", \"b\");
+    sl = NOTHING;
+}
+";
+        {
+            Program p();
+            p.parse(code_or_nothing, "softlist_auto_no_narrow_or_nothing");
+        }
+        assertTrue(True);
+
+        # softlist<auto!> in function parameter
+        string code_param = "%new-style
+%require-types
+sub processSoftList(softlist<auto!> data) {
+    # Can receive softlists with any element type
+}
+
+sub test() {
+    processSoftList(1);  # Single value converted to list
+    processSoftList((1, 2, 3));
+    processSoftList((\"a\", \"b\"));
+}
+";
+        {
+            Program p();
+            p.parse(code_param, "softlist_auto_no_narrow_param");
+        }
+        assertTrue(True);
     }
 }

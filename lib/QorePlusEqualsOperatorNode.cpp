@@ -71,7 +71,8 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 // Add context about type narrowing
                 edesc->concat("; the list's element type was inferred from the initial value; "
                     "to use mixed types, include values of all needed types in the initial assignment, "
-                    "or use %broken-narrowed-types to disable type narrowing");
+                    "or use list<auto!> to disable type narrowing for the variable; "
+                    "note: %broken-narrowed-types will suppress this error but move it to runtime");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
                 if (!err) {
                     err = -1;

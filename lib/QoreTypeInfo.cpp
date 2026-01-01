@@ -43,6 +43,7 @@
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
+const QoreAutoNoNarrowTypeInfo staticAutoNoNarrowTypeInfo;
 
 const QoreBigIntTypeInfo staticBigIntTypeInfo;
 const QoreBigIntOrNothingTypeInfo staticBigIntOrNothingTypeInfo;
@@ -78,6 +79,8 @@ const QoreEmptyHashTypeInfo staticEmptyHashTypeInfo;
 
 const QoreAutoHashTypeInfo staticAutoHashTypeInfo;
 const QoreAutoHashOrNothingTypeInfo staticAutoHashOrNothingTypeInfo;
+const QoreAutoNoNarrowHashTypeInfo staticAutoNoNarrowHashTypeInfo;
+const QoreAutoNoNarrowHashOrNothingTypeInfo staticAutoNoNarrowHashOrNothingTypeInfo;
 
 const QoreListTypeInfo staticListTypeInfo;
 const QoreListOrNothingTypeInfo staticListOrNothingTypeInfo;
@@ -85,6 +88,8 @@ const QoreEmptyListTypeInfo staticEmptyListTypeInfo;
 
 const QoreAutoListTypeInfo staticAutoListTypeInfo;
 const QoreAutoListOrNothingTypeInfo staticAutoListOrNothingTypeInfo;
+const QoreAutoNoNarrowListTypeInfo staticAutoNoNarrowListTypeInfo;
+const QoreAutoNoNarrowListOrNothingTypeInfo staticAutoNoNarrowListOrNothingTypeInfo;
 
 const QoreNothingTypeInfo staticNothingTypeInfo;
 
@@ -150,6 +155,7 @@ const QoreFloatOrNumberTypeInfo staticFloatOrNumberTypeInfo;
 
 const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *autoTypeInfo = &staticAutoTypeInfo,
+   *autoNoNarrowTypeInfo = &staticAutoNoNarrowTypeInfo,
    *bigIntTypeInfo = &staticBigIntTypeInfo,
    *floatTypeInfo = &staticFloatTypeInfo,
    *boolTypeInfo = &staticBoolTypeInfo,
@@ -160,8 +166,10 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *hashTypeInfo = &staticHashTypeInfo,
    *emptyHashTypeInfo = &staticEmptyHashTypeInfo,
    *autoHashTypeInfo = &staticAutoHashTypeInfo,
+   *autoNoNarrowHashTypeInfo = &staticAutoNoNarrowHashTypeInfo,
    *listTypeInfo = &staticListTypeInfo,
    *autoListTypeInfo = &staticAutoListTypeInfo,
+   *autoNoNarrowListTypeInfo = &staticAutoNoNarrowListTypeInfo,
    *emptyListTypeInfo = &staticEmptyListTypeInfo,
    *nothingTypeInfo = &staticNothingTypeInfo,
    *nullTypeInfo = &staticNullTypeInfo,
@@ -198,8 +206,10 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *dateOrNothingTypeInfo = &staticDateOrNothingTypeInfo,
    *hashOrNothingTypeInfo = &staticHashOrNothingTypeInfo,
    *autoHashOrNothingTypeInfo = &staticAutoHashOrNothingTypeInfo,
+   *autoNoNarrowHashOrNothingTypeInfo = &staticAutoNoNarrowHashOrNothingTypeInfo,
    *listOrNothingTypeInfo = &staticListOrNothingTypeInfo,
    *autoListOrNothingTypeInfo = &staticAutoListOrNothingTypeInfo,
+   *autoNoNarrowListOrNothingTypeInfo = &staticAutoNoNarrowListOrNothingTypeInfo,
    *nullOrNothingTypeInfo = &staticNullOrNothingTypeInfo,
    *codeOrNothingTypeInfo = &staticCodeOrNothingTypeInfo,
    *dataOrNothingTypeInfo = &staticDataOrNothingTypeInfo,
@@ -307,6 +317,8 @@ void init_qore_types() {
     do_maps(NT_OBJECT,          "object", objectTypeInfo, objectOrNothingTypeInfo);
     do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
     do_maps(NT_ALL,             "auto", autoTypeInfo, autoTypeInfo);
+    // auto! - marker type for auto with no type narrowing; uses same or_nothing type as auto
+    str_typeinfo_map["auto!"] = autoNoNarrowTypeInfo;
     do_maps(NT_DATE,            "date", dateTypeInfo, dateOrNothingTypeInfo);
     do_maps(NT_CODE,            "code", codeTypeInfo, codeOrNothingTypeInfo);
     do_maps(NT_DATA,            "data", dataTypeInfo, dataOrNothingTypeInfo);
@@ -1745,6 +1757,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
                 return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
+                return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
             const qore_ns_private* ns;
             const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(*subtypes[0]->cscope, ns);
@@ -1758,6 +1772,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
             } else {
                 if (!strcmp(subtypes[1]->cscope->ostr, "auto"))
                 return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+            if (!strcmp(subtypes[1]->cscope->ostr, "auto!"))
+                return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
 
                 // resolve value type
                 const QoreTypeInfo* valueType = subtypes[1]->resolveRuntime();
@@ -1778,6 +1794,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
                 return or_nothing ? autoListOrNothingTypeInfo : autoListTypeInfo;
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
+                return or_nothing ? autoNoNarrowListOrNothingTypeInfo : autoNoNarrowListTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = subtypes[0]->resolveRuntime();
             if (!valueType)
@@ -1796,6 +1814,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
                 return or_nothing ? softAutoListOrNothingTypeInfo : softAutoListTypeInfo;
+            // softlist<auto!> - treated same as softlist<auto> since softlist already implies flexible typing
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
+                return or_nothing ? softAutoListOrNothingTypeInfo : softAutoListTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = subtypes[0]->resolveRuntime();
             if (!valueType)
@@ -1813,6 +1834,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
     if (!strcmp(cscope->ostr, "reference")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
+                return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
+            // reference<auto!> - treated same as reference<auto> since reference doesn't narrow
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = subtypes[0]->resolveRuntime();
@@ -1857,6 +1881,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
                 return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
+                return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
             const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc,
                 *subtypes[0]->cscope);
@@ -1872,6 +1898,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             } else {
                 if (!strcmp(subtypes[1]->cscope->ostr, "auto"))
                     return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+                if (!strcmp(subtypes[1]->cscope->ostr, "auto!"))
+                    return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
 
                 // resolve value type
                 const QoreTypeInfo* valueType = QoreParseTypeInfo::resolveAny(subtypes[1], loc, err);
@@ -1893,6 +1921,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
                 return or_nothing ? autoListOrNothingTypeInfo : autoListTypeInfo;
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
+                return or_nothing ? autoNoNarrowListOrNothingTypeInfo : autoNoNarrowListTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = QoreParseTypeInfo::resolveAny(subtypes[0], loc, err);
             if (QoreTypeInfo::hasType(valueType)) {
@@ -1910,6 +1940,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
     if (!strcmp(cscope->ostr, "softlist")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
+                return or_nothing ? softAutoListOrNothingTypeInfo : softAutoListTypeInfo;
+            // softlist<auto!> - treated same as softlist<auto> since softlist already implies flexible typing
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? softAutoListOrNothingTypeInfo : softAutoListTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = QoreParseTypeInfo::resolveAny(subtypes[0], loc, err);
@@ -1929,6 +1962,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
     if (!strcmp(cscope->ostr, "reference")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
+                return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
+            // reference<auto!> - treated same as reference<auto> since reference doesn't narrow
+            if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
             // resolve value type
             const QoreTypeInfo* valueType = QoreParseTypeInfo::resolveAny(subtypes[0], loc, err);
