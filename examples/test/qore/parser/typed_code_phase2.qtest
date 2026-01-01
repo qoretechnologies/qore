@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypedCodePhase2Test
+
+class TypedCodePhase2Test inherits QUnit::Test {
+    constructor() : QUnit::Test("TypedCodePhase2Test", "1.0") {
+        addTestCase("Simple typed code parsing", \simpleTypedCodeTest());
+        addTestCase("Complex return type parsing", \complexReturnTypeTest());
+        addTestCase("Complex parameter type parsing", \complexParamTypeTest());
+        addTestCase("Nested complex types", \nestedComplexTypesTest());
+        addTestCase("Or-nothing typed code", \orNothingTypedCodeTest());
+        addTestCase("Multiple parameters", \multipleParamsTest());
+        addTestCase("Nothing return type", \nothingReturnTypeTest());
+        addTestCase("Auto return type", \autoReturnTypeTest());
+        set_return_value(main());
+    }
+
+    simpleTypedCodeTest() {
+        # Test basic typed code declarations
+        code<int()> noParamFunc;
+        assertEq(NOTHING, noParamFunc);
+
+        code<string(int)> oneParamFunc;
+        assertEq(NOTHING, oneParamFunc);
+
+        code<bool(int, string)> twoParamFunc;
+        assertEq(NOTHING, twoParamFunc);
+
+        code<float(int, string, bool)> threeParamFunc;
+        assertEq(NOTHING, threeParamFunc);
+    }
+
+    complexReturnTypeTest() {
+        # Test typed code with complex return types
+        code<list<int>()> listReturn;
+        assertEq(NOTHING, listReturn);
+
+        code<hash<string, int>()> hashReturn;
+        assertEq(NOTHING, hashReturn);
+
+        code<hash<string, list<int>>()> nestedHashReturn;
+        assertEq(NOTHING, nestedHashReturn);
+    }
+
+    complexParamTypeTest() {
+        # Test typed code with complex parameter types
+        code<int(list<string>)> listParam;
+        assertEq(NOTHING, listParam);
+
+        code<string(hash<string, int>)> hashParam;
+        assertEq(NOTHING, hashParam);
+
+        code<bool(hash<string, list<int>>)> nestedHashParam;
+        assertEq(NOTHING, nestedHashParam);
+    }
+
+    nestedComplexTypesTest() {
+        # Test deeply nested complex types
+        code<hash<string, list<hash<string, int>>>()> deepReturn;
+        assertEq(NOTHING, deepReturn);
+
+        code<int(hash<string, list<hash<string, int>>>)> deepParam;
+        assertEq(NOTHING, deepParam);
+
+        # Complex return and params
+        code<list<hash<string, int>>(hash<string, list<int>>)> bothComplex;
+        assertEq(NOTHING, bothComplex);
+    }
+
+    orNothingTypedCodeTest() {
+        # Test or-nothing typed code
+        *code<int(string)> maybeFunc;
+        assertEq(NOTHING, maybeFunc);
+
+        # Assign a closure
+        maybeFunc = int sub (string s) { return s.length(); };
+        assertEq(5, maybeFunc("hello"));
+
+        # Assign NOTHING
+        maybeFunc = NOTHING;
+        assertEq(NOTHING, maybeFunc);
+    }
+
+    multipleParamsTest() {
+        # Test multiple complex parameters
+        code<int(list<string>, hash<string, int>)> twoComplexParams;
+        assertEq(NOTHING, twoComplexParams);
+
+        code<string(int, list<int>, hash<string, bool>, string)> mixedParams;
+        assertEq(NOTHING, mixedParams);
+
+        code<list<int>(hash<string, int>, list<string>, hash<string, list<int>>)> allComplexParams;
+        assertEq(NOTHING, allComplexParams);
+    }
+
+    nothingReturnTypeTest() {
+        # Test nothing return type
+        code<nothing()> voidLikeNoParam;
+        assertEq(NOTHING, voidLikeNoParam);
+
+        code<nothing(int)> voidLikeOneParam;
+        assertEq(NOTHING, voidLikeOneParam);
+
+        code<nothing(string, bool)> voidLikeTwoParams;
+        assertEq(NOTHING, voidLikeTwoParams);
+    }
+
+    autoReturnTypeTest() {
+        # Test auto return type
+        code<auto()> autoReturnNoParam;
+        assertEq(NOTHING, autoReturnNoParam);
+
+        code<auto(string)> autoReturnOneParam;
+        assertEq(NOTHING, autoReturnOneParam);
+
+        code<auto(int, string, bool)> autoReturnMultiParams;
+        assertEq(NOTHING, autoReturnMultiParams);
+    }
+}

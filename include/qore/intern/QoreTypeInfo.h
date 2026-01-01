@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -604,6 +604,24 @@ public:
             ? autoTypeInfo
             : ti->return_vec[0].spec.getComplexList();
     }
+
+    //! Returns the complex code type info if this is a typed callable type
+    /** @param ti the type to check
+        @return the QoreComplexCodeTypeInfo pointer if this is a typed callable, nullptr otherwise
+    */
+    DLLLOCAL static const class QoreComplexCodeTypeInfo* getComplexCodeType(const QoreTypeInfo* ti);
+
+    //! Checks if two typed callable types have compatible signatures
+    /** This is used for additional type checking when assigning closures/call references
+        to typed code variables. Standard variance rules apply:
+        - Return types: covariant (source can be more specific)
+        - Parameter types: contravariant (source can be more general)
+
+        @param target the target type (typed code variable)
+        @param source the source type (closure/call reference)
+        @return true if compatible, false otherwise
+    */
+    DLLLOCAL static bool checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source);
 
     //! Returns the element type info for an iterator class based on source type
     /** For HashPairIterator with source hash<string, int>: returns the type info for
@@ -3944,5 +3962,165 @@ protected:
         return false;
     }
 };
+
+//! Maximum number of types allowed in a union type
+constexpr size_t QORE_MAX_UNION_MEMBERS = 100;
+
+//! Type info for explicitly declared union types (union<T1, T2, ...>)
+class QoreUnionTypeInfo : public QoreTypeInfo {
+public:
+    //! Constructor for explicit union types
+    DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+            const QoreString& name, bool or_nothing = false)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing) {
+    }
+
+    //! Returns true if this is an or-nothing union type
+    DLLLOCAL bool isOrNothing() const {
+        return orNothing;
+    }
+
+protected:
+    bool orNothing;  //!< true if this union type accepts NOTHING
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        str.concat(&tname);
+    }
+
+    // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        // union types generally cannot be converted to scalars unless all members can
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return orNothing;  // *union<...> has a default value of NOTHING
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        // Only *union<...> has a default value (NOTHING); regular union<...> has no default
+        return QoreValue();
+    }
+
+    // returns true if this type could contain an object or a closure
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return true;  // conservatively assume union could contain scannable types
+    }
+};
+
+//! Vector of type infos for union member types
+typedef std::vector<const QoreTypeInfo*> type_vec_t;
+
+//! Creates or retrieves a cached union type for the given member types
+/** @param member_types vector of member types
+    @param or_nothing if true, the union type also accepts NOTHING
+    @return the union type info, or nullptr on error
+*/
+DLLLOCAL const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing = false);
+
+//! Creates or retrieves a cached or-nothing union type for the given member types
+DLLLOCAL const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
+
+//! Type info for typed callable types: code<ReturnType(ParamTypes...)>
+/** This class represents a callable type with specified return type and parameter types.
+    It supports:
+    - Return type specification
+    - Parameter type specification (zero or more)
+    - Varargs support via "..." syntax
+    - Standard variance: covariant returns, contravariant parameters
+*/
+class QoreComplexCodeTypeInfo : public QoreTypeInfo {
+public:
+    //! Constructor for typed callable types
+    /** @param ret_type the return type (nullptr for nothing/void)
+        @param param_types vector of parameter types
+        @param varargs if true, accepts variable arguments
+        @param or_nothing if true, the code type also accepts NOTHING
+    */
+    DLLLOCAL QoreComplexCodeTypeInfo(const QoreTypeInfo* ret_type, type_vec_t&& param_types,
+            bool varargs = false, bool or_nothing = false);
+
+    //! Returns the return type of this callable
+    DLLLOCAL const QoreTypeInfo* getReturnType() const {
+        return returnType;
+    }
+
+    //! Returns the parameter types of this callable
+    DLLLOCAL const type_vec_t& getParamTypes() const {
+        return paramTypes;
+    }
+
+    //! Returns true if this callable accepts variable arguments
+    DLLLOCAL bool hasVarArgs() const {
+        return varargs;
+    }
+
+    //! Returns true if this is an or-nothing callable type
+    DLLLOCAL bool isOrNothing() const {
+        return orNothing;
+    }
+
+    //! Checks if the given signature is compatible with this callable type
+    /** Uses standard variance rules:
+        - Return type: covariant (assigned callable can return more specific type)
+        - Parameter types: contravariant (assigned callable can accept more general type)
+        @param sig the function signature to check
+        @return true if the signature is compatible, false otherwise
+    */
+    DLLLOCAL bool isSignatureCompatible(const class AbstractFunctionSignature* sig) const;
+
+protected:
+    const QoreTypeInfo* returnType;  //!< return type (nullptr = nothing)
+    type_vec_t paramTypes;           //!< parameter types
+    bool varargs;                    //!< true if accepts variable arguments
+    bool orNothing;                  //!< true if accepts NOTHING
+    QoreString pname;                //!< path name for type
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        str.concat(&tname);
+    }
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return orNothing;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return QoreValue();  // NOTHING
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return true;  // closures need scanning
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        return pname.empty() ? tname.c_str() : pname.c_str();
+    }
+};
+
+//! Creates or retrieves a cached typed callable type
+/** @param return_type the return type (nullptr for nothing)
+    @param param_types vector of parameter types
+    @param varargs if true, accepts variable arguments
+    @param or_nothing if true, also accepts NOTHING
+    @return the typed callable type info
+*/
+DLLLOCAL const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
+    const type_vec_t& param_types, bool varargs = false, bool or_nothing = false);
+
+//! Creates or retrieves a cached or-nothing typed callable type
+DLLLOCAL const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
+    const type_vec_t& param_types, bool varargs = false);
+
+//! Creates a typed callable type from a function signature
+/** @param sig the function signature to create the type from
+    @param or_nothing if true, also accepts NOTHING
+    @return the typed callable type info
+*/
+DLLLOCAL const QoreTypeInfo* qore_get_complex_code_type_from_signature(const class AbstractFunctionSignature* sig,
+    bool or_nothing = false);
 
 #endif // _QORE_QORETYPEINFO_H

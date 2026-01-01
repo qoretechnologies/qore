@@ -4,7 +4,7 @@
 
     QORE programming language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,7 +44,8 @@
 #define PO_NO_TOP_LEVEL_STATEMENTS          (1 <<  4)    //!< cannot define new top-level statements (outside of sub or class defs)
 #define PO_ALLOW_REPARSE                    (1 <<  5)    //!< allow multiple parse/commit cycles (for REPL support); requires no other threads active in Program
 #define PO_BROKEN_NARROWED_TYPES            (1 <<  6)    //!< disables parse-time type narrowing (narrowed type information is not used)
-// bits 7, 8 are available for future use
+#define PO_NO_TYPEDEF                       (1 <<  7)    //!< disables the typedef keyword (for backwards compatibility)
+// bit 8 is available for future use
 #define PO_NO_INHERIT_SYSTEM_CLASSES        (1 <<  9)    //!< do not inherit system classes into this program space
 #define PO_NO_INHERIT_USER_CLASSES          (1 << 10)    //!< do not inherit public user classes into this program space
 #define PO_NO_CHILD_PO_RESTRICTIONS         (1 << 11)    //!< turn off parse option inheritance restrictions

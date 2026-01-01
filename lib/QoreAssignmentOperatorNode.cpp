@@ -109,6 +109,11 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         //printd(5, "QoreAssignmentOperatorNode::parseInitImpl() '%s' <- '%s' res: %d may_not_match: %d "
         //    "may_need_filter: %d ident: %d\n", QoreTypeInfo::getName(ti),
         //    QoreTypeInfo::getName(parse_context.typeInfo), res, may_not_match, may_need_filter, ident);
+
+        // Additional check for typed callable signature compatibility
+        if (res && !QoreTypeInfo::checkComplexCodeCompatibility(ti, parse_context.typeInfo)) {
+            res = QTI_NOT_EQUAL;
+        }
     } else {
         res = QTI_AMBIGUOUS;
     }

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -331,6 +331,10 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
 }
 
 qore_ns_private::~qore_ns_private() {
+    // Clean up typedef entries
+    for (auto& i : typedefMap) {
+        delete i.second;
+    }
 }
 
 QoreProgram* qore_ns_private::getProgram() const {
@@ -2539,6 +2543,7 @@ void qore_ns_private::parseCommit() {
     pending_class_names.clear();
     pending_const_names.clear();
     pending_hashdecl_names.clear();
+    pending_typedef_names.clear();
     pending_ns_names.clear();
 }
 
@@ -2589,6 +2594,16 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
             hashDeclList.parseRemove(name.c_str());
         }
         pending_hashdecl_names.clear();
+
+        // remove only typedefs added in this pending transaction
+        for (const auto& name : pending_typedef_names) {
+            typedef_map_t::iterator i = typedefMap.find(name);
+            if (i != typedefMap.end()) {
+                delete i->second;
+                typedefMap.erase(i);
+            }
+        }
+        pending_typedef_names.clear();
 
         // remove only namespaces added in this pending transaction
         for (const auto& name : pending_ns_names) {
@@ -2738,6 +2753,83 @@ void qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const Nam
       return;
 
    sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub);
+}
+
+// only called while parsing before addition to namespace tree, no locking needed
+// returns TypedefEntry* on success, nullptr on error
+TypedefEntry* qore_ns_private::parseAddTypedef(const QoreProgramLocation* loc, const char* tdname,
+        const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
+    std::unique_ptr<QoreParseTypeInfo> pti_holder(parseTypeInfo);
+
+    // Check for duplicate typedef name
+    if (typedefMap.find(tdname) != typedefMap.end()) {
+        std::string nspath;
+        getPath(nspath, true);
+        parse_error(*loc, "typedef '%s' has already been defined in '%s'", tdname, nspath.c_str());
+        return nullptr;
+    }
+
+    // Check for conflict with class name
+    if (classList.find(tdname)) {
+        parse_error(*loc, "typedef '%s' conflicts with existing class in namespace '%s::'", tdname, name.c_str());
+        return nullptr;
+    }
+
+    // Check for conflict with hashdecl name
+    if (hashDeclList.find(tdname)) {
+        parse_error(*loc, "typedef '%s' conflicts with existing hashdecl in namespace '%s::'", tdname, name.c_str());
+        return nullptr;
+    }
+
+    // Check public visibility warning
+    if (!imported && pub && !this->pub && parse_check_parse_option(PO_IN_MODULE))
+        qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
+        "typedef '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), tdname,
+        name.c_str());
+
+    // Add the typedef
+    TypedefEntry* entry = new TypedefEntry(loc, typeInfo, pti_holder.release(), pub);
+    typedefMap[tdname] = entry;
+    pending_typedef_names.push_back(tdname);
+    return entry;
+}
+
+// only called while parsing inside unattached namespaces
+// global tdmap is updated when namespace is attached via parseRebuildIndexes
+void qore_ns_private::parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& nscope,
+        const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
+    std::unique_ptr<QoreParseTypeInfo> pti_holder(parseTypeInfo);
+
+    QoreNamespace* sns = resolveNameScope(loc, nscope);
+    if (!sns)
+        return;
+
+    sns->priv->parseAddTypedef(loc, nscope[nscope.size() - 1], typeInfo, pti_holder.release(), pub);
+}
+
+// only called with RootNS
+void qore_root_ns_private::parseAddTypedefIntern(const QoreProgramLocation* loc, const NamedScope& nscope,
+        const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
+    std::unique_ptr<QoreParseTypeInfo> pti_holder(parseTypeInfo);
+
+    qore_ns_private* sns = parseResolveNamespace(loc, nscope);
+    if (!sns) {
+        return;
+    }
+
+    const char* tdname = nscope.getIdentifier();
+    TypedefEntry* entry = sns->parseAddTypedef(loc, tdname, typeInfo, pti_holder.release(), pub);
+    if (entry) {
+        // add to global typedef map
+        tdmap.update(tdname, sns, entry);
+    }
+}
+
+const TypedefEntry* qore_ns_private::findLocalTypedef(const char* tdname) const {
+    typedef_map_t::const_iterator i = typedefMap.find(tdname);
+    if (i != typedefMap.end())
+        return i->second;
+    return nullptr;
 }
 
 // public, only called either in single-threaded initialization or

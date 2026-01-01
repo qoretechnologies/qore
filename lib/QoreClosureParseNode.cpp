@@ -87,11 +87,20 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_qc = parse_get_class_priv();
         parse_ns = parse_get_ns();
         //printd(5, "QoreClosureParseNode::parseInitImpl() this: %p set deferred\n", this);
+        // Use generic closure type for deferred initialization
+        parse_context.typeInfo = runTimeClosureTypeInfo;
     } else {
         err = uf->parseInit(nullptr);
         uf->parseCommit();
+
+        // After parseCommit, the signature is available - create a typed callable type
+        AbstractFunctionSignature* sig = uf->getUniqueSignature();
+        if (sig) {
+            parse_context.typeInfo = qore_get_complex_code_type_from_signature(sig);
+        } else {
+            parse_context.typeInfo = runTimeClosureTypeInfo;
+        }
     }
-    parse_context.typeInfo = runTimeClosureTypeInfo;
     return err;
 }
 

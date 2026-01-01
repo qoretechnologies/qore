@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypedCodePhase3Test
+
+class TypedCodePhase3Test inherits QUnit::Test {
+    constructor() : QUnit::Test("TypedCodePhase3Test", "1.0") {
+        addTestCase("Compatible assignment test", \compatibleAssignmentTest());
+        addTestCase("Covariant return type test", \covariantReturnTest());
+        addTestCase("Contravariant parameter test", \contravariantParamTest());
+        addTestCase("Incompatible return type test", \incompatibleReturnTest());
+        addTestCase("Incompatible parameter type test", \incompatibleParamTest());
+        addTestCase("Parameter count mismatch test", \paramCountMismatchTest());
+        addTestCase("Complex type compatibility test", \complexTypeCompatibilityTest());
+        addTestCase("Or-nothing code assignment test", \orNothingCodeTest());
+        set_return_value(main());
+    }
+
+    compatibleAssignmentTest() {
+        # Exact match
+        code<int(string)> func1 = int sub (string s) { return s.length(); };
+        assertEq(5, func1("hello"));
+
+        # Multiple params exact match
+        code<string(int, string)> func2 = string sub (int x, string s) { return sprintf("%d: %s", x, s); };
+        assertEq("42: test", func2(42, "test"));
+
+        # No params
+        code<int()> func3 = int sub () { return 99; };
+        assertEq(99, func3());
+    }
+
+    covariantReturnTest() {
+        # auto return accepts any specific return type (covariant)
+        code<auto(string)> func1 = int sub (string s) { return s.length(); };
+        assertEq(5, func1("hello"));
+
+        code<auto(int)> func2 = string sub (int x) { return sprintf("num: %d", x); };
+        assertEq("num: 42", func2(42));
+
+        # Assign closure with more specific return type
+        code<auto()> func3 = list<int> sub () { return (1, 2, 3); };
+        assertEq((1, 2, 3), func3());
+    }
+
+    contravariantParamTest() {
+        # Closure takes auto, target expects string (contravariant)
+        code<int(string)> func1 = int sub (auto x) { return 42; };
+        assertEq(42, func1("test"));
+
+        # Closure takes auto for multiple params
+        code<string(int, string)> func2 = string sub (auto x, auto y) { return "ok"; };
+        assertEq("ok", func2(1, "test"));
+
+        # Closure takes softint where int is expected
+        code<int(int)> func3 = int sub (softint x) { return x * 2; };
+        assertEq(10, func3(5));
+    }
+
+    incompatibleReturnTest() {
+        # Test that incompatible return types are caught at parse time
+        bool caught = False;
+        string err_msg;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(string)> func = string sub (string s) { return s; }; }", "test");
+            err_msg = "no exception";
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+            err_msg = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertTrue(caught, sprintf("Should catch incompatible return type at parse time (got: %s)", err_msg));
+
+        # Also test bool vs int (different specific types)
+        caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(string)> func = bool sub (string s) { return True; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Should catch bool vs int return type mismatch");
+    }
+
+    incompatibleParamTest() {
+        # Test that incompatible parameter types are caught at parse time
+        bool caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(string)> func = int sub (int x) { return x; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Should catch incompatible param type at parse time");
+
+        # Different specific types
+        caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(int, string)> func = int sub (string x, int y) { return 1; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Should catch swapped param types");
+    }
+
+    paramCountMismatchTest() {
+        # Source has fewer params than target expects (should fail)
+        bool caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(int, string)> func = int sub (int x) { return x; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Should catch source with fewer params");
+
+        # Source has more params than target expects (OK if source params have defaults or we allow more)
+        # Actually, this depends on the design - let's test what happens
+        code<int(int)> func = int sub (int x, int y = 0) { return x + y; };
+        assertEq(5, func(5));
+    }
+
+    complexTypeCompatibilityTest() {
+        # Complex return types
+        code<list<int>()> func1 = list<int> sub () { return (1, 2, 3); };
+        assertEq((1, 2, 3), func1());
+
+        # Complex param types
+        code<int(list<string>)> func2 = int sub (list<string> l) { return l.size(); };
+        assertEq(3, func2(("a", "b", "c")));
+
+        # Both complex
+        code<hash<string, int>(list<string>)> func3 = hash<string, int> sub (list<string> l) {
+            hash<string, int> rv;
+            for (int i = 0; i < l.size(); ++i) {
+                rv{l[i]} = i;
+            }
+            return rv;
+        };
+        assertEq({"a": 0, "b": 1}, func3(("a", "b")));
+    }
+
+    orNothingCodeTest() {
+        # Or-nothing code accepts NOTHING
+        *code<int(string)> maybeFunc;
+        assertEq(NOTHING, maybeFunc);
+
+        # Or-nothing code accepts compatible closure
+        maybeFunc = int sub (string s) { return s.length(); };
+        assertEq(5, maybeFunc("hello"));
+
+        # Reset to NOTHING
+        maybeFunc = NOTHING;
+        assertEq(NOTHING, maybeFunc);
+
+        # Or-nothing typed code should also check signature compatibility
+        bool caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { *code<int(string)> func = string sub (string s) { return s; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Or-nothing typed code should also check signature compatibility");
+    }
+}

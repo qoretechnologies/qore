@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%no-child-restrictions
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypedefTest
+
+class TypedefTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Typedef test", "1.0") {
+        addTestCase("Basic typedef", \testBasicTypedef());
+        addTestCase("Typedef with or-nothing", \testTypedefOrNothing());
+        addTestCase("Typedef with complex types", \testTypedefComplexTypes());
+        addTestCase("Typedef in namespace", \testTypedefInNamespace());
+        addTestCase("Public typedef", \testPublicTypedef());
+        addTestCase("Typedef usage in function", \testTypedefInFunction());
+        addTestCase("Typedef usage in class", \testTypedefInClass());
+        addTestCase("Typedef to typedef", \testTypedefToTypedef());
+        addTestCase("Typedef with %no-typedef", \testNoTypedefOption());
+        addTestCase("Typedef duplicate error", \testTypedefDuplicateError());
+        addTestCase("Typedef class conflict error", \testTypedefClassConflict());
+        set_return_value(main());
+    }
+
+    testBasicTypedef() {
+        # Test basic typedef for simple types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef MyInt = int;
+            typedef MyString = string;
+            typedef MyBool = bool;
+
+            int sub test() {
+                MyInt x = 5;
+                MyString s = 'hello';
+                MyBool b = True;
+                return x + s.length() + (b ? 1 : 0);
+            }
+        ", "test");
+        p.run();
+        assertEq(11, p.callFunction("test"));
+    }
+
+    testTypedefOrNothing() {
+        # Test typedef with or-nothing modifier
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef MyInt = int;
+
+            auto sub test() {
+                *MyInt x;
+                *MyInt y = 10;
+                return (x, y);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(NOTHING, result[0]);
+        assertEq(10, result[1]);
+    }
+
+    testTypedefComplexTypes() {
+        # Test typedef with complex types (hash, list)
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef IntList = list<int>;
+            typedef StringHash = hash<string, string>;
+
+            auto sub test() {
+                IntList myList = (1, 2, 3);
+                StringHash myHash = {'a': 'b', 'c': 'd'};
+
+                int sum = 0;
+                foreach int i in (myList) {
+                    sum += i;
+                }
+                return (sum, myHash{'a'});
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(6, result[0]);
+        assertEq("b", result[1]);
+    }
+
+    testTypedefInNamespace() {
+        # Test typedef inside a namespace
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            namespace MyNs {
+                typedef MyInt = int;
+
+                int sub getValue() {
+                    MyInt x = 42;
+                    return x;
+                }
+            }
+
+            int sub test() {
+                return MyNs::getValue();
+            }
+        ", "test");
+        p.run();
+        assertEq(42, p.callFunction("test"));
+    }
+
+    testPublicTypedef() {
+        # Test public typedef visibility
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            public typedef PublicInt = int;
+
+            PublicInt sub getValue() {
+                return 100;
+            }
+        ", "test");
+        p.run();
+        assertEq(100, p.callFunction("getValue"));
+    }
+
+    testTypedefInFunction() {
+        # Test typedef usage in function parameters and return types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef MyInt = int;
+            typedef MyString = string;
+
+            MyInt sub doubleIt(MyInt x) {
+                return x * 2;
+            }
+
+            MyString sub greet(MyString name) {
+                return 'Hello, ' + name;
+            }
+
+            auto sub test() {
+                return (doubleIt(10), greet('World'));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(20, result[0]);
+        assertEq("Hello, World", result[1]);
+    }
+
+    testTypedefInClass() {
+        # Test typedef usage in class members and methods
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef MyInt = int;
+
+            class Counter {
+                private {
+                    MyInt count = 0;
+                }
+
+                MyInt getCount() {
+                    return count;
+                }
+
+                increment(MyInt amount) {
+                    count += amount;
+                }
+            }
+
+            int sub test() {
+                Counter c();
+                c.increment(5);
+                c.increment(3);
+                return c.getCount();
+            }
+        ", "test");
+        p.run();
+        assertEq(8, p.callFunction("test"));
+    }
+
+    testTypedefToTypedef() {
+        # Test typedef referring to another typedef
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef MyInt = int;
+            typedef AliasInt = MyInt;
+            typedef AnotherAlias = AliasInt;
+
+            AnotherAlias sub getValue() {
+                AnotherAlias x = 42;
+                return x;
+            }
+        ", "test");
+        p.run();
+        assertEq(42, p.callFunction("getValue"));
+    }
+
+    testNoTypedefOption() {
+        # Test that %no-typedef disables the typedef keyword
+        Program p(PO_NEW_STYLE);
+
+        # With %no-typedef, 'typedef' should be treated as an identifier
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+            %no-typedef
+            typedef MyInt = int;  # Should fail - typedef is not a keyword
+        ", "test"));
+    }
+
+    testTypedefDuplicateError() {
+        # Test that duplicate typedef names in same namespace cause error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+            typedef MyInt = int;
+            typedef MyInt = string;  # Should fail - duplicate typedef
+        ", "test"));
+    }
+
+    testTypedefClassConflict() {
+        # Test that typedef with same name as class causes error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+            class Foo {}
+            typedef Foo = int;  # Should fail - conflicts with class
+        ", "test"));
+    }
+}
