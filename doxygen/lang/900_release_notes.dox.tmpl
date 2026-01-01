@@ -138,6 +138,11 @@
         zero runtime overhead
       - use \c %%enable-debug / \c %%disable-debug parse directives or \c PO_ENABLE_DEBUG parse option
         (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
+    - new @ref auto_no_narrow "auto!" syntax to disable parse-time type narrowing
+      (<a href="https://github.com/qoretechnologies/qore/issues/5080">issue 5080</a>)
+      - \c auto!, \c hash<auto!>, \c list<auto!> prevent parse-time type inference errors
+      - allows variables to accept values of different types without \c PARSE-TYPE-ERROR
+      - runtime type enforcement still applies to individual values
     - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)

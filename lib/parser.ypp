@@ -2800,6 +2800,13 @@ uncqtypedef:
     IDENTIFIER {
         $$ = new ParserTypeStruct($1, false);
     }
+    | IDENTIFIER '!' {
+        // Handle auto! syntax - append '!' to identifier and look up the type
+        QoreString type_name($1);
+        type_name.concat('!');
+        free($1);
+        $$ = new ParserTypeStruct(type_name.giveBuffer(), false);
+    }
     | SCOPED_REF {
         $$ = new ParserTypeStruct(new QoreParseTypeInfo($1, false));
     }
@@ -2809,6 +2816,13 @@ uncqtypedef:
     }
     | '*' IDENTIFIER {
         $$ = new ParserTypeStruct($2, true);
+    }
+    | '*' IDENTIFIER '!' {
+        // Handle *auto! syntax - or-nothing variant of auto!
+        QoreString type_name($2);
+        type_name.concat('!');
+        free($2);
+        $$ = new ParserTypeStruct(type_name.giveBuffer(), true);
     }
     | '*' SCOPED_REF {
         $$ = new ParserTypeStruct(new QoreParseTypeInfo($2, true));

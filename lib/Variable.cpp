@@ -2242,32 +2242,68 @@ bool LocalVar::isAutoTypeInfo(const QoreTypeInfo* ti) {
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
-        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
+        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo
+        || ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+        || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
         return true;
     }
     // Check for complex types with auto element type (hash only, not list)
     // List types are excluded because softlist accepts scalars
     const QoreTypeInfo* elementType = QoreTypeInfo::getComplexHashValueType(ti);
-    if (elementType == autoTypeInfo) {
+    if (elementType == autoTypeInfo || elementType == autoNoNarrowTypeInfo) {
         return true;
     }
     return false;
 }
 
-void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti) {
+bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*& base_ti) {
+    if (ti == autoNoNarrowTypeInfo) {
+        base_ti = autoTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        base_ti = autoHashTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        base_ti = autoHashOrNothingTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        base_ti = autoListTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        base_ti = autoListOrNothingTypeInfo;
+        return true;
+    }
+    base_ti = ti;
+    return false;
+}
+
+void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
+    }
+    // Don't narrow if no_narrowing flag is set (declared with auto!)
+    if (no_narrowing) {
+        return;
     }
     // Don't narrow if the new type is also auto or unspecified
     if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
         return;
     }
     narrowedTypeInfo = ti;
+    narrowedLoc = loc;
 }
 
 void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
+    }
+    // Don't narrow if no_narrowing flag is set (declared with auto!)
+    if (no_narrowing) {
+        return;
     }
     // Don't merge if the new type is unspecified
     if (!QoreTypeInfo::hasType(ti)) {
@@ -2295,32 +2331,68 @@ bool Var::isAutoTypeInfo(const QoreTypeInfo* ti) {
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
-        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
+        || ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo
+        || ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+        || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
         return true;
     }
     // Check for complex types with auto element type (hash only, not list)
     // List types are excluded because softlist accepts scalars
     const QoreTypeInfo* elementType = QoreTypeInfo::getComplexHashValueType(ti);
-    if (elementType == autoTypeInfo) {
+    if (elementType == autoTypeInfo || elementType == autoNoNarrowTypeInfo) {
         return true;
     }
     return false;
 }
 
-void Var::parseSetNarrowedType(const QoreTypeInfo* ti) {
+bool Var::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*& base_ti) {
+    if (ti == autoNoNarrowTypeInfo) {
+        base_ti = autoTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        base_ti = autoHashTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        base_ti = autoHashOrNothingTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        base_ti = autoListTypeInfo;
+        return true;
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        base_ti = autoListOrNothingTypeInfo;
+        return true;
+    }
+    base_ti = ti;
+    return false;
+}
+
+void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
+    }
+    // Don't narrow if no_narrowing flag is set (declared with auto!)
+    if (no_narrowing) {
+        return;
     }
     // Don't narrow if the new type is also auto or unspecified
     if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
         return;
     }
     narrowedTypeInfo = ti;
+    narrowedLoc = loc;
 }
 
 void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
+    }
+    // Don't narrow if no_narrowing flag is set (declared with auto!)
+    if (no_narrowing) {
+        return;
     }
     // Don't merge if the new type is unspecified
     if (!QoreTypeInfo::hasType(ti)) {
