@@ -22,6 +22,15 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+%try-module json
+%define NoJson
+%endtry
+
+%ifdef NoJson
+# Stub function when json module is not available
+auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+%endif
+
 #! Contains all public definitions in the ElasticSearchDataProvider module
 public namespace ElasticSearchDataProvider {
 #! Bulk insert/upsert operation for ElasticSearch
