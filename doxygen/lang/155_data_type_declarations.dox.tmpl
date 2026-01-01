@@ -1269,4 +1269,203 @@ global_config = {"setting": "value"};
     - @ref hash_type "hash<auto>"
     - @ref list_type "list<auto>"
     - @ref softlist_type "softlist<auto>"
+
+    <hr>
+    @section typedef_keyword typedef
+
+    The \c typedef keyword creates type aliases, allowing you to define custom names for existing types.
+    This improves code readability and maintainability by giving meaningful names to complex type declarations.
+
+    @par Syntax
+    @code{.py}
+typedef TypeName = type_declaration;
+public typedef TypeName = type_declaration;  # exported from module
+    @endcode
+
+    @par Basic Examples
+    @code{.py}
+# Simple type aliases
+typedef MyInt = int;
+typedef MyString = string;
+
+# Using the type alias
+MyInt x = 42;
+MyString s = "hello";
+
+# Complex type aliases
+typedef IntList = list<int>;
+typedef StringHash = hash<string, string>;
+
+IntList numbers = (1, 2, 3);
+StringHash mapping = {"key": "value"};
+    @endcode
+
+    @par With Or-Nothing Modifier
+    The or-nothing modifier (\c *) can be applied to typedef types:
+    @code{.py}
+typedef MyInt = int;
+
+*MyInt x;       # x can be int or NOTHING
+*MyInt y = 10;  # y is 10
+    @endcode
+
+    @par In Namespaces
+    Typedefs can be declared within namespaces and follow standard scoping rules:
+    @code{.py}
+namespace MyNs {
+    typedef UserId = int;
+
+    UserId sub getCurrentUser() {
+        return 42;
+    }
+}
+
+# Use with namespace qualifier
+MyNs::UserId id = MyNs::getCurrentUser();
+    @endcode
+
+    @par Public Typedefs
+    Use the \c public modifier to export typedefs from modules:
+    @code{.py}
+public typedef PublicType = hash<string, int>;
+    @endcode
+
+    @par Typedef Chains
+    Typedefs can reference other typedefs:
+    @code{.py}
+typedef MyInt = int;
+typedef AliasInt = MyInt;
+typedef AnotherAlias = AliasInt;  # Still resolves to int
+    @endcode
+
+    @par Disabling typedef
+    The \c typedef keyword can be disabled with:
+    - Parse directive: \c %%no-typedef
+    - Parse option: @ref PO_NO_TYPEDEF
+
+    When disabled, \c typedef is treated as an identifier rather than a keyword.
+
+    <hr>
+    @section union_type union<...>
+
+    The \c union<...> syntax creates an explicit union type that can hold values of any of the specified
+    member types. This is useful when a variable, parameter, or return value needs to accept multiple
+    specific types.
+
+    @par Syntax
+    @code{.py}
+union<type1, type2, ...>   # union of specified types
+*union<type1, type2, ...>  # or-nothing union (also accepts NOTHING)
+    @endcode
+
+    @par Basic Examples
+    @code{.py}
+# Variable that can hold int or string
+union<int, string> value = 42;
+value = "hello";  # OK - string is in the union
+
+# Function returning different types
+union<int, string> sub getValue(bool useInt) {
+    if (useInt) {
+        return 42;
+    }
+    return "hello";
+}
+    @endcode
+
+    @par Or-Nothing Unions
+    The or-nothing modifier allows the union to also accept NOTHING:
+    @code{.py}
+*union<int, string> x;       # x is NOTHING
+*union<int, string> y = 10;  # y is 10
+*union<int, string> z = "hello";  # z is "hello"
+    @endcode
+
+    @par In Function Signatures
+    @code{.py}
+string sub describe(union<int, string> val) {
+    if (val.typeCode() == NT_INT) {
+        return "integer: " + string(val);
+    }
+    return "string: " + val;
+}
+    @endcode
+
+    @par In Class Members
+    @code{.py}
+class Container {
+    private {
+        union<int, string> value;
+    }
+
+    constructor(union<int, string> v) {
+        value = v;
+    }
+
+    union<int, string> getValue() {
+        return value;
+    }
+}
+    @endcode
+
+    @par With Complex Types
+    Unions can contain complex types and be nested in other complex types:
+    @code{.py}
+# Union of complex types
+union<list<int>, hash<string, int>> data;
+
+# Union as element type
+list<union<int, string>> items = (1, "two", 3, "four");
+
+# Hash with union values
+hash<string, union<int, bool>> flags = {
+    "count": 5,
+    "enabled": True
+};
+    @endcode
+
+    @par With typedef
+    Unions work well with typedef for readable type declarations:
+    @code{.py}
+typedef IntOrString = union<int, string>;
+
+IntOrString sub getValue(bool useInt) {
+    return useInt ? 42 : "hello";
+}
+
+IntOrString x = 10;
+IntOrString y = "world";
+    @endcode
+
+    @par Type Checking and Narrowing
+    After a type check, the compiler narrows the type within that branch:
+    @code{.py}
+sub process(union<int, string> val) {
+    if (val.typeCode() == NT_INT) {
+        # val is treated as int here
+        return val * 2;
+    } else {
+        # val is treated as string here
+        return val + "!";
+    }
+}
+    @endcode
+
+    @par Constraints
+    Union types have the following constraints:
+    - Maximum of 100 member types
+    - At most one soft type (e.g., \c softint, \c softstring)
+    - Cannot have both soft and non-soft versions of the same base type
+      (e.g., \c union<int, \c softint> is invalid)
+
+    @code{.py}
+# Valid unions
+union<int, string>
+union<int, string, bool, float>
+union<int, softstring>  # OK - different base types
+
+# Invalid unions
+union<softint, softstring>  # Error: multiple soft types
+union<int, softint>         # Error: soft and non-soft of same base
+    @endcode
 */

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,9 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/FunctionCallNode.h"
+
+#include <algorithm>
+#include <set>
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
@@ -268,6 +271,11 @@ tmap_t ch_map,          // complex hash map
    cron_map,            // complex reference or nothing map
    csl_map,             // complex softlist map
    cslon_map;           // complex softlist or nothing map
+
+// Cache for union types - keyed by sorted vector of member types
+typedef std::map<type_vec_t, QoreUnionTypeInfo*> union_map_t;
+static union_map_t union_map,       // union types
+                   union_on_map;    // union or-nothing types
 
 // Cache for parameterized HashPairInfo types based on value type
 typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
@@ -657,6 +665,105 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
     QoreComplexReferenceOrNothingTypeInfo* ti = new QoreComplexReferenceOrNothingTypeInfo(vti);
     cron_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
+}
+
+// Helper function to create a normalized key for union type caching
+// Sorts member types by pointer value to ensure consistent cache lookups
+static type_vec_t normalize_union_key(const type_vec_t& member_types) {
+    type_vec_t key(member_types);
+    std::sort(key.begin(), key.end());
+    // Remove duplicates
+    key.erase(std::unique(key.begin(), key.end()), key.end());
+    return key;
+}
+
+// Helper function to build the union type name
+static QoreString build_union_name(const type_vec_t& member_types, bool or_nothing) {
+    QoreString name;
+    if (or_nothing) {
+        name.concat('*');
+    }
+    name.concat("union<");
+    for (size_t i = 0; i < member_types.size(); ++i) {
+        if (i > 0) {
+            name.concat(", ");
+        }
+        name.concat(QoreTypeInfo::getName(member_types[i]));
+    }
+    name.concat('>');
+    return name;
+}
+
+const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
+    // Handle edge cases
+    if (member_types.empty()) {
+        return autoTypeInfo;  // empty union accepts anything
+    }
+    if (member_types.size() == 1) {
+        const QoreTypeInfo* ti = member_types[0];
+        if (or_nothing) {
+            const QoreTypeInfo* orn = get_or_nothing_type(ti);
+            return orn ? orn : ti;
+        }
+        return ti;
+    }
+
+    // Normalize the key for consistent cache lookup
+    type_vec_t key = normalize_union_key(member_types);
+
+    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
+    bool has_nothing = false;
+    for (const QoreTypeInfo* ti : key) {
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+            has_nothing = true;
+            break;
+        }
+    }
+
+    // Use appropriate cache
+    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
+
+    AutoLocker al(ctl);
+
+    union_map_t::iterator i = cache.find(key);
+    if (i != cache.end()) {
+        return i->second;
+    }
+
+    // Build accept and return vectors from all member types
+    q_accept_vec_t accept_vec;
+    q_return_vec_t return_vec;
+
+    for (const QoreTypeInfo* ti : key) {
+        // Add accept types from this member
+        for (const auto& a : ti->accept_vec) {
+            accept_vec.push_back(a);
+        }
+        // Add return types from this member
+        for (const auto& r : ti->return_vec) {
+            return_vec.push_back(r);
+        }
+    }
+
+    // If or_nothing and no member accepts NOTHING, add it
+    if (or_nothing && !has_nothing) {
+        accept_vec.push_back({NT_NOTHING, nullptr});
+        accept_vec.push_back({NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }});
+        return_vec.push_back({NT_NOTHING});
+    }
+
+    // Build the name
+    QoreString name = build_union_name(member_types, or_nothing && !has_nothing);
+
+    // Create the union type
+    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name,
+        or_nothing || has_nothing);
+    cache[key] = ti;
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types) {
+    return qore_get_union_type(member_types, true);
 }
 
 static const QoreTypeInfo* getExternalTypeInfoForType(qore_type_t t) {
@@ -1866,6 +1973,29 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         // resolve class
         return resolveRuntimeClass(*subtypes[0]->cscope, or_nothing);
     }
+    if (!strcmp(cscope->ostr, "union")) {
+        if (subtypes.empty() || subtypes.size() > QORE_MAX_UNION_MEMBERS) {
+            return nullptr;
+        }
+
+        // Resolve all member types
+        type_vec_t member_types;
+        member_types.reserve(subtypes.size());
+
+        for (const auto& st : subtypes) {
+            if (!strcmp(st->cscope->ostr, "auto")) {
+                return autoTypeInfo;  // union<auto> = auto
+            }
+
+            const QoreTypeInfo* member = st->resolveRuntime();
+            if (!member) {
+                return nullptr;
+            }
+            member_types.push_back(member);
+        }
+
+        return qore_get_union_type(member_types, or_nothing);
+    }
     return nullptr;
 }
 
@@ -1998,6 +2128,78 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         // resolve class
         return resolveClass(loc, *subtypes[0]->cscope, or_nothing, err);
     }
+    if (!strcmp(cscope->ostr, "union")) {
+        // Validate union constraints
+        if (subtypes.empty()) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; union type requires at least one member " \
+                "type", getName());
+            err = -1;
+            return autoTypeInfo;  // return auto on error
+        }
+        if (subtypes.size() > QORE_MAX_UNION_MEMBERS) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; union type has %d member types but " \
+                "maximum allowed is %d", getName(), (int)subtypes.size(), (int)QORE_MAX_UNION_MEMBERS);
+            err = -1;
+            return autoTypeInfo;  // return auto on error
+        }
+
+        // Resolve all member types
+        type_vec_t member_types;
+        member_types.reserve(subtypes.size());
+
+        // Track soft types for validation
+        const QoreTypeInfo* soft_type = nullptr;
+        std::set<qore_type_t> base_types;
+
+        for (const auto& st : subtypes) {
+            if (!strcmp(st->cscope->ostr, "auto")) {
+                // union<auto> is equivalent to auto
+                return autoTypeInfo;
+            }
+
+            const QoreTypeInfo* member = QoreParseTypeInfo::resolveAny(st, loc, err);
+            if (err) {
+                return autoTypeInfo;  // return auto on error
+            }
+
+            // Check for soft type constraints
+            qore_type_t base_type = QoreTypeInfo::getBaseType(member);
+            bool is_soft = QoreTypeInfo::getName(member)[0] == 's' &&
+                           (strncmp(QoreTypeInfo::getName(member), "soft", 4) == 0);
+
+            if (is_soft) {
+                if (soft_type && soft_type != member) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; union type can have at most one " \
+                        "soft type but found '%s' and '%s'", getName(), QoreTypeInfo::getName(soft_type),
+                        QoreTypeInfo::getName(member));
+                    err = -1;
+                    return autoTypeInfo;  // return auto on error
+                }
+                soft_type = member;
+
+                // Check for soft+non-soft of same base type
+                if (base_types.find(base_type) != base_types.end()) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; union type cannot have both soft " \
+                        "and non-soft versions of the same base type", getName());
+                    err = -1;
+                    return autoTypeInfo;  // return auto on error
+                }
+            } else {
+                // Check if we already have a soft version of this base type
+                if (soft_type && QoreTypeInfo::getBaseType(soft_type) == base_type) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; union type cannot have both soft " \
+                        "and non-soft versions of the same base type", getName());
+                    err = -1;
+                    return autoTypeInfo;  // return auto on error
+                }
+                base_types.insert(base_type);
+            }
+
+            member_types.push_back(member);
+        }
+
+        return qore_get_union_type(member_types, or_nothing);
+    }
 
     parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type '%s' does not take subtype declarations",
         getName(), cscope->getIdentifier());
@@ -2031,6 +2233,41 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAndDelete(const QoreProgramLocatio
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
         bool or_nothing, int& err) {
+    // check for typedef first (only for simple names without scope qualification)
+    if (cscope.size() == 1) {
+        TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope.ostr);
+        if (td) {
+            // resolve the typedef's underlying type
+            const QoreTypeInfo* rv;
+            if (td->typeInfo) {
+                // already resolved
+                rv = td->typeInfo;
+            } else if (td->parseTypeInfo) {
+                // resolve the parse type info
+                rv = td->parseTypeInfo->resolve(loc, err);
+                // cache the resolved type for future lookups
+                td->typeInfo = rv;
+            } else {
+                // should not happen - typedef without type info
+                parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
+                err = -1;
+                return autoTypeInfo;
+            }
+
+            // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
+            if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {
+                // need to get the or-nothing variant of this type
+                const QoreTypeInfo* orn = qore_get_or_nothing_type(rv);
+                if (orn) {
+                    return orn;
+                }
+                // if we can't get or-nothing variant, just return the base type
+                // the caller should handle the or_nothing semantics
+            }
+            return rv;
+        }
+    }
+
     // resolve class
     const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, cscope);
 

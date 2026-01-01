@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1023,6 +1023,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%disable-debug{WS}*$                   parse_disable_parse_options(yylloc, PO_ENABLE_DEBUG);
 ^%no-reflection{WS}*$                   parse_set_parse_options(yylloc, PO_NO_REFLECTION);
 ^%no-transient{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TRANSIENT);
+^%no-typedef{WS}*$                      parse_set_parse_options(yylloc, PO_NO_TYPEDEF);
 ^%push-parse-options{WS}*$              push_parse_options();
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);
@@ -1932,6 +1933,12 @@ transient                               {
                                                 yylval->string = strdup("transient"); return IDENTIFIER;
                                             }
                                             return TOK_TRANSIENT;
+                                        }
+typedef                                 {
+                                            if (getProgram()->getParseOptions64() & PO_NO_TYPEDEF) {
+                                                yylval->string = strdup("typedef"); return IDENTIFIER;
+                                            }
+                                            return TOK_TYPEDEF;
                                         }
 map                                     { push_ignore_numeric_argv_ref(); return TOK_MAP; }
 foldr                                   { push_ignore_numeric_argv_ref(); return TOK_FOLDR; }

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -151,6 +151,41 @@ public:
     }
     DLLLOCAL bool isPublic() const {
         return pub;
+    }
+};
+
+class TypedefNode {
+public:
+    const QoreProgramLocation* loc;
+    NamedScope name;
+    const QoreTypeInfo* typeInfo;       //!< resolved type info (for built-in types)
+    QoreParseTypeInfo* parseTypeInfo;   //!< parse-time type info (for complex types)
+    bool pub;
+
+    DLLLOCAL TypedefNode(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* ti,
+            QoreParseTypeInfo* pti, bool p = false)
+            : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), pub(p) {
+    }
+    DLLLOCAL TypedefNode(const QoreProgramLocation* loc, NamedScope* n, const QoreTypeInfo* ti,
+            QoreParseTypeInfo* pti, bool p = false)
+            : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), pub(p) {
+    }
+    DLLLOCAL ~TypedefNode() {
+        delete parseTypeInfo;
+    }
+    DLLLOCAL const char* getName() const {
+        return name.getIdentifier();
+    }
+    DLLLOCAL bool isPublic() const {
+        return pub;
+    }
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
+    }
+    DLLLOCAL QoreParseTypeInfo* takeParseTypeInfo() {
+        QoreParseTypeInfo* rv = parseTypeInfo;
+        parseTypeInfo = nullptr;
+        return rv;
     }
 };
 
@@ -657,6 +692,7 @@ static AbstractQoreNode* parse_map(const QoreProgramLocation* loc, QoreValue exp
 #define NSN_NS       4
 #define NSN_FUNC     5
 #define NSN_SFUNC    6
+#define NSN_TYPEDEF  9
 #define NSN_VAR      7
 #define NSN_METH     8
 
@@ -666,6 +702,7 @@ struct NSNode {
         ObjClassDef* ocd;
         HashDeclDef* hashdecl;
         ConstNode* cn;
+        TypedefNode* td;
         QoreNamespace* ns;
         ParseUserFunction* func;
         ParseScopedUserFunction* sfunc;
@@ -676,6 +713,7 @@ struct NSNode {
     DLLLOCAL NSNode(ObjClassDef* o) { type = NSN_OCD; n.ocd = o; }
     DLLLOCAL NSNode(HashDeclDef* h) { type = NSN_HASHDECL; n.hashdecl = h; }
     DLLLOCAL NSNode(ConstNode* c) { type = NSN_CONST; n.cn = c; }
+    DLLLOCAL NSNode(TypedefNode* t) { type = NSN_TYPEDEF; n.td = t; }
     DLLLOCAL NSNode(QoreNamespace* s) { type = NSN_NS; n.ns = s; }
     DLLLOCAL NSNode(ParseUserFunction* f) : type(NSN_FUNC) {
         n.func = f;
@@ -702,6 +740,9 @@ struct NSNode {
                 break;
             case NSN_CONST:
                 delete n.cn;
+                break;
+            case NSN_TYPEDEF:
+                delete n.td;
                 break;
             case NSN_NS:
                 delete n.ns;
@@ -739,6 +780,10 @@ struct NSNode {
             case NSN_CONST:
                 ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub);
                 delete n.cn;
+                break;
+            case NSN_TYPEDEF:
+                ns.parseAddTypedef(n.td->loc, n.td->name, n.td->getTypeInfo(), n.td->takeParseTypeInfo(), n.td->pub);
+                delete n.td;
                 break;
             case NSN_NS:
                 ns.parseAddNamespace(n.ns);
@@ -1573,6 +1618,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     QoreClass* qoreclass;
     typed_hash_decl_private* hashdeclpriv;
     class ConstNode* constnode;
+    class TypedefNode* typedefnode;
     QoreNamespace *ns;
     struct NSNodeList* nsnlist;
     struct NSNode* nsn;
@@ -1665,6 +1711,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token TOK_ABSTRACT "abstract"
 %token TOK_HASHDECL "hashdecl"
 %token TOK_TRANSIENT "transient"
+%token TOK_TYPEDEF "typedef"
 %token TOK_NULL "NULL"
 %token TOK_NOTHING "NOTHING"
 %token TOK_TRUE "True"
@@ -1834,6 +1881,8 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <nsn>            namespace_decl
 %type <constnode>      scoped_const_decl
 %type <constnode>      unscoped_const_decl
+%type <typedefnode>    typedef_decl
+%type <typedefnode>    scoped_typedef_decl
 %type <i4>             method_modifiers
 %type <i4>             method_modifier
 %type <i4>             nsc_modifiers
@@ -1886,6 +1935,17 @@ top_level_command:
     }
     | hashdecl_def {
         qore_root_ns_private::parseAddHashDecl($1->loc, *($1->name), $1->takeHashDecl());
+        delete $1;
+    }
+    | typedef_decl {
+        NamedScope ns($1->getName());
+        qore_root_ns_private::parseAddTypedef($1->loc, ns, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
+        delete $1;
+    }
+    | scoped_typedef_decl {
+        // see if strong encapsulation is enabled
+        check_strong_encapsulation($1->loc, "typedef", $1->name.ostr);
+        qore_root_ns_private::parseAddTypedef($1->loc, $1->name, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
         delete $1;
     }
     | scoped_const_decl {
@@ -2133,6 +2193,14 @@ namespace_decl:
     | unscoped_const_decl {
         $$ = new NSNode($1);
     }
+    | scoped_typedef_decl {
+        // see if strong encapsulation is enabled
+        check_strong_encapsulation($1->loc, "typedef", $1->name.ostr);
+        $$ = new NSNode($1);
+    }
+    | typedef_decl {
+        $$ = new NSNode($1);
+    }
     | class_def {
         $$ = new NSNode($1);
     }
@@ -2173,6 +2241,40 @@ scoped_const_decl:
     }
     | TOK_PUBLIC TOK_CONST SCOPED_REF '=' exp ';' {
         $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $3, $5, true);
+    }
+    ;
+
+typedef_decl:
+    TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreTypeInfo* ti = $4->getTypeInfo();
+        QoreParseTypeInfo* pti = $4->getParseTypeInfo();
+        delete $4;
+        $$ = new TypedefNode(loc, $2, ti, pti);
+    }
+    | TOK_PUBLIC TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreTypeInfo* ti = $5->getTypeInfo();
+        QoreParseTypeInfo* pti = $5->getParseTypeInfo();
+        delete $5;
+        $$ = new TypedefNode(loc, $3, ti, pti, true);
+    }
+    ;
+
+scoped_typedef_decl:
+    TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreTypeInfo* ti = $4->getTypeInfo();
+        QoreParseTypeInfo* pti = $4->getParseTypeInfo();
+        delete $4;
+        $$ = new TypedefNode(loc, $2, ti, pti);
+    }
+    | TOK_PUBLIC TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreTypeInfo* ti = $5->getTypeInfo();
+        QoreParseTypeInfo* pti = $5->getParseTypeInfo();
+        delete $5;
+        $$ = new TypedefNode(loc, $3, ti, pti, true);
     }
     ;
 

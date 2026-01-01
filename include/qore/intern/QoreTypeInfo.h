@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -3944,5 +3944,63 @@ protected:
         return false;
     }
 };
+
+//! Maximum number of types allowed in a union type
+constexpr size_t QORE_MAX_UNION_MEMBERS = 100;
+
+//! Type info for explicitly declared union types (union<T1, T2, ...>)
+class QoreUnionTypeInfo : public QoreTypeInfo {
+public:
+    //! Constructor for explicit union types
+    DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+            const QoreString& name, bool or_nothing = false)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing) {
+    }
+
+    //! Returns true if this is an or-nothing union type
+    DLLLOCAL bool isOrNothing() const {
+        return orNothing;
+    }
+
+protected:
+    bool orNothing;  //!< true if this union type accepts NOTHING
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        str.concat(&tname);
+    }
+
+    // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        // union types generally cannot be converted to scalars unless all members can
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return orNothing;  // *union<...> has a default value of NOTHING
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        // Only *union<...> has a default value (NOTHING); regular union<...> has no default
+        return QoreValue();
+    }
+
+    // returns true if this type could contain an object or a closure
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return true;  // conservatively assume union could contain scannable types
+    }
+};
+
+//! Vector of type infos for union member types
+typedef std::vector<const QoreTypeInfo*> type_vec_t;
+
+//! Creates or retrieves a cached union type for the given member types
+/** @param member_types vector of member types
+    @param or_nothing if true, the union type also accepts NOTHING
+    @return the union type info, or nullptr on error
+*/
+DLLLOCAL const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing = false);
+
+//! Creates or retrieves a cached or-nothing union type for the given member types
+DLLLOCAL const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
 
 #endif // _QORE_QORETYPEINFO_H
