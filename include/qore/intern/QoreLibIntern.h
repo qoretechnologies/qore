@@ -1093,7 +1093,7 @@ DLLLOCAL AbstractQoreNode* missing_method_error(const char* meth, const char* op
 // checks for illegal "self" assignments in an object context
 DLLLOCAL int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar* selfid);
 
-DLLLOCAL void ignore_return_value(QoreSimpleValue& n);
+DLLLOCAL void ignore_return_value(const QoreSimpleValue& n);
 
 DLLLOCAL void qore_string_init();
 

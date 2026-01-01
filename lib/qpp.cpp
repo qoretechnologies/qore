@@ -2496,6 +2496,52 @@ protected:
         return 0;
     }
 
+    // Generate vector-based arguments for abstract methods to avoid varargs ABI issues
+    int serializeBindingArgsVectors(FILE* fp) const {
+        size_t size = params.size();
+        if (size && params[size - 1].type == "...")
+            --size;
+
+        // Generate type_vec_t
+        fputs(", type_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            std::string str;
+            if (get_qore_type(params[i].type, str))
+                return -1;
+            fputs(str.c_str(), fp);
+        }
+        fputs("}", fp);
+
+        // Generate arg_vec_t
+        fputs(", arg_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            if (params[i].val.empty())
+                fputs("QoreValue()", fp);
+            else {
+                std::string vs;
+                if (get_qore_value(params[i].val, vs, nullptr, nullptr, true))
+                    return -1;
+                fputs(vs.c_str(), fp);
+            }
+        }
+        fputs("}", fp);
+
+        // Generate name_vec_t
+        fputs(", name_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            fprintf(fp, "\"%s\"", params[i].name.c_str());
+        }
+        fputs("}", fp);
+
+        return 0;
+    }
+
     void serializeQoreAttrComment(FILE* fp, unsigned indent = 0, const char* comment_str = "//") const {
         while (indent--)
             fputc(' ', fp);
@@ -4074,8 +4120,15 @@ public:
         }
         fprintf(fp, "%s", cppt.c_str());
 
-        if (serializeBindingArgs(fp))
-            return -1;
+        // Use vector-based arguments for abstract methods to avoid varargs ABI issues
+        // with NaN-boxed QoreValue across shared library boundaries
+        if (attr & QCA_ABSTRACT) {
+            if (serializeBindingArgsVectors(fp))
+                return -1;
+        } else {
+            if (serializeBindingArgs(fp))
+                return -1;
+        }
 
         fputs(");\n", fp);
 

@@ -75,6 +75,68 @@ class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
 
+// ============================================================================
+// QoreSimpleValue - Trivially copyable value type for unions and varargs
+// ============================================================================
+
+//! Minimal value type with uninitialized default constructor for use in unions
+/** This struct is designed for use in:
+    - C unions (requires trivial default constructor)
+    - varargs passing (requires trivial copy)
+
+    WARNING: Default constructor leaves bits UNINITIALIZED.
+    Convert to QoreValue before calling any methods.
+
+    @code
+    // In union:
+    union { QoreSimpleValue qv; ... };
+
+    // When using:
+    QoreValue(u.qv).someMethod();  // Convert first!
+    @endcode
+
+    @see QoreValue for the safe version with initialized default constructor
+*/
+struct QoreSimpleValue {
+    //! The raw 64-bit NaN-boxed value - PUBLIC for direct access in parser
+    uint64_t bits;
+
+    //! Default constructor - leaves bits UNINITIALIZED (required for unions)
+    QoreSimpleValue() noexcept = default;
+
+    //! Copy constructor - trivial
+    QoreSimpleValue(const QoreSimpleValue&) noexcept = default;
+
+    //! Copy assignment - trivial
+    QoreSimpleValue& operator=(const QoreSimpleValue&) noexcept = default;
+
+    //! Construct from QoreValue (implicit conversion)
+    DLLLOCAL inline QoreSimpleValue(const QoreValue& v) noexcept;
+
+    //! Assignment from QoreValue
+    DLLLOCAL inline QoreSimpleValue& operator=(const QoreValue& v) noexcept;
+
+    //! Returns the raw bits for debugging/serialization
+    DLLLOCAL uint64_t rawBits() const noexcept { return bits; }
+
+    //! Set raw bits directly (for deserialization)
+    DLLLOCAL void setRawBits(uint64_t b) noexcept { bits = b; }
+
+    //! Explicit bool conversion - true if not Nothing (bits != 0) and not Null
+    /** Note: This is a quick check, not a full type analysis */
+    DLLLOCAL explicit operator bool() const noexcept {
+        // Nothing is 0, Null is 0xFFFB000000000001
+        return bits != 0 && bits != 0xFFFB000000000001ULL;
+    }
+};
+
+// Compile-time verification that QoreSimpleValue is trivially copyable (required for unions/varargs)
+static_assert(std::is_trivially_copyable<QoreSimpleValue>::value,
+    "QoreSimpleValue must be trivially copyable for use in unions and varargs");
+static_assert(std::is_trivially_default_constructible<QoreSimpleValue>::value,
+    "QoreSimpleValue must be trivially default constructible for use in unions");
+static_assert(sizeof(QoreSimpleValue) == 8, "QoreSimpleValue must be exactly 8 bytes");
+
 //! namespace for implementation details of QoreValue functions
 namespace detail {
     //! used in QoreLValue::get() - returns T* for class types
@@ -271,14 +333,18 @@ public:
     // Constructors
     // ========================================================================
 
-    //! Default constructor: trivial for use in unions (bits are uninitialized)
-    //! IMPORTANT: For local variables, use QoreValue{} or makeNothing() for a valid NOTHING value
-    //! The NaN-boxing encoding requires bits = 0 for NOTHING, which only happens with
-    //! value-initialization (brace init) or zero-initialization (static storage)
-    QoreValue() noexcept = default;
+    //! Default constructor: initializes to NOTHING (safe)
+    /** Unlike QoreSimpleValue, QoreValue's default constructor is safe and
+        initializes the value to NOTHING. Use QoreSimpleValue only in unions
+        or varargs where trivial construction is required.
+    */
+    DLLLOCAL constexpr QoreValue() noexcept : bits(0) {}
+
+    //! Construct from QoreSimpleValue (implicit conversion)
+    DLLLOCAL constexpr QoreValue(QoreSimpleValue sv) noexcept : bits(sv.bits) {}
 
     //! Creates a boolean value
-    constexpr QoreValue(bool b) noexcept : bits(b ? VAL_TRUE : VAL_FALSE) {}
+    DLLLOCAL constexpr QoreValue(bool b) noexcept : bits(b ? VAL_TRUE : VAL_FALSE) {}
 
     //! Creates an integer value (stores inline if in 48-bit range, otherwise allocates QoreBigIntNode)
     DLLEXPORT QoreValue(int i);
@@ -725,8 +791,16 @@ public:
 // Compile-time size verification
 static_assert(sizeof(QoreValue) == 8, "QoreValue must be exactly 8 bytes");
 
-// Legacy type alias for backward compatibility
-using QoreSimpleValue = QoreValue;
+// ============================================================================
+// QoreSimpleValue inline implementations (must be after QoreValue is defined)
+// ============================================================================
+
+inline QoreSimpleValue::QoreSimpleValue(const QoreValue& v) noexcept : bits(v.rawBits()) {}
+
+inline QoreSimpleValue& QoreSimpleValue::operator=(const QoreValue& v) noexcept {
+    bits = v.rawBits();
+    return *this;
+}
 
 // ============================================================================
 // RAII Helper Classes
