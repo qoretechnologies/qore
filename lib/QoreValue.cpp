@@ -293,11 +293,17 @@ const AbstractQoreNode* QoreValue::getInternalNode() const {
 }
 
 bool QoreValue::isValue() const {
+    // Match old behavior: NOTHING is not considered a "value" for constant folding
+    // In the old implementation, NOTHING was represented as QV_Node with v.n=nullptr,
+    // and isValue() returned false for it
+    if (isNothing()) {
+        return false;
+    }
     if (!isPointer()) {
         return true;
     }
     AbstractQoreNode* n = getPointerUnsafe();
-    return !n || n->is_value();
+    return n && n->is_value();
 }
 
 bool QoreValue::needsEval() const {
