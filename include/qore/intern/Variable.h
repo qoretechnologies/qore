@@ -110,6 +110,7 @@ private:
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment
+    const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred
     bool is_auto_type = false;          // true if declared type is an auto type
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
@@ -309,15 +310,20 @@ public:
         return is_auto_type;
     }
 
-    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc = nullptr);
     DLLLOCAL void parseMergeNarrowedType(const QoreTypeInfo* ti);
 
     DLLLOCAL const QoreTypeInfo* parseGetNarrowedType() const {
         return narrowedTypeInfo;
     }
 
+    DLLLOCAL const QoreProgramLocation* parseGetNarrowedLoc() const {
+        return narrowedLoc;
+    }
+
     DLLLOCAL void parseResetNarrowedType() {
         narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
     }
 };
 

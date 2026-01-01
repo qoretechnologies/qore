@@ -194,6 +194,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         QoreTypeInfo::getThisType(error_ti, *edesc);
         edesc->concat(", but right-hand side is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
+
+        // Add context about type narrowing if applicable
+        if (has_narrowed_type && !is_direct_auto_assignment) {
+            edesc->concat("; the container's element type was inferred from the initial value; "
+                "to use mixed types, include values of all needed types in the initial assignment, "
+                "or use %broken-narrowed-types to disable type narrowing");
+        }
+
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);
         if (!err) {
             err = -1;
@@ -209,14 +217,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
             if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
-                // Direct assignment replaces the narrowed type
-                lvar->parseSetNarrowedType(parse_context.typeInfo);
+                // Direct assignment replaces the narrowed type, store location for error messages
+                lvar->parseSetNarrowedType(parse_context.typeInfo, loc);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
             if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
-                // Direct assignment replaces the narrowed type
-                gvar->parseSetNarrowedType(parse_context.typeInfo);
+                // Direct assignment replaces the narrowed type, store location for error messages
+                gvar->parseSetNarrowedType(parse_context.typeInfo, loc);
             }
         }
     }

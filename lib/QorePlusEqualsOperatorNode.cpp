@@ -65,9 +65,14 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     if (eti) {
         if (!QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
             if (!QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
-                parseException(*loc, "PARSE-TYPE-ERROR", "cannot append a value with type '%s' to a list with " \
-                    "element type '%s'",
+                QoreStringNode* edesc = new QoreStringNodeMaker(
+                    "cannot append a value with type '%s' to a list with element type '%s'",
                     QoreTypeInfo::getName(rightTypeInfo), QoreTypeInfo::getName(eti));
+                // Add context about type narrowing
+                edesc->concat("; the list's element type was inferred from the initial value; "
+                    "to use mixed types, include values of all needed types in the initial assignment, "
+                    "or use %broken-narrowed-types to disable type narrowing");
+                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
                 if (!err) {
                     err = -1;
                 }

@@ -549,8 +549,9 @@ public:
     //! Sets the narrowed type for the variable (called during assignment parsing)
     /** Only sets if this is an auto-typed variable and the new type is more specific
         @param ti the type from the right-hand side of the assignment
+        @param loc the location where narrowing occurred (optional)
     */
-    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc = nullptr);
 
     //! Merges the given type with the current narrowed type (for branch handling)
     /** Uses matchCommonType to find the union type between the current narrowed type
@@ -564,9 +565,15 @@ public:
         return narrowedTypeInfo;
     }
 
+    //! Returns the location where narrowing occurred, or nullptr if not set
+    DLLLOCAL const QoreProgramLocation* parseGetNarrowedLoc() const {
+        return narrowedLoc;
+    }
+
     //! Resets the narrowed type (e.g., when entering a new scope)
     DLLLOCAL void parseResetNarrowedType() {
         narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
     }
 
 private:
@@ -578,6 +585,7 @@ private:
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
+    const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_find_lvar(name.c_str());

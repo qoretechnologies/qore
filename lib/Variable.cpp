@@ -2254,7 +2254,7 @@ bool LocalVar::isAutoTypeInfo(const QoreTypeInfo* ti) {
     return false;
 }
 
-void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti) {
+void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
     }
@@ -2263,6 +2263,7 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti) {
         return;
     }
     narrowedTypeInfo = ti;
+    narrowedLoc = loc;
 }
 
 void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
@@ -2307,7 +2308,7 @@ bool Var::isAutoTypeInfo(const QoreTypeInfo* ti) {
     return false;
 }
 
-void Var::parseSetNarrowedType(const QoreTypeInfo* ti) {
+void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
     if (!is_auto_type) {
         return;  // Only narrow auto types
     }
@@ -2316,6 +2317,7 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti) {
         return;
     }
     narrowedTypeInfo = ti;
+    narrowedLoc = loc;
 }
 
 void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {
