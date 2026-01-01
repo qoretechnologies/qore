@@ -58,10 +58,13 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
-    if (QoreTypeInfo::isType(ti, NT_LIST)) {
+    // issue #5765 use getReturnComplexListOrNothing to handle or-nothing types (e.g., *list<int>)
+    // so that list append operations on nested structures preserve type checking
+    // Check if lvalue type returns a list (including *list types)
+    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(ti);
+    if (eti) {
         if (!QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-            const QoreTypeInfo* eti = QoreTypeInfo::getUniqueReturnComplexList(ti);
-            if (eti && !QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
+            if (!QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
                 parseException(*loc, "PARSE-TYPE-ERROR", "cannot append a value with type '%s' to a list with " \
                     "element type '%s'",
                     QoreTypeInfo::getName(rightTypeInfo), QoreTypeInfo::getName(eti));
