@@ -126,6 +126,15 @@
       - integrates with typedef: \c typedef \c IntOrString \c = \c union<int, \c string>;
       - supports parse-time type narrowing after type checks
       - constraints: maximum 100 member types, at most one soft type, no soft+non-soft of same base type
+    - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
+      (<a href="https://github.com/qoretechnologies/qore/issues/5089">issue 5089</a>)
+      - syntax: \c code<int(string)> for a callable returning int and taking a string parameter
+      - enables parse-time type checking for closures and call references
+      - covariant return types: assigned closure can return a more specific type
+      - contravariant parameter types: assigned closure can accept more general types
+      - supports or-nothing variant: \c *code<int(string)>
+      - works with complex types: \c code<list<int>(hash<string, \c int>)>
+      - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
     - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)

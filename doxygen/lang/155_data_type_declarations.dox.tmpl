@@ -43,6 +43,7 @@
     |@ref softlist_complex_type "softlist<...>"|all types|@ref list|Accepts all data types; @ref nothing is returned as an empty list; a list is returned with its elements processed by the subtype declaration, and any other type is returned as the first element of a new list, also processed by the subtype declaration
     |@ref data_type "data"|@ref string or @ref binary|same as received|Restricts input to @ref string and @ref binary and returns the same type
     |@ref code_type "code"|@ref closure, @ref call_reference|same as received|Restricts values to @ref closure "closures" and @ref call_reference "call references"
+    |@ref code_complex_type "code<...>"|@ref closure, @ref call_reference with compatible signature|same as received|Restricts values to @ref closure "closures" and @ref call_reference "call references" with signature matching the type arguments
     |@ref reference_type "reference"|@ref lvalue_references|the type the reference points to|Restricts values to references to lvalues
     |@ref reference_complex_type "reference<...>"|@ref lvalue_references|the type given as an argument|Restricts values to references to lvalues compatible with the given type
     |@ref int_or_nothing_type "*int"|@ref integer, @ref null, or @ref nothing|@ref integer or @ref nothing|Restricts values to %Qore's @ref integer or @ref nothing types; if @ref null is passed then @ref nothing is returned
@@ -63,6 +64,7 @@
     |@ref null_or_nothing_type "*null"|@ref null or @ref nothing|@ref null or @ref nothing|Restricts input to @ref null or @ref nothing and returns the same type
     |@ref data_or_nothing_type "*data"|@ref string, @ref binary, @ref null, or @ref nothing|@ref string, @ref binary, or @ref nothing|Restricts input to @ref string, @ref binary, or @ref nothing and returns the same type; if @ref null is passed then @ref nothing is returned
     |@ref code_or_nothing_type "*code"|@ref closure, @ref call_reference, @ref null, or @ref nothing|@ref closure, @ref call_reference, or @ref nothing|Restricts values to @ref closure "closures", @ref call_reference "call references" and @ref nothing; if @ref null is passed then @ref nothing is returned
+    |@ref code_complex_or_nothing_type "*code<...>"|@ref closure, @ref call_reference with compatible signature, @ref null, or @ref nothing|@ref closure, @ref call_reference, or @ref nothing|Restricts values to @ref closure "closures" and @ref call_reference "call references" with signature matching the type arguments, or @ref nothing
     |@ref timeout_or_nothing_type "*timeout"|@ref integer, @ref date, @ref null, or @ref nothing|@ref integer or @ref nothing|Accepts @ref integer, @ref date and converts dates to an integer value representing milliseconds and returns the integer; incoming integers are assumed to represent milliseconds. If no value or @ref null is passed, then @ref nothing is returned
     |@ref reference_or_nothing_type "*reference"|@ref lvalue_references, @ref null, or @ref nothing|the type the reference points to and @ref nothing|Restricts values to references to lvalues and @ref nothing; if @ref null is passed then @ref nothing is returned
     |@ref reference_complex_or_nothing_type "*reference<...>"|@ref lvalue_references, @ref null, or @ref nothing|the type given as an argument and @ref nothing|Restricts values to references to lvalues compatible with the given type and @ref nothing; if @ref null is passed then @ref nothing is returned
@@ -718,6 +720,83 @@ sub foo(code c) {
 
     @note that also \c "closure" and \c "callref" are accepted as synonyms for \c "code" (they are not more specific than \c "code" but rather provide identical type restrictions)
 
+    @subsection code_complex_type Typed Callable
+
+    <b>Typed Callable Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c code&lt;<em>ReturnType</em>(<em>ParamTypes...</em>)&gt;|@ref closure, @ref call_reference with compatible signature|same as received|Restricts values to @ref closure and @ref call_reference with a specific signature
+
+    The typed callable syntax allows specifying the expected return type and parameter types for closures and call references. The signature follows the format \c code<ReturnType(ParamType1, ParamType2, ...)>.
+
+    Type compatibility follows standard variance rules:
+    - <b>Return types</b> are covariant: the assigned closure can return a more specific type than declared
+    - <b>Parameter types</b> are contravariant: the assigned closure can accept more general types than declared
+
+    @par Examples
+    @code{.py}
+# Basic typed callable with return and parameter types
+code<int(string)> lengthFunc = int sub (string s) { return s.length(); };
+int len = lengthFunc("hello");  # returns 5
+
+# Multiple parameters
+code<string(int, string)> formatter = string sub (int x, string s) {
+    return sprintf("%d: %s", x, s);
+};
+
+# Covariant return: auto accepts any specific return type
+code<auto(string)> flexReturn = int sub (string s) { return s.length(); };
+
+# Contravariant parameters: closure accepts auto where string is expected
+code<int(string)> acceptsGeneral = int sub (auto x) { return 42; };
+
+# Complex parameter and return types
+code<list<int>(hash<string, int>)> transformer = list<int> sub (hash<string, int> h) {
+    return h.values();
+};
+
+# Function parameter with typed callable
+sub process(code<int(string)> processor, string input) {
+    int result = processor(input);
+    printf("Result: %d\n", result);
+}
+process(lengthFunc, "test");
+
+# Class member with typed callable
+class Calculator {
+    private code<int(int, int)> operation = int sub (int a, int b) { return a + b; };
+
+    int calculate(int x, int y) {
+        return operation(x, y);
+    }
+
+    setOperation(code<int(int, int)> op) {
+        operation = op;
+    }
+}
+
+# Higher-order functions: function returning typed callable
+code<int(int)> sub getMultiplier(int factor) {
+    return int sub (int x) { return x * factor; };
+}
+code<int(int)> tripler = getMultiplier(3);
+int result = tripler(5);  # returns 15
+    @endcode
+
+    @note Closures with default parameters can be assigned to typed callables expecting fewer parameters, as long as the required parameters match.
+
+    @par Incompatible Assignments
+    The following will cause parse-time type errors:
+    @code{.py}
+# Error: return type mismatch (string vs int)
+code<int(string)> func = string sub (string s) { return s; };
+
+# Error: parameter type mismatch (int vs string)
+code<int(string)> func = int sub (int x) { return x; };
+
+# Error: fewer parameters than expected
+code<int(int, string)> func = int sub (int x) { return x; };
+    @endcode
+
     <hr>
     @section reference_type reference
 
@@ -982,6 +1061,39 @@ sub foo(*data d) {
 sub foo(*code c) {
 }
     @endcode
+
+    @subsection code_complex_or_nothing_type *code<...>
+
+    <b>Typed Callable Or-Nothing Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c *code&lt;<em>ReturnType</em>(<em>ParamTypes...</em>)&gt;|@ref closure, @ref call_reference with compatible signature, @ref null, or @ref nothing|same as received, or @ref nothing|Restricts values to @ref closure and @ref call_reference with a specific signature, and @ref nothing
+
+    Combines the typed callable signature checking with the ability to hold @ref nothing.
+
+    @par Example
+    @code{.py}
+# Declare or-nothing typed callable
+*code<int(string)> maybeFunc;
+# Initially NOTHING
+assert(maybeFunc == NOTHING);
+
+# Assign compatible closure
+maybeFunc = int sub (string s) { return s.length(); };
+int len = maybeFunc("hello");  # returns 5
+
+# Reset to NOTHING
+maybeFunc = NOTHING;
+
+# Use in function with optional callback
+sub processWithOptionalCallback(string data, *code<nothing(string)> callback) {
+    # process data...
+    if (callback) {
+        callback(data);
+    }
+}
+    @endcode
+
+    @note Typed or-nothing callables still enforce signature compatibility - incompatible closures will cause parse-time type errors.
 
     <hr>
     @section timeout_or_nothing_type *timeout

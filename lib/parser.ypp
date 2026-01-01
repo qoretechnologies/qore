@@ -1107,6 +1107,7 @@ public:
         QoreString buf;
         bool or_nothing = false;
         bool comma = false;
+        int paren_depth = 0;  // Track parenthesis depth for callable types like code<int(string, bool)>
 
         const char* p = str;
         while (true) {
@@ -1120,7 +1121,26 @@ public:
                 break;
             }
             switch (*p) {
+                case '(':
+                    ++paren_depth;
+                    buf.concat(*p);
+                    if (comma)
+                        comma = false;
+                    break;
+                case ')':
+                    --paren_depth;
+                    buf.concat(*p);
+                    if (comma)
+                        comma = false;
+                    break;
                 case '<': {
+                    // Inside parentheses, just accumulate the character
+                    if (paren_depth > 0) {
+                        buf.concat(*p);
+                        if (comma)
+                            comma = false;
+                        break;
+                    }
                     if (buf.empty()) {
                         if (raise_error)
                             parse_error(*loc, "invalid subtype specification in '%s'", str);
@@ -1128,20 +1148,31 @@ public:
                     }
                     // Find matching '>' using bracket counting instead of strrchr
                     // This correctly handles nested types like hash<list<int>, list<string>>
-                    int depth = 1;
+                    // Also handle parentheses inside angle brackets for callable types
+                    int angle_depth = 1;
+                    int inner_paren_depth = 0;
                     const char* e = p + 1;
-                    while (*e && depth > 0) {
-                        if (*e == '<') ++depth;
-                        else if (*e == '>') --depth;
-                        if (depth > 0) ++e;
+                    while (*e && angle_depth > 0) {
+                        if (*e == '(') ++inner_paren_depth;
+                        else if (*e == ')') --inner_paren_depth;
+                        else if (*e == '<' && inner_paren_depth == 0) ++angle_depth;
+                        else if (*e == '>' && inner_paren_depth == 0) --angle_depth;
+                        if (angle_depth > 0) ++e;
                     }
-                    if (depth != 0 || *e != '>') {
+                    if (angle_depth != 0 || *e != '>') {
                         if (raise_error)
                             parse_error(*loc, "unbalanced angle brackets in subtype specification in '%s'", str);
                         return;
                     }
                     buf.concat(p, e - p + 1);
                     //printd(5, "ST: '%s' (str: '%s') p: %p '%s'\n", buf.c_str(), str, p, p);
+                    // Check if next character is '(' - if so, continue accumulating for callable type syntax
+                    // e.g., hash<string, int>(list<string>) should be a single subtype
+                    if (*(e + 1) == '(') {
+                        // Don't push yet - continue accumulating
+                        p = e;
+                        break;
+                    }
                     subtypes.push_back(getParseType(loc, buf.giveBuffer(), or_nothing));
                     buf.reset();
                     or_nothing = false;
@@ -1149,7 +1180,25 @@ public:
                     p = e;
                     break;
                 }
+                case '>':
+                    // Inside parentheses, just accumulate the character
+                    if (paren_depth > 0) {
+                        buf.concat(*p);
+                        if (comma)
+                            comma = false;
+                        break;
+                    }
+                    // Otherwise this is unexpected - accumulate for error reporting
+                    buf.concat(*p);
+                    if (comma)
+                        comma = false;
+                    break;
                 case ',':
+                    // Inside parentheses, don't split on comma - just accumulate
+                    if (paren_depth > 0) {
+                        buf.concat(*p);
+                        break;
+                    }
                     buf.trim();
                     if (!buf.empty()) {
                         // Push the accumulated simple type
@@ -1194,6 +1243,23 @@ public:
         //printd(0, "gPT() '%s'\n", id);
         char* p0 = strchr(id, '<');
         if (p0) {
+            // Check if this is a callable signature with form: ReturnType(Params...)
+            // where ReturnType may be a complex type like hash<string, int>
+            // In this case, we should NOT parse it as a complex type - keep the raw string
+            char* paren = strchr(id, '(');
+            if (paren) {
+                // Find where angle brackets end
+                int angle_depth = 0;
+                for (char* p = id; p < paren; ++p) {
+                    if (*p == '<') ++angle_depth;
+                    else if (*p == '>') --angle_depth;
+                }
+                // If parentheses come after angle brackets are balanced (or there are none),
+                // this is a callable signature - don't parse as complex type
+                if (angle_depth == 0) {
+                    return new QoreParseTypeInfo(id, or_nothing);
+                }
+            }
             char* p1 = strrchr(id, '>');
             if (p1 > (p0 + 1)) {
                 // terminate main type string

@@ -358,7 +358,7 @@ public namespace TableMapper {
             *int hbuf_size;
 
             #! per-row @ref closure or @ref call_reference for batch inserts/upserts
-            *code rowcode;
+            *code<nothing(hash<auto>)> rowcode;
 
             #! upsert flag
             bool upsert = False;
@@ -367,7 +367,7 @@ public namespace TableMapper {
             *int upsert_strategy;
 
             #! closure used for upserting
-            *code upsert_code;
+            *code<int(hash<auto>)> upsert_code;
         }
 
         #! builds the object based on a hash providing field mappings, data constraints, and optionally custom mapping logic
@@ -709,7 +709,7 @@ table_mapper.setRowCode(rowcode);
 
             @note the per-row @ref closure "closure" or @ref call_reference "call reference" can also be set by using the \c "rowcode" option in the constructor()
         */
-        setRowCode(*code rowc) {
+        setRowCode(*code<nothing(hash<auto>)> rowc) {
             rowcode = rowc;
         }
 

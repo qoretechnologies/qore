@@ -40,6 +40,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/Function.h"
 
 #include <algorithm>
 #include <set>
@@ -277,6 +278,28 @@ typedef std::map<type_vec_t, QoreUnionTypeInfo*> union_map_t;
 static union_map_t union_map,       // union types
                    union_on_map;    // union or-nothing types
 
+// Cache key for typed callable types: (returnType, paramTypes, varargs, or_nothing)
+struct ComplexCodeCacheKey {
+    const QoreTypeInfo* returnType;
+    type_vec_t paramTypes;
+    bool varargs;
+    bool orNothing;
+
+    bool operator<(const ComplexCodeCacheKey& other) const {
+        if (returnType != other.returnType) return returnType < other.returnType;
+        if (paramTypes.size() != other.paramTypes.size()) return paramTypes.size() < other.paramTypes.size();
+        for (size_t i = 0; i < paramTypes.size(); ++i) {
+            if (paramTypes[i] != other.paramTypes[i]) return paramTypes[i] < other.paramTypes[i];
+        }
+        if (varargs != other.varargs) return varargs < other.varargs;
+        return orNothing < other.orNothing;
+    }
+};
+
+// Cache for typed callable types
+typedef std::map<ComplexCodeCacheKey, QoreComplexCodeTypeInfo*> complex_code_map_t;
+static complex_code_map_t complex_code_map;
+
 // Cache for parameterized HashPairInfo types based on value type
 typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
 static hp_decl_map_t hp_decl_map;
@@ -390,6 +413,14 @@ void delete_qore_types() {
     for (auto& i : csl_map)
         delete i.second;
     for (auto& i : cslon_map)
+        delete i.second;
+    // Clean up union type cache
+    for (auto& i : union_map)
+        delete i.second;
+    for (auto& i : union_on_map)
+        delete i.second;
+    // Clean up typed callable type cache
+    for (auto& i : complex_code_map)
         delete i.second;
     // Clean up hash pair info decl cache
     for (auto& i : hp_decl_map)
@@ -764,6 +795,411 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
 
 const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types) {
     return qore_get_union_type(member_types, true);
+}
+
+// Forward declaration
+static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str);
+
+// Helper function to parse a type string into a QoreParseTypeInfo with proper subtypes
+static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
+    // Trim whitespace
+    while (*type_str && isspace(*type_str)) ++type_str;
+    if (!*type_str) return nullptr;
+
+    std::string str(type_str);
+    while (!str.empty() && isspace(str.back())) str.pop_back();
+    if (str.empty()) return nullptr;
+
+    // Check for or-nothing prefix
+    bool or_nothing = false;
+    if (str[0] == '*') {
+        or_nothing = true;
+        str.erase(0, 1);
+    }
+
+    // Check if this is a complex type (has angle brackets)
+    size_t angle_pos = str.find('<');
+    if (angle_pos == std::string::npos) {
+        // Simple type
+        return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
+    }
+
+    // Complex type - find matching '>'
+    int depth = 1;
+    size_t close_pos = angle_pos + 1;
+    while (close_pos < str.size() && depth > 0) {
+        if (str[close_pos] == '<') ++depth;
+        else if (str[close_pos] == '>') --depth;
+        ++close_pos;
+    }
+    if (depth != 0) {
+        // Unbalanced brackets - return as-is
+        return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
+    }
+    --close_pos;  // Point to the closing '>'
+
+    // Extract base type and subtype content
+    std::string base_type = str.substr(0, angle_pos);
+    std::string subtype_content = str.substr(angle_pos + 1, close_pos - angle_pos - 1);
+
+    // Parse subtypes (split on commas, respecting nested brackets)
+    parse_type_vec_t subtypes;
+    std::string current;
+    int angle_depth = 0;
+    for (size_t i = 0; i <= subtype_content.size(); ++i) {
+        char c = i < subtype_content.size() ? subtype_content[i] : '\0';
+        if (c == '<') {
+            ++angle_depth;
+            current += c;
+        } else if (c == '>') {
+            --angle_depth;
+            current += c;
+        } else if ((c == ',' || c == '\0') && angle_depth == 0) {
+            // Trim whitespace
+            while (!current.empty() && isspace(current.back())) current.pop_back();
+            while (!current.empty() && isspace(current.front())) current.erase(0, 1);
+            if (!current.empty()) {
+                // Recursively parse this subtype
+                QoreParseTypeInfo* sub_pti = parse_type_string_to_pti(current.c_str());
+                if (sub_pti) {
+                    subtypes.push_back(sub_pti);
+                }
+            }
+            current.clear();
+        } else {
+            current += c;
+        }
+    }
+
+    return new QoreParseTypeInfo(strdup(base_type.c_str()), or_nothing, std::move(subtypes));
+}
+
+// Helper function to parse a type string and resolve it (for use in code<> signature parsing)
+// This handles complex types like "hash<string, int>" and "list<string>"
+static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, const QoreProgramLocation* loc, int& err) {
+    // Trim whitespace
+    while (*type_str && isspace(*type_str)) ++type_str;
+    if (!*type_str) return nullptr;
+
+    std::string str(type_str);
+    while (!str.empty() && isspace(str.back())) str.pop_back();
+    if (str.empty()) return nullptr;
+
+    // Check for or-nothing prefix
+    bool or_nothing = false;
+    const char* check_str = str.c_str();
+    if (str[0] == '*') {
+        or_nothing = true;
+        check_str++;
+    }
+
+    // Check for "nothing" type
+    if (!strcmp(check_str, "nothing")) {
+        return nothingTypeInfo;
+    }
+
+    // Check for "auto" type
+    if (!strcmp(check_str, "auto")) {
+        return autoTypeInfo;
+    }
+
+    // Check if this is a simple type (no angle brackets)
+    if (!strchr(str.c_str(), '<')) {
+        // Simple type - try to resolve as builtin first
+        const QoreTypeInfo* rv = or_nothing
+            ? getBuiltinUserOrNothingTypeInfo(check_str)
+            : getBuiltinUserTypeInfo(check_str);
+        if (rv) return rv;
+    }
+
+    // Parse the type string into a QoreParseTypeInfo with proper structure
+    QoreParseTypeInfo* pti = parse_type_string_to_pti(type_str);
+    if (!pti) return nullptr;
+
+    return QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
+}
+
+// Helper function to build the typed callable type name
+static QoreString build_complex_code_name(const QoreTypeInfo* returnType, const type_vec_t& paramTypes,
+        bool varargs, bool or_nothing) {
+    QoreString name;
+    if (or_nothing) {
+        name.concat('*');
+    }
+    name.concat("code<");
+    // Return type
+    if (returnType) {
+        name.concat(QoreTypeInfo::getName(returnType));
+    } else {
+        name.concat("nothing");
+    }
+    name.concat('(');
+    // Parameter types
+    for (size_t i = 0; i < paramTypes.size(); ++i) {
+        if (i > 0) {
+            name.concat(", ");
+        }
+        name.concat(QoreTypeInfo::getName(paramTypes[i]));
+    }
+    if (varargs) {
+        if (!paramTypes.empty()) {
+            name.concat(", ");
+        }
+        name.concat("...");
+    }
+    name.concat(")>");
+    return name;
+}
+
+// Helper function to build the path name for typed callable
+static QoreString build_complex_code_path(const QoreTypeInfo* returnType, const type_vec_t& paramTypes,
+        bool varargs, bool or_nothing) {
+    QoreString name;
+    if (or_nothing) {
+        name.concat('*');
+    }
+    name.concat("code<");
+    // Return type
+    if (returnType) {
+        name.concat(QoreTypeInfo::getPath(returnType));
+    } else {
+        name.concat("nothing");
+    }
+    name.concat('(');
+    // Parameter types
+    for (size_t i = 0; i < paramTypes.size(); ++i) {
+        if (i > 0) {
+            name.concat(", ");
+        }
+        name.concat(QoreTypeInfo::getPath(paramTypes[i]));
+    }
+    if (varargs) {
+        if (!paramTypes.empty()) {
+            name.concat(", ");
+        }
+        name.concat("...");
+    }
+    name.concat(")>");
+    return name;
+}
+
+// Helper to build accept_vec for typed callable
+static q_accept_vec_t build_complex_code_accept_vec(bool or_nothing) {
+    q_accept_vec_t avec;
+    avec.push_back({NT_RUNTIME_CLOSURE, nullptr});
+    avec.push_back({NT_FUNCREF, nullptr});
+    if (or_nothing) {
+        avec.push_back({NT_NOTHING, nullptr});
+        avec.push_back({NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }});
+    }
+    return avec;
+}
+
+// Helper to build return_vec for typed callable
+static q_return_vec_t build_complex_code_return_vec(bool or_nothing) {
+    q_return_vec_t rvec;
+    rvec.push_back({NT_RUNTIME_CLOSURE});
+    rvec.push_back({NT_FUNCREF});
+    if (or_nothing) {
+        rvec.push_back({NT_NOTHING});
+    }
+    return rvec;
+}
+
+QoreComplexCodeTypeInfo::QoreComplexCodeTypeInfo(const QoreTypeInfo* ret_type, type_vec_t&& param_types,
+        bool varargs_arg, bool or_nothing_arg)
+        : QoreTypeInfo(build_complex_code_accept_vec(or_nothing_arg),
+            build_complex_code_return_vec(or_nothing_arg),
+            build_complex_code_name(ret_type, param_types, varargs_arg, or_nothing_arg)),
+          returnType(ret_type), paramTypes(std::move(param_types)),
+          varargs(varargs_arg), orNothing(or_nothing_arg) {
+    // Set path name
+    pname = build_complex_code_path(ret_type, paramTypes, varargs, orNothing);
+}
+
+bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignature* sig) const {
+    if (!sig) {
+        return false;
+    }
+
+    // Check return type compatibility (covariant)
+    // The callable's return type must be assignable to our return type
+    const QoreTypeInfo* sigReturnType = sig->getReturnTypeInfo();
+    if (returnType) {
+        // We expect a specific return type - check if the callable's return type is compatible
+        // Covariant: the callable can return a more specific type
+        if (!QoreTypeInfo::parseAccepts(returnType, sigReturnType)) {
+            return false;
+        }
+    }
+    // If returnType is nullptr (nothing), any return type is accepted
+
+    // If we accept varargs, any parameter count is OK
+    if (varargs) {
+        return true;
+    }
+
+    // Check parameter count
+    unsigned sigNumParams = sig->numParams();
+    size_t ourParamCount = paramTypes.size();
+
+    // Compute minimum required params for the signature (params without defaults)
+    unsigned sigMinParams = 0;
+    for (unsigned i = 0; i < sigNumParams; ++i) {
+        if (!sig->hasDefaultArg(i)) {
+            sigMinParams = i + 1;
+        }
+    }
+
+    // The callable must be able to accept our parameter count
+    // - We need at least sigMinParams
+    // - We can have at most sigNumParams unless the callable has varargs
+    if (ourParamCount < sigMinParams) {
+        return false;
+    }
+    if (ourParamCount > sigNumParams && !sig->hasVarargs()) {
+        return false;
+    }
+
+    // Check each parameter type (contravariant)
+    // Our param types must be assignable to the callable's param types
+    for (size_t i = 0; i < ourParamCount && i < sigNumParams; ++i) {
+        const QoreTypeInfo* sigParamType = sig->getParamTypeInfo(i);
+        const QoreTypeInfo* ourParamType = paramTypes[i];
+
+        if (ourParamType) {
+            // We specify a param type - check contravariance
+            // The callable's param type must accept our param type
+            if (!QoreTypeInfo::parseAccepts(sigParamType, ourParamType)) {
+                return false;
+            }
+        }
+        // If ourParamType is nullptr, any param type is accepted
+    }
+
+    return true;
+}
+
+const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
+        const type_vec_t& param_types, bool varargs, bool or_nothing) {
+    // Create cache key
+    ComplexCodeCacheKey key{return_type, param_types, varargs, or_nothing};
+
+    AutoLocker al(ctl);
+
+    complex_code_map_t::iterator i = complex_code_map.find(key);
+    if (i != complex_code_map.end()) {
+        return i->second;
+    }
+
+    // Create copy of param_types for the constructor
+    type_vec_t params_copy(param_types);
+
+    // Create the typed callable type
+    QoreComplexCodeTypeInfo* ti = new QoreComplexCodeTypeInfo(return_type, std::move(params_copy),
+        varargs, or_nothing);
+    complex_code_map[key] = ti;
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
+        const type_vec_t& param_types, bool varargs) {
+    return qore_get_complex_code_type(return_type, param_types, varargs, true);
+}
+
+const QoreTypeInfo* qore_get_complex_code_type_from_signature(const AbstractFunctionSignature* sig,
+        bool or_nothing) {
+    if (!sig) {
+        return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+    }
+
+    // Extract return type
+    const QoreTypeInfo* return_type = sig->getReturnTypeInfo();
+
+    // Extract parameter types
+    type_vec_t param_types;
+    unsigned num_params = sig->numParams();
+    for (unsigned i = 0; i < num_params; ++i) {
+        param_types.push_back(sig->getParamTypeInfo(i));
+    }
+
+    // Check for varargs
+    bool varargs = sig->hasVarargs();
+
+    return qore_get_complex_code_type(return_type, param_types, varargs, or_nothing);
+}
+
+const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    // Check if the type is a QoreComplexCodeTypeInfo by attempting a dynamic_cast
+    return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
+}
+
+bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+    // Get complex code types
+    const QoreComplexCodeTypeInfo* target_code = getComplexCodeType(target);
+    const QoreComplexCodeTypeInfo* source_code = getComplexCodeType(source);
+
+    // If target is not a typed callable, no additional checking needed
+    if (!target_code) {
+        return true;
+    }
+
+    // If source is not a typed callable but target is, it's compatible
+    // (the basic parseAccepts already checked that source is a code type)
+    if (!source_code) {
+        // Source is generic code type - compatible at parse time, runtime check needed
+        return true;
+    }
+
+    // Both are typed callables - compare signatures
+    // Check return type compatibility (covariant)
+    // Source's return type must be assignable to target's return type
+    const QoreTypeInfo* target_ret = target_code->getReturnType();
+    const QoreTypeInfo* source_ret = source_code->getReturnType();
+
+    if (target_ret) {
+        // Target expects a specific return type
+        if (!parseAccepts(target_ret, source_ret)) {
+            return false;
+        }
+    }
+
+    // If target accepts varargs, skip param count checking
+    if (target_code->hasVarArgs()) {
+        return true;
+    }
+
+    // Check parameter count
+    const type_vec_t& target_params = target_code->getParamTypes();
+    const type_vec_t& source_params = source_code->getParamTypes();
+
+    // Source must accept at least as many params as target specifies
+    // (contravariance means source can have fewer required params)
+    if (source_params.size() < target_params.size() && !source_code->hasVarArgs()) {
+        // Source doesn't have varargs and has fewer params than target
+        return false;
+    }
+
+    // Check each parameter type (contravariant)
+    // Source's param types must accept target's param types
+    size_t check_count = std::min(target_params.size(), source_params.size());
+    for (size_t i = 0; i < check_count; ++i) {
+        const QoreTypeInfo* target_param = target_params[i];
+        const QoreTypeInfo* source_param = source_params[i];
+
+        if (target_param) {
+            // Target specifies a param type - check contravariance
+            // Source's param type must accept target's param type
+            if (!parseAccepts(source_param, target_param)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 static const QoreTypeInfo* getExternalTypeInfoForType(qore_type_t t) {
@@ -2199,6 +2635,120 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
 
         return qore_get_union_type(member_types, or_nothing);
+    }
+    if (!strcmp(cscope->ostr, "code")) {
+        // Parse typed callable: code<ReturnType(ParamType1, ParamType2, ...)>
+        // Expected format: subtypes[0] contains "ReturnType(ParamType1, ParamType2, ...)"
+        if (subtypes.size() != 1) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; 'code' type takes a single callable " \
+                "signature specification in the form 'ReturnType(ParamTypes...)'", getName());
+            err = -1;
+            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+        }
+
+        // Use getName() to get the full type string including angle brackets and parentheses
+        const char* sig_str = subtypes[0]->getName();
+
+        // Find the opening parenthesis to split return type from params
+        const char* paren_open = strchr(sig_str, '(');
+        if (!paren_open) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
+                "expected format 'ReturnType(ParamTypes...)' with parentheses", getName(), sig_str);
+            err = -1;
+            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+        }
+
+        // Find closing parenthesis
+        const char* paren_close = strrchr(sig_str, ')');
+        if (!paren_close || paren_close < paren_open) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
+                "missing closing parenthesis", getName(), sig_str);
+            err = -1;
+            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+        }
+
+        // Extract return type string
+        std::string return_type_str(sig_str, paren_open - sig_str);
+        // Trim whitespace
+        while (!return_type_str.empty() && isspace(return_type_str.back())) {
+            return_type_str.pop_back();
+        }
+        while (!return_type_str.empty() && isspace(return_type_str.front())) {
+            return_type_str.erase(0, 1);
+        }
+
+        // Resolve return type
+        const QoreTypeInfo* returnType = nullptr;
+        if (!return_type_str.empty() && return_type_str != "nothing") {
+            // Use the helper to properly parse and resolve complex types
+            returnType = parse_and_resolve_type_string(return_type_str.c_str(), loc, err);
+            if (err) {
+                return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+            }
+        }
+        // If empty or "nothing", returnType stays nullptr (means nothing return)
+
+        // Extract parameter types string
+        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
+
+        // Check for varargs
+        bool has_varargs = false;
+        size_t dotdotdot_pos = params_str.rfind("...");
+        if (dotdotdot_pos != std::string::npos) {
+            has_varargs = true;
+            // Remove "..." from params_str
+            params_str = params_str.substr(0, dotdotdot_pos);
+            // Trim trailing comma and whitespace
+            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
+                params_str.pop_back();
+            }
+        }
+
+        // Parse parameter types
+        type_vec_t param_types;
+        if (!params_str.empty()) {
+            // Split on commas, handling nested angle brackets
+            std::string current_param;
+            int angle_depth = 0;
+            int paren_depth = 0;
+            for (size_t i = 0; i <= params_str.size(); ++i) {
+                char c = i < params_str.size() ? params_str[i] : '\0';
+                if (c == '<') {
+                    ++angle_depth;
+                    current_param += c;
+                } else if (c == '>') {
+                    --angle_depth;
+                    current_param += c;
+                } else if (c == '(') {
+                    ++paren_depth;
+                    current_param += c;
+                } else if (c == ')') {
+                    --paren_depth;
+                    current_param += c;
+                } else if ((c == ',' || c == '\0') && angle_depth == 0 && paren_depth == 0) {
+                    // Trim whitespace from current_param
+                    while (!current_param.empty() && isspace(current_param.back())) {
+                        current_param.pop_back();
+                    }
+                    while (!current_param.empty() && isspace(current_param.front())) {
+                        current_param.erase(0, 1);
+                    }
+                    if (!current_param.empty()) {
+                        // Use the helper to properly parse and resolve complex types
+                        const QoreTypeInfo* param_type = parse_and_resolve_type_string(current_param.c_str(), loc, err);
+                        if (err) {
+                            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+                        }
+                        param_types.push_back(param_type);
+                    }
+                    current_param.clear();
+                } else {
+                    current_param += c;
+                }
+            }
+        }
+
+        return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
     }
 
     parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type '%s' does not take subtype declarations",
