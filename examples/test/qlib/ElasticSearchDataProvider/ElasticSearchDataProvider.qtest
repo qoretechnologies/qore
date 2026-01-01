@@ -25,9 +25,9 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
         RestClient rest;
 
         # checkModule helper
-        static checkModule() {
+        static checkModule(Test test) {
 %ifdef NoJson
-            throw "SKIPPED", "no json module";
+            test.testSkip("no json module");
 %endif
         }
 
@@ -54,7 +54,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     }
 
     private mainTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -188,7 +188,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk API operations
     private bulkApiTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -263,7 +263,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test scroll API operations
     private scrollApiTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -334,7 +334,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test aggregation API
     private aggregationTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -425,7 +425,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk operation class (record-based bulk insert)
     private bulkOperationTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -474,7 +474,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Negative tests - test error handling
     private negativeTests() {
-        checkModule();
+        checkModule(self);
         # Test bulk API with invalid action type
         if (rest) {
             ElasticSearchBulkDataProvider bulk(rest);

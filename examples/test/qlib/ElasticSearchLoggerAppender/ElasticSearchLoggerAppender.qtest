@@ -23,9 +23,9 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     private {
         RestClient rest;
 
-        static checkModule() {
+        static checkModule(Test test) {
 %ifdef NoJson
-            throw "SKIPPED", "no json module";
+            test.testSkip("no json module");
 %endif
         }
 
@@ -51,7 +51,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test constructor validation
     private constructorTest() {
-        checkModule();
+        checkModule(self);
         # Test missing url
         try {
             new ElasticSearchLoggerAppender::ElasticSearchLoggerAppender(
@@ -96,7 +96,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test document creation from log events
     private documentCreationTest() {
-        checkModule();
+        checkModule(self);
         # Create appender with mock-like settings (won't actually connect)
         ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
             "test",
@@ -137,7 +137,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test batching behavior
     private batchingTest() {
-        checkModule();
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -201,7 +201,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Negative tests
     private negativeTests() {
-        checkModule();
+        checkModule(self);
         # Test with REST client constructor - missing index
         if (rest) {
             try {

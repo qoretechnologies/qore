@@ -165,6 +165,7 @@ class MyRestHandler inherits RestHandler {
     }
 }
 
+%ifndef NoJson
 class SwaggerRestHandler inherits RestHandler {
     constructor(AbstractRestSchemaValidator validator) : RestHandler(NOTHING, validator) {
         addClass(new TestRestClass());
@@ -172,6 +173,7 @@ class SwaggerRestHandler inherits RestHandler {
         addClass(new B2543RestClass());
     }
 }
+%endif
 
 class DummyListenerInterface inherits HttpListenerInterface {
     addUserThreadContext(hash<auto> uctx) {}
@@ -187,8 +189,6 @@ public class RestHandlerTest inherits QUnit::Test {
         MyRestHandler mHandler();
 %ifndef NoJson
         SwaggerRestHandler swaggerHandler(RestHandlerTest::getSwagger());
-%else
-        SwaggerRestHandler swaggerHandler;
 %endif
         int port;
 

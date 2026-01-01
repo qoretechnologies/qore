@@ -23,7 +23,9 @@
 
 public class Main inherits QUnit::Test {
     private {
+%ifndef NoJson
         EmpathicBuildingRestConnection ebrc;
+%endif
         Logger logger;
 
         # command-line options
@@ -47,7 +49,9 @@ public class Main inherits QUnit::Test {
             } else if (m_options.verbose) {
                 printf("%s: %s\n", ex.err, ex.desc);
             }
+%ifndef NoJson
             remove ebrc;
+%endif
         }
 
         # Return for compatibility with test harness that checks return value.
@@ -72,6 +76,7 @@ public class Main inherits QUnit::Test {
 
     dataProviderTest() {
         checkModule();
+%ifndef NoJson
         if (!ebrc) {
             testSkip("no connection");
         }
@@ -83,10 +88,12 @@ public class Main inherits QUnit::Test {
 
         prov = ebrc.getDataProvider().getChildProviderPath("organizations");
         assertEq("organizations", prov.getName());
+%endif
     }
 
     connectionTest() {
         checkModule();
+%ifndef NoJson
         {
             EmpathicBuildingRestConnection rc({
                 "name": "test",
@@ -100,10 +107,12 @@ public class Main inherits QUnit::Test {
             assertEq(45000, client.getTimeout());
             assertEq(45000, client.getConnectTimeout());
         }
+%endif
     }
 
     pollTest() {
         checkModule();
+%ifndef NoJson
         if (!ebrc) {
             testSkip("no connection");
         }
@@ -124,6 +133,7 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
+%endif
     }
 
     private error(string fmt) {
@@ -131,6 +141,7 @@ public class Main inherits QUnit::Test {
     }
 
     private setupConnection() {
+%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.HUE_CONNECTION;
         if (conn_name.val()) {
             AbstractConnection conn = get_connection(conn_name);
@@ -153,6 +164,7 @@ public class Main inherits QUnit::Test {
         ebrc.getDataProvider();
         # ensure that pings work
         ebrc.ping();
+%endif
     }
 }
 

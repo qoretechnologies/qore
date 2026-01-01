@@ -21,7 +21,9 @@
 
 public class OpenAiDataProviderTest inherits QUnit::Test {
     public {
+%ifndef NoJson
         OpenAiRestConnection rc;
+%endif
         Logger logger;
 
         # command-line options
@@ -58,15 +60,19 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 
     sanityTest() {
         checkModule();
+%ifndef NoJson
         hash<auto> fake_opts = {
             "token": "x",
         };
         OpenAiRestConnection rc("test", "test", NOTHING, NOTHING, fake_opts);
         OpenAiDataProvider prov(rc.get(True));
         assertEq("openai", prov.getName());
+%endif
     }
 
     test() {
+        checkModule();
+%ifndef NoJson
         if (!rc) {
             testSkip("no connection");
         }
@@ -74,6 +80,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = new OpenAiDataProvider(rc.get());
         prov = prov.getChildProvider("models");
         assertGt(0, prov.getChildProviderNames().size());
+%endif
     }
 
     private usageIntern() {
@@ -86,6 +93,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
+%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.OPENAI_CONNECTION;
         if (!conn_name.val()) {
             error("missing -c,--connection option or OPENAI_CONNECTION environment variable");
@@ -96,5 +104,6 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             error("connection %y is type %y; expecting \"OpenAiRestConnection\"", conn_name, conn.className());
         }
         rc = conn;
+%endif
     }
 }
