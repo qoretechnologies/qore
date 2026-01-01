@@ -744,7 +744,7 @@ public:
     // ========================================================================
 
     //! Assignment operator (trivial - just copies bits)
-    constexpr QoreValue& operator=(const QoreValue& n) noexcept = default;
+    QoreValue& operator=(const QoreValue& n) noexcept = default;
 
     //! Returns true if the value is not NOTHING
     DLLLOCAL explicit operator bool() const { return !isNothing(); }
