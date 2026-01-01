@@ -24,19 +24,19 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     private {
         RestClient rest;
 
-        # checkModule helper
-        static checkModule(Test test) {
-%ifdef NoJson
-            test.testSkip("no json module");
-%endif
-        }
-
         # command-line options
         const MyOpts = Opts + {
             "url": "u,url=s",
         };
 
         const OptionColumn = 22;
+    }
+
+    # checkModule helper
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
     }
 
     constructor() : Test("ElasticSearchDataProvider Test", "1.0") {

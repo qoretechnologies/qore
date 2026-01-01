@@ -444,6 +444,7 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     badRequestTest() {
+%ifndef NoYaml
         {
             HTTPClient client({"url": mClient.getURL()});
 
@@ -467,6 +468,7 @@ public class RestHandlerTest inherits QUnit::Test {
             assertEq(400, info."response-headers".status_code);
             assertEq("True", info."response-headers".error);
         }
+%endif
         {
             RestClient client({"url": mClient.getURL()});
 

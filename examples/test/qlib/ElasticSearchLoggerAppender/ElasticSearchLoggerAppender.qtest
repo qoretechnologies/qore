@@ -23,18 +23,18 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     private {
         RestClient rest;
 
-        static checkModule(Test test) {
-%ifdef NoJson
-            test.testSkip("no json module");
-%endif
-        }
-
         # command-line options
         const MyOpts = Opts + {
             "url": "u,url=s",
         };
 
         const OptionColumn = 22;
+    }
+
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
     }
 
     constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {
