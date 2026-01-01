@@ -142,7 +142,9 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
             } else {
                 // issue #2115 when dereferencing a hash, we could get also NOTHING when the requested key value is
                 // not present
-                complexKeyTypeInfo = get_or_nothing_type_check(QoreTypeInfo::getUniqueReturnComplexHash(lti));
+                // issue #5765 use getReturnComplexHashOrNothing to handle or-nothing types (e.g., *hash<string, int>)
+                // so that nested member access like h.a.a preserves type information for parse-time checking
+                complexKeyTypeInfo = get_or_nothing_type_check(QoreTypeInfo::getReturnComplexHashOrNothing(lti));
             }
         }
 

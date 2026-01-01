@@ -348,14 +348,18 @@ public:
 // now shared between parent and child Program objects for top-level local variables with global scope
 class LocalVar {
 public:
-    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti)
-            : name(n_name), is_auto_type(isAutoTypeInfo(ti)), typeInfo(ti),
-              refTypeInfo(QoreTypeInfo::getReferenceTarget(ti)) {
+    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name) {
+        const QoreTypeInfo* base_ti;
+        no_narrowing = isNoNarrowMarkerType(ti, base_ti);
+        is_auto_type = isAutoTypeInfo(base_ti);
+        typeInfo = base_ti;
+        refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
     }
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_auto_type(old.is_auto_type),
-            typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo), narrowedTypeInfo(old.narrowedTypeInfo) {
+            no_narrowing(old.no_narrowing), typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
+            narrowedTypeInfo(old.narrowedTypeInfo) {
     }
 
     DLLLOCAL ~LocalVar() {
@@ -546,11 +550,22 @@ public:
         return is_auto_type;
     }
 
+    //! Returns true if type narrowing is disabled for this variable (declared with auto!)
+    DLLLOCAL bool isNoNarrowing() const {
+        return no_narrowing;
+    }
+
+    //! Sets the no_narrowing flag (called when variable is declared with auto!)
+    DLLLOCAL void setNoNarrowing() {
+        no_narrowing = true;
+    }
+
     //! Sets the narrowed type for the variable (called during assignment parsing)
     /** Only sets if this is an auto-typed variable and the new type is more specific
         @param ti the type from the right-hand side of the assignment
+        @param loc the location where narrowing occurred (optional)
     */
-    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc = nullptr);
 
     //! Merges the given type with the current narrowed type (for branch handling)
     /** Uses matchCommonType to find the union type between the current narrowed type
@@ -564,9 +579,15 @@ public:
         return narrowedTypeInfo;
     }
 
+    //! Returns the location where narrowing occurred, or nullptr if not set
+    DLLLOCAL const QoreProgramLocation* parseGetNarrowedLoc() const {
+        return narrowedLoc;
+    }
+
     //! Resets the narrowed type (e.g., when entering a new scope)
     DLLLOCAL void parseResetNarrowedType() {
         narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
     }
 
 private:
@@ -574,10 +595,12 @@ private:
     bool closure_use = false,
         parse_assigned = false,
         is_self = false,
-        is_auto_type = false;       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
+        is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
+        no_narrowing = false;       // true if declared with auto! to disable type narrowing
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
+    const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_find_lvar(name.c_str());
@@ -585,6 +608,10 @@ private:
 
     //! Helper to detect if a type is an auto type that can be narrowed
     DLLLOCAL static bool isAutoTypeInfo(const QoreTypeInfo* ti);
+
+    //! Helper to check if a type is a no-narrow marker type and get the base type
+    //! Returns true if the type should have no_narrowing set, and sets base_ti to the actual type to use
+    DLLLOCAL static bool isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*& base_ti);
 };
 
 typedef LocalVar* lvar_ptr_t;

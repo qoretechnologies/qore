@@ -110,7 +110,9 @@ private:
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment
+    const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred
     bool is_auto_type = false;          // true if declared type is an auto type
+    bool no_narrowing = false;          // true if declared with auto! to disable type narrowing
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
     bool is_thread_local;               // is this a thread_local var?
@@ -162,8 +164,13 @@ public:
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, const QoreTypeInfo* n_typeInfo,
-            bool builtin = false, bool is_thread_local = false) : loc(loc), val(n_typeInfo), name(n_name),
-            typeInfo(n_typeInfo), pub(false), finalized(false), is_thread_local(is_thread_local), builtin(builtin) {
+            bool builtin = false, bool is_thread_local = false)
+            : loc(loc), name(n_name), pub(false), finalized(false),
+              is_thread_local(is_thread_local), builtin(builtin) {
+        const QoreTypeInfo* base_ti;
+        no_narrowing = isNoNarrowMarkerType(n_typeInfo, base_ti);
+        typeInfo = base_ti;
+        val.set(base_ti);
     }
 
     //! Used when importing variables from another QoreProgram container
@@ -263,6 +270,15 @@ public:
             val.set(typeInfo);
         }
 
+        // Check if this is a no-narrow marker type (disables type narrowing)
+        const QoreTypeInfo* base_ti;
+        if (isNoNarrowMarkerType(typeInfo, base_ti)) {
+            no_narrowing = true;
+            typeInfo = base_ti;
+            refTypeInfo = QoreTypeInfo::getReferenceTarget(typeInfo);
+            val.set(typeInfo);
+        }
+
         // Set is_auto_type flag based on the resolved typeInfo
         is_auto_type = isAutoTypeInfo(typeInfo);
 
@@ -274,6 +290,9 @@ public:
     }
 
     DLLLOCAL static bool isAutoTypeInfo(const QoreTypeInfo* ti);
+
+    //! Helper to check if a type is a no-narrow marker type and get the base type
+    DLLLOCAL static bool isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*& base_ti);
 
     DLLLOCAL QoreParseTypeInfo* copyParseTypeInfo() const {
         return parseTypeInfo ? parseTypeInfo->copy() : nullptr;
@@ -309,15 +328,28 @@ public:
         return is_auto_type;
     }
 
-    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti);
+    DLLLOCAL bool isNoNarrowing() const {
+        return no_narrowing;
+    }
+
+    DLLLOCAL void setNoNarrowing() {
+        no_narrowing = true;
+    }
+
+    DLLLOCAL void parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc = nullptr);
     DLLLOCAL void parseMergeNarrowedType(const QoreTypeInfo* ti);
 
     DLLLOCAL const QoreTypeInfo* parseGetNarrowedType() const {
         return narrowedTypeInfo;
     }
 
+    DLLLOCAL const QoreProgramLocation* parseGetNarrowedLoc() const {
+        return narrowedLoc;
+    }
+
     DLLLOCAL void parseResetNarrowedType() {
         narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
     }
 };
 
