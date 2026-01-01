@@ -38,6 +38,7 @@
 #include <qore/node_types.h>
 
 #include <string>
+#include <cstring>
 
 #include <cassert>
 
@@ -57,6 +58,30 @@ struct QoreParseContext;
  */
 class AbstractQoreNode : public QoreReferenceCounter {
 public:
+    //! custom operator new that zero-initializes memory to avoid valgrind warnings about uninitialized bitfield padding
+    DLLLOCAL static void* operator new(size_t size) {
+        void* ptr = ::operator new(size);
+        memset(ptr, 0, size);
+        return ptr;
+    }
+
+    //! custom operator new[] for arrays
+    DLLLOCAL static void* operator new[](size_t size) {
+        void* ptr = ::operator new[](size);
+        memset(ptr, 0, size);
+        return ptr;
+    }
+
+    //! standard delete operator
+    DLLLOCAL static void operator delete(void* ptr) noexcept {
+        ::operator delete(ptr);
+    }
+
+    //! standard delete[] operator
+    DLLLOCAL static void operator delete[](void* ptr) noexcept {
+        ::operator delete[](ptr);
+    }
+
     //! constructor takes the type
     /** The type code for the class is passed as the argument to the constructor
         @param t the Qore type code identifying this class in the Qore type system
