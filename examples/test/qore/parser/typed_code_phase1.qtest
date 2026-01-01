@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypedCodePhase1Test
+
+class TypedCodePhase1Test inherits QUnit::Test {
+    constructor() : QUnit::Test("TypedCodePhase1Test", "1.0") {
+        addTestCase("Basic type infrastructure test", \basicTypeTest());
+        addTestCase("Code type basic assignment test", \codeTypeBasicTest());
+        addTestCase("Closure signature test", \closureSignatureTest());
+        addTestCase("Call reference signature test", \callRefSignatureTest());
+        addTestCase("Or-nothing code test", \orNothingCodeTest());
+        set_return_value(main());
+    }
+
+    basicTypeTest() {
+        # Test that basic code type still works
+        code c = auto sub () { return 1; };
+        assertEq(1, c());
+
+        code c2 = auto sub (int x) { return x * 2; };
+        assertEq(10, c2(5));
+
+        code c3 = int sub (int x, int y) { return x + y; };
+        assertEq(7, c3(3, 4));
+    }
+
+    codeTypeBasicTest() {
+        # Test basic code type assignments with closures
+        code adder = int sub (int a, int b) { return a + b; };
+        assertEq(5, adder(2, 3));
+
+        # Test with string return type
+        code formatter = string sub (string s) { return "Hello, " + s; };
+        assertEq("Hello, World", formatter("World"));
+
+        # Test with no return type (nothing)
+        list<int> results = ();
+        code appender = sub (int x) { push results, x; };
+        appender(1);
+        appender(2);
+        assertEq((1, 2), results);
+    }
+
+    closureSignatureTest() {
+        # Test closures with various signatures
+        # No params, int return
+        code getOne = int sub () { return 1; };
+        assertEq(1, getOne());
+
+        # One param
+        code double_val = int sub (int x) { return x * 2; };
+        assertEq(6, double_val(3));
+
+        # Multiple params
+        code multiply = int sub (int a, int b, int c) { return a * b * c; };
+        assertEq(24, multiply(2, 3, 4));
+
+        # String params and return
+        code concat = string sub (string a, string b) { return a + b; };
+        assertEq("foobar", concat("foo", "bar"));
+
+        # Mixed types
+        code mixed = string sub (int n, string s) { return s + sprintf("%d", n); };
+        assertEq("test42", mixed(42, "test"));
+    }
+
+    callRefSignatureTest() {
+        # Test call references
+        code intFunc = \getInt();
+        assertEq(42, intFunc());
+
+        code strFunc = \getString();
+        assertEq("hello", strFunc());
+
+        code sumFunc = \sumInts();
+        assertEq(15, sumFunc(5, 10));
+    }
+
+    orNothingCodeTest() {
+        # Test *code (or-nothing code type)
+        *code maybeCode;
+        assertEq(NOTHING, maybeCode);
+
+        maybeCode = int sub () { return 99; };
+        assertEq(99, maybeCode());
+
+        maybeCode = NOTHING;
+        assertEq(NOTHING, maybeCode);
+    }
+
+    # Helper functions for call reference tests
+    static int getInt() {
+        return 42;
+    }
+
+    static string getString() {
+        return "hello";
+    }
+
+    static int sumInts(int a, int b) {
+        return a + b;
+    }
+}

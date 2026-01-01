@@ -1,0 +1,451 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%no-child-restrictions
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class UnionTypeTest
+
+class UnionTypeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Union type test", "1.0") {
+        addTestCase("Basic union type", \testBasicUnion());
+        addTestCase("Union with multiple types", \testMultipleTypes());
+        addTestCase("Union or-nothing", \testUnionOrNothing());
+        addTestCase("Union type assignment", \testUnionAssignment());
+        addTestCase("Union in function signature", \testUnionInFunction());
+        addTestCase("Union in class", \testUnionInClass());
+        addTestCase("Union with complex types", \testUnionComplexTypes());
+        addTestCase("Union with typedef", \testUnionWithTypedef());
+        addTestCase("Union type checking", \testUnionTypeChecking());
+        addTestCase("Union error - empty", \testUnionEmptyError());
+        addTestCase("Union error - too many members", \testUnionTooManyMembers());
+        addTestCase("Union error - multiple soft types", \testMultipleSoftTypesError());
+        addTestCase("Union error - soft and non-soft conflict", \testSoftNonSoftConflict());
+        addTestCase("Union variant resolution", \testUnionVariantResolution());
+        addTestCase("Union type compatibility", \testUnionTypeCompatibility());
+        addTestCase("Union nested in complex type", \testUnionNestedInComplexType());
+        addTestCase("Union parse narrowing", \testUnionParseNarrowing());
+        set_return_value(main());
+    }
+
+    testBasicUnion() {
+        # Test basic union type declaration
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            union<int, string> sub getValue(bool useInt) {
+                if (useInt) {
+                    return 42;
+                }
+                return 'hello';
+            }
+
+            auto sub test() {
+                return (getValue(True), getValue(False));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("hello", result[1]);
+    }
+
+    testMultipleTypes() {
+        # Test union with multiple types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            union<int, string, bool, float> sub test(int choice) {
+                switch (choice) {
+                    case 0: return 42;
+                    case 1: return 'hello';
+                    case 2: return True;
+                    case 3: return 3.14;
+                }
+                return 0;
+            }
+        ", "test");
+        p.run();
+        assertEq(42, p.callFunction("test", 0));
+        assertEq("hello", p.callFunction("test", 1));
+        assertEq(True, p.callFunction("test", 2));
+        assertEq(3.14, p.callFunction("test", 3));
+    }
+
+    testUnionOrNothing() {
+        # Test union with or-nothing modifier
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            auto sub test() {
+                *union<int, string> x;
+                *union<int, string> y = 10;
+                *union<int, string> z = 'hello';
+                return (x, y, z);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(NOTHING, result[0]);
+        assertEq(10, result[1]);
+        assertEq("hello", result[2]);
+    }
+
+    testUnionAssignment() {
+        # Test union type assignment and reassignment
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            auto sub test() {
+                union<int, string> x = 42;
+                auto first = x;
+                x = 'now a string';
+                auto second = x;
+                x = 100;
+                auto third = x;
+                return (first, second, third);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("now a string", result[1]);
+        assertEq(100, result[2]);
+    }
+
+    testUnionInFunction() {
+        # Test union in function parameters and return types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            string sub describe(union<int, string> val) {
+                if (val.typeCode() == NT_INT) {
+                    return 'integer: ' + string(val);
+                }
+                return 'string: ' + val;
+            }
+
+            auto sub test() {
+                return (describe(42), describe('hello'));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq("integer: 42", result[0]);
+        assertEq("string: hello", result[1]);
+    }
+
+    testUnionInClass() {
+        # Test union in class members and methods
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            class Container {
+                private {
+                    union<int, string> value;
+                }
+
+                constructor(union<int, string> v) {
+                    value = v;
+                }
+
+                union<int, string> getValue() {
+                    return value;
+                }
+
+                setValue(union<int, string> v) {
+                    value = v;
+                }
+            }
+
+            auto sub test() {
+                Container c(42);
+                auto v1 = c.getValue();
+                c.setValue('hello');
+                auto v2 = c.getValue();
+                return (v1, v2);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("hello", result[1]);
+    }
+
+    testUnionComplexTypes() {
+        # Test union with complex types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            auto sub test() {
+                union<list<int>, hash<string, int>> val1 = (1, 2, 3);
+                union<list<int>, hash<string, int>> val2 = {'a': 1, 'b': 2};
+
+                int sum1 = 0;
+                if (val1.typeCode() == NT_LIST) {
+                    foreach int i in (val1) {
+                        sum1 += i;
+                    }
+                }
+
+                int sum2 = 0;
+                if (val2.typeCode() == NT_HASH) {
+                    foreach auto v in (val2.values()) {
+                        sum2 += v;
+                    }
+                }
+
+                return (sum1, sum2);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(6, result[0]);
+        assertEq(3, result[1]);
+    }
+
+    testUnionWithTypedef() {
+        # Test union type with typedef
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            typedef IntOrString = union<int, string>;
+
+            IntOrString sub getValue(bool useInt) {
+                if (useInt) {
+                    return 42;
+                }
+                return 'hello';
+            }
+
+            auto sub test() {
+                IntOrString x = 10;
+                IntOrString y = 'world';
+                return (x, y, getValue(True), getValue(False));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(10, result[0]);
+        assertEq("world", result[1]);
+        assertEq(42, result[2]);
+        assertEq("hello", result[3]);
+    }
+
+    testUnionTypeChecking() {
+        # Test that invalid assignments to union types fail at parse time
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            sub test() {
+                union<int, string> x = 42;  # OK
+                x = 'hello';  # OK
+                # Attempting to assign incompatible type should fail
+            }
+        ", "test");
+        p.run();
+        p.callFunction("test");
+
+        # Test parse-time type error (Qore catches this at parse time)
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(), ("
+            sub test() {
+                union<int, string> x = 3.14;  # Should fail - float not in union
+            }
+        ", "test"));
+    }
+
+    testUnionEmptyError() {
+        # Test that empty union type causes parse error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+            union<> sub test() {
+                return 1;
+            }
+        ", "test"));
+    }
+
+    testUnionTooManyMembers() {
+        # Test that union with too many members causes parse error (max 100)
+        Program p(PO_NEW_STYLE);
+
+        # Build a union type string with 101 types
+        string types = "";
+        for (int i = 0; i < 101; i++) {
+            if (i > 0) {
+                types += ", ";
+            }
+            types += "int";  # Same type repeated - just testing limit
+        }
+
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("
+            union<" + types + "> sub test() {
+                return 1;
+            }
+        ", "test"));
+    }
+
+    testMultipleSoftTypesError() {
+        # Test that multiple soft types in union causes parse error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("
+            union<softint, softstring> sub test() {
+                return 1;
+            }
+        ", "test"));
+    }
+
+    testSoftNonSoftConflict() {
+        # Test that soft type with corresponding non-soft type causes parse error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("
+            union<int, softint> sub test() {
+                return 1;
+            }
+        ", "test"));
+    }
+
+    testUnionVariantResolution() {
+        # Test that function variant resolution works correctly with unions
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            string sub describe(int x) {
+                return 'int: ' + string(x);
+            }
+
+            string sub describe(string x) {
+                return 'string: ' + x;
+            }
+
+            string sub describe(bool x) {
+                return 'bool: ' + string(x);
+            }
+
+            # Pass union values to overloaded function
+            auto sub test() {
+                union<int, string, bool> v1 = 42;
+                union<int, string, bool> v2 = 'hello';
+                union<int, string, bool> v3 = True;
+
+                return (describe(v1), describe(v2), describe(v3));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq("int: 42", result[0]);
+        assertEq("string: hello", result[1]);
+        assertEq("bool: 1", result[2]);  # Note: bool to string converts to "1" or "0" in Qore
+    }
+
+    testUnionTypeCompatibility() {
+        # Test union type compatibility - narrower union should be assignable to wider
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            auto sub test() {
+                # A single type should be assignable to a union containing that type
+                int x = 42;
+                union<int, string> y = x;
+
+                # A union should be usable where auto is expected
+                auto z = y;
+
+                return (y, z);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq(42, result[1]);
+    }
+
+    testUnionNestedInComplexType() {
+        # Test union nested in complex types like list and hash
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            auto sub test() {
+                # List containing union values
+                list<union<int, string>> items = (1, 'two', 3, 'four');
+
+                int intSum = 0;
+                string strConcat = '';
+                foreach auto item in (items) {
+                    if (item.typeCode() == NT_INT) {
+                        intSum += item;
+                    } else {
+                        strConcat += item;
+                    }
+                }
+
+                # Hash with union values
+                hash<string, union<int, bool>> flags = {
+                    'count': 5,
+                    'enabled': True,
+                    'level': 3,
+                    'active': False
+                };
+
+                return (intSum, strConcat, flags{'count'}, flags{'enabled'});
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(4, result[0]);
+        assertEq("twofour", result[1]);
+        assertEq(5, result[2]);
+        assertEq(True, result[3]);
+    }
+
+    testUnionParseNarrowing() {
+        # Test that parse narrowing works with union types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            int sub processInt(int x) {
+                return x * 2;
+            }
+
+            string sub processString(string x) {
+                return x + '!';
+            }
+
+            auto sub test(union<int, string> val) {
+                # After type check, the type should be narrowed
+                if (val.typeCode() == NT_INT) {
+                    # Here val should be treated as int
+                    return processInt(val);
+                } else {
+                    # Here val should be treated as string
+                    return processString(val);
+                }
+            }
+
+            auto sub main_test() {
+                return (test(21), test('hello'));
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("main_test");
+        assertEq(42, result[0]);
+        assertEq("hello!", result[1]);
+    }
+}

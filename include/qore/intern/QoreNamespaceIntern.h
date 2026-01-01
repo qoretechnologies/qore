@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,37 @@ class QoreModuleContext;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
+//! Entry for a type alias (typedef)
+struct TypedefEntry {
+    const QoreProgramLocation* loc;
+    QoreParseTypeInfo* parseTypeInfo = nullptr;  //!< parse-time type info (before resolution)
+    const QoreTypeInfo* typeInfo = nullptr;      //!< resolved type info (after resolution)
+    bool pub = false;                            //!< is this typedef public?
+
+    //! Constructor for parse-time type info only
+    DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, bool p = false)
+            : loc(loc), parseTypeInfo(pti), pub(p) {
+    }
+
+    //! Constructor for both resolved type info and parse-time type info
+    DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, const QoreTypeInfo* ti, QoreParseTypeInfo* pti,
+            bool p = false)
+            : loc(loc), parseTypeInfo(pti), typeInfo(ti), pub(p) {
+    }
+
+    DLLLOCAL TypedefEntry(const TypedefEntry& old)
+            : loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+              typeInfo(old.typeInfo), pub(old.pub) {
+    }
+
+    DLLLOCAL ~TypedefEntry() {
+        delete parseTypeInfo;
+    }
+};
+
+//! Map of type aliases
+typedef std::map<std::string, TypedefEntry*> typedef_map_t;
+
 class qore_ns_private {
 public:
     const QoreProgramLocation* loc;
@@ -63,6 +94,7 @@ public:
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
     ConstantList constant;         // constant map
+    typedef_map_t typedefMap;      // typedef map
     QoreNamespaceList nsl;         // namespace map
     FunctionList func_list;        // function map
     GlobalVariableList var_list;   // global variable map
@@ -76,6 +108,7 @@ public:
     std::vector<std::string> pending_class_names;    // Classes added in pending parse
     std::vector<std::string> pending_const_names;    // Constants added in pending parse
     std::vector<std::string> pending_hashdecl_names; // Hashdecls added in pending parse
+    std::vector<std::string> pending_typedef_names;  // Typedefs added in pending parse
     std::vector<std::string> pending_ns_names;       // Child namespaces added in pending parse
 
     // 0 = root namespace, ...
@@ -317,6 +350,17 @@ public:
 
     DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const NamedScope& name, QoreValue value,
             bool pub);
+
+    //! Adds a typedef to the namespace; returns the TypedefEntry* on success, nullptr on error
+    DLLLOCAL TypedefEntry* parseAddTypedef(const QoreProgramLocation* loc, const char* name,
+            const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub);
+
+    //! Adds a typedef to the namespace (scoped version for use inside unattached namespaces)
+    DLLLOCAL void parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& name,
+            const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub);
+
+    //! Finds a typedef in this namespace
+    DLLLOCAL const TypedefEntry* findLocalTypedef(const char* name) const;
 
     DLLLOCAL int parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& name,
             MethodVariantBase* qcmethod, bool static_flag);
@@ -1072,6 +1116,8 @@ typedef RootMap<TypedHashDecl> thdmap_t;
 
 typedef RootMap<Var> varmap_t;
 
+typedef RootMap<TypedefEntry> tdmap_t;
+
 struct deferred_new_check_t {
     const qore_class_private* qc;
     const QoreProgramLocation* loc;
@@ -1371,6 +1417,27 @@ protected:
         return nullptr;
     }
 
+    DLLLOCAL TypedefEntry* parseFindTypedefIntern(const char* tdname) {
+        {
+            // try to check in current namespace first
+            qore_ns_private* nscx = parse_get_ns();
+            if (nscx) {
+                const TypedefEntry* td = nscx->findLocalTypedef(tdname);
+                if (td)
+                    return const_cast<TypedefEntry*>(td);
+            }
+        }
+
+        tdmap_t::iterator i = tdmap.find(tdname);
+
+        if (i != tdmap.end()) {
+            return i->second.obj;
+        }
+
+        //printd(5, "qore_root_ns_private::parseFindTypedefIntern() this: %p '%s' not found\n", this, tdname);
+        return nullptr;
+    }
+
     DLLLOCAL QoreClass* parseFindScopedClassIntern(const QoreProgramLocation* loc, const NamedScope& name,
             bool raise_error);
     DLLLOCAL QoreClass* parseFindScopedClassIntern(const NamedScope& name, unsigned& matched);
@@ -1474,6 +1541,9 @@ protected:
     DLLLOCAL void parseAddClassIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc);
 
     DLLLOCAL void parseAddHashDeclIntern(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd);
+
+    DLLLOCAL void parseAddTypedefIntern(const QoreProgramLocation* loc, const NamedScope& name,
+            const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub);
 
     DLLLOCAL qore_ns_private* parseResolveNamespaceIntern(const QoreProgramLocation* loc, const NamedScope& nscope,
             qore_ns_private* sns);
@@ -1612,6 +1682,11 @@ protected:
             thdmap.update(hdli.getName(), ns, hdli.get());
     }
 
+    DLLLOCAL static void rebuildTypedefIndexes(tdmap_t& tdmap, typedef_map_t& tdm, qore_ns_private* ns) {
+        for (typedef_map_t::iterator i = tdm.begin(), e = tdm.end(); i != e; ++i)
+            tdmap.update(i->first, ns, i->second);
+    }
+
     DLLLOCAL static void rebuildFunctionIndexes(fmap_t& fmap, fl_map_t& flmap, qore_ns_private* ns) {
         for (fl_map_t::iterator i = flmap.begin(), e = flmap.end(); i != e; ++i) {
             assert(i->second->getNamespace() == ns);
@@ -1637,6 +1712,9 @@ protected:
 
         // process hashdecl indexes
         rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
+
+        // process typedef indexes
+        rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
 
         // reindex namespace
         nsmap.update(ns);
@@ -1668,6 +1746,9 @@ protected:
         // process hashdecl indexes
         rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
 
+        // process typedef indexes
+        rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
+
         // reindex namespace
         nsmap.update(ns);
     }
@@ -1690,6 +1771,8 @@ public:
     clmap_t clmap;       // root class map
 
     thdmap_t thdmap;     // root hashdecl map
+
+    tdmap_t tdmap;       // root typedef map
 
     varmap_t varmap;     // root variable map
 
@@ -1842,6 +1925,7 @@ public:
         varmap.clear();
         clmap.clear();
         thdmap.clear();
+        tdmap.clear();
         nsmap.clear();
 
         // Only rebuild indexes for atomic rollback - with full reset, the program is unusable anyway
@@ -2093,6 +2177,10 @@ public:
         return getRootNS()->rpriv->parseFindScopedClassWithMethodInternError(loc, name, error);
     }
 
+    DLLLOCAL static TypedefEntry* parseFindTypedef(const char* name) {
+        return getRootNS()->rpriv->parseFindTypedefIntern(name);
+    }
+
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
             QoreValue value, bool pub) {
         getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub);
@@ -2110,6 +2198,11 @@ public:
 
     DLLLOCAL static void parseAddHashDecl(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd) {
         getRootNS()->rpriv->parseAddHashDeclIntern(loc, name, hd);
+    }
+
+    DLLLOCAL static void parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& name,
+            const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
+        getRootNS()->rpriv->parseAddTypedefIntern(loc, name, typeInfo, parseTypeInfo, pub);
     }
 
     DLLLOCAL static void parseAddNamespace(QoreNamespace* nns) {

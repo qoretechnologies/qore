@@ -3423,7 +3423,7 @@ map upsert($1), row_list;
         closure; the closure returned by this method is faster than the one returned by
         @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
     */
-    code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
+    code<int(hash<auto>)> getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
@@ -3498,8 +3498,8 @@ upsert(row_hash);
         - getUpsertClosure()
         - getUpsertClosureWithValidation()
     */
-    code getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto, *hash<auto> opt) {
-        code upsert = getUpsertClosure(example_row, upsert_strategy, opt);
+    code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto, *hash<auto> opt) {
+        code<int(hash<auto>)> upsert = getUpsertClosure(example_row, upsert_strategy, opt);
         return int sub (hash<auto> h) {
             map upsert($1), h.contextIterator();
             return UR_Verified;
@@ -3528,8 +3528,8 @@ map upsert($1), row_list;
 
         @note the row values passed to the closure for upserting are checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data to the closure will cause the closure to throw an \c UPSERT-ERROR exception; see @ref SqlUtil::AbstractTable::getUpsertClosure() for a similar method that returns a non-validating closure; the closure returned by this method is a little slower than the one returned by @ref SqlUtil::AbstractTable::getUpsertClosure() since each row is validated
     */
-    code getUpsertClosureWithValidation(hash<auto> example_row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
-        code upsert = getUpsertClosure(example_row, upsert_strategy, opt);
+    code<int(hash<auto>)> getUpsertClosureWithValidation(hash<auto> example_row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
+        code<int(hash<auto>)> upsert = getUpsertClosure(example_row, upsert_strategy, opt);
 
         return int sub (hash<auto> row) {
             if (!row.compareKeys(example_row)) {
@@ -5688,7 +5688,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         return getAllUpsertColumns(row).firstValue();
     }
 
-    private code getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+    private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
@@ -5702,7 +5702,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         };
     }
 
-    private code getUpsertUpdateFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+    private code<int(hash<auto>)> getUpsertUpdateFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
         string insert_sql = getUpsertInsertSql(example_row);
@@ -5716,7 +5716,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         };
     }
 
-    private code getUpsertSelectFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+    private code<int(hash<auto>)> getUpsertSelectFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         #printf("getUpsertSelectFirst() %s: %y\n", name, cols.keys());
         list<string> updc();
         string select_sql = getUpsertSelectSql(example_row, cols, \updc);
@@ -5741,7 +5741,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         };
     }
 
-    private code getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+    private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
 
         return int sub (hash<auto> row) {
@@ -5749,7 +5749,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         };
     }
 
-    private code getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+    private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 

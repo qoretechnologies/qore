@@ -1131,11 +1131,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     *PgsqlType getType(string name) {
-        *hash qh = ds.select("select attname, pg_catalog.format_type(a.atttypid, a.atttypmod) typedef from pg_class c, pg_catalog.pg_attribute a where relkind = 'c' and attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped and relname = %v order by attnum", name);
+        *hash qh = ds.select("select attname, pg_catalog.format_type(a.atttypid, a.atttypmod) type_def from pg_class c, pg_catalog.pg_attribute a where relkind = 'c' and attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped and relname = %v order by attnum", name);
         if (!qh.attname)
             return;
 
-        string src = foldl $1 + ", " + $2, (map sprintf("%s %s", $1.attname, $1.typedef), qh.contextIterator());
+        string src = foldl $1 + ", " + $2, (map sprintf("%s %s", $1.attname, $1.type_def), qh.contextIterator());
 
         # replace common type names with verbose type names as stored in PostgreSQL
         foreach hash<auto> h in (PgsqlTable::PgsqlNameMap.pairIterator()) {
