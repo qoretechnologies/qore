@@ -61,14 +61,16 @@ public:
     //! custom operator new that zero-initializes memory to avoid valgrind warnings about uninitialized bitfield padding
     DLLLOCAL static void* operator new(size_t size) {
         void* ptr = ::operator new(size);
-        memset(ptr, 0, size);
+        // Only zero-initialize the base-class portion to avoid unnecessary work
+        memset(ptr, 0, sizeof(AbstractQoreNode));
         return ptr;
     }
 
     //! custom operator new[] for arrays
     DLLLOCAL static void* operator new[](size_t size) {
         void* ptr = ::operator new[](size);
-        memset(ptr, 0, size);
+        // Only zero-initialize the base-class portion per element
+        memset(ptr, 0, sizeof(AbstractQoreNode));
         return ptr;
     }
 
