@@ -34,7 +34,10 @@
 %requires HttpServer
 %requires WebSocketClient
 %requires QoreRepl
-%requires json
+
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class QoreReplWebSocketTest
 
@@ -44,6 +47,12 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         QoreReplWebSocketHandler wsHandler;
         Logger logger;
         int port;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
     }
 
     constructor() : Test("QoreReplWebSocketTest", "1.0") {
@@ -83,6 +92,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testHandlerOptions() {
+        checkModule();
         # Test default values
         QoreReplWebSocketHandler h();
         assertEq(0, h.getMaxConnections(), "Default max connections should be 0");
@@ -106,6 +116,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testSessionConnection() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -134,6 +145,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testEvalSimple() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -164,6 +176,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testEvalError() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -198,6 +211,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testMultiLine() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -235,6 +249,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testCommands() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -267,6 +282,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testPingPong() {
+        checkModule();
         Queue msgs();
         WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
             "url": "ws://localhost:" + port + "/ws/repl",
@@ -289,6 +305,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testAuthCallback() {
+        checkModule();
         # Create handler with auth callback
         QoreReplWebSocketHandler authHandler(NOTHING, {
             "logger": logger,
@@ -334,6 +351,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     testMaxConnections() {
+        checkModule();
         # Create handler with max 1 connection
         QoreReplWebSocketHandler limitHandler(NOTHING, {
             "logger": logger,

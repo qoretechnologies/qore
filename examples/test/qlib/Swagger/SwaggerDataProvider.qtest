@@ -46,6 +46,7 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
     }
 
     compatTest() {
+        checkModules();
         hash<auto> schema = {
             "swagger": "2.0",
             "info": {

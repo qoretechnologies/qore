@@ -13,6 +13,10 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/OpenAiDataProvider
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class OpenAiDataProviderTest
 
 public class OpenAiDataProviderTest inherits QUnit::Test {

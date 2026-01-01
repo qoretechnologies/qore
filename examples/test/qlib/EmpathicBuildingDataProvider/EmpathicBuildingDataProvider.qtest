@@ -71,6 +71,7 @@ public class Main inherits QUnit::Test {
     }
 
     dataProviderTest() {
+        checkModule();
         if (!ebrc) {
             testSkip("no connection");
         }
@@ -102,6 +103,7 @@ public class Main inherits QUnit::Test {
     }
 
     pollTest() {
+        checkModule();
         if (!ebrc) {
             testSkip("no connection");
         }

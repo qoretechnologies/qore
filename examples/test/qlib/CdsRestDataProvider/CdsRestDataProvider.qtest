@@ -25,6 +25,12 @@
 
 %exec-class CdsRestDataProviderTest
 
+sub checkModule() {
+%ifdef NoJson
+    throw "SKIPPED", "no json module";
+%endif
+}
+
 class CdsRestDataProviderTest inherits QUnit::Test {
     public {}
 
@@ -186,6 +192,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test Dynamics connection class creation
     dynamicsConnectionClassTests() {
+        checkModule();
         string url = "https://example.crm.dynamics.com";
 
         # Test CdsRestConnection creation
@@ -238,6 +245,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test Business Central connection class creation
     bcConnectionClassTests() {
+        checkModule();
         string url = "https://api.businesscentral.dynamics.com";
 
         # Test BusinessCentralRestConnection creation
@@ -327,6 +335,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test Dynamics data provider class structure
     dynamicsDataProviderClassTests() {
+        checkModule();
         # Test CdsRestDataProvider class exists and has correct structure
         {
             hash<DataProviderInfo> info = CdsRestDataProvider::ProviderInfo;
@@ -356,6 +365,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test Business Central data provider class structure
     bcDataProviderClassTests() {
+        checkModule();
         # Test BcRestDataProvider class exists and has correct structure
         {
             hash<DataProviderInfo> info = BcRestDataProvider::ProviderInfo;
@@ -406,6 +416,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test factory registration
     factoryTests() {
+        checkModule();
         # Test that factories are registered
         AbstractDataProviderFactory cds_factory = DataProvider::getFactory("cdsrest");
         assertEq(True, cds_factory instanceof CdsRestDataProviderFactory);
@@ -416,6 +427,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test app registration in action catalog
     appRegistrationTests() {
+        checkModule();
         # Test that app names are defined
         assertEq("Dynamics", CdsRestDataProvider::DynamicsAppName);
         assertEq("BusinessCentral", CdsRestDataProvider::BusinessCentralAppName);
@@ -423,6 +435,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test DataProvider expression support
     expressionSupportTests() {
+        checkModule();
         # Test that ODataExpressions constant is defined with expected operators
         {
             assertTrue(ODataExpressions.hasKey(DP_OP_AND));
@@ -601,6 +614,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
     #! Test getChildProviderSummaryInfo() for Business Central data providers
     childProviderSummaryInfoTests() {
+        checkModule();
         # Test BcCompaniesDataProvider.getChildProviderSummaryInfo() with mock data
         {
             MockCdsRestClient mock_client({"companies": (

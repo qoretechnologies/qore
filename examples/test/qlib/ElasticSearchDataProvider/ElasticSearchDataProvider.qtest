@@ -24,6 +24,13 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     private {
         RestClient rest;
 
+        # checkModule helper
+        static checkModule() {
+%ifdef NoJson
+            throw "SKIPPED", "no json module";
+%endif
+        }
+
         # command-line options
         const MyOpts = Opts + {
             "url": "u,url=s",
@@ -47,6 +54,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     }
 
     private mainTest() {
+        checkModule();
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -180,6 +188,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk API operations
     private bulkApiTest() {
+        checkModule();
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -254,6 +263,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test scroll API operations
     private scrollApiTest() {
+        checkModule();
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -324,6 +334,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test aggregation API
     private aggregationTest() {
+        checkModule();
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -414,6 +425,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk operation class (record-based bulk insert)
     private bulkOperationTest() {
+        checkModule();
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -462,6 +474,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Negative tests - test error handling
     private negativeTests() {
+        checkModule();
         # Test bulk API with invalid action type
         if (rest) {
             ElasticSearchBulkDataProvider bulk(rest);

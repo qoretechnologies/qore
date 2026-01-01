@@ -13,6 +13,10 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/AwsRestClientDataProvider
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class AwsRestClientDataProviderTest
 
 public class AwsRestClientDataProviderTest inherits QUnit::Test {
@@ -23,7 +27,14 @@ public class AwsRestClientDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
     httpClientDataProviderTest() {
+        checkModule();
         assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientDataProvider parent({"url": "localhost:1"}); });
         assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientCallDataProvider parent({"url": "localhost:1"}); });
         assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientDeleteDataProvider parent({"url": "localhost:1"}); });
