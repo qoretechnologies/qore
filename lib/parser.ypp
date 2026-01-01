@@ -2817,6 +2817,13 @@ uncqtypedef:
     | '*' IDENTIFIER {
         $$ = new ParserTypeStruct($2, true);
     }
+    | '*' IDENTIFIER '!' {
+        // Handle *auto! syntax - or-nothing variant of auto!
+        QoreString type_name($2);
+        type_name.concat('!');
+        free($2);
+        $$ = new ParserTypeStruct(type_name.giveBuffer(), true);
+    }
     | '*' SCOPED_REF {
         $$ = new ParserTypeStruct(new QoreParseTypeInfo($2, true));
     }

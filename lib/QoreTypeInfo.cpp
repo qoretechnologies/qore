@@ -318,7 +318,9 @@ void init_qore_types() {
     do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
     do_maps(NT_ALL,             "auto", autoTypeInfo, autoTypeInfo);
     // auto! - marker type for auto with no type narrowing; uses same or_nothing type as auto
+    // (auto! already accepts nothing, so *auto! is the same as auto!)
     str_typeinfo_map["auto!"] = autoNoNarrowTypeInfo;
+    str_ornothingtypeinfo_map["auto!"] = autoNoNarrowTypeInfo;
     do_maps(NT_DATE,            "date", dateTypeInfo, dateOrNothingTypeInfo);
     do_maps(NT_CODE,            "code", codeTypeInfo, codeOrNothingTypeInfo);
     do_maps(NT_DATA,            "data", dataTypeInfo, dataOrNothingTypeInfo);

@@ -69,8 +69,8 @@ public:
     //! custom operator new[] for arrays
     DLLLOCAL static void* operator new[](size_t size) {
         void* ptr = ::operator new[](size);
-        // Only zero-initialize the base-class portion per element
-        memset(ptr, 0, sizeof(AbstractQoreNode));
+        // Zero-initialize the entire allocated memory to avoid uninitialized padding in any element
+        memset(ptr, 0, size);
         return ptr;
     }
 

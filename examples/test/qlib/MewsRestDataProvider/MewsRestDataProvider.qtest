@@ -132,6 +132,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
                 "limit": 2,
             });
             # recs may be empty or have fewer than 2 records in demo environment
+            # assertLe(bound, actual) asserts actual <= bound
             assertLe(2, recs.size());
         } catch (hash<ExceptionInfo> ex) {
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
