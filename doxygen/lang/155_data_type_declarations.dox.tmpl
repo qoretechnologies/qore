@@ -1180,4 +1180,93 @@ printf("%s\n", l.fullType());
     @endcode
 
     - In general \c auto is recommended over @ref any_type "any"
+
+    @subsection auto_no_narrow auto! (no type narrowing)
+
+    The \c auto! syntax can be used to disable parse-time type narrowing for variables.
+
+    When using \c hash<auto> or \c list<auto>, the compiler infers a more specific element type from the
+    initial assignment and enforces it at parse time. This can cause \c PARSE-TYPE-ERROR when later
+    assigning values of a different type.
+
+    The \c auto! syntax prevents this parse-time type narrowing:
+
+    @par Syntax variants:
+    - \c auto! - for any type without narrowing
+    - \c hash<auto!> - for hashes without element type narrowing
+    - \c hash<string, auto!> - explicit key type with no value type narrowing
+    - \c list<auto!> - for lists without element type narrowing
+    - \c softlist<auto!> - for softlists without element type narrowing
+    - \c *hash<auto!> - or-nothing hash variant
+    - \c *list<auto!> - or-nothing list variant
+
+    @par Basic Example
+    @code{.py}
+# Without auto! - gives PARSE-TYPE-ERROR
+hash<auto> h1 = {"x": 1};
+h1.y = "string";  # PARSE-TYPE-ERROR: type narrowed to hash<string, int>
+
+# With auto! - parsing succeeds
+hash<auto!> h2 = {"x": 1};
+h2.y = "string";  # parsing succeeds (runtime type still enforced)
+h2 = {"z": "text"};  # whole hash reassignment works
+
+# list<auto!> works similarly
+list<auto!> l = (1, 2, 3);
+l = ("a", "b");  # parsing succeeds
+    @endcode
+
+    @par Function Parameters and Return Types
+    The \c auto! syntax can be used in function signatures:
+    @code{.py}
+# Function that returns different hash types
+hash<auto!> sub getFlexibleData(string type) {
+    if (type == "numbers") {
+        return {"value": 42};
+    }
+    return {"value": "text"};
+}
+
+# Function accepting flexible hash parameter
+sub processData(hash<auto!> data) {
+    # Can receive hashes with any value type
+}
+    @endcode
+
+    @par Class Members
+    Class members can also use \c auto! to prevent type narrowing:
+    @code{.py}
+class FlexibleContainer {
+    public hash<auto!> data;
+
+    constructor() {
+        data = {"initial": 1};
+    }
+
+    setStringData() {
+        data = {"value": "text"};  # No parse error
+    }
+}
+    @endcode
+
+    @par Global Variables
+    @code{.py}
+our hash<auto!> global_config = {"setting": 1};
+# Later assignments with different value types are allowed at parse time
+global_config = {"setting": "value"};
+    @endcode
+
+    @note While \c auto! prevents parse-time type narrowing errors, the runtime type of values is still
+    enforced. For example, adding a string to a hash that was created with integer values will still
+    raise a \c RUNTIME-TYPE-ERROR. The \c auto! syntax allows flexible typing at the variable level,
+    but individual values retain their types.
+
+    @warning The \c %%broken-narrowed-types parse directive will also suppress parse-time type narrowing
+    errors, but it only moves the error to runtime rather than fixing the underlying type issue. Using
+    \c auto! is the recommended approach when you genuinely need flexible typing.
+
+    @see
+    - @ref hash_type "hash<auto>"
+    - @ref list_type "list<auto>"
+    - @ref softlist_type "softlist<auto>"
 */

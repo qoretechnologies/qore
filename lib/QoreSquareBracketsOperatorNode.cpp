@@ -99,7 +99,9 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             }
         }
         if (!typeInfo && QoreTypeInfo::parseAccepts(listTypeInfo, lti)) {
-            const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexList(lti);
+            // issue #5765 use getReturnComplexListOrNothing to handle or-nothing types (e.g., *list<int>)
+            // so that nested element access like l[0][1] preserves type information for parse-time checking
+            const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexListOrNothing(lti);
             if (rti_can_be_list) {
                 if (rti_is_list) {
                     if (ti) {

@@ -58,13 +58,22 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
-    if (QoreTypeInfo::isType(ti, NT_LIST)) {
+    // issue #5765 use getReturnComplexListOrNothing to handle or-nothing types (e.g., *list<int>)
+    // so that list append operations on nested structures preserve type checking
+    // Check if lvalue type returns a list (including *list types)
+    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(ti);
+    if (eti) {
         if (!QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-            const QoreTypeInfo* eti = QoreTypeInfo::getUniqueReturnComplexList(ti);
-            if (eti && !QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
-                parseException(*loc, "PARSE-TYPE-ERROR", "cannot append a value with type '%s' to a list with " \
-                    "element type '%s'",
+            if (!QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
+                QoreStringNode* edesc = new QoreStringNodeMaker(
+                    "cannot append a value with type '%s' to a list with element type '%s'",
                     QoreTypeInfo::getName(rightTypeInfo), QoreTypeInfo::getName(eti));
+                // Add context about type narrowing
+                edesc->concat("; the list's element type was inferred from the initial value; "
+                    "to use mixed types, include values of all needed types in the initial assignment, "
+                    "or use list<auto!> to disable type narrowing for the variable; "
+                    "note: %broken-narrowed-types will suppress this error but move it to runtime");
+                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
                 if (!err) {
                     err = -1;
                 }
