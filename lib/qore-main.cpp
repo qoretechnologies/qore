@@ -35,6 +35,7 @@
 
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/EncryptionTransforms.h"
 
 #include <cerrno>
 #include <csignal>
@@ -287,6 +288,11 @@ void qore_cleanup() {
         CONF_modules_unload(1);
 
         CRYPTO_cleanup_all_ex_data();
+
+#ifdef OPENSSL_3_PLUS
+        // refs #4910: free cached cipher and digest references
+        crypto_cache_cleanup();
+#endif
 
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
         CRYPTO_set_id_callback(0);
