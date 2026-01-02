@@ -113,6 +113,28 @@
       - \c auto!, \c hash<auto!>, \c list<auto!> prevent parse-time type inference errors
       - allows variables to accept values of different types without \c PARSE-TYPE-ERROR
       - runtime type enforcement still applies to individual values
+    - new @ref typedef_keyword "typedef" keyword for type aliases
+      - syntax: \c typedef \c MyType \c = \c int; or \c typedef \c IntList \c = \c list<int>;
+      - supports all type declarations including complex types, hashdecls, and classes
+      - can be declared \c public for module exports
+      - works in namespaces with standard scoping rules
+      - can be disabled with \c %%no-typedef parse directive or @ref PO_NO_TYPEDEF
+    - new @ref union_type "union<...>" explicit union type syntax
+      - syntax: \c union<int, \c string> for a type accepting either int or string
+      - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
+      - works with complex types: \c list<union<int, \c string>>, \c hash<string, \c union<int, \c bool>>
+      - integrates with typedef: \c typedef \c IntOrString \c = \c union<int, \c string>;
+      - supports parse-time type narrowing after type checks
+      - constraints: maximum 100 member types, at most one soft type, no soft+non-soft of same base type
+    - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
+      (<a href="https://github.com/qoretechnologies/qore/issues/5089">issue 5089</a>)
+      - syntax: \c code<int(string)> for a callable returning int and taking a string parameter
+      - enables parse-time type checking for closures and call references
+      - covariant return types: assigned closure can return a more specific type
+      - contravariant parameter types: assigned closure can accept more general types
+      - supports or-nothing variant: \c *code<int(string)>
+      - works with complex types: \c code<list<int>(hash<string, \c int>)>
+      - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
     - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)

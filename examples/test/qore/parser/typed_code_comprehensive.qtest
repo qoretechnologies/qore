@@ -1,0 +1,281 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class TypedCodeComprehensiveTest
+
+class TypedCodeComprehensiveTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TypedCodeComprehensiveTest", "1.0") {
+        addTestCase("Function parameter with typed code", \functionParamTest());
+        addTestCase("Return typed code from function", \returnTypedCodeTest());
+        addTestCase("Class member with typed code", \classMemberTest());
+        addTestCase("Call reference assignment", \callRefTest());
+        addTestCase("Nested complex types in signature", \nestedComplexTypesTest());
+        addTestCase("Multiple typed code operations", \multipleOperationsTest());
+        addTestCase("Higher-order functions", \higherOrderTest());
+        addTestCase("Default parameter in closure", \defaultParamTest());
+        addTestCase("Closure capturing variables", \closureCapturingTest());
+        addTestCase("Type inference edge cases", \typeInferenceEdgeCasesTest());
+        set_return_value(main());
+    }
+
+    functionParamTest() {
+        # Function that takes typed code as parameter
+        int result = applyToString(int sub (string s) { return s.length(); }, "hello");
+        assertEq(5, result);
+
+        # Function with typed code param - passing compatible closure
+        result = applyToString(int sub (auto s) { return 99; }, "test");
+        assertEq(99, result);
+    }
+
+    private int applyToString(code<int(string)> func, string s) {
+        return func(s);
+    }
+
+    returnTypedCodeTest() {
+        # Function that returns typed code
+        code<int(int)> doubler = getDoubler();
+        assertEq(10, doubler(5));
+
+        # Return different typed closures based on condition
+        code<int(int)> op1 = getIntOperation(True);
+        code<int(int)> op2 = getIntOperation(False);
+        assertEq(10, op1(5));
+        assertEq(25, op2(5));
+    }
+
+    private code<int(int)> getDoubler() {
+        return int sub (int x) { return x * 2; };
+    }
+
+    private code<int(int)> getIntOperation(bool double_it) {
+        if (double_it) {
+            return int sub (int x) { return x * 2; };
+        }
+        return int sub (int x) { return x * x; };
+    }
+
+    classMemberTest() {
+        TypedCodeHolder holder();
+
+        # Use member typed code
+        assertEq(5, holder.transform("hello"));
+
+        # Update member typed code
+        holder.setTransformer(int sub (string s) { return s.length() * 2; });
+        assertEq(10, holder.transform("hello"));
+
+        # Verify or-nothing member
+        assertFalse(holder.hasOptionalTransformer());
+        holder.setOptionalTransformer(int sub (string s) { return 42; });
+        assertTrue(holder.hasOptionalTransformer());
+        assertEq(42, holder.transformOptional("x"));
+    }
+
+    callRefTest() {
+        # Assign call reference to typed code
+        code<int(string)> func = \stringLength();
+        assertEq(5, func("hello"));
+
+        # Call reference with compatible signature
+        code<auto(int)> func2 = \intToString();
+        assertEq("42", func2(42));
+
+        # Method reference
+        TypedCodeHolder holder();
+        code<int(string)> memberFunc = \holder.transform();
+        assertEq(5, memberFunc("hello"));
+    }
+
+    private int stringLength(string s) {
+        return s.length();
+    }
+
+    private string intToString(int x) {
+        return sprintf("%d", x);
+    }
+
+    nestedComplexTypesTest() {
+        # Typed code with list<int> parameter
+        code<int(list<int>)> sumList = int sub (list<int> l) {
+            int sum = 0;
+            foreach int i in (l) {
+                sum += i;
+            }
+            return sum;
+        };
+        assertEq(15, sumList((1, 2, 3, 4, 5)));
+
+        # Typed code with hash<string, int> return
+        code<hash<string, int>()> getHash = hash<string, int> sub () {
+            return {"a": 1, "b": 2};
+        };
+        assertEq({"a": 1, "b": 2}, getHash());
+
+        # Complex nested types
+        code<list<hash<string, int>>(int)> createList = list<hash<string, int>> sub (int n) {
+            list<hash<string, int>> result = ();
+            for (int i = 0; i < n; ++i) {
+                result += {"index": i};
+            }
+            return result;
+        };
+        assertEq(({"index": 0}, {"index": 1}), createList(2));
+    }
+
+    multipleOperationsTest() {
+        # Chain of typed code assignments
+        code<int(int)> step1 = int sub (int x) { return x + 1; };
+        code<int(int)> step2 = int sub (int x) { return x * 2; };
+        code<int(int)> step3 = int sub (int x) { return x - 3; };
+
+        int result = step3(step2(step1(5)));
+        assertEq(9, result);  # ((5+1)*2)-3 = 9
+
+        # Array of typed code
+        list<code<int(int)>> operations = (step1, step2, step3);
+        result = 5;
+        foreach code<int(int)> op in (operations) {
+            result = op(result);
+        }
+        assertEq(9, result);
+    }
+
+    higherOrderTest() {
+        # Map function using typed code
+        list<int> numbers = (1, 2, 3, 4, 5);
+        list<int> doubled = mapInts(numbers, int sub (int x) { return x * 2; });
+        assertEq((2, 4, 6, 8, 10), doubled);
+
+        # Filter function using typed code
+        list<int> evens = filterInts(numbers, bool sub (int x) { return x % 2 == 0; });
+        assertEq((2, 4), evens);
+
+        # Compose functions
+        code<int(int)> composed = compose(
+            int sub (int x) { return x + 1; },
+            int sub (int x) { return x * 2; }
+        );
+        assertEq(12, composed(5));  # (5+1)*2 = 12
+    }
+
+    private list<int> mapInts(list<int> l, code<int(int)> mapper) {
+        list<int> result = ();
+        foreach int x in (l) {
+            result += mapper(x);
+        }
+        return result;
+    }
+
+    private list<int> filterInts(list<int> l, code<bool(int)> predicate) {
+        list<int> result = ();
+        foreach int x in (l) {
+            if (predicate(x)) {
+                result += x;
+            }
+        }
+        return result;
+    }
+
+    private code<int(int)> compose(code<int(int)> f, code<int(int)> g) {
+        return int sub (int x) { return g(f(x)); };
+    }
+
+    defaultParamTest() {
+        # Closure with default parameter assigned to typed code expecting fewer params
+        code<int(int)> func = int sub (int x, int y = 10) { return x + y; };
+        assertEq(15, func(5));
+
+        # Multiple default params
+        code<string(string)> greeting = string sub (string name, string prefix = "Hello", string suffix = "!") {
+            return sprintf("%s, %s%s", prefix, name, suffix);
+        };
+        assertEq("Hello, World!", greeting("World"));
+    }
+
+    closureCapturingTest() {
+        # Closure capturing local variable
+        int multiplier = 3;
+        code<int(int)> tripler = int sub (int x) { return x * multiplier; };
+        assertEq(15, tripler(5));
+
+        # Closure capturing and modifying (counter)
+        int counter = 0;
+        code<int()> increment = int sub () { return ++counter; };
+        assertEq(1, increment());
+        assertEq(2, increment());
+        assertEq(3, increment());
+        assertEq(3, counter);
+
+        # Factory function creating closures
+        code<int(int)> adder5 = createAdder(5);
+        code<int(int)> adder10 = createAdder(10);
+        assertEq(15, adder5(10));
+        assertEq(15, adder10(5));
+    }
+
+    private code<int(int)> createAdder(int n) {
+        return int sub (int x) { return x + n; };
+    }
+
+    typeInferenceEdgeCasesTest() {
+        # Assign nothing to or-nothing typed code
+        *code<int(string)> maybeFunc = NOTHING;
+        assertEq(NOTHING, maybeFunc);
+
+        # Re-assign to valid closure
+        maybeFunc = int sub (string s) { return s.length(); };
+        assertEq(5, maybeFunc("hello"));
+
+        # Incompatible signature - parse error test
+        bool caught = False;
+        try {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("sub test() { code<int(int, int)> func = int sub (int x) { return x; }; }", "test");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err == "PARSE-TYPE-ERROR";
+        }
+        assertTrue(caught, "Should catch source with fewer params");
+
+        # Test that regular code type still works
+        code genericFunc = int sub () { return 42; };
+        assertEq(42, genericFunc());
+    }
+}
+
+class TypedCodeHolder {
+    private {
+        code<int(string)> transformer = int sub (string s) { return s.length(); };
+        *code<int(string)> optionalTransformer;
+    }
+
+    int transform(string s) {
+        return transformer(s);
+    }
+
+    setTransformer(code<int(string)> t) {
+        transformer = t;
+    }
+
+    bool hasOptionalTransformer() {
+        return exists optionalTransformer;
+    }
+
+    setOptionalTransformer(code<int(string)> t) {
+        optionalTransformer = t;
+    }
+
+    int transformOptional(string s) {
+        if (!optionalTransformer) {
+            throw "NO-TRANSFORMER", "No optional transformer set";
+        }
+        return optionalTransformer(s);
+    }
+}
