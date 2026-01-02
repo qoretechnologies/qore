@@ -29,6 +29,7 @@
     |@ref broken-list-range "%broken-list-range"|Assume broken list range operator as per pre-2.0
     |@ref broken-logic-precedence "%broken-logic-precedence"|Use old pre-0.8.12 precedence of logical and bitwise operators
     |@ref broken-loop-statement "%broken-loop-statement"|Accept @ref break "break" and @ref continue "continue" outside of loops as with pre-0.8.13
+    |@ref broken-narrowed-types "%broken-narrowed-types"|Disable parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables <br><br>Since %Qore 2.3
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
     |@ref broken-range "%broken-range"|Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with pre-0.9.5
     |@ref broken-references "%broken-references"|Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13
@@ -40,6 +41,7 @@
     |@ref correct-list-range "%correct-list-range"|revert the effect of the @ref broken-list-range "%broken-list-range" parse option
     |@ref correct-logic-precedence "%correct-logic-precedence"|revert the effect of the @ref broken-logic-precedence "%broken-logic-precedence" parse option
     |@ref correct-loop-statement "%correct-loop-statement"|revert the effect of the @ref broken-loop-statement "%broken-loop-statement" parse option
+    |@ref correct-narrowed-types "%correct-narrowed-types"|revert the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option <br><br>Since %Qore 2.3
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
     |@ref correct-range "%correct-range"|revert the effect of the @ref broken-range "%broken-range" parse option
     |@ref correct-references "%correct-references"|revert the effect of the @ref broken-references "%broken-references" parse option
@@ -49,15 +51,15 @@
     |@ref disable-all-warnings "%disable-all-warnings"|Turns off all @ref warnings "warnings"
     |@ref disable-debug "%disable-debug"|Disables @@assert and @@debug statements (they are skipped at parse time); reverts the effect of @ref enable-debug "%enable-debug"<br><br>Since %Qore 2.1
     |@ref disable-warning "%disable-warning" <em>@ref warnings "warning-code"</em>|Disables the named @ref warnings "warning" until @ref enable-warning "%enable-warning" is encountered with the same code or @ref enable-all-warnings "%enable-all-warnings" is encountered
-    |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref if "%if"; uses the same expression syntax as @ref if "%if"
-    |@ref else "%else"|Allows for parsing an alternate block when used with the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
+    |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if"; uses the same expression syntax as @ref parse_if "%if"
+    |@ref else "%else"|Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all @ref warnings "warnings"
     |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br><br>Since %Qore 2.1
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
-    |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
+    |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
-    |@ref if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
+    |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref include "%include" <em>file_name</em>|Starts parsing \a file_name immediately. Parsing resumes with the current input after \a file_name has been completely parsed
@@ -93,6 +95,7 @@
     |@ref no-thread-control "%no-thread-control"|Disallows access to thread control operations (see @ref no-thread-control "%no-thread-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CONTROL and the <tt>-</tt><tt>-no-thread-control</tt> command line option
     |@ref no-thread-info "%no-thread-info"|Disallows any access to functionality that provides threading information (see @ref no-thread-info "%no-thread-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_INFO and the <tt>-</tt><tt>-no-thread-info</tt> command line option
     |@ref no-threads "%no-threads"|Disallows access to all thread control operations and thread classes (equivalent to <tt>-</tt><tt>-no-thread-control</tt> and <tt>-</tt><tt>-no-thread-classes</tt> together); equivalent to parse option @ref Qore::PO_NO_THREADS and the <tt>-</tt><tt>-no-threads</tt> command line option
+    |@ref no-typedef "%no-typedef"|Disables the \c typedef keyword; equivalent to parse option @ref Qore::PO_NO_TYPEDEF <br><br>Since %Qore 2.3
     |@ref no-top-level "%no-top-level"|Disallows any further top level code; equivalent to parse option @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS and the <tt>-</tt><tt>-no-top-level</tt> command line option
     |@ref no-transient "%no-transient"|Removes the @ref transient keyword for backwards-compatibility; equivalent to parse option @ref Qore::PO_NO_TRANSIENT
     |@ref no-uncontrolled-apis "%no-uncontrolled-apis"|Disallows access to uncontrolled APIs such as external language bindings or direct generic system call APIs that could bypass %Qore's sandboxing controls
@@ -427,6 +430,40 @@
     @since %Qore 0.8.13
 
     <hr>
+    @section broken-narrowed-types %broken-narrowed-types
+
+    @par Parse Directive:
+    <tt>%%broken-narrowed-types</tt>
+
+    @par Command Line:
+    <tt>-pbroken-narrowed-types</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_BROKEN_NARROWED_TYPES
+
+    @par Description:
+    Disables parse-time type narrowing for variables declared with \c auto, \c hash<auto>, and \c list<auto>.
+    When this option is set, the compiler will not narrow variable types based on assignments, and type
+    checking will be deferred to runtime.
+
+    This option is provided for backwards compatibility with code that relies on the old behavior where
+    \c auto variables could be assigned values of different types without parse-time errors.
+
+    @par Example:
+    Without this option, the following code would fail at parse time:
+    @code{.py}
+auto val = 1;        # val is narrowed to 'int'
+val = "string";      # PARSE-TYPE-ERROR without %broken-narrowed-types
+    @endcode
+
+    With \c %%broken-narrowed-types, the code parses successfully and type checking occurs at runtime.
+
+    @see @ref correct-narrowed-types "%correct-narrowed-types"
+    @see @ref auto_no_narrow "auto!" syntax for per-variable control
+
+    @since %Qore 2.3
+
+    <hr>
     @section broken-operators %broken-operators
 
     @par Parse Directive:
@@ -643,6 +680,26 @@ i+ =4;
     @since %Qore 0.8.12.10
 
     <hr>
+    @section correct-narrowed-types %correct-narrowed-types
+
+    @par Parse Directive:
+    <tt>%%correct-narrowed-types</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Reverts the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option, re-enabling
+    parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables.
+
+    @see @ref broken-narrowed-types "%broken-narrowed-types"
+
+    @since %Qore 2.3
+
+    <hr>
     @section correct-loop-statement %correct-loop-statement
 
     @par Parse Directive:
@@ -816,7 +873,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Provides else-if functionality in a @ref conditional_parsing "conditionally-parsed" block started by @ref if "%if". The expression uses the same syntax as @ref if "%if", supporting \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators.
+    Provides else-if functionality in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if". The expression uses the same syntax as @ref parse_if "%if", supporting \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators.
 
     @par Example:
     @code{.py}
@@ -846,7 +903,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Allows for parsing an alternate block when used with the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
 
     @since %Qore 0.8.3
 
@@ -970,7 +1027,7 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Closes a conditionally-parsed block started by the @ref if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
+    Closes a conditionally-parsed block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing" based on parse defines)
 
     @since %Qore 0.8.3
 
@@ -1009,7 +1066,7 @@ sub validate_input(int value, int max_value) {
     @see @ref Qore::set_return_value()
 
     <hr>
-    @section if %if
+    @section parse_if %if
 
     @par Parse Directive:
     <tt>%%if</tt> \em expression
@@ -1753,6 +1810,26 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows access to all thread control operations and thread classes (equivalent to @ref no-thread-control "%no-thread-control" and @ref no-thread-classes "%no-thread-classes" together).
+
+    <hr>
+    @section no-typedef %no-typedef
+
+    @par Parse Directive:
+    <tt>%%no-typedef</tt>
+
+    @par Command Line:
+    <tt>-pno-typedef</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_NO_TYPEDEF
+
+    @par Description:
+    Disables the @ref typedef_keyword "typedef" keyword. When this option is set, \c typedef is not recognized
+    as a keyword and can be used as an identifier (variable name, function name, etc.).
+
+    This option is provided for backwards compatibility with code that uses \c typedef as an identifier.
+
+    @since %Qore 2.3
 
     <hr>
     @section no-top-level %no-top-level

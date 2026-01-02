@@ -67,6 +67,9 @@ public class DataProvider {
         #! Map of known data provider factory names to modules
         const FactoryMap = {
             "asyncapi": "AsyncApiDataProvider",
+            "awsrestclient": "AwsRestClientDataProvider",
+
+            "bcrest": "CdsRestDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
@@ -96,8 +99,12 @@ public class DataProvider {
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            # provided by the json module
+            "McpClientDataProvider": "McpClientDataProvider",
+
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
+            "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module
             "mqtt": "MqttDataProvider",

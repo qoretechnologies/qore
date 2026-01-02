@@ -1269,15 +1269,16 @@ if (DOXYGEN_FOUND)
     )
     add_dependencies(docs docs-lib)
 
-    # lang
-    message(STATUS "Preparing Doxyfile for lang")
+    # lang - initially configure with empty TAGFILES, will be reconfigured after modules are defined
+    message(STATUS "Preparing Doxyfile for lang (initial, without module tags)")
+    set(QORE_LANG_DOC_TAGFILES "" CACHE INTERNAL "Module tag files for lang docs cross-referencing")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang @ONLY)
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
-        DEPENDS QORE_DOX_FILES
+        DEPENDS QORE_DOX_FILES QPP_GENERATED_FILES
         COMMENT "Generating API documentation with Doxygen for: lang"
         VERBATIM
     )
@@ -1456,6 +1457,19 @@ qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
+
+# Reconfigure lang Doxyfile with module tag files after all modules are defined
+if (DOXYGEN_FOUND)
+    # Build TAGFILES string from collected module names
+    set(QORE_LANG_DOC_TAGFILES "")
+    foreach(mod ${QORE_USER_MODULE_NAMES})
+        # Tag file path relative to lang html output: ../modules/{mod}/html
+        # Tag files are generated as {mod}.tag in the module's html output directory
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/docs/modules/${mod}/${mod}.tag=../modules/${mod}/html\"")
+    endforeach()
+    message(STATUS "Reconfiguring Doxyfile for lang with ${CMAKE_BINARY_DIR}/docs/modules/<module>/<module>.tag module cross-references")
+    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang @ONLY)
+endif()
 
 # print info
 message(STATUS "")

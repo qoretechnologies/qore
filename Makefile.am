@@ -1219,8 +1219,12 @@ doxygen/lib/Doxyfile: doxygen/lib/Doxyfile.tmpl configure.ac
 lang-dox-src: dummy
 	cd lib; make dox-src
 
+# Generate TAGFILES for lang docs to reference module documentation
+LANG_DOC_TAGFILES = $(foreach m,$(USER_MODS) $(USER_SPLIT_MODS),"docs/modules/$(m)/$(m).tag=../modules/$(m)/html")
+
 doxygen/lang/Doxyfile: doxygen/lang/Doxyfile.tmpl configure.ac
-	doxygen/dpp "$(VERSION)" $< "$(top_srcdir)/doxygen" "$(top_srcdir)/getrev.sh" > $@
+	doxygen/dpp "$(VERSION)" $< "$(top_srcdir)/doxygen" "$(top_srcdir)/getrev.sh" | \
+		sed 's/^TAGFILES.*=.*/TAGFILES = $(LANG_DOC_TAGFILES)/' > $@
 
 $(LANG_TMP_DOXYFILES_SRC): doxygen/lang/%.dox: doxygen/lang/%.dox.tmpl lib $(QPP) lang-dox-src
 	$(QPP) -t $< -o $@

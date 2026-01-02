@@ -1,12 +1,12 @@
 /** @page conditional_parsing Conditional Parsing and Parse Defines
 
-    %Qore supports conditional parsing with parse defines similar to the C/C++ preprocessor. The following parse directives are supported: @ref define "%define", @ref else "%else", @ref elif "%elif", @ref endif "%endif", @ref if "%if", @ref ifdef "%ifdef", and @ref ifndef "%ifndef".
+    %Qore supports conditional parsing with parse defines similar to the C/C++ preprocessor. The following parse directives are supported: @ref define "%define", @ref else "%else", @ref elif "%elif", @ref endif "%endif", @ref parse_if "%if", @ref ifdef "%ifdef", and @ref ifndef "%ifndef".
 
     These directives allow for the existence (or lack thereof) of a parse define to affect which code is parsed into the program at parse time.
 
     @section if_directive The %if Directive
 
-    The @ref if "%if" directive supports C preprocessor-style boolean expressions using the \c defined() function. This allows for more complex conditional logic than the simple @ref ifdef "%ifdef" directive.
+    The @ref parse_if "%if" directive supports C preprocessor-style boolean expressions using the \c defined() function. This allows for more complex conditional logic than the simple @ref ifdef "%ifdef" directive.
 
     @subsection if_syntax Syntax
 
@@ -18,7 +18,7 @@
 
     @subsection if_operators Supported Operators
 
-    The @ref if "%if" directive supports the following operators:
+    The @ref parse_if "%if" directive supports the following operators:
     - \c defined(SYMBOL) - returns true if SYMBOL is defined
     - \c ! - logical NOT operator
     - \c && - logical AND operator
@@ -56,7 +56,7 @@
 
     @section elif_directive The %elif Directive
 
-    The @ref elif "%elif" directive provides else-if functionality, allowing multiple conditions to be tested in sequence. It uses the same expression syntax as @ref if "%if".
+    The @ref elif "%elif" directive provides else-if functionality, allowing multiple conditions to be tested in sequence. It uses the same expression syntax as @ref parse_if "%if".
 
     @code{.py}
 %if defined(WINDOWS)

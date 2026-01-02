@@ -45,7 +45,7 @@
 %requires reflection
 
 module Util {
-    version = "2.1.1";
+    version = "2.2";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -102,7 +102,13 @@ module Util {
     - @ref Util::uniq()
     - @ref Util::zip()
 
+    Classes:
+    - @ref Util::TerminalColor "TerminalColor"
+
     @section utilrelnotes Release Notes
+
+    @subsection util_2_2 Util 2.2
+    - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output
 
     @subsection util_2_1_1 Util 2.1.1
     - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
@@ -2317,5 +2323,222 @@ public hash<ExceptionInfo> sub check_exception_serializable(hash<ExceptionInfo> 
         ex.arg = sprintf("unserializable arg: %y", ex.arg);
     }
     return ex;
+}
+
+#! Helper class for ANSI terminal color output
+/** This class provides methods for formatting text with ANSI color codes for terminal output.
+    Colors are automatically disabled when output is not connected to a terminal.
+
+    @par Example:
+    @code{.py}
+TerminalColor color();
+printf("%s: %s\n", color.error("ERROR"), "Something went wrong");
+printf("%s: %s\n", color.success("OK"), "Operation completed");
+printf("Value: %s\n", color.cyan("some value"));
+    @endcode
+
+    @since Util 2.2
+*/
+public class TerminalColor {
+    public {
+        #! Whether color output is enabled
+        bool enabled;
+    }
+
+    private {
+        # ANSI color codes
+        const Reset = "\033[0m";
+        const Bold = "\033[1m";
+        const Dim = "\033[2m";
+
+        # Foreground colors
+        const Red = "\033[31m";
+        const Green = "\033[32m";
+        const Yellow = "\033[33m";
+        const Blue = "\033[34m";
+        const Magenta = "\033[35m";
+        const Cyan = "\033[36m";
+        const White = "\033[37m";
+
+        # Bright foreground colors
+        const BrightRed = "\033[91m";
+        const BrightGreen = "\033[92m";
+        const BrightYellow = "\033[93m";
+        const BrightBlue = "\033[94m";
+        const BrightMagenta = "\033[95m";
+        const BrightCyan = "\033[96m";
+    }
+
+    #! Creates a TerminalColor object
+    /** @param enable_color if @ref True "True", color output is enabled if stdout is a terminal;
+        if @ref False "False", color output is always disabled
+    */
+    constructor(bool enable_color = True) {
+        # Check if stdout is a terminal and color is requested
+        enabled = enable_color && TerminalColor::isTerminal();
+    }
+
+    #! Check if stdout is connected to a terminal
+    /** @return @ref True "True" if stdout is connected to a terminal, @ref False "False" otherwise
+    */
+    static bool isTerminal() {
+        try {
+            # Try to get terminal window size - this will fail if not a terminal
+            hash<auto> ws = TermIOS::getWindowSize();
+            return ws.columns > 0;
+        } catch () {
+            return False;
+        }
+    }
+
+    #! Apply a color code to text if colors are enabled
+    /** @param color_code the ANSI color code to apply
+        @param text the text to colorize
+        @return the colorized text if colors are enabled, otherwise the original text
+    */
+    string apply(string color_code, string text) {
+        if (!enabled) {
+            return text;
+        }
+        return color_code + text + Reset;
+    }
+
+    #! Format text in red
+    string red(string text) {
+        return apply(Red, text);
+    }
+
+    #! Format text in green
+    string green(string text) {
+        return apply(Green, text);
+    }
+
+    #! Format text in yellow
+    string yellow(string text) {
+        return apply(Yellow, text);
+    }
+
+    #! Format text in blue
+    string blue(string text) {
+        return apply(Blue, text);
+    }
+
+    #! Format text in magenta
+    string magenta(string text) {
+        return apply(Magenta, text);
+    }
+
+    #! Format text in cyan
+    string cyan(string text) {
+        return apply(Cyan, text);
+    }
+
+    #! Format text in white
+    string white(string text) {
+        return apply(White, text);
+    }
+
+    #! Format error text (bright red + bold)
+    string error(string text) {
+        return apply(BrightRed + Bold, text);
+    }
+
+    #! Format success text (bright green)
+    string success(string text) {
+        return apply(BrightGreen, text);
+    }
+
+    #! Format warning text (bright yellow)
+    string warning(string text) {
+        return apply(BrightYellow, text);
+    }
+
+    #! Format info text (bright cyan)
+    string info(string text) {
+        return apply(BrightCyan, text);
+    }
+
+    #! Format a key/field name (cyan)
+    string key(string text) {
+        return apply(Cyan, text);
+    }
+
+    #! Format a type name (magenta)
+    string type(string text) {
+        return apply(Magenta, text);
+    }
+
+    #! Format a value (green)
+    string value(string text) {
+        return apply(Green, text);
+    }
+
+    #! Format a number (bright blue)
+    string number(string text) {
+        return apply(BrightBlue, text);
+    }
+
+    #! Format a string value (yellow)
+    string str(string text) {
+        return apply(Yellow, text);
+    }
+
+    #! Format dim/secondary text
+    string dim(string text) {
+        return apply(Dim, text);
+    }
+
+    #! Format bold text
+    string bold(string text) {
+        return apply(Bold, text);
+    }
+
+    #! Format a hash/record value with colors
+    /** @param val the value to format
+        @param indent the current indentation string
+        @return the colorized formatted value
+    */
+    string formatValue(auto val, string indent = "") {
+        switch (val.typeCode()) {
+            case NT_HASH: {
+                if (!val) {
+                    return "{}";
+                }
+                list<string> parts = ();
+                foreach hash<auto> i in (val.pairIterator()) {
+                    push parts, sprintf("%s  %s: %s", indent, key(i.key),
+                        formatValue(i.value, indent + "  "));
+                }
+                return sprintf("{\n%s\n%s}", parts.join(",\n"), indent);
+            }
+            case NT_LIST: {
+                if (!val) {
+                    return "[]";
+                }
+                list<string> parts = ();
+                foreach auto item in (val) {
+                    push parts, sprintf("%s  %s", indent, formatValue(item, indent + "  "));
+                }
+                return sprintf("[\n%s\n%s]", parts.join(",\n"), indent);
+            }
+            case NT_STRING:
+                return str(sprintf("%y", val));
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return number(sprintf("%y", val));
+            case NT_BOOLEAN:
+                return val ? success("True") : warning("False");
+            case NT_NULL:
+            case NT_NOTHING:
+                return dim("NOTHING");
+            case NT_DATE:
+                return info(sprintf("%y", val));
+            case NT_BINARY:
+                return dim(sprintf("<binary: %d bytes>", val.size()));
+            default:
+                return sprintf("%y", val);
+        }
+    }
 }
 }
