@@ -472,6 +472,10 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                 throw "WEBSOCKET-ERROR", "buffer too short for mask";
             }
             mask = buf.substr(pos, 4);
+            # Verify mask is exactly 4 bytes as required by RFC 6455
+            if (mask.size() != 4) {
+                throw "WEBSOCKET-ERROR", sprintf("invalid mask size: %d (expected 4)", mask.size());
+            }
             pos += 4;
         }
 

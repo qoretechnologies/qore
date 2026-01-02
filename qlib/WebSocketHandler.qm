@@ -956,8 +956,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 if (wsc.stop_flag) {
                     continue;
                 }
-                bool da = sock.isDataAvailable(100);  # Wait 100ms instead of 0
-                if (!da) {
+                if (!sock.isDataAvailable(0)) {
                     int now = clock_getmillis() / 1000;
                     if (!update) {
                         if ((now - timestamp) >= heartbeat) {
