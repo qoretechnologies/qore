@@ -10,9 +10,10 @@
     @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
 
     @par Parse-Time Type Narrowing
-    %Qore now performs parse-time type narrowing for variables declared with \c auto, \c hash<auto>, and
-    \c list<auto>. After a variable is assigned a value of a specific type, the compiler narrows the variable's
-    type and will raise a \c PARSE-TYPE-ERROR if a subsequent assignment uses an incompatible type.
+    %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
+    @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
+    specific type, the compiler narrows the variable's type and will raise a \c PARSE-TYPE-ERROR if a subsequent
+    assignment uses an incompatible type.
 
     For example, the following code that worked in previous versions will now fail at parse time:
     @code{.py}
@@ -21,13 +22,13 @@ val = "string";      # PARSE-TYPE-ERROR: cannot assign 'string' to 'int'
     @endcode
 
     <b>Workarounds:</b>
-    - Use @ref auto_no_narrow "auto!" instead of \c auto to disable type narrowing for individual variables:
+    - Use @ref auto_no_narrow "auto!" instead of @ref auto_type "auto" to disable type narrowing for individual variables:
       @code{.py}
 auto! val = 1;       # val remains 'auto', no narrowing
 val = "string";      # OK
       @endcode
-    - Use \c hash<auto!> instead of \c hash<auto> for hashes without value type narrowing
-    - Use \c list<auto!> instead of \c list<auto> for lists without element type narrowing
+    - Use @ref auto_no_narrow "hash<auto!>" instead of @ref hash_type "hash<auto>" for hashes without value type narrowing
+    - Use @ref auto_no_narrow "list<auto!>" instead of @ref list_type "list<auto>" for lists without element type narrowing
     - Use the @ref broken-narrowed-types "%broken-narrowed-types" parse directive to globally disable
       parse-time type narrowing (moves type checking to runtime)
     - Use @ref Qore::PO_BROKEN_NARROWED_TYPES "PO_BROKEN_NARROWED_TYPES" when setting up a
@@ -91,7 +92,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - new @ref HttpServer::HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
     - @ref HttpServerAsyncIo "HttpServerAsyncIo" module
-      - new module providing async I/O support classes for the HttpServer module
+      - new module providing async I/O support classes for the @ref HttpServer "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
     - @ref HttpServerUtil "HttpServerUtil" module
       - added functionality to support setting cookies
@@ -135,7 +136,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
     - new method in the @ref reflection "reflection" module:
-      - \c Class::tryGetConstant()
+      - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
     - new builtin methods:
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
@@ -161,7 +162,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
     - new @ref auto_no_narrow "auto!" syntax to disable parse-time type narrowing
       (<a href="https://github.com/qoretechnologies/qore/issues/5080">issue 5080</a>)
-      - \c auto!, \c hash<auto!>, \c list<auto!> prevent parse-time type inference errors
+      - @ref auto_no_narrow "auto!", @ref auto_no_narrow "hash<auto!>", @ref auto_no_narrow "list<auto!>" prevent parse-time type inference errors
       - allows variables to accept values of different types without \c PARSE-TYPE-ERROR
       - runtime type enforcement still applies to individual values
     - new @ref typedef_keyword "typedef" keyword for type aliases
@@ -270,15 +271,15 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
     - @ref Util "Util" module
-      - fixed the \c glob_to_regex() function
+      - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
     - @ref reflection "reflection" module
-      - Class::getConstant() now searches the class hierarchy
+      - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
     - @ref DataProvider "DataProvider" module
-      - fixed a bug in AbstractDataProviderBulkOperation::setupInitialRecord() that caused the buffer to have
+      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular

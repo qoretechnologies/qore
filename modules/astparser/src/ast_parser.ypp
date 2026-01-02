@@ -1487,6 +1487,12 @@ uncqtypedef:
             $$ = new std::string($1);
             free($1);
         }
+        | IDENTIFIER '!' {
+            // Handle auto! syntax
+            $$ = new std::string($1);
+            $$->push_back('!');
+            free($1);
+        }
         | SCOPED_REF {
             $$ = new std::string($1);
             free($1);
@@ -1498,6 +1504,13 @@ uncqtypedef:
         | '*' IDENTIFIER {
             $$ = new std::string("*");
             $$->append($2);
+            free($2);
+        }
+        | '*' IDENTIFIER '!' {
+            // Handle *auto! syntax
+            $$ = new std::string("*");
+            $$->append($2);
+            $$->push_back('!');
             free($2);
         }
         | '*' SCOPED_REF {
