@@ -354,7 +354,9 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
             if (bd.offset >= bd.data.size()) {
                 // All current data has been copied - remove from pending
                 h2->pending_body_data.erase(it);
-                printd(5, "CONNECT_DATA_PROVIDER all data copied, returning %zu\n", to_copy);
+                // Don't send END_STREAM - this is a bidirectional streaming protocol
+                *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+                printd(5, "CONNECT_DATA_PROVIDER all data copied, returning %zu (NO_END_STREAM)\n", to_copy);
             }
 
             // Return bytes copied - nghttp2 will call us again if it needs more
@@ -978,62 +980,18 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         bd.data.insert(bd.data.end(), src, src + len);
     }
 
-    // Create a data provider for this stream
-    nghttp2_data_provider2 data_provider;
-    data_provider.source.ptr = this;
-    data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
-            uint8_t* buf, size_t length, uint32_t* data_flags,
-            nghttp2_data_source* source, void* user_data) -> ssize_t {
-        Http2Session* h2 = static_cast<Http2Session*>(user_data);
-        printd(5, "DATA_PROVIDER_CALLBACK stream_id=%d length=%zu isServer=%d\n", stream_id, length, h2->is_server);
-        auto it = h2->pending_body_data.find(stream_id);
-        if (it == h2->pending_body_data.end()) {
-            // No more data - defer until more data is submitted
-            printd(5, "DATA_PROVIDER_CALLBACK no pending data, returning DEFERRED\n");
-            return NGHTTP2_ERR_DEFERRED;
-        }
-
-        BodyData& bd = it->second;
-        size_t remaining = bd.data.size() - bd.offset;
-        size_t to_copy = std::min(remaining, length);
-        printd(5, "DATA_PROVIDER_CALLBACK remaining=%zu to_copy=%zu\n", remaining, to_copy);
-
-        if (to_copy > 0) {
-            memcpy(buf, bd.data.data() + bd.offset, to_copy);
-            bd.offset += to_copy;
-        }
-
-        if (bd.offset >= bd.data.size()) {
-            h2->pending_body_data.erase(it);
-            // Check stream type to determine if we should send EOF
-            Http2StreamInfo* stream = h2->getStream(stream_id);
-            if (stream && !stream->isStreaming()) {
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-            }
-        }
-
-        return static_cast<ssize_t>(to_copy);
-    };
-
-    // First try to resume if the stream was deferred
+    // Resume the stream's data provider to trigger sending the data
+    // The data provider was set up when the request/response was submitted
+    // and returns NGHTTP2_ERR_DEFERRED when no data is available
     int rv = nghttp2_session_resume_data(session, stream_id);
     printd(5, "sendStreamData() nghttp2_session_resume_data rv=%d\n", rv);
 
-    // If resume fails (stream not deferred), we need to submit new data
+    // NGHTTP2_ERR_INVALID_ARGUMENT means the stream is not deferred or doesn't exist
+    // This can happen if the data provider hasn't been called yet
     if (rv == NGHTTP2_ERR_INVALID_ARGUMENT) {
-        // Stream is not deferred, submit new data frame
-        uint8_t flags = end_stream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE;
-        rv = nghttp2_submit_data2(session, flags, stream_id, &data_provider);
-        printd(5, "sendStreamData() nghttp2_submit_data2 rv=%d\n", rv);
-        if (rv == NGHTTP2_ERR_DATA_EXIST) {
-            // There's already a pending DATA frame - this is OK, our data is queued
-            // in pending_body_data and will be picked up by the callback
-            printd(5, "sendStreamData() DATA_EXIST - data queued for pending frame\n");
-        } else if (rv < 0) {
-            xsink->raiseException("HTTP2-ERROR", "failed to submit data: %s",
-                nghttp2_strerror(rv));
-            return -1;
-        }
+        // The stream is not in deferred state - the data will be picked up
+        // on the next send cycle when nghttp2 calls the data provider
+        printd(5, "sendStreamData() stream not deferred, data queued for next send cycle\n");
     } else if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to resume stream data: %s",
             nghttp2_strerror(rv));
@@ -1108,15 +1066,43 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         nva.push_back(nv);
     }
 
-    // For CONNECT response, we use submit_headers with only END_HEADERS flag
-    // This keeps the stream open for bidirectional data (no END_STREAM)
-    // Note: Using nghttp2_submit_response would set END_STREAM which closes the stream
-    int rv = nghttp2_submit_headers(session,
-        NGHTTP2_FLAG_END_HEADERS,  // Only END_HEADERS, NOT END_STREAM
-        stream_id,
-        nullptr,  // no priority spec
-        nva.data(), nva.size(),
-        nullptr);  // no user data
+    // For CONNECT response, we use submit_response with a data provider that defers
+    // This keeps the stream open for bidirectional data using NGHTTP2_DATA_FLAG_NO_END_STREAM
+    nghttp2_data_provider data_provider;
+    data_provider.source.ptr = this;
+    data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
+            uint8_t* buf, size_t length, uint32_t* data_flags,
+            nghttp2_data_source* source, void* user_data) -> ssize_t {
+        // For CONNECT streams, defer data until explicitly provided via sendStreamData
+        Http2Session* h2 = static_cast<Http2Session*>(user_data);
+        printd(5, "CONNECT_RESPONSE_DATA_PROVIDER stream_id=%d length=%zu h2=%p\n", stream_id, length, h2);
+        auto it = h2->pending_body_data.find(stream_id);
+        if (it == h2->pending_body_data.end()) {
+            // No data yet - defer until sendStreamData provides data
+            printd(5, "CONNECT_RESPONSE_DATA_PROVIDER no data, returning DEFERRED\n");
+            return NGHTTP2_ERR_DEFERRED;
+        }
+
+        BodyData& bd = it->second;
+        size_t remaining = bd.data.size() - bd.offset;
+        size_t to_copy = std::min(remaining, length);
+        printd(5, "CONNECT_RESPONSE_DATA_PROVIDER remaining=%zu to_copy=%zu\n", remaining, to_copy);
+
+        if (to_copy > 0) {
+            memcpy(buf, bd.data.data() + bd.offset, to_copy);
+            bd.offset += to_copy;
+        }
+
+        if (bd.offset >= bd.data.size()) {
+            h2->pending_body_data.erase(it);
+            // Don't send END_STREAM - this is a bidirectional streaming protocol
+            *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+        }
+
+        return static_cast<ssize_t>(to_copy);
+    };
+
+    int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), &data_provider);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));
