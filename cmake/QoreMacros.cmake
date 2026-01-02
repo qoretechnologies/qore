@@ -4,6 +4,9 @@
 
 include(CMakeParseArguments)
 
+# Global list to collect user module names for documentation cross-referencing
+set(QORE_USER_MODULE_NAMES "" CACHE INTERNAL "List of user module names for doc cross-referencing")
+
 #
 # Create C++ code using the new value API from the QPP files
 #
@@ -287,6 +290,9 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     endif()
 
     set (_extra_files ${ARGN})
+
+    # Add module name to the global list for documentation cross-referencing
+    set(QORE_USER_MODULE_NAMES ${QORE_USER_MODULE_NAMES} ${f} CACHE INTERNAL "List of user module names for doc cross-referencing")
 
     if (DOXYGEN_FOUND)
         # get module name

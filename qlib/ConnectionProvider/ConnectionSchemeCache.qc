@@ -152,6 +152,7 @@ public class ConnectionSchemeCache {
             "bltcp": "BusyLightDataProvider",
             "blssl": "BusyLightDataProvider",
 
+            "bcrests": "CdsRestClient",
             "cdsrests": "CdsRestClient",
             "dynamics": "CdsRestClient",
 
@@ -176,11 +177,17 @@ public class ConnectionSchemeCache {
             # provided by the json module
             "jsonrpc": "JsonRpcClient",
             "jsonrpcs": "JsonRpcClient",
+            "mcp": "McpClient",
+            "mcps": "McpClient",
+
+            # provided by the jni module
+            "kafka": "KafkaDataProvider",
 
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",
             "memcacheds": "MemcachedDataProvider",
+            "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module
             "mqtttcp": "MqttDataProvider",
