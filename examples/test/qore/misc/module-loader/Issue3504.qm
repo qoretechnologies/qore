@@ -6,6 +6,6 @@ module Issue3504 {
     license = "MIT";
 }
 
-public namespace Util {
+public namespace Qorize {
     public sub t() {}
 }
