@@ -267,6 +267,78 @@ public:
     */
     DLLEXPORT int getHttp2Mode() const;
 
+    //! Sends an HTTP/2 extended CONNECT request (RFC 8441)
+    /** @param path the request path
+        @param headers request headers
+        @param protocol the :protocol pseudo-header value (e.g., "websocket")
+        @param info optional reference to a hash to receive connection info
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return response hash with headers and stream_id, or nullptr on error
+
+        @note This method is used for WebSocket over HTTP/2 (RFC 8441)
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreHashNode* sendHttp2Connect(const char* path, const QoreHashNode* headers,
+        const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
+
+    //! Sends data on an HTTP/2 stream
+    /** @param stream_id the stream ID to send data on
+        @param data the data to send
+        @param end_stream if true, signals end of stream (no more data will be sent)
+        @param timeout_ms timeout in milliseconds
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 on success, -1 on error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads data from an HTTP/2 stream
+    /** @param stream_id the stream ID to read data from
+        @param timeout_ms timeout in milliseconds
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return binary data read, or nullptr if no data available or error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Returns the HTTP/2 stream ID for the current request
+    /** @return the stream ID, or 0 if not in HTTP/2 mode
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int32_t getHttp2StreamId() const;
+
+    //! Returns true if the HTTP/2 stream has buffered data available
+    /** @param stream_id the stream ID to check
+
+        @return true if the stream has buffered data, false otherwise
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasHttp2StreamData(int32_t stream_id) const;
+
+    //! Checks if HTTP/2 stream data is available, polling the socket if needed
+    /** @param stream_id the stream ID to check
+        @param timeout_ms timeout in milliseconds for polling
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return true if data is available, false otherwise
+
+        @note This method first checks for buffered data, then polls the socket for new
+        HTTP/2 frames if no data is buffered. This is the correct way to check for
+        data availability when using HTTP/2 streams.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
     //! sets the connection URL
     /** @param url the URL to use for connection parameters
         @param xsink if an error occurs, the Qore-language exception information will be added here

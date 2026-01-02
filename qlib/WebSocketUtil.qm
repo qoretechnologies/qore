@@ -402,6 +402,125 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         return h;
     }
 
+    #! Parses a WebSocket frame from binary data
+    /** @param buf the binary data containing the WebSocket frame
+        @param encoding the character encoding to use for text messages
+
+        @return a hash with the following keys:
+        - \c op: the operation code (one of @ref ws_op_codes)
+        - \c msg: the message data received, if any
+        - \c masked: True if the data was masked
+        - \c close: for close messages, the close code
+        - \c fin: True if this is the final frame in a message
+        - \c rsv1: the RSV1 bit (used by extensions like permessage-deflate)
+        - \c rsv2: the RSV2 bit (reserved for extensions)
+        - \c rsv3: the RSV3 bit (reserved for extensions)
+
+        @throw WEBSOCKET-ERROR if the buffer is too short to contain a valid frame
+
+        @note This function is used for HTTP/2 WebSocket where frame data comes
+        from HTTP/2 DATA frames rather than directly from the socket
+
+        @since WebSocketUtil 1.6
+    */
+    public hash<WsMsgInfo> sub ws_parse_frame(binary buf, *string encoding) {
+        int pos = 0;
+        int len = buf.size();
+
+        if (len < 2) {
+            throw "WEBSOCKET-ERROR", sprintf("buffer too short for WebSocket frame: %d bytes", len);
+        }
+
+        int b0 = buf[pos++];
+
+        # get opcode
+        int op = b0 & 0xf;
+        softbool fin = b0 & WS_FIN;
+
+        # extract RSV bits
+        softbool rsv1 = b0 & WS_RSV1;
+        softbool rsv2 = b0 & WS_RSV2;
+        softbool rsv3 = b0 & WS_RSV3;
+
+        # get next byte
+        int b1 = buf[pos++];
+        softbool masked = b1 & 0x80;
+        b1 &= 0x7f;
+
+        int data_len;
+        if (b1 < 126) {
+            data_len = b1;
+        } else if (b1 == 126) {
+            if (len < pos + 2) {
+                throw "WEBSOCKET-ERROR", "buffer too short for extended length";
+            }
+            data_len = (buf[pos] << 8) | buf[pos + 1];
+            pos += 2;
+        } else {
+            if (len < pos + 8) {
+                throw "WEBSOCKET-ERROR", "buffer too short for extended length";
+            }
+            data_len = 0;
+            for (int i = 0; i < 8; ++i) {
+                data_len = (data_len << 8) | buf[pos++];
+            }
+        }
+
+        *binary mask;
+        if (masked) {
+            if (len < pos + 4) {
+                throw "WEBSOCKET-ERROR", "buffer too short for mask";
+            }
+            mask = buf.substr(pos, 4);
+            pos += 4;
+        }
+
+        *data data;
+        if (data_len > 0) {
+            if (len < pos + data_len) {
+                throw "WEBSOCKET-ERROR", sprintf("buffer too short for data: need %d, have %d",
+                    pos + data_len, len);
+            }
+            data = buf.substr(pos, data_len);
+        }
+
+        # unmask data if necessary
+        if (mask && data) {
+            # unmasked data
+            binary udata;
+            for (int i = 0; i < data.size(); ++i) {
+                udata += chr((data[i] ^ mask[i % 4]));
+            }
+            data = udata;
+        }
+
+        hash<WsMsgInfo> h({
+            "op": op,
+            "masked": masked,
+            "fin": fin,
+            "rsv1": rsv1,
+            "rsv2": rsv2,
+            "rsv3": rsv3,
+        });
+        if (h.op == WSOP_Close) {
+            if (data) {
+                # get an unsigned 2-byte integer in network byte order (MSB) for the close code
+                h.close = get_word_16(data, 0);
+                # remove the first 2 bytes extracted above
+                splice data, 0, 2;
+                *string txtmsg = data ? data.toString("utf8") : NOTHING;
+                data = txtmsg;
+            } else {
+                h.close = WSCC_NoStatusRcvd;
+            }
+        } else if (op == WSOP_Text) {
+            data = data.toString(encoding ?? "UTF-8");
+        }
+
+        h.msg = data;
+        return h;
+    }
+
     #! returns a string response key from the binary key and the WebSocket GUID value
     /** @param key the base64-encoded key received in the \c Sec-WebSocket-Key header
 

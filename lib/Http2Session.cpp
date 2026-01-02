@@ -38,6 +38,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 
+#include <algorithm>
 #include <cstring>
 
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
@@ -82,6 +83,9 @@ int Http2Session::init(ExceptionSink* xsink) {
     nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, onStreamCloseCallback);
     nghttp2_session_callbacks_set_on_header_callback(callbacks, onHeaderCallback);
     nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, onBeginHeadersCallback);
+    nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, onFrameSendCallback);
+    nghttp2_session_callbacks_set_on_invalid_frame_recv_callback(callbacks, onInvalidFrameRecvCallback);
+    nghttp2_session_callbacks_set_on_invalid_header_callback(callbacks, onInvalidHeaderCallback);
 
     int rv;
     if (is_server) {
@@ -282,6 +286,11 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     nghttp2_data_provider* data_prd = nullptr;
     nghttp2_data_provider data_provider;
 
+    // RFC 8441: For extended CONNECT (WebSocket over HTTP/2), we must NOT send END_STREAM
+    // because we need to send data after the handshake completes.
+    // Check if this is a CONNECT request with :protocol (extended CONNECT)
+    bool is_extended_connect = (method_str == "CONNECT" && !protocol.empty());
+
     if (body && body_len > 0) {
         // Store body data for callback (copies the data)
         int32_t stream_id = nghttp2_session_get_next_stream_id(session);
@@ -315,6 +324,44 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
             return static_cast<ssize_t>(to_copy);
         };
         data_prd = &data_provider;
+    } else if (is_extended_connect) {
+        // For extended CONNECT without initial body, provide a data provider that defers
+        // This prevents nghttp2 from sending END_STREAM on the HEADERS frame
+        data_provider.source.ptr = this;
+        data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
+                uint8_t* buf, size_t length, uint32_t* data_flags,
+                nghttp2_data_source* source, void* user_data) -> ssize_t {
+            // For extended CONNECT streams, defer data until explicitly provided via sendStreamData
+            Http2Session* h2 = static_cast<Http2Session*>(user_data);
+            printd(5, "CONNECT_DATA_PROVIDER stream_id=%d length=%zu h2=%p\n", stream_id, length, h2);
+            auto it = h2->pending_body_data.find(stream_id);
+            if (it == h2->pending_body_data.end()) {
+                // No data yet - defer until sendStreamData provides data
+                printd(5, "CONNECT_DATA_PROVIDER no data, returning DEFERRED\n");
+                return NGHTTP2_ERR_DEFERRED;
+            }
+
+            BodyData& bd = it->second;
+            size_t remaining = bd.data.size() - bd.offset;
+            size_t to_copy = std::min(remaining, length);
+            printd(5, "CONNECT_DATA_PROVIDER remaining=%zu to_copy=%zu\n", remaining, to_copy);
+
+            if (to_copy > 0) {
+                memcpy(buf, bd.data.data() + bd.offset, to_copy);
+                bd.offset += to_copy;
+            }
+
+            if (bd.offset >= bd.data.size()) {
+                // All current data has been copied - remove from pending
+                h2->pending_body_data.erase(it);
+                printd(5, "CONNECT_DATA_PROVIDER all data copied, returning %zu\n", to_copy);
+            }
+
+            // Return bytes copied - nghttp2 will call us again if it needs more
+            // We return DEFERRED only when there's NO data (handled above at the find check)
+            return static_cast<ssize_t>(to_copy);
+        };
+        data_prd = &data_provider;
     }
 
     int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
@@ -326,8 +373,11 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         return -1;
     }
 
-    // Create stream info
-    getOrCreateStream(stream_id);
+    // Create stream info and mark as streaming for extended CONNECT
+    Http2StreamInfo* stream = getOrCreateStream(stream_id);
+    if (is_extended_connect && stream) {
+        stream->stream_type = Http2StreamType::WebSocket;  // Mark as bidirectional streaming
+    }
 
     return stream_id;
 }
@@ -353,9 +403,17 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     };
     nva.push_back(nv_status);
 
-    // Add regular headers
+    // Add regular headers, filtering out connection-specific headers
     for (const auto& h : headers) {
         if (h.first[0] == ':') {
+            continue;
+        }
+        // Skip connection-specific headers (forbidden in HTTP/2)
+        if (h.first == "Connection" || h.first == "connection" ||
+            h.first == "Keep-Alive" || h.first == "keep-alive" ||
+            h.first == "Proxy-Connection" || h.first == "proxy-connection" ||
+            h.first == "Transfer-Encoding" || h.first == "transfer-encoding" ||
+            h.first == "Upgrade" || h.first == "upgrade") {
             continue;
         }
         nghttp2_nv nv = {
@@ -553,10 +611,12 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 }
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
+    printd(5, "sendPendingData() want_write=%d isServer=%d\n", nghttp2_session_want_write(session), is_server);
     // First, collect data from nghttp2
     while (nghttp2_session_want_write(session)) {
         const uint8_t* data;
         ssize_t len = nghttp2_session_mem_send(session, &data);
+        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", len);
         if (len < 0) {
             xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
                 nghttp2_strerror(static_cast<int>(len)));
@@ -569,9 +629,13 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     }
 
     // Send buffered data
+    printd(5, "sendPendingData() send_buffer.size=%zu\n", send_buffer.size());
     if (!send_buffer.empty()) {
+        // CRITICAL: Pass bypass_h2=true to send raw HTTP/2 frames directly to the socket,
+        // bypassing the HTTP/2 DATA frame path which would cause infinite recursion
         int rc = sock->send(xsink, "Http2Session", "sendPendingData",
-            send_buffer.data(), send_buffer.size(), timeout_ms);
+            send_buffer.data(), send_buffer.size(), timeout_ms, QORE_SOURCE_SOCKET,
+            true);  // bypass_h2=true
         if (rc < 0) {
             return -1;
         }
@@ -584,16 +648,24 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     char* buf;
-    ssize_t len = sock->brecv(xsink, "receiveData", buf, 16384, 0, timeout_ms, false);
+    // Use suppress_exception=true to avoid exception on timeout
+    ssize_t len = sock->brecv(xsink, "receiveData", buf, 16384, 0, timeout_ms, false, true);
+    printd(5, "receiveData() brecv len=%zd isServer=%d\n", len, is_server);
     if (len < 0) {
+        // Check for timeout (QSE_TIMEOUT = -3)
+        if (len == QSE_TIMEOUT) {
+            return 0;  // Not an error, just no data available
+        }
         return -1;
     }
     if (len == 0) {
-        // Connection closed or timeout
-        return -1;
+        // This could be SSL_ERROR_ZERO_RETURN (clean shutdown) or just no data
+        // For HTTP/2, we'll treat this as "no data available" rather than fatal
+        return 0;  // Not fatal for HTTP/2, just no data
     }
 
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
+    printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {
         xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_recv failed: %s",
             nghttp2_strerror(static_cast<int>(rv)));
@@ -625,8 +697,16 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 void Http2Session::markStreamComplete(int32_t stream_id) {
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
-        completed_streams.push(std::move(it->second));
-        streams.erase(it);
+        // For CONNECT streams, we need to keep the stream in the map so we can respond
+        // Create a copy for completed_streams instead of moving
+        if (it->second->is_connect) {
+            auto copy = std::make_unique<Http2StreamInfo>(*it->second);
+            completed_streams.push(std::move(copy));
+            // Keep the original in streams for submitConnectResponse to find
+        } else {
+            completed_streams.push(std::move(it->second));
+            streams.erase(it);
+        }
     }
 }
 
@@ -649,6 +729,11 @@ bool Http2Session::wantWrite() const {
 
 // nghttp2 callbacks
 
+int Http2Session::onFrameSendCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, void* user_data) {
+    return 0;
+}
+
 ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data,
         size_t length, int flags, void* user_data) {
     // We use mem_send instead, so this callback just returns success
@@ -658,6 +743,8 @@ ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data
 int Http2Session::onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d\n",
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server);
 
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
@@ -667,6 +754,15 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                     stream->headers_complete = true;
                     // For requests without a body (like GET), END_STREAM is on the HEADERS frame
                     if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+                        stream->body_complete = true;
+                        // Mark as complete so the handler is called
+                        // For CONNECT streams, markStreamComplete() keeps the stream in the map
+                        h2->markStreamComplete(frame->hd.stream_id);
+                    } else if (h2->is_server && stream->is_connect) {
+                        // RFC 8441: Extended CONNECT requests have no body, so they're complete
+                        // once headers are received. The client doesn't send END_STREAM because
+                        // it needs to send data on the stream after the handshake completes.
+                        printd(5, "onFrameRecvCallback: CONNECT request complete (no END_STREAM expected)\n");
                         stream->body_complete = true;
                         h2->markStreamComplete(frame->hd.stream_id);
                     }
@@ -748,9 +844,11 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
 int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flags,
         int32_t stream_id, const uint8_t* data, size_t len, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    printd(5, "onDataChunkRecvCallback stream_id=%d len=%zu isServer=%d\n", stream_id, len, h2->is_server);
     Http2StreamInfo* stream = h2->getOrCreateStream(stream_id);
     if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
+        printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
     }
     return 0;
 }
@@ -827,34 +925,78 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
     return 0;
 }
 
+int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, int lib_error_code, void* user_data) {
+    // Log invalid frames for debugging but don't fail
+    printd(3, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x error: %s\n",
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags,
+        nghttp2_strerror(lib_error_code));
+    return 0;
+}
+
+int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, const uint8_t* name, size_t namelen,
+        const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data) {
+    // Log invalid headers for debugging but don't fail
+    std::string hdr_name(reinterpret_cast<const char*>(name), namelen);
+    std::string hdr_val(reinterpret_cast<const char*>(value), valuelen);
+    printd(3, "Http2Session::onInvalidHeaderCallback() stream_id: %d header: %s=%s\n",
+        frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
+    return 0;
+}
+
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink) {
+    printd(5, "sendStreamData() stream_id=%d len=%zu end_stream=%d isServer=%d\n", stream_id, len, end_stream, is_server);
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
         return -1;
     }
 
-    // Store data for the data provider callback (copies the data)
-    pending_body_data[stream_id] = BodyData(data, len);
+    // Check if there's already too much buffered data (flow control backpressure)
+    // Limit to 1MB per stream to prevent unbounded memory growth
+    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+    auto it = pending_body_data.find(stream_id);
+    if (it != pending_body_data.end()) {
+        size_t pending = it->second.data.size() - it->second.offset;
+        if (pending > MAX_STREAM_BUFFER) {
+            xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: %zu bytes pending, "
+                "waiting for peer to consume data", stream_id, pending);
+            return -1;
+        }
+    }
+
+    // Append data to the pending buffer for the data provider callback
+    if (it == pending_body_data.end()) {
+        // No existing data - create new entry
+        pending_body_data[stream_id] = BodyData(data, len);
+    } else {
+        // Append to existing data (preserving unread data)
+        BodyData& bd = it->second;
+        const uint8_t* src = reinterpret_cast<const uint8_t*>(data);
+        bd.data.insert(bd.data.end(), src, src + len);
+    }
 
     // Create a data provider for this stream
-    nghttp2_data_provider data_provider;
+    nghttp2_data_provider2 data_provider;
     data_provider.source.ptr = this;
     data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
             uint8_t* buf, size_t length, uint32_t* data_flags,
             nghttp2_data_source* source, void* user_data) -> ssize_t {
         Http2Session* h2 = static_cast<Http2Session*>(user_data);
+        printd(5, "DATA_PROVIDER_CALLBACK stream_id=%d length=%zu isServer=%d\n", stream_id, length, h2->is_server);
         auto it = h2->pending_body_data.find(stream_id);
         if (it == h2->pending_body_data.end()) {
-            // No more data - check if we should send END_STREAM
-            // Note: For streaming, we don't set EOF here
+            // No more data - defer until more data is submitted
+            printd(5, "DATA_PROVIDER_CALLBACK no pending data, returning DEFERRED\n");
             return NGHTTP2_ERR_DEFERRED;
         }
 
         BodyData& bd = it->second;
         size_t remaining = bd.data.size() - bd.offset;
         size_t to_copy = std::min(remaining, length);
+        printd(5, "DATA_PROVIDER_CALLBACK remaining=%zu to_copy=%zu\n", remaining, to_copy);
 
         if (to_copy > 0) {
             memcpy(buf, bd.data.data() + bd.offset, to_copy);
@@ -873,10 +1015,26 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         return static_cast<ssize_t>(to_copy);
     };
 
-    // Resume the stream with more data
+    // First try to resume if the stream was deferred
     int rv = nghttp2_session_resume_data(session, stream_id);
-    if (rv != 0 && rv != NGHTTP2_ERR_INVALID_ARGUMENT) {
-        // INVALID_ARGUMENT means stream is not deferred, which is OK for first send
+    printd(5, "sendStreamData() nghttp2_session_resume_data rv=%d\n", rv);
+
+    // If resume fails (stream not deferred), we need to submit new data
+    if (rv == NGHTTP2_ERR_INVALID_ARGUMENT) {
+        // Stream is not deferred, submit new data frame
+        uint8_t flags = end_stream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE;
+        rv = nghttp2_submit_data2(session, flags, stream_id, &data_provider);
+        printd(5, "sendStreamData() nghttp2_submit_data2 rv=%d\n", rv);
+        if (rv == NGHTTP2_ERR_DATA_EXIST) {
+            // There's already a pending DATA frame - this is OK, our data is queued
+            // in pending_body_data and will be picked up by the callback
+            printd(5, "sendStreamData() DATA_EXIST - data queued for pending frame\n");
+        } else if (rv < 0) {
+            xsink->raiseException("HTTP2-ERROR", "failed to submit data: %s",
+                nghttp2_strerror(rv));
+            return -1;
+        }
+    } else if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to resume stream data: %s",
             nghttp2_strerror(rv));
         return -1;
@@ -923,22 +1081,42 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     };
     nva.push_back(nv_status);
 
-    // Add regular headers
+    // Add regular headers - filter out HTTP/2 forbidden headers and convert to lowercase
+    // Store lowercase names to keep them alive during the nghttp2 call
+    std::vector<std::string> lowered_names;
+    lowered_names.reserve(headers.size());
+
     for (const auto& h : headers) {
+        // Skip pseudo-headers (already handled above)
         if (h.first[0] == ':') {
             continue;
         }
+        // RFC 7540 Section 8.1.2.2: Skip connection-specific headers (forbidden in HTTP/2)
+        std::string lname = h.first;
+        std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
+        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
+            lname == "transfer-encoding" || lname == "upgrade") {
+            continue;
+        }
+        // Store lowercase name
+        lowered_names.push_back(lname);
         nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.first.c_str())),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
             reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            h.first.size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
+            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
     }
 
-    // For CONNECT response, we don't send a body - the stream becomes a tunnel
-    // Note: We do NOT set END_STREAM flag - the stream remains open for bidirectional data
-    int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), nullptr);
+    // For CONNECT response, we use submit_headers with only END_HEADERS flag
+    // This keeps the stream open for bidirectional data (no END_STREAM)
+    // Note: Using nghttp2_submit_response would set END_STREAM which closes the stream
+    int rv = nghttp2_submit_headers(session,
+        NGHTTP2_FLAG_END_HEADERS,  // Only END_HEADERS, NOT END_STREAM
+        stream_id,
+        nullptr,  // no priority spec
+        nva.data(), nva.size(),
+        nullptr);  // no user data
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));

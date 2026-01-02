@@ -116,18 +116,50 @@ public namespace HttpServerAsyncIo {
 
         #! Keep-alive timeout
         *timeout ttl;
+
+        #! HTTP response code (for HTTP/2 streaming responses like WebSocket CONNECT)
+        *int code;
+
+        #! Response headers (for HTTP/2 streaming responses)
+        *hash<auto> hdr;
     }
 
     #! Connection info passed to callbacks
     /** For HTTP/2 connections, \c header_info contains:
         - \c http2: True for HTTP/2 requests
         - \c stream_id: The HTTP/2 stream ID (needed for sending response)
+        - \c push_resource: Callback for HTTP/2 Server Push (PUSH_PROMISE); signature:
+          \c int sub(string path, *hash<auto> headers) returns the promised stream ID
+        - \c h2op: The Http2PollOperation for sending pushed responses
 
         For HTTP/2, the \c hdr hash also includes:
         - \c method: The HTTP method
         - \c path: The request path
         - \c :authority: The :authority pseudo-header value
         - \c :scheme: The :scheme pseudo-header value
+
+        @par Example: Using HTTP/2 Server Push
+        @code{.py}
+# In your request handler:
+hash<HttpResponseInfo> handleRequest(hash<HttpConnectionInfo> conn_info) {
+    if (conn_info.header_info.http2) {
+        code push_resource = conn_info.header_info.push_resource;
+        if (push_resource) {
+            # Push CSS file to client
+            int css_stream = push_resource("/style.css", {"content-type": "text/css"});
+            if (css_stream > 0) {
+                # Send the pushed content
+                conn_info.header_info.h2op.startSendPushedResponse(css_stream, 200,
+                    {"content-type": "text/css"}, css_content);
+            }
+        }
+    }
+    # Return main response
+    return makeResponse(200, html_content);
+}
+        @endcode
+
+        @since HttpServerAsyncIo 1.1
     */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection

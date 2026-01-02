@@ -807,6 +807,34 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
         #logDebug("websocket request: cx: %N", cx);
         #logDebug("websocket request: hdr: %N", hdr);
+
+        # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
+        # Check if this is an HTTP/2 WebSocket CONNECT request
+        if (cx."header-info".is_websocket_connect) {
+            logDebug("HTTP/2 WebSocket CONNECT request received");
+
+            # Negotiate extensions if supported
+            *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+            hash<auto> rhdr;
+            if (ext_result.response_header) {
+                rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
+            }
+            # Store negotiated extensions in hdr for startImpl to access
+            if (ext_result.extensions) {
+                hdr."_ws_negotiated_extensions" = ext_result.extensions;
+                hdr."_ws_extension_rsv_mask" = ext_result.rsv_mask;
+            }
+
+            # RFC 8441: Return 200 OK for HTTP/2 WebSocket CONNECT
+            return {
+                "code": 200,
+                "hdr": rhdr,
+                "streaming": True,
+                "stream_type": "websocket",
+            };
+        }
+
+        # HTTP/1.1 WebSocket upgrade requires Sec-WebSocket-Key
         if (!hdr."sec-websocket-key") {
             return {
                 "code": 400,
@@ -928,7 +956,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 if (wsc.stop_flag) {
                     continue;
                 }
-                if (!sock.isDataAvailable(0)) {
+                bool da = sock.isDataAvailable(100);  # Wait 100ms instead of 0
+                if (!da) {
                     int now = clock_getmillis() / 1000;
                     if (!update) {
                         if ((now - timestamp) >= heartbeat) {

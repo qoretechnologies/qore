@@ -724,6 +724,16 @@ int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* 
     return priv->socket->submitHttp2PushPromise(stream_id, path, headers, xsink);
 }
 
+void QoreSocketObject::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp2ActiveStream(stream_id, xsink);
+}
+
+int32_t QoreSocketObject::getHttp2ActiveStream() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getHttp2ActiveStream();
+}
+
 long QoreSocketObject::verifyPeerCertificate() {
     AutoLocker al(priv->m);
     return priv->socket->verifyPeerCertificate();

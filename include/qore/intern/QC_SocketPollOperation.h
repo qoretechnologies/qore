@@ -515,10 +515,11 @@ public:
         @param status_code HTTP status code
         @param headers response headers
         @param body response body (can be nullptr)
+        @param is_connect if true, use submitConnectResponse for RFC 8441 WebSocket
     */
     DLLLOCAL SocketHttp2SendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         Http2Session* h2_session, int32_t stream_id, int status_code,
-        const QoreHashNode* headers, const BinaryNode* body);
+        const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false);
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
 

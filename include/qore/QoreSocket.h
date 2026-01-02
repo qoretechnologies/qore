@@ -1884,6 +1884,21 @@ public:
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Sets the active HTTP/2 stream ID for transparent send/recv operations
+    /** @param stream_id the stream ID to use for subsequent send/recv operations
+        @param xsink exception sink for error reporting
+
+        @since Qore 2.3
+    */
+    DLLEXPORT void setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Gets the active HTTP/2 stream ID
+    /** @return the active stream ID, or -1 if no stream is active
+
+        @since Qore 2.3
+    */
+    DLLEXPORT int32_t getHttp2ActiveStream() const;
+
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;
 

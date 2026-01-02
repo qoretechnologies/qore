@@ -699,6 +699,8 @@ public class HttpAsyncSocketIoController {
                 "http2": True,
                 "stream_id": request.stream_id,
                 "is_websocket_connect": is_websocket_connect,
+                "push_resource": h2op.getPushResourceCallback(),
+                "h2op": h2op,  # Pass for startSendPushedResponse()
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
@@ -751,6 +753,20 @@ public class HttpAsyncSocketIoController {
                     }
                     log(LoggerLevel::DEBUG, "HTTP/2 WebSocket stream started: %y stream=%d",
                         uh, request.stream_id);
+
+                    # RFC 8441: Send 200 OK response for WebSocket CONNECT
+                    # The response must be sent before WebSocket data can be exchanged
+                    h2op.startSendResponse(result.code ?? 200, result.hdr);
+
+                    # Drive the send operation to completion
+                    while (True) {
+                        *hash<SocketPollInfo> poll_info = h2op.continuePoll();
+                        if (!poll_info) {
+                            break;
+                        }
+                        Socket::poll((poll_info,), 100ms);
+                    }
+
                     # Create HTTP/2 WebSocket stream handler
                     Http2WebSocketStream ws_stream(h2op, request.stream_id);
                     {

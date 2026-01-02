@@ -1446,6 +1446,7 @@ SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_so
     if ((rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey))) {
         sshh.error();
         assert(*xsink);
+        return;
     }
 
     // Set ALPN protocols if configured (for HTTP/2 support)
@@ -2435,7 +2436,14 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 rc = QSE_SSL_ERR;
             }
             // close the local socket unconditionally
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2452,12 +2460,26 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 }
             }
             // close the local socket unconditionally
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             // in case there is no exception when reading, the remote end closed the connection
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
@@ -2581,7 +2603,14 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_SSL_ERR;
             }
             // close the socket unconditionally
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2594,12 +2623,26 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 }
             }
             // close the socket unconditionally
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             rc = !*xsink ? 0 : QSE_SSL_ERR;
             break;
         } else if (err == SSL_ERROR_SSL) {
             // close the socket unconditionally
+#ifdef HAVE_HTTP2
+            // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
             xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
@@ -2708,8 +2751,17 @@ bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const ch
 void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char* mname, const char* func,
         bool always_error) {
     if (e == SSL_ERROR_ZERO_RETURN) {
-        // the remote end has closed the connection, so we close this end as well
+        // the remote end has closed the connection
+#ifdef HAVE_HTTP2
+        // NOTE: For HTTP/2 connections, don't auto-close on SSL_ERROR_ZERO_RETURN.
+        // This could be a timeout or the end of a read operation, not necessarily a connection close.
+        // Let the HTTP/2 layer handle connection lifecycle.
+        if (!qs.h2_session) {
+            qs.close();
+        }
+#else
         qs.close();
+#endif
         if (always_error) {
             xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the %s() call could not be " \
                 "completed because the TLS/SSL connection was terminated (err: %d)", mname, func, e);
@@ -2731,7 +2783,14 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         // close the socket if connection reset received
         if (e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET) {
             //printd(5, "SSLSocketHelper::handleErrorIntern() Socket::%s() (%s) socket closed by remote end\n", mname, func);
+#ifdef HAVE_HTTP2
+            // For HTTP/2 connections, let the HTTP/2 layer handle connection lifecycle
+            if (!qs.h2_session) {
+                qs.close();
+            }
+#else
             qs.close();
+#endif
         }
 #endif
     }
@@ -2942,6 +3001,18 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     }
 
     return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
+}
+
+void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return;
+    }
+    priv->h2_active_stream_id = stream_id;
+}
+
+int32_t QoreSocket::getHttp2ActiveStream() const {
+    return priv->h2_active_stream_id;
 }
 #endif
 
@@ -4749,6 +4820,7 @@ SocketUpgradeServerSslPollOperation::SocketUpgradeServerSslPollOperation(Excepti
 
         poll_state.reset(sock->priv->socket->startSslAccept(xsink, sock->priv->cert, sock->priv->pk));
         if (*xsink) {
+            poll_state.reset();
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -5055,14 +5127,30 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     }
     set_non_block = true;
 
-    // Initialize HTTP/2 session
-    if (initSession(xsink)) {
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        return;
+    // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
+    bool reused_session = false;
+    if (sock->priv->socket->priv->h2_session) {
+        // Reuse existing session
+        h2_session.reset(sock->priv->socket->priv->h2_session);
+        sock->priv->socket->priv->h2_session = nullptr;
+        reused_session = true;
+    } else {
+        // Initialize new HTTP/2 session
+        if (initSession(xsink)) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return;
+        }
     }
 
-    h2_state = H2S_SEND_PREFACE;
+    // Set initial state based on whether we reused a session
+    if (reused_session) {
+        // Session already established - go directly to reading frames
+        h2_state = H2S_READING;
+    } else {
+        // New session - need to exchange connection preface
+        h2_state = H2S_SEND_PREFACE;
+    }
 }
 
 SocketHttp2ServerPollOperation::~SocketHttp2ServerPollOperation() {
@@ -5186,9 +5274,10 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     }
     out->setKeyValue("headers", headers, nullptr);
 
-    // Body as binary
+    // Body as binary - must copy the data since stream_info->body will be destroyed
     if (!stream_info->body.empty()) {
-        BinaryNode* body = new BinaryNode(stream_info->body.data(), stream_info->body.size());
+        BinaryNode* body = new BinaryNode();
+        body->append(stream_info->body.data(), stream_info->body.size());
         out->setKeyValue("body", body, nullptr);
     }
 
@@ -5198,6 +5287,10 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     }
     if (!stream_info->scheme.empty()) {
         out->setKeyValue("scheme", new QoreStringNode(stream_info->scheme), nullptr);
+    }
+    // RFC 8441: Add :protocol pseudo-header for extended CONNECT
+    if (!stream_info->connect_protocol.empty()) {
+        headers->setKeyValue(":protocol", new QoreStringNode(stream_info->connect_protocol), nullptr);
     }
 
     return out.release();
@@ -5209,7 +5302,7 @@ Http2Session* SocketHttp2ServerPollOperation::takeSession() {
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,
         QoreSocketObject* sock, Http2Session* /*unused_h2_session*/, int32_t stream_id, int status_code,
-        const QoreHashNode* headers, const BinaryNode* body)
+        const QoreHashNode* headers, const BinaryNode* body, bool is_connect)
         : SocketPollSocketOperationBase(sock), stream_id(stream_id) {
 
     AutoLocker al(sock->priv->m);
@@ -5246,11 +5339,16 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         }
     }
 
-    // Submit response
-    const void* body_ptr = body ? body->getPtr() : nullptr;
-    size_t body_len = body ? body->size() : 0;
-
-    int rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
+    int rv;
+    if (is_connect) {
+        // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
+    } else {
+        // Regular HTTP/2 response with body and END_STREAM
+        const void* body_ptr = body ? body->getPtr() : nullptr;
+        size_t body_len = body ? body->size() : 0;
+        rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
+    }
     if (rv != 0 || *xsink) {
         sock->priv->clearNonBlock();
         set_non_block = false;

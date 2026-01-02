@@ -295,6 +295,8 @@ private:
         size_t length, int flags, void* user_data);
     static int onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
+    static int onFrameSendCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, void* user_data);
     static int onDataChunkRecvCallback(nghttp2_session* session, uint8_t flags,
         int32_t stream_id, const uint8_t* data, size_t len, void* user_data);
     static int onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
@@ -304,6 +306,11 @@ private:
         uint8_t flags, void* user_data);
     static int onBeginHeadersCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
+    static int onInvalidFrameRecvCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, int lib_error_code, void* user_data);
+    static int onInvalidHeaderCallback(nghttp2_session* session,
+        const nghttp2_frame* frame, const uint8_t* name, size_t namelen,
+        const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data);
 
     // Helper to convert headers to nghttp2 format
     DLLLOCAL std::vector<nghttp2_nv> makeNv(const std::map<std::string, std::string>& headers);

@@ -626,6 +626,158 @@ nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int d
     client->setHttp2StreamPriority(stream_id, weight, dependency, exclusive, xsink);
 }
 
+//! Sends an HTTP/2 extended CONNECT request (RFC 8441)
+/** @param path the request path (e.g., "/chat")
+    @param headers optional request headers
+    @param protocol the :protocol pseudo-header value (e.g., "websocket")
+    @param info optional reference to receive connection info
+
+    @return a hash with response information:
+    - \c status_code: HTTP status code (200 for success)
+    - \c stream_id: the HTTP/2 stream ID for subsequent data transfer
+    - \c headers: response headers
+
+    @throw HTTP2-ERROR if HTTP/2 is not available
+    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails
+
+    @par Example:
+    @code{.py}
+# WebSocket over HTTP/2 connection
+hash<auto> info;
+hash<auto> resp = httpclient.sendHttp2Connect("/chat", {"Sec-WebSocket-Protocol": "chat"},
+    "websocket", \info);
+if (resp.status_code == 200) {
+    int stream_id = resp.stream_id;
+    # Now use sendHttp2StreamData/readHttp2StreamData for WebSocket frames
+}
+    @endcode
+
+    @note This method is used for WebSocket over HTTP/2 (RFC 8441) and other protocols
+    that use extended CONNECT with the :protocol pseudo-header
+
+    @since %Qore 2.2
+*/
+*hash<auto> HTTPClient::sendHttp2Connect(string path, *hash<auto> headers, string protocol,
+        *reference<hash<auto>> info) {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendHttp2Connect(path->c_str(), headers,
+        protocol->c_str(), *ohrh, xsink), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+//! Sends data on an HTTP/2 stream
+/** @param stream_id the stream ID to send data on (from sendHttp2Connect())
+    @param data binary data to send
+    @param end_stream if @ref True, signals end of stream (no more data will be sent)
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Send a WebSocket text frame over HTTP/2
+binary frame = ws_encode_frame(WS_OP_TEXT, "Hello, WebSocket!");
+httpclient.sendHttp2StreamData(stream_id, frame);
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
+        *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    client->sendHttp2StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
+}
+
+//! Reads data from an HTTP/2 stream
+/** @param stream_id the stream ID to read data from (from sendHttp2Connect())
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @return binary data read from the stream, or @ref NOTHING if no data available
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Read WebSocket data over HTTP/2
+*binary data = httpclient.readHttp2StreamData(stream_id, 5000);
+if (data) {
+    hash<auto> frame = ws_decode_frame(data);
+    # Process WebSocket frame
+}
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+    @since %Qore 2.2
+*/
+*binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    return client->readHttp2StreamData(stream_id, timeout, xsink);
+}
+
+//! Returns the current HTTP/2 stream ID
+/** @return the stream ID, or 0 if not in HTTP/2 mode or no stream active
+
+    @par Example:
+    @code{.py}
+int stream_id = httpclient.getHttp2StreamId();
+if (stream_id > 0) {
+    # Send data on the stream
+    httpclient.sendHttp2StreamData(stream_id, data);
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+int HTTPClient::getHttp2StreamId() [flags=CONSTANT] {
+    return client->getHttp2StreamId();
+}
+
+//! Returns true if the HTTP/2 stream has buffered data available
+/** @param stream_id the stream ID to check
+
+    @return True if the stream has buffered data, False otherwise
+
+    @par Example:
+    @code{.py}
+if (httpclient.hasHttp2StreamData(stream_id)) {
+    *binary data = httpclient.readHttp2StreamData(stream_id, 0);
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT] {
+    return client->hasHttp2StreamData((int32_t)stream_id);
+}
+
+//! Checks if HTTP/2 stream data is available, polling the socket if needed
+/** @param stream_id the stream ID to check
+    @param timeout_ms optional timeout in milliseconds for polling (default 0 for immediate check)
+
+    @return @ref True if data is available, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2DataAvailable(stream_id, 1000)) {
+    *binary data = httpclient.readHttp2StreamData(stream_id, 0);
+}
+    @endcode
+
+    @note This method first checks for already-buffered HTTP/2 stream data, then polls the
+    socket for new HTTP/2 frames if no data is buffered. This is the correct way to check for
+    data availability when using HTTP/2 streams (e.g., for WebSocket over HTTP/2).
+
+    @throw HTTP2-ERROR if HTTP/2 support is not available
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) {
+    return client->isHttp2DataAvailable((int32_t)stream_id, (int)timeout_ms, xsink);
+}
+
 //! Returns the negotiated HTTP protocol version string
 /** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
 
