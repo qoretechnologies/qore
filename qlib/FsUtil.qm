@@ -34,7 +34,7 @@
 %enable-all-warnings
 
 module FsUtil {
-    version = "1.3";
+    version = "1.4";
     desc = "user module providing file system related functionality";
     author = "Tomas Heger";
     url = "http://qore.org";
@@ -82,6 +82,15 @@ module FsUtil {
     @ref FsUtil::WinPathHandler
 
     @section fsutil_relnotes Release Notes
+
+    @subsection fsutil_v1_4 Version 1.4
+    - fixed @ref FsUtil::path_exists() "path_exists()" to correctly return \c False for permission errors
+      instead of incorrectly returning \c True
+    - fixed @ref FsUtil::remove_tree() "remove_tree()" to properly handle symlinks (by removing them with
+      \c unlink() instead of trying \c rmdir()) and to throw \c REMOVE-TREE-ERROR on \c rmdir() failure
+    - fixed @ref FsUtil::move_path() "move_path()" to throw \c MOVE-PATH-ERROR on \c rename() failure
+    - fixed @ref FsUtil::copy_path() "copy_path()" and @ref FsUtil::copy_tree() "copy_tree()" to properly
+      pass the \c depth parameter through the function chain
 
     @subsection fsutil_v1_3 Version 1.3
     - added @ref FsUtil::move_path() "move_path()"
@@ -321,12 +330,23 @@ public namespace FsUtil {
     /** @param path the path to be checked
         @param follow_symlinks flag indicating whether target of a symlink should be checked instead
 
-        @return True if the given path exists, False otherwise. If follow_symlinks is True and path points to a
-        symlink, the link's target is checked instead of the link itself
+        @return \c True if the given path exists, \c False otherwise (including permission errors).
+        If \a follow_symlinks is \c True and path points to a symlink, the link's target is checked
+        instead of the link itself.
+
+        @par Example:
+        @code{.py}
+bool b = path_exists("/tmp");                    # True (directory exists)
+bool b = path_exists("/nonexistent");            # False
+bool b = path_exists("/tmp/mylink");             # True (symlink exists)
+bool b = path_exists("/tmp/mylink", True);       # True if target exists, False if dangling
+bool b = path_exists("/tmp/broken_link");        # True (link itself exists)
+bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
+        @endcode
     */
     public bool sub path_exists(string path, bool follow_symlinks = False) {
         *hash<StatInfo> s = follow_symlinks ? hstat(path) : hlstat(path);
-        return (exists s || errno() != Err::ENOENT);
+        return exists s;
     }
 
     const TMP_MAX_ATTEMPTS = 10000;
@@ -527,7 +547,10 @@ public namespace FsUtil {
         foreach string name in (dir.list()) {
             string sub_path = join_paths(path, name);
             try {
-                if (is_dir(sub_path)) {
+                # Check for symlink first since is_dir follows symlinks
+                if (is_link(sub_path)) {
+                    remove_file(sub_path);
+                } else if (is_dir(sub_path)) {
                     remove_tree(sub_path);
                 } else {
                     remove_file(sub_path);
@@ -550,7 +573,9 @@ public namespace FsUtil {
         }
 
         # directory specified by path should be empty now
-        rmdir(path);
+        if (rmdir(path)) {
+            throw "REMOVE-TREE-ERROR", sprintf("failed to remove directory %y: %s", path, strerror());
+        }
     }
 
     #! Universal remove function
@@ -852,6 +877,8 @@ public namespace FsUtil {
         @param overwrite flag indicating whether destination should be overwritten if exists (False by default)
         @param fail_immediately flag indicating whether the function is supposed to fail with an exception immediately
         on the first error instead of accumulating all exceptions (True by default)
+        @param depth determines how many levels of subdirectories and files should be copied; if not given (NOTHING),
+        all levels are copied
 
         @throws SAME-DIR-ERROR If both paths point to the same file
         @throws DIR-STAT-ERROR If stat call for the source path fails
@@ -868,8 +895,8 @@ public namespace FsUtil {
         If the whole tree is copied correctly, the function returns the path to the new copy.
     */
     public string sub copy_tree(string source, string destination, bool follow_symlinks = False,
-            bool overwrite = False, bool fail_immediately = True) {
-        return copy_tree_internal(source, destination, follow_symlinks, overwrite, False, fail_immediately);
+            bool overwrite = False, bool fail_immediately = True, *int depth) {
+        return copy_tree_internal(source, destination, follow_symlinks, overwrite, False, fail_immediately, depth);
     }
 
     #! Universal copy function
@@ -897,9 +924,9 @@ public namespace FsUtil {
         copied correctly, the function returns the path to the new copy.
     */
     public string sub copy_path(string source, string destination, bool follow_symlinks = False,
-            bool overwrite = False,  bool fail_immediately = True, *int depth) {
+            bool overwrite = False, bool fail_immediately = True, *int depth) {
         if (is_dir(source)) {
-            return copy_tree(source, destination, follow_symlinks, overwrite, fail_immediately);
+            return copy_tree(source, destination, follow_symlinks, overwrite, fail_immediately, depth);
         } else {
             return copy_file(source, destination, follow_symlinks, overwrite);
         }
@@ -977,7 +1004,9 @@ public namespace FsUtil {
             }
         }
 
-        rename(source, destination);
+        if (rename(source, destination)) {
+            throw "MOVE-PATH-ERROR", sprintf("failed to move %y to %y: %s", source, destination, strerror());
+        }
 
         return destination;
     }
