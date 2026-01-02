@@ -297,4 +297,9 @@ public:
     DLLLOCAL int doHMAC(const char* err, const char* digest, const char* ptr, size_t len, ExceptionSink* xsink);
 };
 
+#ifdef OPENSSL_3_PLUS
+// refs #4910: cleanup function to free cached digest references
+DLLLOCAL void digest_cache_cleanup();
+#endif
+
 #endif // _QORE_QL_CRYPTO_H

@@ -39,6 +39,17 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
+#ifdef OPENSSL_3_PLUS
+#include <map>
+#include <string>
+
+// thread-safe cache for fetched digests to avoid memory leaks
+// refs #4910: EVP_MD_fetch() returns references that must be freed
+typedef std::map<std::string, EVP_MD*, ltstrcase> digest_cache_t;
+static digest_cache_t digest_cache;
+static QoreThreadLock digest_cache_lock;
+#endif
+
 #define QCRYPTO_DECRYPT 0
 #define QCRYPTO_ENCRYPT 1
 
@@ -213,15 +224,38 @@ private:
     }
 };
 
-static const EVP_MD* q_lookup_digest(const char* cipher) {
+static const EVP_MD* q_lookup_digest(const char* digest) {
 #ifdef OPENSSL_3_PLUS
-    return EVP_MD_fetch(nullptr, cipher, nullptr);
+    // refs #4910: use cache to avoid memory leaks from EVP_MD_fetch()
+    AutoLocker al(digest_cache_lock);
+    digest_cache_t::iterator di = digest_cache.find(digest);
+    if (di != digest_cache.end()) {
+        return di->second;
+    }
+
+    // fetch and cache
+    EVP_MD* md = EVP_MD_fetch(nullptr, digest, nullptr);
+    if (md) {
+        digest_cache[digest] = md;
+    }
+    return md;
 #else
     // find digest
-    digest_map_t::const_iterator i = digest_map.find(cipher);
+    digest_map_t::const_iterator i = digest_map.find(digest);
     return i == digest_map.end() ? nullptr : i->second;
 #endif
 }
+
+#ifdef OPENSSL_3_PLUS
+void digest_cache_cleanup() {
+    // refs #4910: free all cached digest references
+    AutoLocker al(digest_cache_lock);
+    for (auto& i : digest_cache) {
+        EVP_MD_free(i.second);
+    }
+    digest_cache.clear();
+}
+#endif
 
 int HMACHelper::doHMAC(const char* err, const char* digest, const char* ptr, size_t len, ExceptionSink* xsink) {
 #ifdef OPENSSL_3_PLUS
@@ -230,6 +264,8 @@ int HMACHelper::doHMAC(const char* err, const char* digest, const char* ptr, siz
         xsink->raiseException(err, "error looking up MAC '%s'", digest);
         return -1;
     }
+    // refs #4910: EVP_MAC_fetch() returns a reference that must be freed
+    ON_BLOCK_EXIT(EVP_MAC_free, mac);
     EVP_MAC_CTX* ctx = EVP_MAC_CTX_new(mac);
     if (!ctx) {
         xsink->raiseException(err, "error creating MAC context for MAC '%s'", digest);
