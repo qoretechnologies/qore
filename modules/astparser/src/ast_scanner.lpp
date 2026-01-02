@@ -28,6 +28,11 @@
   so a thread-safe scanner can be generated
 
   see: http://flex.sourceforge.net/
+
+  IMPORTANT: This file should be kept in sync with the main Qore scanner:
+      lib/scanner.lpp
+  All syntax changes in the main scanner should be mirrored here for IDE
+  integration to understand all Qore syntax.
 */
 
 #include <cctype>
