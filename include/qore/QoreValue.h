@@ -573,10 +573,12 @@ public:
     }
 
     //! Sets a double value (any current value is overwritten without dereferencing)
-    DLLLOCAL void set(double f) {
-        memcpy(&bits, &f, sizeof(f));
-        bits += DOUBLE_ENCODE_OFFSET;
-    }
+    /** For most doubles, stores them inline using offset encoding. However, doubles
+        with bit patterns >= 0xFFF8000000000000 (including negative NaN values)
+        would collide with internal NaN-boxing tags after encoding, so they are
+        stored as QoreFloatNode instead.
+    */
+    DLLEXPORT void set(double f);
 
     //! Sets a boolean value (any current value is overwritten without dereferencing)
     DLLLOCAL void set(bool b) {

@@ -699,6 +699,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreBackgroundOperatorNode.cpp
     lib/QoreValue.cpp
     lib/QoreBigIntNode.cpp
+    lib/QoreBigFloatNode.cpp
     lib/StreamPipe.cpp
     lib/CompressionTransforms.cpp
     lib/EncryptionTransforms.cpp
@@ -967,6 +968,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSquareBracketsRangeOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreValue.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreBigIntNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigFloatNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperatorInterface.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperator.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/StreamPipe.cpp\"

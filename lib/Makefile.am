@@ -339,6 +339,8 @@ libqore_la_SOURCES = \
 	QoreHTTPClient.cpp \
 	QoreHttpClientObject.cpp \
 	QoreValue.cpp \
+	QoreBigIntNode.cpp \
+	QoreBigFloatNode.cpp \
 	StreamPipe.cpp \
 	CompressionTransforms.cpp \
 	EncryptionTransforms.cpp \

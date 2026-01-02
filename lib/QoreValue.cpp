@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreBigIntNode.h>
+#include <qore/QoreBigFloatNode.h>
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -437,6 +438,26 @@ void QoreValue::set(AbstractQoreNode* n) {
         bits = VAL_NOTHING;
     } else {
         bits = TAG_POINTER | (reinterpret_cast<uint64_t>(n) & PAYLOAD_MASK);
+    }
+}
+
+void QoreValue::set(double f) {
+    // Copy double bits
+    uint64_t double_bits;
+    memcpy(&double_bits, &f, sizeof(f));
+
+    // Check if this double would collide with internal tags after encoding.
+    // Doubles with bits >= 0xFFF8000000000000 (including negative NaN values)
+    // would become >= TAG_INT48 after adding DOUBLE_ENCODE_OFFSET.
+    // These must be stored as QoreBigFloatNode to preserve correct behavior.
+    constexpr uint64_t PROBLEMATIC_THRESHOLD = 0xFFF8000000000000ULL;
+    if (double_bits >= PROBLEMATIC_THRESHOLD) {
+        // Allocate QoreBigFloatNode for problematic doubles (negative NaN, etc.)
+        QoreBigFloatNode* n = new QoreBigFloatNode(f);
+        bits = TAG_POINTER | (reinterpret_cast<uint64_t>(n) & PAYLOAD_MASK);
+    } else {
+        // Normal inline encoding
+        bits = double_bits + DOUBLE_ENCODE_OFFSET;
     }
 }
 

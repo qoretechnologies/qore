@@ -19,6 +19,7 @@ class NanBoxingTest inherits QUnit::Test {
         addTestCase("Large integer tests (BigInt fallback)", \testLargeIntegers());
         addTestCase("Float edge cases", \testFloatEdgeCases());
         addTestCase("Float special values", \testFloatSpecialValues());
+        addTestCase("NaN encoding edge cases", \testNanEncodingEdgeCases());
         addTestCase("Type discrimination", \testTypeDiscrimination());
         addTestCase("Type conversions", \testTypeConversions());
         addTestCase("Null and Nothing", \testNullNothing());
@@ -146,6 +147,102 @@ class NanBoxingTest inherits QUnit::Test {
         # Comparisons with infinity
         assertTrue(1.0e308 < inf, "large < inf");
         assertTrue(-1.0e308 > neginf, "large neg > -inf");
+    }
+
+    #! Test NaN encoding edge cases - critical for NaN-boxing correctness
+    #! This test specifically verifies that negative NaN values (which have bit patterns
+    #! that can collide with NaN-boxing tags) are handled correctly.
+    testNanEncodingEdgeCases() {
+        # Positive NaN (standard quiet NaN: 0x7ff8000000000000)
+        float pos_nan = @nan@;
+        assertEq("float", pos_nan.type(), "positive NaN is float type");
+        assertTrue(pos_nan.nanp(), "positive NaN nanp() returns true");
+        assertFalse(pos_nan.infp(), "positive NaN infp() returns false");
+        assertTrue(pos_nan != pos_nan, "positive NaN != itself (IEEE 754)");
+
+        # Negative NaN - created by negating positive NaN
+        # This has bit pattern 0xfff8000000000000 which after NaN-boxing encoding
+        # could collide with internal tags if not handled correctly
+        float neg_nan = -@nan@;
+        assertEq("float", neg_nan.type(), "negative NaN is float type");
+        assertTrue(neg_nan.nanp(), "negative NaN nanp() returns true");
+        assertFalse(neg_nan.infp(), "negative NaN infp() returns false");
+        assertTrue(neg_nan != neg_nan, "negative NaN != itself (IEEE 754)");
+
+        # NaN from arithmetic operations (inf - inf typically produces NaN)
+        float inf = @inf@;
+        float arith_nan = inf - inf;
+        if (arith_nan.nanp()) {
+            assertEq("float", arith_nan.type(), "arithmetic NaN is float type");
+            assertTrue(arith_nan != arith_nan, "arithmetic NaN != itself");
+        }
+
+        # NaN from 0/0 produces NaN
+        float zero = 0.0;
+        float zero_div_nan;
+        try {
+            zero_div_nan = zero / zero;
+            if (zero_div_nan.nanp()) {
+                assertEq("float", zero_div_nan.type(), "0/0 NaN is float type");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Some platforms throw on 0/0, that's acceptable
+        }
+
+        # NaN stored and retrieved from containers
+        hash<auto> h = {"nan": pos_nan, "neg_nan": neg_nan};
+        assertTrue(h.nan.nanp(), "NaN retrieved from hash is still NaN");
+        assertTrue(h.neg_nan.nanp(), "negative NaN retrieved from hash is still NaN");
+        assertEq("float", h.nan.type(), "NaN from hash is float type");
+        assertEq("float", h.neg_nan.type(), "negative NaN from hash is float type");
+
+        # NaN in lists
+        list<float> l = (pos_nan, neg_nan, inf, -inf);
+        assertTrue(l[0].nanp(), "NaN in list[0] is NaN");
+        assertTrue(l[1].nanp(), "negative NaN in list[1] is NaN");
+        assertEq("float", l[0].type(), "NaN from list is float type");
+        assertEq("float", l[1].type(), "negative NaN from list is float type");
+
+        # NaN assignment and reassignment
+        float f = 1.0;
+        f = pos_nan;
+        assertTrue(f.nanp(), "assigned NaN is NaN");
+        assertEq("float", f.type(), "assigned NaN is float type");
+        f = neg_nan;
+        assertTrue(f.nanp(), "reassigned negative NaN is NaN");
+        assertEq("float", f.type(), "reassigned negative NaN is float type");
+        f = 2.0;
+        assertFalse(f.nanp(), "after reassign to 2.0, not NaN");
+        assertEq(2.0, f, "after reassign, value is 2.0");
+
+        # NaN passed as function argument and returned
+        auto returned = identityFloat(pos_nan);
+        assertTrue(returned.nanp(), "NaN returned from function is NaN");
+        assertEq("float", returned.type(), "NaN returned is float type");
+        returned = identityFloat(neg_nan);
+        assertTrue(returned.nanp(), "negative NaN returned from function is NaN");
+        assertEq("float", returned.type(), "negative NaN returned is float type");
+
+        # NaN in conditional expressions
+        float result = pos_nan ? 1.0 : 2.0;
+        # NaN is truthy in Qore (exists and non-zero)
+        assertEq(1.0, result, "NaN is truthy in conditional");
+
+        # Verify NaN is not confused with integer 0
+        # This is the critical test for the NaN-boxing collision bug
+        assertFalse(pos_nan === 0, "positive NaN !== 0 (absolute equality)");
+        assertFalse(neg_nan === 0, "negative NaN !== 0 (absolute equality)");
+        assertFalse(pos_nan == 0, "positive NaN != 0 (value equality)");
+        assertFalse(neg_nan == 0, "negative NaN != 0 (value equality)");
+
+        # Type checks should identify NaN as float, not integer
+        assertFalse(pos_nan.type() == "integer", "positive NaN type is not integer");
+        assertFalse(neg_nan.type() == "integer", "negative NaN type is not integer");
+    }
+
+    # Helper function to test NaN through function call/return
+    private float identityFloat(float f) {
+        return f;
     }
 
     #! Test type discrimination for all value types
