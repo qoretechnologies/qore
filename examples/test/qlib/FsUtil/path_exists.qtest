@@ -9,43 +9,71 @@
 %require-types
 %enable-all-warnings
 
-%exec-class CopyFileObjTest
+%exec-class PathExistsTest
 
-public class CopyFileObjTest inherits QUnit::Test {
+public class PathExistsTest inherits QUnit::Test {
 
-    constructor() : Test ("CopyFileObjTest", "1.0") {
-        addTestCase("path_exists test", \test_path_exists());
+    constructor() : Test ("PathExistsTest", "1.0") {
+        addTestCase("Basic path_exists test", \test_basic());
+        addTestCase("Symlink tests", \test_symlinks());
+        addTestCase("Edge cases", \test_edge_cases());
         set_return_value(main());
     }
 
-    test_path_exists() {
-        # get a directory
+    test_basic() {
+        # Create a temporary directory
         string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
         assertTrue(path_exists(tmp_dir));
         assertFalse(path_exists(join_paths(tmp_dir, "non-existent.txt")));
 
-        # get a file
+        # Create a file
         hash<TmpFileHash> tmp_file = make_tmp_file(NOTHING, NOTHING, tmp_dir);
         tmp_file.file.close();
         assertTrue(path_exists(tmp_file.path));
 
-        # create a link to that file
+        # Remove the file
+        unlink(tmp_file.path);
+        assertFalse(path_exists(tmp_file.path));
+    }
+
+    test_symlinks() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        # Create a file
+        hash<TmpFileHash> tmp_file = make_tmp_file(NOTHING, NOTHING, tmp_dir);
+        tmp_file.file.close();
+
+        # Create a link to that file
         string tmp_link = join_paths(tmp_dir, "link");
         symlink(tmp_file.path, tmp_link);
         assertTrue(path_exists(tmp_link));
+        assertTrue(path_exists(tmp_link, True));  # follow_symlinks
 
-        # remove the file (but keep the link)
+        # Remove the file (but keep the link - now a dangling symlink)
         unlink(tmp_file.path);
         assertFalse(path_exists(tmp_file.path));
-        assertTrue(path_exists(tmp_link));
-        assertFalse(path_exists(tmp_link, True));
+        assertTrue(path_exists(tmp_link));  # Link itself exists
+        assertFalse(path_exists(tmp_link, True));  # But target doesn't
 
-        # remove the link
+        # Remove the link
         unlink(tmp_link);
         assertFalse(path_exists(tmp_link));
+    }
 
-        # remove the directory as well
-        remove_tree(tmp_dir);
-        assertFalse(path_exists(tmp_dir));
+    test_edge_cases() {
+        # Root directory should exist
+        assertTrue(path_exists("/"));
+        assertTrue(path_exists("/tmp"));
+
+        # Non-existent paths
+        assertFalse(path_exists("/nonexistent_path_12345"));
+        assertFalse(path_exists(""));
+
+        # Current directory
+        assertTrue(path_exists("."));
+        assertTrue(path_exists(".."));
     }
 }

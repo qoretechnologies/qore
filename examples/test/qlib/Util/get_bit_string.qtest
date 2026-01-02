@@ -11,14 +11,66 @@
 
 public class GetBitStringTest inherits QUnit::Test {
     constructor() : Test ("GetBitStringTest", "1.0") {
-        addTestCase ("Tests for the get_bit_string() function", \test_getbitstring());
+        addTestCase("Basic tests for get_bit_string()", \test_basic());
+        addTestCase("Min bits padding tests", \test_min_bits());
+        addTestCase("Negative number tests", \test_negative());
+        addTestCase("Edge cases", \test_edge_cases());
+        addTestCase("Error handling", \test_errors());
         set_return_value(main());
     }
 
-    test_getbitstring() {
+    test_basic() {
         assertEq("0", get_bit_string(0));
-        assertEq("00000000", get_bit_string(0, 8));
+        assertEq("1", get_bit_string(1));
         assertEq("10", get_bit_string(2));
+        assertEq("11", get_bit_string(3));
+        assertEq("100", get_bit_string(4));
+        assertEq("101", get_bit_string(5));
+        assertEq("1010", get_bit_string(10));
+        assertEq("11111111", get_bit_string(255));
+        assertEq("100000000", get_bit_string(256));
         assertEq("11100110101101101100100100110", get_bit_string(483842342));
+    }
+
+    test_min_bits() {
+        # Test padding with min_bits
+        assertEq("00000000", get_bit_string(0, 8));
+        assertEq("00000001", get_bit_string(1, 8));
+        assertEq("00000101", get_bit_string(5, 8));
+        assertEq("00001010", get_bit_string(10, 8));
+        assertEq("11111111", get_bit_string(255, 8));
+        # min_bits smaller than actual bits - no truncation
+        assertEq("100000000", get_bit_string(256, 4));
+        # 16-bit padding
+        assertEq("0000000000000001", get_bit_string(1, 16));
+        assertEq("0000000011111111", get_bit_string(255, 16));
+        # 32-bit padding
+        assertEq("00000000000000000000000000000001", get_bit_string(1, 32));
+        # 64-bit padding
+        assertEq("0000000000000000000000000000000000000000000000000000000000000001", get_bit_string(1, 64));
+        # No min_bits (NOTHING) - should work the same as without parameter
+        assertEq("101", get_bit_string(5));
+    }
+
+    test_negative() {
+        # Negative numbers use two's complement
+        assertEq("1111111111111111111111111111111111111111111111111111111111111111", get_bit_string(-1));
+        assertEq("1111111111111111111111111111111111111111111111111111111111111110", get_bit_string(-2));
+    }
+
+    test_edge_cases() {
+        # Zero with various min_bits
+        assertEq("0", get_bit_string(0, 0));
+        assertEq("0", get_bit_string(0, 1));
+        assertEq("00", get_bit_string(0, 2));
+        # Large numbers
+        assertEq("111111111111111111111111111111111111111111111111111111111111111", get_bit_string(9223372036854775807));
+    }
+
+    test_errors() {
+        # Invalid min_bits values
+        assertThrows("INVALID-BITS", \get_bit_string(), (0, -1));
+        assertThrows("INVALID-BITS", \get_bit_string(), (0, 65));
+        assertThrows("INVALID-BITS", \get_bit_string(), (0, 100));
     }
 }

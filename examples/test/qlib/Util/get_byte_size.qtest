@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%new-style
+%require-types
+%enable-all-warnings
+
+%exec-class GetByteSizeTest
+
+public class GetByteSizeTest inherits QUnit::Test {
+    constructor() : Test ("GetByteSizeTest", "1.0") {
+        addTestCase("Binary byte sizes (get_byte_size)", \test_binary());
+        addTestCase("Marketing byte sizes (get_marketing_byte_size)", \test_marketing());
+        addTestCase("Decimal precision", \test_decimals());
+        addTestCase("Edge cases", \test_edge_cases());
+        set_return_value(main());
+    }
+
+    test_binary() {
+        # Binary sizes use 1024 as base
+        assertEq("0.00 bytes", get_byte_size(0));
+        assertEq("1.00 byte", get_byte_size(1));
+        assertEq("1023.00 bytes", get_byte_size(1023));
+        assertEq("1.00 KiB", get_byte_size(1024));
+        assertEq("1.00 KiB", get_byte_size(1025));  # Rounds
+        assertEq("1.00 MiB", get_byte_size(1024 * 1024));
+        assertEq("1.00 GiB", get_byte_size(1024 * 1024 * 1024));
+        assertEq("1.00 TiB", get_byte_size(1024 * 1024 * 1024 * 1024));
+    }
+
+    test_marketing() {
+        # Marketing sizes use 1000 as base
+        assertEq("0.00 bytes", get_marketing_byte_size(0));
+        assertEq("1.00 byte", get_marketing_byte_size(1));
+        assertEq("999.00 bytes", get_marketing_byte_size(999));
+        assertEq("1.00 KB", get_marketing_byte_size(1000));
+        assertEq("1.00 MB", get_marketing_byte_size(1000 * 1000));
+        assertEq("1.00 GB", get_marketing_byte_size(1000 * 1000 * 1000));
+        assertEq("1.00 TB", get_marketing_byte_size(1000 * 1000 * 1000 * 1000));
+    }
+
+    test_decimals() {
+        # Test with different decimal places
+        assertEq("1.5 KiB", get_byte_size(1536, 1));
+        assertEq("1.50 KiB", get_byte_size(1536, 2));
+        assertEq("1.500 KiB", get_byte_size(1536, 3));
+
+        assertEq("1.5 KB", get_marketing_byte_size(1500, 1));
+        assertEq("1.50 KB", get_marketing_byte_size(1500, 2));
+    }
+
+    test_edge_cases() {
+        # Large values
+        int pb = 1024 * 1024 * 1024 * 1024 * 1024;
+        assertTrue(get_byte_size(pb) =~ /PiB$/);
+
+        # Fractional sizes
+        assertEq("1.5 MiB", get_byte_size(1572864, 1));  # 1.5 * 1024 * 1024
+    }
+}

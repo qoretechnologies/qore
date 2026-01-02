@@ -1438,7 +1438,45 @@ class QdpCmd {
     static showType(*AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
         printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
         hash<string, bool> rmap;
-        QdpCmd::showType(prov, \rmap, info.type);
+        # For simple types without fields, show explanation
+        if (info.type && !info.type.getFields()) {
+            string type_name = info.type.getName();
+            string explanation = QdpCmd::getSimpleTypeExplanation(type_name);
+            printf("%s%s\n", type_name, explanation ? " (" + explanation + ")" : "");
+        } else if (info.type) {
+            QdpCmd::showType(prov, \rmap, info.type);
+        }
+    }
+
+    #! Returns a human-readable explanation for simple type names
+    static string getSimpleTypeExplanation(string type_name) {
+        # Handle optional types (starting with *)
+        bool optional = type_name[0] == "*";
+        string base_type = optional ? type_name.substr(1) : type_name;
+        string opt_prefix = optional ? "optional " : "";
+
+        switch (base_type) {
+            case "auto": return opt_prefix + "any value of any type";
+            case "data": return opt_prefix + "string or binary data";
+            case "string": return opt_prefix + "text string";
+            case "binary": return opt_prefix + "binary data";
+            case "int": return opt_prefix + "integer number";
+            case "float": return opt_prefix + "floating-point number";
+            case "number": return opt_prefix + "arbitrary-precision number";
+            case "bool": return opt_prefix + "true or false";
+            case "date": return opt_prefix + "date/time value";
+            case "hash": return opt_prefix + "key-value mapping";
+            case "list": return opt_prefix + "list of values";
+            case "nothing": return "no value (null)";
+            case "softstring": return opt_prefix + "value converted to string";
+            case "softint": return opt_prefix + "value converted to integer";
+            case "softbool": return opt_prefix + "value converted to boolean";
+            case "softdate": return opt_prefix + "value converted to date";
+            case "softfloat": return opt_prefix + "value converted to float";
+            case "softnumber": return opt_prefix + "value converted to number";
+            case "softlist": return opt_prefix + "value converted to list";
+            default: return "";
+        }
     }
 
     static showType(*AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
@@ -2071,10 +2109,6 @@ class MyObserver inherits Observer {
                 exit(0);
             }
         }
-        if (QdpCmd::ix) {
-            # Print prompt after output
-            stdout.print("> ");
-        }
         stdout.sync();
     }
 
@@ -2116,6 +2150,8 @@ class InputHelper {
         AbstractDataProvider provider;
         # message map
         hash<string, hash<DataProviderMessageInfo>> mmap;
+        # event map
+        *hash<string, hash<DataProviderMessageInfo>> emap;
 
 %ifndef NoLinenoise
         static string path;
@@ -2125,10 +2161,12 @@ class InputHelper {
         const Prompt = "> ";
 
         const Commands = {
+            "event": True,
             "exit": True,
             "help": True,
             "history": True,
             "info": True,
+            "msg": True,
             "quit": True,
         };
     }
@@ -2136,6 +2174,7 @@ class InputHelper {
     constructor(AbstractDataProvider provider) {
         self.provider = provider;
         mmap = provider.getMessageTypes();
+        emap = provider.getEventTypes();
 
 %ifndef NoLinenoise
         Linenoise::history_set_max_len(100);
@@ -2201,6 +2240,22 @@ class InputHelper {
                 interactiveInfo(provider);
                 continue;
             }
+            if (line == "info messages" || line == "info msgs") {
+                showAllMessages();
+                continue;
+            }
+            if (line == "info events") {
+                showAllEvents();
+                continue;
+            }
+            if (line =~ /^msg\s+/) {
+                showMessageInfo(provider, trim(line.substr(4)));
+                continue;
+            }
+            if (line =~ /^event\s+/) {
+                showEventInfo(provider, trim(line.substr(6)));
+                continue;
+            }
 %ifndef NoLinenoise
             if (line == 'history') {
                 map printf("%s\n", $1), Linenoise::history();
@@ -2219,42 +2274,41 @@ class InputHelper {
     }
 
     private interactiveHelp() {
-        printf("\n%s\n\n", QdpCmd::color.bold("Interactive Mode Commands"));
-
         printf("%s\n", QdpCmd::color.bold("SENDING MESSAGES"));
-        printf("  %s    Send a message to the provider\n", QdpCmd::color.key("<msg-id>: <data>"));
-        printf("  %s                  Example: data: action=ping,id=123\n\n", QdpCmd::color.dim(""));
-
-        printf("%s\n", QdpCmd::color.bold("AVAILABLE MESSAGES"));
-        foreach hash<auto> msg in (mmap.pairIterator()) {
-            string type_info = msg.value.type ? msg.value.type.getName() : "auto";
-            printf("  %s %s: %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(msg.key),
-                QdpCmd::color.type(type_info));
+        printHelpLine("<msg-id>: <data>", "Send a message to the provider");
+        printf("                    Example: data: action=ping,id=123\n");
+        if (mmap) {
+            printf("  %s: %s\n", QdpCmd::color.key("Available"),
+                (foldl $1 + ", " + $2, (map QdpCmd::color.type($1), keys mmap)));
+            printf("  (type '%s' or '%s <id>' for details)\n", QdpCmd::color.key("info msgs"),
+                QdpCmd::color.key("msg"));
         }
-        printf("\n");
-
         printf("%s\n", QdpCmd::color.bold("SESSION COMMANDS"));
-        printf("  %s                 Show this help\n", QdpCmd::color.key("help, ?"));
-        printf("  %s                 Show connection info\n", QdpCmd::color.key("info"));
+        printHelpLine("help, ?", "Show this help");
+        printHelpLine("info", "Show connection info");
+        printHelpLine("info msgs", "List all available messages");
+        printHelpLine("info events", "List all available events");
+        printHelpLine("msg <id>", "Show message type details");
+        printHelpLine("event <id>", "Show event type details");
 %ifndef NoLinenoise
-        printf("  %s              Show command history\n", QdpCmd::color.key("history"));
+        printHelpLine("history", "Show command history");
 %endif
-        printf("  %s            Exit interactive mode\n", QdpCmd::color.key("quit, exit"));
-        printf("\n");
-
+        printHelpLine("quit, exit", "Exit interactive mode");
         printf("%s\n", QdpCmd::color.bold("KEYBOARD SHORTCUTS"));
-        printf("  %s               Send message / execute command\n", QdpCmd::color.key("Enter"));
-        printf("  %s              Exit interactive mode\n", QdpCmd::color.key("Ctrl+C"));
+        printHelpLine("Enter", "Send message / execute command");
+        printHelpLine("Ctrl+C", "Exit interactive mode");
 %ifndef NoLinenoise
-        printf("  %s              Previous command in history\n", QdpCmd::color.key("Up/Down"));
-        printf("  %s                 Autocomplete message ID\n", QdpCmd::color.key("Tab"));
+        printHelpLine("Up/Down", "Previous command in history");
+        printHelpLine("Tab", "Autocomplete message ID");
 %endif
     }
 
-    private interactiveInfo(AbstractDataProvider provider) {
-        printf("\n%s\n\n", QdpCmd::color.bold("Connection Info"));
+    private printHelpLine(string key, string desc) {
+        printf("  %s%s%s\n", QdpCmd::color.key(key), strmul(" ", 18 - key.length()), desc);
+    }
 
-        # Basic provider info
+    private interactiveInfo(AbstractDataProvider provider) {
+        printf("%s\n", QdpCmd::color.bold("Connection Info"));
         printf("  %s: %s\n", QdpCmd::color.key("Provider"), provider.getName());
         printf("  %s: %s\n", QdpCmd::color.key("Description"), provider.getShortDesc());
 
@@ -2269,38 +2323,154 @@ class InputHelper {
                     cinfo.auto_reconnect ? "Yes" : "No");
             }
             if (cinfo.info) {
-                printf("\n%s\n", QdpCmd::color.bold("Additional Connection Info"));
-                QdpCmd::outputRecord(cinfo.info);
+                formatConnectionInfo(cinfo.info);
             }
         }
 
-        # Messages
+        # Messages summary
         *hash<string, hash<DataProviderMessageInfo>> messages = provider.getMessageTypes();
         if (messages) {
-            printf("\n%s\n", QdpCmd::color.bold("Outgoing Messages (send with <id>: <data>)"));
-            foreach hash<auto> msg in (messages.pairIterator()) {
-                string type_info = msg.value.type ? msg.value.type.getName() : "auto";
-                printf("  %s %s: %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(msg.key),
-                    QdpCmd::color.type(type_info));
-            }
+            printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Outgoing Messages"),
+                (foldl $1 + ", " + $2, keys messages), QdpCmd::color.key("msg"));
         }
 
-        # Events
+        # Events summary
         *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
         if (events) {
-            printf("\n%s\n", QdpCmd::color.bold("Incoming Events (received automatically)"));
-            foreach hash<auto> evt in (events.pairIterator()) {
-                string type_info = evt.value.type ? evt.value.type.getName() : "auto";
-                printf("  %s %s: %s\n", QdpCmd::color.dim("←"), QdpCmd::color.key(evt.key),
-                    QdpCmd::color.type(type_info));
+            printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Incoming Events"),
+                (foldl $1 + ", " + $2, keys events), QdpCmd::color.key("event"));
+        }
+    }
+
+    private formatConnectionInfo(hash<auto> info) {
+        # Format peer info (remote endpoint)
+        if (info.peer) {
+            string peer_str = info.peer.hostname ?? info.peer.address;
+            if (info.peer.port) {
+                peer_str += ":" + info.peer.port;
             }
+            if (info.peer.hostname && info.peer.address && info.peer.address != info.peer.hostname) {
+                peer_str += " (" + info.peer.address + ")";
+            }
+            printf("  %s: %s\n", QdpCmd::color.key("Peer"), peer_str);
+        }
+        # Format local socket info
+        if (info.socket.port) {
+            printf("  %s: %d\n", QdpCmd::color.key("Local Port"), info.socket.port);
+        }
+    }
+
+    private showMessageInfo(AbstractDataProvider provider, string msg_id) {
+        if (!msg_id.val()) {
+            printf("%s: usage: msg <message-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+                (foldl $1 + ", " + $2, keys mmap));
+            return;
+        }
+        *hash<DataProviderMessageInfo> info;
+        try {
+            info = provider.getMessageInfo(msg_id);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", QdpCmd::color.error("ERROR"), ex.desc);
+            return;
+        }
+        if (!info) {
+            printf("%s: unknown message '%s'; valid: %s\n", QdpCmd::color.error("ERROR"),
+                msg_id, (foldl $1 + ", " + $2, keys mmap));
+            return;
+        }
+        QdpCmd::showType(provider, msg_id, info);
+    }
+
+    private showEventInfo(AbstractDataProvider provider, string event_id) {
+        if (!event_id.val()) {
+            *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+            printf("%s: usage: event <event-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+                events ? (foldl $1 + ", " + $2, keys events) : "(none)");
+            return;
+        }
+        *hash<DataProviderMessageInfo> info;
+        try {
+            info = provider.getEventInfo(event_id);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", QdpCmd::color.error("ERROR"), ex.desc);
+            return;
+        }
+        if (!info) {
+            *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+            printf("%s: unknown event '%s'; valid: %s\n", QdpCmd::color.error("ERROR"),
+                event_id, events ? (foldl $1 + ", " + $2, keys events) : "(none)");
+            return;
+        }
+        QdpCmd::showType(provider, event_id, info);
+    }
+
+    private showAllMessages() {
+        if (!mmap) {
+            printf("No messages available for this provider\n");
+            return;
+        }
+        printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED MESSAGES"),
+            QdpCmd::color.key("msg"));
+        foreach hash<auto> msg in (mmap.pairIterator()) {
+            string desc = msg.value.desc ?? "(no description)";
+            printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(msg.key));
+            printf("    %s\n", desc);
+        }
+    }
+
+    private showAllEvents() {
+        if (!emap) {
+            printf("No events available for this provider\n");
+            return;
+        }
+        printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED EVENTS"),
+            QdpCmd::color.key("event"));
+        foreach hash<auto> evt in (emap.pairIterator()) {
+            string desc = evt.value.desc ?? "(no description)";
+            printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(evt.key));
+            printf("    %s\n", desc);
         }
     }
 
     softlist<string> completion(string str) {
         list<string> rv = ();
-        rv += map $1, keys Commands, $1.equalPartial(str);
-        rv += map $1 + ": ", keys mmap, $1.equalPartial(str);
+        # Info subcommands
+        list<string> info_subcmds = ("msgs", "messages", "events");
+        # For empty input (after "msg ", "event ", or "info ")
+        if (!str.val()) {
+            rv += keys mmap;
+            if (emap) {
+                rv += keys emap;
+            }
+            rv += info_subcmds;
+            return rv;
+        }
+        # Complete command names
+        foreach string cmd in (keys Commands) {
+            if (cmd.equalPartial(str)) {
+                rv += cmd;
+            }
+        }
+        # Complete info subcommands (for after "info ")
+        foreach string subcmd in (info_subcmds) {
+            if (subcmd.equalPartial(str)) {
+                rv += subcmd;
+            }
+        }
+        # Complete message IDs (user adds ":" for sending)
+        foreach string msg in (keys mmap) {
+            if (msg.equalPartial(str)) {
+                rv += msg;
+            }
+        }
+        # Complete event IDs (for after "event ")
+        if (emap) {
+            foreach string evt in (keys emap) {
+                if (evt.equalPartial(str)) {
+                    rv += evt;
+                }
+            }
+        }
         return rv;
     }
 }
