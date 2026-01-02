@@ -23,6 +23,11 @@
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
   DEALINGS IN THE SOFTWARE.
+
+  IMPORTANT: This file should be kept in sync with the main Qore parser:
+      lib/parser.ypp
+  All syntax changes in the main parser should be mirrored here for IDE
+  integration to understand all Qore syntax.
 */
 
 #include <cstdio>
@@ -100,6 +105,7 @@ typedef void* yyscan_t;
     ASTHashExpression* hash;
     ASTHashDeclaration* hashdecl;
     ASTHashdeclHashExpression* hashdeclhash;
+    ASTTypedefDeclaration* typedefdecl;
     ASTHashElementExpression* hashelem;
     ASTHashMemberDeclaration* hashmember;
     std::vector<ASTHashMemberDeclaration*>* hashmemberlist;
@@ -182,6 +188,7 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %token TOK_ABSTRACT "abstract"
 %token TOK_HASHDECL "hashdecl"
 %token TOK_TRANSIENT "transient"
+%token TOK_TYPEDEF "typedef"
 %token TOK_NULL "NULL"
 %token TOK_NOTHING "NOTHING"
 %token TOK_TRUE "True"
@@ -365,6 +372,7 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <hashmemberlist> hashdecl_attributes
 %type <hashdecl>       hashdecl_def
 %type <hashmember>     hashdecl_member
+%type <typedefdecl>    typedef_def
 %type <string>         ident_openparen
 %type <hashdeclhash>   immediate_typed_hash
 %type <sclist>         inheritance_list
@@ -438,6 +446,9 @@ top_level_command:
             $$ = $1;
         }
         | hashdecl_def {
+            $$ = $1;
+        }
+        | typedef_def {
             $$ = $1;
         }
         | scoped_const_decl {
@@ -739,6 +750,7 @@ namespace_decl:
         | unscoped_const_decl { $$ = $1; }
         | class_def { $$ = $1; }
         | hashdecl_def { $$ = $1; }
+        | typedef_def { $$ = $1; }
         | sub_def { $$ = $1; }
         | scoped_sub_def { $$ = $1; }
         | gvardecl ';' { $$ = $1; }
@@ -1157,6 +1169,57 @@ hashdecl_def:
         }
         ;
 
+typedef_def:
+        TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+            ASTName name($2, ASTNameKind::ANK_Identifier);
+            name.loc = @2;
+            free($2);
+            ASTName typeName($4, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @4;
+            delete $4;
+
+            $$ = new ASTTypedefDeclaration(std::move(name), std::move(typeName));
+            $$->loc.set(@1, @5);
+        }
+        | TOK_PUBLIC TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+            ASTModifiers mods(ASTModifier::AM_Public);
+            mods.loc = @1;
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+            ASTName typeName($5, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @5;
+            delete $5;
+
+            $$ = new ASTTypedefDeclaration(mods, std::move(name), std::move(typeName));
+            $$->loc.set(@1, @6);
+        }
+        | TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+            ASTName name($2, ASTNameKind::ANK_ScopedRef);
+            name.loc = @2;
+            free($2);
+            ASTName typeName($4, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @4;
+            delete $4;
+
+            $$ = new ASTTypedefDeclaration(std::move(name), std::move(typeName));
+            $$->loc.set(@1, @5);
+        }
+        | TOK_PUBLIC TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+            ASTModifiers mods(ASTModifier::AM_Public);
+            mods.loc = @1;
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+            ASTName typeName($5, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @5;
+            delete $5;
+
+            $$ = new ASTTypedefDeclaration(mods, std::move(name), std::move(typeName));
+            $$->loc.set(@1, @6);
+        }
+        ;
+
 class_def:
         nsc_modifiers CLASS_STRING inheritance_list '{' class_attributes '}' {
             ASTModifiers mods($1);
@@ -1424,6 +1487,12 @@ uncqtypedef:
             $$ = new std::string($1);
             free($1);
         }
+        | IDENTIFIER '!' {
+            // Handle auto! syntax
+            $$ = new std::string($1);
+            $$->push_back('!');
+            free($1);
+        }
         | SCOPED_REF {
             $$ = new std::string($1);
             free($1);
@@ -1435,6 +1504,13 @@ uncqtypedef:
         | '*' IDENTIFIER {
             $$ = new std::string("*");
             $$->append($2);
+            free($2);
+        }
+        | '*' IDENTIFIER '!' {
+            // Handle *auto! syntax
+            $$ = new std::string("*");
+            $$->append($2);
+            $$->push_back('!');
             free($2);
         }
         | '*' SCOPED_REF {

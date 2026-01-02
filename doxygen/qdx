@@ -244,6 +244,11 @@ class qdx {
             fixParam(\comment);
         }
 
+        # Check if the initial comment is already complete (single-line doc comment)
+        if (comment =~ /\*\//) {
+            return comment;
+        }
+
         DocumentTableHelper dth();
 
         while (ins.next()) {
@@ -593,7 +598,7 @@ class qdx {
                 line = adjustQuotedStrings(line);
 
                 # read until closing curly bracket '}'
-                readUntilCloseBracket(inf);
+                readUntilCloseBracket(ins);
             }
 
             if (line =~ /[[:blank:]]*abstract .*;[[:blank:]]*$/) {
@@ -691,10 +696,16 @@ class qdx {
                     continue;
                 } else if (class_name) {
                     if (line =~ /({|})/) {
+                        # normalize line for brace counting: remove strings, comments, and hash access
+                        string brace_line = line;
+                        brace_line =~ s/"(?:[^"\\]|\\.)*"/""/g;  # remove string literals
+                        brace_line =~ s/'(?:[^'\\]|\\.)*'/''/g;  # remove single-quoted strings
+                        brace_line =~ s/#.*//;                    # remove line comments
+                        brace_line =~ s/\w+{[^{}]*}/_/g;          # remove hash access like foo{bar}
                         # count how many open curly brackets
-                        int ob = (line =~ x/({)/g).size();
+                        int ob = (brace_line =~ x/({)/g).size();
                         # count how many close curly brackets
-                        int cb = (line =~ x/(})/g).size();
+                        int cb = (brace_line =~ x/(})/g).size();
                         cbc += (ob - cb);
                         if (!cbc) {
                             line = regex_subst(line, "}", "};");
@@ -741,10 +752,16 @@ class qdx {
                             continue;
                         }
                     } else {
+                        # normalize line for brace counting: remove strings, comments, and hash access
+                        string brace_line = line;
+                        brace_line =~ s/"(?:[^"\\]|\\.)*"/""/g;  # remove string literals
+                        brace_line =~ s/'(?:[^'\\]|\\.)*'/''/g;  # remove single-quoted strings
+                        brace_line =~ s/#.*//;                    # remove line comments
+                        brace_line =~ s/\w+{[^{}]*}/_/g;          # remove hash access like foo{bar}
                         # count how many open curly brackets
-                        int ob = (line =~ x/({)/g).size();
+                        int ob = (brace_line =~ x/({)/g).size();
                         # count how many close curly brackets
-                        int cb = (line =~ x/(})/g).size();
+                        int cb = (brace_line =~ x/(})/g).size();
                         int tot = (ob - cb);
                         if (tot) {
                             ppc += tot;
@@ -987,107 +1004,87 @@ class qdx {
     }
 
     # return number of lines processed
-    private int readUntilCloseBracket(FileInputStream inf) {
+    # Uses the InputStreamLineIterator to avoid stream desync issues
+    private int readUntilCloseBracket(InputStreamLineIterator ins) {
         int cnt = 1;
         int line_cnt = 0;
         string quote;
-        bool need = True;
+        bool in_block_comment = False;
         int regex = 0;
 
-        StreamReader sr(inf);
-        *string fc = sr.readString(1);
-        if (!exists fc) {
-            return line_cnt;
-        }
+        while (ins.next()) {
+            ++line_cnt;
+            string line = ins.getValue();
 
-        string c = fc;
-        need = False;
+            for (int i = 0; i < line.size(); ++i) {
+                string c = line[i];
 
-        while (True) {
-            if (need) {
-                c = sr.readString(1);
-            } else {
-                need = True;
-            }
-
-            if (c == "\n") {
-                ++line_cnt;
-            }
-
-            if (regex) {
-                if (c == "\\")
-                    sr.readString(1);
-                if (c == "/") {
-                    --regex;
-                }
-                continue;
-            }
-
-            if (c == "'" || c == '"') {
-                if (quote.val()) {
-                    if (c == quote) {
-                        delete quote;
+                # Handle block comments that span lines
+                if (in_block_comment) {
+                    if (c == "*" && i + 1 < line.size() && line[i + 1] == "/") {
+                        in_block_comment = False;
+                        ++i;  # skip the /
                     }
-                } else {
-                    quote = c;
+                    continue;
                 }
-                continue;
-            }
-            if (quote.val()) {
-                if (c == "\\" && quote != "'")
-                    sr.readString(1);
-                continue;
-            }
-            if (c == "!" || c == "=") {
-                c = sr.readString(1);
-                if (c == "~") {
-                    regex = 1;
-                    while (True) {
-                        c = sr.readString(1);
-                        if (c == "s") {
+
+                # Handle regex patterns
+                if (regex) {
+                    if (c == "\\") {
+                        ++i;  # skip next char
+                    } else if (c == "/") {
+                        --regex;
+                    }
+                    continue;
+                }
+
+                # Handle strings
+                if (c == "'" || c == '"') {
+                    if (quote.val()) {
+                        if (c == quote) {
+                            delete quote;
+                        }
+                    } else {
+                        quote = c;
+                    }
+                    continue;
+                }
+                if (quote.val()) {
+                    if (c == "\\" && quote != "'") {
+                        ++i;  # skip next char
+                    }
+                    continue;
+                }
+
+                # Handle regex start
+                if ((c == "!" || c == "=") && i + 1 < line.size() && line[i + 1] == "~") {
+                    ++i;  # skip ~
+                    # find the regex delimiter
+                    while (++i < line.size()) {
+                        if (line[i] == "s") {
                             ++regex;
-                        } else if (c == "/") {
+                        } else if (line[i] == "/") {
+                            regex = regex ? regex : 1;
                             break;
                         }
                     }
+                    continue;
                 }
-                continue;
-            }
 
-            if (c == "{") {
-                ++cnt;
-            } else if (c == "}") {
-                if (!--cnt) {
-                    return line_cnt;
-                }
-            } else if (c == "$") {#"){
-                c = sr.readString(1);
-                if (c != "#") {
-                    need = False;
-                }
-            } else if (c == "#") {
-                # read until EOL
-                sr.readLine();
-            } else if (c == "/") {
-                c = sr.readString(1);
-                if (c == "*") {
-                    # read until close block comment
-                    bool star = False;
-                    while (True) {
-                        c = sr.readString(1);
-                        if (star) {
-                            if (c == "/") {
-                                break;
-                            }
-                            star = (c == "*");
-                            continue;
-                        }
-                        if (c == "*") {
-                            star = True;
-                        }
+                # Count braces
+                if (c == "{") {
+                    ++cnt;
+                } else if (c == "}") {
+                    if (!--cnt) {
+                        return line_cnt;
                     }
-                } else {
-                    need = False;
+                } else if (c == "#") {
+                    # Line comment - skip rest of line
+                    break;
+                } else if (c == "/" && i + 1 < line.size() && line[i + 1] == "*") {
+                    # Block comment start
+                    in_block_comment = True;
+                    ++i;  # skip *
                 }
             }
         }

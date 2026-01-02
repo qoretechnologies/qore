@@ -797,6 +797,22 @@ const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
     @since %Qore 2.1
 */
 const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
+
+//! Disables the @ref typedef keyword
+/** @see @ref no-typedef "%no-typedef"
+
+    @since %Qore 2.3
+*/
+const PO_NO_TYPEDEF = PO_NO_TYPEDEF;
+
+//! Disables parse-time type narrowing
+/** With this option set, narrowed type information is not used.
+
+    @see @ref auto_type "auto! syntax"
+
+    @since %Qore 2.3
+*/
+const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 ///@}
 
 /** @defgroup warning_constants Warning Constants

@@ -27,6 +27,12 @@
     Note that the Qore library is released under a choice of three open-source
     licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
     information.
+
+    IMPORTANT: Changes to this file that affect syntax parsing (new grammar rules,
+    tokens, etc.) should also be mirrored to the astparser module:
+        modules/astparser/src/ast_parser.ypp
+    The astparser module is used for IDE integration and needs to understand all
+    Qore syntax.
 */
 
 #include "qore/Qore.h"

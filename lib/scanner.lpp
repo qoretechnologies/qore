@@ -37,6 +37,12 @@
     so a thread-safe scanner can be generated
 
     see: http://flex.sourceforge.net/
+
+    IMPORTANT: Changes to this file that affect syntax parsing (new tokens, keywords,
+    parse options, etc.) should also be mirrored to the astparser module:
+        modules/astparser/src/ast_scanner.lpp
+    The astparser module is used for IDE integration and needs to understand all
+    Qore syntax.
 */
 
 #include <qore/Qore.h>

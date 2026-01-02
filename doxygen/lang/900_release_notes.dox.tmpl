@@ -7,6 +7,56 @@
     @par Release Summary
     Minor new features and minor bugfixes; see below for more information
 
+    @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
+
+    @par Parse-Time Type Narrowing
+    %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
+    @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
+    specific type, the compiler narrows the variable's type and will raise a \c PARSE-TYPE-ERROR if a subsequent
+    assignment uses an incompatible type.
+
+    For example, the following code that worked in previous versions will now fail at parse time:
+    @code{.py}
+auto val = 1;        # val is narrowed to 'int'
+val = "string";      # PARSE-TYPE-ERROR: cannot assign 'string' to 'int'
+    @endcode
+
+    <b>Workarounds:</b>
+    - Use @ref auto_no_narrow "auto!" instead of @ref auto_type "auto" to disable type narrowing for individual variables:
+      @code{.py}
+auto! val = 1;       # val remains 'auto', no narrowing
+val = "string";      # OK
+      @endcode
+    - Use @ref auto_no_narrow "hash<auto!>" instead of @ref hash_type "hash<auto>" for hashes without value type narrowing
+    - Use @ref auto_no_narrow "list<auto!>" instead of @ref list_type "list<auto>" for lists without element type narrowing
+    - Use the @ref broken-narrowed-types "%broken-narrowed-types" parse directive to globally disable
+      parse-time type narrowing (moves type checking to runtime)
+    - Use @ref Qore::PO_BROKEN_NARROWED_TYPES "PO_BROKEN_NARROWED_TYPES" when setting up a
+      @ref Qore::Program "Program" object
+
+    @par New typedef Keyword
+    The new @ref typedef_keyword "typedef" keyword for type aliases may conflict with existing code that uses
+    \c typedef as an identifier (variable name, function name, etc.).
+
+    <b>Workaround:</b>
+    - Use the @ref no-typedef "%no-typedef" parse directive to disable the \c typedef keyword
+    - Use @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF" when setting up a @ref Qore::Program "Program" object
+
+    @par New code<> Typed Callable Syntax
+    The new @ref code_complex_type "code<ReturnType(ParamTypes...)>" syntax enables parse-time type checking
+    for closures and call references. Code that assigns closures or call references with incompatible signatures
+    to typed callable variables will now fail at parse time with \c PARSE-TYPE-ERROR.
+
+    For example:
+    @code{.py}
+code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: parameter type mismatch
+    @endcode
+
+    <b>Workaround:</b>
+    - Use the untyped @ref code_type "code" type instead of the typed \c code<...> syntax if strict type
+      checking is not desired
+    - Ensure closures and call references match the expected signature
+
     @subsection qore_2_3_0_new_features New Features in Qore
     - <b>HTTP/2 support (h2 over TLS via ALPN negotiation)</b>
       - new builtin \c nghttp2 library support for HTTP/2 binary framing and HPACK header compression
@@ -22,75 +72,77 @@
       - @note <b>Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2
         are not currently supported. WebSocket and SSE connections will use HTTP/1.x even when HTTP/2
         is available for regular HTTP traffic
-    - <a href="../../modules/AsyncApi/html/index.html">AsyncApi</a> module
+    - @ref AsyncApi "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
-    - <a href="../../modules/AsyncApiDataProvider/html/index.html">AsyncApiDataProvider</a> module
+    - @ref AsyncApiDataProvider "AsyncApiDataProvider" module
       - new module providing a data provider API for AsyncAPI schemas
       - protocol-agnostic design with pluggable transports (WebSocket, MQTT, Kafka, etc.)
       - includes built-in WebSocket transport
-    - <a href="../../modules/CdsRestClient/html/index.html">CdsRestClient</a> module
+    - @ref CdsRestClient "CdsRestClient" module
       - added support for Microsoft Dynamics 365 Business Central
-        - new \c BusinessCentralRestConnection class for BC connections
+        - new @ref CdsRestClient::BusinessCentralRestConnection "BusinessCentralRestConnection" class for BC connections
         - API profile support for BC-specific URL construction and OAuth2 scopes
         - new \c bcrests connection scheme
-    - <a href="../../modules/CdsRestDataProvider/html/index.html">CdsRestDataProvider</a> module
+    - @ref CdsRestDataProvider "CdsRestDataProvider" module
       - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
       - added support for the DataProvider expression framework for OData queries with support for
         contains, startsWith, endsWith, null, and notNull operators
-    - <a href="../../modules/ConnectionProvider/html/index.html">ConnectionProvider</a> module
-      - added the \c RestartableIoHelper class
+    - @ref ConnectionProvider "ConnectionProvider" module
+      - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
       - new \c http_version option in \c HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0")
       - \c RestConnection inherits the \c http_version option from \c HttpConnection
-    - <a href="../../modules/OpenApi3/html/index.html">OpenApi3</a> module
+    - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
-    - <a href="../../modules/RestSchemaDataProvider/html/index.html">RestSchemaDataProvider</a> module
+    - @ref RestSchemaDataProvider "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
-    - <a href="../../modules/HttpServer/html/index.html">HttpServer</a> module
+    - @ref HttpServer "HttpServer" module
       - implemented async I/O mode for high-concurrency connection handling (enabled by default)
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
         - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
         - request processing is dispatched to ThreadPool for concurrent handler execution
-        - HTTP responses are sent asynchronously using \c Socket::startPollSendHttpResponse()
+        - HTTP responses are sent asynchronously using @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()"
         - enables handling many more concurrent connections with fewer threads
         - sub-millisecond response latency for simple requests
-        - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
-        - new \c HttpServer::queueAsyncResponse() method for async response sending
-        - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
-    - <a href="../../modules/HttpServerAsyncIo/html/index.html">HttpServerAsyncIo</a> module
-      - new module providing async I/O support classes for the HttpServer module
+        - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
+        - new @ref HttpServer::HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
+        - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
+    - @ref HttpServerAsyncIo "HttpServerAsyncIo" module
+      - new module providing async I/O support classes for the @ref HttpServer "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
       - new \c Http2PollOperation class for HTTP/2 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 via \c http_version option
-    - <a href="../../modules/HttpServerUtil/html/index.html">HttpServerUtil</a> module
+    - @ref HttpServerUtil "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 mode control
-    - <a href="../../modules/SqlUtil/html/index.html">SqlUtil</a> module
+    - @ref SqlUtil "SqlUtil" module
       - implemented support for specifying the columns to use for upserts separately from the row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
-    - <a href="../../modules/WebSocketClient/html/index.html">WebSocketClient</a> module
+    - @ref Util "Util" module
+      - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection
+    - @ref WebSocketClient "WebSocketClient" module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
       - added WebSocket extension support with permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
         - new \c extensions constructor option for extension negotiation
         - automatic compression/decompression when extensions are active
-        - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
-    - <a href="../../modules/WebSocketHandler/html/index.html">WebSocketHandler</a> module
+        - new @ref WebSocketClient::WebSocketClient::hasPerMessageDeflate() "hasPerMessageDeflate()" and @ref WebSocketClient::WebSocketClient::getActiveExtensions() "getActiveExtensions()" methods
+    - @ref WebSocketHandler "WebSocketHandler" module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
       - added server-side WebSocket extension support with permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
         - new \c extensions constructor option to enable supported extensions
         - automatic negotiation with clients via Sec-WebSocket-Extensions headers
         - compression/decompression of messages when extensions are negotiated
-        - new \c hasExtensionSupport() and \c getSupportedExtensions() handler methods
-        - new \c hasPerMessageDeflate() and \c getActiveExtensions() connection methods
-    - <a href="../../modules/WebSocketUtil/html/index.html">WebSocketUtil</a> module
+        - new @ref WebSocketHandler::WebSocketHandler::hasExtensionSupport() "hasExtensionSupport()" and @ref WebSocketHandler::WebSocketHandler::getSupportedExtensions() "getSupportedExtensions()" handler methods
+        - new @ref WebSocketHandler::WebSocketConnection::hasPerMessageDeflate() "hasPerMessageDeflate()" and @ref WebSocketHandler::WebSocketConnection::getActiveExtensions() "getActiveExtensions()" connection methods
+    - @ref WebSocketUtil "WebSocketUtil" module
       - added pluggable WebSocket extension framework
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-        - new \c AbstractWebSocketExtension base class for extension implementations
-        - new \c WebSocketExtensionRegistry factory class for extension management
-        - new \c PerMessageDeflateExtension implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
+        - new @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" base class for extension implementations
+        - new @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class for extension management
+        - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
     - updated module ABI and the Program container to allow for better sandboxing
     - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
@@ -102,8 +154,8 @@
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
-    - new method in the <a href="../../modules/reflection/html/index.html">reflection</a> module:
-      - \c Class::tryGetConstant()
+    - new method in the @ref reflection "reflection" module:
+      - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
     - new builtin methods:
       - static @ref Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
@@ -136,11 +188,11 @@
       - \c @@debug \c { \c ... \c } executes a block of statements only when debugging is enabled
       - both statements are completely skipped at parse time when \c %%enable-debug is not set, providing
         zero runtime overhead
-      - use \c %%enable-debug / \c %%disable-debug parse directives or \c PO_ENABLE_DEBUG parse option
+      - use \c %%enable-debug / \c %%disable-debug parse directives or @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
         (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
     - new @ref auto_no_narrow "auto!" syntax to disable parse-time type narrowing
       (<a href="https://github.com/qoretechnologies/qore/issues/5080">issue 5080</a>)
-      - \c auto!, \c hash<auto!>, \c list<auto!> prevent parse-time type inference errors
+      - @ref auto_no_narrow "auto!", @ref auto_no_narrow "hash<auto!>", @ref auto_no_narrow "list<auto!>" prevent parse-time type inference errors
       - allows variables to accept values of different types without \c PARSE-TYPE-ERROR
       - runtime type enforcement still applies to individual values
     - new @ref typedef_keyword "typedef" keyword for type aliases
@@ -148,7 +200,7 @@
       - supports all type declarations including complex types, hashdecls, and classes
       - can be declared \c public for module exports
       - works in namespaces with standard scoping rules
-      - can be disabled with \c %%no-typedef parse directive or @ref PO_NO_TYPEDEF
+      - can be disabled with \c %%no-typedef parse directive or @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF"
     - new @ref union_type "union<...>" explicit union type syntax
       - syntax: \c union<int, \c string> for a type accepting either int or string
       - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
@@ -165,7 +217,7 @@
       - supports or-nothing variant: \c *code<int(string)>
       - works with complex types: \c code<list<int>(hash<string, \c int>)>
       - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
-    - <a href="../../modules/ElasticSearchDataProvider/html/index.html">ElasticSearchDataProvider</a> module
+    - @ref ElasticSearchDataProvider "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - added Scroll API for efficient iteration over large result sets
@@ -174,12 +226,12 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-    - <a href="../../modules/ElasticSearchLoggerAppender/html/index.html">ElasticSearchLoggerAppender</a> module
+    - @ref ElasticSearchLoggerAppender "ElasticSearchLoggerAppender" module
       - new module providing a logger appender that sends log events to ElasticSearch using the Bulk API with
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
-    - <a href="../../modules/MemcachedDataProvider/html/index.html">MemcachedDataProvider</a> module
+    - @ref MemcachedDataProvider "MemcachedDataProvider" module
       - new module providing a data provider API for Memcached caching servers
       - pure Qore implementation using TCP sockets with the memcached binary protocol
       - full protocol support including storage operations (set, add, replace, append, prepend, cas), retrieval
@@ -187,14 +239,14 @@
         commands
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
-    - <a href="../../modules/mongodb/html/index.html">mongodb</a> module
+    - @ref mongodb "mongodb" module
       - new builtin module providing MongoDB client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
       - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
         deleteMany)
       - aggregation pipeline support
       - automatic BSON to Qore value conversion (hashes, lists, dates, binary, ObjectId, etc.)
-    - <a href="../../modules/MongoDbDataProvider/html/index.html">MongoDbDataProvider</a> module
+    - @ref MongoDbDataProvider "MongoDbDataProvider" module
       - new module providing a data provider API for MongoDB servers
       - hierarchical data provider structure: databases -> collections -> operations
       - full CRUD support through insert, find, update, and delete data providers
@@ -206,7 +258,7 @@
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
       - @ref Qore::RegexExtract "RegexExtract" - pre-compiled regex extraction with global mode support
-    - <a href="../../modules/QoreRepl/html/index.html">QoreRepl</a> module
+    - @ref QoreRepl "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
       - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
@@ -215,23 +267,23 @@
       - new \c --interactive command-line option to force REPL mode
       - new \c --no-repl command-line option to disable automatic REPL mode when stdin is a terminal
       - uses the QoreRepl module for the interactive session
-    - new parse option @ref PO_ALLOW_REPARSE
+    - new parse option @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
       - enables multiple parse/commit cycles on a Program object for REPL functionality
       - allows local variables to be declared in subsequent parse transactions (essential for REPL)
       - parsing is blocked when threads are active in the Program to ensure thread safety
     - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
       - returns the number of threads currently active in a Program object
-      - useful for coordinating thread activity with parse operations when using PO_ALLOW_REPARSE
+      - useful for coordinating thread activity with parse operations when using @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
     - @ref Qore::Program::parseRollback() "Program::parseRollback()" has been un-deprecated and enhanced
-      - when used with @ref PO_ALLOW_REPARSE, performs atomic rollback of only the pending parse transaction
+      - when used with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", performs atomic rollback of only the pending parse transaction
       - preserves all previously committed program state (variables, functions, classes, etc.)
       - enables REPL-style interactive programming where parse errors don't destroy the Program object
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
       produce a warning when used, as the underlying parse options were never enforced:
-      - \c --no-class-defs (PO_NO_CLASS_DEFS) - would have disallowed class definitions
-    - Note: @ref PO_NO_CLASS_DEFS, @ref PO_NO_CONSTANT_DEFS, @ref PO_NO_NAMESPACE_DEFS, and @ref PO_NO_NEW are
+      - \c --no-class-defs (@ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS") - would have disallowed class definitions
+    - Note: @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS", @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS", @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS", and @ref Qore::PO_NO_NEW "PO_NO_NEW" are
       now defined as 0 (no-op). These parse options were documented but never enforced in the parser. Code that
       set these options will continue to work but the restrictions will not be applied.
 
@@ -242,22 +294,22 @@
       - Using the QoreRepl module with a custom frontend that provides line editing
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
-    - <a href="../../modules/RestClient/html/index.html">RestClient</a> module
+    - @ref RestClient "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
-    - <a href="../../modules/RestHandler/html/index.html">RestHandler</a> module
+    - @ref RestHandler "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
-    - <a href="../../modules/Util/html/index.html">Util</a> module
-      - fixed the \c glob_to_regex() function
+    - @ref Util "Util" module
+      - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
-    - <a href="../../modules/reflection/html/index.html">reflection</a> module
-      - Class::getConstant() now searches the class hierarchy
+    - @ref reflection "reflection" module
+      - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
-    - <a href="../../modules/DataProvider/html/index.html">DataProvider</a> module
-      - fixed a bug in AbstractDataProviderBulkOperation::setupInitialRecord() that caused the buffer to have
+    - @ref DataProvider "DataProvider" module
+      - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular

@@ -59,6 +59,7 @@
 #include "ast/declarations/ASTMemberGroupDeclaration.h"
 #include "ast/declarations/ASTNamespaceDeclaration.h"
 #include "ast/declarations/ASTSuperclassDeclaration.h"
+#include "ast/declarations/ASTTypedefDeclaration.h"
 #include "ast/declarations/ASTVariableDeclaration.h"
 #include "ast/declarations/ASTVarListDeclaration.h"
 
