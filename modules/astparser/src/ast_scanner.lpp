@@ -208,6 +208,7 @@ static bool angle_balanced(const char* p) {
 bool PO_BROKEN_LOGIC_PRECEDENCE = false;
 bool PO_BROKEN_OPERATORS = false;
 bool PO_NO_TRANSIENT = false;
+bool PO_NO_TYPEDEF = false;
 %}
 
 %option noyywrap nomain noyy_top_state warn
@@ -312,6 +313,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%loose-types{WS}*$                     { yylval->parseopt = new ASTParseOption(APOK_LOOSE_TYPES); return PARSE_OPTION_FULL; }
 ^%no-reflection{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_NO_REFLECTION); return PARSE_OPTION_FULL; }
 ^%no-transient{WS}*$                    { PO_NO_TRANSIENT = true; yylval->parseopt = new ASTParseOption(APOK_NO_TRANSIENT); return PARSE_OPTION_FULL; }
+^%no-typedef{WS}*$                      { PO_NO_TYPEDEF = true; yylval->parseopt = new ASTParseOption(APOK_NO_TYPEDEF); return PARSE_OPTION_FULL; }
 ^%push-parse-options{WS}*$              { yylval->parseopt = new ASTParseOption(APOK_PUSH_PARSE_OPTIONS); return PARSE_OPTION_FULL; }
 ^%append-include-path{WS}*$             { yylval->parseopt = new ASTStringParseOption(APOK_APPEND_INCLUDE_PATH); return PARSE_OPTION_FULL; }
 ^%append-include-path{WS}+              { BEGIN(append_path_state); return PARSE_OPTION_BEGIN; }
@@ -806,6 +808,13 @@ transient                               {
                                                 return IDENTIFIER;
                                             }
                                             return TOK_TRANSIENT;
+                                        }
+typedef                                 {
+                                            if (PO_NO_TYPEDEF) {
+                                                yylval->string = strdup("typedef");
+                                                return IDENTIFIER;
+                                            }
+                                            return TOK_TYPEDEF;
                                         }
 class\(                                 { yylval->string = strdup("class"); return KW_IDENTIFIER_OPENPAREN; }
 private\(                               { yylval->string = strdup("private"); return KW_IDENTIFIER_OPENPAREN; }
