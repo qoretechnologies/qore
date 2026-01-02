@@ -103,8 +103,14 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         # Hash with list value
         assertEq("items:\n  - 1\n  - 2\n  - 3", sprintf("%Y", ("items": (1, 2, 3))));
 
-        # List with hash items
-        assertEq("- 1\n- 2\n-\n  key: \"value\"", sprintf("%Y", (1, 2, ("key": "value"))));
+        # List with hash items (single-key simple hashes render inline)
+        assertEq("- 1\n- 2\n- key: \"value\"", sprintf("%Y", (1, 2, ("key": "value"))));
+
+        # Hash with list of simple single-key hashes (issue fix)
+        assertEq("a:\n  - b: 2\n  - c: 3", sprintf("%Y", ("a": (("b": 2),("c":3)))));
+
+        # Multi-key hash in list still uses newlines
+        assertEq("-\n  x: 1\n  y: 2", sprintf("%Y", (("x": 1, "y": 2),)));
 
         # Nested list
         assertEq("-\n  - 1\n  - 2\n-\n  - 3\n  - 4", sprintf("%Y", ((1, 2), (3, 4))));
