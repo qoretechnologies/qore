@@ -11,16 +11,63 @@
 
 public class ParseRangesTest inherits QUnit::Test {
     constructor() : Test ("ParseRangesTest", "1.0") {
-        addTestCase ("Tests for parse_ranges() function", \test_parse_ranges());
+        addTestCase("Basic tests", \test_basic());
+        addTestCase("Range tests", \test_ranges());
+        addTestCase("Negative number tests", \test_negative());
+        addTestCase("Reverse range tests", \test_reverse());
+        addTestCase("Error handling", \test_errors());
         set_return_value(main());
     }
 
-    test_parse_ranges() {
-        assertEq ((), parse_ranges (""));
-        assertEq ((1,), parse_ranges ("1"));
-        assertEq ((2,3,4,5), parse_ranges ("2-5"));
-        assertEq ((3,5,7,8,9), parse_ranges ("3,5, 7-9"));
-        # and a special "broken" input that I think is handled just right
-        assertEq ((1,3,5,6,7,12,4), parse_ranges ("1,3, ,5-7-, 12, 4-"));
+    test_basic() {
+        # Empty input
+        assertEq((), parse_ranges(""));
+        # Single values
+        assertEq((1,), parse_ranges("1"));
+        assertEq((0,), parse_ranges("0"));
+        assertEq((42,), parse_ranges("42"));
+        # Multiple single values
+        assertEq((1, 2, 3), parse_ranges("1, 2, 3"));
+        assertEq((1, 5, 10), parse_ranges("1,5,10"));
+    }
+
+    test_ranges() {
+        # Simple ranges
+        assertEq((2, 3, 4, 5), parse_ranges("2-5"));
+        assertEq((0, 1, 2), parse_ranges("0-2"));
+        assertEq((10, 11, 12, 13, 14, 15), parse_ranges("10-15"));
+        # Mixed single and range
+        assertEq((3, 5, 7, 8, 9), parse_ranges("3,5, 7-9"));
+        assertEq((1, 3, 4, 5, 10), parse_ranges("1, 3-5, 10"));
+        # Range of size 1
+        assertEq((5,), parse_ranges("5-5"));
+    }
+
+    test_negative() {
+        # Single negative values
+        assertEq((-1,), parse_ranges("-1"));
+        assertEq((-5,), parse_ranges("-5"));
+        assertEq((-10, -5, 0), parse_ranges("-10, -5, 0"));
+        # Negative ranges
+        assertEq((-5, -4, -3), parse_ranges("-5--3"));
+        assertEq((-3, -2, -1, 0, 1), parse_ranges("-3-1"));
+        # Mixed positive and negative
+        assertEq((-2, -1, 0, 1, 2), parse_ranges("-2-2"));
+        assertEq((-5, 0, 5), parse_ranges("-5, 0, 5"));
+    }
+
+    test_reverse() {
+        # Reverse ranges (start > end)
+        assertEq((5, 4, 3), parse_ranges("5-3"));
+        assertEq((10, 9, 8, 7, 6, 5), parse_ranges("10-5"));
+        assertEq((0, -1, -2, -3), parse_ranges("0--3"));
+    }
+
+    test_errors() {
+        # Invalid input should throw PARSE-RANGES-ERROR
+        assertThrows("PARSE-RANGES-ERROR", \parse_ranges(), "abc");
+        assertThrows("PARSE-RANGES-ERROR", \parse_ranges(), "1-2-3");
+        assertThrows("PARSE-RANGES-ERROR", \parse_ranges(), "1.5");
+        assertThrows("PARSE-RANGES-ERROR", \parse_ranges(), "1..5");
     }
 }

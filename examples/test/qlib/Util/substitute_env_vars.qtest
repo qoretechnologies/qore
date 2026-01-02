@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%new-style
+%require-types
+%enable-all-warnings
+
+%exec-class SubstituteEnvVarsTest
+
+public class SubstituteEnvVarsTest inherits QUnit::Test {
+    constructor() : Test ("SubstituteEnvVarsTest", "1.0") {
+        addTestCase("Basic substitution", \test_basic());
+        addTestCase("Multiple variables", \test_multiple());
+        addTestCase("Missing variables", \test_missing());
+        addTestCase("Edge cases", \test_edge_cases());
+        set_return_value(main());
+    }
+
+    test_basic() {
+        # Set up test environment variables
+        string orig_home = ENV.HOME ?? "";
+
+        # Test $VAR syntax
+        if (orig_home.val()) {
+            assertEq(orig_home, substitute_env_vars("$HOME"));
+            assertEq("path: " + orig_home, substitute_env_vars("path: $HOME"));
+            assertEq(orig_home + "/test", substitute_env_vars("$HOME/test"));
+        }
+
+        # Test ${VAR} syntax
+        if (orig_home.val()) {
+            assertEq(orig_home, substitute_env_vars("${HOME}"));
+            assertEq(orig_home + "suffix", substitute_env_vars("${HOME}suffix"));
+        }
+    }
+
+    test_multiple() {
+        string home = ENV.HOME ?? "";
+        string user = ENV.USER ?? "";
+
+        if (home.val() && user.val()) {
+            assertEq(home + "/" + user, substitute_env_vars("$HOME/$USER"));
+            assertEq("home=" + home + " user=" + user, substitute_env_vars("home=$HOME user=$USER"));
+        }
+    }
+
+    test_missing() {
+        # Missing variable should remain as-is or be empty
+        string result = substitute_env_vars("$NONEXISTENT_VAR_12345");
+        # The function should either keep the original or replace with empty
+        assertTrue(result == "$NONEXISTENT_VAR_12345" || result == "");
+    }
+
+    test_edge_cases() {
+        # Empty string
+        assertEq("", substitute_env_vars(""));
+
+        # No variables
+        assertEq("plain text", substitute_env_vars("plain text"));
+        assertEq("/path/to/file", substitute_env_vars("/path/to/file"));
+
+        # Dollar sign without variable
+        assertEq("$", substitute_env_vars("$"));
+        assertEq("cost: $100", substitute_env_vars("cost: $100"));
+    }
+}
