@@ -10,6 +10,7 @@
     @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
 
     @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
+    @parblock
     The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
     - <b>nghttp2:</b> HTTP/2 support is always available
     - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
@@ -23,6 +24,7 @@
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
     - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
+    @endparblock
 
     @par Parse-Time Type Narrowing
     @parblock
@@ -79,6 +81,19 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
+    - <b>NaN-boxing optimization for internal value representation</b>
+      (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
+      - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction in value storage overhead)
+      - uses IEEE 754 NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
+        and pointers to complex types) in a single 64-bit word
+      - includes small string optimization (SSO): strings up to 6 bytes are stored inline without heap
+        allocation, eliminating memory allocation overhead for common short strings (e.g., hash keys
+        like "id", "name", "type", status codes, short identifiers)
+      - improves CPU cache utilization by storing more values in the same cache line, reducing cache
+        misses during value-intensive operations
+      - faster value passing and copying since values fit in a single register
+      - particularly beneficial for code with many small values (loops, function calls, hash/list operations)
+      - no API changes required - existing code benefits automatically from the optimization
     - <b>HTTP/2 support (h2 over TLS via ALPN negotiation)</b>
       - new builtin \c nghttp2 library support for HTTP/2 binary framing and HPACK header compression
       - ALPN (Application-Layer Protocol Negotiation) support in Socket class for TLS protocol selection
@@ -310,11 +325,6 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - when used with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", performs atomic rollback of only the pending parse transaction
       - preserves all previously committed program state (variables, functions, classes, etc.)
       - enables REPL-style interactive programming where parse errors don't destroy the @ref Qore::Program "Program" object
-    - implemented NaN-boxing optimization for internal value representation
-      (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
-      - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction)
-      - uses IEEE 754 NaN bit patterns to encode multiple value types in a single 64-bit word
-      - improves cache utilization and value passing performance
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now

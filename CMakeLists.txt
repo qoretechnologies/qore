@@ -1325,20 +1325,22 @@ if (DOXYGEN_FOUND)
     )
     add_dependencies(docs docs-lib)
 
-    # lang - initially configure with empty TAGFILES, will be reconfigured after modules are defined
-    message(STATUS "Preparing Doxyfile for lang (initial, without module tags)")
+    # lang - two-pass build:
+    # 1. docs-lang: builds with empty TAGFILES, generates qore.tag for modules to use
+    # 2. docs-lang-final: rebuilds after modules are built, with module tagfiles for cross-referencing
+    message(STATUS "Preparing Doxyfile for lang (initial pass, without module tags)")
     set(QORE_LANG_DOC_TAGFILES "" CACHE INTERNAL "Module tag files for lang docs cross-referencing")
-    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang @ONLY)
+    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial @ONLY)
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         DEPENDS QORE_DOX_FILES QPP_GENERATED_FILES
-        COMMENT "Generating API documentation with Doxygen for: lang"
+        COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
-    add_dependencies(docs docs-lang)
+    # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
 endif (DOXYGEN_FOUND)
 
 add_custom_target(install-docs
@@ -1514,17 +1516,45 @@ qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
 
-# Reconfigure lang Doxyfile with module tag files after all modules are defined
+# Configure lang Doxyfile final pass with module tag files after all modules are defined
 if (DOXYGEN_FOUND)
     # Build TAGFILES string from collected module names
     set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
-        # Tag file path relative to lang html output: ../modules/{mod}/html
-        # Tag files are generated as {mod}.tag in the module's html output directory
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/docs/modules/${mod}/${mod}.tag=../modules/${mod}/html\"")
+        # Tag file is generated in build root as {mod}.tag
+        # Relative path to module html from lang html: ../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
     endforeach()
-    message(STATUS "Reconfiguring Doxyfile for lang with ${CMAKE_BINARY_DIR}/docs/modules/<module>/<module>.tag module cross-references")
-    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang @ONLY)
+    message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
+    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final @ONLY)
+
+    # docs-lang-final: rebuilds lang docs after all modules are built, with module tagfiles
+    # This enables @ref links from lang docs to module symbols
+    add_custom_target(docs-lang-final
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMENT "Generating API documentation with Doxygen for: lang (final pass with module cross-references)"
+        VERBATIM
+    )
+
+    # docs-lang-final-fast: same as docs-lang-final but without module dependencies
+    # Use this for quick testing when module docs are already built manually
+    add_custom_target(docs-lang-final-fast
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
+        VERBATIM
+    )
+
+    # docs-lang-final depends on all module docs (so their tagfiles exist)
+    foreach(mod ${QORE_USER_MODULE_NAMES})
+        add_dependencies(docs-lang-final docs-${mod})
+    endforeach()
+
+    # docs depends on docs-lang-final (the final lang docs with module cross-refs)
+    add_dependencies(docs docs-lang-final)
 endif()
 
 # print info
