@@ -140,12 +140,8 @@ public class Http2Test inherits QUnit::Test {
     }
 
     constructor() : Test("Http2Test", "1.0") {
-        # Tests that require running HttpServer are disabled for now
-        # as they may hang in some test environments
-        # addTestCase("HTTP/2 ALPN negotiation test", \testAlpnNegotiation());
         addTestCase("HTTP/2 settings test", \testHttp2Settings());
         addTestCase("HTTP/2 enable/disable test", \testHttp2EnableDisable());
-        # addTestCase("HTTP/2 fallback to HTTP/1.1 test", \testHttp2Fallback());
         addTestCase("HTTP/2 version string test", \testHttp2VersionString());
         addTestCase("HTTP/2 server http_version option test", \testServerHttpVersionOption());
         addTestCase("Socket HTTP/2 poll test", \testSocketHttp2PollOperations());
@@ -155,8 +151,6 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 Server Push test", \testHttp2ServerPush());
         addTestCase("HTTP/2 h2c direct mode test", \testHttp2H2cDirectMode());
         addTestCase("HTTP/2 stream priority test", \testHttp2StreamPriority());
-        # TEMPORARILY DISABLED - hangs on server_done.waitForZero
-        # addTestCase("HTTP/2 error handling test", \testHttp2ErrorHandling());
         addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
         addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
 

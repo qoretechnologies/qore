@@ -4148,7 +4148,7 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
 
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, status_code,
-            headers ? headers->hashRefSelf() : nullptr, body_bin),
+            headers, body_bin),
         xsink
     );
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -4242,7 +4242,7 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
 
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, status_code,
-            headers ? headers->hashRefSelf() : nullptr, nullptr, true),  // is_connect=true
+            headers, nullptr, true),  // is_connect=true
         xsink
     );
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
