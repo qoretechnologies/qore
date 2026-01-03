@@ -134,6 +134,13 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - @ref RestClient::RestConnection "RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "HttpConnection"
     - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
+    - @ref Qdx "Qdx" module
+      - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
+        (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)
+        - correctly handles \c $# (loop iteration variable) vs \c # (comment start)
+        - supports strings, comments, regex, heredocs, substitution, and transliteration
+        - new @ref Qdx::count_braces() "count_braces()" and @ref Qdx::count_all_brackets() "count_all_brackets()"
+          helper functions for accurate bracket counting in Qore code
     - @ref RestSchemaDataProvider "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
     - @ref HttpServer "HttpServer" module
