@@ -9,17 +9,15 @@
 
     @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
 
-    @par nghttp2 Library Now Required
-    The \c nghttp2 library is now a required build dependency for %Qore. HTTP/2 support is always available
-    and cannot be disabled at build time. Systems that previously built %Qore without nghttp2 will now need
-    to install the \c libnghttp2-dev (Debian/Ubuntu) or \c nghttp2-devel (RHEL/Fedora) package.
+    @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
+    The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
+    - <b>nghttp2:</b> HTTP/2 support is always available
+    - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
 
-    @par Brotli, Zstd, and LZ4 Compression Libraries Now Required
-    The Brotli, Zstd, and LZ4 compression libraries are now required build dependencies for %Qore.
-    These compression formats are always available and cannot be disabled at build time. Systems that
-    previously built %Qore without these libraries will now need to install the development packages:
-    - <b>Debian/Ubuntu:</b> \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
-    - <b>RHEL/Fedora:</b> \c brotli-devel, \c libzstd-devel, \c lz4-devel
+    Systems that previously built %Qore without these libraries will need to install the development packages:
+    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
+    - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel
+    - <b>Alpine:</b> \c nghttp2-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
@@ -27,6 +25,7 @@
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
 
     @par Parse-Time Type Narrowing
+    @parblock
     %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
     @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
     specific type, the compiler narrows the variable's type and will raise a \c PARSE-TYPE-ERROR if a subsequent
@@ -50,16 +49,20 @@ val = "string";      # OK
       parse-time type narrowing (moves type checking to runtime)
     - Use @ref Qore::PO_BROKEN_NARROWED_TYPES "PO_BROKEN_NARROWED_TYPES" when setting up a
       @ref Qore::Program "Program" object
+    @endparblock
 
     @par New typedef Keyword
+    @parblock
     The new @ref typedef_keyword "typedef" keyword for type aliases may conflict with existing code that uses
     \c typedef as an identifier (variable name, function name, etc.).
 
     <b>Workaround:</b>
     - Use the @ref no-typedef "%no-typedef" parse directive to disable the \c typedef keyword
     - Use @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF" when setting up a @ref Qore::Program "Program" object
+    @endparblock
 
     @par New code<> Typed Callable Syntax
+    @parblock
     The new @ref code_complex_type "code<ReturnType(ParamTypes...)>" syntax enables parse-time type checking
     for closures and call references. Code that assigns closures or call references with incompatible signatures
     to typed callable variables will now fail at parse time with \c PARSE-TYPE-ERROR.
@@ -69,10 +72,11 @@ val = "string";      # OK
 code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: parameter type mismatch
     @endcode
 
-    <b>Workaround:</b>
+    <b>Notes:</b>
     - Use the untyped @ref code_type "code" type instead of the typed \c code<...> syntax if strict type
       checking is not desired
     - Ensure closures and call references match the expected signature
+    @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
     - <b>HTTP/2 support (h2 over TLS via ALPN negotiation)</b>
@@ -111,8 +115,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         contains, startsWith, endsWith, null, and notNull operators
     - @ref ConnectionProvider "ConnectionProvider" module
       - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
-      - new \c http_version option in \c HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0")
-      - \c RestConnection inherits the \c http_version option from \c HttpConnection
+      - new \c http_version option in @ref ConnectionProvider::HttpConnection "HttpConnection" for HTTP version control ("auto", "1.0", "1.1", "2.0")
+      - @ref RestClient::RestConnection "RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "HttpConnection"
     - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
     - @ref RestSchemaDataProvider "RestSchemaDataProvider" module
@@ -131,7 +135,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref HttpServerAsyncIo "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref HttpServer "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
-      - new \c Http2PollOperation class for HTTP/2 server connection handling
+      - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 via \c http_version option
     - @ref HttpServerUtil "HttpServerUtil" module
       - added functionality to support setting cookies
@@ -165,7 +169,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - new @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class for extension management
         - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
-    - updated module ABI and the Program container to allow for better sandboxing
+    - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
       - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
       - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
@@ -178,7 +182,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - new method in the @ref reflection "reflection" module:
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
     - new builtin methods:
-      - static @ref Program::getAllDefines() "Program::getAllDefines()"
+      - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
       - @ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()": sets ALPN protocols for TLS negotiation
@@ -287,18 +291,18 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - automatically enters REPL mode when run interactively in a terminal with no script file
       - new \c --interactive command-line option to force REPL mode
       - new \c --no-repl command-line option to disable automatic REPL mode when stdin is a terminal
-      - uses the QoreRepl module for the interactive session
+      - uses the @ref QoreRepl "QoreRepl" module for the interactive session
     - new parse option @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
-      - enables multiple parse/commit cycles on a Program object for REPL functionality
+      - enables multiple parse/commit cycles on a @ref Qore::Program "Program" object for REPL functionality
       - allows local variables to be declared in subsequent parse transactions (essential for REPL)
-      - parsing is blocked when threads are active in the Program to ensure thread safety
+      - parsing is blocked when threads are active in the @ref Qore::Program "Program" to ensure thread safety
     - new builtin method @ref Qore::Program::getThreadCount() "Program::getThreadCount()"
-      - returns the number of threads currently active in a Program object
+      - returns the number of threads currently active in a @ref Qore::Program "Program" object
       - useful for coordinating thread activity with parse operations when using @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"
     - @ref Qore::Program::parseRollback() "Program::parseRollback()" has been un-deprecated and enhanced
       - when used with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", performs atomic rollback of only the pending parse transaction
       - preserves all previously committed program state (variables, functions, classes, etc.)
-      - enables REPL-style interactive programming where parse errors don't destroy the Program object
+      - enables REPL-style interactive programming where parse errors don't destroy the @ref Qore::Program "Program" object
     - implemented NaN-boxing optimization for internal value representation
       (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
       - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction)
@@ -317,7 +321,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - The integrated REPL in the \c qore binary provides basic readline functionality without advanced line
       editing features. For enhanced editing (arrow key navigation, command history recall, etc.), consider:
       - Using \c rlwrap: \c rlwrap \c qore (provides readline wrapper)
-      - Using the QoreRepl module with a custom frontend that provides line editing
+      - Using the @ref QoreRepl "QoreRepl" module with a custom frontend that provides line editing
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - @ref RestClient "RestClient" module
@@ -341,7 +345,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class when storing objects that create circular
       references; the TreeMap class now supports deterministic garbage collection
       (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
-    - fixed a potential crash when raising parse warnings with no associated Program object
+    - fixed a potential crash when raising parse warnings with no associated @ref Qore::Program "Program" object
 
     @section qore_2_2_1 Qore 2.2.1
 
