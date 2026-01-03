@@ -819,6 +819,15 @@ bool QoreSandboxManager::isInterruptRequested() const {
     return interrupt_requested.load(std::memory_order_acquire);
 }
 
+bool QoreSandboxManager::checkIOInterrupt(ExceptionSink* xsink, const char* operation) const {
+    if (interrupt_requested.load(std::memory_order_acquire)) {
+        xsink->raiseException("PROGRAM-INTERRUPTED",
+            "program execution was interrupted during %s", operation);
+        return true;
+    }
+    return false;
+}
+
 QoreHashNode* QoreSandboxManager::getConfiguration() const {
     ReferenceHolder<QoreHashNode> config(new QoreHashNode(autoTypeInfo), nullptr);
 
@@ -908,4 +917,12 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 QoreSandboxManager* runtime_get_sandbox_manager() {
     QoreProgram* pgm = getProgram();
     return pgm ? pgm->getSandboxManager() : nullptr;
+}
+
+bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        return sm->checkIOInterrupt(xsink, operation);
+    }
+    return false;
 }

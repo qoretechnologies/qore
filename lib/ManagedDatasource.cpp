@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ManagedDatasource.h"
 #include "qore/intern/qore_ds_private.h"
 
@@ -99,25 +100,65 @@ void ManagedDatasource::deref() {
 #endif
 }
 
-int ManagedDatasource::grabLockIntern() {
+int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
     int ctid = q_gettid();
 
     if (tid == ctid)
         return 0;
 
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+    int64 remaining_timeout = tl_timeout_ms;
+
     while (tid != -1) {
+        // Check for interrupt
+        if (sm && xsink && sm->checkIOInterrupt(xsink, "datasource lock acquisition")) {
+            return -2;  // -2 indicates interrupt
+        }
+
         ++waiting;
-        if (tl_timeout_ms) {
-            int rc = cond.wait(&ds_lock, tl_timeout_ms);
+        if (tl_timeout_ms > 0 || (tl_timeout_ms < 0 && sm)) {
+            // Positive timeout or infinite timeout with sandbox manager: use polling
+            int effective_timeout;
+            if (sm) {
+                // With sandbox manager, poll at intervals for interrupt checking
+                effective_timeout = (tl_timeout_ms < 0 || remaining_timeout > poll_interval)
+                    ? poll_interval : remaining_timeout;
+            } else {
+                // No sandbox manager: use full timeout
+                effective_timeout = tl_timeout_ms;
+            }
+
+            int rc = cond.wait(&ds_lock, effective_timeout);
             --waiting;
             if (!rc)
                 continue;
-            printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
+
+            // Timeout occurred
+            if (sm && tl_timeout_ms > 0) {
+                remaining_timeout -= effective_timeout;
+                if (remaining_timeout <= 0) {
+                    printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
+                    return -1;
+                }
+            } else if (sm && tl_timeout_ms < 0) {
+                // Infinite timeout with sandbox manager - continue polling
+                continue;
+            } else {
+                printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
+                return -1;
+            }
+        } else if (tl_timeout_ms == 0) {
+            // Zero timeout means try once without waiting - fail immediately if lock not available
+            printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
+            --waiting;
             return -1;
-        }
-        else
+        } else {
+            // Infinite timeout without sandbox manager
             cond.wait(&ds_lock);
-        --waiting;
+            --waiting;
+        }
     }
 
     tid = ctid;
@@ -126,14 +167,19 @@ int ManagedDatasource::grabLockIntern() {
 }
 
 int ManagedDatasource::grabLock(ExceptionSink *xsink) {
-    if (grabLockIntern() < 0) {
+    int rc = grabLockIntern(xsink);
+    if (rc < 0) {
         endDBActionIntern();
-        const char *un = getUsername();
-        const char *db = getDBName();
-        xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource '%s@%s' after waiting %d millisecond%s on transaction lock held by TID %d",
-                                getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(),
-                                q_gettid(), un ? un : "<n/a>", db ? db : "<n/a>", tl_timeout_ms,
-                                tl_timeout_ms == 1 ? "" : "s", tid);
+        if (rc == -1) {
+            // Timeout
+            const char *un = getUsername();
+            const char *db = getDBName();
+            xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource '%s@%s' after waiting %d millisecond%s on transaction lock held by TID %d",
+                                    getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(),
+                                    q_gettid(), un ? un : "<n/a>", db ? db : "<n/a>", tl_timeout_ms,
+                                    tl_timeout_ms == 1 ? "" : "s", tid);
+        }
+        // rc == -2 means interrupt, exception already raised by checkIOInterrupt
         return -1;
     }
     return 0;
