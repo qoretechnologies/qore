@@ -361,6 +361,25 @@ if (NOT (WIN32 OR MINGW OR MSYS))
     endif (Backtrace_FOUND)
 endif (NOT (WIN32 OR MINGW OR MSYS))
 
+# HTTP/2 support via nghttp2 (required)
+pkg_check_modules(NGHTTP2 QUIET libnghttp2)
+if (NGHTTP2_FOUND)
+    message(STATUS "Found nghttp2: ${NGHTTP2_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARIES})
+else()
+    # Try to find nghttp2 without pkg-config
+    find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
+    find_library(NGHTTP2_LIBRARY NAMES nghttp2)
+    if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY)
+        message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
+    else()
+        message(FATAL_ERROR "nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev")
+    endif()
+endif()
+
 if (WIN32 OR MINGW OR MSYS)
     SET(CMAKE_DL_LIBS dl)
     SET(MPFR_LIBRARIES mpfr gmp)
@@ -735,6 +754,10 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
+# HTTP/2 support is always enabled (nghttp2 is required)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/Http2Session.cpp
+)
 
 # get list of header files
 file(GLOB LIBQORE_SOURCE_HEADERS "include/qore/*.h" "include/qore/intern/*.h")
@@ -1113,6 +1136,8 @@ if (SINGLE_COMPILATION_UNIT)
 #ifdef DEBUG
 #include \"${CMAKE_SOURCE_DIR}/lib/ql_debug.cpp\"
 #endif
+// HTTP/2 support is always enabled (nghttp2 is required)
+#include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
 ")
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)

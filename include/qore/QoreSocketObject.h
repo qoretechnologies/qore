@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     provides a thread-safe interface to the QoreSocket object
 
@@ -60,6 +60,8 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketUpgradeClientSslPollOperation;
     friend class SocketUpgradeServerSslPollOperation;
     friend class HttpClientConnectPollOperation;
+    friend class SocketHttp2ServerPollOperation;
+    friend class SocketHttp2SendResponsePollOperation;
 
 public:
     DLLEXPORT QoreSocketObject();
@@ -311,6 +313,48 @@ public:
     DLLEXPORT const char* getSSLCipherName();
     DLLEXPORT const char* getSSLCipherVersion();
     DLLEXPORT bool isSecure();
+
+    //! Sets the ALPN protocols to offer during TLS negotiation
+    /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})
+        @param xsink Exception sink for error handling
+
+        @note This method must be called before connecting or upgrading to SSL/TLS
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
+
+    //! Returns the negotiated ALPN protocol after a TLS connection is established
+    /** @return The negotiated protocol string, or nullptr if no protocol was negotiated
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreStringNode* getAlpnProtocol() const;
+
+    //! Returns true if the connection is using HTTP/2 (negotiated via ALPN)
+    /** @return true if HTTP/2, false otherwise
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT bool isHttp2() const;
+
+    //! Submits an HTTP/2 PUSH_PROMISE frame for server push
+    /** @since %Qore 2.2
+    */
+    DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Sets the active HTTP/2 stream ID for transparent send/recv operations
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Gets the active HTTP/2 stream ID
+    /** @return the active stream ID, or -1 if no stream is active
+        @since %Qore 2.3
+    */
+    DLLEXPORT int32_t getHttp2ActiveStream() const;
+
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);

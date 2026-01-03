@@ -657,6 +657,7 @@ DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
 
 DLLLOCAL extern int qore_library_options;
+DLLLOCAL extern std::atomic<int> qore_global_http2_mode;
 
 #ifndef HAVE_GETHOSTBYADDR_R
 DLLLOCAL extern QoreThreadLock lck_gethostbyaddr;

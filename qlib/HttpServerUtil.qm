@@ -386,6 +386,18 @@ public hashdecl HttpResponseInfo {
 
     #! additional info to be added to the context (cx) variable's \a user_state key if the connection is not closed
     *hash<auto> user_state;
+
+    #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
+    /** When this is set, the connection will be handled as a dedicated socket.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    softbool streaming = False;
+
+    #! the type of streaming connection: "sse" or "websocket"
+    /** Only used when \c streaming is @ref True.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    *string stream_type;
 }
 
 #! the return value of HTTP handler methods with potentially unserialized message bodies
@@ -503,6 +515,19 @@ public hashdecl HttpListenerOptionInfo {
     /** client certificates are requested if \a ssl_verify_flags contains @ref Qore::SSL_VERIFY_PEER "SSL_VERIFY_PEER"
     */
     bool ssl_accept_all_certs = True;
+
+    #! HTTP version mode for this listener
+    /** Controls HTTP/2 support for incoming connections:
+        - \c "auto": Use HTTP/2 if client negotiates via ALPN, fall back to HTTP/1.1 (default)
+        - \c "1.0": HTTP/1.0 only
+        - \c "1.1": HTTP/1.1 only
+        - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
+
+        @note HTTP/2 requires TLS; non-TLS connections always use HTTP/1.x
+
+        @since HttpServer 1.6
+    */
+    string http_version = "auto";
 
     #! Additional info added to the notification callback when listeners are started
     hash<auto> ext_info;

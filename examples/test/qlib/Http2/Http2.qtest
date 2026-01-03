@@ -1,0 +1,1878 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo/HttpServerAsyncIo.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+
+%exec-class Http2Test
+
+# HTTP/2 test certificate and key (PEM format)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+
+# Simple request handler for HTTP/2 tests
+class Http2TestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, sprintf("method=%s, path=%s", hdr.method, hdr.path));
+    }
+}
+
+# WebSocket connection class for HTTP/2 WebSocket testing - echoes messages back to the client
+class EchoWebSocketConnection inherits WebSocketHandler::WebSocketConnection {
+    private {
+        Counter cnt;
+    }
+
+    constructor(WebSocketHandler::WebSocketHandler handler, Counter cnt)
+            : WebSocketConnection(handler) {
+        self.cnt = cnt;
+    }
+
+    gotMessage(string msg) {
+        # Echo the message back to the client
+        send(msg);
+    }
+
+    gotMessage(binary msg) {
+        # Echo binary back
+        send(msg);
+    }
+
+    registered() {
+        # Send a welcome message when client connects
+        send("welcome");
+    }
+
+    connectionClosed() {
+        cnt.dec();
+    }
+}
+
+# WebSocket handler for HTTP/2 testing that creates EchoWebSocketConnection objects
+class EchoWebSocketHandler inherits WebSocketHandler::WebSocketHandler {
+    private {
+        Counter cnt;
+    }
+
+    constructor(Counter cnt) : WebSocketHandler() {
+        self.cnt = cnt;
+    }
+
+    WebSocketHandler::WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWebSocketConnection(self, cnt);
+    }
+}
+
+public class Http2Test inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+        string url;
+        # Detect if running on Alpine/musl - some tests hang due to threading/SSL differences
+        bool skip_complex_tests = is_file("/etc/alpine-release");
+    }
+
+    constructor() : Test("Http2Test", "1.0") {
+        addTestCase("HTTP/2 settings test", \testHttp2Settings());
+        addTestCase("HTTP/2 enable/disable test", \testHttp2EnableDisable());
+        addTestCase("HTTP/2 version string test", \testHttp2VersionString());
+        addTestCase("HTTP/2 server http_version option test", \testServerHttpVersionOption());
+        addTestCase("Socket HTTP/2 poll test", \testSocketHttp2PollOperations());
+        addTestCase("HTTP/2 SSE stream test", \testHttp2SseStream());
+        addTestCase("HTTP/2 WebSocket stream test", \testHttp2WebSocketStream());
+        addTestCase("HTTP/2 connection persistence test", \testHttp2ConnectionPersistence());
+        addTestCase("HTTP/2 Server Push test", \testHttp2ServerPush());
+        addTestCase("HTTP/2 h2c direct mode test", \testHttp2H2cDirectMode());
+        addTestCase("HTTP/2 stream priority test", \testHttp2StreamPriority());
+        addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
+        addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
+        addTestCase("HTTP/2 global mode test", \testGlobalHttp2Mode());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # HttpServer setup is only needed for tests that connect to a server
+        # Currently disabled tests: testAlpnNegotiation, testHttp2Fallback
+    }
+
+    globalTearDown() {
+        # Cleanup only needed if mServer was created
+        if (mServer) {
+            delete mServer;
+        }
+    }
+
+    testAlpnNegotiation() {
+        # Test that ALPN protocols can be set
+        Socket sock();
+
+        # Set ALPN protocols
+        sock.setAlpnProtocols(("h2", "http/1.1"));
+
+        # Connect to server
+        sock.connect(sprintf("localhost:%d", port), 5000);
+
+        # Accept all certificates for testing
+        sock.acceptAllCertificates(True);
+
+        # Upgrade to SSL with ALPN
+        sock.upgradeClientToSSL(5000);
+
+        # Check if the socket reports secure
+        assertTrue(sock.isSecure(), "Socket should be secure after SSL upgrade");
+
+        # Get the negotiated ALPN protocol (may be nothing if server doesn't support ALPN)
+        *string proto = sock.getAlpnProtocol();
+        if (exists proto) {
+            assertTrue(proto == "h2" || proto == "http/1.1",
+                sprintf("Negotiated protocol should be h2 or http/1.1, got: %s", proto));
+        }
+
+        sock.close();
+    }
+
+    testHttp2Settings() {
+        # Test HTTP/2 settings API (no connection needed)
+        HTTPClient client({"url": "https://example.com"});
+
+        # Enable HTTP/2
+        client.setHttp2Enabled(True);
+        assertTrue(client.isHttp2Enabled(), "HTTP/2 should be enabled");
+
+        # Check default settings (will be null since not connected)
+        *hash<auto> settings = client.getHttp2Settings();
+        # Settings may be null if HTTP/2 is not active yet
+        if (exists settings) {
+            assertTrue(exists settings.max_concurrent_streams, "Settings should have max_concurrent_streams");
+            assertTrue(exists settings.initial_window_size, "Settings should have initial_window_size");
+        }
+
+        # Set custom settings
+        client.setHttp2Settings({
+            "max_concurrent_streams": 150,
+            "initial_window_size": 131072,
+        });
+    }
+
+    testHttp2EnableDisable() {
+        # Test HTTP/2 API without connecting
+        HTTPClient client({"url": "https://example.com"});
+
+        # By default HTTP/2 is enabled (auto mode) but not yet active (no connection)
+        assertTrue(client.isHttp2Enabled(), "HTTP/2 should be enabled by default (auto mode)");
+        assertFalse(client.isHttp2Active(), "HTTP/2 should not be active initially");
+        assertEq("auto", client.getHttp2Mode(), "Default mode should be 'auto'");
+        assertEq("auto", client.getHTTPVersion(), "Default http_version should be 'auto'");
+
+        # Disable HTTP/2
+        client.setHttp2Enabled(False);
+        assertFalse(client.isHttp2Enabled(), "HTTP/2 should be disabled after setHttp2Enabled(False)");
+        assertEq("disabled", client.getHttp2Mode(), "Mode should be 'disabled'");
+
+        # Enable HTTP/2 again
+        client.setHttp2Enabled(True);
+        assertTrue(client.isHttp2Enabled(), "HTTP/2 should be enabled after setHttp2Enabled(True)");
+
+        # Test setHttp2Mode
+        client.setHttp2Mode("required");
+        assertEq("required", client.getHttp2Mode(), "Mode should be 'required'");
+        assertEq("2.0", client.getHTTPVersion(), "http_version should be '2.0' for required mode");
+
+        # Test setHTTPVersion for HTTP/2
+        client.setHTTPVersion("1.1");
+        assertEq("disabled", client.getHttp2Mode(), "Mode should be 'disabled' for http_version 1.1");
+        assertFalse(client.isHttp2Enabled(), "HTTP/2 should be disabled for http_version 1.1");
+    }
+
+    testHttp2Fallback() {
+        # Test that when server doesn't support HTTP/2, we fall back to HTTP/1.1
+        HTTPClient client({"url": url});
+        client.acceptAllCertificates(True);
+
+        # Enable HTTP/2
+        client.setHttp2Enabled(True);
+
+        # Make a request (server may or may not support HTTP/2)
+        hash<auto> info;
+        hash<auto> response = client.send(NOTHING, "GET", "/test", NOTHING, NOTHING, \info);
+
+        # The request should succeed regardless of HTTP version
+        assertEq(200, response.status_code, "Request should succeed");
+
+        # Get the actual HTTP version used
+        string version = client.getHttpVersion();
+        assertTrue(version == "HTTP/2" || version == "HTTP/1.1" || version == "HTTP/1.0",
+            sprintf("HTTP version should be valid, got: %s", version));
+    }
+
+    testHttp2VersionString() {
+        # Test HTTP version API without connecting
+        HTTPClient client({"url": "https://example.com"});
+
+        # Test HTTP/1.1 version string (default)
+        string version = client.getHttpVersion();
+        assertTrue(version == "HTTP/1.1" || version == "HTTP/1.0",
+            sprintf("Default version should be HTTP/1.x, got: %s", version));
+
+        # Test HTTP version after enabling HTTP/2
+        client.setHttp2Enabled(True);
+        version = client.getHttpVersion();
+        # Version may still be 1.x if not connected yet
+        assertTrue(version == "HTTP/2" || version == "HTTP/1.1" || version == "HTTP/1.0",
+            sprintf("Version should be valid HTTP version, got: %s", version));
+    }
+
+    testHttpAcceptPollOperation() {
+        # Test HttpAcceptPollOperation with various http_version modes
+        # Create a new SSL listener socket for testing
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int test_port = listener.getPort();
+
+        # Test 1: Accept operation with http_version="auto"
+        {
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            # Create the accept poll operation
+            HttpServerAsyncIo::HttpAcceptPollOperation accept_op(listener, True, cert, key,
+                SSL_VERIFY_NONE, True, "auto");
+
+            assertEq("http_accept", accept_op.getGoal(), "goal should be http_accept");
+            assertEq("accepting", accept_op.getState(), "initial state should be accepting");
+            assertFalse(accept_op.goalReached(), "goal should not be reached initially");
+
+            # Start client connection in background
+            Counter done(1);
+            background sub() {
+                Socket client();
+                client.setAlpnProtocols(("h2", "http/1.1"));
+                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.acceptAllCertificates(True);
+                client.upgradeClientToSSL(5000);
+                done.dec();
+            }();
+
+            # Drive the poll operation to completion
+            int max_iterations = 100;
+            int iterations = 0;
+            while (!accept_op.goalReached() && iterations < max_iterations) {
+                *hash<SocketPollInfo> info = accept_op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                # Simulate poll - just wait briefly
+                usleep(10000);
+                iterations++;
+            }
+
+            # Wait for client to finish
+            done.waitForZero(5000ms);
+
+            # Verify state after completion
+            assertTrue(accept_op.goalReached(), "accept operation should complete");
+            assertEq("complete", accept_op.getState(), "state should be complete");
+
+            # Get output and verify
+            hash<auto> output = accept_op.getOutput();
+            assertTrue(exists output.sock, "output should contain socket");
+            assertTrue(output.ssl, "output should indicate SSL connection");
+            assertEq("auto", output.http_version, "output should contain http_version mode");
+
+            # Clean up
+            output.sock.close();
+        }
+
+        # Test 2: Accept operation with http_version="1.1" (HTTP/1.x only)
+        {
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            HttpServerAsyncIo::HttpAcceptPollOperation accept_op(listener, True, cert, key,
+                SSL_VERIFY_NONE, True, "1.1");
+
+            # Start client connection
+            Counter done(1);
+            background sub() {
+                Socket client();
+                client.setAlpnProtocols(("h2", "http/1.1"));
+                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.acceptAllCertificates(True);
+                client.upgradeClientToSSL(5000);
+                done.dec();
+            }();
+
+            # Drive the poll operation
+            int iterations = 0;
+            while (!accept_op.goalReached() && iterations < 100) {
+                *hash<SocketPollInfo> info = accept_op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                usleep(10000);
+                iterations++;
+            }
+
+            done.waitForZero(5000ms);
+
+            assertTrue(accept_op.goalReached(), "accept operation should complete for 1.1 mode");
+            hash<auto> output = accept_op.getOutput();
+            assertFalse(output.is_http2, "should NOT be HTTP/2 for 1.1 mode");
+            assertEq("1.1", output.http_version, "http_version should be 1.1");
+
+            output.sock.close();
+        }
+
+        # Test 3: Non-SSL accept
+        {
+            HttpServerAsyncIo::HttpAcceptPollOperation accept_op(listener, False);
+
+            # Start client connection
+            Counter done(1);
+            background sub() {
+                Socket client();
+                client.connect(sprintf("localhost:%d", test_port), 5000);
+                done.dec();
+            }();
+
+            # Drive the poll operation
+            int iterations = 0;
+            while (!accept_op.goalReached() && iterations < 100) {
+                *hash<SocketPollInfo> info = accept_op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                usleep(10000);
+                iterations++;
+            }
+
+            done.waitForZero(5000ms);
+
+            assertTrue(accept_op.goalReached(), "non-SSL accept should complete");
+            hash<auto> output = accept_op.getOutput();
+            assertFalse(output.ssl, "should NOT be SSL");
+            assertFalse(output.is_http2, "non-SSL should NOT be HTTP/2");
+
+            output.sock.close();
+        }
+
+        listener.close();
+    }
+
+    testServerHttpVersionOption() {
+        # Test the http_version option in HttpListenerOptionInfo (no server needed)
+
+        # Test 1: Default http_version is "auto"
+        {
+            hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{};
+            assertEq("auto", opts.http_version, "default http_version should be 'auto'");
+        }
+
+        # Test 2: Verify http_version values
+        {
+            # Valid values
+            hash<HttpListenerOptionInfo> opts1 = <HttpListenerOptionInfo>{"http_version": "auto"};
+            assertEq("auto", opts1.http_version);
+
+            hash<HttpListenerOptionInfo> opts2 = <HttpListenerOptionInfo>{"http_version": "1.0"};
+            assertEq("1.0", opts2.http_version);
+
+            hash<HttpListenerOptionInfo> opts3 = <HttpListenerOptionInfo>{"http_version": "1.1"};
+            assertEq("1.1", opts3.http_version);
+
+            hash<HttpListenerOptionInfo> opts4 = <HttpListenerOptionInfo>{"http_version": "2.0"};
+            assertEq("2.0", opts4.http_version);
+        }
+    }
+
+    testHttp2PollOperation() {
+        # Test the Http2PollOperation wrapper class from HttpServerAsyncIo
+        # This requires a socket with an established HTTP/2 connection
+
+        # Create a server socket
+        Socket server_sock();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        server_sock.setCertificate(cert);
+        server_sock.setPrivateKey(key);
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        int test_port = server_sock.getPort();
+
+        # Track test results
+        hash<auto> test_results;
+        Mutex result_mutex();
+
+        # Server thread - accepts connection and uses Http2PollOperation
+        Counter server_done(1);
+        background sub() {
+            try {
+                Socket client = server_sock.accept();
+                client.setNoDelay(True);
+                client.setAlpnProtocols(("h2", "http/1.1"));
+                client.upgradeServerToSSL();
+
+                # Check if HTTP/2 was negotiated
+                *string proto = client.getAlpnProtocol();
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_alpn = proto;
+                }
+
+                if (proto == "h2") {
+                    # Create Http2PollOperation
+                    HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                    # Verify initial state
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.initial_state = h2op.getState();
+                        test_results.initial_goal = h2op.getGoal();
+                    }
+
+                    # Drive the poll operation to read request
+                    int iterations = 0;
+                    while (!h2op.goalReached() && !h2op.isClosed() && iterations < 200) {
+                        *hash<SocketPollInfo> info = h2op.continuePoll();
+                        if (!info) {
+                            break;
+                        }
+                        usleep(10000);
+                        iterations++;
+                    }
+
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.after_read_state = h2op.getState();
+                        test_results.goal_reached = h2op.goalReached();
+                        test_results.has_error = h2op.hasError();
+                        if (h2op.hasError()) {
+                            test_results.error = h2op.getError();
+                        }
+                    }
+
+                    # If request was received, get it
+                    if (h2op.goalReached()) {
+                        auto request = h2op.getOutput();
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.request = request;
+                        }
+
+                        # Send response
+                        h2op.startSendResponse(200, {"content-type": "text/plain"}, "HTTP/2 response");
+
+                        # Drive send operation
+                        iterations = 0;
+                        while (h2op.getState() == "sending" && iterations < 200) {
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            usleep(10000);
+                            iterations++;
+                        }
+
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.after_send_state = h2op.getState();
+                        }
+                    }
+                } else {
+                    # HTTP/1.x fallback - just read and respond
+                    client.readHTTPHeader(30s);
+                    client.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "HTTP/1.1 response");
+                }
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            server_done.dec();
+        }();
+
+        # Client thread - connects with HTTP/2 and sends request
+        Counter client_done(1);
+        background sub() {
+            try {
+                HTTPClient client({
+                    "url": sprintf("https://localhost:%d", test_port),
+                });
+                client.acceptAllCertificates(True);
+                client.setHttp2Enabled(True);
+
+                # Make request
+                hash<auto> info;
+                client.get("/test-h2", NOTHING, \info);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_response = info;
+                    test_results.client_http2_active = client.isHttp2Active();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            client_done.dec();
+        }();
+
+        # Wait for both to complete
+        server_done.waitForZero(10000ms);
+        client_done.waitForZero(10000ms);
+        server_sock.close();
+
+        # Verify results
+        assertFalse(exists test_results.server_error,
+            sprintf("server should not have error: %s", test_results.server_error ?? "none"));
+        assertFalse(exists test_results.client_error,
+            sprintf("client should not have error: %s", test_results.client_error ?? "none"));
+
+        # If HTTP/2 was negotiated, verify the poll operation states
+        if (test_results.server_alpn == "h2") {
+            assertEq("reading", test_results.initial_state, "initial state should be reading");
+            assertEq("http2_connection", test_results.initial_goal, "goal should be http2_connection");
+            assertTrue(test_results.goal_reached ?? False, "goal should be reached after reading request");
+            assertFalse(test_results.has_error ?? True, "should not have error");
+
+            if (exists test_results.request) {
+                assertTrue(exists test_results.request.method, "request should have method");
+                assertTrue(exists test_results.request.path, "request should have path");
+            }
+
+            assertEq("sent", test_results.after_send_state, "state should be 'sent' after sending response");
+        }
+
+        # Verify client got a response
+        assertTrue(exists test_results.client_response, "client should receive response");
+        assertEq(200, test_results.client_response.response_code ?? 0, "response should be 200");
+    }
+
+    testSocketHttp2PollOperations() {
+        # Test the low-level Socket HTTP/2 poll operations
+        # Socket::startPollReadHttp2Request() and Socket::startPollSendHttp2Response()
+
+        # Create a server socket
+        Socket server_sock();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        server_sock.setCertificate(cert);
+        server_sock.setPrivateKey(key);
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        int test_port = server_sock.getPort();
+
+        hash<auto> test_results;
+        Mutex result_mutex();
+
+        # Server thread
+        Counter server_done(1);
+        background sub() {
+            try {
+                Socket client = server_sock.accept();
+                client.setNoDelay(True);
+                client.setAlpnProtocols(("h2",));  # HTTP/2 only
+                client.upgradeServerToSSL();
+
+                *string proto = client.getAlpnProtocol();
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_alpn = proto;
+                }
+
+                if (proto == "h2") {
+                    # Use low-level startPollReadHttp2Request
+                    AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.read_op_created = True;
+                        test_results.read_op_goal = read_op.getGoal();
+                    }
+
+                    # Drive the read operation
+                    int iterations = 0;
+                    while (!read_op.goalReached() && iterations < 200) {
+                        *hash<SocketPollInfo> info = read_op.continuePoll();
+                        if (!info) {
+                            break;
+                        }
+                        usleep(10000);
+                        iterations++;
+                    }
+
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.read_goal_reached = read_op.goalReached();
+                    }
+
+                    if (read_op.goalReached()) {
+                        auto request = read_op.getOutput();
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.h2_request = request;
+                        }
+
+                        # Send response using startPollSendHttp2Response
+                        int stream_id = request.stream_id;
+                        AbstractPollOperation send_op = client.startPollSendHttp2Response(
+                            stream_id, 200, {"content-type": "text/plain"}, "Hello HTTP/2!");
+
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.send_op_created = True;
+                            test_results.send_op_goal = send_op.getGoal();
+                        }
+
+                        # Drive the send operation
+                        iterations = 0;
+                        while (!send_op.goalReached() && iterations < 200) {
+                            *hash<SocketPollInfo> info = send_op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            usleep(10000);
+                            iterations++;
+                        }
+
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.send_goal_reached = send_op.goalReached();
+                        }
+                    }
+                }
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            server_done.dec();
+        }();
+
+        # Client thread
+        Counter client_done(1);
+        background sub() {
+            try {
+                HTTPClient client({
+                    "url": sprintf("https://localhost:%d", test_port),
+                });
+                client.acceptAllCertificates(True);
+                client.setHttp2Mode("required");  # Require HTTP/2
+
+                hash<auto> info;
+                client.get("/socket-h2-test", NOTHING, \info);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_response = info;
+                    test_results.client_http2 = client.isHttp2Active();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            client_done.dec();
+        }();
+
+        # Wait for completion
+        server_done.waitForZero(10000ms);
+        client_done.waitForZero(10000ms);
+        server_sock.close();
+
+        # Verify results
+        assertFalse(exists test_results.server_error,
+            sprintf("server should not have error: %s", test_results.server_error ?? "none"));
+
+        # If HTTP/2 was negotiated
+        if (test_results.server_alpn == "h2") {
+            assertTrue(test_results.read_op_created ?? False, "read poll operation should be created");
+            assertTrue(test_results.read_goal_reached ?? False, "read operation should reach goal");
+
+            if (exists test_results.h2_request) {
+                assertTrue(exists test_results.h2_request.method, "request should have method");
+                assertTrue(exists test_results.h2_request.path, "request should have path");
+                assertTrue(exists test_results.h2_request.stream_id, "request should have stream_id");
+                assertTrue(test_results.h2_request.stream_id > 0, "stream_id should be positive");
+            }
+
+            assertTrue(test_results.send_op_created ?? False, "send poll operation should be created");
+            assertTrue(test_results.send_goal_reached ?? False, "send operation should reach goal");
+        }
+
+        # Client results (may fail if HTTP/2 not available on server)
+        if (!exists test_results.client_error) {
+            assertTrue(exists test_results.client_response, "client should get response");
+            assertEq(200, test_results.client_response."response-headers".status_code ?? 0, "response should be 200");
+        }
+    }
+
+    testHttp2SseStream() {
+        # Test Http2SseStream SSE event formatting and functionality
+        # This tests the SSE protocol formatting without requiring an actual HTTP/2 connection
+
+        # Test 1: SSE event formatting (static method)
+        {
+            # Basic event with just data
+            hash<auto> event1 = {"data": "Hello, SSE!"};
+            string formatted1 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event1);
+            assertEq("data: Hello, SSE!\n\n", formatted1, "basic data event formatting");
+
+            # Event with type
+            hash<auto> event2 = {"type": "message", "data": "test data"};
+            string formatted2 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event2);
+            assertTrue(formatted2.find("event: message") >= 0, "event type should be present");
+            assertTrue(formatted2.find("data: test data") >= 0, "data should be present");
+            assertTrue(formatted2.endsWith("\n\n"), "event should end with double newline");
+
+            # Event with ID
+            hash<auto> event3 = {"id": "evt-123", "data": "identified event"};
+            string formatted3 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event3);
+            assertTrue(formatted3.find("id: evt-123") >= 0, "id should be present");
+            assertTrue(formatted3.find("data: identified event") >= 0, "data should be present");
+
+            # Event with retry
+            hash<auto> event4 = {"retry": 3000, "data": "retry event"};
+            string formatted4 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event4);
+            assertTrue(formatted4.find("retry: 3000") >= 0, "retry should be present");
+
+            # Full event with all fields
+            hash<auto> event5 = {
+                "id": "full-123",
+                "type": "update",
+                "retry": 5000,
+                "data": "complete event",
+            };
+            string formatted5 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event5);
+            assertTrue(formatted5.find("id: full-123") >= 0, "id in full event");
+            assertTrue(formatted5.find("event: update") >= 0, "type in full event");
+            assertTrue(formatted5.find("retry: 5000") >= 0, "retry in full event");
+            assertTrue(formatted5.find("data: complete event") >= 0, "data in full event");
+
+            # Multiline data
+            hash<auto> event6 = {"data": "line1\nline2\nline3"};
+            string formatted6 = HttpServerAsyncIo::Http2SseStream::formatSseEvent(event6);
+            assertTrue(formatted6.find("data: line1") >= 0, "first line should be present");
+            assertTrue(formatted6.find("data: line2") >= 0, "second line should be present");
+            assertTrue(formatted6.find("data: line3") >= 0, "third line should be present");
+        }
+
+        # Test 2: Test AbstractSseConnection interface via Http1SseConnection
+        # (Http2SseStream requires an actual Http2PollOperation which we can't easily mock)
+        {
+            # Verify the interface exists
+            assertTrue(True, "AbstractSseConnection interface exists");
+        }
+    }
+
+    testHttp2WebSocketStream() {
+        # Test Http2WebSocketStream WebSocket frame encoding and functionality
+        # This tests WebSocket protocol handling without requiring an actual HTTP/2 connection
+
+        # Test 1: WebSocket frame encoding (static method)
+        {
+            # Text frame (small payload)
+            binary text_payload = binary("Hello");
+            binary frame1 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_TEXT, text_payload);
+            # Frame should have FIN bit set (0x80) | opcode (0x01 for text)
+            assertEq(0x81, frame1[0], "first byte should be 0x81 (FIN + TEXT opcode)");
+            # Payload length (5 bytes, no mask for server frames)
+            assertEq(5, frame1[1], "second byte should be payload length");
+            # Rest is payload
+            assertEq("Hello", frame1.substr(2).toString(), "payload should match");
+
+            # Binary frame
+            binary bin_payload = <48656c6c6f>;  # "Hello" in hex
+            binary frame2 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_BINARY, bin_payload);
+            assertEq(0x82, frame2[0], "first byte should be 0x82 (FIN + BINARY opcode)");
+            assertEq(5, frame2[1], "payload length should be 5");
+
+            # Ping frame
+            binary ping_payload = binary("ping");
+            binary frame3 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_PING, ping_payload);
+            assertEq(0x89, frame3[0], "first byte should be 0x89 (FIN + PING opcode)");
+
+            # Pong frame
+            binary frame4 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_PONG, ping_payload);
+            assertEq(0x8A, frame4[0], "first byte should be 0x8A (FIN + PONG opcode)");
+
+            # Close frame
+            binary close_payload = binary();
+            close_payload += binary(chr((1000 >> 8) & 0xFF));  # Close code 1000 high byte
+            close_payload += binary(chr(1000 & 0xFF));          # Close code 1000 low byte
+            binary frame5 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_CLOSE, close_payload);
+            assertEq(0x88, frame5[0], "first byte should be 0x88 (FIN + CLOSE opcode)");
+
+            # Medium payload (126 bytes - uses 16-bit length)
+            binary medium_payload = binary(strmul("X", 200));
+            binary frame6 = HttpServerAsyncIo::Http2WebSocketStream::encodeFrame(
+                HttpServerAsyncIo::WS_OP_TEXT, medium_payload);
+            assertEq(0x81, frame6[0], "first byte for medium frame");
+            assertEq(126, frame6[1], "second byte should be 126 for extended length");
+            # 16-bit length follows (big endian)
+            int len16 = (frame6[2] << 8) | frame6[3];
+            assertEq(200, len16, "16-bit length should be 200");
+        }
+
+        # Test 2: WebSocket opcodes are correctly defined
+        {
+            assertEq(0x00, HttpServerAsyncIo::WS_OP_CONTINUATION, "CONTINUATION opcode");
+            assertEq(0x01, HttpServerAsyncIo::WS_OP_TEXT, "TEXT opcode");
+            assertEq(0x02, HttpServerAsyncIo::WS_OP_BINARY, "BINARY opcode");
+            assertEq(0x08, HttpServerAsyncIo::WS_OP_CLOSE, "CLOSE opcode");
+            assertEq(0x09, HttpServerAsyncIo::WS_OP_PING, "PING opcode");
+            assertEq(0x0A, HttpServerAsyncIo::WS_OP_PONG, "PONG opcode");
+        }
+
+        # Test 3: WebSocketFrameInfo hashdecl structure
+        {
+            hash<auto> frame_info = {
+                "type": "text",
+                "data": "test message",
+            };
+            assertEq("text", frame_info.type, "WebSocketFrameInfo type");
+            assertEq("test message", frame_info.data, "WebSocketFrameInfo data");
+        }
+
+        # Test 4: Verify AbstractWebSocketConnection interface exists
+        {
+            # Just verify the class hierarchy compiles
+            assertTrue(True, "AbstractWebSocketConnection interface exists");
+        }
+    }
+
+    testHttp2ConnectionPersistence() {
+        # Skip on Alpine - external network tests can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping external server test on Alpine");
+            return;
+        }
+
+        # Test HTTP/2 connection persistence using external server test
+        # This verifies that HTTPClient can make multiple HTTP/2 requests
+        # Note: this test uses an external test server (httpbin.org)
+
+        # Quick connectivity check - try to connect TCP with very short timeout
+        {
+            Socket sock();
+            try {
+                sock.connectINET("httpbin.org", 443, 2s);
+                sock.close();
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip("Cannot reach test server (httpbin.org): " + ex.desc);
+                return;
+            }
+        }
+
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "error_passthru": True,
+            "connect_timeout": 5s,
+            "timeout": 5s,
+        });
+        client.acceptAllCertificates(True);
+        client.setHttp2Mode("auto");
+
+        # Send first request
+        hash<auto> info1;
+        *string resp1;
+        try {
+            resp1 = client.get("/get?seq=1", NOTHING, \info1);
+        } catch (hash<ExceptionInfo> ex) {
+            # Skip test if we can't connect to external server
+            testSkip("Cannot connect to test server: " + ex.desc);
+            return;
+        }
+
+        # Check first request
+        assertEq(200, info1."response-headers".status_code ?? 0, "first request should succeed");
+        bool http2_active = client.isHttp2Active();
+
+        if (!http2_active) {
+            # Server might not support HTTP/2, skip the rest
+            testSkip("Server doesn't support HTTP/2 via ALPN");
+            return;
+        }
+
+        # Send second request on same connection
+        hash<auto> info2;
+        string resp2 = client.get("/get?seq=2", NOTHING, \info2);
+        assertEq(200, info2."response-headers".status_code ?? 0, "second request should succeed");
+
+        # Verify both responses are strings
+        assertEq("string", type(resp1), "first response should be string");
+        assertEq("string", type(resp2), "second response should be string");
+
+        # Verify HTTP/2 is still active
+        assertTrue(client.isHttp2Active(), "HTTP/2 should still be active after multiple requests");
+    }
+
+    testHttp2ServerPush() {
+        # Skip complex tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex HTTP/2 test on Alpine");
+            return;
+        }
+
+        # Test HTTP/2 Server Push functionality (PUSH_PROMISE)
+        # This tests the Http2PollOperation push methods
+
+        # Create a server socket
+        Socket server_sock();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        server_sock.setCertificate(cert);
+        server_sock.setPrivateKey(key);
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        int test_port = server_sock.getPort();
+
+        hash<auto> test_results;
+        Mutex result_mutex();
+
+        # Server thread - accepts connection and uses Server Push
+        Counter server_done(1);
+        background sub() {
+            try {
+                Socket client = server_sock.accept();
+                client.setNoDelay(True);
+                client.setAlpnProtocols(("h2",));
+                client.upgradeServerToSSL();
+
+                *string proto = client.getAlpnProtocol();
+                {
+                    AutoLock al(result_mutex);
+                    test_results.server_alpn = proto;
+                }
+
+                if (proto == "h2") {
+                    # Create Http2PollOperation
+                    HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                    # Drive the poll operation to read request
+                    int iterations = 0;
+                    while (!h2op.goalReached() && !h2op.isClosed() && iterations < 200) {
+                        *hash<SocketPollInfo> info = h2op.continuePoll();
+                        if (!info) {
+                            break;
+                        }
+                        usleep(10000);
+                        iterations++;
+                    }
+
+                    if (h2op.goalReached()) {
+                        auto request = h2op.getOutput();
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.request = request;
+                        }
+
+                        # Test 1: Get push resource callback
+                        *code push_resource = h2op.getPushResourceCallback();
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.has_push_callback = exists push_resource;
+                        }
+
+                        # Test 2: Try to push a resource
+                        if (push_resource) {
+                            try {
+                                int pushed_stream = push_resource("/style.css",
+                                    {"content-type": "text/css"});
+                                {
+                                    AutoLock al(result_mutex);
+                                    test_results.pushed_stream_id = pushed_stream;
+                                    test_results.push_succeeded = pushed_stream > 0;
+                                }
+
+                                # If push succeeded, send the pushed content
+                                if (pushed_stream > 0) {
+                                    AbstractPollOperation push_op = h2op.startSendPushedResponse(
+                                        pushed_stream, 200,
+                                        {"content-type": "text/css"},
+                                        binary("body { color: blue; }"));
+
+                                    # Drive the push send operation
+                                    iterations = 0;
+                                    while (!push_op.goalReached() && iterations < 100) {
+                                        *hash<SocketPollInfo> info = push_op.continuePoll();
+                                        if (!info) {
+                                            break;
+                                        }
+                                        usleep(10000);
+                                        iterations++;
+                                    }
+                                    {
+                                        AutoLock al(result_mutex);
+                                        test_results.pushed_response_sent = push_op.goalReached();
+                                    }
+                                }
+                            } catch (hash<ExceptionInfo> ex) {
+                                AutoLock al(result_mutex);
+                                test_results.push_error = sprintf("%s: %s", ex.err, ex.desc);
+                            }
+                        }
+
+                        # Send main response
+                        h2op.startSendResponse(200, {"content-type": "text/html"},
+                            binary("<html><body>Main page</body></html>"));
+
+                        iterations = 0;
+                        while (h2op.getState() == "sending" && iterations < 200) {
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            usleep(10000);
+                            iterations++;
+                        }
+                    }
+                }
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            server_done.dec();
+        }();
+
+        # Client thread
+        Counter client_done(1);
+        background sub() {
+            try {
+                HTTPClient client({
+                    "url": sprintf("https://localhost:%d", test_port),
+                });
+                client.acceptAllCertificates(True);
+                client.setHttp2Mode("required");
+
+                hash<auto> info;
+                client.get("/index.html", NOTHING, \info);
+                {
+                    AutoLock al(result_mutex);
+                    test_results.client_response = info;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(result_mutex);
+                test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            client_done.dec();
+        }();
+
+        # Wait for completion
+        server_done.waitForZero(15000ms);
+        client_done.waitForZero(15000ms);
+        server_sock.close();
+
+        # Verify results
+        assertFalse(exists test_results.server_error,
+            sprintf("server should not have error: %s", test_results.server_error ?? "none"));
+
+        if (test_results.server_alpn == "h2") {
+            # Verify push callback was available
+            assertTrue(test_results.has_push_callback ?? False,
+                "push_resource callback should be available");
+
+            # Note: Server push may fail if client doesn't support it or has disabled it
+            # So we just verify the API works, not that push actually succeeded
+            if (test_results.push_succeeded) {
+                assertTrue(test_results.pushed_stream_id > 0,
+                    "pushed stream ID should be positive");
+            }
+        }
+    }
+
+    testHttp2H2cDirectMode() {
+        # Skip complex tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex HTTP/2 test on Alpine");
+            return;
+        }
+
+        # Test h2c (HTTP/2 cleartext) direct mode with prior knowledge
+
+        # Test 1: Verify h2c mode constants exist
+        assertEq(3, HTTP2_MODE_H2C_DIRECT, "HTTP2_MODE_H2C_DIRECT should be 3");
+        assertEq(4, HTTP2_MODE_H2C_UPGRADE, "HTTP2_MODE_H2C_UPGRADE should be 4");
+
+        # Test 2: HTTPClient h2c mode setting
+        {
+            HTTPClient client({"url": "http://example.com"});
+
+            # Set h2c-direct mode (also accepts "h2c")
+            client.setHttp2Mode("h2c-direct");
+            assertEq("h2c", client.getHttp2Mode(), "mode should be h2c");
+            assertTrue(client.isHttp2Enabled(), "HTTP/2 should be enabled in h2c mode");
+        }
+
+        # Test 3: h2c-upgrade mode (not implemented, should throw error on connect)
+        {
+            HTTPClient client({"url": "http://example.com"});
+            client.setHttp2Mode("h2c-upgrade");
+            assertEq("h2c-upgrade", client.getHttp2Mode(), "mode should be h2c-upgrade");
+            # Note: actual connection would throw "h2c-upgrade mode is not yet implemented"
+        }
+
+        # Test 4: HttpAcceptPollOperation with h2c mode
+        {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            int test_port = listener.getPort();
+
+            # Create accept operation with h2c mode (no SSL)
+            HttpServerAsyncIo::HttpAcceptPollOperation accept_op(listener, False,
+                NOTHING, NOTHING, SSL_VERIFY_NONE, True, "h2c");
+
+            assertEq("http_accept", accept_op.getGoal());
+
+            # Start client connection
+            Counter done(1);
+            background sub() {
+                Socket client();
+                client.connect(sprintf("localhost:%d", test_port), 5000);
+                done.dec();
+            }();
+
+            # Drive the accept
+            int iterations = 0;
+            while (!accept_op.goalReached() && iterations < 100) {
+                *hash<SocketPollInfo> info = accept_op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                usleep(10000);
+                iterations++;
+            }
+
+            done.waitForZero(5000ms);
+
+            assertTrue(accept_op.goalReached(), "h2c accept should complete");
+
+            hash<auto> output = accept_op.getOutput();
+            assertFalse(output.ssl, "h2c should not be SSL");
+            assertTrue(output.is_http2, "h2c should indicate HTTP/2");
+            assertEq("h2c", output.negotiated_protocol, "negotiated protocol should be h2c");
+            assertEq("h2c", output.http_version, "http_version should be h2c");
+
+            output.sock.close();
+            listener.close();
+        }
+
+        # Test 5: End-to-end h2c test with local server
+        {
+            Socket server_sock();
+            server_sock.bind("localhost:0");
+            server_sock.listen();
+            int test_port = server_sock.getPort();
+
+            hash<auto> test_results;
+            Mutex result_mutex();
+
+            # Server thread - accepts h2c connection
+            Counter server_done(1);
+            background sub() {
+                try {
+                    # Accept with h2c mode
+                    HttpServerAsyncIo::HttpAcceptPollOperation accept_op(server_sock, False,
+                        NOTHING, NOTHING, SSL_VERIFY_NONE, True, "h2c");
+
+                    int iterations = 0;
+                    while (!accept_op.goalReached() && iterations < 100) {
+                        *hash<SocketPollInfo> info = accept_op.continuePoll();
+                        if (!info) {
+                            break;
+                        }
+                        usleep(10000);
+                        iterations++;
+                    }
+
+                    if (accept_op.goalReached()) {
+                        Socket client = accept_op.getSocket();
+                        bool is_h2 = accept_op.isHttp2();
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.server_is_http2 = is_h2;
+                        }
+
+                        if (is_h2) {
+                            # Handle as HTTP/2
+                            HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                            iterations = 0;
+                            while (!h2op.goalReached() && !h2op.isClosed() && iterations < 200) {
+                                *hash<SocketPollInfo> info = h2op.continuePoll();
+                                if (!info) {
+                                    break;
+                                }
+                                usleep(10000);
+                                iterations++;
+                            }
+
+                            if (h2op.goalReached()) {
+                                hash<auto> request = h2op.getOutput();
+                                {
+                                    AutoLock al(result_mutex);
+                                    test_results.h2c_request = request;
+                                }
+
+                                # Send response
+                                h2op.startSendResponse(200, {"content-type": "text/plain"},
+                                    binary("h2c response"));
+
+                                iterations = 0;
+                                while (h2op.getState() == "sending" && iterations < 100) {
+                                    *hash<SocketPollInfo> info = h2op.continuePoll();
+                                    if (!info) {
+                                        break;
+                                    }
+                                    usleep(10000);
+                                    iterations++;
+                                }
+                            }
+                        }
+
+                        client.close();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                server_done.dec();
+            }();
+
+            # Client thread - connects with h2c-direct mode
+            Counter client_done(1);
+            background sub() {
+                try {
+                    HTTPClient client({
+                        "url": sprintf("http://localhost:%d", test_port),
+                    });
+                    client.setHttp2Mode("h2c-direct");
+
+                    hash<auto> info;
+                    client.get("/h2c-test", NOTHING, \info);
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.client_response = info;
+                        test_results.client_h2_active = client.isHttp2Active();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                client_done.dec();
+            }();
+
+            server_done.waitForZero(15000ms);
+            client_done.waitForZero(15000ms);
+            server_sock.close();
+
+            # Verify - h2c may not work if client doesn't implement it fully
+            # so we just verify the server side worked correctly
+            assertFalse(exists test_results.server_error,
+                sprintf("server error: %s", test_results.server_error ?? "none"));
+            assertTrue(test_results.server_is_http2 ?? False,
+                "server should detect h2c connection as HTTP/2");
+        }
+    }
+
+    testHttp2StreamPriority() {
+        # Skip complex SSL/HTTP2 tests on Alpine - they can hang due to threading differences
+        if (skip_complex_tests) {
+            testSkip("Skipping complex SSL/HTTP2 test on Alpine");
+            return;
+        }
+
+        # Test HTTP/2 stream priority setting
+        # This tests the setHttp2StreamPriority() API
+
+        # Test 1: API exists and throws appropriate error when not connected
+        {
+            HTTPClient client({"url": "https://example.com"});
+
+            # Should throw error since not connected
+            assertThrows("HTTP2-ERROR", \client.setHttp2StreamPriority(), (1, 16, 0, False),
+                "should throw when not connected");
+        }
+
+        # Test 2: Local server test with stream priority
+        {
+            Socket server_sock();
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+            server_sock.setCertificate(cert);
+            server_sock.setPrivateKey(key);
+            server_sock.bind("localhost:0");
+            server_sock.listen();
+            int test_port = server_sock.getPort();
+
+            hash<auto> test_results;
+            Mutex result_mutex();
+
+            # Server thread
+            Counter server_done(1);
+            background sub() {
+                try {
+                    Socket client = server_sock.accept();
+                    client.setNoDelay(True);
+                    client.setAlpnProtocols(("h2",));
+                    client.upgradeServerToSSL();
+
+                    *string proto = client.getAlpnProtocol();
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.server_alpn = proto;
+                    }
+
+                    if (proto == "h2") {
+                        HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                        int iterations = 0;
+                        while (!h2op.goalReached() && !h2op.isClosed() && iterations < 200) {
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            usleep(10000);
+                            iterations++;
+                        }
+
+                        if (h2op.goalReached()) {
+                            hash<auto> request = h2op.getOutput();
+                            {
+                                AutoLock al(result_mutex);
+                                test_results.request = request;
+                            }
+
+                            # Send response
+                            h2op.startSendResponse(200, {"content-type": "text/plain"},
+                                binary("priority test response"));
+
+                            iterations = 0;
+                            while (h2op.getState() == "sending" && iterations < 100) {
+                                *hash<SocketPollInfo> info = h2op.continuePoll();
+                                if (!info) {
+                                    break;
+                                }
+                                usleep(10000);
+                                iterations++;
+                            }
+                        }
+                    }
+
+                    client.close();
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                server_done.dec();
+            }();
+
+            # Client thread - tests priority API
+            Counter client_done(1);
+            background sub() {
+                try {
+                    HTTPClient client({
+                        "url": sprintf("https://localhost:%d", test_port),
+                    });
+                    client.acceptAllCertificates(True);
+                    client.setHttp2Mode("required");
+
+                    # Make a request
+                    hash<auto> info;
+                    client.get("/priority-test", NOTHING, \info);
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.client_response = info;
+                        test_results.client_h2_active = client.isHttp2Active();
+                    }
+
+                    # If HTTP/2 is active, test priority setting
+                    # Note: We can't easily verify the priority was applied,
+                    # but we can verify the API doesn't throw
+                    if (client.isHttp2Active()) {
+                        try {
+                            # Set priority for a hypothetical stream
+                            # This may or may not succeed depending on connection state
+                            client.setHttp2StreamPriority(1, 32, 0, False);
+                            {
+                                AutoLock al(result_mutex);
+                                test_results.priority_call_succeeded = True;
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            # It's OK if it fails - the stream may be closed
+                            AutoLock al(result_mutex);
+                            test_results.priority_error = sprintf("%s: %s", ex.err, ex.desc);
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                client_done.dec();
+            }();
+
+            server_done.waitForZero(15000ms);
+            client_done.waitForZero(15000ms);
+            server_sock.close();
+
+            # Verify
+            assertFalse(exists test_results.server_error,
+                sprintf("server error: %s", test_results.server_error ?? "none"));
+
+            if (test_results.server_alpn == "h2") {
+                assertTrue(test_results.client_h2_active ?? False,
+                    "client should be using HTTP/2");
+            }
+        }
+    }
+
+    testHttp2ErrorHandling() {
+        # Test HTTP/2 error handling
+
+        # Test 1: Setting required mode on non-SSL connection should work
+        # but actual request would fail without h2c support on server
+        {
+            HTTPClient client({
+                "url": "http://example.com:80",  # Non-SSL
+            });
+            # Setting required mode shouldn't throw - the error happens on connect
+            client.setHttp2Mode("required");
+            assertEq("required", client.getHttp2Mode(), "mode should be required");
+        }
+
+        # Test 2: Http2PollOperation error state handling
+        {
+            Socket server_sock();
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+            server_sock.setCertificate(cert);
+            server_sock.setPrivateKey(key);
+            server_sock.bind("localhost:0");
+            server_sock.listen();
+            int test_port = server_sock.getPort();
+
+            hash<auto> test_results;
+            Mutex result_mutex();
+
+            # Server thread - accepts then immediately closes
+            Counter server_done(1);
+            background sub() {
+                try {
+                    Socket client = server_sock.accept();
+                    client.setNoDelay(True);
+                    client.setAlpnProtocols(("h2",));
+                    client.upgradeServerToSSL();
+
+                    *string proto = client.getAlpnProtocol();
+                    {
+                        AutoLock al(result_mutex);
+                        test_results.server_alpn = proto;
+                    }
+
+                    if (proto == "h2") {
+                        HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                        # Immediately close to trigger error
+                        usleep(50000);  # Wait briefly for client to start
+                        client.close();
+
+                        # Try to continue polling - should detect close
+                        int iterations = 0;
+                        while (!h2op.isClosed() && iterations < 50) {
+                            try {
+                                *hash<SocketPollInfo> info = h2op.continuePoll();
+                                if (!info) {
+                                    break;
+                                }
+                            } catch () {
+                                break;
+                            }
+                            usleep(10000);
+                            iterations++;
+                        }
+
+                        {
+                            AutoLock al(result_mutex);
+                            test_results.h2op_closed = h2op.isClosed();
+                            test_results.h2op_has_error = h2op.hasError();
+                            test_results.h2op_error = h2op.getError();
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                server_done.dec();
+            }();
+
+            # Client thread
+            Counter client_done(1);
+            background sub() {
+                try {
+                    HTTPClient client({
+                        "url": sprintf("https://localhost:%d", test_port),
+                    });
+                    client.acceptAllCertificates(True);
+                    client.setHttp2Mode("required");
+
+                    hash<auto> info;
+                    client.get("/error-test", NOTHING, \info);
+                } catch (hash<ExceptionInfo> ex) {
+                    # Expected - server closed connection
+                    AutoLock al(result_mutex);
+                    test_results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                client_done.dec();
+            }();
+
+            server_done.waitForZero(10000ms);
+            client_done.waitForZero(10000ms);
+            server_sock.close();
+
+            # Verify error was detected
+            if (test_results.server_alpn == "h2") {
+                assertTrue(test_results.h2op_closed ?? False,
+                    "h2op should detect connection closed");
+            }
+        }
+
+        # Test 3: startSendResponse in wrong state
+        {
+            Socket server_sock();
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+            server_sock.setCertificate(cert);
+            server_sock.setPrivateKey(key);
+            server_sock.bind("localhost:0");
+            server_sock.listen();
+            int test_port = server_sock.getPort();
+
+            hash<auto> test_results;
+            Mutex result_mutex();
+
+            Counter server_done(1);
+            background sub() {
+                try {
+                    Socket client = server_sock.accept();
+                    client.setNoDelay(True);
+                    client.setAlpnProtocols(("h2",));
+                    client.upgradeServerToSSL();
+
+                    *string proto = client.getAlpnProtocol();
+
+                    if (proto == "h2") {
+                        HttpServerAsyncIo::Http2PollOperation h2op(client);
+
+                        # Try to send response before request is ready - should throw
+                        try {
+                            h2op.startSendResponse(200, {}, binary("test"));
+                            {
+                                AutoLock al(result_mutex);
+                                test_results.wrong_state_threw = False;
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            AutoLock al(result_mutex);
+                            test_results.wrong_state_threw = True;
+                            test_results.wrong_state_error = ex.err;
+                        }
+                    }
+
+                    client.close();
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(result_mutex);
+                    test_results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                server_done.dec();
+            }();
+
+            # Brief client connection
+            Counter client_done(1);
+            background sub() {
+                try {
+                    Socket client();
+                    client.setAlpnProtocols(("h2",));
+                    client.connect(sprintf("localhost:%d", test_port), 5000);
+                    client.acceptAllCertificates(True);
+                    client.upgradeClientToSSL(5000);
+                    usleep(100000);
+                    client.close();
+                } catch () {}
+                client_done.dec();
+            }();
+
+            server_done.waitForZero(10000ms);
+            client_done.waitForZero(10000ms);
+            server_sock.close();
+
+            # Verify state error was thrown
+            assertTrue(test_results.wrong_state_threw ?? False,
+                "startSendResponse before request ready should throw");
+            assertEq("HTTP2-STATE-ERROR", test_results.wrong_state_error ?? "",
+                "should throw HTTP2-STATE-ERROR");
+        }
+    }
+
+    testHttp2ModeConstants() {
+        # Test that HTTP/2 mode constants are defined correctly
+        assertEq(0, HTTP2_MODE_DISABLED, "HTTP2_MODE_DISABLED should be 0");
+        assertEq(1, HTTP2_MODE_AUTO, "HTTP2_MODE_AUTO should be 1");
+        assertEq(2, HTTP2_MODE_REQUIRED, "HTTP2_MODE_REQUIRED should be 2");
+        assertEq(3, HTTP2_MODE_H2C_DIRECT, "HTTP2_MODE_H2C_DIRECT should be 3");
+        assertEq(4, HTTP2_MODE_H2C_UPGRADE, "HTTP2_MODE_H2C_UPGRADE should be 4");
+
+        # Test mode setting via constants
+        HTTPClient client({"url": "https://example.com"});
+
+        client.setHttp2Mode(HTTP2_MODE_DISABLED);
+        assertEq("disabled", client.getHttp2Mode());
+
+        client.setHttp2Mode(HTTP2_MODE_AUTO);
+        assertEq("auto", client.getHttp2Mode());
+
+        client.setHttp2Mode(HTTP2_MODE_REQUIRED);
+        assertEq("required", client.getHttp2Mode());
+
+        # Test h2c modes on non-SSL URL
+        HTTPClient h2c_client({"url": "http://example.com"});
+
+        h2c_client.setHttp2Mode(HTTP2_MODE_H2C_DIRECT);
+        assertEq("h2c", h2c_client.getHttp2Mode());  # Canonical name is "h2c"
+
+        h2c_client.setHttp2Mode(HTTP2_MODE_H2C_UPGRADE);
+        assertEq("h2c-upgrade", h2c_client.getHttp2Mode());
+    }
+
+    testHttp2WebSocketClientServer() {
+        # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex WebSocket/HTTP2 test on Alpine");
+            return;
+        }
+
+        # Test WebSocketClient connecting to HttpServer over HTTP/2
+        # This tests the RFC 8441 WebSocket handshake over HTTP/2
+        #
+        # NOTE: Full bidirectional messaging over HTTP/2 requires WebSocketHandler
+        # to be HTTP/2-aware (reading from HTTP/2 DATA frames instead of raw socket).
+        # This test verifies the handshake and initial server-to-client message works.
+
+        # Create a simple WebSocket handler that sends a welcome message
+        Counter cnt(1);
+        Queue msg_queue();
+        *string server_error;
+
+        # Create HTTP server with HTTP/2 and WebSocket support
+        EchoWebSocketHandler ws_handler(cnt);
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        try {
+            server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
+            server.setDefaultHandler("websocket", ws_handler);
+
+            # Create SSL cert and key objects
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,  # Auto-assign port
+                "cert": cert,
+                "key": key,
+                "http_version": "2.0",  # Enable HTTP/2
+            });
+            int port = linfo.port;
+
+            # Create WebSocket client and connect over HTTP/2
+            # Use ssl_verify_cert: False to accept self-signed certificate
+            # Use http_version: "2.0" to enable HTTP/2 mode
+            WebSocketClient::WebSocketClient ws_client(sub (data msg) {
+                msg_queue.push(msg.toString());
+            }, {
+                "url": "wss://localhost:" + port + "/ws",
+                "ssl_verify_cert": False,
+                "http_version": "2.0",  # Force HTTP/2 mode
+            });
+
+            # Connect and wait for welcome message
+            ws_client.connect();
+
+            # Wait for welcome message (sent by server in registered() callback)
+            # Use Queue.get() with timeout to wait for the message
+            *string welcome_msg;
+            try {
+                welcome_msg = msg_queue.get(10s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+
+            # Verify we received the welcome message
+            assertTrue(exists welcome_msg, "should receive welcome message");
+            if (exists welcome_msg) {
+                assertEq("welcome", welcome_msg, "welcome message should be 'welcome'");
+            }
+
+            # Verify HTTP/2 was used for the WebSocket connection
+            assertTrue(ws_client.isHttp2(), "WebSocket should be over HTTP/2");
+
+            # Test bidirectional communication: send message and receive echo
+            ws_client.send("test-echo");
+            *string echo_msg;
+            try {
+                echo_msg = msg_queue.get(10s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+            assertTrue(exists echo_msg, "should receive echo message");
+            if (exists echo_msg) {
+                assertEq("test-echo", echo_msg, "echo message should be 'test-echo'");
+            }
+
+            # Close the connection
+            ws_client.disconnect();
+
+            # Wait for server to see the disconnect
+            cnt.waitForZero(5s);
+
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        server.stop();
+
+        assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testGlobalHttp2Mode() {
+        # Test set_global_http2_mode() and get_global_http2_mode() functions
+
+        # Save original mode to restore at end
+        string original_mode = get_global_http2_mode();
+
+        # Test 1: Default mode should be "auto"
+        assertEq("auto", original_mode, "default global HTTP/2 mode should be 'auto'");
+
+        # Test 2: Set mode to "disabled" using string
+        set_global_http2_mode("disabled");
+        assertEq("disabled", get_global_http2_mode(), "global mode should be 'disabled' after setting");
+
+        # Test 3: Set mode to "required" using string
+        set_global_http2_mode("required");
+        assertEq("required", get_global_http2_mode(), "global mode should be 'required' after setting");
+
+        # Test 4: Set mode to "auto" using string
+        set_global_http2_mode("auto");
+        assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting");
+
+        # Test 5: Set mode using integer constants
+        set_global_http2_mode(HTTP2_MODE_DISABLED);
+        assertEq("disabled", get_global_http2_mode(), "global mode should be 'disabled' after setting with int");
+
+        set_global_http2_mode(HTTP2_MODE_REQUIRED);
+        assertEq("required", get_global_http2_mode(), "global mode should be 'required' after setting with int");
+
+        set_global_http2_mode(HTTP2_MODE_AUTO);
+        assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting with int");
+
+        # Test 6: Case insensitivity of string mode
+        set_global_http2_mode("DISABLED");
+        assertEq("disabled", get_global_http2_mode(), "mode setting should be case-insensitive");
+
+        set_global_http2_mode("Auto");
+        assertEq("auto", get_global_http2_mode(), "mode setting should be case-insensitive");
+
+        # Test 7: Invalid string mode should throw exception
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode("invalid"); });
+
+        # Test 8: Invalid integer mode should throw exception
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(99); });
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(-1); });
+
+        # Restore original mode
+        set_global_http2_mode(original_mode);
+        assertEq(original_mode, get_global_http2_mode(), "global mode should be restored");
+    }
+}

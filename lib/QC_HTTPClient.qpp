@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -162,6 +162,32 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     |@ref EVENT_HTTP_FOOTERS_RECEIVED|Raised when HTTP footers are received.
     |@ref EVENT_HTTP_CHUNKED_DATA_RECEIVED|Raised when a block of HTTP chunked data is received.
     |@ref EVENT_HTTP_CHUNK_SIZE|Raised when the next chunk size for HTTP chunked data is known.
+
+    @section httpclient_http2 HTTP/2 Support
+
+    The %Qore HTTPClient class supports HTTP/2 over TLS via ALPN (Application-Layer Protocol Negotiation).
+    By default, HTTP/2 mode is \c "auto", meaning HTTP/2 will be used if the server supports it, with
+    automatic fallback to HTTP/1.1 otherwise.
+
+    HTTP/2 modes:
+    - \c "auto" (default): Use HTTP/2 if available via ALPN, fallback to HTTP/1.1
+    - \c "disabled": Use HTTP/1.x only, never attempt HTTP/2
+    - \c "required": Require HTTP/2, fail if the server doesn't support it
+
+    Use @ref setHttp2Mode() to control the HTTP/2 mode, or set the \c http_version constructor option.
+
+    @note
+    - HTTP/2 requires TLS; non-TLS connections will always use HTTP/1.x
+    - <b>Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2 are
+      not currently supported. WebSocket and SSE connections will use HTTP/1.x regardless of the HTTP/2 mode
+
+    @see
+    - @ref setHttp2Mode()
+    - @ref getHttp2Mode()
+    - @ref isHttp2Active()
+    - @ref isHttp2Enabled()
+
+    @since %Qore 2.2
 
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
@@ -388,6 +414,383 @@ string version = httpclient.getHTTPVersion();
  */
 string HTTPClient::getHTTPVersion() [flags=CONSTANT] {
     return new QoreStringNode(client->getHTTPVersion());
+}
+
+//! Returns @ref True if HTTP/2 support is enabled
+/** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+    If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+    @return @ref True if HTTP/2 support is enabled
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2Enabled()) {
+    printf("HTTP/2 support is enabled\n");
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+bool HTTPClient::isHttp2Enabled() [flags=CONSTANT] {
+    return client->isHttp2Enabled();
+}
+
+//! Enables or disables HTTP/2 support
+/** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+    If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+    @param enable @ref True to enable HTTP/2, @ref False to disable
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Enabled(True);
+    @endcode
+
+    @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
+    client->setHttp2Enabled(enable);
+}
+
+//! Sets the HTTP/2 protocol mode
+/** The HTTP/2 mode controls how HTTP/2 is used:
+    - \c "disabled" or 0: HTTP/1.x only, never use HTTP/2
+    - \c "auto" or 1: Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
+    - \c "required" or 2: Require HTTP/2, fail if unavailable
+    - \c "h2c" or "h2c-direct" or 3: h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
+    - \c "h2c-upgrade" or 4: h2c via HTTP/1.1 Upgrade header (not yet implemented)
+
+    @param mode the HTTP/2 mode: "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Mode("auto");
+# or
+httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
+# For h2c (cleartext HTTP/2) with prior knowledge:
+httpclient.setHttp2Mode("h2c");
+    @endcode
+
+    @note For h2 (encrypted HTTP/2), a TLS connection is required
+    @note h2c modes work on non-TLS connections only
+    @note h2c-upgrade mode is not yet implemented; use h2c mode (prior knowledge) instead
+
+    @throw HTTP2-MODE-ERROR invalid mode value
+
+    @since %Qore 2.2
+
+    @see getHttp2Mode()
+    @see setHTTPVersion()
+*/
+nothing HTTPClient::setHttp2Mode(auto mode) {
+    int mode_int;
+    if (mode.getType() == NT_STRING) {
+        const QoreStringNode* mode_str = mode.get<const QoreStringNode>();
+        const char* str = mode_str->c_str();
+        if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
+            mode_int = HTTP2_MODE_DISABLED;
+        } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
+            mode_int = HTTP2_MODE_AUTO;
+        } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
+            mode_int = HTTP2_MODE_REQUIRED;
+        } else if (!strcasecmp(str, "h2c") || !strcasecmp(str, "h2c-direct") || !strcmp(str, "3")) {
+            mode_int = HTTP2_MODE_H2C_DIRECT;
+        } else if (!strcasecmp(str, "h2c-upgrade") || !strcmp(str, "4")) {
+            mode_int = HTTP2_MODE_H2C_UPGRADE;
+        } else {
+            xsink->raiseException("HTTP2-MODE-ERROR", "invalid value '%s' for HTTP/2 mode; "
+                "valid values are: \"disabled\", \"auto\", \"required\", \"h2c\", \"h2c-upgrade\" (or 0-4)", str);
+            return QoreValue();
+        }
+    } else {
+        mode_int = (int)mode.getAsBigInt();
+        if (mode_int < HTTP2_MODE_DISABLED || mode_int > HTTP2_MODE_H2C_UPGRADE) {
+            xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0-4", mode_int);
+            return QoreValue();
+        }
+    }
+    client->setHttp2Mode(mode_int, xsink);
+}
+
+//! Returns the current HTTP/2 protocol mode
+/** @return the current HTTP/2 mode as a string: "disabled", "auto", or "required"
+
+    @par Example:
+    @code{.py}
+string mode = httpclient.getHttp2Mode();
+printf("HTTP/2 mode: %s\n", mode);
+    @endcode
+
+    @note This is a convenience method; the same information can be obtained from getHTTPVersion()
+
+    @since %Qore 2.2
+
+    @see setHttp2Mode()
+    @see getHTTPVersion()
+*/
+string HTTPClient::getHttp2Mode() [flags=CONSTANT] {
+    int mode = client->getHttp2Mode();
+    switch (mode) {
+        case HTTP2_MODE_DISABLED:
+            return new QoreStringNode("disabled");
+        case HTTP2_MODE_REQUIRED:
+            return new QoreStringNode("required");
+        case HTTP2_MODE_H2C_DIRECT:
+            return new QoreStringNode("h2c");
+        case HTTP2_MODE_H2C_UPGRADE:
+            return new QoreStringNode("h2c-upgrade");
+        case HTTP2_MODE_AUTO:
+        default:
+            return new QoreStringNode("auto");
+    }
+}
+
+//! Returns @ref True if the connection is currently using HTTP/2
+/** @return @ref True if HTTP/2 is active on the current connection
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2Active()) {
+    printf("Using HTTP/2\n");
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+bool HTTPClient::isHttp2Active() [flags=CONSTANT] {
+    return client->isHttp2Active();
+}
+
+//! Returns the current HTTP/2 settings
+/** @return a hash with HTTP/2 settings, or @ref nothing if HTTP/2 is not active
+
+    The returned hash may contain:
+    - \c header_table_size: HPACK header table size
+    - \c enable_push: whether server push is enabled
+    - \c max_concurrent_streams: maximum concurrent streams
+    - \c initial_window_size: initial flow control window size
+    - \c max_frame_size: maximum frame size
+    - \c max_header_list_size: maximum header list size
+
+    @par Example:
+    @code{.py}
+*hash<auto> settings = httpclient.getHttp2Settings();
+if (settings) {
+    printf("HTTP/2 max concurrent streams: %d\n", settings.max_concurrent_streams);
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+*hash<auto> HTTPClient::getHttp2Settings() [flags=CONSTANT] {
+    return client->getHttp2Settings();
+}
+
+//! Sets HTTP/2 settings to be used for new connections
+/** @param settings a hash with HTTP/2 settings to apply
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp2Settings({
+    "max_concurrent_streams": 200,
+    "initial_window_size": 131072,
+});
+    @endcode
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2Settings(*hash<auto> settings) {
+    client->setHttp2Settings(settings, xsink);
+}
+
+//! Sets HTTP/2 stream priority
+/** @param stream_id the stream ID to set priority for
+    @param weight priority weight (1-256, default 16)
+    @param dependency stream ID this stream depends on (0 for root)
+    @param exclusive if @ref True, becomes exclusive dependency
+
+    @par Example:
+    @code{.py}
+# Make stream 5 depend on stream 3 with weight 32
+httpclient.setHttp2StreamPriority(5, 32, 3);
+    @endcode
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int dependency = 0,
+        softbool exclusive = False) {
+    client->setHttp2StreamPriority(stream_id, weight, dependency, exclusive, xsink);
+}
+
+//! Sends an HTTP/2 extended CONNECT request (RFC 8441)
+/** @param path the request path (e.g., "/chat")
+    @param headers optional request headers
+    @param protocol the :protocol pseudo-header value (e.g., "websocket")
+    @param info optional reference to receive connection info
+
+    @return a hash with response information:
+    - \c status_code: HTTP status code (200 for success)
+    - \c stream_id: the HTTP/2 stream ID for subsequent data transfer
+    - \c headers: response headers
+
+    @throw HTTP2-ERROR if HTTP/2 is not available
+    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails
+
+    @par Example:
+    @code{.py}
+# WebSocket over HTTP/2 connection
+hash<auto> info;
+hash<auto> resp = httpclient.sendHttp2Connect("/chat", {"Sec-WebSocket-Protocol": "chat"},
+    "websocket", \info);
+if (resp.status_code == 200) {
+    int stream_id = resp.stream_id;
+    # Now use sendHttp2StreamData/readHttp2StreamData for WebSocket frames
+}
+    @endcode
+
+    @note This method is used for WebSocket over HTTP/2 (RFC 8441) and other protocols
+    that use extended CONNECT with the :protocol pseudo-header
+
+    @since %Qore 2.2
+*/
+*hash<auto> HTTPClient::sendHttp2Connect(string path, *hash<auto> headers, string protocol,
+        *reference<hash<auto>> info) {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendHttp2Connect(path->c_str(), headers,
+        protocol->c_str(), *ohrh, xsink), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+//! Sends data on an HTTP/2 stream
+/** @param stream_id the stream ID to send data on (from sendHttp2Connect())
+    @param data binary data to send
+    @param end_stream if @ref True, signals end of stream (no more data will be sent)
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Send a WebSocket text frame over HTTP/2
+binary frame = ws_encode_frame(WS_OP_TEXT, "Hello, WebSocket!");
+httpclient.sendHttp2StreamData(stream_id, frame);
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+    @since %Qore 2.2
+*/
+nothing HTTPClient::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
+        *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    client->sendHttp2StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
+}
+
+//! Reads data from an HTTP/2 stream
+/** @param stream_id the stream ID to read data from (from sendHttp2Connect())
+    @param timeout_ms timeout in milliseconds (default: connection timeout)
+
+    @return binary data read from the stream, or @ref NOTHING if no data available
+
+    @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
+
+    @par Example:
+    @code{.py}
+# Read WebSocket data over HTTP/2
+*binary data = httpclient.readHttp2StreamData(stream_id, 5000);
+if (data) {
+    hash<auto> frame = ws_decode_frame(data);
+    # Process WebSocket frame
+}
+    @endcode
+
+    @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+    @since %Qore 2.2
+*/
+*binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) {
+    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    return client->readHttp2StreamData(stream_id, timeout, xsink);
+}
+
+//! Returns the current HTTP/2 stream ID
+/** @return the stream ID, or 0 if not in HTTP/2 mode or no stream active
+
+    @par Example:
+    @code{.py}
+int stream_id = httpclient.getHttp2StreamId();
+if (stream_id > 0) {
+    # Send data on the stream
+    httpclient.sendHttp2StreamData(stream_id, data);
+}
+    @endcode
+
+    @since %Qore 2.2
+*/
+int HTTPClient::getHttp2StreamId() [flags=CONSTANT] {
+    return client->getHttp2StreamId();
+}
+
+//! Returns true if the HTTP/2 stream has buffered data available
+/** @param stream_id the stream ID to check
+
+    @return True if the stream has buffered data, False otherwise
+
+    @par Example:
+    @code{.py}
+if (httpclient.hasHttp2StreamData(stream_id)) {
+    *binary data = httpclient.readHttp2StreamData(stream_id, 0);
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT] {
+    return client->hasHttp2StreamData((int32_t)stream_id);
+}
+
+//! Checks if HTTP/2 stream data is available, polling the socket if needed
+/** @param stream_id the stream ID to check
+    @param timeout_ms optional timeout in milliseconds for polling (default 0 for immediate check)
+
+    @return @ref True if data is available, @ref False otherwise
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp2DataAvailable(stream_id, 1000)) {
+    *binary data = httpclient.readHttp2StreamData(stream_id, 0);
+}
+    @endcode
+
+    @note This method first checks for already-buffered HTTP/2 stream data, then polls the
+    socket for new HTTP/2 frames if no data is buffered. This is the correct way to check for
+    data availability when using HTTP/2 streams (e.g., for WebSocket over HTTP/2).
+
+    @throw HTTP2-ERROR if HTTP/2 support is not available
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) {
+    return client->isHttp2DataAvailable((int32_t)stream_id, (int)timeout_ms, xsink);
+}
+
+//! Returns the negotiated HTTP protocol version string
+/** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
+
+    @par Example:
+    @code{.py}
+string proto = httpclient.getHttpVersion();
+printf("Using protocol: %s\n", proto);
+    @endcode
+
+    @since %Qore 2.2
+*/
+string HTTPClient::getHttpVersion() [flags=CONSTANT] {
+    return client->getHttpVersion();
 }
 
 //! Sets the object to make a secure SSL/TLS connection on the next connect if the passed argument is @ref True, or an unencrypted cleartext connection if it is @ref False

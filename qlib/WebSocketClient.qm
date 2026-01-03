@@ -180,6 +180,12 @@ c.waitForZero();
 
     @section websocketclient_relnotes WebSocketClient Module Release History
 
+    @subsection wsc_v2_6 v2.6
+    - added support for WebSocket over HTTP/2 (RFC 8441)
+      - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
+      - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
+        HTTP/2 WebSocket is being used
+
     @subsection wsc_v2_5 v2.5
     - added WebSocket extension support with permessage-deflate compression
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
@@ -413,7 +419,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const DefaultTimeout = 15s;
 
         #! module version
-        const Version = "2.5";
+        const Version = "2.6";
 
         #! default user agent string for HTTP requests
         const DefaultUserAgent = sprintf("Qore-WebSocketClient/%s", WebSocketClient::Version);
@@ -507,6 +513,12 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! RSV bits used by active extensions (bitmask)
         int extension_rsv_mask = 0;
+
+        #! True if using HTTP/2 WebSocket (RFC 8441)
+        bool http2_websocket = False;
+
+        #! HTTP/2 stream ID for WebSocket data (RFC 8441)
+        int h2_stream_id = 0;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -727,6 +739,18 @@ ws.connect();
         on_exit m.unlock();
 
         return hc.isOpen();
+    }
+
+    #! Returns @ref True "True" if the connection is using HTTP/2 WebSocket (RFC 8441)
+    /** @return @ref True "True" if connected via HTTP/2 extended CONNECT, @ref False "False" if using HTTP/1.1 Upgrade
+
+        @since WebSocketClient 2.6
+    */
+    bool isHttp2() {
+        m.lock();
+        on_exit m.unlock();
+
+        return http2_websocket;
     }
 
     #! Initiate a server reconnect immediately
@@ -997,7 +1021,7 @@ ws.setEventQueue();
     */
     ping(*data msg) {
         logDebug("sending PING %y (open: %y connected: %y)", msg, hc.isOpen(), hc.isConnected());
-        hc.send2(ws_encode_message(msg ?? "", WSOP_Ping, True), timeout_ms);
+        sendWsFrame(ws_encode_message(msg ?? "", WSOP_Ping, True));
     }
 
     #! Sends a \c PONG message to the server as a unidirectional keep-alive message
@@ -1005,7 +1029,7 @@ ws.setEventQueue();
     */
     pong(*data msg) {
         logDebug("sending PONG %y (open: %y connected: %y)", msg, hc.isOpen(), hc.isConnected());
-        hc.send2(ws_encode_message(msg ?? "", WSOP_Pong, True), timeout_ms);
+        sendWsFrame(ws_encode_message(msg ?? "", WSOP_Pong, True));
     }
 
     #! Sends string data over the web socket with timeout specified in options; if any errors occur, an exception is thrown
@@ -1063,7 +1087,7 @@ ws.setEventQueue();
             }
         }
 
-        hc.send2(ws_encode_message(msg, op, True, fin, rsv_bits), timeout_ms);
+        sendWsFrame(ws_encode_message(msg, op, True, fin, rsv_bits));
     }
 
     #! Constructor for child classes with no callback
@@ -1291,7 +1315,7 @@ ws.setEventQueue();
     }
 
     private waitTidCleared(int old_tid) {
-        while (tid && tid != old_tid) {
+        while (tid == old_tid) {
             ++tid_waiting;
             tid_cond.wait(m);
             --tid_waiting;
@@ -1332,7 +1356,14 @@ ws.setEventQueue();
             }
 
             try {
-                if (!hc.isDataAvailable(50ms)) {
+                # For HTTP/2, use the HTTP/2-aware data availability check
+                bool data_available;
+                if (http2_websocket && h2_stream_id > 0) {
+                    data_available = hc.isHttp2DataAvailable(h2_stream_id, 50ms);
+                } else {
+                    data_available = hc.isDataAvailable(50ms);
+                }
+                if (!data_available) {
 %ifdef PO_NO_PROCESS_CONTROL
                     yield();
 %else
@@ -1340,7 +1371,7 @@ ws.setEventQueue();
 %endif
                     continue;
                 }
-                hash<WsMsgInfo> h = ws_read_message(hc, timeout_ms);
+                hash<WsMsgInfo> h = readWsMessage();
                 {
                     int state = eventRaw(h);
                     if (state == WSC_Continue) {
@@ -1626,7 +1657,7 @@ ws.setEventQueue();
     }
 
     private handlePing(hash<auto> h) {
-        hc.send2(ws_encode_message(h.msg ?? "heartbeat", WSOP_Pong, True), timeout_ms);
+        sendWsFrame(ws_encode_message(h.msg ?? "heartbeat", WSOP_Pong, True));
     }
 
     private logArgs(LoggerLevel level, string message, *softlist<auto> args) {
@@ -1654,6 +1685,38 @@ ws.setEventQueue();
         logArgs(LoggerLevel::ERROR, fmt, argv);
     }
 
+    #! Sends raw WebSocket frame data (handles HTTP/2 vs HTTP/1.1)
+    /** @since WebSocketClient 2.6
+    */
+    private sendWsFrame(binary data) {
+        if (http2_websocket && h2_stream_id > 0) {
+            # HTTP/2: Send data through the HTTP/2 stream
+            hc.sendHttp2StreamData(h2_stream_id, data, False, timeout_ms);
+        } else {
+            # HTTP/1.1: Send data directly over the socket
+            hc.send2(data, timeout_ms);
+        }
+    }
+
+    #! Reads a WebSocket message (handles HTTP/2 vs HTTP/1.1)
+    /** @return WebSocket message info hash
+        @since WebSocketClient 2.6
+    */
+    private hash<WsMsgInfo> readWsMessage() {
+        if (http2_websocket && h2_stream_id > 0) {
+            # HTTP/2: Read data from HTTP/2 stream and parse WebSocket frame
+            *binary data = hc.readHttp2StreamData(h2_stream_id, timeout_ms);
+            if (!data) {
+                throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
+            }
+            # Parse WebSocket frame from the data
+            return ws_parse_frame(data);
+        } else {
+            # HTTP/1.1: Read WebSocket message directly from socket
+            return ws_read_message(hc, timeout_ms);
+        }
+    }
+
     private sendClose(int code, *string txtmsg) {
         if (!WSCCMap{code}) {
             logError("Attempt to send invalid close code %d; expecting one of: %y", code,
@@ -1672,7 +1735,7 @@ ws.setEventQueue();
         }
         msg += txtmsg;
         try {
-            hc.send2(ws_encode_message(msg, WSOP_Close, True), timeout_ms);
+            sendWsFrame(ws_encode_message(msg, WSOP_Close, True));
         } catch (hash<ExceptionInfo> ex) {
             # ignore SOCKET-NOT-OPEN errors when closing (server already closed the connection)
             if (ex.err == "SOCKET-NOT-OPEN") {
@@ -1688,6 +1751,31 @@ ws.setEventQueue();
         hash<auto> hdr = {
             "User-Agent": DefaultUserAgent,
         } + hdr0;
+
+        # Connect first to determine HTTP version
+        {
+            on_error {
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                    (url, info));
+                hc = new HTTPClient(http_opts);
+                rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
+            }
+            hc.connect();
+        }
+
+        # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
+        bool h2_active = hc.isHttp2Active();
+        if (h2_active) {
+            return connectHttp2WebSocket(hdr, \info, reconnect);
+        }
+
+        # HTTP/1.1 WebSocket handshake
+        return connectHttp1WebSocket(hdr, \info, reconnect);
+    }
+
+    #! HTTP/1.1 WebSocket handshake with Upgrade header
+    private hash<auto> connectHttp1WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        http2_websocket = False;
 
         string key = get_random_string(16).toBase64();
         hdr += {
@@ -1712,12 +1800,11 @@ ws.setEventQueue();
         hash<auto> rh;
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/1.1 WebSocket handshake to %s: %N",
                     (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }
-            hc.connect();
             rh = hc.send(NOTHING, "GET", NOTHING, hdr, NOTHING, \info);
         }
 
@@ -1739,7 +1826,72 @@ ws.setEventQueue();
             }
         }
 
-        # Process server's extension response
+        processExtensions(rh);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! RFC 8441: HTTP/2 WebSocket handshake using extended CONNECT
+    /** @since WebSocketClient 2.6
+    */
+    private hash<auto> connectHttp2WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
+        http2_websocket = True;
+        h2_stream_id = 0;
+        logDebug("Using HTTP/2 WebSocket handshake (RFC 8441)");
+
+        # Remove :protocol from headers - it's handled by sendHttp2Connect
+        remove hdr.":protocol";
+
+        # Add extension offers if configured (extensions work the same in HTTP/2)
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+                logDebug("Offering extensions: %s", ext_header);
+            }
+        }
+
+        *hash<auto> rh;
+        {
+            on_error {
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/2 WebSocket CONNECT to %s: %N",
+                    (url, info));
+                hc = new HTTPClient(http_opts);
+                rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
+            }
+            # RFC 8441: Use extended CONNECT with :protocol pseudo-header
+            # sendHttp2Connect() handles the :protocol header and returns stream_id
+            string path = hc.getConnectionPath() ?? "/";
+            rh = hc.sendHttp2Connect(path, hdr, "websocket", \info);
+        }
+
+        # Check for failure
+        if (!rh) {
+            raiseError("HTTP/2 WebSocket CONNECT to %y failed", hc.getURL());
+        }
+
+        # Store stream ID for data transfer
+        h2_stream_id = rh.stream_id ?? hc.getHttp2StreamId();
+
+        # RFC 8441: Expect 200 OK for successful WebSocket over HTTP/2
+        # (sendHttp2Connect already checks this, but we verify here too)
+        if (rh.status_code != 200) {
+            raiseError("HTTP/2 server at URL %y returned status code '%d %s' to our WebSocket CONNECT request; "
+                "expecting '200 OK' (RFC 8441)", hc.getURL(), rh.status_code, rh.status_message);
+        }
+
+        # Note: HTTP/2 WebSocket does NOT use Sec-WebSocket-Accept header
+        # The CONNECT response is simpler - just 200 OK means success
+
+        processExtensions(rh);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! Process server's extension response (shared between HTTP/1.1 and HTTP/2)
+    private processExtensions(hash<auto> rh) {
         active_extensions = NOTHING;
         extension_rsv_mask = 0;
         if (offered_extensions && rh."sec-websocket-extensions") {
@@ -1772,12 +1924,13 @@ ws.setEventQueue();
                 active_extensions = NOTHING;
             }
         }
+    }
 
-        logInfo("Connected to %y (open: %y)", hc.getURL(), hc.isOpen());
+    #! Finalize connection (shared between HTTP/1.1 and HTTP/2)
+    private finishConnect() {
+        logInfo("Connected to %y (open: %y, http2: %y)", hc.getURL(), hc.isOpen(), http2_websocket);
         ++num_connects;
         cid = seq.next();
-
-        return rh;
     }
 
     #! throws an exception due to an error

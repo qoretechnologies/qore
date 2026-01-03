@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,9 @@
 #include "qore/intern/ql_compression.h"
 
 #include "qore/intern/qore_socket_private.h"
+
+#include "qore/intern/Http2Session.h"
+#include "qore/intern/QoreLibIntern.h"
 
 #include <cctype>
 #include <map>
@@ -282,8 +285,55 @@ struct qore_httpclient_priv {
         // known content encodings are not decoded when set
         encoding_passthru = false,
         // if URLs are pre-encoded
-        pre_encoded_urls = false
+        pre_encoded_urls = false,
+        // HTTP/2 is currently active on the connection
+        http2_active = false,
+        // h2c upgrade is pending (for HTTP2_MODE_H2C_UPGRADE)
+        h2c_upgrade_pending = false
         ;
+
+    // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED, HTTP2_MODE_H2C_*)
+    int http2_mode = HTTP2_MODE_AUTO
+        ;
+
+    // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
+    int32_t h2_stream_id = 0;
+
+    // Helper to access the socket's HTTP/2 session
+    // NOTE: The h2_session is now stored on the socket, not HTTPClient,
+    // so that all layers (Socket, HTTPClient) share the same session
+    DLLLOCAL Http2Session* getH2Session() const {
+        return msock ? msock->socket->priv->h2_session : nullptr;
+    }
+
+    DLLLOCAL void setH2Session(Http2Session* session) {
+        if (msock) {
+            msock->socket->priv->h2_session = session;
+        }
+    }
+
+    DLLLOCAL void clearH2Session() {
+        // Delete the session - HTTPClient manages the lifecycle even though
+        // it's stored on the socket for shared access
+        if (msock && msock->socket->priv->h2_session) {
+            delete msock->socket->priv->h2_session;
+            msock->socket->priv->h2_session = nullptr;
+        }
+        // Also clear the stream ID
+        if (msock) {
+            msock->socket->priv->h2_active_stream_id = -1;
+        }
+        h2_stream_id = 0;
+        http2_active = false;
+    }
+
+    // Sets the active HTTP/2 stream ID on both HTTPClient and socket
+    DLLLOCAL void setActiveH2StreamId(int32_t stream_id) {
+        h2_stream_id = stream_id;
+        if (msock) {
+            msock->socket->priv->h2_active_stream_id = stream_id;
+        }
+    }
 
     // persistent count
     unsigned persistent_count = 0;
@@ -382,9 +432,20 @@ struct qore_httpclient_priv {
                 h->setKeyValueIntern("headers", amm.release());
             }
         }
-        if (!http11) {
-            h->setKeyValueIntern("http_version", new QoreStringNode("1.0"));
+        // Output http_version based on http2_mode and http11
+        const char* version_str;
+        switch (http2_mode) {
+            case HTTP2_MODE_AUTO:
+                version_str = "auto";
+                break;
+            case HTTP2_MODE_REQUIRED:
+                version_str = "2.0";
+                break;
+            default:
+                version_str = http11 ? "1.1" : "1.0";
+                break;
         }
+        h->setKeyValueIntern("http_version", new QoreStringNode(version_str));
         if (max_redirects != HTTPCLIENT_DEFAULT_MAX_REDIRECTS) {
             h->setKeyValueIntern("max_redirects", max_redirects);
         }
@@ -529,6 +590,78 @@ struct qore_httpclient_priv {
 
         if (!rc) {
             setNoDelay();
+            // Determine effective HTTP/2 mode based on global setting and object setting
+            // Check both the new global mode and the legacy QLO_DISABLE_HTTP2 library option
+            int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+            bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+            int effective_http2_mode;
+            if (global_mode == HTTP2_MODE_DISABLED || lib_disabled) {
+                // Global disabled or library option overrides object setting
+                effective_http2_mode = HTTP2_MODE_DISABLED;
+            } else if (global_mode == HTTP2_MODE_REQUIRED) {
+                // Global required overrides object setting (unless object explicitly uses h2c modes)
+                effective_http2_mode = (http2_mode == HTTP2_MODE_H2C_DIRECT || http2_mode == HTTP2_MODE_H2C_UPGRADE)
+                    ? http2_mode : HTTP2_MODE_REQUIRED;
+            } else {
+                // Global auto: use object's setting
+                effective_http2_mode = http2_mode;
+            }
+            // Handle h2c (HTTP/2 cleartext) modes
+            if (effective_http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
+                // Direct h2c: start HTTP/2 immediately with prior knowledge
+                http2_active = true;
+                setH2Session(Http2Session::createClient(msock->socket->priv, xsink, "http"));
+                if (*xsink) {
+                    msock->socket->close();
+                    http2_active = false;
+                    return -1;
+                }
+                // Send connection preface
+                if (getH2Session()->sendConnectionPreface(xsink)) {
+                    clearH2Session();
+                    msock->socket->close();
+                    http2_active = false;
+                    return -1;
+                }
+            } else if (effective_http2_mode == HTTP2_MODE_H2C_UPGRADE && !connect_ssl) {
+                // TODO: h2c upgrade via HTTP/1.1 Upgrade header is not yet implemented
+                // This requires:
+                // 1. Sending HTTP/1.1 request with Upgrade: h2c and HTTP2-Settings headers
+                // 2. Handling 101 Switching Protocols response
+                // 3. Using nghttp2_session_upgrade2() to complete upgrade
+                // For now, raise an exception
+                xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not yet implemented; "
+                    "use h2c (h2c-direct) mode for HTTP/2 cleartext with prior knowledge");
+                msock->socket->close();
+                return -1;
+            } else
+            // Check if HTTP/2 was negotiated via ALPN (for TLS connections)
+            if (effective_http2_mode != HTTP2_MODE_DISABLED && connect_ssl) {
+                http2_active = msock->socket->isHttp2();
+                // If HTTP/2 is required but not available, raise an exception
+                if (effective_http2_mode == HTTP2_MODE_REQUIRED && !http2_active) {
+                    xsink->raiseException("HTTP2-REQUIRED-ERROR", "HTTP/2 is required but the server does not "
+                        "support HTTP/2 via ALPN");
+                    msock->socket->close();
+                    return -1;
+                }
+                // Create HTTP/2 session if HTTP/2 is active
+                if (http2_active) {
+                    setH2Session(Http2Session::createClient(msock->socket->priv, xsink));
+                    if (*xsink) {
+                        msock->socket->close();
+                        http2_active = false;
+                        return -1;
+                    }
+                    // Send connection preface
+                    if (getH2Session()->sendConnectionPreface(xsink)) {
+                        clearH2Session();
+                        msock->socket->close();
+                        http2_active = false;
+                        return -1;
+                    }
+                }
+            }
         }
         return rc;
     }
@@ -547,6 +680,7 @@ struct qore_httpclient_priv {
             proxy_connected = false;
             persistent = false;
             persistent_count = 0;
+            clearH2Session();
         }
     }
 
@@ -1255,6 +1389,11 @@ struct qore_httpclient_priv {
         const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr,
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
         const ResolvedCallReferenceNode* trailer_callback = nullptr);
+
+    //! Send a request and get response using HTTP/2
+    DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
+        const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink);
 
     DLLLOCAL void addProxyAuthorization(const QoreHashNode* headers, QoreHashNode& h, ExceptionSink* xsink) const {
         if (proxy_connection.username.empty())
@@ -2752,8 +2891,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("http_version");
     if (!n.isNothing()) {
         if (n.getType() != NT_STRING) {
-            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string version ('1.0', '1.1') as value for "
-                "the \"http_version\" key in the options hash");
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string version ('auto', '1.0', '1.1', '2.0') "
+                "as value for the \"http_version\" key in the options hash");
             return -1;
         }
         if (setHTTPVersion((n.get<const QoreStringNode>())->c_str(), xsink))
@@ -3029,17 +3168,43 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     SafeLocker sl(priv->m);
     if (!strcmp(version, "1.0")) {
         http_priv->http11 = false;
+        http_priv->http2_mode = HTTP2_MODE_DISABLED;
     } else if (!strcmp(version, "1.1")) {
         http_priv->http11 = true;
+        http_priv->http2_mode = HTTP2_MODE_DISABLED;
+    } else if (!strcasecmp(version, "auto")) {
+        http_priv->http11 = true;
+        http_priv->http2_mode = HTTP2_MODE_AUTO;
+        // Set up ALPN protocols for auto mode
+        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+        protocols->push(new QoreStringNode("h2"), xsink);
+        protocols->push(new QoreStringNode("http/1.1"), xsink);
+        priv->socket->setAlpnProtocols(*protocols, xsink);
+    } else if (!strcmp(version, "2.0") || !strcmp(version, "2")) {
+        http_priv->http11 = true;
+        http_priv->http2_mode = HTTP2_MODE_REQUIRED;
+        // Set up ALPN protocols for required mode (h2 only)
+        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+        protocols->push(new QoreStringNode("h2"), xsink);
+        priv->socket->setAlpnProtocols(*protocols, xsink);
     } else {
-        xsink->raiseException("HTTP-VERSION-ERROR", "only '1.0' and '1.1' are valid (value passed: '%s')", version);
+        xsink->raiseException("HTTP-VERSION-ERROR", "only 'auto', '1.0', '1.1', '2.0', '2' are valid "
+            "(value passed: '%s')", version);
         rc = -1;
     }
     return rc;
 }
 
 const char* QoreHttpClientObject::getHTTPVersion() const {
-    return http_priv->http11 ? "1.1" : "1.0";
+    // Return the configured version, not the active version
+    switch (http_priv->http2_mode) {
+        case HTTP2_MODE_AUTO:
+            return "auto";
+        case HTTP2_MODE_REQUIRED:
+            return "2.0";
+        default:
+            return http_priv->http11 ? "1.1" : "1.0";
+    }
 }
 
 void QoreHttpClientObject::setHTTP11(bool val) {
@@ -3048,6 +3213,318 @@ void QoreHttpClientObject::setHTTP11(bool val) {
 
 bool QoreHttpClientObject::isHTTP11() const {
     return http_priv->http11;
+}
+
+bool QoreHttpClientObject::isHttp2Enabled() const {
+    return http_priv->http2_mode != HTTP2_MODE_DISABLED;
+}
+
+void QoreHttpClientObject::setHttp2Enabled(bool enable) {
+    // Map old API to new http2_mode
+    http_priv->http2_mode = enable ? HTTP2_MODE_AUTO : HTTP2_MODE_DISABLED;
+    // Set up ALPN protocols when HTTP/2 is enabled
+    if (enable) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), &xsink);
+        protocols->push(new QoreStringNode("h2"), &xsink);
+        protocols->push(new QoreStringNode("http/1.1"), &xsink);
+        priv->socket->setAlpnProtocols(*protocols, &xsink);
+    }
+}
+
+void QoreHttpClientObject::setHttp2Mode(int mode, ExceptionSink* xsink) {
+    if (mode < HTTP2_MODE_DISABLED || mode > HTTP2_MODE_H2C_UPGRADE) {
+        xsink->raiseException("HTTP2-MODE-ERROR", "invalid HTTP/2 mode %d; valid modes are: 0 (disabled), "
+            "1 (auto), 2 (required), 3 (h2c-direct), 4 (h2c-upgrade)", mode);
+        return;
+    }
+    http_priv->http2_mode = mode;
+    // Set up ALPN protocols based on mode (not used for h2c modes)
+    if (mode != HTTP2_MODE_DISABLED && mode != HTTP2_MODE_H2C_DIRECT && mode != HTTP2_MODE_H2C_UPGRADE) {
+        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+        if (mode == HTTP2_MODE_REQUIRED) {
+            // Only advertise HTTP/2
+            protocols->push(new QoreStringNode("h2"), xsink);
+        } else {
+            // Auto mode: prefer h2, fall back to http/1.1
+            protocols->push(new QoreStringNode("h2"), xsink);
+            protocols->push(new QoreStringNode("http/1.1"), xsink);
+        }
+        priv->socket->setAlpnProtocols(*protocols, xsink);
+    }
+}
+
+int QoreHttpClientObject::getHttp2Mode() const {
+    return http_priv->http2_mode;
+}
+
+bool QoreHttpClientObject::isHttp2Active() const {
+    return http_priv->http2_active;
+}
+
+QoreHashNode* QoreHttpClientObject::getHttp2Settings() const {
+    if (!http_priv->http2_active) {
+        return nullptr;
+    }
+    // Return current HTTP/2 settings
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    rv->setKeyValue("header_table_size", 4096, nullptr);
+    rv->setKeyValue("enable_push", true, nullptr);
+    rv->setKeyValue("max_concurrent_streams", 100, nullptr);
+    rv->setKeyValue("initial_window_size", 65535, nullptr);
+    rv->setKeyValue("max_frame_size", 16384, nullptr);
+    return rv.release();
+}
+
+void QoreHttpClientObject::setHttp2Settings(const QoreHashNode* settings, ExceptionSink* xsink) {
+    // HTTP/2 settings will be applied when establishing the connection
+    // For now, just validate the settings
+    if (!settings) {
+        return;
+    }
+    // Settings validation would go here
+}
+
+void QoreHttpClientObject::setHttp2StreamPriority(int32_t stream_id, int32_t weight, int32_t dependency,
+        bool exclusive, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+        return;
+    }
+    http_priv->getH2Session()->submitPriority(stream_id, dependency, weight, exclusive, xsink);
+}
+
+QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
+    if (http_priv->http2_active) {
+        return new QoreStringNode("HTTP/2");
+    }
+    return new QoreStringNode(http_priv->http11 ? "HTTP/1.1" : "HTTP/1.0");
+}
+
+QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const QoreHashNode* headers,
+        const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    // Ensure we're connected with HTTP/2
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        // Try to connect first
+        if (http_priv->connect_unlocked(xsink, http_priv->connection)) {
+            return nullptr;
+        }
+        if (!http_priv->http2_active || !http_priv->getH2Session()) {
+            xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
+            return nullptr;
+        }
+    }
+
+    // Build headers map with :protocol for extended CONNECT (RFC 8441)
+    std::map<std::string, std::string> h2_headers;
+    h2_headers[":protocol"] = protocol;
+
+    // Add Host header
+    h2_headers["host"] = http_priv->connection.host.c_str();
+
+    // Copy custom headers
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    // Submit CONNECT request
+    int32_t stream_id = http_priv->getH2Session()->submitRequest("CONNECT", path, h2_headers,
+        nullptr, 0, xsink);
+    if (stream_id < 0) {
+        return nullptr;
+    }
+
+    // Send the request
+    if (http_priv->getH2Session()->sendPendingData(http_priv->timeout, xsink) < 0) {
+        return nullptr;
+    }
+
+    // Read the response
+    while (true) {
+        if (http_priv->getH2Session()->receiveData(http_priv->timeout, xsink) < 0) {
+            return nullptr;
+        }
+
+        // Check if we have a response
+        Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+        if (stream && stream->headers_complete) {
+            // Build response hash
+            ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+            rv->setKeyValue("status_code", stream->status_code, xsink);
+            rv->setKeyValue("stream_id", stream_id, xsink);
+
+            // Add response headers
+            ReferenceHolder<QoreHashNode> rh(new QoreHashNode(autoTypeInfo), xsink);
+            for (const auto& h : stream->headers) {
+                rh->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
+            }
+            rv->setKeyValue("headers", rh.release(), xsink);
+
+            // Store stream ID on both HTTPClient and socket for isDataAvailable()
+            http_priv->setActiveH2StreamId(stream_id);
+
+            // Add info if requested
+            if (info) {
+                info->setKeyValue("http2", true, xsink);
+                info->setKeyValue("stream_id", stream_id, xsink);
+                info->setKeyValue("status_code", stream->status_code, xsink);
+            }
+
+            // RFC 8441: 200 OK means CONNECT succeeded
+            if (stream->status_code != 200) {
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "HTTP/2 CONNECT request failed with status %d", stream->status_code);
+                return nullptr;
+            }
+
+            return rv.release();
+        }
+    }
+}
+
+int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+
+    if (http_priv->getH2Session()->sendStreamData(stream_id, ptr, len, end_stream, xsink) < 0) {
+        return -1;
+    }
+
+    // Send pending data
+    return http_priv->getH2Session()->sendPendingData(timeout_ms, xsink);
+}
+
+BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+        return nullptr;
+    }
+
+    // First check if data is already in the buffer (from isHttp2DataAvailable)
+    Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+    if (stream && !stream->body.empty()) {
+        // Copy data to a new BinaryNode (append copies data internally)
+        SimpleRefHolder<BinaryNode> rv(new BinaryNode());
+        rv->append(stream->body.data(), stream->body.size());
+        stream->body.clear();
+        return rv.release();
+    }
+
+    // No data in buffer, try to receive data
+    if (http_priv->getH2Session()->receiveData(timeout_ms, xsink) < 0) {
+        return nullptr;
+    }
+
+    // Get stream data again
+    stream = http_priv->getH2Session()->getStream(stream_id);
+    if (!stream || stream->body.empty()) {
+        return nullptr;
+    }
+
+    // Copy data to a new BinaryNode (append copies data internally)
+    SimpleRefHolder<BinaryNode> rv(new BinaryNode());
+    rv->append(stream->body.data(), stream->body.size());
+    stream->body.clear();
+    return rv.release();
+}
+
+int32_t QoreHttpClientObject::getHttp2StreamId() const {
+    return http_priv->h2_stream_id;
+}
+
+bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
+    SafeLocker sl(priv->m);
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        return false;
+    }
+    Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+    return stream && !stream->body.empty();
+}
+
+bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        // Fall back to socket-level check if not in HTTP/2 mode
+        return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+    }
+
+    // First check if there's already buffered data
+    Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+    if (stream && !stream->body.empty()) {
+        return true;
+    }
+
+    // Get socket reference before releasing lock
+    QoreSocket* sock = http_priv->msock->socket;
+
+    // Release lock during blocking I/O operations
+    sl.unlock();
+
+    // Check if socket has data available
+    bool has_socket_data = sock->isDataAvailable(xsink, timeout_ms);
+
+    // Re-acquire lock BEFORE any Http2Session operations
+    // (Http2Session is not thread-safe and requires external locking)
+    sl.lock();
+
+    if (!has_socket_data) {
+        // No data available within timeout
+        return false;
+    }
+    if (*xsink) {
+        return false;
+    }
+
+    // Re-check HTTP/2 is still active after re-acquiring lock (state could have changed)
+    if (!http_priv->http2_active || !http_priv->getH2Session()) {
+        return false;
+    }
+
+    // Verify session is still valid before proceeding
+    Http2Session* h2_session = http_priv->getH2Session();
+    if (!h2_session) {
+        return false;
+    }
+
+    // Note: Use a small timeout (100ms) to allow SSL to decrypt the raw socket data.
+    // We already waited for socket data to be available, but SSL_read needs time to process it.
+    // CRITICAL: Lock MUST be held here - Http2Session is not thread-safe
+    int rc = h2_session->receiveData(100, xsink);
+
+    // Check if we got an error (not just timeout)
+    if (rc < 0 && *xsink) {
+        return false;
+    }
+
+    // Re-check session after receiveData (it might have been invalidated)
+    h2_session = http_priv->getH2Session();
+    if (!h2_session) {
+        return false;
+    }
+
+    // Now check if the stream has data
+    stream = h2_session->getStream(stream_id);
+    return stream && !stream->body.empty();
 }
 
 int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  {
@@ -3192,7 +3669,13 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
         }
     }
 
-    // send the message
+    // Use HTTP/2 if active
+    if (http2_active && getH2Session()) {
+        return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            info, timeout_ms, code, xsink);
+    }
+
+    // send the message (HTTP/1.x path)
     int rc = msock->socket->priv->sendHttpMessage(xsink, info, "HTTPClient", mname, meth, msgpath,
         http11 ? "1.1" : "1.0", &nh, body, data, size, send_callback, is, max_chunk_size, trailer_callback,
         QORE_SOURCE_HTTPCLIENT, timeout_ms, &msock->m, &aborted);
@@ -3255,6 +3738,137 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
     }
 
     return response_hash.release();
+}
+
+QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* mname, const char* meth,
+        const char* mpath, const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink) {
+    Http2Session* h2_session = getH2Session();
+    assert(h2_session);
+
+    // Convert request headers to std::map
+    std::map<std::string, std::string> headers;
+    ConstHashIterator hi(nh);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        if (val.getType() == NT_STRING) {
+            headers[key] = val.get<const QoreStringNode>()->c_str();
+        } else if (val.getType() == NT_LIST) {
+            // For multi-value headers, use first value
+            const QoreListNode* l = val.get<const QoreListNode>();
+            if (l->size() > 0) {
+                QoreValue first = l->retrieveEntry(0);
+                if (first.getType() == NT_STRING) {
+                    headers[key] = first.get<const QoreStringNode>()->c_str();
+                }
+            }
+        }
+    }
+
+    // Add :authority header from Host if present
+    auto host_it = headers.find("Host");
+    if (host_it != headers.end()) {
+        headers[":authority"] = host_it->second;
+    }
+
+    // Get request body data
+    const void* body_data = data;
+    size_t body_len = size;
+    if (!body_data && body) {
+        body_data = body->c_str();
+        body_len = body->size();
+    }
+
+    // Record request in info if provided
+    if (info) {
+        info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/2", meth, mpath), nullptr);
+    }
+
+    // Submit the HTTP/2 request
+    int32_t stream_id = h2_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink);
+    if (stream_id < 0) {
+        return nullptr;
+    }
+
+    // Send pending data (the request)
+    if (h2_session->sendPendingData(timeout_ms, xsink)) {
+        return nullptr;
+    }
+
+    // Receive data until we have a complete response
+    while (!h2_session->hasCompletedStreams()) {
+        if (h2_session->receiveData(timeout_ms, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
+            // Check if session is in GOAWAY state
+            if (h2_session->isGoawayReceived()) {
+                xsink->raiseException("HTTP2-GOAWAY", "server sent GOAWAY frame");
+                return nullptr;
+            }
+            break;
+        }
+        // Send any pending data (e.g., WINDOW_UPDATE, ACKs)
+        h2_session->sendPendingData(timeout_ms, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    // Get the completed stream
+    std::unique_ptr<Http2StreamInfo> stream = h2_session->takeCompletedStream();
+    if (!stream) {
+        xsink->raiseException("HTTP2-ERROR", "no response received for stream %d", stream_id);
+        return nullptr;
+    }
+
+    code = stream->status_code;
+
+    // Build response hash similar to HTTP/1.x format
+    ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
+
+    // Add status code and message
+    response->setKeyValue("status_code", code, xsink);
+
+    // Map common status codes to messages
+    const char* status_msg = "Unknown";
+    switch (code) {
+        case 200: status_msg = "OK"; break;
+        case 201: status_msg = "Created"; break;
+        case 204: status_msg = "No Content"; break;
+        case 301: status_msg = "Moved Permanently"; break;
+        case 302: status_msg = "Found"; break;
+        case 304: status_msg = "Not Modified"; break;
+        case 400: status_msg = "Bad Request"; break;
+        case 401: status_msg = "Unauthorized"; break;
+        case 403: status_msg = "Forbidden"; break;
+        case 404: status_msg = "Not Found"; break;
+        case 500: status_msg = "Internal Server Error"; break;
+        case 502: status_msg = "Bad Gateway"; break;
+        case 503: status_msg = "Service Unavailable"; break;
+    }
+    response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
+    response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+
+    // Add response headers
+    for (const auto& h : stream->headers) {
+        // Convert header name to lowercase for consistency
+        response->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
+    }
+
+    // Add body if present (must copy data as stream->body will be freed)
+    if (!stream->body.empty()) {
+        BinaryNode* body = new BinaryNode();
+        body->append(stream->body.data(), stream->body.size());
+        response->setKeyValue("body", body, xsink);
+    }
+
+    if (info) {
+        info->setKeyValue("response-headers", response->refSelf(), xsink);
+    }
+
+    return response.release();
 }
 
 void check_headers(const char* str, int len, bool &multipart, QoreHashNode& ans, const QoreEncoding *enc,
@@ -3560,6 +4174,101 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     }
 
     // code >= 300 && < 400 is already handled above
+
+    // For HTTP/2, the body is already in the response hash (as binary)
+    // We need to extract it and convert to string if appropriate
+    if (http2_active && !os && !recv_callback) {
+        QoreValue h2_body = ans->getKeyValue("body");
+        if (h2_body.getType() == NT_BINARY) {
+            const BinaryNode* bin = h2_body.get<const BinaryNode>();
+            if (bin && bin->size()) {
+                // Get charset from content-type header
+                const QoreEncoding* body_enc = msock->socket->getEncoding();
+                const char* ct = get_string_header(xsink, **ans, "content-type", true);
+                if (!*xsink && ct) {
+                    // Look for charset parameter
+                    const char* charset = strstr(ct, "charset=");
+                    if (charset) {
+                        charset += 8;
+                        // Skip quotes if present
+                        if (*charset == '"' || *charset == '\'') {
+                            ++charset;
+                        }
+                        // Extract charset name
+                        QoreString charset_str;
+                        while (*charset && *charset != '"' && *charset != '\'' && *charset != ';' && *charset != ' ') {
+                            charset_str.concat(*charset++);
+                        }
+                        if (!charset_str.empty()) {
+                            body_enc = QEM.findCreate(charset_str.c_str());
+                        }
+                    }
+                }
+                if (!*xsink) {
+                    // Check content-encoding for compression
+                    content_encoding = get_string_header(xsink, **ans, "content-encoding");
+                    if (!*xsink && content_encoding && !encoding_passthru) {
+                        qore_uncompress_to_string_t dec = nullptr;
+                        if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
+                            dec = qore_inflate_to_string;
+                        else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
+                            dec = qore_gunzip_to_string;
+                        else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
+                            dec = qore_bunzip2_to_string;
+#ifdef HAVE_BROTLI
+                        else if (!strcasecmp(content_encoding, "br"))
+                            dec = qore_unbrotli_to_string;
+#endif
+#ifdef HAVE_ZSTD
+                        else if (!strcasecmp(content_encoding, "zstd"))
+                            dec = qore_unzstd_to_string;
+#endif
+                        if (dec) {
+                            QoreStringNode* decoded = dec(bin, body_enc, xsink);
+                            if (!*xsink && decoded) {
+                                ans->setKeyValue("body", decoded, xsink);
+                            }
+                        }
+                    } else if (!*xsink) {
+                        // Only convert binary to string for text content types
+                        // Keep binary data as-is (e.g., for application/octet-stream, images, etc.)
+                        bool is_text = false;
+                        if (ct) {
+                            // Check for text content types
+                            if (!strncasecmp(ct, "text/", 5)) {
+                                is_text = true;
+                            } else if (!strncasecmp(ct, "application/json", 16) ||
+                                       !strncasecmp(ct, "application/xml", 15) ||
+                                       !strncasecmp(ct, "application/javascript", 22) ||
+                                       !strncasecmp(ct, "application/x-www-form-urlencoded", 33)) {
+                                is_text = true;
+                            }
+                        }
+                        if (is_text) {
+                            // Convert binary to string with detected encoding
+                            QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+                            ans->setKeyValue("body", str_body, xsink);
+                        }
+                        // else: keep body as binary
+                    }
+                }
+                if (*xsink) {
+                    disconnect_unlocked();
+                    return nullptr;
+                }
+            }
+        }
+        // For HTTP/2, set response-body in info if needed
+        if (info) {
+            QoreValue body_val = ans->getKeyValue("body");
+            if (body_val) {
+                info->setKeyValue("response-body", body_val.refSelf(), xsink);
+            }
+        }
+        // Skip the HTTP/1.x body reading logic
+        goto http2_body_done;
+    }
+
     if (bodyp && (code < 100 || code >= 200) && code != 204) {
         // see if we should do a binary or string read
         content_encoding = get_string_header(xsink, **ans, "content-encoding");
@@ -3715,6 +4424,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         }
     }
 
+http2_body_done:
     if (*xsink) {
         disconnect_unlocked();
         return nullptr;

@@ -418,6 +418,144 @@ private:
     DLLLOCAL int checkContinuePoll(ExceptionSink* xsink);
 };
 
+class Http2Session;
+
+// HTTP/2 poll operation states
+constexpr int H2S_NONE = 0;
+constexpr int H2S_SEND_PREFACE = 1;
+constexpr int H2S_RECV_PREFACE = 2;
+constexpr int H2S_READING = 3;
+constexpr int H2S_REQUEST_READY = 4;
+constexpr int H2S_SENDING = 5;
+constexpr int H2S_SENT = 6;
+
+//! Poll operation for reading HTTP/2 requests on a server connection
+/** This poll operation handles HTTP/2 server-side request reading:
+    1. Exchange connection preface (SETTINGS frames)
+    2. Read frames until a complete request stream is available
+
+    The output is a hash with request information:
+    - method: HTTP method
+    - path: request path
+    - headers: request headers hash
+    - body: request body (binary)
+    - stream_id: HTTP/2 stream ID for sending response
+    - session: the Http2Session for sending responses
+*/
+class SocketHttp2ServerPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL ~SocketHttp2ServerPollOperation();
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return h2_state == H2S_REQUEST_READY;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual QoreValue getOutput() const;
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        switch (h2_state) {
+            case H2S_NONE: return "none";
+            case H2S_SEND_PREFACE: return "sending-preface";
+            case H2S_RECV_PREFACE: return "receiving-preface";
+            case H2S_READING: return "reading-frames";
+            case H2S_REQUEST_READY: return "request-ready";
+            default: return "unknown";
+        }
+    }
+
+    //! Returns the Http2Session (caller takes ownership)
+    DLLLOCAL Http2Session* takeSession();
+
+    //! Returns the stream ID of the completed request
+    DLLLOCAL int32_t getStreamId() const { return stream_id; }
+
+private:
+    std::unique_ptr<Http2Session> h2_session;
+    int h2_state = H2S_NONE;
+    int32_t stream_id = 0;
+    mutable ReferenceHolder<QoreHashNode> out;
+
+    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+
+    //! Initialize HTTP/2 session
+    DLLLOCAL int initSession(ExceptionSink* xsink);
+};
+
+//! Poll operation for sending HTTP/2 responses
+/** This poll operation sends an HTTP/2 response:
+    - Submits response headers and body
+    - Sends all pending frames
+
+    The HTTP/2 session is retrieved from the socket (stored by a previous
+    read operation).
+*/
+class SocketHttp2SendResponsePollOperation : public SocketPollSocketOperationBase {
+public:
+    //! Creates the poll operation
+    /** @param xsink exception sink
+        @param sock the socket (must have an active HTTP/2 session from a previous read)
+        @param h2_session unused, session is retrieved from socket
+        @param stream_id the stream ID to respond on
+        @param status_code HTTP status code
+        @param headers response headers
+        @param body response body (can be nullptr)
+        @param is_connect if true, use submitConnectResponse for RFC 8441 WebSocket
+    */
+    DLLLOCAL SocketHttp2SendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        Http2Session* h2_session, int32_t stream_id, int status_code,
+        const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false);
+
+    DLLLOCAL ~SocketHttp2SendResponsePollOperation();
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return h2_state == H2S_SENT;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        switch (h2_state) {
+            case H2S_NONE: return "none";
+            case H2S_SENDING: return "sending";
+            case H2S_SENT: return "sent";
+            default: return "unknown";
+        }
+    }
+
+    //! Returns nullptr - session is managed by socket
+    DLLLOCAL Http2Session* takeSession();
+
+private:
+    int h2_state = H2S_NONE;
+    int32_t stream_id = 0;
+
+    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+};
+
 DLLLOCAL QoreClass* initSocketPollOperationClass(QoreNamespace& qorens);
 
 #endif // _QORE_CLASS_SOCKETPOLLOPERATION_H

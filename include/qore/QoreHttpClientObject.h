@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,6 +55,17 @@ constexpr int64 URL_NORMAL         = UC_TARGET | UC_USERNAME | UC_PASSWORD | UC_
 constexpr int64 URL_MASK_PASSWORD  = URL_NORMAL | UC_MASK_PASSWORD;
 
 class Queue;
+
+//! HTTP/2 protocol mode options
+/** @since %Qore 2.2
+*/
+enum Http2Mode {
+    HTTP2_MODE_DISABLED = 0,  //!< HTTP/1.x only, never use HTTP/2
+    HTTP2_MODE_AUTO = 1,      //!< Use HTTP/2 if available via ALPN, fallback to HTTP/1.1 (default)
+    HTTP2_MODE_REQUIRED = 2,  //!< Require HTTP/2, fail if unavailable
+    HTTP2_MODE_H2C_DIRECT = 3,    //!< h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
+    HTTP2_MODE_H2C_UPGRADE = 4    //!< h2c via HTTP/1.1 Upgrade header
+};
 
 //! provides a way to communicate with HTTP servers using Qore data structures
 /** thread-safe, uses QoreSocket for socket communication
@@ -170,6 +181,163 @@ public:
 
     //! returns true if HTTP 1.1 protocol compliance has been set
     DLLEXPORT bool isHTTP11() const;
+
+    //! Returns true if HTTP/2 support is enabled
+    /** @return true if HTTP/2 support is enabled (will try to use h2 via ALPN)
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT bool isHttp2Enabled() const;
+
+    //! Enables or disables HTTP/2 support
+    /** When enabled, the client will offer h2 via ALPN during TLS negotiation.
+        If the server supports HTTP/2, subsequent requests will use HTTP/2.
+
+        @param enable true to enable HTTP/2, false to disable
+
+        @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Enabled(bool enable);
+
+    //! Returns true if the connection is currently using HTTP/2
+    /** @return true if HTTP/2 is active on the current connection
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT bool isHttp2Active() const;
+
+    //! Returns the current HTTP/2 settings
+    /** @return a hash with HTTP/2 settings, or nullptr if HTTP/2 is not active
+
+        The returned hash may contain:
+        - \c header_table_size: HPACK header table size
+        - \c enable_push: whether server push is enabled
+        - \c max_concurrent_streams: maximum concurrent streams
+        - \c initial_window_size: initial flow control window size
+        - \c max_frame_size: maximum frame size
+        - \c max_header_list_size: maximum header list size
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreHashNode* getHttp2Settings() const;
+
+    //! Sets HTTP/2 settings to be used for new connections
+    /** @param settings a hash with HTTP/2 settings to apply
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Settings(const QoreHashNode* settings, ExceptionSink* xsink);
+
+    //! Sets HTTP/2 stream priority
+    /** @param stream_id the stream ID to set priority for
+        @param weight priority weight (1-256, default 16)
+        @param dependency stream ID this stream depends on (0 for root)
+        @param exclusive if true, becomes exclusive dependency
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2StreamPriority(int32_t stream_id, int32_t weight, int32_t dependency,
+        bool exclusive, ExceptionSink* xsink);
+
+    //! Returns the negotiated HTTP protocol version string
+    /** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreStringNode* getHttpVersion() const;
+
+    //! Sets the HTTP/2 protocol mode
+    /** @param mode the HTTP/2 mode: HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, or HTTP2_MODE_REQUIRED
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @note The default mode is HTTP2_MODE_AUTO, which uses HTTP/2 if available via ALPN
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT void setHttp2Mode(int mode, ExceptionSink* xsink);
+
+    //! Returns the current HTTP/2 protocol mode
+    /** @return the current HTTP/2 mode: HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, or HTTP2_MODE_REQUIRED
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int getHttp2Mode() const;
+
+    //! Sends an HTTP/2 extended CONNECT request (RFC 8441)
+    /** @param path the request path
+        @param headers request headers
+        @param protocol the :protocol pseudo-header value (e.g., "websocket")
+        @param info optional reference to a hash to receive connection info
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return response hash with headers and stream_id, or nullptr on error
+
+        @note This method is used for WebSocket over HTTP/2 (RFC 8441)
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT QoreHashNode* sendHttp2Connect(const char* path, const QoreHashNode* headers,
+        const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
+
+    //! Sends data on an HTTP/2 stream
+    /** @param stream_id the stream ID to send data on
+        @param data the data to send
+        @param end_stream if true, signals end of stream (no more data will be sent)
+        @param timeout_ms timeout in milliseconds
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 on success, -1 on error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads data from an HTTP/2 stream
+    /** @param stream_id the stream ID to read data from
+        @param timeout_ms timeout in milliseconds
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return binary data read, or nullptr if no data available or error
+
+        @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Returns the HTTP/2 stream ID for the current request
+    /** @return the stream ID, or 0 if not in HTTP/2 mode
+
+        @since %Qore 2.2
+    */
+    DLLEXPORT int32_t getHttp2StreamId() const;
+
+    //! Returns true if the HTTP/2 stream has buffered data available
+    /** @param stream_id the stream ID to check
+
+        @return true if the stream has buffered data, false otherwise
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasHttp2StreamData(int32_t stream_id) const;
+
+    //! Checks if HTTP/2 stream data is available, polling the socket if needed
+    /** @param stream_id the stream ID to check
+        @param timeout_ms timeout in milliseconds for polling
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return true if data is available, false otherwise
+
+        @note This method first checks for buffered data, then polls the socket for new
+        HTTP/2 frames if no data is buffered. This is the correct way to check for
+        data availability when using HTTP/2 streams.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     //! sets the connection URL
     /** @param url the URL to use for connection parameters
