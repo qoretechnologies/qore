@@ -132,9 +132,16 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         SimpleRefHolder<QoreMinusOperatorNode> del(this);
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder rv(this, *xsink);
-        val = rv.takeReferencedValue();
-        parse_context.typeInfo = val.getFullTypeInfo();
-        return **xsink ? -1 : 0;
+        QoreValue result = rv.takeReferencedValue();
+        // only use parse-time folding if we got a valid result
+        // (constants may not be fully resolved at parse time, resulting in NOTHING)
+        if (!result.isNothing() || **xsink) {
+            val = result;
+            parse_context.typeInfo = val.getFullTypeInfo();
+            return **xsink ? -1 : 0;
+        }
+        // constants not resolved - skip parse-time folding, let runtime handle it
+        del.release();
     }
 
     // issue #4834: if the rhs is NOTHING, then return the type of the lhs and raise a warning

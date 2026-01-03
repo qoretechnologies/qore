@@ -141,8 +141,16 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     ExceptionSink xsink;
     ValueEvalOptimizedRefHolder rv(this, &xsink);
     assert(!xsink);
-    val = rv.takeReferencedValue();
-    parse_context.typeInfo = val.getFullTypeInfo();
+    QoreValue result = rv.takeReferencedValue();
+    // only use parse-time folding if we got a valid result
+    // (constants may not be fully resolved at parse time, resulting in NOTHING)
+    if (!result.isNothing()) {
+        val = result;
+        parse_context.typeInfo = val.getFullTypeInfo();
+        return 0;
+    }
+    // constants not resolved - skip parse-time folding, let runtime handle it
+    holder.release();
     return 0;
 }
 

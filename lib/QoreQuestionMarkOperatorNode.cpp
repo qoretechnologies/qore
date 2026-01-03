@@ -60,9 +60,16 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
-        val = v.takeReferencedValue();
-        typeInfo = val.getTypeInfo();
-        return 0;
+        QoreValue result = v.takeReferencedValue();
+        // only use parse-time folding if we got a valid result
+        // (constants may not be fully resolved at parse time, resulting in NOTHING)
+        if (!result.isNothing()) {
+            val = result;
+            typeInfo = val.getTypeInfo();
+            return 0;
+        }
+        // constants not resolved - skip parse-time folding, let runtime handle it
+        del.release();
     }
 
     // FIXME: find common type if l != r type

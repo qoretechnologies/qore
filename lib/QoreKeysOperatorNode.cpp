@@ -76,17 +76,26 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     if (!err && exp.isValue()) {
-        ReferenceHolder<> holder(this, 0);
         qore_type_t t = exp.getType();
         if (t == NT_HASH || t == NT_OBJECT) {
+            ReferenceHolder<> holder(this, 0);
             ValueEvalOptimizedRefHolder rv(this, 0);
-            parse_context.typeInfo = rv->getTypeInfo();
-            val = rv.takeReferencedValue();
+            QoreValue result = rv.takeReferencedValue();
+            // only use parse-time folding if we got a valid result
+            // (constants may not be fully resolved at parse time, resulting in NOTHING)
+            if (!result.isNothing()) {
+                parse_context.typeInfo = result.getTypeInfo();
+                val = result;
+                return 0;
+            }
+            // constants not resolved - skip parse-time folding, let runtime handle it
+            holder.release();
         } else {
+            ReferenceHolder<> holder(this, 0);
             parse_context.typeInfo = nothingTypeInfo;
             val.clear();
+            return 0;
         }
-        return 0;
     }
 
     parse_context.typeInfo = returnTypeInfo;
