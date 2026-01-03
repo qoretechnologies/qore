@@ -38,6 +38,20 @@
 
 #include <qore/QoreThreadLock.h>
 
+// Forward declaration
+class ExceptionSink;
+
+//! @defgroup condition_wait_results Condition Wait Result Codes
+//! Result codes for QoreCondition::waitWithInterrupt() methods
+//@{
+//! Wait completed successfully (condition was signaled)
+#define QORE_COND_RESULT_SUCCESS 0
+//! Wait timed out
+#define QORE_COND_RESULT_TIMEOUT 1
+//! Wait was interrupted by sandbox manager
+#define QORE_COND_RESULT_INTERRUPTED 2
+//@}
+
 //! a thread condition class implementing a wrapper for pthread_cond_t
 /** all threads that block on a given QoreCondition object should use the same mutex or QoreThreadLock object for blocking
     @see QoreThreadLock
@@ -150,6 +164,93 @@ public:
     */
     DLLLOCAL int wait2(QoreThreadLock& l, int64 timeout_ms) {
         return wait2(&l, timeout_ms);
+    }
+
+    //! blocks a thread on a mutex until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking. When a SandboxManager is attached
+        to the current program and an interrupt is requested, this method will return
+        with QORE_COND_RESULT_INTERRUPTED.
+
+        @param m the mutex to wait on
+        @param xsink exception sink for interrupt errors (optional - if nullptr, no exception raised)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLEXPORT int waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink = nullptr);
+
+    //! blocks a thread on a mutex for a certain number of milliseconds until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking. When a SandboxManager is attached
+        to the current program and an interrupt is requested, this method will return
+        with QORE_COND_RESULT_INTERRUPTED.
+
+        @param m the mutex to wait on
+        @param timeout_ms the timeout value in milliseconds; if < 0 will wait indefinitely
+        @param xsink exception sink for interrupt errors (optional - if nullptr, no exception raised)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLEXPORT int waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink = nullptr);
+
+    //! blocks a thread on a lock until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking.
+
+        @param l the QoreThreadLock to wait on
+        @param xsink exception sink for interrupt errors (optional)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLLOCAL int waitWithInterrupt(QoreThreadLock* l, ExceptionSink* xsink = nullptr) {
+        return waitWithInterrupt(&l->ptm_lock, xsink);
+    }
+
+    //! blocks a thread on a lock for a certain number of milliseconds until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking.
+
+        @param l the QoreThreadLock to wait on
+        @param timeout_ms the timeout value in milliseconds; if < 0 will wait indefinitely
+        @param xsink exception sink for interrupt errors (optional)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLLOCAL int waitWithInterrupt(QoreThreadLock* l, int64 timeout_ms, ExceptionSink* xsink = nullptr) {
+        return waitWithInterrupt(&l->ptm_lock, timeout_ms, xsink);
+    }
+
+    //! blocks a thread on a lock until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking.
+
+        @param l the QoreThreadLock to wait on
+        @param xsink exception sink for interrupt errors (optional)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLLOCAL int waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink = nullptr) {
+        return waitWithInterrupt(&l, xsink);
+    }
+
+    //! blocks a thread on a lock for a certain number of milliseconds until the condition is signaled, with interrupt support
+    /** This method supports sandbox interrupt checking.
+
+        @param l the QoreThreadLock to wait on
+        @param timeout_ms the timeout value in milliseconds; if < 0 will wait indefinitely
+        @param xsink exception sink for interrupt errors (optional)
+
+        @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
+
+        @since Qore 2.1
+    */
+    DLLLOCAL int waitWithInterrupt(QoreThreadLock& l, int64 timeout_ms, ExceptionSink* xsink = nullptr) {
+        return waitWithInterrupt(&l, timeout_ms, xsink);
     }
 
 private:

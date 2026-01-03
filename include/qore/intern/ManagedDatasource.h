@@ -68,8 +68,8 @@ protected:
     // returns true if we have the transaction lock, false if not
     DLLLOCAL bool endDBAction(char cmd = DAH_NOCHANGE, bool new_transaction = false);
     DLLLOCAL int closeUnlocked(ExceptionSink* xsink);
-    // returns 0 for OK, -1 for error
-    DLLLOCAL int grabLockIntern();
+    // returns 0 for OK, -1 for timeout, -2 for interrupt
+    DLLLOCAL int grabLockIntern(ExceptionSink* xsink = nullptr);
     DLLLOCAL void grabLockUnconditionalIntern();
     // returns 0 for OK, -1 for error
     DLLLOCAL int grabLock(ExceptionSink* xsink);

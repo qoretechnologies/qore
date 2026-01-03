@@ -39,6 +39,7 @@
 
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/AbstractPollState.h"
+#include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
 #include <cstdio>
@@ -372,22 +373,45 @@ struct qore_qf_private {
         // must be called with the lock held
         assert(m.trylock());
 
-        ssize_t rc;
-        while (true) {
-            rc = ::write(fd, buf, len);
-            // try again if we are interrupted by a signal
-            if (rc >= 0 || errno != EINTR)
+        // Check for sandbox interrupt support
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
+        const char* ptr = static_cast<const char*>(buf);
+        size_t remaining = len;
+        size_t total_written = 0;
+
+        while (remaining > 0) {
+            // Check for interrupt
+            if (sm && xsink && sm->checkIOInterrupt(xsink, "file write")) {
+                return -1;
+            }
+
+            ssize_t rc;
+            while (true) {
+                rc = ::write(fd, ptr, remaining);
+                // try again if we are interrupted by a signal
+                if (rc >= 0 || errno != EINTR)
+                    break;
+            }
+
+            if (rc > 0) {
+                ptr += rc;
+                remaining -= rc;
+                total_written += rc;
+                do_write_event_unlocked(rc, total_written, len);
+            } else if (rc < 0) {
+                if (xsink) {
+                    xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed writing " QSD " byte%s to File", len,
+                        len == 1 ? "" : "s");
+                }
+                return rc;
+            } else {
+                // rc == 0, nothing written but no error
                 break;
+            }
         }
 
-        if (rc > 0) {
-            do_write_event_unlocked(rc, rc, len);
-        } else if (xsink && rc < 0) {
-            xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed writing " QSD " byte%s to File", len,
-                len == 1 ? "" : "s");
-        }
-
-        return rc;
+        return total_written;
     }
 
     // private function, unlocked
@@ -441,12 +465,43 @@ struct qore_qf_private {
         char* buf = (char* )malloc(sizeof(char) * bs);
         char* bbuf = 0;
 
+        // Check for sandbox interrupt support
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+
         while (true) {
-            // wait for data
-            if (timeout_ms >= 0 && !isDataAvailableIntern(timeout_ms, mname, xsink)) {
-                if (!*xsink)
-                    xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded (%d ms) reading file block in "
-                        "ReadOnlyFile::%s()", timeout_ms, mname);
+            // Check for interrupt
+            if (sm && sm->checkIOInterrupt(xsink, "file read")) {
+                br = 0;
+                break;
+            }
+
+            // wait for data with polling for interruptibility
+            int effective_timeout = timeout_ms;
+            if (sm && (timeout_ms < 0 || timeout_ms > poll_interval)) {
+                effective_timeout = poll_interval;
+            }
+
+            if (effective_timeout >= 0 && !isDataAvailableIntern(effective_timeout, mname, xsink)) {
+                if (*xsink) {
+                    br = 0;
+                    break;
+                }
+                // If we used a smaller timeout for polling, continue if not timed out yet
+                if (sm && timeout_ms != effective_timeout) {
+                    if (timeout_ms > 0) {
+                        timeout_ms -= effective_timeout;
+                        if (timeout_ms <= 0) {
+                            xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded reading file block in "
+                                "ReadOnlyFile::%s()", mname);
+                            br = 0;
+                            break;
+                        }
+                    }
+                    continue;  // Continue polling
+                }
+                xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded (%d ms) reading file block in "
+                    "ReadOnlyFile::%s()", timeout_ms, mname);
                 br = 0;
                 break;
             }
@@ -505,7 +560,7 @@ struct qore_qf_private {
         return rc == -1 ? 0 : str.release();
     }
 
-    DLLLOCAL int readLine(QoreString& str, bool incl_eol = true) {
+    DLLLOCAL int readLine(QoreString& str, bool incl_eol = true, ExceptionSink* xsink = nullptr) {
         str.clear();
 
         AutoLocker al(m);
@@ -516,9 +571,22 @@ struct qore_qf_private {
 
         bool tty = (bool)isatty(fd);
 
+        // Check for sandbox interrupt support
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
         int ch, rc = -1;
+        int char_count = 0;
+        const int check_interval = 100;  // Check interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
+            // Check for interrupt periodically
+            if (sm && xsink && ++char_count >= check_interval) {
+                char_count = 0;
+                if (sm->checkIOInterrupt(xsink, "file readLine")) {
+                    return -1;
+                }
+            }
+
             str.concat((char)ch);
             if (rc == -1)
                 rc = 0;
@@ -552,7 +620,7 @@ struct qore_qf_private {
         return rc;
     }
 
-    DLLLOCAL int readUntil(char byte, QoreString& str, bool incl_byte = true) {
+    DLLLOCAL int readUntil(char byte, QoreString& str, bool incl_byte = true, ExceptionSink* xsink = nullptr) {
         str.clear();
 
         AutoLocker al(m);
@@ -561,9 +629,22 @@ struct qore_qf_private {
         if (!is_open)
             return -2;
 
+        // Check for sandbox interrupt support
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
         int ch, rc = -1;
+        int char_count = 0;
+        const int check_interval = 100;  // Check interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
+            // Check for interrupt periodically
+            if (sm && xsink && ++char_count >= check_interval) {
+                char_count = 0;
+                if (sm->checkIOInterrupt(xsink, "file readUntil")) {
+                    return -1;
+                }
+            }
+
             char c = ch;
             str.concat(c);
             if (rc == -1)
@@ -745,9 +826,9 @@ struct qore_qf_private {
     }
 
     // not the most efficient search algorithm, restarts the search the byte after it fails for multi-byte patterns
-    DLLLOCAL int readUntil(const char* bytes, QoreString& str, bool incl_bytes) {
+    DLLLOCAL int readUntil(const char* bytes, QoreString& str, bool incl_bytes, ExceptionSink* xsink = nullptr) {
         if (!bytes[1])
-            return readUntil(bytes[0], str, incl_bytes);
+            return readUntil(bytes[0], str, incl_bytes, xsink);
 
         str.clear();
 
@@ -757,12 +838,25 @@ struct qore_qf_private {
         if (!is_open)
             return -2;
 
+        // Check for sandbox interrupt support
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
         // offset in bytes
         unsigned pos = 0;
 
         int ch, rc = -1;
+        int char_count = 0;
+        const int check_interval = 100;  // Check interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
+            // Check for interrupt periodically
+            if (sm && xsink && ++char_count >= check_interval) {
+                char_count = 0;
+                if (sm->checkIOInterrupt(xsink, "file readUntil")) {
+                    return -1;
+                }
+            }
+
             char c = ch;
             str.concat(c);
             if (rc == -1)

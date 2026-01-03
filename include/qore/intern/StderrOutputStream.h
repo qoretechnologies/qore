@@ -33,6 +33,11 @@
 #define _QORE_STDERROUTPUTSTREAM_H
 
 #include "qore/OutputStream.h"
+#include <qore/QoreSandboxManager.h>
+
+#include <unistd.h>
+#include <poll.h>
+#include <cerrno>
 
 /**
  * @brief Private data for the Qore::StderrOutputStream class.
@@ -57,16 +62,70 @@ public:
 
    DLLLOCAL void write(const void *ptr, int64 count, ExceptionSink *xsink) override {
       assert(count >= 0);
-      if (count < 0)
+      if (count <= 0)
          return;
+
+      // Check for sandbox interrupt support
+      QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
       const char* current = reinterpret_cast<const char*>(ptr);
-      int64 blockCount = count / WRITE_BLOCK_SIZE;
-      for (int64 i = 0; i < blockCount; i++) {
-         fwrite(current, WRITE_BLOCK_SIZE, 1, stderr);
-         current = (current + WRITE_BLOCK_SIZE);
-         count -= WRITE_BLOCK_SIZE;
+      int64 remaining = count;
+
+      while (remaining > 0) {
+         // Check for interrupt
+         if (sm && sm->checkIOInterrupt(xsink, "stderr write")) {
+            return;
+         }
+
+         // Write in blocks
+         size_t to_write = remaining > WRITE_BLOCK_SIZE ? WRITE_BLOCK_SIZE : remaining;
+         ssize_t written = ::write(STDERR_FILENO, current, to_write);
+
+         if (written < 0) {
+            if (errno == EINTR) {
+               continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+               // Would block - poll for write readiness
+               const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+               struct pollfd pfd;
+               pfd.fd = STDERR_FILENO;
+               pfd.events = POLLOUT;
+
+               while (true) {
+                  int pret = ::poll(&pfd, 1, poll_ms);
+                  if (pret > 0) {
+                     // Ready for writing
+                     break;
+                  }
+                  if (pret == 0) {
+                     // Timeout - check for interrupt and retry
+                     if (sm && sm->checkIOInterrupt(xsink, "stderr write")) {
+                        return;
+                     }
+                     break;
+                  }
+                  // pret < 0: error
+                  if (errno == EINTR) {
+                     // Interrupted by signal - check for sandbox interrupt then retry poll
+                     if (sm && sm->checkIOInterrupt(xsink, "stderr write")) {
+                        return;
+                     }
+                     continue;
+                  }
+                  xsink->raiseErrnoException("STDERR-WRITE-ERROR", errno,
+                     "error polling stderr for write readiness");
+                  return;
+               }
+               continue;
+            }
+            xsink->raiseErrnoException("STDERR-WRITE-ERROR", errno, "error writing to stderr");
+            return;
+         }
+
+         current += written;
+         remaining -= written;
       }
-      fwrite(ptr, count, 1, stderr);
    }
 private:
    static const int WRITE_BLOCK_SIZE = 1024;

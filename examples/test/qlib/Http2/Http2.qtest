@@ -133,6 +133,15 @@ class EchoWebSocketHandler inherits WebSocketHandler::WebSocketHandler {
 }
 
 public class Http2Test inherits QUnit::Test {
+    public {
+        # Command-line options
+        const MyOpts = Opts + {
+            "external": "e,external",
+        };
+
+        const OptionColumn = 22;
+    }
+
     private {
         HttpServer mServer;
         int port;
@@ -141,7 +150,7 @@ public class Http2Test inherits QUnit::Test {
         bool skip_complex_tests = is_file("/etc/alpine-release");
     }
 
-    constructor() : Test("Http2Test", "1.0") {
+    constructor() : Test("Http2Test", "1.0", \ARGV, MyOpts) {
         addTestCase("HTTP/2 settings test", \testHttp2Settings());
         addTestCase("HTTP/2 enable/disable test", \testHttp2EnableDisable());
         addTestCase("HTTP/2 version string test", \testHttp2VersionString());
@@ -170,6 +179,11 @@ public class Http2Test inherits QUnit::Test {
         if (mServer) {
             delete mServer;
         }
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-e,--external", "run tests that connect to external servers", OptionColumn);
     }
 
     testAlpnNegotiation() {
@@ -916,6 +930,12 @@ public class Http2Test inherits QUnit::Test {
     }
 
     testHttp2ConnectionPersistence() {
+        # Skip external server tests unless explicitly enabled with -e,--external
+        if (!m_options.external) {
+            testSkip("external server tests disabled; use -e,--external to enable");
+            return;
+        }
+
         # Skip on Alpine - external network tests can hang
         if (skip_complex_tests) {
             testSkip("Skipping external server test on Alpine");

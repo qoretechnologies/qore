@@ -30,6 +30,9 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreCounter.h>
+#include <qore/QoreCondition.h>
+
+#include <cerrno>
 
 struct qore_counter_private {
     enum cond_status_e { Cond_Deleted = -1 };
@@ -92,9 +95,20 @@ struct qore_counter_private {
         ++waiting;
         while (cnt && cnt != Cond_Deleted) {
             if (!timeout_ms) {
-                cond.wait(&l);
+                // Use interruptible wait for sandbox support
+                rc = cond.waitWithInterrupt(&l, xsink);
+                if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                    --waiting;
+                    return -1;  // Exception already raised
+                }
             } else {
-                if ((rc = cond.wait(&l, timeout_ms))) {
+                // Use interruptible wait with timeout for sandbox support
+                rc = cond.waitWithInterrupt(&l, timeout_ms, xsink);
+                if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                    --waiting;
+                    return -1;  // Exception already raised
+                }
+                if (rc == QORE_COND_RESULT_TIMEOUT) {
                     break;
                 }
             }
@@ -105,7 +119,7 @@ struct qore_counter_private {
                 "another thread while waiting %p", this);
             return -1;
         }
-        return rc;
+        return rc == QORE_COND_RESULT_TIMEOUT ? ETIMEDOUT : 0;
     }
 
     DLLLOCAL void waitForZero() {

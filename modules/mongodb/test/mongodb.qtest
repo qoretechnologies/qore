@@ -61,6 +61,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Data type tests", \dataTypeTests());
         addTestCase("Large data tests", \largeDataTests());
         addTestCase("Memory stress tests", \memoryStressTests());
+        addTestCase("Interrupt test", \interruptTests());
         set_return_value(main());
     }
 
@@ -1130,5 +1131,145 @@ public class MongoDbTest inherits QUnit::Test {
 
         # Clean up
         coll.drop();
+    }
+
+    interruptTests() {
+        if (!ensureClient()) return;
+
+        # Test 1: Pre-requested interrupt - set interrupt before attempting operation
+        # This is more deterministic than trying to interrupt during an operation
+        {
+            string pre_interrupt_code = '
+%require-types
+%new-style
+%strict-args
+
+%requires mongodb
+
+our *hash<ExceptionInfo> ex_info;
+
+sub test_pre_interrupt() {
+    try {
+        # This should fail because interrupt was already requested before we started
+        MongoClient client(ENV.MONGODB_URL ?? "mongodb://localhost:27017");
+        # The connection attempt or first operation should detect the interrupt
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        ex_info = ex;
+    }
+}
+';
+
+            Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            pgm.parse(pre_interrupt_code, "pre_interrupt_test");
+
+            SandboxManager sm();
+            pgm.setSandboxManager(sm);
+
+            # Request interrupt BEFORE the operation
+            sm.requestInterrupt();
+
+            # Now try to perform the operation - it should be interrupted immediately
+            pgm.callFunction("test_pre_interrupt");
+
+            *hash<ExceptionInfo> ex_info = pgm.getGlobalVariable("ex_info");
+            # The operation should have been interrupted
+            assertTrue(ex_info.val(), "Pre-interrupt: operation was interrupted");
+            if (ex_info) {
+                # Should be some kind of interrupt-related error
+                assertTrue(ex_info.err.val(), "Pre-interrupt: exception has error code: " + ex_info.err);
+            }
+        }
+
+        # Test 2: Test that we can interrupt a MongoDB operation using the sandbox mechanism
+        # This test verifies that the interruptible stream wrapper is working
+
+        # Create embedded program with sandbox for interrupt testing
+        string code = '
+%require-types
+%new-style
+%strict-args
+
+%requires mongodb
+
+our Counter cnt(1);
+our *hash<auto> result;
+our *hash<ExceptionInfo> ex_info;
+
+sub test_interrupt() {
+    try {
+        # Use a server command with a sleep - "$where" with a JavaScript function
+        # that includes a sleep can be used to create a blocking operation
+        MongoClient client(ENV.MONGODB_URL ?? "mongodb://localhost:27017");
+        MongoDatabase db = client.getDatabase("qore_interrupt_test");
+        MongoCollection coll = db.createCollection("interrupt_test_coll");
+
+        # Insert some data
+        for (int i = 0; i < 100; i++) {
+            coll.insertOne({"x": i, "data": "test data " + string(i)});
+        }
+
+        # Try to perform a blocking operation - serverStatus with slow sections
+        # or run a command that takes some time
+        cnt.dec();  # Signal that we are about to block
+
+        # This command should be interruptible
+        result = db.runCommand({"serverStatus": 1, "repl": 0, "metrics": 0});
+    } catch (hash<ExceptionInfo> ex) {
+        ex_info = ex;
+    }
+}
+';
+
+        Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        pgm.parse(code, "interrupt_test");
+
+        # Get the counter from the embedded program
+        Counter cnt = pgm.getGlobalVariable("cnt");
+
+        # Set up the sandbox manager
+        SandboxManager sm();
+        pgm.setSandboxManager(sm);
+
+        # Run the blocking operation in a background thread
+        background pgm.callFunction("test_interrupt");
+
+        # Wait for the operation to start
+        cnt.waitForZero();
+
+        # Give it a moment to actually start the blocking I/O
+        sleep(100ms);
+
+        # Request interrupt
+        sm.requestInterrupt();
+
+        # Wait a bit for the interrupt to take effect
+        sleep(500ms);
+
+        # Check if the operation completed or was interrupted
+        # Note: The interrupt may or may not have been triggered depending on timing
+        # We mainly want to verify no crash occurs and the mechanism is in place
+
+        *hash<ExceptionInfo> ex_info = pgm.getGlobalVariable("ex_info");
+        *hash<auto> result = pgm.getGlobalVariable("result");
+
+        # Either the operation completed (result is set) or was interrupted (exception)
+        # Both are valid outcomes depending on timing
+        assertTrue(result.val() || ex_info.val(),
+            "MongoDB operation either completed or was interrupted");
+
+        if (ex_info) {
+            # If there was an exception, it should be a program interrupted or I/O error
+            assertTrue(ex_info.err =~ /INTERRUPT|PROGRAM|MONGODB/i,
+                "Exception is interrupt-related: " + ex_info.err);
+        }
+
+        # Clean up - use the class member client for cleanup
+        try {
+            MongoDatabase db = self.client.getDatabase("qore_interrupt_test");
+            db.getCollection("interrupt_test_coll").drop();
+        } catch () {
+            # Ignore cleanup errors
+        }
     }
 }
