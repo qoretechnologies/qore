@@ -276,7 +276,7 @@ class qdx {
     string adjustQuotedStrings(string line) {
         int flag = 0;
         int i = 0;
-        while (i < line.size()) {
+        while (i < line.length()) {
             switch (flag) {
                 case 0:
                     switch (line[i]) {
@@ -1016,12 +1016,13 @@ class qdx {
             ++line_cnt;
             string line = ins.getValue();
 
-            for (int i = 0; i < line.size(); ++i) {
+            # Use length() for character count, not size() which returns byte count
+            for (int i = 0; i < line.length(); ++i) {
                 string c = line[i];
 
                 # Handle block comments that span lines
                 if (in_block_comment) {
-                    if (c == "*" && i + 1 < line.size() && line[i + 1] == "/") {
+                    if (c == "*" && i + 1 < line.length() && line[i + 1] == "/") {
                         in_block_comment = False;
                         ++i;  # skip the /
                     }
@@ -1057,10 +1058,10 @@ class qdx {
                 }
 
                 # Handle regex start
-                if ((c == "!" || c == "=") && i + 1 < line.size() && line[i + 1] == "~") {
+                if ((c == "!" || c == "=") && i + 1 < line.length() && line[i + 1] == "~") {
                     ++i;  # skip ~
                     # find the regex delimiter
-                    while (++i < line.size()) {
+                    while (++i < line.length()) {
                         if (line[i] == "s") {
                             ++regex;
                         } else if (line[i] == "/") {
@@ -1078,10 +1079,15 @@ class qdx {
                     if (!--cnt) {
                         return line_cnt;
                     }
+                } else if (c == "$") {
+                    # Handle $# (loop iteration index) - skip the # so it's not treated as a comment
+                    if (i + 1 < line.length() && line[i + 1] == "#") {
+                        ++i;  # skip the #
+                    }
                 } else if (c == "#") {
                     # Line comment - skip rest of line
                     break;
-                } else if (c == "/" && i + 1 < line.size() && line[i + 1] == "*") {
+                } else if (c == "/" && i + 1 < line.length() && line[i + 1] == "*") {
                     # Block comment start
                     in_block_comment = True;
                     ++i;  # skip *
