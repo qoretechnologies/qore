@@ -442,7 +442,7 @@ public:
     ResolvedCallReferenceNode* thr_init = nullptr;
 
     // return value for use with %exec-class
-    QoreValue exec_class_rv;
+    QoreValue exec_class_rv{};
 
     // public object that owns this private implementation
     QoreProgram* pgm;

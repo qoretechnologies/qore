@@ -2782,7 +2782,7 @@ namespace {
             btp->startThread(xsink);
 
             {
-                QoreValue rv;
+                QoreValue rv{};
                 ThreadData* td = thread_data.get();
 
                 {

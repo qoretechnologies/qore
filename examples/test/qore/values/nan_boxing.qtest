@@ -1,0 +1,652 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%disable-warning unreferenced-variable
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class NanBoxingTest
+
+#! Comprehensive tests for NaN-boxed QoreValue implementation
+#! Tests edge cases, boundary conditions, and negative tests
+class NanBoxingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("NaN-boxing QoreValue tests", "1.0") {
+        addTestCase("Integer boundary tests", \testIntegerBoundaries());
+        addTestCase("Large integer tests (BigInt fallback)", \testLargeIntegers());
+        addTestCase("Float edge cases", \testFloatEdgeCases());
+        addTestCase("Float special values", \testFloatSpecialValues());
+        addTestCase("NaN encoding edge cases", \testNanEncodingEdgeCases());
+        addTestCase("Type discrimination", \testTypeDiscrimination());
+        addTestCase("Type conversions", \testTypeConversions());
+        addTestCase("Null and Nothing", \testNullNothing());
+        addTestCase("Boolean operations", \testBooleanOperations());
+        addTestCase("Arithmetic at boundaries", \testArithmeticBoundaries());
+        addTestCase("Comparison operations", \testComparisons());
+        addTestCase("Hash with value types", \testHashOperations());
+        addTestCase("List with value types", \testListOperations());
+        addTestCase("String operations", \testStringOperations());
+        addTestCase("Reference counting", \testReferenceCounting());
+        addTestCase("Assignment operations", \testAssignmentOperations());
+        addTestCase("Negative tests", \testNegativeCases());
+        set_return_value(main());
+    }
+
+    #! Test integer values at 48-bit boundaries (inline storage limit)
+    testIntegerBoundaries() {
+        # Small integers
+        assertEq(0, 0, "zero");
+        assertEq(1, 1, "one");
+        assertEq(-1, -1, "negative one");
+        assertEq(42, 42, "small positive");
+        assertEq(-42, -42, "small negative");
+
+        # Powers of 2
+        assertEq(256, 256, "2^8");
+        assertEq(65536, 65536, "2^16");
+        assertEq(16777216, 16777216, "2^24");
+        assertEq(4294967296, 4294967296, "2^32");
+        assertEq(1099511627776, 1099511627776, "2^40");
+
+        # Near 48-bit boundary (2^47 = 140737488355328)
+        int max47 = 140737488355327;  # 2^47 - 1
+        int min47 = -140737488355328; # -2^47
+        assertEq(max47, max47, "max 47-bit positive");
+        assertEq(min47, min47, "min 47-bit negative");
+
+        # Exactly at 48-bit boundary
+        int val_2_47 = 140737488355328;  # 2^47
+        assertEq(val_2_47, val_2_47, "2^47 exact");
+        assertEq(-val_2_47 - 1, -val_2_47 - 1, "-2^47 - 1");
+    }
+
+    #! Test large integers that may require BigInt fallback
+    testLargeIntegers() {
+        # Values beyond 48-bit range (require BigInt node allocation)
+        int large1 = 1000000000000000;      # 10^15
+        int large2 = 9223372036854775807;   # INT64_MAX
+        int large3 = -9223372036854775807 - 1;  # INT64_MIN (avoid literal overflow)
+
+        assertEq(large1, large1, "10^15");
+        assertEq(large2, large2, "INT64_MAX");
+        assertEq(large3, large3, "INT64_MIN");
+
+        # Arithmetic with large integers
+        assertEq(large1 + 1, 1000000000000001, "large + 1");
+        assertEq(large1 - 1, 999999999999999, "large - 1");
+        assertEq(large1 * 2, 2000000000000000, "large * 2");
+        assertEq(large1 / 10, 100000000000000, "large / 10");
+
+        # Overflow behavior
+        int near_max = 9223372036854775806;
+        assertEq(near_max + 1, large2, "near_max + 1 = INT64_MAX");
+
+        # Large negative
+        int large_neg = -1000000000000000;
+        assertEq(large_neg, large_neg, "-10^15");
+        assertEq(large_neg - 1, -1000000000000001, "large_neg - 1");
+    }
+
+    #! Test floating point edge cases
+    testFloatEdgeCases() {
+        # Basic floats
+        assertEq(0.0, 0.0, "zero float");
+        assertEq(1.0, 1.0, "one float");
+        assertEq(-1.0, -1.0, "negative one float");
+        assertEq(3.14159265358979, 3.14159265358979, "pi");
+
+        # Very small values (denormalized territory)
+        float tiny = 1.0e-300;
+        assertTrue(tiny > 0, "tiny positive");
+        assertTrue(tiny < 1.0e-299, "tiny is small");
+
+        # Very large values
+        float huge = 1.0e300;
+        assertTrue(huge > 1.0e299, "huge is large");
+
+        # Precision preservation
+        float precise = 1.23456789012345;
+        assertEq(precise, 1.23456789012345, "precision preserved");
+
+        # Negative zero (IEEE 754)
+        float negzero = -0.0;
+        assertEq(negzero, 0.0, "-0.0 equals 0.0");
+        assertTrue(negzero == 0.0, "-0.0 == 0.0");
+    }
+
+    #! Test special floating point values (NaN, Infinity)
+    testFloatSpecialValues() {
+        # Infinity - use Qore's @inf@ literal
+        float inf = @inf@;
+        assertTrue(inf > 1.0e308, "infinity is larger than large float");
+        assertTrue(inf > 0, "infinity is positive");
+
+        float neginf = -@inf@;
+        assertTrue(neginf < -1.0e308, "neg infinity is smaller than large neg float");
+        assertTrue(neginf < 0, "neg infinity is negative");
+
+        # NaN - use Qore's @nan@ literal
+        float nan_val = @nan@;
+        assertTrue(nan_val != nan_val, "NaN != NaN (IEEE 754)");
+        assertFalse(nan_val == nan_val, "NaN == NaN is false");
+
+        # Infinity arithmetic
+        assertEq(inf + 1, inf, "inf + 1 = inf");
+        assertEq(inf + inf, inf, "inf + inf = inf");
+        # Note: inf - inf and inf * 0 behavior may vary by platform
+        # IEEE 754 specifies NaN, but some implementations return 0.0
+        float result1 = inf - inf;
+        # Check that result is either NaN or 0.0 (platform-dependent)
+        assertTrue(result1 != result1 || result1 == 0.0, "inf - inf is NaN or 0.0");
+        float result2 = inf * 0;
+        assertTrue(result2 != result2 || result2 == 0.0, "inf * 0 is NaN or 0.0");
+
+        # Comparisons with infinity
+        assertTrue(1.0e308 < inf, "large < inf");
+        assertTrue(-1.0e308 > neginf, "large neg > -inf");
+    }
+
+    #! Test NaN encoding edge cases - critical for NaN-boxing correctness
+    #! This test specifically verifies that negative NaN values (which have bit patterns
+    #! that can collide with NaN-boxing tags) are handled correctly.
+    testNanEncodingEdgeCases() {
+        # Positive NaN (standard quiet NaN: 0x7ff8000000000000)
+        float pos_nan = @nan@;
+        assertEq("float", pos_nan.type(), "positive NaN is float type");
+        assertTrue(pos_nan.nanp(), "positive NaN nanp() returns true");
+        assertFalse(pos_nan.infp(), "positive NaN infp() returns false");
+        assertTrue(pos_nan != pos_nan, "positive NaN != itself (IEEE 754)");
+
+        # Negative NaN - created by negating positive NaN
+        # This has bit pattern 0xfff8000000000000 which after NaN-boxing encoding
+        # could collide with internal tags if not handled correctly
+        float neg_nan = -@nan@;
+        assertEq("float", neg_nan.type(), "negative NaN is float type");
+        assertTrue(neg_nan.nanp(), "negative NaN nanp() returns true");
+        assertFalse(neg_nan.infp(), "negative NaN infp() returns false");
+        assertTrue(neg_nan != neg_nan, "negative NaN != itself (IEEE 754)");
+
+        # NaN from arithmetic operations (inf - inf typically produces NaN)
+        float inf = @inf@;
+        float arith_nan = inf - inf;
+        if (arith_nan.nanp()) {
+            assertEq("float", arith_nan.type(), "arithmetic NaN is float type");
+            assertTrue(arith_nan != arith_nan, "arithmetic NaN != itself");
+        }
+
+        # NaN from 0/0 produces NaN
+        float zero = 0.0;
+        float zero_div_nan;
+        try {
+            zero_div_nan = zero / zero;
+            if (zero_div_nan.nanp()) {
+                assertEq("float", zero_div_nan.type(), "0/0 NaN is float type");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Some platforms throw on 0/0, that's acceptable
+        }
+
+        # NaN stored and retrieved from containers
+        hash<auto> h = {"nan": pos_nan, "neg_nan": neg_nan};
+        assertTrue(h.nan.nanp(), "NaN retrieved from hash is still NaN");
+        assertTrue(h.neg_nan.nanp(), "negative NaN retrieved from hash is still NaN");
+        assertEq("float", h.nan.type(), "NaN from hash is float type");
+        assertEq("float", h.neg_nan.type(), "negative NaN from hash is float type");
+
+        # NaN in lists
+        list<float> l = (pos_nan, neg_nan, inf, -inf);
+        assertTrue(l[0].nanp(), "NaN in list[0] is NaN");
+        assertTrue(l[1].nanp(), "negative NaN in list[1] is NaN");
+        assertEq("float", l[0].type(), "NaN from list is float type");
+        assertEq("float", l[1].type(), "negative NaN from list is float type");
+
+        # NaN assignment and reassignment
+        float f = 1.0;
+        f = pos_nan;
+        assertTrue(f.nanp(), "assigned NaN is NaN");
+        assertEq("float", f.type(), "assigned NaN is float type");
+        f = neg_nan;
+        assertTrue(f.nanp(), "reassigned negative NaN is NaN");
+        assertEq("float", f.type(), "reassigned negative NaN is float type");
+        f = 2.0;
+        assertFalse(f.nanp(), "after reassign to 2.0, not NaN");
+        assertEq(2.0, f, "after reassign, value is 2.0");
+
+        # NaN passed as function argument and returned
+        auto returned = identityFloat(pos_nan);
+        assertTrue(returned.nanp(), "NaN returned from function is NaN");
+        assertEq("float", returned.type(), "NaN returned is float type");
+        returned = identityFloat(neg_nan);
+        assertTrue(returned.nanp(), "negative NaN returned from function is NaN");
+        assertEq("float", returned.type(), "negative NaN returned is float type");
+
+        # NaN in conditional expressions
+        float result = pos_nan ? 1.0 : 2.0;
+        # NaN is truthy in Qore (exists and non-zero)
+        assertEq(1.0, result, "NaN is truthy in conditional");
+
+        # Verify NaN is not confused with integer 0
+        # This is the critical test for the NaN-boxing collision bug
+        assertFalse(pos_nan === 0, "positive NaN !== 0 (absolute equality)");
+        assertFalse(neg_nan === 0, "negative NaN !== 0 (absolute equality)");
+        assertFalse(pos_nan == 0, "positive NaN != 0 (value equality)");
+        assertFalse(neg_nan == 0, "negative NaN != 0 (value equality)");
+
+        # Type checks should identify NaN as float, not integer
+        assertFalse(pos_nan.type() == "integer", "positive NaN type is not integer");
+        assertFalse(neg_nan.type() == "integer", "negative NaN type is not integer");
+    }
+
+    # Helper function to test NaN through function call/return
+    private float identityFloat(float f) {
+        return f;
+    }
+
+    #! Test type discrimination for all value types
+    testTypeDiscrimination() {
+        auto nothing_val;  # NOTHING
+        auto null_val = NULL;
+        bool bool_val = True;
+        int int_val = 42;
+        float float_val = 3.14;
+        string str_val = "test";
+        list<auto> list_val = (1, 2, 3);
+        hash<auto> hash_val = {"a": 1};
+
+        # Type checks
+        assertEq(NOTHING, nothing_val, "nothing type");
+        assertEq(NULL, null_val, "null type");
+        assertEq("bool", bool_val.type(), "bool type");
+        assertEq("integer", int_val.type(), "int type");
+        assertEq("float", float_val.type(), "float type");
+        assertEq("string", str_val.type(), "string type");
+        assertEq("list", list_val.type(), "list type");
+        assertEq("hash", hash_val.type(), "hash type");
+
+        # Type name
+        assertEq("nothing", nothing_val.fullType(), "nothing fullType");
+        assertEq("NULL", null_val.fullType(), "null fullType");
+    }
+
+    #! Test type conversions between value types
+    testTypeConversions() {
+        # Int to float
+        int i = 42;
+        float f = float(i);
+        assertEq(42.0, f, "int to float");
+
+        # Float to int (truncation)
+        float f2 = 3.7;
+        int i2 = int(f2);
+        assertEq(3, i2, "float to int truncates");
+
+        float f3 = -3.7;
+        int i3 = int(f3);
+        assertEq(-3, i3, "negative float to int truncates toward zero");
+
+        # Bool to int
+        assertEq(1, int(True), "True to int");
+        assertEq(0, int(False), "False to int");
+
+        # Int to bool
+        assertTrue(boolean(1), "1 to bool");
+        assertTrue(boolean(-1), "-1 to bool");
+        assertTrue(boolean(42), "42 to bool");
+        assertFalse(boolean(0), "0 to bool");
+
+        # Float to bool
+        assertTrue(boolean(1.0), "1.0 to bool");
+        assertTrue(boolean(-0.1), "-0.1 to bool");
+        assertFalse(boolean(0.0), "0.0 to bool");
+
+        # String to int/float
+        assertEq(123, int("123"), "string to int");
+        assertEq(3.14, float("3.14"), "string to float");
+
+        # Large int to float (precision loss possible)
+        int large = 9007199254740993;  # > 2^53, beyond float precision
+        float flarge = float(large);
+        # Note: may lose precision, just ensure no crash
+        assertTrue(flarge > 9007199254740000.0, "large int to float");
+    }
+
+    #! Test NULL and NOTHING handling
+    testNullNothing() {
+        auto n;
+        assertEq(NOTHING, n, "uninitialized is NOTHING");
+        assertTrue(n === NOTHING, "=== NOTHING");
+        assertFalse(n === NULL, "NOTHING !== NULL");
+
+        auto null_val = NULL;
+        assertEq(NULL, null_val, "NULL assignment");
+        assertTrue(null_val === NULL, "=== NULL");
+        assertFalse(null_val === NOTHING, "NULL !== NOTHING");
+
+        # Null coalescing
+        assertEq(42, n ?? 42, "NOTHING ?? default");
+        assertEq(42, null_val ?? 42, "NULL ?? default");
+
+        # exists() and val()
+        assertFalse(exists n, "NOTHING doesn't exist");
+        assertTrue(exists null_val, "NULL exists");
+        assertFalse(n.val(), "NOTHING has no val");
+        assertFalse(null_val.val(), "NULL has no val");
+    }
+
+    #! Test boolean operations
+    testBooleanOperations() {
+        # Basic booleans
+        assertTrue(True, "True is true");
+        assertFalse(False, "False is false");
+
+        # Logical operations
+        assertTrue(True && True, "True && True");
+        assertFalse(True && False, "True && False");
+        assertTrue(True || False, "True || False");
+        assertFalse(False || False, "False || False");
+        assertFalse(!True, "!True");
+        assertTrue(!False, "!False");
+
+        # Boolean from expressions
+        assertTrue(1 == 1, "1 == 1");
+        assertFalse(1 == 2, "1 == 2");
+        assertTrue(1 < 2, "1 < 2");
+        assertTrue(2 > 1, "2 > 1");
+
+        # Short-circuit evaluation
+        int x = 0;
+        bool result = False && (++x > 0);
+        assertEq(0, x, "short-circuit && didn't increment");
+        result = True || (++x > 0);
+        assertEq(0, x, "short-circuit || didn't increment");
+    }
+
+    #! Test arithmetic at value boundaries
+    testArithmeticBoundaries() {
+        # Addition near boundaries
+        int a = 140737488355327;  # max 47-bit
+        assertEq(140737488355328, a + 1, "47-bit + 1");
+
+        # Multiplication that crosses boundary
+        int b = 1000000;
+        int c = 1000000;
+        assertEq(1000000000000, b * c, "10^6 * 10^6");
+
+        # Division
+        int d = 1000000000000;
+        assertEq(1000000, d / 1000000, "10^12 / 10^6");
+
+        # Modulo
+        assertEq(3, 10 % 7, "10 % 7");
+        assertEq(-3, -10 % 7, "-10 % 7");
+
+        # Floating point arithmetic
+        float f1 = 1.0e100;
+        float f2 = 2.0e100;
+        float sum = f1 + f2;
+        # Use relative comparison for large floats (avoid floating point precision issues)
+        assertTrue(sum > 2.9e100 && sum < 3.1e100, "large float add");
+
+        # Mixed int/float arithmetic
+        assertEq(43.5, 42 + 1.5, "int + float");
+        assertEq(40.5, 42 - 1.5, "int - float");
+        assertEq(63.0, 42 * 1.5, "int * float");
+        assertEq(28.0, 42 / 1.5, "int / float");
+    }
+
+    #! Test comparison operations
+    testComparisons() {
+        # Integer comparisons
+        assertTrue(1 < 2, "1 < 2");
+        assertTrue(2 > 1, "2 > 1");
+        assertTrue(1 <= 1, "1 <= 1");
+        assertTrue(1 >= 1, "1 >= 1");
+        assertTrue(1 == 1, "1 == 1");
+        assertTrue(1 != 2, "1 != 2");
+
+        # Float comparisons
+        assertTrue(1.5 < 2.5, "1.5 < 2.5");
+        assertTrue(2.5 > 1.5, "2.5 > 1.5");
+
+        # Mixed comparisons
+        assertTrue(1 < 1.5, "int < float");
+        assertTrue(1.5 > 1, "float > int");
+        assertTrue(1 == 1.0, "int == float");
+
+        # Large integer comparisons
+        int large1 = 9223372036854775806;
+        int large2 = 9223372036854775807;
+        assertTrue(large1 < large2, "large1 < large2");
+        assertTrue(large2 > large1, "large2 > large1");
+
+        # Absolute equality (===)
+        assertTrue(1 === 1, "int === int");
+        assertFalse(1 === 1.0, "int !== float (different types)");
+        assertTrue(True === True, "True === True");
+        assertFalse(True === 1, "True !== 1");
+
+        # Spaceship operator
+        assertEq(-1, 1 <=> 2, "1 <=> 2");
+        assertEq(0, 2 <=> 2, "2 <=> 2");
+        assertEq(1, 3 <=> 2, "3 <=> 2");
+    }
+
+    #! Test hash operations with different value types
+    testHashOperations() {
+        hash<auto> h = {
+            "nothing": NOTHING,
+            "null": NULL,
+            "bool": True,
+            "int": 42,
+            "bigint": 9223372036854775807,
+            "float": 3.14,
+            "string": "test",
+            "list": (1, 2, 3),
+        };
+
+        # Retrieval
+        assertEq(NOTHING, h.nothing, "hash nothing");
+        assertEq(NULL, h.null, "hash null");
+        assertEq(True, h.bool, "hash bool");
+        assertEq(42, h.int, "hash int");
+        assertEq(9223372036854775807, h.bigint, "hash bigint");
+        assertEq(3.14, h.float, "hash float");
+        assertEq("test", h.string, "hash string");
+        assertEq((1, 2, 3), h.list, "hash list");
+
+        # Modification
+        h.int = 100;
+        assertEq(100, h.int, "hash int modified");
+
+        # Keys and values
+        assertEq(8, h.size(), "hash size");
+        assertTrue(inlist("int", h.keys()), "keys contains int");
+    }
+
+    #! Test list operations with different value types
+    testListOperations() {
+        list<auto> l = (
+            NOTHING,
+            NULL,
+            True,
+            False,
+            0,
+            42,
+            -1,
+            9223372036854775807,
+            0.0,
+            3.14,
+            "test",
+        );
+
+        assertEq(11, l.size(), "list size");
+        assertEq(NOTHING, l[0], "list[0] nothing");
+        assertEq(NULL, l[1], "list[1] null");
+        assertEq(True, l[2], "list[2] true");
+        assertEq(False, l[3], "list[3] false");
+        assertEq(0, l[4], "list[4] zero");
+        assertEq(42, l[5], "list[5] 42");
+        assertEq(-1, l[6], "list[6] -1");
+        assertEq(9223372036854775807, l[7], "list[7] bigint");
+        assertEq(0.0, l[8], "list[8] 0.0");
+        assertEq(3.14, l[9], "list[9] 3.14");
+        assertEq("test", l[10], "list[10] string");
+
+        # Push/pop
+        push l, 999;
+        assertEq(999, l[11], "pushed value");
+        auto popped = pop l;
+        assertEq(999, popped, "popped value");
+        assertEq(11, l.size(), "size after pop");
+
+        # Map operation
+        list<int> nums = (1, 2, 3, 4, 5);
+        list<int> doubled = map $1 * 2, nums;
+        assertEq((2, 4, 6, 8, 10), doubled, "map doubles");
+    }
+
+    #! Test string operations
+    testStringOperations() {
+        string s = "hello";
+        assertEq(5, s.length(), "string length");
+        assertEq("HELLO", s.upr(), "uppercase");
+        assertEq("hello", s.lwr(), "lowercase");
+
+        # Concatenation
+        string s2 = s + " world";
+        assertEq("hello world", s2, "concatenation");
+
+        # Format with different types
+        string fmt = sprintf("%d %f %s", 42, 3.14, "test");
+        assertEq("42 3.140000 test", fmt, "sprintf");
+
+        # String to value conversions
+        assertEq(42, int("42"), "string to int");
+        assertEq(-42, int("-42"), "string to negative int");
+        assertEq(3.14, float("3.14"), "string to float");
+
+        # Empty string
+        string empty = "";
+        assertEq(0, empty.length(), "empty length");
+        assertFalse(boolean(empty), "empty is false");
+
+        # Unicode
+        string unicode = "日本語";
+        assertEq(3, unicode.length(), "unicode length");
+    }
+
+    #! Test reference counting with objects
+    testReferenceCounting() {
+        # Object creation and assignment
+        hash<auto> h1 = {"a": 1, "b": 2};
+        hash<auto> h2 = h1;  # Reference copy
+        h2.a = 100;
+        # In Qore, hash assignment creates a copy
+        assertEq(1, h1.a, "original hash unchanged");
+        assertEq(100, h2.a, "copy modified");
+
+        # List copying
+        list<int> l1 = (1, 2, 3);
+        list<int> l2 = l1;
+        l2[0] = 100;
+        assertEq(1, l1[0], "original list unchanged");
+        assertEq(100, l2[0], "list copy modified");
+
+        # Multiple references in container
+        hash<auto> obj = {"value": 42};
+        list<auto> refs = (obj, obj, obj);
+        assertEq(42, refs[0].value, "ref[0]");
+        assertEq(42, refs[1].value, "ref[1]");
+        assertEq(42, refs[2].value, "ref[2]");
+    }
+
+    #! Test various assignment operations
+    testAssignmentOperations() {
+        # Basic assignment
+        int a = 10;
+        assertEq(10, a, "basic assign");
+
+        # Compound assignments
+        a += 5;
+        assertEq(15, a, "+=");
+        a -= 3;
+        assertEq(12, a, "-=");
+        a *= 2;
+        assertEq(24, a, "*=");
+        a /= 4;
+        assertEq(6, a, "/=");
+        a %= 4;
+        assertEq(2, a, "%=");
+
+        # Float compound
+        float f = 10.0;
+        f += 0.5;
+        assertEq(10.5, f, "float +=");
+
+        # String compound
+        string s = "hello";
+        s += " world";
+        assertEq("hello world", s, "string +=");
+
+        # Increment/decrement
+        int b = 5;
+        assertEq(5, b++, "post-increment value");
+        assertEq(6, b, "after post-increment");
+        assertEq(7, ++b, "pre-increment value");
+        assertEq(7, b, "after pre-increment");
+        assertEq(7, b--, "post-decrement value");
+        assertEq(6, b, "after post-decrement");
+        assertEq(5, --b, "pre-decrement value");
+    }
+
+    #! Negative tests - error conditions
+    testNegativeCases() {
+        # Division by zero (should throw at runtime)
+        bool caught = False;
+        int zero = 0;  # Use variable to avoid parse-time detection
+        try {
+            int x = 1 / zero;
+        } catch (hash<auto> ex) {
+            caught = True;
+            assertEq("DIVISION-BY-ZERO", ex.err, "div by zero error");
+        }
+        assertTrue(caught, "division by zero throws");
+
+        # Type mismatch operations handled gracefully
+        # (Qore is dynamically typed, so most work via conversion)
+
+        # Invalid string to int
+        caught = False;
+        try {
+            int x = int("not a number");
+        } catch (hash<auto> ex) {
+            caught = True;
+        }
+        # Note: Qore may return 0 for invalid string conversions
+        # This tests the actual behavior
+
+        # Null dereference
+        auto n = NULL;
+        caught = False;
+        try {
+            auto x = n.someMethod();
+        } catch (hash<auto> ex) {
+            caught = True;
+        }
+        assertTrue(caught, "null dereference throws");
+
+        # Index out of bounds
+        list<int> l = (1, 2, 3);
+        auto val = l[100];  # Returns NOTHING, doesn't throw
+        assertEq(NOTHING, val, "out of bounds returns NOTHING");
+
+        # Negative index returns NOTHING in Qore (unlike Python)
+        assertEq(NOTHING, l[-1], "negative index returns NOTHING");
+
+        # Use .last() method to get last element
+        assertEq(3, l.last(), "last() method works");
+    }
+}

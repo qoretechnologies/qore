@@ -38,7 +38,7 @@
 // to maintain the order of inserts
 class HashMember {
 public:
-    QoreValue val;
+    QoreValue val{};
     std::string key;
 
     DLLLOCAL HashMember(const char* n_key) : key(n_key) {

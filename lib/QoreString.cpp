@@ -1878,16 +1878,18 @@ bool QoreString::equalPartialPath(const QoreString& str, ExceptionSink* xsink) c
         enc = str.priv->getEncoding();
 
     if (!enc->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot perform path matching on non-ASCII-compatible " \
-            "encoding \"%s\"", enc->getCode());
+        if (xsink) {
+            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot perform path matching on non-ASCII-compatible " \
+                "encoding \"%s\"", enc->getCode());
+        }
         return false;
     }
 
     TempEncodingHelper a(this, enc, xsink);
-    if (xsink && *xsink)
+    if ((xsink && *xsink) || !a)
         return false;
     TempEncodingHelper b(str, enc, xsink);
-    if (xsink && *xsink)
+    if ((xsink && *xsink) || !b)
         return false;
 
     if (a->size() < b->size())

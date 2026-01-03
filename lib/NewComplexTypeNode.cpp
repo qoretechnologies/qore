@@ -85,7 +85,7 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexList(parse_context.typeInfo);
         if (ti) {
             ReferenceHolder<> holder(this, nullptr);
-            QoreValue new_args;
+            QoreValue new_args{};
             const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
             parse_context.typeInfo = ti;
             if (qore_list_private::parseInitComplexListInitialization(loc, parse_context, takeArgs(), new_args)

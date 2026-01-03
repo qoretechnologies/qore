@@ -89,7 +89,7 @@ public:
     }
 
 protected:
-    QoreValue val;
+    QoreValue val{};
     bool validp;
 };
 

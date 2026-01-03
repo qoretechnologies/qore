@@ -725,6 +725,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreMultiplicationOperatorNode.cpp
     lib/QoreBackgroundOperatorNode.cpp
     lib/QoreValue.cpp
+    lib/QoreBigIntNode.cpp
+    lib/QoreBigFloatNode.cpp
     lib/StreamPipe.cpp
     lib/CompressionTransforms.cpp
     lib/EncryptionTransforms.cpp
@@ -998,6 +1000,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRangeOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSquareBracketsRangeOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreValue.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigIntNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigFloatNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperatorInterface.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperator.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/StreamPipe.cpp\"
@@ -1177,12 +1181,12 @@ endif (WIN32 OR MINGW OR MSYS)
 
 set_target_properties(libqore PROPERTIES OUTPUT_NAME qore)
 if (APPLE)
-    set_target_properties(libqore PROPERTIES VERSION 12)
-    set_target_properties(libqore PROPERTIES SOVERSION 12)
+    set_target_properties(libqore PROPERTIES VERSION 20)
+    set_target_properties(libqore PROPERTIES SOVERSION 20)
     set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
 else (APPLE)
-    set_target_properties(libqore PROPERTIES VERSION 12.7.0)
-    set_target_properties(libqore PROPERTIES SOVERSION 12)
+    set_target_properties(libqore PROPERTIES VERSION 20.0.0)
+    set_target_properties(libqore PROPERTIES SOVERSION 20)
 endif (APPLE)
 
 if (ADDRESS_SANITIZER)

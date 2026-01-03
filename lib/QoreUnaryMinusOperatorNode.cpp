@@ -53,7 +53,7 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     switch (v->getType()) {
         case NT_NUMBER: {
             needs_deref = true;
-            return static_cast<QoreNumberNode *>(v->v.n)->negate();
+            return static_cast<QoreNumberNode *>(v->getInternalNode())->negate();
         }
 
         case NT_FLOAT: {

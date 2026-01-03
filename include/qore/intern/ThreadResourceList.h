@@ -39,7 +39,7 @@
 typedef std::set<AbstractThreadResource*> trset_t;
 
 struct ArgPgm {
-    QoreValue arg;
+    QoreValue arg{};
     QoreProgram* pgm;
 
     DLLLOCAL ArgPgm(const QoreValue arg, QoreProgram* pgm) : arg(arg.refSelf()), pgm(pgm) {

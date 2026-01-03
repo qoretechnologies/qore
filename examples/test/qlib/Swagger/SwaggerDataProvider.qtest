@@ -14,6 +14,11 @@
 %define NoYaml
 %endtry
 
+%ifdef NoYaml
+# Stub function when yaml module is not available
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%endif
+
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/QUnit.qm
@@ -46,6 +51,7 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
     }
 
     compatTest() {
+        checkModules();
         hash<auto> schema = {
             "swagger": "2.0",
             "info": {

@@ -277,29 +277,23 @@ DateTimeValueHelper::DateTimeValueHelper(const AbstractQoreNode* n) {
 
 DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n) {
     if (!n.isNullOrNothing()) {
-        switch (n.type) {
-            case QV_Node: {
-                dt = n.v.n->getDateTimeRepresentation(del);
-                return;
-            }
-            case QV_Bool: {
-                dt = DateTime::makeRelativeFromSeconds(n.v.b ? 1 : 0);
-                del = true;
-                return;
-            }
-            case QV_Int: {
-                dt = DateTime::makeRelativeFromSeconds(n.v.i);
-                del = true;
-                return;
-            }
-            case QV_Float: {
-                dt = DateTime::makeRelativeFromSeconds((int64)n.v.f, (int)((n.v.f - (double)((int)n.v.f)) * 1000000));
-                del = true;
-                return;
-            }
-            default:
-                assert(false);
-                // no break
+        qore_type_t t = n.getType();
+        if (t == NT_BOOLEAN) {
+            dt = DateTime::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0);
+            del = true;
+            return;
+        } else if (t == NT_INT) {
+            dt = DateTime::makeRelativeFromSeconds(n.getAsBigInt());
+            del = true;
+            return;
+        } else if (t == NT_FLOAT) {
+            double f = n.getAsFloat();
+            dt = DateTime::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
+            del = true;
+            return;
+        } else if (n.hasNode()) {
+            dt = n.getInternalNode()->getDateTimeRepresentation(del);
+            return;
         }
     }
     dt = ZeroDate;
@@ -341,31 +335,25 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const AbstractQoreNode* n, Exce
 
 DateTimeNodeValueHelper::DateTimeNodeValueHelper(const QoreValue& n) {
     if (!n.isNullOrNothing()) {
-        switch (n.type) {
-            case QV_Node: {
-                del = true;
-                dt = new DateTimeNode;
-                n.v.n->getDateTimeRepresentation(*dt);
-                return;
-            }
-            case QV_Bool: {
-                dt = DateTimeNode::makeRelativeFromSeconds(n.v.b ? 1 : 0);
-                del = true;
-                return;
-            }
-            case QV_Int: {
-                dt = DateTimeNode::makeRelativeFromSeconds(n.v.i);
-                del = true;
-                return;
-            }
-            case QV_Float: {
-                dt = DateTimeNode::makeRelativeFromSeconds((int64)n.v.f, (int)((n.v.f - (double)((int)n.v.f)) * 1000000));
-                del = true;
-                return;
-            }
-            default:
-                assert(false);
-                // no break
+        qore_type_t t = n.getType();
+        if (t == NT_BOOLEAN) {
+            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBool() ? 1 : 0);
+            del = true;
+            return;
+        } else if (t == NT_INT) {
+            dt = DateTimeNode::makeRelativeFromSeconds(n.getAsBigInt());
+            del = true;
+            return;
+        } else if (t == NT_FLOAT) {
+            double f = n.getAsFloat();
+            dt = DateTimeNode::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
+            del = true;
+            return;
+        } else if (n.hasNode()) {
+            del = true;
+            dt = new DateTimeNode;
+            n.getInternalNode()->getDateTimeRepresentation(*dt);
+            return;
         }
     }
     dt = ZeroDate;

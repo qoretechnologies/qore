@@ -699,7 +699,9 @@ include_HEADERS = \
 	include/qore/UnicodeCharacterIterator.h \
     include/qore/AbstractPollState.h \
     include/qore/AbstractPollableIoObjectBase.h \
-    include/qore/QoreRegexInterface.h
+    include/qore/QoreRegexInterface.h \
+    include/qore/QoreBigIntNode.h \
+    include/qore/QoreBigFloatNode.h
 
 noinst_HEADERS = \
 	include/qore/macros-none.h \

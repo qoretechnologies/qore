@@ -3,7 +3,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -419,6 +419,9 @@ void QoreSignalManager::signal_handler_thread() {
     tclist.exec();
 
     tcount.dec();
+
+    // clean up thread-local storage before exiting (issue #5085)
+    qore_thread_local_storage_cleanup();
 
     //fprintf(stderr, "signal handler thread stopped (count: %d) &ptid: %p\n", tcount.getCount(), &ptid);
     //fflush(stderr);

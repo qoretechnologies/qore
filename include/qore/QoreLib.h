@@ -622,7 +622,7 @@ DLLEXPORT int qore_release_signals(const sig_vec_t& sig_vec, const char* name);
 #define QORE_MIN(a, b) ((a) < (b) ? (a) : (b))
 
 //! macro for no argument
-#define QORE_PARAM_NO_ARG QoreSimpleValue().assign(nullptr)
+#define QORE_PARAM_NO_ARG QoreSimpleValue{}
 
 // define QORE_PATH_MAX
 #ifndef QORE_PATH_MAX

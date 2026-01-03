@@ -244,6 +244,8 @@
 #include "QoreRangeOperatorNode.cpp"
 #include "QoreSquareBracketsRangeOperatorNode.cpp"
 #include "QoreValue.cpp"
+#include "QoreBigIntNode.cpp"
+#include "QoreBigFloatNode.cpp"
 #include "FunctionalOperatorInterface.cpp"
 #include "FunctionalOperator.cpp"
 #include "StreamPipe.cpp"

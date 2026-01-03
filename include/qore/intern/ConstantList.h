@@ -95,7 +95,7 @@ public:
     ParseWarnOptions pwo;
     std::string name;
     const QoreTypeInfo* typeInfo;
-    QoreValue val;
+    QoreValue val{};
     bool in_init : 1,     // being initialized
         pub : 1,          // public constant (modules only)
         init : 1,         // already initialized
@@ -189,7 +189,7 @@ public:
     }
 
 protected:
-    QoreValue saved_val;
+    QoreValue saved_val{};
     ClassAccess access;
     std::string from_module;
 

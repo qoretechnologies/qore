@@ -42,7 +42,7 @@ private:
 
 public:
     const QoreProgramLocation* loc;
-    QoreValue val;
+    QoreValue val{};
     StatementBlock* code;
     CaseNode* next = nullptr;
     bool def;
@@ -80,7 +80,7 @@ public:
 
 private:
     CaseNode* head = nullptr, *tail = nullptr;
-    QoreValue sexp;
+    QoreValue sexp{};
     CaseNode* deflt = nullptr;
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context0);

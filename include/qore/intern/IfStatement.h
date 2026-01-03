@@ -46,7 +46,7 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 private:
-    QoreValue cond;
+    QoreValue cond{};
     StatementBlock* if_code;
     StatementBlock* else_code;
     LVList* lvars = nullptr;

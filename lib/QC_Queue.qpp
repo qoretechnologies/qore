@@ -232,7 +232,7 @@ auto Queue::get(timeout timeout_ms = 0) {
         }
     }
 
-    QoreValue rv;
+    QoreValue rv{};
     bool to;
     rv = q->shift(xsink, self, timeout_ms, &to);
     queue_check_timeout(to, timeout_ms, xsink);
@@ -307,7 +307,7 @@ auto Queue::pop(timeout timeout_ms = 0) {
         }
     }
 
-    QoreValue rv;
+    QoreValue rv{};
     bool to;
     rv = q->pop(xsink, self, timeout_ms, &to);
     queue_check_timeout(to, timeout_ms, xsink);

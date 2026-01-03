@@ -108,6 +108,7 @@ public class Main inherits QUnit::Test {
     }
 
     pollTest() {
+        checkModule();
         if (!mrc) {
             testSkip("no connection");
         }

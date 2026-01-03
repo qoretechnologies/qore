@@ -305,7 +305,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
 QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int timeout_ms, bool& to) {
     to = false;
     bool dec_obj = false;
-    QoreValue rv;
+    QoreValue rv{};
     {
         SafeLocker sl(&l);
 
@@ -364,7 +364,7 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
 QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int timeout_ms, bool& to) {
     to = false;
     bool dec_obj = false;
-    QoreValue rv;
+    QoreValue rv{};
     {
         SafeLocker sl(&l);
 
