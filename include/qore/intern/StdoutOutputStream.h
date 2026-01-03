@@ -33,6 +33,11 @@
 #define _QORE_STDOUTOUTPUTSTREAM_H
 
 #include "qore/OutputStream.h"
+#include <qore/QoreSandboxManager.h>
+
+#include <unistd.h>
+#include <poll.h>
+#include <cerrno>
 
 /**
  * @brief Private data for the Qore::StdoutOutputStream class.
@@ -57,16 +62,47 @@ public:
 
    DLLLOCAL void write(const void *ptr, int64 count, ExceptionSink *xsink) override {
       assert(count >= 0);
-      if (count < 0)
+      if (count <= 0)
          return;
+
+      // Check for sandbox interrupt support
+      QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
       const char* current = reinterpret_cast<const char*>(ptr);
-      int64 blockCount = count / WRITE_BLOCK_SIZE;
-      for (int64 i = 0; i < blockCount; i++) {
-         fwrite(current, WRITE_BLOCK_SIZE, 1, stdout);
-         current = (current + WRITE_BLOCK_SIZE);
-         count -= WRITE_BLOCK_SIZE;
+      int64 remaining = count;
+
+      while (remaining > 0) {
+         // Check for interrupt
+         if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+            return;
+         }
+
+         // Write in blocks
+         size_t to_write = remaining > WRITE_BLOCK_SIZE ? WRITE_BLOCK_SIZE : remaining;
+         ssize_t written = ::write(STDOUT_FILENO, current, to_write);
+
+         if (written < 0) {
+            if (errno == EINTR) {
+               continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+               // Would block - poll for write readiness
+               if (sm) {
+                  const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+                  struct pollfd pfd;
+                  pfd.fd = STDOUT_FILENO;
+                  pfd.events = POLLOUT;
+                  poll(&pfd, 1, poll_ms);
+               }
+               continue;
+            }
+            xsink->raiseErrnoException("STDOUT-WRITE-ERROR", errno, "error writing to stdout");
+            return;
+         }
+
+         current += written;
+         remaining -= written;
       }
-      fwrite(ptr, count, 1, stdout);
    }
 private:
    static const int WRITE_BLOCK_SIZE = 1024;

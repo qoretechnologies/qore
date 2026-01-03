@@ -86,20 +86,24 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
             ++read_waiting;
-            rc = timeout_ms ? read_cond.wait(l, timeout_ms) : read_cond.wait(l);
+            // Use interruptible wait for sandbox support
+            rc = read_cond.waitWithInterrupt(l, timeout_ms, xsink);
             --read_waiting;
+            // Check for interrupt
+            if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                return QW_ERROR;  // Exception already raised
+            }
         } else {
-            rc = ETIMEDOUT;
+            rc = QORE_COND_RESULT_TIMEOUT;
         }
 
-        if (rc) {
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
 #ifdef DEBUG
             // if an error has occurred, then it must be due to a timeout
             if (!timeout_ms)
                 printd(0, "qore_queue_private::waitReadIntern(timeout_ms=0) this: %p pthread_cond_wait() returned rc: %d\n", this, rc);
 #endif
             assert(timeout_ms);
-            assert(rc == ETIMEDOUT);
             return QW_TIMEOUT;
         }
 
@@ -129,20 +133,24 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
             ++write_waiting;
-            rc = timeout_ms ? write_cond.wait(l, timeout_ms) : write_cond.wait(l);
+            // Use interruptible wait for sandbox support
+            rc = write_cond.waitWithInterrupt(l, timeout_ms, xsink);
             --write_waiting;
+            // Check for interrupt
+            if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                return QW_ERROR;  // Exception already raised
+            }
         } else {
-            rc = ETIMEDOUT;
+            rc = QORE_COND_RESULT_TIMEOUT;
         }
 
-        if (rc) {
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
 #ifdef DEBUG
             // if an error has occurred, then it must be due to a timeout
             if (!timeout_ms)
                 printd(0, "qore_queue_private::waitWriteIntern(timeout_ms=0) this: %p pthread_cond_wait() returned rc: %d\n", this, rc);
 #endif
             assert(timeout_ms);
-            assert(rc == ETIMEDOUT);
             return QW_TIMEOUT;
         }
 

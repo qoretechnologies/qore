@@ -388,6 +388,10 @@ sm.clearInterrupt();
     - **Auto-lock constructors**: AutoLock, AutoReadLock, AutoWriteLock (polled every 500ms)
     - **Queue operations**: Queue::get(), Queue::pop() (polled every 500ms)
     - **Thread synchronization**: Counter::waitForZero(), Condition::wait(), Gate::enter() (polled every 500ms)
+    - **File I/O**: File read, write, and lock operations (polled at I/O poll interval)
+    - **Stream I/O**: PipeInputStream::read(), PipeOutputStream::write() (polled at I/O poll interval)
+    - **Standard I/O**: StdoutOutputStream::write(), StderrOutputStream::write() (polled at I/O poll interval)
+    - **Database operations**: Datasource transaction lock acquisition (polled at I/O poll interval)
 
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
 
@@ -402,6 +406,7 @@ sm.clearInterrupt();
     |----------------|------------------|---------|
     | sleep(), usleep() | 100ms | Fast response for timed waits |
     | Threading primitives | 500ms | Lower overhead for lock contention |
+    | I/O operations | 500ms | Consistent with threading primitives |
 
     @note The polling mechanism only incurs overhead when a @ref Qore::SandboxManager "SandboxManager"
     is attached to the Program. Normal programs without a SandboxManager have zero polling overhead.

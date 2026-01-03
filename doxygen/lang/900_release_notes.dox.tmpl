@@ -172,6 +172,13 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - SSRF prevention with @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" preset
       - @ref sandbox_resources "resource limits" for memory, CPU time, wall time, threads, and recursion
       - @ref sandbox_interrupt "safe interrupt mechanism" for stopping runaway code in loops and blocking operations
+      - I/O interruptibility: all file, stream, database, and standard I/O operations respect interrupt requests
+        (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>)
+        - uses 500ms polling interval (same as threading primitives) to check for interrupts
+        - @ref Qore::File "File" read, write, and lock operations use polling with interrupt checks
+        - @ref Qore::PipeInputStream "PipeInputStream" and @ref Qore::PipeOutputStream "PipeOutputStream" operations use polling
+        - @ref Qore::StdoutOutputStream "StdoutOutputStream" and @ref Qore::StderrOutputStream "StderrOutputStream" use polling
+        - @ref Qore::Datasource "Datasource" transaction lock acquisition is interruptible
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation

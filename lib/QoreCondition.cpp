@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreCondition.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
 #include <cstring>
@@ -129,4 +130,67 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
     return rc;
 #endif // DEBUG
 #endif // DARWIN
+}
+
+int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink) {
+    return waitWithInterrupt(m, -1, xsink);
+}
+
+int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink) {
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+
+    // If no sandbox manager, use regular wait
+    if (!sm) {
+        int rc = (timeout_ms < 0) ? wait(m) : wait2(m, timeout_ms);
+        return rc ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+    }
+
+    // Check for interrupt before waiting
+    if (sm->isInterruptRequested()) {
+        if (xsink) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
+        }
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+    int64 remaining_timeout = timeout_ms;
+
+    while (true) {
+        // Calculate effective timeout for this poll cycle
+        int effective_timeout;
+        if (timeout_ms < 0) {
+            // Infinite timeout - poll at intervals
+            effective_timeout = poll_interval;
+        } else {
+            // Finite timeout - use smaller of remaining or poll interval
+            effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
+        }
+
+        // Wait for the effective timeout
+        int rc = wait2(m, effective_timeout);
+
+        if (rc == 0) {
+            // Condition was signaled
+            return QORE_COND_RESULT_SUCCESS;
+        }
+
+        // Timeout occurred - check for interrupt
+        if (sm->isInterruptRequested()) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
+            }
+            return QORE_COND_RESULT_INTERRUPTED;
+        }
+
+        // Check if we've exceeded the total timeout
+        if (timeout_ms >= 0) {
+            remaining_timeout -= effective_timeout;
+            if (remaining_timeout <= 0) {
+                return QORE_COND_RESULT_TIMEOUT;
+            }
+        }
+        // For infinite timeout, continue polling
+    }
 }
