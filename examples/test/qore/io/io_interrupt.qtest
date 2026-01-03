@@ -407,16 +407,17 @@ sub push_queue() {
 
         assertEq(0, q.size(), "queue should be empty");
 
-        # Test with timeout - should return NOTHING immediately on empty queue with 0 timeout
+        # Test with negative timeout - should timeout immediately on empty queue
+        # (Queue semantics: negative = immediate timeout, 0 = infinite wait)
         bool got_timeout = False;
         try {
-            auto v = q.get(0);
+            auto v = q.get(-1);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "QUEUE-TIMEOUT") {
                 got_timeout = True;
             }
         }
-        assertTrue(got_timeout, "get with 0 timeout on empty queue should timeout");
+        assertTrue(got_timeout, "get with negative timeout on empty queue should timeout immediately");
 
         assertTrue(True, "queue normal operations test completed");
     }

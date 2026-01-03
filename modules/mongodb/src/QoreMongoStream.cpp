@@ -30,6 +30,7 @@
 #include <cerrno>
 #include <cstring>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 //! Interruptible stream structure
@@ -269,6 +270,14 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     void* user_data,
     bson_error_t* error) {
 
+    // Check for interrupt before starting connection
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm && sm->isInterruptRequested()) {
+        bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+            "MongoDB connection interrupted");
+        return nullptr;
+    }
+
     // Resolve the hostname
     struct addrinfo hints;
     struct addrinfo* result = nullptr;
@@ -293,6 +302,30 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     struct addrinfo* rp;
 
     for (rp = result; rp != nullptr; rp = rp->ai_next) {
+        // Check for interrupt before each connection attempt
+        if (sm && sm->isInterruptRequested()) {
+            freeaddrinfo(result);
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB connection interrupted");
+            return nullptr;
+        }
+
+        // Check network access if sandbox manager is present
+        if (sm) {
+            ExceptionSink xsink;
+            if (!sm->checkNetworkAccess(rp->ai_addr, rp->ai_addrlen, IPPROTO_TCP, &xsink)) {
+                // Network access denied by sandbox
+                if (xsink) {
+                    freeaddrinfo(result);
+                    bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                        "MongoDB connection denied by sandbox: network access restricted");
+                    return nullptr;
+                }
+                // Try next address
+                continue;
+            }
+        }
+
         sock = mongoc_socket_new(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (!sock) {
             continue;
@@ -329,12 +362,28 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 
     // Check if SSL/TLS is required
     if (mongoc_uri_get_tls(uri)) {
+        // Check for interrupt before TLS setup
+        if (sm && sm->isInterruptRequested()) {
+            mongoc_stream_destroy(base);
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB TLS setup interrupted");
+            return nullptr;
+        }
+
         // Use default SSL options (nullptr means use system defaults)
         mongoc_stream_t* tls_stream = mongoc_stream_tls_new_with_hostname(base, host->host, nullptr, 1);
         if (!tls_stream) {
             mongoc_stream_destroy(base);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_SOCKET,
                 "Failed to create TLS stream for '%s:%u'", host->host, host->port);
+            return nullptr;
+        }
+
+        // Check for interrupt before TLS handshake
+        if (sm && sm->isInterruptRequested()) {
+            mongoc_stream_destroy(tls_stream);
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB TLS handshake interrupted");
             return nullptr;
         }
 

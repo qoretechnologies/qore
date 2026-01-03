@@ -176,6 +176,13 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
             return QORE_COND_RESULT_SUCCESS;
         }
 
+        // Check if it was actually a timeout (ETIMEDOUT) vs other errors
+        if (rc != ETIMEDOUT) {
+            // Non-timeout error (e.g., EINVAL) - this shouldn't happen normally
+            // but if it does, treat it as an error and return timeout to avoid infinite loop
+            return QORE_COND_RESULT_TIMEOUT;
+        }
+
         // Timeout occurred - check for interrupt
         if (sm->isInterruptRequested()) {
             if (xsink) {

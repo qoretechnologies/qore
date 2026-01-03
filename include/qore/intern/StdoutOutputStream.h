@@ -87,12 +87,35 @@ public:
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                // Would block - poll for write readiness
-               if (sm) {
-                  const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
-                  struct pollfd pfd;
-                  pfd.fd = STDOUT_FILENO;
-                  pfd.events = POLLOUT;
-                  poll(&pfd, 1, poll_ms);
+               const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+               struct pollfd pfd;
+               pfd.fd = STDOUT_FILENO;
+               pfd.events = POLLOUT;
+
+               while (true) {
+                  int pret = ::poll(&pfd, 1, poll_ms);
+                  if (pret > 0) {
+                     // Ready for writing
+                     break;
+                  }
+                  if (pret == 0) {
+                     // Timeout - check for interrupt and retry
+                     if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+                        return;
+                     }
+                     break;
+                  }
+                  // pret < 0: error
+                  if (errno == EINTR) {
+                     // Interrupted by signal - check for sandbox interrupt then retry poll
+                     if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+                        return;
+                     }
+                     continue;
+                  }
+                  xsink->raiseErrnoException("STDOUT-WRITE-ERROR", errno,
+                     "error polling stdout for write readiness");
+                  return;
                }
                continue;
             }

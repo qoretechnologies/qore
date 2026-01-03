@@ -118,16 +118,15 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         }
 
         ++waiting;
-        if (tl_timeout_ms || sm) {
-            // Use smaller timeout for interrupt checking when sandbox manager exists
+        if (tl_timeout_ms > 0 || (tl_timeout_ms < 0 && sm)) {
+            // Positive timeout or infinite timeout with sandbox manager: use polling
             int effective_timeout;
             if (sm) {
-                if (tl_timeout_ms == 0) {
-                    effective_timeout = poll_interval;
-                } else {
-                    effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-                }
+                // With sandbox manager, poll at intervals for interrupt checking
+                effective_timeout = (tl_timeout_ms < 0 || remaining_timeout > poll_interval)
+                    ? poll_interval : remaining_timeout;
             } else {
+                // No sandbox manager: use full timeout
                 effective_timeout = tl_timeout_ms;
             }
 
@@ -143,15 +142,20 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
                     printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
                     return -1;
                 }
-            } else if (sm) {
+            } else if (sm && tl_timeout_ms < 0) {
                 // Infinite timeout with sandbox manager - continue polling
                 continue;
             } else {
                 printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
                 return -1;
             }
-        }
-        else {
+        } else if (tl_timeout_ms == 0) {
+            // Zero timeout means try once without waiting - fail immediately if lock not available
+            printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
+            --waiting;
+            return -1;
+        } else {
+            // Infinite timeout without sandbox manager
             cond.wait(&ds_lock);
             --waiting;
         }

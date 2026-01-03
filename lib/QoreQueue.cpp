@@ -87,7 +87,9 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
         if (timeout_ms >= 0) {
             ++read_waiting;
             // Use interruptible wait for sandbox support
-            rc = read_cond.waitWithInterrupt(l, timeout_ms, xsink);
+            // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
+            int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
+            rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
             --read_waiting;
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
@@ -134,7 +136,9 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
         if (timeout_ms >= 0) {
             ++write_waiting;
             // Use interruptible wait for sandbox support
-            rc = write_cond.waitWithInterrupt(l, timeout_ms, xsink);
+            // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
+            int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
+            rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
             --write_waiting;
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
