@@ -14,6 +14,18 @@
     and cannot be disabled at build time. Systems that previously built %Qore without nghttp2 will now need
     to install the \c libnghttp2-dev (Debian/Ubuntu) or \c nghttp2-devel (RHEL/Fedora) package.
 
+    @par Brotli, Zstd, and LZ4 Compression Libraries Now Required
+    The Brotli, Zstd, and LZ4 compression libraries are now required build dependencies for %Qore.
+    These compression formats are always available and cannot be disabled at build time. Systems that
+    previously built %Qore without these libraries will now need to install the development packages:
+    - <b>Debian/Ubuntu:</b> \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
+    - <b>RHEL/Fedora:</b> \c brotli-devel, \c libzstd-devel, \c lz4-devel
+
+    The following @ref Qore::Option "Option" namespace constants are now always \c True:
+    - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
+    - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
+    - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
+
     @par Parse-Time Type Narrowing
     %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
     @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
