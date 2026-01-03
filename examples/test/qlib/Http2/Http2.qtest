@@ -6,15 +6,25 @@
 %new-style
 %strict-args
 
+stderr.printf("DEBUG: Loading Util.qm\n");
 %requires ../../../../qlib/Util.qm
+stderr.printf("DEBUG: Loading QUnit.qm\n");
 %requires ../../../../qlib/QUnit.qm
+stderr.printf("DEBUG: Loading Mime.qm\n");
 %requires ../../../../qlib/Mime.qm
+stderr.printf("DEBUG: Loading Logger.qm\n");
 %requires ../../../../qlib/Logger.qm
+stderr.printf("DEBUG: Loading HttpServerUtil.qm\n");
 %requires ../../../../qlib/HttpServerUtil.qm
+stderr.printf("DEBUG: Loading HttpServer.qm\n");
 %requires ../../../../qlib/HttpServer.qm
+stderr.printf("DEBUG: Loading HttpServerAsyncIo.qm\n");
 %requires ../../../../qlib/HttpServerAsyncIo/HttpServerAsyncIo.qm
+stderr.printf("DEBUG: Loading WebSocketClient.qm\n");
 %requires ../../../../qlib/WebSocketClient.qm
+stderr.printf("DEBUG: Loading WebSocketHandler.qm\n");
 %requires ../../../../qlib/WebSocketHandler.qm
+stderr.printf("DEBUG: All modules loaded\n");
 
 %exec-class Http2Test
 
@@ -140,6 +150,7 @@ public class Http2Test inherits QUnit::Test {
     }
 
     constructor() : Test("Http2Test", "1.0") {
+        stderr.printf("DEBUG: Adding test cases\n");
         addTestCase("HTTP/2 settings test", \testHttp2Settings());
         addTestCase("HTTP/2 enable/disable test", \testHttp2EnableDisable());
         addTestCase("HTTP/2 version string test", \testHttp2VersionString());
@@ -153,6 +164,7 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 stream priority test", \testHttp2StreamPriority());
         addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
         addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
+        stderr.printf("DEBUG: Calling main()\n");
 
         set_return_value(main());
     }
@@ -199,8 +211,10 @@ public class Http2Test inherits QUnit::Test {
     }
 
     testHttp2Settings() {
+        stderr.printf("DEBUG: testHttp2Settings() starting\n");
         # Test HTTP/2 settings API (no connection needed)
         HTTPClient client({"url": "https://example.com"});
+        stderr.printf("DEBUG: testHttp2Settings() HTTPClient created\n");
 
         # Enable HTTP/2
         client.setHttp2Enabled(True);

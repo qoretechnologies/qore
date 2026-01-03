@@ -4263,9 +4263,26 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                             }
                         }
                     } else if (!*xsink) {
-                        // Convert binary to string with detected encoding
-                        QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
-                        ans->setKeyValue("body", str_body, xsink);
+                        // Only convert binary to string for text content types
+                        // Keep binary data as-is (e.g., for application/octet-stream, images, etc.)
+                        bool is_text = false;
+                        if (ct) {
+                            // Check for text content types
+                            if (!strncasecmp(ct, "text/", 5)) {
+                                is_text = true;
+                            } else if (!strncasecmp(ct, "application/json", 16) ||
+                                       !strncasecmp(ct, "application/xml", 15) ||
+                                       !strncasecmp(ct, "application/javascript", 22) ||
+                                       !strncasecmp(ct, "application/x-www-form-urlencoded", 33)) {
+                                is_text = true;
+                            }
+                        }
+                        if (is_text) {
+                            // Convert binary to string with detected encoding
+                            QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+                            ans->setKeyValue("body", str_body, xsink);
+                        }
+                        // else: keep body as binary
                     }
                 }
                 if (*xsink) {
