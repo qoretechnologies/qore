@@ -844,7 +844,7 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
         if (pstr[i] == '%' && (!broken_sprintf || arg_offset < arg_size)) {
             bool arg_used = true;
             bool use_arg;
-            QoreValue param_value;
+            QoreValue param_value{};
             if (arg_offset < arg_size) {
                 param_value = get_param_value(arg_list, arg_offset++);
                 use_arg = true;
@@ -2969,7 +2969,6 @@ void qore_process_params(unsigned num_params, type_vec_t &typeList, arg_vec_t &d
     for (unsigned i = 0; i < num_params; ++i) {
         typeList.push_back(va_arg(args, const QoreTypeInfo*));
         defaultArgList.push_back(va_arg(args, QoreSimpleValue));
-        //printd(5, "qore_process_params() i: %d/%d typeInfo: %p (%s) defArg: %p\n", i, num_params, typeList[i], typeList[i]->getTypeName(), defaultArgList[i]);
     }
 }
 
@@ -2978,10 +2977,9 @@ void qore_process_params(unsigned num_params, type_vec_t &typeList, arg_vec_t &d
     defaultArgList.reserve(num_params);
     nameList.reserve(num_params);
     for (unsigned i = 0; i < num_params; ++i) {
-        typeList.push_back(va_arg(args, const QoreTypeInfo *));
+        typeList.push_back(va_arg(args, const QoreTypeInfo*));
         defaultArgList.push_back(va_arg(args, QoreSimpleValue));
         nameList.push_back(va_arg(args, const char*));
-        //printd(5, "qore_process_params() i: %d/%d typeInfo: %p (%s) defArg: %p\n", i, num_params, typeList[i], typeList[i]->getTypeName(), defaultArgList[i]);
     }
 }
 

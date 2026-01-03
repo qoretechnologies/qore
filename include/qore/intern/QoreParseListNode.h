@@ -196,7 +196,7 @@ protected:
     // common value type, if any
     const QoreTypeInfo* vtype = nullptr;
     // node type info (derivative of list)
-    const QoreTypeInfo* typeInfo;
+    const QoreTypeInfo* typeInfo = nullptr;
     // flag for a list expression in curly brackets for the list version of the map operator
     bool finalized = false;
     // is this a variable list declaration?

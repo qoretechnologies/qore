@@ -72,7 +72,7 @@ struct qore_qf_private {
     mutable QoreThreadLock m;
     Queue* event_queue = nullptr;
     //! argument for the event queue
-    QoreValue event_arg;
+    QoreValue event_arg{};
     //! if data should be included in file events
     bool event_data = false;
     bool in_non_block = false;

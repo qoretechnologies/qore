@@ -239,7 +239,7 @@ int qore_list_private::parseCheckTypedAssignment(const QoreProgramLocation* loc,
 }
 
 QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink) {
-    QoreValue val;
+    QoreValue val{};
 
     if (!args.isNothing()) {
         ValueEvalOptimizedRefHolder a(args, xsink);

@@ -81,7 +81,7 @@ struct qore_ds_private {
     // DBI event queue
     Queue* event_queue = nullptr;
     // DBI Event queue argument
-    QoreValue event_arg;
+    QoreValue event_arg{};
 
     // interface for the parent class
     DatasourceStatementHelper* dsh;

@@ -52,14 +52,13 @@ Qore is a scripting language supporting threading and embedded logic, designed
 for applying a flexible scripting-based approach to enterprise interface
 development but is also useful as a general purpose language.
 
-%package -n libqore12
+%package -n libqore20
 Summary:        The libraries for the qore runtime and qore clients
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Languages/Other
-Provides:       qore-module(abi)%{?_isa} = 1.4
-Provides:       qore-module(abi)%{?_isa} = 1.3
+Provides:       qore-module(abi)%{?_isa} = 1.5
 
-%description -n libqore12
+%description -n libqore20
 Qore is a scripting language supporting threading and embedded logic, designed
 for applying a flexible scripting-based approach to enterprise interface
 development but is also useful as a general purpose language.
@@ -67,14 +66,14 @@ development but is also useful as a general purpose language.
 This package provides the qore library required for all clients using qore
 functionality.
 
-%files -n libqore12
+%files -n libqore20
 %defattr(-,root,root,-)
-%{_libdir}/libqore.so.12.7.0
-%{_libdir}/libqore.so.12
+%{_libdir}/libqore.so.20.0.0
+%{_libdir}/libqore.so.20
 %doc COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 
-%post -n libqore12 -p /sbin/ldconfig
-%postun -n libqore12 -p /sbin/ldconfig
+%post -n libqore20 -p /sbin/ldconfig
+%postun -n libqore20 -p /sbin/ldconfig
 
 %package doc
 Summary:        API documentation, programming language reference, and Qore example programs
@@ -97,7 +96,7 @@ and also for user modules delivered with Qore and also example programs.
 Summary:        The header files needed to compile programs using the qore library
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Languages/C and C++
-Requires:       libqore12 = %{version}-%{release}
+Requires:       libqore20 = %{version}-%{release}
 
 %description devel
 Qore is a scripting language supporting threading and embedded logic, designed
@@ -124,7 +123,7 @@ Qore library.
 Summary:        C++ API documentation for the qore library
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Documentation/HTML
-Requires:       libqore12 = %{version}-%{release}
+Requires:       libqore20 = %{version}-%{release}
 
 %description devel-doc
 Qore is a scripting language supporting threading and embedded logic, designed

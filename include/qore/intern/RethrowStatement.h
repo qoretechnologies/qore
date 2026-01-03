@@ -58,7 +58,7 @@ public:
     }
 
 private:
-    QoreValue args;
+    QoreValue args{};
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 

@@ -22,6 +22,17 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+%try-module uuid
+%define NoUuid
+%endtry
+
+%ifdef NoUuid
+# Stub class when uuid module is not available
+class UUID {
+    static string get() { throw "UUID-ERROR", "the uuid module is required for this operation"; }
+}
+%endif
+
 #! Contains all public definitions in the EmpathicBuildingDataProvider module
 public namespace EmpathicBuildingDataProvider {
 #! The Empathic Building measurements create API data provider

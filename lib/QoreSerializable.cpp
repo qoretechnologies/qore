@@ -879,7 +879,7 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
 
                 QoreHashNode* cmh = nullptr;
 
-                QoreValue cv;
+                QoreValue cv{};
                 if (mh) {
                     bool exists;
                     cv = mh->getKeyValueExistence(class_path.c_str(), exists);
@@ -1334,11 +1334,11 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, StreamWriter& 
         }
 
         case NT_INT: {
-            return serializeIntToStream(val.v.i, writer, xsink);
+            return serializeIntToStream(val.getAsBigInt(), writer, xsink);
         }
 
         case NT_BOOLEAN: {
-            return serializeBoolToStream(val.v.b, writer, xsink);
+            return serializeBoolToStream(val.getAsBool(), writer, xsink);
         }
 
         case NT_LIST: {
@@ -1346,7 +1346,7 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, StreamWriter& 
         }
 
         case NT_FLOAT: {
-            return serializeFloatToStream(val.v.f, writer, xsink);
+            return serializeFloatToStream(val.getAsFloat(), writer, xsink);
         }
 
         case NT_NUMBER: {

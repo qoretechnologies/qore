@@ -43,7 +43,7 @@ class RSetHelper;
 
 class QoreQueueNode {
 public:
-    QoreValue node;
+    QoreValue node{};
     QoreQueueNode* prev,
                     * next;
     DLLLOCAL QoreQueueNode(QoreValue n, QoreQueueNode* p, QoreQueueNode* nx) : node(n), prev(p), next(nx) {

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,7 @@
 DLLEXPORT void qore_thread_local_storage_destroy(void* qtls);
 DLLEXPORT void qore_thread_local_storage_set(void* qtls, void* p);
 DLLEXPORT void* qore_thread_local_storage_get(void* qtls);
+DLLEXPORT void qore_thread_local_storage_cleanup();
 
 //! provides access to thread-local storage
 /** This classes uses a single static pthread_key_t and a map to the actual

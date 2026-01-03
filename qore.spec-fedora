@@ -33,8 +33,7 @@ development but is also useful as a general purpose language.
 
 %package -n libqore
 Summary: The libraries for the qore runtime and qore clients
-Provides: qore-module(abi)%{?_isa} = 1.4
-Provides: qore-module(abi)%{?_isa} = 1.3
+Provides: qore-module(abi)%{?_isa} = 1.5
 
 %description -n libqore
 Qore is a scripting language supporting threading and embedded logic, designed
@@ -45,8 +44,8 @@ This package provides the qore library required for all clients using qore
 functionality.
 
 %files -n libqore
-%{_libdir}/libqore.so.12.7.0
-%{_libdir}/libqore.so.12
+%{_libdir}/libqore.so.20.0.0
+%{_libdir}/libqore.so.20
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 %doc README.md README-MODULES RELEASE-NOTES AUTHORS ABOUT
 

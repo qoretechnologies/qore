@@ -38,7 +38,7 @@ class RSetHelper;
 
 class lvalue_ref {
 public:
-    QoreValue vexp;
+    QoreValue vexp{};
     const QoreTypeInfo* typeInfo;
     QoreObject* self;
     QoreProgram* pgm;

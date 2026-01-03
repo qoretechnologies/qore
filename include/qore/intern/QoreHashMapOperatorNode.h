@@ -37,7 +37,7 @@
 class QoreHashMapOperatorNode : public QoreNOperatorNodeBase<3> {
 public:
     DLLLOCAL QoreHashMapOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1, QoreValue p2) :
-        QoreNOperatorNodeBase<3>(loc, p0, QoreSimpleValue().assign(p1), QoreSimpleValue().assign(p2)) {
+        QoreNOperatorNodeBase<3>(loc, p0, p1, p2) {
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;

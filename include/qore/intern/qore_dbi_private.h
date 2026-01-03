@@ -129,7 +129,7 @@ public:
 
 struct OptInputHelper {
     ExceptionSink* xsink;
-    QoreValue val;
+    QoreValue val{};
     bool tmp;
 
     DLLLOCAL OptInputHelper(ExceptionSink* xs, const qore_dbi_private& driver, const char* opt, bool set = false, const QoreValue v = QoreValue());

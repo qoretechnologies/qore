@@ -127,7 +127,7 @@ void VarRefNode::resolve(const QoreTypeInfo* typeInfo) {
 }
 
 QoreValue VarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreValue v;
+    QoreValue v{};
     if (type == VT_LOCAL) {
         v = ref.id->eval(needs_deref, xsink);
         //printd(5, "VarRefNode::evalImpl() this: %p lvar %p (%s) v: '%s' pgm: %p\n", this, ref.id, ref.id->getName(),

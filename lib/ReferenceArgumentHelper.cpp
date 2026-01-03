@@ -38,7 +38,7 @@ struct lvih_intern {
     ReferenceNode* ref;
 
     DLLLOCAL lvih_intern(QoreValue val, const QoreTypeInfo* typeInfo, ExceptionSink* xs) : lv("ref_arg_helper", typeInfo), xsink(xs) {
-        printd(5, "ReferenceArgumentHelper::ReferenceArgumentHelper() instantiating %p (type: %d, val->node: %p) \n", &lv, val.type, val.type == QV_Node ? val.v.n: 0);
+        printd(5, "ReferenceArgumentHelper::ReferenceArgumentHelper() instantiating %p (type: %d, val->node: %p) \n", &lv, val.getType(), val.hasNode() ? val.getInternalNode() : nullptr);
         lv.instantiate(val);
         VarRefNode* vr = new VarRefNode(get_runtime_location(), strdup("ref_arg_helper"), VT_LOCAL);
         vr->ref.id = &lv;

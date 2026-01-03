@@ -175,8 +175,8 @@ public:
     typedef std::set<std::string> strset_t;
     typedef std::map<std::string, std::string> strmap_t;
 
-    QoreValue init_c, // the initialization closure
-        del_c;         // the destructor closure
+    QoreValue init_c{}, // the initialization closure
+        del_c{};         // the destructor closure
 
     const QoreProgramLocation* init_loc = nullptr,
         * del_loc = nullptr;

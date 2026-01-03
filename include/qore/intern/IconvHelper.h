@@ -48,11 +48,13 @@ public:
       c = iconv_open(to->getCode(), from->getCode());
 #endif
       if (c == (iconv_t) -1) {
-         if (errno == EINVAL) {
-            xsink->raiseException("ENCODING-CONVERSION-ERROR", "cannot convert from \"%s\" to \"%s\"",
-                  from->getCode(), to->getCode());
-         } else {
-            reportUnknownError(xsink);
+         if (xsink) {
+            if (errno == EINVAL) {
+               xsink->raiseException("ENCODING-CONVERSION-ERROR", "cannot convert from \"%s\" to \"%s\"",
+                     from->getCode(), to->getCode());
+            } else {
+               reportUnknownError(xsink);
+            }
          }
       }
    }
@@ -68,14 +70,18 @@ public:
    }
 
    void reportIllegalSequence(size_t offset, ExceptionSink *xsink) {
-      xsink->raiseException("ENCODING-CONVERSION-ERROR",
-                            "illegal character sequence at byte offset " QLLD " found in input type \"%s\" (while converting to \"%s\")",
-                            (int64)offset, from->getCode(), to->getCode());
+      if (xsink) {
+         xsink->raiseException("ENCODING-CONVERSION-ERROR",
+                               "illegal character sequence at byte offset " QLLD " found in input type \"%s\" (while converting to \"%s\")",
+                               (int64)offset, from->getCode(), to->getCode());
+      }
    }
 
    void reportUnknownError(ExceptionSink *xsink) {
-      xsink->raiseErrnoException("ENCODING-CONVERSION-ERROR", errno, "unknown error converting from \"%s\" to \"%s\"",
-                                 from->getCode(), to->getCode());
+      if (xsink) {
+         xsink->raiseErrnoException("ENCODING-CONVERSION-ERROR", errno, "unknown error converting from \"%s\" to \"%s\"",
+                                    from->getCode(), to->getCode());
+      }
    }
 
 private:

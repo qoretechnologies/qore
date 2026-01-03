@@ -471,7 +471,7 @@ int ManagedDatasource::setOptionInit(const char* opt, const QoreValue val, Excep
 int ManagedDatasource::setOption(const char* opt, const QoreValue val, ExceptionSink* xsink) {
     DatasourceActionHelper dbah(*this, xsink, DAH_NOCONN);
     if (!dbah)
-        return QoreValue();
+        return -1;
     return Datasource::setOption(opt, val, xsink);
 }
 

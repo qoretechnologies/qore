@@ -141,50 +141,41 @@ int qore_date_info::getMonthIxFromAbbr(const char* abbr) {
 }
 
 void qore_absolute_time::set(const AbstractQoreZoneInfo* n_zone, const QoreValue v) {
-   switch (v.type) {
-      case QV_Bool: {
-         zone = n_zone;
-         epoch = v.v.b ? 1 : 0;
-         us = 0;
-         break;
-      }
-      case QV_Int: {
-         set(n_zone, v.v.i, 0);
-         break;
-      }
-      case QV_Float: {
-         set(v.v.f, n_zone);
-         break;
-      }
-      case QV_Node:
-         switch (get_node_type(v.v.n)) {
-            case NT_STRING: {
-               const char* str = reinterpret_cast<const QoreStringNode*>(v.v.n)->getBuffer();
-               set(str, n_zone);
-               break;
-            }
-            case NT_DATE: {
-               const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(v.v.n);
-               if (d->priv->relative) {
-                  int64 us = d->priv->d.rel.getRelativeMicroseconds();
-                  int64 s = us / 1000000;
-                  us -= s * 1000000;
-                  set(n_zone, s, us);
-               }
-               else
-                  set(d->priv->d.abs);
-               break;
-            }
-            default: {
-               double f = v.v.n ? v.v.n->getAsFloat() : 0.0;
-               set(f, n_zone);
-               break;
-            }
+   qore_type_t t = v.getType();
+   if (t == NT_BOOLEAN) {
+      zone = n_zone;
+      epoch = v.getAsBool() ? 1 : 0;
+      us = 0;
+   } else if (t == NT_INT) {
+      set(n_zone, v.getAsBigInt(), 0);
+   } else if (t == NT_FLOAT) {
+      set(v.getAsFloat(), n_zone);
+   } else if (v.hasNode()) {
+      const AbstractQoreNode* n = v.getInternalNode();
+      switch (get_node_type(n)) {
+         case NT_STRING: {
+            const char* str = reinterpret_cast<const QoreStringNode*>(n)->getBuffer();
+            set(str, n_zone);
+            break;
          }
-         break;
-      default:
-         assert(false);
-         break;
+         case NT_DATE: {
+            const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(n);
+            if (d->priv->relative) {
+               int64 us = d->priv->d.rel.getRelativeMicroseconds();
+               int64 s = us / 1000000;
+               us -= s * 1000000;
+               set(n_zone, s, us);
+            }
+            else
+               set(d->priv->d.abs);
+            break;
+         }
+         default: {
+            double f = n ? n->getAsFloat() : 0.0;
+            set(f, n_zone);
+            break;
+         }
+      }
    }
 }
 
@@ -583,45 +574,39 @@ qore_relative_time &qore_relative_time::operator-=(const qore_absolute_time &dt)
 }
 
 void qore_relative_time::set(const QoreValue v) {
-    switch (v.type) {
-        case QV_Bool: {
-            set(0, 0, 0, 0, 0, (int)v.v.b, 0);
-            break;
-        }
-        case QV_Int: {
-            zero();
-            addSecondsTo(v.v.i);
-            break;
-        }
-        case QV_Float: {
-            zero();
-            addSecondsTo(v.v.f);
-            break;
-        }
-        case QV_Node:
-            switch (get_node_type(v.v.n)) {
-                case NT_STRING: {
-                    const char* str = reinterpret_cast<const QoreStringNode*>(v.v.n)->getBuffer();
-                    set(str);
-                    break;
-                }
-                case NT_DATE: {
-                    const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(v.v.n);
-                    if (d->priv->relative)
-                        set(d->priv->d.rel);
-                    else {
-                        zero();
-                        addSecondsTo(d->priv->d.abs.epoch, d->priv->d.abs.us);
-                    }
-                    break;
-                }
-                default:
-                    double f = v.v.n ? v.v.n->getAsFloat() : 0.0;
-                    zero();
-                    addSecondsTo(f);
-                    break;
+    qore_type_t t = v.getType();
+    if (t == NT_BOOLEAN) {
+        set(0, 0, 0, 0, 0, (int)v.getAsBool(), 0);
+    } else if (t == NT_INT) {
+        zero();
+        addSecondsTo(v.getAsBigInt());
+    } else if (t == NT_FLOAT) {
+        zero();
+        addSecondsTo(v.getAsFloat());
+    } else if (v.hasNode()) {
+        const AbstractQoreNode* n = v.getInternalNode();
+        switch (get_node_type(n)) {
+            case NT_STRING: {
+                const char* str = reinterpret_cast<const QoreStringNode*>(n)->getBuffer();
+                set(str);
+                break;
             }
-            break;
+            case NT_DATE: {
+                const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(n);
+                if (d->priv->relative)
+                    set(d->priv->d.rel);
+                else {
+                    zero();
+                    addSecondsTo(d->priv->d.abs.epoch, d->priv->d.abs.us);
+                }
+                break;
+            }
+            default:
+                double f = n ? n->getAsFloat() : 0.0;
+                zero();
+                addSecondsTo(f);
+                break;
+        }
     }
 }
 

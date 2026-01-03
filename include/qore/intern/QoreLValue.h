@@ -612,19 +612,19 @@ public:
             case QV_Bool:
                 v.b = n.v.b;
                 assert(val.getType() == NT_BOOLEAN);
-                n.v.b = val.v.b;
+                n.v.b = val.getAsBool();
                 break;
 
             case QV_Int:
                 v.i = n.v.i;
                 assert(val.getType() == NT_INT);
-                n.v.i = val.v.i;
+                n.v.i = val.getAsBigInt();
                 break;
 
             case QV_Float:
                 v.f = n.v.f;
                 assert(val.getType() == NT_FLOAT);
-                n.v.f = val.v.f;
+                n.v.f = val.getAsFloat();
                 break;
 
             case QV_Node:
@@ -784,21 +784,31 @@ public:
             rv = nullptr;
         }
 
-        switch (val.type) {
-            case QV_Bool: v.b = val.v.b; if (type != QV_Bool) type = QV_Bool; break;
-            case QV_Int: v.i = val.v.i; if (type != QV_Int) type = QV_Int; break;
-            case QV_Float: v.f = val.v.f; if (type != QV_Float) type = QV_Float; break;
-            case QV_Node:
-                v.n = val.takeNode();
-                if (type != QV_Node) {
-                    type = QV_Node;
-                }
-                if (!is_closure) {
-                    check_lvalue_object_in_out(v.n, nullptr);
-                }
-                break;
-            default: assert(false);
-                // no break
+        // Use QoreValue's type info via getType()
+        qore_type_t vt = val.getType();
+        if (vt == NT_BOOLEAN) {
+            v.b = val.getAsBool();
+            if (type != QV_Bool) type = QV_Bool;
+        } else if (vt == NT_INT) {
+            v.i = val.getAsBigInt();
+            if (type != QV_Int) type = QV_Int;
+        } else if (vt == NT_FLOAT) {
+            v.f = val.getAsFloat();
+            if (type != QV_Float) type = QV_Float;
+        } else if (val.hasNode()) {
+            v.n = val.takeNode();
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
+            if (!is_closure) {
+                check_lvalue_object_in_out(v.n, nullptr);
+            }
+        } else {
+            // nothing or null
+            v.n = nullptr;
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
         }
 
         return rv;
@@ -871,6 +881,23 @@ public:
             type = QV_Node;
 
         return rv;
+    }
+
+    // Assign from QoreValue - delegates to the appropriate typed assign method
+    DLLLOCAL AbstractQoreNode* assign(QoreValue val) {
+        qore_type_t vt = val.getType();
+        if (vt == NT_BOOLEAN) {
+            return assign(val.getAsBool());
+        } else if (vt == NT_INT) {
+            return assign(val.getAsBigInt());
+        } else if (vt == NT_FLOAT) {
+            return assign(val.getAsFloat());
+        } else if (val.hasNode()) {
+            return assign(val.takeNode());
+        } else {
+            // nothing or null
+            return assign(static_cast<AbstractQoreNode*>(nullptr));
+        }
     }
 
     DLLLOCAL bool exists() const {

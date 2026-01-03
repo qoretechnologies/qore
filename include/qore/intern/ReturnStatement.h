@@ -54,7 +54,7 @@ public:
     }
 
 private:
-    QoreValue exp;
+    QoreValue exp{};
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);

@@ -90,7 +90,7 @@ private:
     //! qore exception error description
     QoreStringNode* desc;
     //! qore exeption arg
-    QoreValue arg;
+    QoreValue arg{};
 };
 
 #endif
