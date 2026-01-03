@@ -418,8 +418,6 @@ private:
     DLLLOCAL int checkContinuePoll(ExceptionSink* xsink);
 };
 
-#ifdef HAVE_HTTP2
-
 class Http2Session;
 
 // HTTP/2 poll operation states
@@ -557,8 +555,6 @@ private:
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
 };
-
-#endif // HAVE_HTTP2
 
 DLLLOCAL QoreClass* initSocketPollOperationClass(QoreNamespace& qorens);
 

@@ -155,6 +155,7 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 stream priority test", \testHttp2StreamPriority());
         addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
         addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
+        addTestCase("HTTP/2 global mode test", \testGlobalHttp2Mode());
 
         set_return_value(main());
     }
@@ -1823,5 +1824,55 @@ public class Http2Test inherits QUnit::Test {
         server.stop();
 
         assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testGlobalHttp2Mode() {
+        # Test set_global_http2_mode() and get_global_http2_mode() functions
+
+        # Save original mode to restore at end
+        string original_mode = get_global_http2_mode();
+
+        # Test 1: Default mode should be "auto"
+        assertEq("auto", original_mode, "default global HTTP/2 mode should be 'auto'");
+
+        # Test 2: Set mode to "disabled" using string
+        set_global_http2_mode("disabled");
+        assertEq("disabled", get_global_http2_mode(), "global mode should be 'disabled' after setting");
+
+        # Test 3: Set mode to "required" using string
+        set_global_http2_mode("required");
+        assertEq("required", get_global_http2_mode(), "global mode should be 'required' after setting");
+
+        # Test 4: Set mode to "auto" using string
+        set_global_http2_mode("auto");
+        assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting");
+
+        # Test 5: Set mode using integer constants
+        set_global_http2_mode(HTTP2_MODE_DISABLED);
+        assertEq("disabled", get_global_http2_mode(), "global mode should be 'disabled' after setting with int");
+
+        set_global_http2_mode(HTTP2_MODE_REQUIRED);
+        assertEq("required", get_global_http2_mode(), "global mode should be 'required' after setting with int");
+
+        set_global_http2_mode(HTTP2_MODE_AUTO);
+        assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting with int");
+
+        # Test 6: Case insensitivity of string mode
+        set_global_http2_mode("DISABLED");
+        assertEq("disabled", get_global_http2_mode(), "mode setting should be case-insensitive");
+
+        set_global_http2_mode("Auto");
+        assertEq("auto", get_global_http2_mode(), "mode setting should be case-insensitive");
+
+        # Test 7: Invalid string mode should throw exception
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode("invalid"); });
+
+        # Test 8: Invalid integer mode should throw exception
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(99); });
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(-1); });
+
+        # Restore original mode
+        set_global_http2_mode(original_mode);
+        assertEq(original_mode, get_global_http2_mode(), "global mode should be restored");
     }
 }

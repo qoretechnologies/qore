@@ -2436,14 +2436,10 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 rc = QSE_SSL_ERR;
             }
             // close the local socket unconditionally
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2460,26 +2456,18 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 }
             }
             // close the local socket unconditionally
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             // in case there is no exception when reading, the remote end closed the connection
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
@@ -2603,14 +2591,10 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_SSL_ERR;
             }
             // close the socket unconditionally
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
@@ -2623,26 +2607,18 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 }
             }
             // close the socket unconditionally
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             rc = !*xsink ? 0 : QSE_SSL_ERR;
             break;
         } else if (err == SSL_ERROR_SSL) {
             // close the socket unconditionally
-#ifdef HAVE_HTTP2
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
             xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the "
                 "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             rc = QSE_SSL_ERR;
@@ -2752,16 +2728,12 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         bool always_error) {
     if (e == SSL_ERROR_ZERO_RETURN) {
         // the remote end has closed the connection
-#ifdef HAVE_HTTP2
         // NOTE: For HTTP/2 connections, don't auto-close on SSL_ERROR_ZERO_RETURN.
         // This could be a timeout or the end of a read operation, not necessarily a connection close.
         // Let the HTTP/2 layer handle connection lifecycle.
         if (!qs.h2_session) {
             qs.close();
         }
-#else
-        qs.close();
-#endif
         if (always_error) {
             xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the %s() call could not be " \
                 "completed because the TLS/SSL connection was terminated (err: %d)", mname, func, e);
@@ -2783,14 +2755,10 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         // close the socket if connection reset received
         if (e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET) {
             //printd(5, "SSLSocketHelper::handleErrorIntern() Socket::%s() (%s) socket closed by remote end\n", mname, func);
-#ifdef HAVE_HTTP2
             // For HTTP/2 connections, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
                 qs.close();
             }
-#else
-            qs.close();
-#endif
         }
 #endif
     }
@@ -2979,7 +2947,6 @@ bool QoreSocket::isHttp2() const {
     return priv->ssl->isHttp2();
 }
 
-#ifdef HAVE_HTTP2
 int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink) {
     if (!priv->h2_session) {
@@ -3014,7 +2981,6 @@ void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
 int32_t QoreSocket::getHttp2ActiveStream() const {
     return priv->h2_active_stream_id;
 }
-#endif
 
 long QoreSocket::verifyPeerCertificate() const {
     if (!priv->ssl) {
@@ -5109,7 +5075,6 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
     return true;
 }
 
-#ifdef HAVE_HTTP2
 #include "qore/intern/Http2Session.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
@@ -5408,5 +5373,3 @@ Http2Session* SocketHttp2SendResponsePollOperation::takeSession() {
     // Session is now managed by socket, not this operation
     return nullptr;
 }
-
-#endif // HAVE_HTTP2

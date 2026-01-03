@@ -33,8 +33,6 @@
 
 #include <qore/Qore.h>
 
-#ifdef HAVE_HTTP2
-
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 
@@ -1116,5 +1114,3 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
 
     return 0;
 }
-
-#endif // HAVE_HTTP2

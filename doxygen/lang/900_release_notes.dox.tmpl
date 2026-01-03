@@ -9,6 +9,11 @@
 
     @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par nghttp2 Library Now Required
+    The \c nghttp2 library is now a required build dependency for %Qore. HTTP/2 support is always available
+    and cannot be disabled at build time. Systems that previously built %Qore without nghttp2 will now need
+    to install the \c libnghttp2-dev (Debian/Ubuntu) or \c nghttp2-devel (RHEL/Fedora) package.
+
     @par Parse-Time Type Narrowing
     %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
     @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
@@ -69,9 +74,13 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - new \c Socket::startPollReadHttp2Request() for non-blocking HTTP/2 request reading
       - new \c Socket::startPollSendHttp2Response() for non-blocking HTTP/2 response sending
       - new \c http_version option in ConnectionProvider for client-side HTTP version control
-      - @note <b>Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2
-        are not currently supported. WebSocket and SSE connections will use HTTP/1.x even when HTTP/2
-        is available for regular HTTP traffic
+      - WebSocket over HTTP/2 support (RFC 8441 extended CONNECT method)
+      - Server-Sent Events (SSE) over HTTP/2 support
+      - new @ref Qore::set_global_http2_mode() "set_global_http2_mode()" function to globally control HTTP/2 mode
+        at runtime (\c "auto", \c "disabled", or \c "required") - affects all new HTTP connections
+        (requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights)
+      - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
+      - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
     - @ref AsyncApi "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings

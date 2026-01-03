@@ -4036,7 +4036,6 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
     return qore_socket_private::poll(items, timeout_ms, xsink);
 }
 
-#ifdef HAVE_HTTP2
 //! Returns a poll operation for reading an HTTP/2 request on a server connection
 /** This poll operation is used for server-side HTTP/2 connections that have been
     negotiated via ALPN during the TLS handshake.
@@ -4256,8 +4255,6 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
     return rv.release();
 }
 
-#endif // HAVE_HTTP2
-
 //! Sets the active HTTP/2 stream ID for transparent send/recv operations
 /** When set, Socket::send() and Socket::recv() will automatically use HTTP/2
     DATA frames on the specified stream instead of raw socket I/O. This enables
@@ -4279,11 +4276,7 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
     @since %Qore 2.3
 */
 nothing Socket::setHttp2ActiveStream(int stream_id) {
-#ifdef HAVE_HTTP2
     s->setHttp2ActiveStream((int32_t)stream_id, xsink);
-#else
-    xsink->raiseException("HTTP2-ERROR", "HTTP/2 support not available");
-#endif
     return QoreValue();
 }
 
@@ -4293,9 +4286,5 @@ nothing Socket::setHttp2ActiveStream(int stream_id) {
     @since %Qore 2.3
 */
 int Socket::getHttp2ActiveStream() {
-#ifdef HAVE_HTTP2
     return s->getHttp2ActiveStream();
-#else
-    return -1;
-#endif
 }

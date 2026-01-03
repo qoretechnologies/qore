@@ -37,6 +37,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/EncryptionTransforms.h"
 
+#include <atomic>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
@@ -76,6 +77,7 @@ extern char** environ;
 int qore_trace = 0;
 int debug = 0;
 int qore_library_options = QLO_NONE;
+std::atomic<int> qore_global_http2_mode{1};  // HTTP2_MODE_AUTO by default
 
 // issue #3818: qore SSL app-specific data index
 int qore_ssl_data_index = -1;

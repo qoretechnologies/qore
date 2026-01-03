@@ -403,4 +403,11 @@ const HAVE_GET_STACK_SIZE = bool(QORE_CONST_HAVE_GET_STACK_SIZE);
 /** @since %Qore 0.9.0
 */
 const HAVE_THREAD_NAME = bool(QORE_CONST_HAVE_THREAD_NAME);
+
+//! Indicates if HTTP/2 support is available
+/** HTTP/2 support is built into the %Qore library and is always available.
+
+    @since %Qore 2.3
+*/
+const HAVE_HTTP2 = bool(true);
 ///@}

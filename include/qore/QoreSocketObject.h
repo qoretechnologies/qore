@@ -60,10 +60,8 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketUpgradeClientSslPollOperation;
     friend class SocketUpgradeServerSslPollOperation;
     friend class HttpClientConnectPollOperation;
-#ifdef HAVE_HTTP2
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
-#endif
 
 public:
     DLLEXPORT QoreSocketObject();

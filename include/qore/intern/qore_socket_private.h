@@ -41,9 +41,7 @@
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
 
-#ifdef HAVE_HTTP2
 #include "qore/intern/Http2Session.h"
-#endif
 
 #include <cctype>
 #include <cctype>
@@ -577,7 +575,6 @@ struct qore_socket_private {
     // issue #3818: verbose certificate verification error info
     QoreStringNode* ssl_err_str = nullptr;
 
-#ifdef HAVE_HTTP2
     //! HTTP/2 session for persistent HTTP/2 connections
     /** The session is created during startPollReadHttp2Request() and reused
         for subsequent operations on the same connection.
@@ -596,7 +593,6 @@ struct qore_socket_private {
         This is set when receiving HTTP/2 protocol frames to avoid infinite recursion.
     */
     bool h2_receiving_frames = false;
-#endif
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -674,12 +670,10 @@ struct qore_socket_private {
             remote_cert->deref(nullptr);
             remote_cert = nullptr;
         }
-#ifdef HAVE_HTTP2
         if (h2_session) {
             delete h2_session;
             h2_session = nullptr;
         }
-#endif
         if (sock >= 0) {
             // if an SSL connection has been established, shut it down first
             if (ssl) {
@@ -1387,7 +1381,6 @@ struct qore_socket_private {
     DLLLOCAL bool isDataAvailable(int timeout_ms, const char* mname, ExceptionSink* xsink) {
         if (buflen)
             return true;
-#ifdef HAVE_HTTP2
         // For HTTP/2 SERVER-SIDE connections with active stream, we need special handling:
         // 1. Check if stream buffer already has data
         // 2. If not, check if raw socket has data
@@ -1432,7 +1425,6 @@ struct qore_socket_private {
             }
             return false;
         }
-#endif
         return isSocketDataAvailable(timeout_ms, mname, xsink);
     }
 
@@ -2097,7 +2089,6 @@ struct qore_socket_private {
             return (ssize_t)bs;
         }
 
-#ifdef HAVE_HTTP2
         // Read from HTTP/2 stream buffer when stream is active (but not when receiving protocol frames)
         // NOTE: Only do HTTP/2 stream handling for server-side connections. For client connections,
         // HTTPClient's readHttp2StreamData() handles the stream-level reading.
@@ -2146,7 +2137,6 @@ struct qore_socket_private {
             // No data available (stream may be closed)
             return 0;
         }
-#endif
 
         // real socket reads are only done when the buffer is empty
 
@@ -2216,11 +2206,7 @@ struct qore_socket_private {
             // only close the socket if no data was recevied and the error is not EAGAIN or EINPROGRESS
             // NOTE: For HTTP/2, don't close on rc=0 - it could be a timeout or flow control,
             // not a connection close. Let the HTTP/2 layer handle connection lifecycle.
-#ifdef HAVE_HTTP2
             if (!rc && isOpen() && errno != EAGAIN && errno != EINPROGRESS && !h2_session) {
-#else
-            if (!rc && isOpen() && errno != EAGAIN && errno != EINPROGRESS) {
-#endif
                 close();
             }
         }
@@ -3127,7 +3113,6 @@ struct qore_socket_private {
             return 0;
         }
 
-#ifdef HAVE_HTTP2
         // If HTTP/2 is active with a stream, send data via HTTP/2 DATA frames
         // bypass_h2 is true when sending raw HTTP/2 frames (from Http2Session::sendPendingData)
         if (h2_session && h2_active_stream_id > 0 && !bypass_h2) {
@@ -3144,7 +3129,6 @@ struct qore_socket_private {
             }
             return 0;
         }
-#endif
 
         PrivateQoreSocketThroughputHelper th(this, true);
 

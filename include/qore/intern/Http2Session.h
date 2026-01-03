@@ -34,8 +34,6 @@
 #ifndef _QORE_HTTP2_SESSION_H
 #define _QORE_HTTP2_SESSION_H
 
-#ifdef HAVE_HTTP2
-
 #include <nghttp2/nghttp2.h>
 
 #include <qore/Qore.h>
@@ -353,7 +351,5 @@ private:
     };
     std::map<int32_t, BodyData> pending_body_data;
 };
-
-#endif // HAVE_HTTP2
 
 #endif // _QORE_HTTP2_SESSION_H
