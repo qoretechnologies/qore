@@ -109,23 +109,10 @@
 #define QORE_CONST_HAVE_SETSID 0
 #endif
 
-#ifdef HAVE_BROTLI
+// Brotli, Zstd, and LZ4 compression are always available (required since Qore 2.3)
 #define QORE_CONST_HAVE_BROTLI 1
-#else
-#define QORE_CONST_HAVE_BROTLI 0
-#endif
-
-#ifdef HAVE_ZSTD
 #define QORE_CONST_HAVE_ZSTD 1
-#else
-#define QORE_CONST_HAVE_ZSTD 0
-#endif
-
-#ifdef HAVE_LZ4
 #define QORE_CONST_HAVE_LZ4 1
-#else
-#define QORE_CONST_HAVE_LZ4 0
-#endif
 
 #ifdef HAVE_PWD_H
 #define QORE_CONST_HAVE_PWD_H 1

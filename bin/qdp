@@ -1842,7 +1842,7 @@ class QdpCmd {
     static usage() {
         string script = get_script_name();
 
-        printf("\n%s - Qore Data Provider CLI Tool\n\n", color.bold(script));
+        printf("%s - Qore Data Provider CLI Tool\n\n", color.bold(script));
 
         printf("%s\n", color.bold("USAGE"));
         printf("  %s [options] <provider> [command] [args...]\n\n", script);
@@ -1958,7 +1958,6 @@ class QdpCmd {
             script, color.dim("# JSON output, limit 10"));
         printf("  %s rest'{url=http://api.example.com}' list\n", script);
         printf("  %s @salesforce/search-records '{query=\"SELECT Id FROM Account\"}'\n", script);
-        printf("\n");
 
         exit(1);
     }

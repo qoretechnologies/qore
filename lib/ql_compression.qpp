@@ -36,18 +36,11 @@
 #include <climits>
 #include <zlib.h>
 
-#ifdef HAVE_BROTLI
+// Brotli, Zstd, and LZ4 are required since Qore 2.3
 #include <brotli/encode.h>
 #include <brotli/decode.h>
-#endif
-
-#ifdef HAVE_ZSTD
 #include <zstd.h>
-#endif
-
-#ifdef HAVE_LZ4
 #include <lz4.h>
-#endif
 #include "qore/intern/ql_compression.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -616,7 +609,6 @@ BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, ExceptionSink* xsink
     return buf ? new BinaryNode(buf, len) : nullptr;
 }
 
-#ifdef HAVE_BROTLI
 BinaryNode* qore_brotli(const void* ptr, unsigned long len, int quality, ExceptionSink* xsink) {
     // Calculate maximum compressed size
     size_t max_compressed_size = BrotliEncoderMaxCompressedSize(len);
@@ -737,9 +729,7 @@ QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding*
     // NOTE: the null terminator is added by the QoreStringNode constructor
     return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
 }
-#endif // HAVE_BROTLI
 
-#ifdef HAVE_ZSTD
 BinaryNode* qore_zstd(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
     // Calculate maximum compressed size
     size_t max_compressed_size = ZSTD_compressBound(len);
@@ -873,9 +863,7 @@ QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* e
     // NOTE: the null terminator is added by the QoreStringNode constructor
     return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
 }
-#endif // HAVE_ZSTD
 
-#ifdef HAVE_LZ4
 BinaryNode* qore_lz4(const void* ptr, unsigned long len, int acceleration, ExceptionSink* xsink) {
     // Calculate maximum compressed size
     int max_compressed_size = LZ4_compressBound(len);
@@ -960,7 +948,6 @@ QoreStringNode* qore_unlz4_to_string(const BinaryNode* b, int max_output_size, c
     // NOTE: the null terminator is added by the QoreStringNode constructor
     return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
 }
-#endif // HAVE_LZ4
 
 /** @defgroup compression_constants Compression Constants
  */
@@ -974,7 +961,6 @@ const BZ2_DEFAULT_COMPRESSION = BZ2_DEFAULT_COMPRESSION;
 //! Identifies the default compression level appropriate for given algorithm
 const COMPRESSION_LEVEL_DEFAULT = COMPRESSION_LEVEL_DEFAULT;
 
-#ifdef HAVE_BROTLI
 //! gives the default quality level for the brotli() function (value: \c 11)
 /** @since %Qore 2.1
  */
@@ -989,9 +975,7 @@ const BROTLI_MIN_QUALITY = 0;
 /** @since %Qore 2.1
  */
 const BROTLI_MAX_QUALITY = 11;
-#endif
 
-#ifdef HAVE_ZSTD
 //! gives the default compression level for the zstd() function (value: \c 3)
 /** @since %Qore 2.1
  */
@@ -1006,9 +990,7 @@ const ZSTD_MIN_LEVEL = 1;
 /** @since %Qore 2.1
  */
 const ZSTD_MAX_LEVEL = qore(ZSTD_maxCLevel());
-#endif
 
-#ifdef HAVE_LZ4
 //! gives the default acceleration value for the lz4() function (value: \c 1)
 /** Higher acceleration values trade compression ratio for speed.
     @since %Qore 2.1
@@ -1024,7 +1006,6 @@ const LZ4_MIN_ACCELERATION = 1;
 /** @since %Qore 2.1
  */
 const LZ4_MAX_ACCELERATION = 65537;
-#endif
 ///@}
 
 /** @defgroup compression_transformations Compression Stream Transformations
@@ -1051,21 +1032,16 @@ const COMPRESSION_ALG_GZIP = str(CompressionTransforms::ALG_GZIP);
 //! Identifies the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a>
 const COMPRESSION_ALG_BZIP2 = str(CompressionTransforms::ALG_BZIP2);
 
-#ifdef HAVE_BROTLI
 //! Identifies the <a href="https://github.com/google/brotli">Brotli</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>)
 /** @since %Qore 2.1
  */
 const COMPRESSION_ALG_BROTLI = str(CompressionTransforms::ALG_BROTLI);
-#endif
 
-#ifdef HAVE_ZSTD
 //! Identifies the <a href="https://github.com/facebook/zstd">Zstandard</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>)
 /** @since %Qore 2.1
  */
 const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
-#endif
 
-#ifdef HAVE_LZ4
 //! Identifies the <a href="https://github.com/lz4/lz4">LZ4</a> compression algorithm
 /** @note LZ4 does not store the original size in the compressed data, so decompression requires either a
     max_output_size parameter or knowledge of the original size.
@@ -1073,7 +1049,6 @@ const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
     @since %Qore 2.1
  */
 const COMPRESSION_ALG_LZ4 = str(CompressionTransforms::ALG_LZ4);
-#endif
 ///@}
 
 /** @defgroup compresssion_functions Compression Functions
@@ -1514,7 +1489,6 @@ string bunzip2_to_string(binary bin, *string encoding) {
 nothing bunzip2_to_string() [flags=RUNTIME_NOOP] {
 }
 
-#ifdef HAVE_BROTLI
 //! Compresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character
 
@@ -1635,9 +1609,7 @@ string unbrotli_to_string(binary bin, *string encoding) {
 */
 nothing unbrotli_to_string() [flags=RUNTIME_NOOP] {
 }
-#endif // HAVE_BROTLI
 
-#ifdef HAVE_ZSTD
 //! Compresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character
 
@@ -1758,9 +1730,7 @@ string unzstd_to_string(binary bin, *string encoding) {
 */
 nothing unzstd_to_string() [flags=RUNTIME_NOOP] {
 }
-#endif // HAVE_ZSTD
 
-#ifdef HAVE_LZ4
 //! Compresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character.
 
@@ -1889,7 +1859,6 @@ string unlz4_to_string(binary bin, int max_output_size = 0, *string encoding) {
 */
 nothing unlz4_to_string() [flags=RUNTIME_NOOP] {
 }
-#endif // HAVE_LZ4
 
 //! Returns a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 /** @par Example:

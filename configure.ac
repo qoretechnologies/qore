@@ -989,80 +989,50 @@ fi
 AC_SUBST([MONGODB_CPPFLAGS])
 AC_SUBST([MONGODB_LIBS])
 
-# Check for Brotli compression library - optional
-AC_ARG_ENABLE([brotli],
-    [AS_HELP_STRING([--disable-brotli], [disable Brotli compression support])],
-    [enable_brotli=$enableval],
-    [enable_brotli=yes])
-
-if test "x$enable_brotli" = "xyes"; then
-    AC_MSG_CHECKING([for Brotli libraries and header files])
-    if pkg-config --exists libbrotlienc libbrotlidec 2>/dev/null; then
-        BROTLI_CPPFLAGS="`pkg-config --cflags libbrotlienc libbrotlidec`"
-        BROTLI_LIBS="`pkg-config --libs libbrotlienc libbrotlidec`"
-        have_brotli=yes
-        AC_DEFINE([HAVE_BROTLI], [1], [Define if Brotli compression is available])
-        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $BROTLI_LIBS"
-        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $BROTLI_CPPFLAGS"
-        AC_MSG_RESULT([yes (pkg-config)])
-    else
-        have_brotli=no
-        AC_MSG_RESULT([no])
-    fi
+# Check for Brotli compression library - required since Qore 2.3
+AC_MSG_CHECKING([for Brotli libraries and header files])
+if pkg-config --exists libbrotlienc libbrotlidec 2>/dev/null; then
+    BROTLI_CPPFLAGS="`pkg-config --cflags libbrotlienc libbrotlidec`"
+    BROTLI_LIBS="`pkg-config --libs libbrotlienc libbrotlidec`"
+    have_brotli=yes
+    AC_DEFINE([HAVE_BROTLI], [1], [Define if Brotli compression is available])
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $BROTLI_LIBS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $BROTLI_CPPFLAGS"
+    AC_MSG_RESULT([yes (pkg-config)])
 else
-    have_brotli=no
+    AC_MSG_ERROR([Brotli is required. Please install libbrotli-dev (Debian/Ubuntu) or brotli-devel (Fedora/RHEL)])
 fi
 AC_SUBST([BROTLI_CPPFLAGS])
 AC_SUBST([BROTLI_LIBS])
 
-# Check for Zstandard compression library - optional
-AC_ARG_ENABLE([zstd],
-    [AS_HELP_STRING([--disable-zstd], [disable Zstandard compression support])],
-    [enable_zstd=$enableval],
-    [enable_zstd=yes])
-
-if test "x$enable_zstd" = "xyes"; then
-    AC_MSG_CHECKING([for Zstandard library and header files])
-    if pkg-config --exists libzstd 2>/dev/null; then
-        ZSTD_CPPFLAGS="`pkg-config --cflags libzstd`"
-        ZSTD_LIBS="`pkg-config --libs libzstd`"
-        have_zstd=yes
-        AC_DEFINE([HAVE_ZSTD], [1], [Define if Zstandard compression is available])
-        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $ZSTD_LIBS"
-        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $ZSTD_CPPFLAGS"
-        AC_MSG_RESULT([yes (pkg-config)])
-    else
-        have_zstd=no
-        AC_MSG_RESULT([no])
-    fi
+# Check for Zstandard compression library - required since Qore 2.3
+AC_MSG_CHECKING([for Zstandard library and header files])
+if pkg-config --exists libzstd 2>/dev/null; then
+    ZSTD_CPPFLAGS="`pkg-config --cflags libzstd`"
+    ZSTD_LIBS="`pkg-config --libs libzstd`"
+    have_zstd=yes
+    AC_DEFINE([HAVE_ZSTD], [1], [Define if Zstandard compression is available])
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $ZSTD_LIBS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $ZSTD_CPPFLAGS"
+    AC_MSG_RESULT([yes (pkg-config)])
 else
-    have_zstd=no
+    AC_MSG_ERROR([Zstandard is required. Please install libzstd-dev (Debian/Ubuntu) or libzstd-devel (Fedora/RHEL)])
 fi
 AC_SUBST([ZSTD_CPPFLAGS])
 AC_SUBST([ZSTD_LIBS])
 
-# Check for LZ4 compression library - optional
-AC_ARG_ENABLE([lz4],
-    [AS_HELP_STRING([--disable-lz4], [disable LZ4 compression support])],
-    [enable_lz4=$enableval],
-    [enable_lz4=yes])
-
-if test "x$enable_lz4" = "xyes"; then
-    AC_MSG_CHECKING([for LZ4 library and header files])
-    if pkg-config --exists liblz4 2>/dev/null; then
-        LZ4_CPPFLAGS="`pkg-config --cflags liblz4`"
-        LZ4_LIBS="`pkg-config --libs liblz4`"
-        have_lz4=yes
-        AC_DEFINE([HAVE_LZ4], [1], [Define if LZ4 compression is available])
-        QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $LZ4_LIBS"
-        QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $LZ4_CPPFLAGS"
-        AC_MSG_RESULT([yes (pkg-config)])
-    else
-        have_lz4=no
-        AC_MSG_RESULT([no])
-    fi
+# Check for LZ4 compression library - required since Qore 2.3
+AC_MSG_CHECKING([for LZ4 library and header files])
+if pkg-config --exists liblz4 2>/dev/null; then
+    LZ4_CPPFLAGS="`pkg-config --cflags liblz4`"
+    LZ4_LIBS="`pkg-config --libs liblz4`"
+    have_lz4=yes
+    AC_DEFINE([HAVE_LZ4], [1], [Define if LZ4 compression is available])
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $LZ4_LIBS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $LZ4_CPPFLAGS"
+    AC_MSG_RESULT([yes (pkg-config)])
 else
-    have_lz4=no
+    AC_MSG_ERROR([LZ4 is required. Please install liblz4-dev (Debian/Ubuntu) or lz4-devel (Fedora/RHEL)])
 fi
 AC_SUBST([LZ4_CPPFLAGS])
 AC_SUBST([LZ4_LIBS])
@@ -2274,7 +2244,7 @@ show_library_feature profiling $enable_profile
 show_library_feature debug $enable_debug
 echo "*** OPTIONAL BUILTIN MODULES ***"
 show_library_feature "mongodb module" $have_mongodb
-echo "*** OPTIONAL COMPRESSION SUPPORT ***"
+echo "*** REQUIRED COMPRESSION SUPPORT (since Qore 2.3) ***"
 show_library_feature "brotli compression" $have_brotli
 show_library_feature "zstd compression" $have_zstd
 show_library_feature "lz4 compression" $have_lz4
