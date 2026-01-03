@@ -477,39 +477,32 @@ class qdx {
                 }
             }
 
-            # remove quoted strings and line comments for the next comparison
+            # Check if line has brackets for multi-line detection
+            # Using tokenizer to correctly handle $# vs # comments
+            hash<auto> bc = count_all_brackets(line);
             string tline = line;
             tline =~ s/\\"/_/g;
             tline =~ s/"([^"]*)"/_/g;
-            tline =~ s/#.*//;
             # see if we have a function or method declaration that spans multiple lines
             bool fcall = (tline =~ /\w+\s?(\(|\))/) && tline !~ /;\s*$/ && tline !~ /^\s*_:\s*.*\),\s+$/
                 && tline !~ /^\s*\)/;
-            if (fcall || (!fcall && tline =~ /[{}]/ && tline =~ /[\(\)]/
+            if (fcall || (!fcall && (bc.open_braces || bc.close_braces) && (bc.open_parens || bc.close_parens)
                 && tline !~ /(namespace|class|struct|public|private|private:internal|private:hierarchy|const) /)) {
-                # copy of line to check it without parens in quotes
-                string line_copy = line;
-                line_copy =~ s/"(?:[^"\\]|\\.)*"/""/g;
-                line_copy =~ s/#.*//;
-                trim line_copy;
-                # count how many open parens
-                int ob = (line_copy =~ x/(\()/g).size();
-                # count how many close parens
-                int cb = (line_copy =~ x/(\))/g).size();
+                # use tokenizer-based counts for parens and braces
+                int ob = bc.open_parens;
+                int cb = bc.close_parens;
                 int tot = (ob - cb);
                 int otot = tot;
 
-                # count how many open curly brackets
-                int ocb = (line_copy =~ x/({)/g).size();
-                # count how many close curly brackets
-                int ccb = (line_copy =~ x/(})/g).size();
+                int ocb = bc.open_braces;
+                int ccb = bc.close_braces;
                 int ctot = (ocb - ccb);
                 int octot = ctot;
 
-                #printf("l: %y lc: %y fcall: %y tot: %y ctot: %y\n", line, line_copy, fcall, tot, ctot);
+                #printf("l: %y bc: %y fcall: %y tot: %y ctot: %y\n", line, bc, fcall, tot, ctot);
 
                 if (tot > 0
-                    || (!tot && !ctot && !ocb && !ccb && line_copy && line_copy !~ /;\s*(#.*)?$/)
+                    || (!tot && !ctot && !ocb && !ccb && line !~ /;\s*(#.*)?$/)
                     || (ctot > 0 && !fcall)) {
                     # trim trailing whitespace
                     line =~ s/\s*$//;
@@ -535,23 +528,22 @@ class qdx {
 
                         #printf("FOUND COMPLEX LINE: fcall: %y tot: %d ctot: %d: %y\n", fcall, tot, ctot, line);
 
-                        line_copy = new_line;
-                        line_copy =~ s/"(?:[^"\\]|\\.)*"/""/g;
-                        line_copy =~ s/#.*//;
+                        # use tokenizer-based counts for new_line
+                        hash<auto> new_bc = count_all_brackets(new_line);
 
                         # count how many open parens
-                        ob = (line_copy =~ x/(\()/g).size();
+                        ob = new_bc.open_parens;
                         # count how many close parens
-                        cb = (line_copy =~ x/(\))/g).size();
+                        cb = new_bc.close_parens;
                         tot += (ob - cb);
                         if (otot && !tot) {
                             break;
                         }
 
                         # count how many open curly brackets
-                        ocb = (line_copy =~ x/({)/g).size();
+                        ocb = new_bc.open_braces;
                         # count how many close curly brackets
-                        ccb = (line_copy =~ x/(})/g).size();
+                        ccb = new_bc.close_braces;
                         ctot += (ocb - ccb);
                         if ((octot && !ctot) || (fcall && ctot == 1)) {
                             break;
@@ -696,17 +688,9 @@ class qdx {
                     continue;
                 } else if (class_name) {
                     if (line =~ /({|})/) {
-                        # normalize line for brace counting: remove strings, comments, and hash access
-                        string brace_line = line;
-                        brace_line =~ s/"(?:[^"\\]|\\.)*"/""/g;  # remove string literals
-                        brace_line =~ s/'(?:[^'\\]|\\.)*'/''/g;  # remove single-quoted strings
-                        brace_line =~ s/#.*//;                    # remove line comments
-                        brace_line =~ s/\w+{[^{}]*}/_/g;          # remove hash access like foo{bar}
-                        # count how many open curly brackets
-                        int ob = (brace_line =~ x/({)/g).size();
-                        # count how many close curly brackets
-                        int cb = (brace_line =~ x/(})/g).size();
-                        cbc += (ob - cb);
+                        # use tokenizer-based brace counting to correctly handle $# vs # comments
+                        hash<auto> class_bc = count_braces(line);
+                        cbc += (class_bc.open - class_bc.close);
                         if (!cbc) {
                             line = regex_subst(line, "}", "};");
                             delete class_name;
@@ -752,17 +736,9 @@ class qdx {
                             continue;
                         }
                     } else {
-                        # normalize line for brace counting: remove strings, comments, and hash access
-                        string brace_line = line;
-                        brace_line =~ s/"(?:[^"\\]|\\.)*"/""/g;  # remove string literals
-                        brace_line =~ s/'(?:[^'\\]|\\.)*'/''/g;  # remove single-quoted strings
-                        brace_line =~ s/#.*//;                    # remove line comments
-                        brace_line =~ s/\w+{[^{}]*}/_/g;          # remove hash access like foo{bar}
-                        # count how many open curly brackets
-                        int ob = (brace_line =~ x/({)/g).size();
-                        # count how many close curly brackets
-                        int cb = (brace_line =~ x/(})/g).size();
-                        int tot = (ob - cb);
+                        # use tokenizer-based brace counting to correctly handle $# vs # comments
+                        hash<auto> pp_bc = count_braces(line);
+                        int tot = (pp_bc.open - pp_bc.close);
                         if (tot) {
                             ppc += tot;
                             if (!ppc) {

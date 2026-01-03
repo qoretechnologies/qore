@@ -72,6 +72,875 @@ module Qdx {
 
 #! the Qdx namespace contains all the objects in the Qdx module
 public namespace Qdx {
+    #! @defgroup token_types Token Type Constants
+    #! These constants define the different token types recognized by @ref QoreTokenizer
+    #!@{
+
+    #! Single-quoted string literal ('...')
+    public const TOK_STRING_SINGLE = 1;
+    #! Double-quoted string literal ("...")
+    public const TOK_STRING_DOUBLE = 2;
+    #! Heredoc string (<<END...END)
+    public const TOK_HEREDOC = 3;
+    #! Regex pattern (/pattern/flags)
+    public const TOK_REGEX = 4;
+    #! Regex substitution (s/pattern/replacement/flags)
+    public const TOK_SUBSTITUTION = 5;
+    #! Transliteration (tr/chars/replacements/ or y/.../)
+    public const TOK_TRANSLITERATION = 6;
+    #! Line comment (# to end of line)
+    public const TOK_LINE_COMMENT = 7;
+    #! Block comment (/* ... */)
+    public const TOK_BLOCK_COMMENT = 8;
+    #! Left brace ({)
+    public const TOK_LBRACE = 9;
+    #! Right brace (})
+    public const TOK_RBRACE = 10;
+    #! Left parenthesis (()
+    public const TOK_LPAREN = 11;
+    #! Right parenthesis ())
+    public const TOK_RPAREN = 12;
+    #! Left bracket ([)
+    public const TOK_LBRACKET = 13;
+    #! Right bracket (])
+    public const TOK_RBRACKET = 14;
+    #! Regex match operator (=~)
+    public const TOK_REGEX_MATCH = 15;
+    #! Regex not-match operator (!~)
+    public const TOK_REGEX_NOT_MATCH = 16;
+    #! Loop iteration index ($#)
+    public const TOK_DOLLAR_HASH = 17;
+    #! Identifier (variable/function names)
+    public const TOK_IDENTIFIER = 18;
+    #! Whitespace (spaces, tabs)
+    public const TOK_WHITESPACE = 19;
+    #! Newline character
+    public const TOK_NEWLINE = 20;
+    #! Any other single character
+    public const TOK_OTHER = 21;
+    #! End of input
+    public const TOK_EOF = 22;
+
+    #!@}
+
+    #! Token information structure returned by @ref QoreTokenizer
+    public hashdecl TokenInfo {
+        #! Token type (one of the TOK_* constants)
+        int type;
+        #! The actual text of the token
+        string value;
+        #! Line number where the token starts (1-based)
+        int line;
+        #! Column number where the token starts (1-based)
+        int column;
+    }
+
+    #! Tokenizer for Qore source code
+    /** This class provides lexical analysis of Qore source code, correctly handling:
+        - String literals (single and double quoted)
+        - Heredoc strings
+        - Regular expressions and substitutions
+        - Comments (line and block)
+        - All bracket types
+        - Special tokens like $# (loop iteration index)
+
+        @par Example:
+        @code{.py}
+QoreTokenizer tok("if (x == 1) { # comment\n    return x;\n}");
+while (!tok.atEnd()) {
+    hash<TokenInfo> t = tok.next();
+    printf("Token: type=%d value=%y line=%d\n", t.type, t.value, t.line);
+}
+        @endcode
+    */
+    public class QoreTokenizer {
+        private {
+            #! Input text
+            string input;
+            #! Current position (character index)
+            int pos = 0;
+            #! Current line number (1-based)
+            int line = 1;
+            #! Current column number (1-based)
+            int column = 1;
+            #! Input length in characters
+            int len;
+            #! Cached next token for peek()
+            *hash<TokenInfo> peeked;
+        }
+
+        #! Creates a tokenizer for the given input text
+        /** @param text the Qore source code to tokenize
+        */
+        constructor(string text) {
+            input = text;
+            len = text.length();
+        }
+
+        #! Returns True if at end of input
+        bool atEnd() {
+            return !peeked && pos >= len;
+        }
+
+        #! Returns the next token without consuming it
+        /** @return the next token, or a TOK_EOF token if at end of input
+        */
+        hash<TokenInfo> peek() {
+            if (!peeked) {
+                peeked = scanToken();
+            }
+            return peeked;
+        }
+
+        #! Returns the next token and advances the position
+        /** @return the next token, or a TOK_EOF token if at end of input
+        */
+        hash<TokenInfo> next() {
+            if (peeked) {
+                hash<TokenInfo> result = peeked;
+                delete peeked;
+                return result;
+            }
+            return scanToken();
+        }
+
+        #! Skips tokens until a matching close brace is found
+        /** Starts with brace count of 1 (assumes we just passed an open brace).
+            Correctly handles nested braces and skips braces inside strings,
+            comments, and regex patterns.
+
+            @return the number of lines consumed (0-based, so 0 means same line)
+        */
+        int skipToCloseBrace() {
+            int start_line = line;
+            int brace_count = 1;
+
+            while (!atEnd()) {
+                hash<TokenInfo> tok = next();
+                switch (tok.type) {
+                    case TOK_LBRACE:
+                        ++brace_count;
+                        break;
+                    case TOK_RBRACE:
+                        if (!--brace_count) {
+                            return line - start_line;
+                        }
+                        break;
+                    case TOK_EOF:
+                        return line - start_line;
+                }
+            }
+            return line - start_line;
+        }
+
+        #! Returns the current line number
+        int getLine() {
+            return line;
+        }
+
+        #! Returns the current column number
+        int getColumn() {
+            return column;
+        }
+
+        #! Returns the character at the current position, or NOTHING if at end
+        private:internal *string currentChar() {
+            if (pos >= len) {
+                return NOTHING;
+            }
+            return input[pos];
+        }
+
+        #! Returns the character at offset from current position, or NOTHING if out of bounds
+        private:internal *string peekChar(int offset = 1) {
+            int p = pos + offset;
+            if (p >= len || p < 0) {
+                return NOTHING;
+            }
+            return input[p];
+        }
+
+        #! Advances position by count characters, updating line/column
+        private:internal advance(int count = 1) {
+            for (int i = 0; i < count && pos < len; ++i) {
+                if (input[pos] == "\n") {
+                    ++line;
+                    column = 1;
+                } else {
+                    ++column;
+                }
+                ++pos;
+            }
+        }
+
+        #! Scans and returns the next token
+        private:internal hash<TokenInfo> scanToken() {
+            if (pos >= len) {
+                return <TokenInfo>{
+                    "type": TOK_EOF,
+                    "value": "",
+                    "line": line,
+                    "column": column,
+                };
+            }
+
+            int start_line = line;
+            int start_column = column;
+            *string c = currentChar();
+
+            # Newline
+            if (c == "\n") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_NEWLINE,
+                    "value": "\n",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # Whitespace (not newline)
+            if (c == " " || c == "\t" || c == "\r") {
+                string ws = "";
+                while (pos < len) {
+                    c = currentChar();
+                    if (c != " " && c != "\t" && c != "\r") {
+                        break;
+                    }
+                    ws += c;
+                    advance();
+                }
+                return <TokenInfo>{
+                    "type": TOK_WHITESPACE,
+                    "value": ws,
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # Single-quoted string
+            if (c == "'") {
+                return scanSingleQuotedString();
+            }
+
+            # Double-quoted string
+            if (c == '"') {
+                return scanDoubleQuotedString();
+            }
+
+            # Line comment or $#
+            if (c == "#") {
+                return scanLineComment();
+            }
+
+            # Block comment or division
+            if (c == "/") {
+                if (peekChar() == "*") {
+                    return scanBlockComment();
+                }
+                # Just a forward slash (division, etc.)
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_OTHER,
+                    "value": "/",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # $# (loop iteration index) or other $ usage
+            if (c == "$") {
+                if (peekChar() == "#") {
+                    advance(2);
+                    return <TokenInfo>{
+                        "type": TOK_DOLLAR_HASH,
+                        "value": "$#",
+                        "line": start_line,
+                        "column": start_column,
+                    };
+                }
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_OTHER,
+                    "value": "$",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # Regex match operators
+            if (c == "=" && peekChar() == "~") {
+                advance(2);
+                return scanAfterRegexOperator(TOK_REGEX_MATCH, "=~", start_line, start_column);
+            }
+
+            if (c == "!" && peekChar() == "~") {
+                advance(2);
+                return scanAfterRegexOperator(TOK_REGEX_NOT_MATCH, "!~", start_line, start_column);
+            }
+
+            # Braces and brackets
+            if (c == "{") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_LBRACE,
+                    "value": "{",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+            if (c == "}") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_RBRACE,
+                    "value": "}",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+            if (c == "(") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_LPAREN,
+                    "value": "(",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+            if (c == ")") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_RPAREN,
+                    "value": ")",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+            if (c == "[") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_LBRACKET,
+                    "value": "[",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+            if (c == "]") {
+                advance();
+                return <TokenInfo>{
+                    "type": TOK_RBRACKET,
+                    "value": "]",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # Heredoc
+            if (c == "<" && peekChar() == "<") {
+                return scanHeredoc();
+            }
+
+            # Any other character
+            advance();
+            return <TokenInfo>{
+                "type": TOK_OTHER,
+                "value": c,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a single-quoted string
+        private:internal hash<TokenInfo> scanSingleQuotedString() {
+            int start_line = line;
+            int start_column = column;
+            string value = "'";
+            advance();  # skip opening quote
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == "'") {
+                    value += c;
+                    advance();
+                    break;
+                }
+                if (c == "\\") {
+                    value += c;
+                    advance();
+                    # In single-quoted strings, only \' and \\ are escapes
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else {
+                    value += c;
+                    advance();
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_STRING_SINGLE,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a double-quoted string
+        private:internal hash<TokenInfo> scanDoubleQuotedString() {
+            int start_line = line;
+            int start_column = column;
+            string value = '"';
+            advance();  # skip opening quote
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == '"') {
+                    value += c;
+                    advance();
+                    break;
+                }
+                if (c == "\\") {
+                    value += c;
+                    advance();
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else {
+                    value += c;
+                    advance();
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_STRING_DOUBLE,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a line comment (# to end of line)
+        private:internal hash<TokenInfo> scanLineComment() {
+            int start_line = line;
+            int start_column = column;
+            string value = "#";
+            advance();  # skip #
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == "\n") {
+                    break;
+                }
+                value += c;
+                advance();
+            }
+
+            return <TokenInfo>{
+                "type": TOK_LINE_COMMENT,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a block comment (/* ... */)
+        private:internal hash<TokenInfo> scanBlockComment() {
+            int start_line = line;
+            int start_column = column;
+            string value = "/*";
+            advance(2);  # skip /*
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == "*" && peekChar() == "/") {
+                    value += "*/";
+                    advance(2);
+                    break;
+                }
+                value += c;
+                advance();
+            }
+
+            return <TokenInfo>{
+                "type": TOK_BLOCK_COMMENT,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans after a regex operator (=~ or !~) to find the pattern
+        private:internal hash<TokenInfo> scanAfterRegexOperator(int op_type, string op_value, int start_line, int start_column) {
+            # Skip whitespace to find the regex
+            while (pos < len) {
+                *string c = currentChar();
+                if (c != " " && c != "\t") {
+                    break;
+                }
+                advance();
+            }
+
+            if (pos >= len) {
+                return <TokenInfo>{
+                    "type": op_type,
+                    "value": op_value,
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            *string c = currentChar();
+
+            # Check for s (substitution), tr or y (transliteration)
+            if (c == "s" && peekChar() =~ /[^a-zA-Z0-9_]/) {
+                return scanSubstitution(start_line, start_column);
+            }
+            if ((c == "t" && peekChar() == "r" && peekChar(2) =~ /[^a-zA-Z0-9_]/) ||
+                (c == "y" && peekChar() =~ /[^a-zA-Z0-9_]/)) {
+                return scanTransliteration(start_line, start_column);
+            }
+
+            # Regular regex pattern
+            if (c == "/") {
+                return scanRegex(start_line, start_column);
+            }
+
+            # Not followed by a regex - just return the operator
+            return <TokenInfo>{
+                "type": op_type,
+                "value": op_value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a regex pattern (/pattern/flags)
+        private:internal hash<TokenInfo> scanRegex(int start_line, int start_column) {
+            string value = "/";
+            advance();  # skip opening /
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == "/") {
+                    value += c;
+                    advance();
+                    # Scan flags
+                    while (pos < len && currentChar() =~ /[gimsxn]/) {
+                        value += currentChar();
+                        advance();
+                    }
+                    break;
+                }
+                if (c == "\\") {
+                    value += c;
+                    advance();
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else if (c == "\n") {
+                    # Regex can't span lines without escape
+                    break;
+                } else {
+                    value += c;
+                    advance();
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_REGEX,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a substitution (s/pattern/replacement/flags)
+        private:internal hash<TokenInfo> scanSubstitution(int start_line, int start_column) {
+            string value = "s";
+            advance();  # skip 's'
+
+            *string delim = currentChar();
+            if (!delim) {
+                return <TokenInfo>{
+                    "type": TOK_OTHER,
+                    "value": value,
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            value += delim;
+            advance();
+
+            # Scan pattern
+            int pattern_count = 0;
+            while (pos < len) {
+                *string c = currentChar();
+                if (c == "\\") {
+                    value += c;
+                    advance();
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else if (c == delim) {
+                    value += c;
+                    advance();
+                    ++pattern_count;
+                    if (pattern_count >= 2) {
+                        # Scan flags
+                        while (pos < len && currentChar() =~ /[gimsxn]/) {
+                            value += currentChar();
+                            advance();
+                        }
+                        break;
+                    }
+                } else {
+                    value += c;
+                    advance();
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_SUBSTITUTION,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a transliteration (tr/chars/replacements/ or y/.../)
+        private:internal hash<TokenInfo> scanTransliteration(int start_line, int start_column) {
+            string value = "";
+            *string c = currentChar();
+
+            if (c == "t") {
+                value = "tr";
+                advance(2);
+            } else {
+                value = "y";
+                advance();
+            }
+
+            *string delim = currentChar();
+            if (!delim) {
+                return <TokenInfo>{
+                    "type": TOK_OTHER,
+                    "value": value,
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            value += delim;
+            advance();
+
+            # Scan two patterns
+            int pattern_count = 0;
+            while (pos < len) {
+                c = currentChar();
+                if (c == "\\") {
+                    value += c;
+                    advance();
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else if (c == delim) {
+                    value += c;
+                    advance();
+                    ++pattern_count;
+                    if (pattern_count >= 2) {
+                        break;
+                    }
+                } else {
+                    value += c;
+                    advance();
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_TRANSLITERATION,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans a heredoc (<<MARKER...MARKER)
+        private:internal hash<TokenInfo> scanHeredoc() {
+            int start_line = line;
+            int start_column = column;
+            string value = "<<";
+            advance(2);  # skip <<
+
+            # Get the marker
+            string marker = "";
+            while (pos < len) {
+                *string c = currentChar();
+                if (c =~ /[a-zA-Z0-9_]/) {
+                    marker += c;
+                    value += c;
+                    advance();
+                } else {
+                    break;
+                }
+            }
+
+            if (marker == "") {
+                # Not a heredoc, just <<
+                return <TokenInfo>{
+                    "type": TOK_OTHER,
+                    "value": "<<",
+                    "line": start_line,
+                    "column": start_column,
+                };
+            }
+
+            # Find the end marker (must be at start of line)
+            bool at_line_start = False;
+            while (pos < len) {
+                *string c = currentChar();
+
+                if (c == "\n") {
+                    value += c;
+                    at_line_start = True;
+                    advance();
+                    continue;
+                }
+
+                if (at_line_start) {
+                    # Check if this line starts with the marker
+                    bool found = True;
+                    for (int i = 0; i < marker.length(); ++i) {
+                        if (pos + i >= len || input[pos + i] != marker[i]) {
+                            found = False;
+                            break;
+                        }
+                    }
+                    if (found) {
+                        # Check that marker is followed by non-identifier char or EOL
+                        int end_pos = pos + marker.length();
+                        if (end_pos >= len || input[end_pos] !~ /[a-zA-Z0-9_]/) {
+                            # Include the marker in the value (don't add 'c' first)
+                            value += marker;
+                            advance(marker.length());
+                            break;
+                        }
+                    }
+                }
+
+                # Only add character if not part of end marker
+                value += c;
+                at_line_start = False;
+                advance();
+            }
+
+            return <TokenInfo>{
+                "type": TOK_HEREDOC,
+                "value": value,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+    }
+
+    #! Counts open and close braces in a string using proper tokenization
+    /** This function correctly handles braces inside strings, comments, and regex patterns,
+        and correctly handles $# (loop iteration index) vs # (line comment start).
+
+        @param text the text to analyze
+        @return a hash with "open" and "close" keys containing the brace counts
+
+        @par Example:
+        @code{.py}
+hash<auto> counts = count_braces("if (x) { list[$#] }");
+printf("open: %d, close: %d\n", counts.open, counts.close);  # open: 1, close: 1
+        @endcode
+    */
+    public hash<auto> sub count_braces(string text) {
+        QoreTokenizer tok(text);
+        int open_braces = 0;
+        int close_braces = 0;
+
+        while (!tok.atEnd()) {
+            hash<TokenInfo> t = tok.next();
+            switch (t.type) {
+                case TOK_LBRACE:
+                    ++open_braces;
+                    break;
+                case TOK_RBRACE:
+                    ++close_braces;
+                    break;
+            }
+        }
+
+        return {
+            "open": open_braces,
+            "close": close_braces,
+        };
+    }
+
+    #! Counts all bracket types in a string using proper tokenization
+    /** This function correctly handles brackets inside strings, comments, and regex patterns,
+        and correctly handles $# (loop iteration index) vs # (line comment start).
+
+        @param text the text to analyze
+        @return a hash with counts for braces, parentheses, and brackets
+
+        @par Example:
+        @code{.py}
+hash<auto> counts = count_all_brackets("if (x[$#]) { y; }");
+printf("open_braces: %d, close_braces: %d\n", counts.open_braces, counts.close_braces);
+printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_parens);
+        @endcode
+    */
+    public hash<auto> sub count_all_brackets(string text) {
+        QoreTokenizer tok(text);
+        int open_braces = 0;
+        int close_braces = 0;
+        int open_parens = 0;
+        int close_parens = 0;
+        int open_brackets = 0;
+        int close_brackets = 0;
+
+        while (!tok.atEnd()) {
+            hash<TokenInfo> t = tok.next();
+            switch (t.type) {
+                case TOK_LBRACE:
+                    ++open_braces;
+                    break;
+                case TOK_RBRACE:
+                    ++close_braces;
+                    break;
+                case TOK_LPAREN:
+                    ++open_parens;
+                    break;
+                case TOK_RPAREN:
+                    ++close_parens;
+                    break;
+                case TOK_LBRACKET:
+                    ++open_brackets;
+                    break;
+                case TOK_RBRACKET:
+                    ++close_brackets;
+                    break;
+            }
+        }
+
+        return {
+            "open_braces": open_braces,
+            "close_braces": close_braces,
+            "open_parens": open_parens,
+            "close_parens": close_parens,
+            "open_brackets": open_brackets,
+            "close_brackets": close_brackets,
+        };
+    }
+
     #! converts specially-formatted text in the input to HTML tables
     public class DocumentTableHelper {
         private:internal {
