@@ -2369,8 +2369,8 @@ public class AsyncApiSchemaTokenizer {
         list<string> lines = info_section.split("\n");
 
         foreach string line in (lines) {
-            # Parse field: - name (type): description
-            *list<*string> field_match = (line =~ x/^\s*-\s+(\w+)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            # Parse field: - name (type): description (use Qore identifier pattern)
+            *list<*string> field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
             if (field_match && field_match[0] && field_match[1]) {
                 string field_name = field_match[0];
                 string field_type = field_match[1];
@@ -2447,7 +2447,8 @@ public class AsyncApiSchemaTokenizer {
 
         list<string> lines = text.split("\n");
         foreach string line in (lines) {
-            *list<*string> field_match = (line =~ x/^\s*-\s+(\w+)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            # Use Qore identifier pattern for field names
+            *list<*string> field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
             if (field_match && field_match[0] && field_match[1]) {
                 string field_name = field_match[0];
                 string field_type = field_match[1];

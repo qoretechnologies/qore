@@ -6071,8 +6071,8 @@ public class OpenApi3SchemaTokenizer {
                 if (!rv.errors) {
                     rv.errors = {};
                 }
-                # Parse error code and description: (404): description
-                *list<string> parts = (val =~ x/\(([0-9]+)\):\s*(.*)$/);
+                # Parse error code and description: (404): description (flexible whitespace)
+                *list<string> parts = (val =~ x/\(\s*([0-9]+)\s*\)\s*:\s*(.*)$/);
                 if (parts && parts.size() >= 2) {
                     rv.errors{parts[0]} = parts[1];
                 }
@@ -6638,6 +6638,8 @@ public class OpenApi3SchemaGenerator {
     private hash<auto> generateResponses(hash<RestMethodInfo> method_info) {
         # Build success response
         hash<auto> success_response;
+        string status_code;
+
         if (method_info.schema.return_info) {
             hash<auto> response_schema = OpenApi3TypeMapper::mapType(method_info.schema.return_info.type_str);
 
@@ -6667,11 +6669,26 @@ public class OpenApi3SchemaGenerator {
                     "application/x-yaml": {"schema": response_schema},
                 },
             };
+
+            # Use 201 Created for POST with response body
+            status_code = method_info.http_method.lwr() == "post" ? "201" : "200";
         } else {
             success_response = {"description": "Successful response"};
+
+            # Use 204 No Content for DELETE without response body, 201 for POST
+            switch (method_info.http_method.lwr()) {
+                case "delete":
+                    status_code = "204";
+                    break;
+                case "post":
+                    status_code = "201";
+                    break;
+                default:
+                    status_code = "200";
+            }
         }
 
-        hash<auto> responses = {"200": success_response};
+        hash<auto> responses = {status_code: success_response};
 
         # Error responses
         if (method_info.schema.errors) {
