@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProvider.qm module for data access and introspection
 
-/*  DataProvider.qm Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/*  DataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,7 +45,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -164,7 +164,185 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     iterated, and each record will be passed separately to the processor with a significant performance penalty when
     processing large volumes of data.
 
+    @section dataprovider_dpql DPQL - Data Provider Query Language
+
+    DPQL (Data Provider Query Language) is a human-readable query language for constructing DataProviderExpression
+    structures. It provides a simple, intuitive syntax for writing search expressions that can be used with data
+    provider search, update, and delete operations.
+
+    @subsection dpql_syntax DPQL Syntax
+
+    DPQL supports the following syntax elements:
+
+    @par Field References
+    Fields are referenced using the \c @ prefix:
+    - \c @name - simple field name
+    - \c @"field with spaces" - quoted field names for special characters
+    - \c @user.email - dotted paths for nested fields
+
+    @par Comparison Operators
+    - \c == - equals
+    - \c != - not equals
+    - \c < - less than
+    - \c <= - less than or equal
+    - \c > - greater than
+    - \c >= - greater than or equal
+    - \c between - range comparison (\c @age \c between \c 18 \c and \c 65)
+    - \c in - set membership (\c @status \c in \c ("active", \c "pending"))
+    - \c =~ - regex match (\c @email \c =~ \c /example.com$/i)
+
+    @par Logical Operators
+    - \c && - logical AND
+    - \c || - logical OR
+    - \c ! - logical NOT
+
+    @par Literals
+    - Strings: \c "hello" or \c 'world'
+    - Numbers: \c 123, \c 45.67, \c -10
+    - Booleans: \c true, \c false
+    - Null: \c null
+
+    @par Function Calls
+    Custom functions can be used: \c calculate(@score, \c 100) \c > \c 50
+
+    @subsection dpql_examples DPQL Examples
+
+    @par Simple Comparison
+    @code{.py}
+# Parse a simple equality expression
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
+# Result: {"exp": "==", "args": [{"field": "name"}, "John"]}
+    @endcode
+
+    @par Complex Query
+    @code{.py}
+# Parse a complex query with multiple conditions
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+    '@age > 18 && @status == "active" || @role == "admin"');
+    @endcode
+
+    @par Range Query
+    @code{.py}
+# Find records where age is between 18 and 65
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@age between 18 and 65');
+    @endcode
+
+    @par Set Membership
+    @code{.py}
+# Find records with specific status values
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+    '@status in ("pending", "active", "review")');
+    @endcode
+
+    @par Regex Matching
+    @code{.py}
+# Find email addresses from a specific domain (case-insensitive)
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@email =~ /example.com$/i');
+    @endcode
+
+    @par Negation
+    @code{.py}
+# Find non-deleted records
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('!(@deleted == true)');
+    @endcode
+
+    @par Using with Data Providers
+    @code{.py}
+# Search a data provider using DPQL
+hash<DataProviderExpression> where = DataProvider::parseDpqlExpression(
+    '@created > "2024-01-01" && @type == "order"');
+AbstractDataProviderRecordIterator i = provider.searchRecords({"where": where});
+    @endcode
+
+    @subsection dpql_round_trip Round-Trip Conversion
+
+    DPQL expressions can be serialized back to strings:
+    @code{.py}
+# Parse and serialize an expression
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John" && @age > 18');
+string dpql = DataProvider::serializeDpqlExpression(exp);
+# Result: '@name == "John" && @age > 18'
+    @endcode
+
+    @subsection dpql_diagnostics Error Handling and Diagnostics
+
+    The parser provides detailed diagnostics for syntax errors:
+    @code{.py}
+# Parse with diagnostics
+hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name ==');
+if (!result.success) {
+    foreach hash<DpqlDiagnostic> diag in (result.diagnostics) {
+        printf("Error at line %d, column %d: %s (code: %s)\n",
+            diag.line, diag.column, diag.message, diag.code);
+    }
+}
+    @endcode
+
+    @subsection dpql_syntax_highlighting Syntax Highlighting
+
+    For IDE integration, DPQL provides token information with position tracking:
+    @code{.py}
+# Get tokens for syntax highlighting
+list<hash<DpqlTokenInfo>> tokens = DataProvider::getDpqlTokens('@name == "John"');
+foreach hash<DpqlTokenInfo> tok in (tokens) {
+    printf("Token: type=%d value='%s' at line %d, col %d\n",
+        tok.type, tok.value, tok.line, tok.column);
+}
+    @endcode
+
+    Token types include:
+    - \c DPQL_TOK_FIELD (1) - field references
+    - \c DPQL_TOK_STRING (2) - string literals
+    - \c DPQL_TOK_NUMBER (3) - numeric literals
+    - \c DPQL_TOK_BOOLEAN (4) - boolean values
+    - \c DPQL_TOK_IDENTIFIER (6) - identifiers/keywords
+    - \c DPQL_TOK_OP_EQ (10) through \c DPQL_TOK_OP_REGEX (19) - operators
+    - \c DPQL_TOK_REGEX (20) - regex patterns
+
+    @subsection dpql_completions Auto-Completion
+
+    For IDE integration, DPQL provides context-aware completions:
+    @code{.py}
+# Get completions at cursor position
+hash<string, AbstractDataField> fields = {
+    "name": new QoreDataField("name", "Name", StringType),
+    "age": new QoreDataField("age", "Age", IntType),
+    "email": new QoreDataField("email", "Email", StringType),
+};
+list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3, fields);
+# Returns completions matching "na", e.g., [{"label": "name", "kind": "field", ...}]
+    @endcode
+
+    @subsection dpql_validation Expression Validation
+
+    Expressions can be validated against available fields:
+    @code{.py}
+# Validate expression against fields
+hash<string, AbstractDataField> fields = {
+    "name": new QoreDataField("name", "Name", StringType),
+};
+list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+    '@unknown_field == "test"', fields);
+if (errors) {
+    printf("Validation error: %s\n", errors[0].message);
+    # Output: "Validation error: Unknown field 'unknown_field'"
+}
+    @endcode
+
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_4 DataProvider v3.4
+    - added DPQL (Data Provider Query Language) support for human-readable query expressions
+      - @ref DataProvider::DpqlTokenizer "DpqlTokenizer": Tokenizes DPQL expressions with position tracking
+      - @ref DataProvider::DpqlParser "DpqlParser": Parses DPQL strings into DataProviderExpression structures
+      - @ref DataProvider::DpqlSerializer "DpqlSerializer": Serializes DataProviderExpression back to DPQL strings
+      - @ref DataProvider::DpqlCompletionProvider "DpqlCompletionProvider": Context-aware completions for IDE support
+      - @ref DataProvider::DataProvider::parseDpqlExpression() "DataProvider::parseDpqlExpression()": Parse DPQL to expression
+      - @ref DataProvider::DataProvider::parseDpqlExpressionWithInfo() "DataProvider::parseDpqlExpressionWithInfo()": Parse with diagnostics
+      - @ref DataProvider::DataProvider::serializeDpqlExpression() "DataProvider::serializeDpqlExpression()": Serialize expression to DPQL
+      - @ref DataProvider::DataProvider::getDpqlTokens() "DataProvider::getDpqlTokens()": Get tokens for syntax highlighting
+      - @ref DataProvider::DataProvider::getDpqlCompletions() "DataProvider::getDpqlCompletions()": Get completions at cursor position
+      - @ref DataProvider::DataProvider::validateDpqlExpression() "DataProvider::validateDpqlExpression()": Validate against fields
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added methods to return data provider types in the context of option dataprovider_message_support
