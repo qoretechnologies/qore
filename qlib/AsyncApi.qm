@@ -2468,31 +2468,38 @@ public class AsyncApiSchemaTokenizer {
     #! Parse source file content and extract all @EVENT blocks
     /** @param content the source file content
         @return list of parsed event schemas
+
+        This method searches for @EVENT blocks within doc comment blocks (/** ... * /)
+        to avoid matching @EVENT in string literals or regular comments.
     */
     static list<hash<EventSchemaInfo>> parseEventBlocks(string content) {
         list<hash<EventSchemaInfo>> events = ();
 
-        int pos = 0;
-        while (True) {
-            int start = content.find("@EVENT ", pos);
-            if (start < 0) {
-                break;
-            }
+        # Find all doc comment blocks first, then search for @EVENT within them
+        # Pattern matches /** ... */ blocks (non-greedy) with capture group
+        *list<string> doc_matches = (content =~ x/(\/\*\*[\s\S]*?\*\/)/g);
+        if (!doc_matches) {
+            return events;
+        }
 
-            int end = content.find("@ENDEVENTSCHEMA", start);
-            if (end < 0) {
-                pos = start + 7;
+        foreach string doc_block in (doc_matches) {
+            # Check if this doc block contains @EVENT
+            int start = doc_block.find("@EVENT ");
+            if (start < 0) {
                 continue;
             }
 
-            string block = content.substr(start, end - start);
+            int end = doc_block.find("@ENDEVENTSCHEMA", start);
+            if (end < 0) {
+                continue;
+            }
+
+            string block = doc_block.substr(start, end - start);
             try {
                 events += parseEventBlock(block);
             } catch (hash<ExceptionInfo> ex) {
                 # Skip malformed blocks
             }
-
-            pos = end + 15;
         }
 
         return events;
@@ -2501,31 +2508,38 @@ public class AsyncApiSchemaTokenizer {
     #! Parse source file content and extract all @WEBSOCKET blocks
     /** @param content the source file content
         @return list of parsed channel schemas
+
+        This method searches for @WEBSOCKET blocks within doc comment blocks (/** ... * /)
+        to avoid matching @WEBSOCKET in string literals or regular comments.
     */
     static list<hash<ChannelSchemaInfo>> parseChannelBlocks(string content) {
         list<hash<ChannelSchemaInfo>> channels = ();
 
-        int pos = 0;
-        while (True) {
-            int start = content.find("@WEBSOCKET ", pos);
-            if (start < 0) {
-                break;
-            }
+        # Find all doc comment blocks first, then search for @WEBSOCKET within them
+        # Pattern matches /** ... */ blocks (non-greedy) with capture group
+        *list<string> doc_matches = (content =~ x/(\/\*\*[\s\S]*?\*\/)/g);
+        if (!doc_matches) {
+            return channels;
+        }
 
-            int end = content.find("@ENDASYNCAPI", start);
-            if (end < 0) {
-                pos = start + 11;
+        foreach string doc_block in (doc_matches) {
+            # Check if this doc block contains @WEBSOCKET
+            int start = doc_block.find("@WEBSOCKET ");
+            if (start < 0) {
                 continue;
             }
 
-            string block = content.substr(start, end - start);
+            int end = doc_block.find("@ENDASYNCAPI", start);
+            if (end < 0) {
+                continue;
+            }
+
+            string block = doc_block.substr(start, end - start);
             try {
                 channels += parseChannelBlock(block);
             } catch (hash<ExceptionInfo> ex) {
                 # Skip malformed blocks
             }
-
-            pos = end + 12;
         }
 
         return channels;

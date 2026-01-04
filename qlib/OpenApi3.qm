@@ -6307,11 +6307,14 @@ public class OpenApi3TypeMapper {
             }
             return rv;
         }
-        # Check for hash type with named type (hash<TypeName>)
-        *list<string> hash_match = (qore_type =~ x/^hash<(\w+)>$/);
+        # Check for hash type with named type (hash<TypeName> or hash<Namespace::TypeName>)
+        *list<string> hash_match = (qore_type =~ x/^hash<([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>$/);
         if (hash_match) {
+            # Use last component of qualified name for schema reference
+            list<string> name_parts = hash_match[0].split("::");
+            string schema_name = name_parts[name_parts.size() - 1];
             hash<auto> rv = {
-                "\$ref": sprintf("#/components/schemas/%s", hash_match[0]),
+                "\$ref": sprintf("#/components/schemas/%s", schema_name),
                 "nullable": nullable,
             };
             if (!nullable) {
@@ -6370,9 +6373,9 @@ public class OpenApi3TypeMapper {
         return match ? match[0] : NOTHING;
     }
 
-    #! Extract inner type from hash type
+    #! Extract inner type from hash type (supports qualified names like Namespace::TypeName)
     static *string getHashType(string qore_type) {
-        *list<string> match = (qore_type =~ x/^(?:\*)?hash<(\w+)>$/);
+        *list<string> match = (qore_type =~ x/^(?:\*)?hash<([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>$/);
         return match ? match[0] : NOTHING;
     }
 }

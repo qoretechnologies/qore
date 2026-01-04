@@ -298,6 +298,14 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         result = OpenApi3::OpenApi3TypeMapper::mapType("hash<UserInfo>");
         assertEq("#/components/schemas/UserInfo", result."\$ref");
 
+        # Test hash type with qualified name (Namespace::TypeName)
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<MyModule::UserInfo>");
+        assertEq("#/components/schemas/UserInfo", result."\$ref", "Should use last component of qualified name");
+
+        # Test hash type with deeply qualified name
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<Outer::Inner::DeepType>");
+        assertEq("#/components/schemas/DeepType", result."\$ref", "Should extract innermost type name");
+
         # Test generic hash type
         result = OpenApi3::OpenApi3TypeMapper::mapType("hash");
         assertEq("object", result.type);

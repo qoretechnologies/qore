@@ -50,6 +50,7 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("malformed event block", \testMalformedEventBlock());
         addTestCase("malformed channel block", \testMalformedChannelBlock());
         addTestCase("empty content", \testEmptyContent());
+        addTestCase("non-doc comment ignored", \testNonDocCommentIgnored());
         addTestCase("whitespace handling", \testWhitespaceHandling());
         addTestCase("special characters", \testSpecialCharacters());
         addTestCase("complex info schema", \testComplexInfoSchema());
@@ -364,6 +365,33 @@ trailing code";
         # Content with no schema blocks
         events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks("just some random code here");
         assertEq(0, events.size(), "Content with no blocks should return empty list");
+    }
+
+    testNonDocCommentIgnored() {
+        # @EVENT in string literal should be ignored (not in doc comment)
+        string content = 'string s = "@EVENT FAKE_EVENT @EVENTSCHEMA @summary Fake @ENDEVENTSCHEMA";';
+        list<hash<AsyncApi::EventSchemaInfo>> events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(0, events.size(), "@EVENT in string literal should be ignored");
+
+        # @EVENT in regular comment should be ignored (not in doc comment)
+        content = "// @EVENT FAKE_EVENT @EVENTSCHEMA @summary Fake @ENDEVENTSCHEMA";
+        events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(0, events.size(), "@EVENT in line comment should be ignored");
+
+        # @WEBSOCKET in regular comment should be ignored
+        content = "/* @WEBSOCKET /fake @ASYNCAPI @summary Fake @ENDASYNCAPI */";
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(0, channels.size(), "@WEBSOCKET in regular /* */ comment should be ignored");
+
+        # Only doc comments (/** */) should be parsed
+        content = "/** @EVENT REAL_EVENT
+@EVENTSCHEMA
+@summary Real event
+@ENDEVENTSCHEMA
+*/";
+        events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(1, events.size(), "@EVENT in doc comment should be parsed");
+        assertEq("REAL_EVENT", events[0].name, "Event name should be extracted");
     }
 
     testWhitespaceHandling() {
