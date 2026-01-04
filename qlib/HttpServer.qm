@@ -3227,13 +3227,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (hdr.authorization)
                     cx.auth = hdr.authorization;
 
-                # save original content-type
+                # save original content-type and update with body-content-type if set
                 if (hdr."content-type") {
                     hdr."_qore_orig_content_type" = hdr."content-type";
                 }
-                hdr."content-type" = header_info."body-content-type";
-                if (hdr."content-type".typeCode() == NT_LIST) {
-                    hdr."content-type" = hdr."content-type"[0];
+                # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
+                if (header_info."body-content-type".val()) {
+                    hdr."content-type" = header_info."body-content-type";
+                    if (hdr."content-type".typeCode() == NT_LIST) {
+                        hdr."content-type" = hdr."content-type"[0];
+                    }
                 }
 
                 # copy headers to the context var
@@ -3422,9 +3425,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (hdr."content-type") {
             hdr."_qore_orig_content_type" = hdr."content-type";
         }
-        hdr."content-type" = header_info."body-content-type";
-        if (hdr."content-type".typeCode() == NT_LIST) {
-            hdr."content-type" = hdr."content-type"[0];
+        # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
+        if (header_info."body-content-type".val()) {
+            hdr."content-type" = header_info."body-content-type";
+            if (hdr."content-type".typeCode() == NT_LIST) {
+                hdr."content-type" = hdr."content-type"[0];
+            }
         }
 
         # Copy headers to the context
@@ -3651,9 +3657,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (hdr."content-type") {
                     hdr."_qore_orig_content_type" = hdr."content-type";
                 }
-                hdr."content-type" = header_info."body-content-type";
-                if (hdr."content-type".typeCode() == NT_LIST) {
-                    hdr."content-type" = hdr."content-type"[0];
+                # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
+                if (header_info."body-content-type".val()) {
+                    hdr."content-type" = header_info."body-content-type";
+                    if (hdr."content-type".typeCode() == NT_LIST) {
+                        hdr."content-type" = hdr."content-type"[0];
+                    }
                 }
 
                 cx.hdr = hdr;
