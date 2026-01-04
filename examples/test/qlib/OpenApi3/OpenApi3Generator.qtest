@@ -696,26 +696,32 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
     }
 
     testMalformedInput() {
-        # Test parameter without type
+        # Test parameter without type - should be ignored
         string block = "@params\n- name: missing type";
         hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
-        # Should not crash, may have empty or partial params
-        assertTrue(True, "Should handle malformed param without crashing");
+        assertEq(0, result.params.size(), "Malformed param (no type) should be ignored");
 
-        # Test parameter without description
+        # Test parameter without description - should be rejected (description is required)
         block = "@params\n- name (string)";
         result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
-        assertTrue(True, "Should handle param without description");
+        assertEq(0, result.params.size(), "Param without description should be rejected");
 
-        # Test error without code
+        # Test parameter with empty description - should be accepted
+        block = "@params\n- name (string):";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(1, result.params.size(), "Param with empty description should be accepted");
+        assertEq("name", result.params[0].name, "Param name should be parsed");
+        assertEq("string", result.params[0].type_str, "Param type should be parsed");
+
+        # Test error without code - should be ignored
         block = "@error: missing error code";
         result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
-        assertTrue(True, "Should handle malformed error");
+        assertEq(0, result.errors.size(), "Malformed error (no code) should be ignored");
 
-        # Test return without type
+        # Test return without type - should be ignored
         block = "@return: missing return type";
         result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
-        assertTrue(True, "Should handle malformed return");
+        assertFalse(result.return_info.val(), "Malformed return (no type) should be ignored");
 
         # Test source content without @ENDSCHEMA
         string source = '/** @REST GET

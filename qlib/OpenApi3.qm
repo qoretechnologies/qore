@@ -6194,7 +6194,7 @@ public class OpenApi3SchemaTokenizer {
         };
     }
 
-    #! Extract all @SCHEMA blocks from a source file
+    #! Parse all @SCHEMA blocks from a source file
     /** @param filepath path to the Qore source file
         @return list of REST method info with parsed schemas
     */
