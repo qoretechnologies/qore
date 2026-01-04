@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProvider class definition
 
-/** AbstractDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** AbstractDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1610,6 +1610,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         #! static callback for dynamic value resolution
         static code cb_resolve_value;
+    }
+
+    private:internal {
+        #! Optional debug info collector
+        /** @since DataProvider 3.5
+        */
+        *AbstractDebugInfoCollector debug_collector;
     }
 
     #! Creates the data provider
@@ -5982,5 +5989,61 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns data provider static info
     private abstract hash<DataProviderInfo> getStaticInfoImpl();
+
+    #! Sets the debug info collector for this data provider
+    /** @param collector the debug collector to use, or @ref nothing to disable debug collection
+
+        When a debug collector is set, the data provider will call the collector's @ref collect() method
+        with technical debug information about operations (HTTP requests, WebSocket messages, etc.).
+
+        @par Example:
+        @code{.py}
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Make requests - debug info is collected
+auto response = provider.doRequest(request);
+
+# Retrieve collected debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+        @endcode
+
+        @since DataProvider 3.5
+    */
+    setDebugCollector(*AbstractDebugInfoCollector collector) {
+        debug_collector = collector;
+    }
+
+    #! Returns the current debug info collector, if any
+    /** @return the current debug collector, or @ref nothing if none is set
+
+        @since DataProvider 3.5
+    */
+    *AbstractDebugInfoCollector getDebugCollector() {
+        return debug_collector;
+    }
+
+    #! Collects debug info if a collector is registered
+    /** @param info the debug information to collect
+
+        Subclasses should call this method to report debug information when performing operations.
+        If no collector is registered, this method does nothing.
+
+        @since DataProvider 3.5
+    */
+    private collectDebugInfo(hash<DataProviderDebugInfo> info) {
+        if (debug_collector) {
+            debug_collector.collect(info);
+        }
+    }
+
+    #! Returns @ref True if debug collection is enabled
+    /** @return @ref True if a debug collector is registered
+
+        @since DataProvider 3.5
+    */
+    bool debugCollectionEnabled() {
+        return debug_collector.val();
+    }
 }
 }
