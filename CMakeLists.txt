@@ -258,6 +258,8 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qore-openapi3-gen
+    bin/qore-asyncapi-gen
 )
 
 set(QORE_DOX_TMPL_SRC

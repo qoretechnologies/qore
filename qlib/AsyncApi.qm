@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AsyncApi.qm AsyncApi 3.0: https://www.asyncapi.com/
 
-/*  AsyncApi.qm Copyright (C) 2025 Qore Technologies, s.r.o.
+/*  AsyncApi.qm Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -139,6 +139,114 @@ WebSocketClient wsc(sub (data msg) { printf("Received: %y\n", msg); }, opts);
 wsc.setAsyncApiValidator(asyncapi, "myChannel");
     @endcode
 
+    @section asyncapi_generator AsyncApi Schema Generator
+
+    The %AsyncApi module also provides classes for generating AsyncAPI 3.0.0 schemas from Qore source code
+    annotations. This allows you to document your event-driven APIs directly in your source code.
+
+    @subsection asyncapi_generator_classes Generator Classes
+
+    The following classes are available for schema generation:
+    - @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer": parses \@EVENT and \@WEBSOCKET blocks from source files
+    - @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper": maps Qore types to JSON Schema types
+    - @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator": generates complete AsyncAPI 3.0.0 schemas
+
+    @subsection asyncapi_event_format Event Block Format
+
+    Document events in your source code using the \@EVENT block format:
+
+    @verbatim
+    /** @EVENT WORKFLOW_STATUS_CHANGED
+        @EVENTSCHEMA
+        @summary Workflow execution status changed
+        @desc Fired when a workflow order's status changes
+        @class WORKFLOW
+        @severity INFO
+        @info
+        - workflow_instanceid (int): workflow instance ID
+        - workflowid (int): workflow ID
+        - name (string): workflow name
+        - status (string): new status
+        @ENDEVENTSCHEMA
+    * /
+    @endverbatim
+
+    @subsection asyncapi_channel_format WebSocket Channel Format
+
+    Document WebSocket channels using the \@WEBSOCKET block format:
+
+    @verbatim
+    /** @WEBSOCKET /events
+        @ASYNCAPI
+        @summary Event streaming endpoint
+        @desc WebSocket endpoint for real-time event streaming
+        @subscribe SubscribeMessage
+        - action (string): subscription action
+        - events (list<string>): events to subscribe to
+        @publish EventMessage
+        - name (string): event name
+        - data (hash<auto>): event data
+        @ENDASYNCAPI
+    * /
+    @endverbatim
+
+    @subsection asyncapi_generator_example Generator Example
+
+    @par Programmatic Usage
+    @code{.py}
+%requires AsyncApi
+
+# Create generator with API metadata
+AsyncApiSchemaGenerator gen({
+    "title": "Qorus Event API",
+    "version": "7.2.0",
+    "description": "Real-time event streaming API",
+});
+
+# Parse source file and add events
+string content = ReadOnlyFile::readTextFile("EventManager.qc");
+list<hash<EventSchemaInfo>> events = AsyncApiSchemaTokenizer::parseEventBlocks(content);
+foreach hash<EventSchemaInfo> event in (events) {
+    gen.addEvent(event);
+}
+
+# Add channel
+gen.addChannel(cast<hash<ChannelSchemaInfo>>({
+    "path": "/events",
+    "summary": "Event streaming endpoint",
+}));
+
+# Add server
+gen.addServer("production", {
+    "host": "api.example.com:443",
+    "protocol": "wss",
+});
+
+# Generate YAML output
+string yaml = gen.toYaml();
+print(yaml);
+    @endcode
+
+    @subsection asyncapi_cli_tool Command-Line Tool
+
+    The \c qore-asyncapi-gen command-line tool can generate AsyncAPI schemas from source files:
+
+    @par Basic Usage
+    @code{.sh}
+qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
+    @endcode
+
+    @par Options
+    - \c -o, \c --output=FILE: Output file (default: stdout)
+    - \c -f, \c --format=FORMAT: Output format: yaml|json (default: yaml)
+    - \c -t, \c --title=TITLE: API title
+    - \c -V, \c --api-version=VER: API version
+    - \c -d, \c --description=DESC: API description
+    - \c -s, \c --server=URL: Server URL (can be specified multiple times)
+    - \c -c, \c --channel=PATH: Channel path (can be specified multiple times)
+    - \c -v, \c --verbose: Increase verbosity
+    - \c -h, \c --help: Show help message
+
     @section asyncapi_relnotes AsyncApi Module Release Notes
 
     @subsection asyncapi_1_0 AsyncApi v1.0
@@ -146,6 +254,10 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     - supports AsyncAPI 3.0 specification
     - protocol-agnostic message validation
     - built-in WebSocket integration via WebSocketClient and WebSocketHandler modules
+    - added @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
+    - added @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT and \@WEBSOCKET blocks
+    - added @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
+    - added \c qore-asyncapi-gen CLI tool for generating schemas from source files
 */
 
 #! main namespace for all public %AsyncApi declarations
@@ -2098,6 +2210,715 @@ public class AsyncApi3Schema inherits ObjectBase, Logger::LoggerWrapper, Qore::S
             return servers.firstValue().getUrl();
         }
         return NOTHING;
+    }
+}
+
+#####################################
+# Schema Generator Classes
+#####################################
+
+#! Event schema information parsed from @EVENT blocks
+public hashdecl EventSchemaInfo {
+    #! Event name (e.g., "WORKFLOW_STATUS_CHANGED")
+    string name;
+    #! Short summary of the event
+    *string summary;
+    #! Detailed description
+    *string desc;
+    #! Event class (e.g., "WORKFLOW", "SYSTEM")
+    *string event_class;
+    #! Event severity (INFO, WARNING, MINOR, MAJOR, FATAL)
+    *string severity;
+    #! Schema for the event's info/payload field
+    *hash<auto> info_schema;
+}
+
+#! WebSocket channel information parsed from @WEBSOCKET blocks
+public hashdecl ChannelSchemaInfo {
+    #! Channel path (e.g., "/creator")
+    string path;
+    #! Short summary of the channel
+    *string summary;
+    #! Detailed description
+    *string desc;
+    #! Subscribe message schema
+    *hash<auto> subscribe_schema;
+    #! Publish message schema
+    *hash<auto> publish_schema;
+}
+
+#! Message schema information
+public hashdecl MessageSchemaInfo {
+    #! Message name
+    string name;
+    #! Message summary
+    *string summary;
+    #! Message description
+    *string desc;
+    #! Content type (default: application/json)
+    *string content_type;
+    #! Payload schema
+    *hash<auto> payload;
+}
+
+#! Tokenizer for @EVENT and @WEBSOCKET comment blocks
+/** This class parses @EVENT/@EVENTSCHEMA and @WEBSOCKET/@ASYNCAPI blocks from Qore source files
+    and extracts schema information for AsyncAPI generation.
+
+    @par Event Block Format
+    @verbatim
+/** @EVENT WORKFLOW_STATUS_CHANGED
+    @EVENTSCHEMA
+    @summary Workflow execution status changed
+    @desc Fired when a workflow order's status changes
+    @class WORKFLOW
+    @severity INFO
+    @info
+    - workflow_instanceid (int): workflow instance ID
+    - workflowid (int): workflow ID
+    - name (string): workflow name
+    - status (string): new status
+    @ENDEVENTSCHEMA
+* /
+    @endverbatim
+
+    @par WebSocket Channel Block Format
+    @verbatim
+/** @WEBSOCKET /creator
+    @ASYNCAPI
+    @summary Event streaming endpoint
+    @desc WebSocket endpoint for real-time event streaming
+    @subscribe SubscribeMessage
+    - action (string): subscribe action
+    - args (hash): subscription arguments
+    @publish EventMessage
+    - name (string): event name
+    - data (hash): event data
+    @ENDASYNCAPI
+* /
+    @endverbatim
+*/
+public class AsyncApiSchemaTokenizer {
+    #! Parse an @EVENT block and extract event schema information
+    /** @param block the text content of the @EVENT block (from @EVENT to @ENDEVENTSCHEMA)
+        @return the parsed event schema information
+    */
+    static hash<EventSchemaInfo> parseEventBlock(string block) {
+        hash<EventSchemaInfo> event = <EventSchemaInfo>{
+            "severity": "INFO",
+        };
+
+        # Extract event name from first line: @EVENT <name> (allow leading whitespace)
+        *list<*string> match = (block =~ x/^\s*@EVENT\s+(\w+)/m);
+        if (match && match[0]) {
+            event.name = match[0];
+        } else {
+            throw "PARSE-ERROR", "Cannot find event name in @EVENT block";
+        }
+
+        # Extract @summary
+        match = (block =~ x/@summary\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        if (match && match[0]) {
+            event.summary = trim(match[0]);
+        }
+
+        # Extract @desc (stop at @ENDEVENTSCHEMA or other tags)
+        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        if (match && match[0]) {
+            event.desc = trim(match[0]);
+        }
+
+        # Extract @class
+        match = (block =~ x/@class\s+(\w+)/);
+        if (match && match[0]) {
+            event.event_class = match[0];
+        }
+
+        # Extract @severity
+        match = (block =~ x/@severity\s+(\w+)/);
+        if (match && match[0]) {
+            event.severity = match[0];
+        }
+
+        # Parse @info schema
+        event.info_schema = parseInfoSchema(block);
+
+        return event;
+    }
+
+    #! Parse the @info section of an event block
+    private static hash<auto> parseInfoSchema(string block) {
+        if (block !~ /@info/) {
+            return {
+                "type": "object",
+                "additionalProperties": True,
+            };
+        }
+
+        # Extract lines after @info
+        *list<*string> info_match = (block =~ x/@info\s*\n((?:\s*-\s+.+\n?)+)/s);
+        if (!info_match || !info_match[0]) {
+            return {
+                "type": "object",
+                "additionalProperties": True,
+            };
+        }
+        string info_section = info_match[0];
+
+        hash<auto> props;
+        list<string> lines = info_section.split("\n");
+
+        foreach string line in (lines) {
+            # Parse field: - name (type): description
+            *list<*string> field_match = (line =~ x/^\s*-\s+(\w+)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match && field_match[0] && field_match[1]) {
+                string field_name = field_match[0];
+                string field_type = field_match[1];
+                *string field_desc = field_match[2];
+
+                hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
+                if (field_desc) {
+                    field_schema.description = trim(field_desc);
+                }
+                props{field_name} = field_schema;
+            }
+        }
+
+        return {
+            "type": "object",
+            "properties": props,
+        };
+    }
+
+    #! Parse a @WEBSOCKET block and extract channel information
+    /** @param block the text content of the @WEBSOCKET block
+        @return the parsed channel schema information
+    */
+    static hash<ChannelSchemaInfo> parseChannelBlock(string block) {
+        hash<ChannelSchemaInfo> channel = <ChannelSchemaInfo>{};
+
+        # Extract path from first line: @WEBSOCKET <path> (path must start with /)
+        *list<*string> match = (block =~ x/^\s*@WEBSOCKET\s+(\/\S*)/m);
+        if (match && match[0]) {
+            channel.path = match[0];
+        } else {
+            throw "PARSE-ERROR", "Cannot find path in @WEBSOCKET block";
+        }
+
+        # Extract @summary
+        match = (block =~ x/@summary\s+(.+?)(?=@|\n\s*\n|$)/s);
+        if (match && match[0]) {
+            channel.summary = trim(match[0]);
+        }
+
+        # Extract @desc (stop at @ENDASYNCAPI or other tags)
+        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        if (match && match[0]) {
+            channel.desc = trim(match[0]);
+        }
+
+        # Extract @subscribe schema
+        match = (block =~ x/@subscribe\s+(\w+)\s*\n((?:\s*-\s+.+\n?)+)/s);
+        if (match && match[0] && match[1]) {
+            channel.subscribe_schema = {
+                "name": match[0],
+                "schema": parseMessageFields(match[1]),
+            };
+        }
+
+        # Extract @publish schema
+        match = (block =~ x/@publish\s+(\w+)\s*\n((?:\s*-\s+.+\n?)+)/s);
+        if (match && match[0] && match[1]) {
+            channel.publish_schema = {
+                "name": match[0],
+                "schema": parseMessageFields(match[1]),
+            };
+        }
+
+        return channel;
+    }
+
+    #! Parse message field definitions
+    private static hash<auto> parseMessageFields(string text) {
+        hash<auto> schema = {
+            "type": "object",
+            "properties": {},
+        };
+
+        list<string> lines = text.split("\n");
+        foreach string line in (lines) {
+            *list<*string> field_match = (line =~ x/^\s*-\s+(\w+)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match && field_match[0] && field_match[1]) {
+                string field_name = field_match[0];
+                string field_type = field_match[1];
+                *string field_desc = field_match[2];
+
+                hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
+                if (field_desc) {
+                    field_schema.description = trim(field_desc);
+                }
+                schema.properties{field_name} = field_schema;
+            }
+        }
+
+        return schema;
+    }
+
+    #! Parse source file content and extract all @EVENT blocks
+    /** @param content the source file content
+        @return list of parsed event schemas
+    */
+    static list<hash<EventSchemaInfo>> parseEventBlocks(string content) {
+        list<hash<EventSchemaInfo>> events = ();
+
+        int pos = 0;
+        while (True) {
+            int start = content.find("@EVENT ", pos);
+            if (start < 0) {
+                break;
+            }
+
+            int end = content.find("@ENDEVENTSCHEMA", start);
+            if (end < 0) {
+                pos = start + 7;
+                continue;
+            }
+
+            string block = content.substr(start, end - start);
+            try {
+                events += parseEventBlock(block);
+            } catch (hash<ExceptionInfo> ex) {
+                # Skip malformed blocks
+            }
+
+            pos = end + 15;
+        }
+
+        return events;
+    }
+
+    #! Parse source file content and extract all @WEBSOCKET blocks
+    /** @param content the source file content
+        @return list of parsed channel schemas
+    */
+    static list<hash<ChannelSchemaInfo>> parseChannelBlocks(string content) {
+        list<hash<ChannelSchemaInfo>> channels = ();
+
+        int pos = 0;
+        while (True) {
+            int start = content.find("@WEBSOCKET ", pos);
+            if (start < 0) {
+                break;
+            }
+
+            int end = content.find("@ENDASYNCAPI", start);
+            if (end < 0) {
+                pos = start + 11;
+                continue;
+            }
+
+            string block = content.substr(start, end - start);
+            try {
+                channels += parseChannelBlock(block);
+            } catch (hash<ExceptionInfo> ex) {
+                # Skip malformed blocks
+            }
+
+            pos = end + 12;
+        }
+
+        return channels;
+    }
+}
+
+#! Type mapper for converting Qore types to JSON Schema types
+/** This class provides mappings from Qore types to JSON Schema/AsyncAPI types.
+*/
+public class AsyncApiTypeMapper {
+    public {
+        #! Standard type mapping from Qore types to JSON Schema
+        const TypeMap = {
+            "string": {"type": "string"},
+            "softstring": {"type": "string"},
+            "int": {"type": "integer"},
+            "softint": {"type": "integer"},
+            "float": {"type": "number"},
+            "number": {"type": "number"},
+            "bool": {"type": "boolean"},
+            "softbool": {"type": "boolean"},
+            "date": {"type": "string", "format": "date-time"},
+            "binary": {"type": "string", "format": "binary"},
+            "any": {},
+            "auto": {"type": "object", "additionalProperties": True},
+        };
+    }
+
+    #! Map a Qore type to JSON Schema type
+    /** @param qore_type the Qore type string (e.g., "int", "*string", "list<hash>")
+        @return JSON Schema type definition
+    */
+    static hash<auto> mapType(string qore_type) {
+        # Handle optional types (prefixed with *)
+        bool nullable = qore_type =~ /^\*/;
+        if (nullable) {
+            qore_type = qore_type.substr(1);
+        }
+
+        hash<auto> rv;
+
+        # Handle list types
+        if (qore_type == "list") {
+            rv = {"type": "array"};
+        } else if (qore_type =~ /^list</) {
+            *list<*string> match = (qore_type =~ x/^list<(.+)>$/);
+            if (match && match[0]) {
+                rv = {
+                    "type": "array",
+                    "items": mapType(match[0]),
+                };
+            } else {
+                rv = {"type": "array"};
+            }
+        }
+        # Handle hash<auto> and similar generic types
+        else if (qore_type =~ /^hash<auto/ || qore_type == "hash") {
+            rv = {
+                "type": "object",
+                "additionalProperties": True,
+            };
+        }
+        # Handle hash<TypeName>
+        else if (qore_type =~ /^hash<\w+>/) {
+            *list<*string> match = (qore_type =~ x/^hash<(\w+)>$/);
+            if (match && match[0]) {
+                if (nullable) {
+                    rv = {"\$ref": "#/components/schemas/" + match[0], "nullable": True};
+                    return rv;
+                }
+                rv = {"\$ref": "#/components/schemas/" + match[0]};
+            } else {
+                rv = {"type": "object"};
+            }
+        }
+        # Standard type mapping
+        else if (TypeMap.hasKey(qore_type)) {
+            rv = {} + (TypeMap{qore_type} ?? {});
+        }
+        # Unknown type - treat as object
+        else {
+            rv = {"type": "object", "additionalProperties": True};
+        }
+
+        if (nullable && rv) {
+            rv.nullable = True;
+        }
+
+        return rv;
+    }
+
+    #! Check if a type is nullable
+    static bool isNullable(string qore_type) {
+        return qore_type =~ /^\*/;
+    }
+
+    #! Get the base type without nullable prefix
+    static string getBaseType(string qore_type) {
+        if (qore_type =~ /^\*/) {
+            return qore_type.substr(1);
+        }
+        return qore_type;
+    }
+}
+
+#! Generates AsyncAPI 3.0.0 schemas from parsed event and channel definitions
+/** This class generates complete AsyncAPI 3.0.0 schemas from parsed @EVENT and @WEBSOCKET blocks.
+
+    @par Example
+    @code{.py}
+%requires AsyncApi
+
+# Create generator with API metadata
+AsyncApiSchemaGenerator gen({
+    "title": "My Event API",
+    "version": "1.0.0",
+});
+
+# Parse source file and add events
+string content = ReadOnlyFile::readTextFile("EventManager.qc");
+list<hash<EventSchemaInfo>> events = AsyncApiSchemaTokenizer::parseEventBlocks(content);
+foreach hash<EventSchemaInfo> event in (events) {
+    gen.addEvent(event);
+}
+
+# Add default channel
+gen.addChannel(<ChannelSchemaInfo>{
+    "path": "/events",
+    "summary": "Event streaming endpoint",
+});
+
+# Generate output
+string yaml = gen.toYaml();
+    @endcode
+*/
+public class AsyncApiSchemaGenerator {
+    private {
+        #! API metadata
+        hash<auto> api_info;
+        #! Parsed events keyed by name
+        hash<string, hash<EventSchemaInfo>> events;
+        #! Parsed channels keyed by path
+        hash<string, hash<ChannelSchemaInfo>> channels;
+        #! Component schemas
+        hash<string, hash<auto>> schemas;
+        #! Server definitions
+        hash<string, hash<auto>> servers;
+    }
+
+    #! Create a generator with API metadata
+    /** @param info API metadata with keys:
+        - title (string): API title
+        - version (string): API version
+        - description (*string): API description
+    */
+    constructor(hash<auto> info) {
+        api_info = info;
+        events = {};
+        channels = {};
+        schemas = {};
+        servers = {};
+    }
+
+    #! Add an event definition
+    addEvent(hash<EventSchemaInfo> event) {
+        events{event.name} = event;
+    }
+
+    #! Add a channel definition
+    addChannel(hash<ChannelSchemaInfo> channel) {
+        channels{channel.path} = channel;
+    }
+
+    #! Add a server definition
+    addServer(string name, hash<auto> server) {
+        servers{name} = server;
+    }
+
+    #! Register a component schema
+    registerSchema(string name, hash<auto> schema) {
+        schemas{name} = schema;
+    }
+
+    #! Generate the complete AsyncAPI 3.0.0 specification as a hash
+    hash<auto> generate() {
+        hash<auto> asyncapi = {
+            "asyncapi": "3.0.0",
+            "defaultContentType": "application/json",
+            "info": {
+                "title": api_info.title ?? "Event API",
+                "version": api_info.version ?? "1.0.0",
+            },
+        };
+
+        if (api_info.description) {
+            asyncapi.info.description = api_info.description;
+        }
+
+        # Add servers
+        if (servers) {
+            asyncapi.servers = servers;
+        } else {
+            asyncapi.servers = {
+                "default": {
+                    "host": "{host}:{port}",
+                    "protocol": "wss",
+                    "description": "WebSocket endpoint",
+                },
+            };
+        }
+
+        # Add channels
+        asyncapi.channels = {};
+        if (channels) {
+            foreach hash<auto> ch in (channels.pairIterator()) {
+                string channel_name = ch.key;
+                channel_name =~ s/^\///;
+                hash<ChannelSchemaInfo> channel = ch.value;
+
+                asyncapi.channels{channel_name} = {
+                    "address": channel.path,
+                    "description": channel.desc ?? channel.summary ?? "",
+                    "messages": {
+                        "subscribe": {"\$ref": "#/components/messages/SubscribeMessage"},
+                        "event": {"\$ref": "#/components/messages/EventMessage"},
+                    },
+                };
+            }
+        }
+
+        # Add default channel if none defined
+        if (!asyncapi.channels) {
+            asyncapi.channels.events = {
+                "address": "/events",
+                "description": "Event streaming endpoint",
+                "messages": {
+                    "subscribe": {"\$ref": "#/components/messages/SubscribeMessage"},
+                    "event": {"\$ref": "#/components/messages/EventMessage"},
+                },
+            };
+        }
+
+        # Add operations
+        string first_channel = asyncapi.channels.firstKey();
+        asyncapi.operations = {
+            "subscribeToEvents": {
+                "action": "send",
+                "channel": {"\$ref": "#/channels/" + first_channel},
+                "summary": "Subscribe to event stream",
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/subscribe"},),
+            },
+            "receiveEvents": {
+                "action": "receive",
+                "channel": {"\$ref": "#/channels/" + first_channel},
+                "summary": "Receive event notifications",
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/event"},),
+            },
+        };
+
+        # Add components
+        asyncapi.components = {
+            "messages": generateMessageComponents(),
+            "schemas": generateSchemaComponents(),
+        };
+
+        return asyncapi;
+    }
+
+    #! Generate message component definitions
+    private hash<auto> generateMessageComponents() {
+        return {
+            "SubscribeMessage": {
+                "name": "subscribe",
+                "title": "Subscribe to Events",
+                "summary": "Subscribe to one or more event types",
+                "contentType": "application/json",
+                "payload": {"\$ref": "#/components/schemas/SubscribePayload"},
+            },
+            "EventMessage": {
+                "name": "event",
+                "title": "Event Notification",
+                "summary": "Real-time event notification",
+                "contentType": "application/json",
+                "payload": {"\$ref": "#/components/schemas/EventPayload"},
+            },
+        };
+    }
+
+    #! Generate schema component definitions
+    private hash<auto> generateSchemaComponents() {
+        hash<auto> component_schemas = schemas + {
+            "SubscribePayload": {
+                "type": "object",
+                "required": ("action", "args"),
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "const": "subscribe",
+                        "description": "Action type",
+                    },
+                    "args": {"\$ref": "#/components/schemas/SubscribeArgs"},
+                },
+            },
+            "SubscribeArgs": {
+                "type": "object",
+                "required": ("match_events",),
+                "properties": {
+                    "match_events": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Events to subscribe to. Use [\"*\"] for all events.",
+                    },
+                    "filter": {
+                        "type": "object",
+                        "description": "Optional filter expression",
+                    },
+                    "history": {
+                        "type": "integer",
+                        "description": "Number of historical events to retrieve",
+                    },
+                },
+            },
+            "EventPayload": {
+                "type": "object",
+                "required": ("name", "data"),
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Event name",
+                    },
+                    "data": {"\$ref": "#/components/schemas/EventData"},
+                },
+            },
+            "EventData": {
+                "type": "object",
+                "required": ("id", "time", "event"),
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Unique event sequence ID",
+                    },
+                    "time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Event timestamp",
+                    },
+                    "event": {
+                        "type": "string",
+                        "description": "Event name",
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL"),
+                        "description": "Event severity",
+                    },
+                    "info": {
+                        "type": "object",
+                        "description": "Event-specific payload",
+                    },
+                },
+            },
+        };
+
+        # Add event-specific info schemas
+        foreach hash<auto> ev in (events.pairIterator()) {
+            hash<EventSchemaInfo> event = ev.value;
+            string schema_name = event.name + "Info";
+
+            hash<auto> event_schema = event.info_schema ?? {"type": "object"};
+            event_schema.description = event.desc ?? event.summary ?? sprintf("Info payload for %s event", event.name);
+
+            component_schemas{schema_name} = event_schema;
+        }
+
+        return component_schemas;
+    }
+
+    #! Generate YAML output
+    string toYaml() {
+%ifdef NoYaml
+        throw "YAML-NOT-AVAILABLE", "YAML module is not available";
+%else
+        return make_yaml(generate(), BlockStyle);
+%endif
+    }
+
+    #! Generate JSON output
+    string toJson() {
+%ifdef NoJson
+        throw "JSON-NOT-AVAILABLE", "JSON module is not available";
+%else
+        return make_json(generate(), JGF_ADD_FORMATTING);
+%endif
     }
 }
 

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file OpenApi3.qm OpenApi3: https://swagger.io//
 
-/*  OpenApi3.qm Copyright (C) 2024 Qore Technologies, s.r.o.
+/*  OpenApi3.qm Copyright (C) 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -153,6 +153,116 @@ schema.setBasePath("/new/path");
 
 OpenApi3Schema openapi3 = OpenApi3Loader::fromFile(ENV.SCHEMA_DIR + DirSep + "MySchema.yaml");
 RestHandler handler(NOTHING, openapi3);
+    @endcode
+
+    @section openapi3_generator OpenApi3 Schema Generator
+
+    The %OpenApi3 module includes classes for generating OpenAPI 3.0.3 schemas from Qore source code
+    using \@SCHEMA documentation blocks.
+
+    @subsection openapi3_generator_classes Generator Classes
+
+    - @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer": parses \@SCHEMA blocks from source code
+    - @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper": maps Qore types to OpenAPI types
+    - @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator": generates complete OpenAPI 3.0.3 schemas
+
+    @subsection openapi3_schema_block Schema Block Format
+
+    Document REST endpoints using \@SCHEMA blocks in Qore source code comments:
+
+    @verbatim
+/** @REST GET
+    @SCHEMA
+    @summary Get user by ID
+    @desc Retrieves a user record from the database
+    @params
+    - id (int): the user ID
+    - Q include_deleted (*bool): include soft-deleted users
+    @return (hash<UserInfo>): user data
+    - id (int): unique identifier
+    - name (string): user name
+    @error (404): User not found
+    @error (500): Internal server error
+    @perms READ_USERS
+    @since 1.0
+    @ENDSCHEMA
+* /
+hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+    // implementation
+}
+    @endverbatim
+
+    @par Parameter Location Prefixes
+    - No prefix: body parameter (for POST/PUT/PATCH)
+    - \c Q: query parameter
+    - \c P or path parameter name in URI: path parameter
+    - \c H: header parameter
+
+    @par Type Mapping
+    | Qore Type | OpenAPI Type | Format |
+    |-----------|--------------|--------|
+    | \c int | integer | int64 |
+    | \c float | number | double |
+    | \c string | string | - |
+    | \c bool | boolean | - |
+    | \c date | string | date-time |
+    | \c binary | string | binary |
+    | \c hash | object | - |
+    | \c hash<TypeName> | \$ref: "#/components/schemas/TypeName" | - |
+    | \c list<T> | array (items: T) | - |
+    | \c *type | type + nullable: true | - |
+
+    @subsection openapi3_generator_usage Generator Usage
+
+    @par Programmatic API
+    @code{.py}
+%requires OpenApi3
+
+# Create generator with API metadata
+OpenApi3SchemaGenerator gen({
+    "title": "My API",
+    "version": "1.0.0",
+    "description": "API description",
+});
+
+# Register component schemas
+gen.registerSchema("UserInfo", {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+    },
+});
+
+# Parse source file and add methods
+string content = ReadOnlyFile::readTextFile("MyHandler.qclass");
+list<hash<RestMethodInfo>> methods = OpenApi3SchemaTokenizer::parseSourceContent(content);
+foreach hash<RestMethodInfo> method in (methods) {
+    gen.addMethod("/users", method);
+}
+
+# Generate output
+string yaml = gen.toYaml();
+string json = gen.toJson();
+    @endcode
+
+    @par CLI Tool
+    The \c qore-openapi3-gen command-line tool generates schemas from source files:
+    @code{.sh}
+# Generate YAML schema
+qore-openapi3-gen -t "My API" -V "1.0.0" -o api.yaml src/*.qclass
+
+# Generate JSON schema with multiple servers
+qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
+
+# Options:
+#   -o, --output=FILE      Output file (default: stdout)
+#   -f, --format=FORMAT    Output format: yaml|json (default: yaml)
+#   -t, --title=TITLE      API title
+#   -V, --api-version=VER  API version
+#   -d, --description=DESC API description
+#   -s, --server=URL       Server URL (can be repeated)
+#   -b, --base-path=PATH   Base path prefix for endpoints
     @endcode
 
     @section openapi3_relnotes OpenApi3 Module Release Notes
@@ -5807,4 +5917,804 @@ namespace Priv {
         }
         return sprintf("unknown<%s = %s>", name, type);
     }
+}
+# End of namespace Priv
+
+# ============================================================================
+# OpenAPI3 Schema Generator - Generate OpenAPI3 schemas from @SCHEMA comments
+# ============================================================================
+
+#! Reopening public namespace for schema generator classes
+public namespace OpenApi3 {
+
+#! Field information for nested types
+public hashdecl FieldInfo {
+    #! Field name
+    string name;
+    #! Type string
+    string type_str;
+    #! Description
+    string description;
+    #! Nesting depth
+    int depth;
+}
+
+#! Parameter information
+public hashdecl ParamInfo {
+    #! Parameter name
+    string name;
+    #! Type string (e.g., "string", "*int", "hash<TypeName>")
+    string type_str;
+    #! Description
+    string description;
+    #! Is required (no * prefix)
+    bool required;
+    #! Location: "path", "query", "body", "header"
+    string location;
+}
+
+#! Return type information
+public hashdecl ReturnInfo {
+    #! Type string
+    string type_str;
+    #! Description
+    *string description;
+    #! Nested fields (for complex types)
+    *list<hash<FieldInfo>> fields;
+}
+
+#! Parsed @SCHEMA block information
+public hashdecl SchemaBlockInfo {
+    #! Summary line
+    *string summary;
+    #! Description
+    *string desc;
+    #! Parameters list
+    *list<hash<ParamInfo>> params;
+    #! Return type information
+    *hash<ReturnInfo> return_info;
+    #! Error responses: HTTP code -> description
+    *hash<string, string> errors;
+    #! Required permissions
+    *list<string> perms;
+    #! Since version
+    *string since;
+    #! See also references
+    *list<string> see;
+}
+
+#! REST method information parsed from source
+public hashdecl RestMethodInfo {
+    #! HTTP method: GET, POST, PUT, DELETE, PATCH
+    string http_method;
+    #! Optional action name (from action=xxx)
+    *string action;
+    #! URI path
+    string path;
+    #! Parsed schema block
+    hash<SchemaBlockInfo> schema;
+}
+
+#! Tokenizes and parses @SCHEMA comment blocks from Qore source files
+public class OpenApi3SchemaTokenizer {
+    public {
+        const TokenSchema = "@SCHEMA";
+        const TokenEndSchema = "@ENDSCHEMA";
+        const TokenSummary = "@summary";
+        const TokenDesc = "@desc";
+        const TokenParams = "@params";
+        const TokenReturn = "@return";
+        const TokenError = "@error";
+        const TokenPerms = "@perms";
+        const TokenSince = "@since";
+        const TokenSee = "@see";
+
+        #! Pattern to match @REST method declarations
+        const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)";
+        #! Pattern to match action= declarations
+        const ActionPattern = "action=([a-zA-Z_][a-zA-Z0-9_]*)";
+    }
+
+    #! Parse a @SCHEMA block from comment text
+    /** @param text the text between @SCHEMA and @ENDSCHEMA
+        @return parsed schema block information
+    */
+    static hash<SchemaBlockInfo> parseSchemaBlock(string text) {
+        hash<SchemaBlockInfo> rv = <SchemaBlockInfo>{};
+        string state = "";
+        *list<hash<FieldInfo>> current_fields;
+        int base_depth = 0;
+
+        # Normalize line endings and split
+        text =~ s/\r\n/\n/g;
+        list<string> lines = text.split("\n");
+
+        foreach string line in (lines) {
+            # Remove leading/trailing whitespace but track indentation
+            string trimmed = trim(line);
+            if (!trimmed) {
+                continue;
+            }
+
+            # Calculate depth based on indentation (2 spaces = 1 level)
+            int leading_spaces = line.length() - ltrim(line).length();
+            int depth = leading_spaces / 2;
+
+            # Check for annotation tokens
+            if (trimmed =~ /^@summary\s+/) {
+                string val = regex_subst(trimmed, "^@summary\\s+", "");
+                rv.summary = val;
+                state = "summary";
+                continue;
+            }
+            if (trimmed =~ /^@desc\s+/) {
+                string val = regex_subst(trimmed, "^@desc\\s+", "");
+                rv.desc = val;
+                state = "desc";
+                continue;
+            }
+            if (trimmed =~ /^@params/) {
+                state = "params";
+                rv.params = ();
+                continue;
+            }
+            if (trimmed =~ /^@return\s+/) {
+                string val = regex_subst(trimmed, "^@return\\s+", "");
+                rv.return_info = parseReturnLine(val);
+                state = "return";
+                current_fields = ();
+                base_depth = depth;
+                continue;
+            }
+            if (trimmed =~ /^@error\s+/) {
+                string val = regex_subst(trimmed, "^@error\\s+", "");
+                if (!rv.errors) {
+                    rv.errors = {};
+                }
+                # Parse error code and description: (404): description
+                *list<string> parts = (val =~ x/\(([0-9]+)\):\s*(.*)$/);
+                if (parts && parts.size() >= 2) {
+                    rv.errors{parts[0]} = parts[1];
+                }
+                continue;
+            }
+            if (trimmed =~ /^@perms\s+/) {
+                string val = regex_subst(trimmed, "^@perms\\s+", "");
+                rv.perms = map trim($1), val.split(",");
+                continue;
+            }
+            if (trimmed =~ /^@since\s+/) {
+                string val = regex_subst(trimmed, "^@since\\s+", "");
+                rv.since = val;
+                continue;
+            }
+            if (trimmed =~ /^@see/) {
+                state = "see";
+                rv.see = ();
+                continue;
+            }
+
+            # Process content based on current state
+            switch (state) {
+                case "desc":
+                    # Continue description with continuation character
+                    if (rv.desc =~ /\\$/) {
+                        rv.desc = rv.desc.substr(0, rv.desc.length() - 1) + " " + trimmed;
+                    }
+                    break;
+
+                case "params":
+                    # Parse parameter line: - name (type): description
+                    if (trimmed =~ /^-\s+/) {
+                        *hash<ParamInfo> param = parseParamLine(trimmed);
+                        if (param) {
+                            rv.params += param;
+                        }
+                    }
+                    break;
+
+                case "return":
+                    # Parse nested field: - name (type): description
+                    if (trimmed =~ /^-\s+/) {
+                        *hash<FieldInfo> field = parseFieldLine(trimmed, depth - base_depth);
+                        if (field) {
+                            current_fields += field;
+                        }
+                    }
+                    break;
+
+                case "see":
+                    if (trimmed =~ /^-\s+/) {
+                        string ref = regex_subst(trimmed, "^-\\s+", "");
+                        rv.see += ref;
+                    }
+                    break;
+            }
+        }
+
+        if (current_fields) {
+            rv.return_info.fields = current_fields;
+        }
+
+        return rv;
+    }
+
+    #! Parse a parameter line
+    static *hash<ParamInfo> parseParamLine(string line) {
+        # Pattern: - [Q ]name (type): description
+        # Q prefix indicates query parameter
+        *list<auto> parts = (line =~ x/^-\s+(Q\s+)?([a-zA-Z_][a-zA-Z0-9_-]*)\s+\(([^)]+)\):\s*(.*)$/);
+        if (!parts || parts.size() < 4) {
+            return;
+        }
+        # parts[0] is the optional Q prefix, parts[1] is name, parts[2] is type, parts[3] is description
+        string location = exists parts[0] ? "query" : "body";
+        string name = parts[1].toString();
+        string type_str = parts[2].toString();
+        string description = parts[3].toString();
+
+        bool required = type_str[0] != "*";
+
+        return <ParamInfo>{
+            "name": name,
+            "type_str": type_str,
+            "description": description,
+            "required": required,
+            "location": location,
+        };
+    }
+
+    #! Parse a return line
+    static hash<ReturnInfo> parseReturnLine(string line) {
+        # Pattern: (type): description
+        *list<string> parts = (line =~ x/^\(([^)]+)\):\s*(.*)$/);
+        if (!parts || parts.size() < 1) {
+            return <ReturnInfo>{
+                "type_str": "any",
+            };
+        }
+        return <ReturnInfo>{
+            "type_str": parts[0],
+            "description": parts.size() >= 2 ? parts[1] : NOTHING,
+        };
+    }
+
+    #! Parse a field line
+    static *hash<FieldInfo> parseFieldLine(string line, int depth) {
+        # Pattern: - name (type): description
+        *list<string> parts = (line =~ x/^-\s+([a-zA-Z_][a-zA-Z0-9_-]*)\s+\(([^)]+)\):\s*(.*)$/);
+        if (!parts || parts.size() < 3) {
+            return;
+        }
+        return <FieldInfo>{
+            "name": parts[0],
+            "type_str": parts[1],
+            "description": parts[2],
+            "depth": depth,
+        };
+    }
+
+    #! Extract all @SCHEMA blocks from a source file
+    /** @param filepath path to the Qore source file
+        @return list of REST method info with parsed schemas
+    */
+    static list<hash<RestMethodInfo>> parseSourceFile(string filepath) {
+        string content = File::readTextFile(filepath);
+        return parseSourceContent(content);
+    }
+
+    #! Extract all @SCHEMA blocks from source content
+    static list<hash<RestMethodInfo>> parseSourceContent(string content) {
+        list<hash<RestMethodInfo>> rv = ();
+
+        # Find all /** ... */ comment blocks containing @REST
+        *list<auto> matches = (content =~ x/\/\*\*\s*(@REST\s+[A-Z]+[^*]*?@SCHEMA.*?@ENDSCHEMA[^*]*?)\*\//gs);
+
+        foreach auto match in (matches) {
+            string block = match;
+
+            # Extract HTTP method
+            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)/i);
+            if (!method_match) {
+                continue;
+            }
+            string http_method = method_match[0].upr();
+
+            # Extract action if present
+            *string action;
+            *list<string> action_match = (block =~ x/action=([a-zA-Z_][a-zA-Z0-9_]*)/);
+            if (action_match) {
+                action = action_match[0];
+            }
+
+            # Extract @SCHEMA block
+            *list<string> schema_match = (block =~ x/@SCHEMA(.*)@ENDSCHEMA/s);
+            if (!schema_match) {
+                continue;
+            }
+            string schema_text = schema_match[0];
+
+            # Parse the schema block
+            hash<SchemaBlockInfo> schema = parseSchemaBlock(schema_text);
+
+            rv += <RestMethodInfo>{
+                "http_method": http_method,
+                "action": action,
+                "path": "",  # Path needs to be determined from class context
+                "schema": schema,
+            };
+        }
+
+        return rv;
+    }
+}
+
+#! Maps Qore types to OpenAPI3 types
+public class OpenApi3TypeMapper {
+    public {
+        #! Map of Qore types to OpenAPI types
+        const TypeMap = {
+            "int": {"type": "integer", "format": "int64"},
+            "softint": {"type": "integer", "format": "int64"},
+            "float": {"type": "number", "format": "double"},
+            "number": {"type": "number"},
+            "string": {"type": "string"},
+            "softstring": {"type": "string"},
+            "bool": {"type": "boolean"},
+            "softbool": {"type": "boolean"},
+            "date": {"type": "string", "format": "date-time"},
+            "softdate": {"type": "string", "format": "date-time"},
+            "binary": {"type": "string", "format": "binary"},
+            "any": {},
+            "auto": {},
+            "nothing": {"type": "null"},
+        };
+    }
+
+    #! Map a Qore type string to OpenAPI type info
+    /** @param qore_type Qore type string (e.g., "string", "*int", "hash<TypeName>", "list<string>")
+        @return hash with OpenAPI type information
+    */
+    static hash<auto> mapType(string qore_type) {
+        # Check for nullable/optional type (leading *)
+        bool nullable = qore_type[0] == "*";
+        if (nullable) {
+            qore_type = qore_type.substr(1);
+        }
+
+        # Check for list/array type
+        *list<string> list_match = (qore_type =~ x/^list<(.+)>$/);
+        if (list_match) {
+            hash<auto> rv = {
+                "type": "array",
+                "items": mapType(list_match[0]),
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
+        # Check for generic hash type BEFORE named type to handle hash<auto>
+        if (qore_type == "hash" || qore_type == "hash<auto>") {
+            hash<auto> rv = {
+                "type": "object",
+                "additionalProperties": True,
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
+        # Check for hash type with named type (hash<TypeName>)
+        *list<string> hash_match = (qore_type =~ x/^hash<(\w+)>$/);
+        if (hash_match) {
+            hash<auto> rv = {
+                "\$ref": sprintf("#/components/schemas/%s", hash_match[0]),
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
+        # Check for UndefinedHash
+        if (qore_type == "UndefinedHash" || qore_type =~ /hash\s+UndefinedHash/) {
+            hash<auto> rv = {
+                "type": "object",
+                "additionalProperties": True,
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
+        # Standard type mapping
+        if (TypeMap.hasKey(qore_type)) {
+            *hash<auto> base = TypeMap{qore_type};
+            if (nullable) {
+                return base + {"nullable": True};
+            }
+            return base ?? {};
+        }
+        # Unknown type - check if it's a named type reference
+        if (qore_type =~ /^[A-Z]/) {
+            hash<auto> rv = {
+                "\$ref": sprintf("#/components/schemas/%s", qore_type),
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
+        # Default to string for unknown types
+        return {"type": "string", "description": sprintf("Unknown type: %s", qore_type)};
+    }
+
+    #! Check if a type string is nullable
+    static bool isNullable(string qore_type) {
+        return qore_type[0] == "*";
+    }
+
+    #! Get the base type (without * prefix)
+    static string getBaseType(string qore_type) {
+        return qore_type[0] == "*" ? qore_type.substr(1) : qore_type;
+    }
+
+    #! Extract element type from list type
+    static *string getElementType(string qore_type) {
+        *list<string> match = (qore_type =~ x/^(?:\*)?list<(.+)>$/);
+        return match ? match[0] : NOTHING;
+    }
+
+    #! Extract inner type from hash type
+    static *string getHashType(string qore_type) {
+        *list<string> match = (qore_type =~ x/^(?:\*)?hash<(\w+)>$/);
+        return match ? match[0] : NOTHING;
+    }
+}
+
+#! Generates OpenAPI3 schemas from parsed REST API documentation
+public class OpenApi3SchemaGenerator {
+    private {
+        #! API metadata
+        hash<auto> api_info;
+        #! Collected paths: path -> method -> operation
+        hash<string, hash<string, hash<auto>>> paths;
+        #! Component schemas: name -> schema
+        hash<string, hash<auto>> schemas;
+        #! Collected security schemes
+        hash<string, hash<auto>> security_schemes;
+    }
+
+    #! Create a generator with API metadata
+    /** @param info API metadata with keys:
+        - title (string): API title
+        - version (string): API version
+        - description (*string): API description
+        - servers (*list<hash>): Server definitions
+    */
+    constructor(hash<auto> info) {
+        api_info = info;
+        paths = {};
+        schemas = {};
+        security_schemes = {};
+    }
+
+    #! Add a REST method to the schema
+    /** @param path URI path (e.g., "/users/{id}")
+        @param method_info parsed REST method info
+    */
+    addMethod(string path, hash<RestMethodInfo> method_info) {
+        string http_method = method_info.http_method.lwr();
+
+        # Build operation object
+        hash<auto!> operation = {
+            "summary": method_info.schema.summary ?? "",
+            "description": method_info.schema.desc ?? "",
+            "operationId": generateOperationId(path, http_method, method_info.action),
+            "tags": (getTagFromPath(path),),
+        };
+
+        # Add parameters
+        *list<hash<auto>> params = generateParameters(path, method_info);
+        if (params) {
+            operation.parameters = params;
+        }
+
+        # Add request body for non-GET methods
+        if (http_method != "get" && method_info.schema.params) {
+            *hash<auto> request_body = generateRequestBody(method_info);
+            if (request_body) {
+                operation.requestBody = request_body;
+            }
+        }
+
+        # Add responses
+        operation.responses = generateResponses(method_info);
+
+        # Add to paths
+        if (!paths{path}) {
+            paths{path} = {};
+        }
+        paths{path}{http_method} = operation;
+    }
+
+    #! Add multiple methods for a path
+    addMethods(string base_path, list<hash<RestMethodInfo>> methods) {
+        foreach hash<RestMethodInfo> method in (methods) {
+            string path = method.path ?? base_path;
+            if (method.action) {
+                # For actions, append to path
+                path += "?action=" + method.action;
+            }
+            addMethod(path, method);
+        }
+    }
+
+    #! Register a schema type
+    registerSchema(string name, hash<auto> schema) {
+        schemas{name} = schema;
+    }
+
+    #! Add a security scheme
+    addSecurityScheme(string name, hash<auto> scheme) {
+        security_schemes{name} = scheme;
+    }
+
+    #! Generate the complete OpenAPI3 specification as a hash
+    hash<auto> generate() {
+        hash<auto> spec = {
+            "openapi": "3.0.3",
+            "info": {
+                "title": api_info.title ?? "API",
+                "version": api_info.version ?? "1.0.0",
+            },
+        };
+
+        if (api_info.description) {
+            spec.info.description = api_info.description;
+        }
+        if (api_info.contact) {
+            spec.info.contact = api_info.contact;
+        }
+
+        if (api_info.servers) {
+            spec.servers = api_info.servers;
+        }
+
+        # Add tags
+        hash<string, bool> tag_set;
+        foreach hash<auto> path_ops in (paths.iterator()) {
+            foreach hash<auto> op in (path_ops.iterator()) {
+                foreach string tag in (op.tags) {
+                    tag_set{tag} = True;
+                }
+            }
+        }
+        list<hash<auto>> tags = ();
+        foreach string tag in (sort(keys tag_set)) {
+            tags += {"name": tag, "description": sprintf("%s endpoints", tag)};
+        }
+        spec.tags = tags;
+
+        # Add paths
+        spec.paths = paths;
+
+        # Add components
+        hash<auto> components = {};
+        if (schemas) {
+            components.schemas = schemas;
+        }
+        if (security_schemes) {
+            components.securitySchemes = security_schemes;
+        }
+        if (components) {
+            spec.components = components;
+        }
+
+        return spec;
+    }
+
+    #! Generate YAML output
+    string toYaml() {
+%ifdef NoYaml
+        throw "YAML-NOT-AVAILABLE", "YAML module is not available";
+%else
+        return make_yaml(generate(), BlockStyle);
+%endif
+    }
+
+    #! Generate JSON output
+    string toJson() {
+%ifdef NoJson
+        throw "JSON-NOT-AVAILABLE", "JSON module is not available";
+%else
+        return make_json(generate(), JGF_ADD_FORMATTING);
+%endif
+    }
+
+    #! Generate operation ID
+    private string generateOperationId(string path, string method, *string action) {
+        string id = path;
+        id =~ s/[{}\/]/_/g;
+        id =~ s/__+/_/g;  # Collapse multiple underscores
+        id =~ s/^_//;
+        id =~ s/_$//;
+        id = method + "_" + id;
+        if (action) {
+            id += "_" + action;
+        }
+        return id;
+    }
+
+    #! Get tag from path
+    static string getTagFromPath(string path) {
+        # Get first path segment after leading /
+        *list<string> parts = path.split("/");
+        if (parts.size() >= 2 && parts[1]) {
+            return parts[1];
+        }
+        return "default";
+    }
+
+    #! Generate parameters from method info
+    private *list<hash<auto>> generateParameters(string path, hash<RestMethodInfo> method_info) {
+        list<hash<auto>> params = ();
+
+        # Extract path parameters
+        *list<string> path_params = (path =~ x/\{([^}]+)\}/g);
+        foreach string param_name in (path_params) {
+            params += {
+                "name": param_name,
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string"},
+                "description": sprintf("Path parameter: %s", param_name),
+            };
+        }
+
+        # Add query parameters for GET methods
+        if (method_info.http_method == "GET" && method_info.schema.params) {
+            foreach hash<ParamInfo> param in (method_info.schema.params) {
+                params += {
+                    "name": param.name,
+                    "in": "query",
+                    "required": param.required,
+                    "schema": OpenApi3TypeMapper::mapType(param.type_str),
+                    "description": param.description,
+                };
+            }
+        }
+
+        return params.size() ? params : NOTHING;
+    }
+
+    #! Generate request body from method info
+    private *hash<auto> generateRequestBody(hash<RestMethodInfo> method_info) {
+        if (!method_info.schema.params) {
+            return;
+        }
+
+        # Filter body parameters (not path or query)
+        *list<hash<ParamInfo>> body_params = select method_info.schema.params, $1.location == "body";
+        if (!body_params) {
+            return;
+        }
+
+        # Build schema for request body
+        hash<auto> properties = {};
+        list<string> required_props = ();
+
+        foreach hash<ParamInfo> param in (body_params) {
+            properties{param.name} = OpenApi3TypeMapper::mapType(param.type_str);
+            properties{param.name}.description = param.description;
+            if (param.required) {
+                required_props += param.name;
+            }
+        }
+
+        hash<auto> body_schema = {
+            "type": "object",
+            "properties": properties,
+        };
+        if (required_props) {
+            body_schema.required = required_props;
+        }
+
+        return {
+            "required": required_props.size() > 0,
+            "content": {
+                "application/json": {"schema": body_schema},
+                "application/x-yaml": {"schema": body_schema},
+            },
+        };
+    }
+
+    #! Generate responses from method info
+    private hash<auto> generateResponses(hash<RestMethodInfo> method_info) {
+        # Build success response
+        hash<auto> success_response;
+        if (method_info.schema.return_info) {
+            hash<auto> response_schema = OpenApi3TypeMapper::mapType(method_info.schema.return_info.type_str);
+
+            # Add field descriptions if available
+            if (method_info.schema.return_info.fields && response_schema."\$ref") {
+                # Create inline schema with field descriptions
+                hash<auto> props = {};
+                foreach hash<FieldInfo> field in (method_info.schema.return_info.fields) {
+                    if (field.depth == 1) {  # Top-level fields only for now
+                        hash<auto> field_type = OpenApi3TypeMapper::mapType(field.type_str);
+                        field_type.description = field.description;
+                        props{field.name} = field_type;
+                    }
+                }
+                if (props) {
+                    response_schema = {
+                        "type": "object",
+                        "properties": props,
+                    };
+                }
+            }
+
+            success_response = {
+                "description": "Successful response",
+                "content": {
+                    "application/json": {"schema": response_schema},
+                    "application/x-yaml": {"schema": response_schema},
+                },
+            };
+        } else {
+            success_response = {"description": "Successful response"};
+        }
+
+        hash<auto> responses = {"200": success_response};
+
+        # Error responses
+        if (method_info.schema.errors) {
+            foreach hash<auto> err in (method_info.schema.errors.pairIterator()) {
+                responses{err.key} = {
+                    "description": err.value,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "error": {"type": "string"},
+                                    "message": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                };
+            }
+        }
+
+        return responses;
+    }
+
+    #! Generate schema from source files
+    /** @param files list of source file paths
+        @param api_info API metadata
+        @return generated OpenAPI3 spec hash
+    */
+    static hash<auto> fromSourceFiles(list<string> files, hash<auto> api_info) {
+        OpenApi3SchemaGenerator gen(api_info);
+
+        foreach string file in (files) {
+            list<hash<RestMethodInfo>> methods = OpenApi3SchemaTokenizer::parseSourceFile(file);
+            if (methods) {
+                # Determine base path from file name
+                string base_path = "/" + basename(file);
+                base_path =~ s/\.[^.]+$//;
+                gen.addMethods(base_path, methods);
+            }
+        }
+
+        return gen.generate();
+    }
+}
 }
