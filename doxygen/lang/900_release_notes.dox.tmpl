@@ -576,6 +576,29 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
 
     @subsection qore_2_1_0_new_features New Features in Qore
     - new function @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()"
+    - <b>Hashdecl (typed hash) single inheritance</b>
+      - hashdecls now support single inheritance using the \c inherits keyword:
+        @code{.py}
+hashdecl BaseInfo {
+    string name;
+    int id;
+}
+
+hashdecl ExtendedInfo inherits BaseInfo {
+    date created;
+    *string description;
+}
+
+hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now()};
+        @endcode
+      - child hashdecls inherit all members from the parent
+      - member shadowing (child member with same name as parent member) is a parse error
+      - circular inheritance is detected and reported as a parse error
+      - type compatibility: derived hashdecl values can be assigned to parent hashdecl variables
+      - new public API: @ref TypedHashDecl::getParentHashDecl() "TypedHashDecl::getParentHashDecl()" and
+        @ref TypedHashDecl::inheritsFrom() "TypedHashDecl::inheritsFrom()"
+      - new reflection API: @ref Qore::Reflection::TypedHash::getParentTypedHash() "TypedHash::getParentTypedHash()"
+        and @ref Qore::Reflection::TypedHash::inheritsFrom() "TypedHash::inheritsFrom()"
 
     @subsection qore_2_1_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/Mime/html/index.html">Mime</a> module

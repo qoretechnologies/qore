@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreNamespaceIntern.h"
 
 bool HashDeclMemberInfo::equal(const HashDeclMemberInfo& other) const {
     return QoreTypeInfo::equal(typeInfo, other.typeInfo);
@@ -86,6 +87,65 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
     return err;
 }
 
+int typed_hash_decl_private::parseInit() {
+    if (parse_init_done || sys) {
+        return 0;
+    }
+    parse_init_done = true;
+
+    int err = 0;
+
+    // Resolve parent hashdecl if specified
+    if (parse_parent) {
+        parentHashDecl = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, *parse_parent);
+        delete parse_parent;
+        parse_parent = nullptr;
+
+        if (!parentHashDecl) {
+            parse_error(*loc, "cannot resolve parent hashdecl in hashdecl '%s'", name.c_str());
+            err = -1;
+        } else {
+            // Initialize parent first
+            const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->parseInit();
+
+            // Check for circular inheritance
+            const typed_hash_decl_private* current = get(*parentHashDecl);
+            while (current) {
+                if (current == this || current->orig == orig) {
+                    parse_error(*loc, "circular hashdecl inheritance detected in hashdecl '%s'", name.c_str());
+                    parentHashDecl = nullptr;
+                    err = -1;
+                    break;
+                }
+                current = current->parentHashDecl ? get(*current->parentHashDecl) : nullptr;
+            }
+        }
+    }
+
+    // Check that child members don't shadow parent members
+    if (parentHashDecl) {
+        for (auto& i : members.member_list) {
+            if (get(*parentHashDecl)->findMember(i.first)) {
+                parse_error(*loc, "hashdecl member '%s' in '%s' shadows member in parent hashdecl '%s'",
+                    i.first, name.c_str(), parentHashDecl->getName());
+                if (!err) {
+                    err = -1;
+                }
+            }
+        }
+    }
+
+    // Initialize own members
+    for (auto& i : members.member_list) {
+        if (i.second) {
+            if (i.second->parseInit(i.first, true) && !err) {
+                err = -1;
+            }
+        }
+    }
+    return err;
+}
+
 // NOTE: the new namespace will be set manually after this call
 typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& old, TypedHashDecl* thd) :
         loc(old.loc),
@@ -96,6 +156,7 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         orig(old.orig),
         typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
         orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
+        parentHashDecl(old.parentHashDecl),
         pub(false),
         sys(old.sys),
         parse_init_done(old.parse_init_done) {
@@ -138,7 +199,7 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
     int err = 0;
     unsigned possible_matches = 0;
     for (auto& i : hd.members.member_list) {
-        HashDeclMemberInfo* m = members.find(i.first);
+        const HashDeclMemberInfo* m = findMember(i.first);
         if (!m) {
             if (!strict_check) {
                 continue;
@@ -199,7 +260,7 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
         case NT_HASH: {
             ConstHashIterator i(n.get<const QoreHashNode>());
             while (i.next()) {
-                HashDeclMemberInfo* m = members.find(i.getKey());
+                const HashDeclMemberInfo* m = findMember(i.getKey());
                 if (!m) {
                     parse_error(*loc, "hashdecl '%s' initializer value from %s contains unknown key '%s'",
                         name.c_str(), context, i.getKey());
@@ -235,7 +296,7 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
                     QoreValue kn = keys[i];
                     const QoreStringNode* key = kn.getType() == NT_STRING ? kn.get<const QoreStringNode>() : nullptr;
                     if (key) {
-                        const HashDeclMemberInfo* m = members.find(key->c_str());
+                        const HashDeclMemberInfo* m = findMember(key->c_str());
                         if (!m) {
                             parse_error(*loc, "hashdecl '%s' hash initializer value from %s contains unknown key '%s'",
                                 name.c_str(), context, key->c_str());
@@ -301,7 +362,7 @@ int typed_hash_decl_private::parseCheckComplexHashAssignment(const QoreProgramLo
 int typed_hash_decl_private::parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
         const QoreTypeInfo*& memberTypeInfo, int pflag) const {
     const_cast<typed_hash_decl_private*>(this)->parseInit();
-    const HashDeclMemberInfo* m = members.find(mem);
+    const HashDeclMemberInfo* m = findMember(mem);
 
     if (!m) {
         parse_error(*loc, "illegal access to unknown member '%s' in hashdecl '%s'", mem, name.c_str());
@@ -337,7 +398,7 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
     if (runtime_check) {
         ConstHashIterator i(init);
         while (i.next()) {
-            if (!members.find(i.getKey())) {
+            if (!findMember(i.getKey())) {
                 xsink->raiseException("HASHDECL-INIT-ERROR", "hashdecl '%s' hash initializer value contains unknown key '%s'", name.c_str(), i.getKey());
                 return nullptr;
             }
@@ -371,6 +432,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
         return -1;
     }
 #endif
+
+    // Initialize parent members first
+    if (parentHashDecl) {
+        if (get(*parentHashDecl)->initHashIntern(h, init, xsink)) {
+            return -1;
+        }
+    }
 
     for (auto& i : members.member_list) {
         // first try to use value given in init hash
@@ -537,6 +605,17 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
     return priv->newHash(h, true, xsink);
+}
+
+const TypedHashDecl* TypedHashDecl::getParentHashDecl() const {
+    return priv->getParentHashDecl();
+}
+
+bool TypedHashDecl::inheritsFrom(const TypedHashDecl* parent) const {
+    if (!parent) {
+        return false;
+    }
+    return priv->isDescendantOf(*typed_hash_decl_private::get(*parent));
 }
 
 TypedHashDeclHolder::~TypedHashDeclHolder() {
