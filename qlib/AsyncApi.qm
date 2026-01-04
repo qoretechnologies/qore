@@ -190,6 +190,30 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     * /
     @endverbatim
 
+    Multiple \@subscribe and \@publish blocks can be defined per channel to support
+    different message types. The parser extracts all message schemas into the
+    \c subscribe_schemas and \c publish_schemas lists in @ref ChannelSchemaInfo.
+
+    @verbatim
+    /** @WEBSOCKET /api
+        @ASYNCAPI
+        @summary Multi-message API endpoint
+        @subscribe CommandMessage
+        - action (string): command action
+        - command (string): command to execute
+        @subscribe QueryMessage
+        - action (string): query action
+        - query (string): query expression
+        @publish CommandResponse
+        - ok (bool): success status
+        - result (*hash<auto>): command result
+        @publish QueryResponse
+        - ok (bool): success status
+        - data (*list<hash<auto>>): query results
+        @ENDASYNCAPI
+    * /
+    @endverbatim
+
     @subsection asyncapi_generator_example Generator Example
 
     @par Programmatic Usage
@@ -2217,7 +2241,7 @@ public class AsyncApi3Schema inherits ObjectBase, Logger::LoggerWrapper, Qore::S
 # Schema Generator Classes
 #####################################
 
-#! Event schema information parsed from @EVENT blocks
+#! Event schema information parsed from \@EVENT blocks
 public hashdecl EventSchemaInfo {
     #! Event name (e.g., "WORKFLOW_STATUS_CHANGED")
     string name;
@@ -2233,7 +2257,7 @@ public hashdecl EventSchemaInfo {
     *hash<auto> info_schema;
 }
 
-#! WebSocket channel information parsed from @WEBSOCKET blocks
+#! WebSocket channel information parsed from \@WEBSOCKET blocks
 public hashdecl ChannelSchemaInfo {
     #! Channel path (e.g., "/creator")
     string path;
@@ -2241,10 +2265,14 @@ public hashdecl ChannelSchemaInfo {
     *string summary;
     #! Detailed description
     *string desc;
-    #! Subscribe message schema
+    #! Subscribe message schema (single, for backwards compatibility)
     *hash<auto> subscribe_schema;
-    #! Publish message schema
+    #! Publish message schema (single, for backwards compatibility)
     *hash<auto> publish_schema;
+    #! All subscribe message schemas (multiple \@subscribe blocks)
+    *list<hash<auto>> subscribe_schemas;
+    #! All publish message schemas (multiple \@publish blocks)
+    *list<hash<auto>> publish_schemas;
 }
 
 #! Message schema information
@@ -2261,8 +2289,8 @@ public hashdecl MessageSchemaInfo {
     *hash<auto> payload;
 }
 
-#! Tokenizer for @EVENT and @WEBSOCKET comment blocks
-/** This class parses @EVENT/@EVENTSCHEMA and @WEBSOCKET/@ASYNCAPI blocks from Qore source files
+#! Tokenizer for \@EVENT and \@WEBSOCKET comment blocks
+/** This class parses \@EVENT/\@EVENTSCHEMA and \@WEBSOCKET/\@ASYNCAPI blocks from Qore source files
     and extracts schema information for AsyncAPI generation.
 
     @par Event Block Format
@@ -2299,8 +2327,8 @@ public hashdecl MessageSchemaInfo {
     @endverbatim
 */
 public class AsyncApiSchemaTokenizer {
-    #! Parse an @EVENT block and extract event schema information
-    /** @param block the text content of the @EVENT block (from @EVENT to @ENDEVENTSCHEMA)
+    #! Parse an \@EVENT block and extract event schema information
+    /** @param block the text content of the \@EVENT block (from \@EVENT to \@ENDEVENTSCHEMA)
         @return the parsed event schema information
     */
     static hash<EventSchemaInfo> parseEventBlock(string block) {
@@ -2318,25 +2346,25 @@ public class AsyncApiSchemaTokenizer {
 
         # Extract @summary
         match = (block =~ x/@summary\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             event.summary = trim(match[0]);
         }
 
         # Extract @desc (stop at @ENDEVENTSCHEMA or other tags)
         match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             event.desc = trim(match[0]);
         }
 
         # Extract @class
         match = (block =~ x/@class\s+(\w+)/);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             event.event_class = match[0];
         }
 
         # Extract @severity
         match = (block =~ x/@severity\s+(\w+)/);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             event.severity = match[0];
         }
 
@@ -2356,8 +2384,8 @@ public class AsyncApiSchemaTokenizer {
         }
 
         # Extract lines after @info
-        *list<*string> info_match = (block =~ x/@info\s*\n((?:\s*-\s+.+\n?)+)/s);
-        if (!info_match || !info_match[0]) {
+        auto info_match = (block =~ x/@info\s*\n((?:\s*-\s+.+\n?)+)/s);
+        if (info_match.typeCode() != NT_LIST || !info_match[0]) {
             return {
                 "type": "object",
                 "additionalProperties": True,
@@ -2370,8 +2398,8 @@ public class AsyncApiSchemaTokenizer {
 
         foreach string line in (lines) {
             # Parse field: - name (type): description (use Qore identifier pattern)
-            *list<*string> field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
-            if (field_match && field_match[0] && field_match[1]) {
+            auto field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match.typeCode() == NT_LIST && field_match[0] && field_match[1]) {
                 string field_name = field_match[0];
                 string field_type = field_match[1];
                 *string field_desc = field_match[2];
@@ -2390,8 +2418,8 @@ public class AsyncApiSchemaTokenizer {
         };
     }
 
-    #! Parse a @WEBSOCKET block and extract channel information
-    /** @param block the text content of the @WEBSOCKET block
+    #! Parse a \@WEBSOCKET block and extract channel information
+    /** @param block the text content of the \@WEBSOCKET block
         @return the parsed channel schema information
     */
     static hash<ChannelSchemaInfo> parseChannelBlock(string block) {
@@ -2407,35 +2435,102 @@ public class AsyncApiSchemaTokenizer {
 
         # Extract @summary
         match = (block =~ x/@summary\s+(.+?)(?=@|\n\s*\n|$)/s);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             channel.summary = trim(match[0]);
         }
 
         # Extract @desc (stop at @ENDASYNCAPI or other tags)
         match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
-        if (match && match[0]) {
+        if (match.typeCode() == NT_LIST && match[0]) {
             channel.desc = trim(match[0]);
         }
 
-        # Extract @subscribe schema
-        match = (block =~ x/@subscribe\s+(\w+)\s*\n((?:\s*-\s+.+\n?)+)/s);
-        if (match && match[0] && match[1]) {
-            channel.subscribe_schema = {
-                "name": match[0],
-                "schema": parseMessageFields(match[1]),
-            };
+        # Extract all @subscribe schemas
+        channel.subscribe_schemas = parseAllMessageBlocks(block, "subscribe");
+        if (channel.subscribe_schemas) {
+            # Set first one for backwards compatibility
+            channel.subscribe_schema = channel.subscribe_schemas[0];
         }
 
-        # Extract @publish schema
-        match = (block =~ x/@publish\s+(\w+)\s*\n((?:\s*-\s+.+\n?)+)/s);
-        if (match && match[0] && match[1]) {
-            channel.publish_schema = {
-                "name": match[0],
-                "schema": parseMessageFields(match[1]),
-            };
+        # Extract all @publish schemas
+        channel.publish_schemas = parseAllMessageBlocks(block, "publish");
+        if (channel.publish_schemas) {
+            # Set first one for backwards compatibility
+            channel.publish_schema = channel.publish_schemas[0];
         }
 
         return channel;
+    }
+
+    #! Parse all @subscribe or @publish message blocks from a channel block
+    /** @param block the channel block text
+        @param msg_type "subscribe" or "publish"
+        @return list of message schema hashes, each with "name" and "schema" keys
+    */
+    private static list<hash<auto>> parseAllMessageBlocks(string block, string msg_type) {
+        list<hash<auto>> messages = ();
+
+        # Find all occurrences of @subscribe or @publish
+        # We need to find each block individually and parse its fields
+        int pos = 0;
+        while (True) {
+            # Find next @subscribe/@publish
+            int start = block.find("@" + msg_type + " ", pos);
+            if (start < 0) {
+                break;
+            }
+
+            # Extract the message name using regex
+            string rest = block.substr(start + msg_type.size() + 2);
+            auto name_match = (rest =~ x/^(\w+)/);
+            string name = name_match.typeCode() == NT_LIST ? name_match[0] : "";
+            int name_end = start + msg_type.size() + 2 + name.size();
+
+            # Find the fields section - lines starting with "- " until next @ tag or empty line
+            int fields_start = block.find("\n", name_end);
+            if (fields_start < 0) {
+                pos = name_end;
+                continue;
+            }
+            fields_start++;
+
+            # Find the end of fields - next @subscribe/@publish/@ENDASYNCAPI tag, or end of block
+            string fields_text = "";
+            int line_start = fields_start;
+            while (line_start < block.size()) {
+                int line_end = block.find("\n", line_start);
+                if (line_end < 0) {
+                    line_end = block.size();
+                }
+                string line = block.substr(line_start, line_end - line_start);
+                string trimmed = trim(line);
+
+                # Stop at next @subscribe, @publish, or @ENDASYNCAPI (regardless of indentation)
+                if (trimmed =~ /^@(subscribe|publish|ENDASYNCAPI)\b/) {
+                    break;
+                }
+
+                # Include field lines (starting with whitespace + -)
+                if (line =~ /^\s+-/) {
+                    fields_text += line + "\n";
+                }
+                # Empty lines within a message block are skipped
+
+                line_start = line_end + 1;
+            }
+
+            if (name) {
+                hash<auto> msg = {
+                    "name": name,
+                    "schema": parseMessageFields(fields_text),
+                };
+                messages += msg;
+            }
+
+            pos = line_start;
+        }
+
+        return messages;
     }
 
     #! Parse message field definitions
@@ -2448,8 +2543,8 @@ public class AsyncApiSchemaTokenizer {
         list<string> lines = text.split("\n");
         foreach string line in (lines) {
             # Use Qore identifier pattern for field names
-            *list<*string> field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
-            if (field_match && field_match[0] && field_match[1]) {
+            auto field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match.typeCode() == NT_LIST && field_match[0] && field_match[1]) {
                 string field_name = field_match[0];
                 string field_type = field_match[1];
                 *string field_desc = field_match[2];
@@ -2465,12 +2560,12 @@ public class AsyncApiSchemaTokenizer {
         return schema;
     }
 
-    #! Parse source file content and extract all @EVENT blocks
+    #! Parse source file content and extract all \@EVENT blocks
     /** @param content the source file content
         @return list of parsed event schemas
 
-        This method searches for @EVENT blocks within doc comment blocks (/** ... * /)
-        to avoid matching @EVENT in string literals or regular comments.
+        This method searches for \@EVENT blocks within doc comment blocks
+        to avoid matching \@EVENT in string literals or regular comments.
     */
     static list<hash<EventSchemaInfo>> parseEventBlocks(string content) {
         list<hash<EventSchemaInfo>> events = ();
@@ -2505,12 +2600,12 @@ public class AsyncApiSchemaTokenizer {
         return events;
     }
 
-    #! Parse source file content and extract all @WEBSOCKET blocks
+    #! Parse source file content and extract all \@WEBSOCKET blocks
     /** @param content the source file content
         @return list of parsed channel schemas
 
-        This method searches for @WEBSOCKET blocks within doc comment blocks (/** ... * /)
-        to avoid matching @WEBSOCKET in string literals or regular comments.
+        This method searches for \@WEBSOCKET blocks within doc comment blocks
+        to avoid matching \@WEBSOCKET in string literals or regular comments.
     */
     static list<hash<ChannelSchemaInfo>> parseChannelBlocks(string content) {
         list<hash<ChannelSchemaInfo>> channels = ();
@@ -2574,19 +2669,19 @@ public class AsyncApiTypeMapper {
     */
     static hash<auto> mapType(string qore_type) {
         # Handle optional types (prefixed with *)
-        bool nullable = qore_type =~ /^\*/;
-        if (nullable) {
+        bool is_nullable = qore_type =~ /^\*/;
+        if (is_nullable) {
             qore_type = qore_type.substr(1);
         }
 
-        hash<auto> rv;
+        hash rv;
 
         # Handle list types
         if (qore_type == "list") {
             rv = {"type": "array"};
         } else if (qore_type =~ /^list</) {
-            *list<*string> match = (qore_type =~ x/^list<(.+)>$/);
-            if (match && match[0]) {
+            auto match = (qore_type =~ x/^list<(.+)>$/);
+            if (match.typeCode() == NT_LIST && match[0]) {
                 rv = {
                     "type": "array",
                     "items": mapType(match[0]),
@@ -2604,9 +2699,9 @@ public class AsyncApiTypeMapper {
         }
         # Handle hash<TypeName>
         else if (qore_type =~ /^hash<\w+>/) {
-            *list<*string> match = (qore_type =~ x/^hash<(\w+)>$/);
-            if (match && match[0]) {
-                if (nullable) {
+            auto match = (qore_type =~ x/^hash<(\w+)>$/);
+            if (match.typeCode() == NT_LIST && match[0]) {
+                if (is_nullable) {
                     rv = {"\$ref": "#/components/schemas/" + match[0], "nullable": True};
                     return rv;
                 }
@@ -2624,8 +2719,8 @@ public class AsyncApiTypeMapper {
             rv = {"type": "object", "additionalProperties": True};
         }
 
-        if (nullable && rv) {
-            rv.nullable = True;
+        if (is_nullable && rv) {
+            rv{"nullable"} = True;
         }
 
         return rv;
@@ -2646,7 +2741,7 @@ public class AsyncApiTypeMapper {
 }
 
 #! Generates AsyncAPI 3.0.0 schemas from parsed event and channel definitions
-/** This class generates complete AsyncAPI 3.0.0 schemas from parsed @EVENT and @WEBSOCKET blocks.
+/** This class generates complete AsyncAPI 3.0.0 schemas from parsed \@EVENT and \@WEBSOCKET blocks.
 
     @par Example
     @code{.py}
