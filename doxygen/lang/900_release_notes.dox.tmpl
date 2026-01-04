@@ -132,6 +132,20 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
       - new \c http_version option in @ref ConnectionProvider::HttpConnection "HttpConnection" for HTTP version control ("auto", "1.0", "1.1", "2.0")
       - @ref RestClient::RestConnection "RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "HttpConnection"
+    - @ref DataProvider "DataProvider" module
+      - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
+        - new @ref DataProvider::DpqlTokenizer "DpqlTokenizer" class for lexical analysis
+        - new @ref DataProvider::DpqlParser "DpqlParser" class for parsing DPQL strings to \c DataProviderExpression hashes
+        - new @ref DataProvider::DpqlSerializer "DpqlSerializer" class for converting expressions back to DPQL strings
+        - new @ref DataProvider::DpqlCompletionProvider "DpqlCompletionProvider" class for IDE/editor autocomplete
+        - static API methods: @ref DataProvider::DataProvider::parseDpqlExpression() "parseDpqlExpression()",
+          @ref DataProvider::DataProvider::parseDpqlExpressionWithInfo() "parseDpqlExpressionWithInfo()",
+          @ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()",
+          @ref DataProvider::DataProvider::getDpqlTokens() "getDpqlTokens()",
+          @ref DataProvider::DataProvider::getDpqlCompletions() "getDpqlCompletions()",
+          @ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()"
+        - DPQL syntax: \c @name \c == \c "John" \c && \c @age \c > \c 18
+        - supports field refs (\c @field), comparison ops, logical ops, ranges, \c in, and regex
     - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
     - @ref Qdx "Qdx" module
