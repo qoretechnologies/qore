@@ -30,6 +30,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("completion tests", \completionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
+        addTestCase("stress tests", \stressTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -277,6 +278,39 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("example.com$", exp.args[1]);
             # Check for case-insensitive flag
             assertEq(RE_Caseless, exp.args[2]);
+        }
+
+        # Test regex with combined flags
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@text =~ /^start.*end$/ims');
+            assertEq(DP_SEARCH_OP_REGEX, exp.exp);
+            assertEq("text", exp.args[0].field);
+            assertEq("^start.*end$", exp.args[1]);
+            # Check all flags are present
+            assertTrue(exp.args.size() >= 4);
+            list<int> flags = exp.args[2..];
+            assertTrue(inlist(RE_Caseless, flags));
+            assertTrue(inlist(RE_MultiLine, flags));
+            assertTrue(inlist(RE_DotAll, flags));
+        }
+
+        # Test scientific notation
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@value == 1.5e10');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("value", exp.args[0].field);
+            assertEq(1.5e10, exp.args[1]);
+        }
+
+        # Test negative scientific notation
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@value > -2.5E-3');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("value", exp.args[0].field);
+            assertEq(-2.5e-3, exp.args[1]);
         }
     }
 
@@ -636,6 +670,50 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
                 '(@name == "John" && @age > 18) || @status == "admin"', fields);
             assertEq(0, errors.size());
+        }
+    }
+
+    stressTests() {
+        # Test deeply nested expressions
+        {
+            # Build expression: (((((@a == 1) && @b == 2) && @c == 3) ...
+            string dpql = "@a == 1";
+            for (int i = 0; i < 20; ++i) {
+                dpql = "(" + dpql + " && @x" + string(i) + " == " + string(i) + ")";
+            }
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_AND, exp.exp);
+
+            # Round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            hash<DataProviderExpression> exp2 = DataProvider::parseDpqlExpression(serialized);
+            assertEq(exp.exp, exp2.exp);
+        }
+
+        # Test long OR chain
+        {
+            list<string> conditions = ();
+            for (int i = 0; i < 50; ++i) {
+                conditions += "@field" + string(i) + " == " + string(i);
+            }
+            string dpql = conditions.join(" || ");
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_OR, exp.exp);
+            assertEq(50, exp.args.size());
+        }
+
+        # Test complex mixed expression
+        {
+            string dpql = '(@a == 1 || @b == 2) && (@c == 3 || @d == 4) && ' +
+                '(@e in (1, 2, 3) || @f between 10 and 20) && !(@g == "deleted")';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_AND, exp.exp);
+
+            # Round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            hash<DataProviderExpression> exp2 = DataProvider::parseDpqlExpression(serialized);
+            assertEq(exp.exp, exp2.exp);
+            assertEq(exp.args.size(), exp2.args.size());
         }
     }
 }
