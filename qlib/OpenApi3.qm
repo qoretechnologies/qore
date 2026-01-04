@@ -6276,6 +6276,11 @@ public class OpenApi3TypeMapper {
         @return hash with OpenAPI type information
     */
     static hash<auto> mapType(string qore_type) {
+        # Handle empty string
+        if (!qore_type.val()) {
+            return {"type": "string", "description": "Unknown type: empty"};
+        }
+
         # Check for nullable/optional type (leading *)
         bool nullable = qore_type[0] == "*";
         if (nullable) {
@@ -6359,12 +6364,12 @@ public class OpenApi3TypeMapper {
 
     #! Check if a type string is nullable
     static bool isNullable(string qore_type) {
-        return qore_type[0] == "*";
+        return qore_type.val() && qore_type[0] == "*";
     }
 
     #! Get the base type (without * prefix)
     static string getBaseType(string qore_type) {
-        return qore_type[0] == "*" ? qore_type.substr(1) : qore_type;
+        return qore_type.val() && qore_type[0] == "*" ? qore_type.substr(1) : qore_type;
     }
 
     #! Extract element type from list type

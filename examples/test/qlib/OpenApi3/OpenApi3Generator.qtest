@@ -743,18 +743,25 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
     }
 
     testUnknownTypes() {
+        # Test empty string - should not crash
+        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("");
+        assertEq("string", result.type, "Empty string should default to string type");
+        assertTrue(result.description.val(), "Empty string should have description");
+
+        # Test isNullable with empty string
+        assertFalse(OpenApi3::OpenApi3TypeMapper::isNullable(""), "Empty string should not be nullable");
+
+        # Test getBaseType with empty string
+        assertEq("", OpenApi3::OpenApi3TypeMapper::getBaseType(""), "Empty string base type should be empty");
+
         # Test completely unknown type
-        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("unknowntype");
+        result = OpenApi3::OpenApi3TypeMapper::mapType("unknowntype");
         assertTrue(result.hasKey("type") || result.hasKey("description"),
             "Should handle unknown type gracefully");
 
         # Test type with unmatched brackets
         result = OpenApi3::OpenApi3TypeMapper::mapType("list<string");
         assertTrue(True, "Should handle unmatched brackets");
-
-        # Test empty type
-        result = OpenApi3::OpenApi3TypeMapper::mapType("");
-        assertTrue(True, "Should handle empty type");
 
         # Test type with only asterisk
         result = OpenApi3::OpenApi3TypeMapper::mapType("*");
