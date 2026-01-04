@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProvider.qc module for data access and introspection
 
-/** DataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -100,7 +100,7 @@ public class DataProvider {
             "kafka": "KafkaDataProvider",
 
             # provided by the json module
-            "McpClientDataProvider": "McpClientDataProvider",
+            "mcpclient": "McpClientDataProvider",
 
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
@@ -131,10 +131,19 @@ public class DataProvider {
 
             "swagger": "SwaggerDataProvider",
 
+            # provided by the tar module
+            "tar": "TarDataProvider",
+
+            # provided by the xml module
+            "webdavclient": "WebDavClientDataProvider",
+
             # provided by the ts-toolkit repo
             "ts-actions": "TypeScriptActionInterface",
 
             "wsclient": "WebSocketClient",
+
+            # provided by the zip module
+            "zip": "ZipDataProvider",
         };
 
         #! Map of known type path prefixes to modules
@@ -611,6 +620,156 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
             }
         }
         return str;
+    }
+
+    #! Parses a DPQL expression string into a DataProviderExpression
+    /** @param text the DPQL expression to parse
+        @param expressions optional map of expression names to their info for validation
+
+        @return the parsed DataProviderExpression
+
+        @throw DPQL-PARSE-ERROR if the expression contains syntax errors
+
+        @par Example:
+        @code{.py}
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John" && @age > 18');
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static hash<DataProviderExpression> parseDpqlExpression(string text,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+        return parser.parse(text);
+    }
+
+    #! Parses a DPQL expression with full diagnostic information
+    /** @param text the DPQL expression to parse
+        @param expressions optional map of expression names to their info for validation
+
+        @return a DpqlParseResult containing the expression, diagnostics, and tokens
+
+        @par Example:
+        @code{.py}
+hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name ==');
+if (!result.success) {
+    foreach hash<DpqlDiagnostic> diag in (result.diagnostics) {
+        printf("Error at %d:%d: %s\n", diag.line, diag.column, diag.message);
+    }
+}
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+        return parser.parseWithInfo(text);
+    }
+
+    #! Serializes a DataProviderExpression to a DPQL string
+    /** @param exp the expression to serialize
+        @param expressions optional map of expression names to their info
+
+        @return the DPQL string representation of the expression
+
+        @par Example:
+        @code{.py}
+hash<DataProviderExpression> exp = <DataProviderExpression>{
+    "exp": "==",
+    "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+};
+string dpql = DataProvider::serializeDpqlExpression(exp);
+# Result: @name == "John"
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static string serializeDpqlExpression(hash<DataProviderExpression> exp,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlSerializer serializer(expressions ?? DataProviderGenericExpressions);
+        return serializer.serialize(exp);
+    }
+
+    #! Gets all tokens from a DPQL expression for syntax highlighting
+    /** @param text the DPQL expression to tokenize
+
+        @return a list of tokens with type and position information
+
+        @par Example:
+        @code{.py}
+list<hash<DpqlTokenInfo>> tokens = DataProvider::getDpqlTokens('@name == "value"');
+foreach hash<DpqlTokenInfo> tok in (tokens) {
+    printf("Token: %s at %d:%d\n", DpqlTokenTypeNames{tok.type}, tok.line, tok.column);
+}
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static list<hash<DpqlTokenInfo>> getDpqlTokens(string text) {
+        DpqlTokenizer tokenizer(text);
+        return tokenizer.getAllTokens();
+    }
+
+    #! Gets DPQL completions at the given cursor position
+    /** @param text the DPQL expression text
+        @param position cursor position (0-based character offset)
+        @param fields available fields for completion
+        @param expressions optional map of expression names to their info
+
+        @return a list of completion items sorted by priority
+
+        @par Example:
+        @code{.py}
+hash<string, AbstractDataField> fields = {
+    "name": new QoreDataField("name", "Name", new QoreStringDataType()),
+    "age": new QoreDataField("age", "Age", new QoreIntDataType()),
+};
+list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3, fields);
+# Returns completions for fields starting with "na"
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
+            hash<string, AbstractDataField> fields,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlCompletionProvider provider(expressions ?? DataProviderGenericExpressions);
+        return provider.getCompletions(text, position, fields);
+    }
+
+    #! Validates a DPQL expression against available fields
+    /** @param text the DPQL expression to validate
+        @param fields available fields
+        @param expressions optional map of expression names to their info
+
+        @return a list of diagnostic messages for any validation errors
+
+        @par Example:
+        @code{.py}
+list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+    '@unknown_field == "value"',
+    my_fields
+);
+if (errors) {
+    foreach hash<DpqlDiagnostic> err in (errors) {
+        printf("Error: %s\n", err.message);
+    }
+}
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
+            hash<string, AbstractDataField> fields,
+            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions);
+        hash<DpqlParseResult> result = parser.parseWithInfo(text);
+        list<hash<DpqlDiagnostic>> diags = result.diagnostics;
+        if (result.success && result.expression) {
+            diags += parser.validate(result.expression, fields);
+        }
+        return diags;
     }
 
     #! Loads data providers from the environment

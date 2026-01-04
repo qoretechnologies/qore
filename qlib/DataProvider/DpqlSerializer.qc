@@ -1,0 +1,368 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DpqlSerializer.qc DPQL serializer implementation
+
+/*  DpqlSerializer.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the DataProvider module
+public namespace DataProvider {
+
+#! Operator precedence levels (lower = binds tighter)
+const DPQL_PREC_PRIMARY = 0;
+const DPQL_PREC_UNARY = 1;
+const DPQL_PREC_COMPARISON = 2;
+const DPQL_PREC_AND = 3;
+const DPQL_PREC_OR = 4;
+
+#! Serializer for DPQL (Data Provider Query Language) expressions
+/** This class converts DataProviderExpression hashes back into human-readable
+    DPQL query strings.
+
+    @par Example:
+    @code{.py}
+DpqlSerializer ser();
+hash<DataProviderExpression> exp = <DataProviderExpression>{
+    "exp": "&&",
+    "args": (
+        <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+        },
+        <DataProviderExpression>{
+            "exp": ">",
+            "args": (<DataProviderFieldReference>{"field": "age"}, 18),
+        },
+    ),
+};
+string dpql = ser.serialize(exp);
+# Result: @name == "John" && @age > 18
+    @endcode
+*/
+public class DpqlSerializer {
+    private {
+        #! Expression map for rendering
+        *hash<string, hash<DataProviderExpressionInfo>> expressions;
+
+        #! Map of operators to their precedence
+        const OperatorPrecedence = {
+            DP_OP_OR: DPQL_PREC_OR,
+            DP_OP_AND: DPQL_PREC_AND,
+            DP_SEARCH_OP_EQ: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_NE: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_LT: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_LE: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_GT: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_GE: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_BETWEEN: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_IN: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_REGEX: DPQL_PREC_COMPARISON,
+            DP_SEARCH_OP_NOT: DPQL_PREC_UNARY,
+        };
+
+        #! Map of operators to their DPQL symbols
+        const OperatorSymbols = {
+            DP_OP_OR: "||",
+            DP_OP_AND: "&&",
+            DP_SEARCH_OP_EQ: "==",
+            DP_SEARCH_OP_NE: "!=",
+            DP_SEARCH_OP_LT: "<",
+            DP_SEARCH_OP_LE: "<=",
+            DP_SEARCH_OP_GT: ">",
+            DP_SEARCH_OP_GE: ">=",
+            DP_SEARCH_OP_NOT: "!",
+        };
+    }
+
+    #! Creates a serializer with optional expression map
+    /** @param expressions optional map of expression names to their info
+    */
+    constructor(*hash<string, hash<DataProviderExpressionInfo>> expressions) {
+        self.expressions = expressions;
+    }
+
+    #! Serializes an expression to DPQL string
+    /** @param exp the expression to serialize
+        @return the DPQL string representation
+    */
+    string serialize(hash<DataProviderExpression> exp) {
+        return serializeExpr(exp, DPQL_PREC_OR + 1);
+    }
+
+    #! Serializes an expression with context precedence
+    /** @param exp the expression to serialize
+        @param context_prec the precedence of the surrounding context
+        @return the DPQL string representation
+    */
+    private string serializeExpr(hash<DataProviderExpression> exp, int context_prec) {
+        string op = exp.exp;
+        int prec = OperatorPrecedence{op} ?? DPQL_PREC_PRIMARY;
+        bool need_parens = prec > context_prec;
+
+        string result;
+
+        switch (op) {
+            case DP_OP_OR:
+                result = serializeBinaryOp(exp.args, "||", DPQL_PREC_OR);
+                break;
+
+            case DP_OP_AND:
+                result = serializeBinaryOp(exp.args, "&&", DPQL_PREC_AND);
+                break;
+
+            case DP_SEARCH_OP_EQ:
+            case DP_SEARCH_OP_NE:
+            case DP_SEARCH_OP_LT:
+            case DP_SEARCH_OP_LE:
+            case DP_SEARCH_OP_GT:
+            case DP_SEARCH_OP_GE:
+                result = serializeComparisonOp(exp.args, OperatorSymbols{op});
+                break;
+
+            case DP_SEARCH_OP_NOT:
+                result = serializeNotOp(exp.args);
+                break;
+
+            case DP_SEARCH_OP_BETWEEN:
+                result = serializeBetweenOp(exp.args);
+                break;
+
+            case DP_SEARCH_OP_IN:
+                result = serializeInOp(exp.args);
+                break;
+
+            case DP_SEARCH_OP_REGEX:
+                result = serializeRegexOp(exp.args);
+                break;
+
+            default:
+                # Unknown operator - treat as function call
+                result = serializeFunctionCall(op, exp.args);
+        }
+
+        if (need_parens) {
+            return "(" + result + ")";
+        }
+        return result;
+    }
+
+    #! Serializes a binary operator with multiple arguments (&&, ||)
+    private string serializeBinaryOp(list<auto> args, string symbol, int prec) {
+        list<string> parts = ();
+        foreach auto arg in (args) {
+            parts += serializeArg(arg, prec);
+        }
+        return parts.join(" " + symbol + " ");
+    }
+
+    #! Serializes a comparison operator
+    private string serializeComparisonOp(list<auto> args, string symbol) {
+        if (args.size() < 2) {
+            return "";
+        }
+        return serializeArg(args[0], DPQL_PREC_COMPARISON) + " " + symbol + " " +
+            serializeArg(args[1], DPQL_PREC_COMPARISON);
+    }
+
+    #! Serializes the NOT operator
+    private string serializeNotOp(list<auto> args) {
+        if (!args) {
+            return "!";
+        }
+        # serializeArg already adds parentheses based on precedence
+        return "!" + serializeArg(args[0], DPQL_PREC_UNARY);
+    }
+
+    #! Serializes the BETWEEN operator
+    private string serializeBetweenOp(list<auto> args) {
+        if (args.size() < 3) {
+            return "";
+        }
+        return serializeArg(args[0], DPQL_PREC_COMPARISON) + " between " +
+            serializeArg(args[1], DPQL_PREC_COMPARISON) + " and " +
+            serializeArg(args[2], DPQL_PREC_COMPARISON);
+    }
+
+    #! Serializes the IN operator
+    private string serializeInOp(list<auto> args) {
+        if (!args) {
+            return "";
+        }
+        string field = serializeArg(args[0], DPQL_PREC_COMPARISON);
+        list<string> values = ();
+        for (int i = 1; i < args.size(); ++i) {
+            values += serializeArg(args[i], DPQL_PREC_PRIMARY);
+        }
+        return field + " in (" + values.join(", ") + ")";
+    }
+
+    #! Serializes the REGEX operator
+    private string serializeRegexOp(list<auto> args) {
+        if (args.size() < 2) {
+            return "";
+        }
+        string field = serializeArg(args[0], DPQL_PREC_COMPARISON);
+        string pattern = args[1].type() == "string" ? args[1] : string(args[1]);
+
+        # Escape forward slashes in pattern
+        pattern = replace(pattern, "/", "\\/");
+
+        # Build flags from remaining args
+        string flags = "";
+        for (int i = 2; i < args.size(); ++i) {
+            if (args[i].typeCode() == NT_INT) {
+                switch (args[i]) {
+                    case RE_Caseless:
+                        flags += "i";
+                        break;
+                    case RE_DotAll:
+                        flags += "s";
+                        break;
+                    case RE_MultiLine:
+                        flags += "m";
+                        break;
+                    case RE_Extended:
+                        flags += "x";
+                        break;
+                    case RE_Unicode:
+                        flags += "u";
+                        break;
+                }
+            }
+        }
+
+        return field + " =~ /" + pattern + "/" + flags;
+    }
+
+    #! Serializes a function call
+    private string serializeFunctionCall(string name, list<auto> args) {
+        list<string> arg_strs = ();
+        foreach auto arg in (args) {
+            arg_strs += serializeArg(arg, DPQL_PREC_OR + 1);
+        }
+        return name + "(" + arg_strs.join(", ") + ")";
+    }
+
+    #! Serializes an argument (value, field ref, or expression)
+    private string serializeArg(auto arg, int context_prec) {
+        if (arg === NOTHING) {
+            return "null";
+        }
+
+        switch (arg.typeCode()) {
+            case NT_HASH:
+                if (arg.hasKey("field")) {
+                    return serializeFieldRef(arg);
+                }
+                if (arg.hasKey("exp")) {
+                    return serializeExpr(arg, context_prec);
+                }
+                # Unknown hash - serialize as JSON-like
+                return serializeLiteral(arg);
+
+            case NT_LIST:
+                # List literal
+                list<string> items = ();
+                foreach auto item in (arg) {
+                    items += serializeArg(item, DPQL_PREC_PRIMARY);
+                }
+                return "(" + items.join(", ") + ")";
+
+            default:
+                return serializeLiteral(arg);
+        }
+    }
+
+    #! Serializes a field reference
+    private string serializeFieldRef(hash<auto> ref) {
+        string field = ref.field;
+
+        # Check if field name needs quoting
+        if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
+            # Escape special characters
+            field = replace(replace(field, "\\", "\\\\"), '"', '\\"');
+            return '@"' + field + '"';
+        }
+
+        return "@" + field;
+    }
+
+    #! Serializes a literal value
+    private string serializeLiteral(auto value) {
+        if (value === NOTHING) {
+            return "null";
+        }
+
+        switch (value.typeCode()) {
+            case NT_STRING:
+                return serializeString(value);
+
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return string(value);
+
+            case NT_BOOLEAN:
+                return value ? "true" : "false";
+
+            case NT_DATE:
+                # Serialize dates as ISO strings
+                return serializeString(value.format("YYYY-MM-DDTHH:mm:SS.xxZ"));
+
+            case NT_BINARY:
+                # Serialize binary as base64 string
+                return serializeString(value.toBase64());
+
+            default:
+                # For other types, try to convert to string
+                return serializeString(string(value));
+        }
+    }
+
+    #! Serializes a string with proper escaping
+    private string serializeString(string value) {
+        string result = '"';
+        for (int i = 0; i < value.size(); ++i) {
+            string c = value[i];
+            switch (c) {
+                case '"':
+                    result += '\\"';
+                    break;
+                case "\\":
+                    result += "\\\\";
+                    break;
+                case "\n":
+                    result += "\\n";
+                    break;
+                case "\r":
+                    result += "\\r";
+                    break;
+                case "\t":
+                    result += "\\t";
+                    break;
+                default:
+                    result += c;
+            }
+        }
+        return result + '"';
+    }
+}
+
+} # namespace DataProvider
