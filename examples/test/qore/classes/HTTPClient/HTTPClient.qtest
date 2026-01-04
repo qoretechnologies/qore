@@ -651,8 +651,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             RealTestHttpServer serv(cert.getPath(), cert.getPath());
             on_exit delete serv;
 
+            # Use HTTP/1.1 for poll operations - HTTP/2 poll is not supported
             HTTPClient hc({
                 "url": "https://localhost:" + serv.getPort(),
+                "http_version": "1.1",
             });
 
             SocketPollOperation spop = hc.startPollConnect();
@@ -758,8 +760,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         RealTestHttpServer serv(cert.getPath(), cert.getPath());
         on_exit delete serv;
 
+        # Use HTTP/1.1 - chunked transfer-encoding is an HTTP/1.1 concept
         HTTPClient hc({
             "url": "https://localhost:" + serv.getPort(),
+            "http_version": "1.1",
         });
         hash<auto> hdr = {
             "Connection": "Keep-Alive",
@@ -777,8 +781,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         RealTestHttpServer serv(cert.getPath(), cert.getPath());
         on_exit delete serv;
 
+        # Use HTTP/1.1 - streaming callbacks not supported with HTTP/2
         HTTPClient hc({
             "url": "https://localhost:" + serv.getPort(),
+            "http_version": "1.1",
         });
         hash<auto> hdr = {
             "X-Test-Disconnect": "true",

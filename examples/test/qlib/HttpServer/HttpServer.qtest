@@ -65,6 +65,9 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             int size = int(m[0]);
             string data = strmul("X", size);
             return makeResponse(200, data, {"Content-Type": "text/plain"});
+        } else if (rpath =~ /^echo-body/) {
+            # Echo back the request body for testing large POST bodies
+            return makeResponse(200, body, {"Content-Type": "application/octet-stream"});
         }
 
         if (hdr.method == "POST") {
@@ -1177,6 +1180,24 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> postResp = h2client.send("http2-data", "POST", "/http2-post");
         assertEq(200, postResp.status_code);
         assertEq("POST, http2-data, http2-post, /http2-post", postResp.body);
+
+        # Test HTTP/2 POST with large request bodies
+        # This exercises HTTP/2 DATA frame handling for request bodies
+        # These sizes test different scenarios:
+        # - 50KB: moderate size, multiple DATA frames
+        # - 100KB: larger request body
+        # - 500KB: tests flow control with large uploads
+        list<int> post_sizes = (50000, 100000, 500000);
+        for (int j = 0; j < post_sizes.size(); j++) {
+            int post_size = post_sizes[j];
+            string large_body = strmul("X", post_size);
+            hash<auto> post_resp = h2client.send(large_body, "POST", "/echo-body");
+            assertEq(200, post_resp.status_code, sprintf("HTTP/2 POST %d bytes should succeed", post_size));
+            assertEq(post_size, post_resp.body.size(), sprintf("HTTP/2 POST %d bytes - response body size", post_size));
+            assertEq(large_body, post_resp.body, sprintf("HTTP/2 POST %d bytes - body content", post_size));
+            # Verify HTTP/2 connection is still active after large upload
+            assertTrue(h2client.isHttp2Active(), sprintf("HTTP/2 active after %d byte POST", post_size));
+        }
 
         # Test HTTP/2 disabled mode
         HTTPClient h1client({

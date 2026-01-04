@@ -2670,6 +2670,13 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
+    // Check if HTTP/2 is active - poll operations don't support HTTP/2
+    if (client->http_priv->http2_active) {
+        xsink->raiseException("HTTP2-POLL-ERROR", "poll operations are not supported with HTTP/2 connections; "
+            "use the synchronous send() method or disable HTTP/2 with http_version=1.1");
+        return -1;
+    }
+
     qore_socket_private* spriv = client->http_priv->msock->socket->priv;
 
     assert(!poll_state);
@@ -3693,6 +3700,13 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
 
     // Use HTTP/2 if active
     if (http2_active && getH2Session()) {
+        // HTTP/2 doesn't support streaming callbacks - raise an error if they are used
+        if (send_callback || is || trailer_callback) {
+            xsink->raiseException("HTTP2-CALLBACK-ERROR", "streaming callbacks (send_callback, InputStream, "
+                "trailer_callback) are not supported with HTTP/2 connections; use the synchronous send() method "
+                "or disable HTTP/2 with http_version=1.1");
+            return nullptr;
+        }
         return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
             info, timeout_ms, code, xsink);
     }
