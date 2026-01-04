@@ -4443,6 +4443,9 @@ class HttpServerIoController {
         AutoLock al(m);
         string key = sock.uniqueHash();
 
+        # Check if this is an HTTP/2 response - preserve the HTTP/2 flag from response context
+        bool is_http2 = response.cx."header-info".http2 ?? False;
+
         # Remove any existing connection entry (connection might be in "dispatched" state)
         remove connections{key};
 
@@ -4458,8 +4461,12 @@ class HttpServerIoController {
             "cx": response.cx,
             "phi": response.phi,
             "response": response,
+            "is_http2": is_http2,
         };
         @assert(connections{key}.state == "sending_response", "response connection must be in sending_response state");
+
+        @debug(log(LoggerLevel::INFO, "queueResponse: key=%y code=%d is_http2=%y body_size=%d",
+            key, response.code, is_http2, response.body ? response.body.size() : 0));
 
         if (tid) {
             sendCmd(IO_QUEUE_RESPONSE, key);
@@ -4682,6 +4689,14 @@ class HttpServerIoController {
                         int body_size = cinfo.response.body ? cinfo.response.body.size() : 0;
                         log(LoggerLevel::DEBUG, "HTTP/2 response: stream=%d, code=%d, body_size=%d",
                             stream_id, cinfo.response.code, body_size);
+
+                        # Verify the socket is still open and has an HTTP/2 session
+                        if (!cinfo.sock.isOpen()) {
+                            log(LoggerLevel::ERROR, "HTTP/2 response: socket closed for key %y, stream %d",
+                                key, stream_id);
+                            return NOTHING;
+                        }
+
                         # Remove Transfer-Encoding header - HTTP/2 uses DATA frames, not chunked encoding
                         hash<auto> hdr = cinfo.response.hdr ?? {};
                         remove hdr."Transfer-Encoding";
@@ -4689,14 +4704,21 @@ class HttpServerIoController {
                         if (cinfo.response.body && !hdr."Content-Length") {
                             hdr."Content-Length" = string(cinfo.response.body.size());
                         }
-                        log(LoggerLevel::DEBUG, "HTTP/2 response: starting send, Content-Length=%y",
-                            hdr."Content-Length");
-                        cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttp2Response(
-                            stream_id,
-                            cinfo.response.code,
-                            hdr,
-                            cinfo.response.body,
-                        );
+                        @debug(log(LoggerLevel::INFO, "HTTP/2 async response: key=%y stream=%d code=%d Content-Length=%y",
+                            key, stream_id, cinfo.response.code, hdr."Content-Length"));
+                        try {
+                            cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttp2Response(
+                                stream_id,
+                                cinfo.response.code,
+                                hdr,
+                                cinfo.response.body,
+                            );
+                        } catch (hash<ExceptionInfo> ex) {
+                            # Log error at ERROR level for visibility
+                            log(LoggerLevel::ERROR, "HTTP/2 response failed for key %y stream %d: %s: %s",
+                                key, stream_id, ex.err, ex.desc);
+                            rethrow;
+                        }
                         # Mark this as an HTTP/2 connection for proper keep-alive handling
                         # Update both the local copy and the hash entry
                         cinfo.is_http2 = connections{key}.is_http2 = True;
@@ -5004,9 +5026,17 @@ class HttpServerIoController {
 
         if (cinfo.response.close || !cinfo.sock.isOpen()) {
             # Close the connection
+            @debug {
+                if (cinfo.is_http2) {
+                    log(LoggerLevel::INFO, "HTTP/2 async response complete: key=%y code=%d body_size=%d (closing)",
+                        key, cinfo.response.code, body_size);
+                }
+            }
             closeConnectionIntern(key);
         } else if (cinfo.is_http2) {
             # HTTP/2 connection - transition to http2 state to wait for more requests
+            @debug(log(LoggerLevel::INFO, "HTTP/2 async response complete: key=%y code=%d body_size=%d (keep-alive)",
+                key, cinfo.response.code, body_size));
             date now = now_us();
             connections{key} = <HttpConnectionPollInfo>{
                 "sock": cinfo.sock,
