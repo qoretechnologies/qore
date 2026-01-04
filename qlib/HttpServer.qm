@@ -1548,8 +1548,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @since HttpServer 1.5
     */
     queueAsyncResponse(Socket sock, hash<HttpAsyncResponseInfo> response) {
+        log("queueAsyncResponse: asyncIo=%y asyncMode=%y code=%d class=%y", exists asyncIo, asyncMode,
+            response.code, asyncIo ? asyncIo.className() : "N/A");
         if (asyncIo) {
-            asyncIo.queueResponse(sock, response);
+            try {
+                asyncIo.queueResponse(sock, response);
+                log("queueAsyncResponse: queueResponse returned successfully");
+            } catch (hash<ExceptionInfo> ex) {
+                log("queueAsyncResponse: EXCEPTION: %s: %s\n%s", ex.err, ex.desc, get_exception_string(ex));
+            }
+        } else {
+            log("queueAsyncResponse: asyncIo is NULL, cannot queue response!");
         }
     }
 
@@ -2078,6 +2087,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
             reference<hash> cx, hash<auto> hdr, bool head, reference<bool> dedicated,
             reference<bool> dedicated_external, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        listener.log("sendReply: code=%d async_response_out=%y is_http2=%y",
+            rv."code", exists async_response_out, cx."header-info".http2);
         if (exists rv.close)
             cx.close = boolean(rv.close);
 
@@ -2284,11 +2295,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         # If async capture is requested, store response info instead of sending
+        listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
+            exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
             # For async sending, we need to read streams into memory
             if (body instanceof InputStream) {
                 body = body.read(-1);
             }
+            listener.log("doResponse: capturing async response code=%d body_size=%d",
+                rv."code", body ? body.size() : 0);
             async_response_out = <HttpAsyncResponseInfo>{
                 "code": rv."code",
                 "hdr": rv.hdr ?? {},
@@ -2320,13 +2335,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     hdr."Content-Length" = string(final_body.size());
                 }
                 # Send HTTP/2 response using poll operation
+                listener.log("doResponse: HTTP/2 sync send starting stream=%d code=%d body_size=%d",
+                    stream_id, rv."code", final_body ? final_body.size() : 0);
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
                     final_body);
+                int poll_count = 0;
                 while (True) {
                     *hash<SocketPollInfo> info = op.continuePoll();
                     if (!info) {
+                        listener.log("doResponse: HTTP/2 sync send complete after %d polls", poll_count);
                         break;
                     }
+                    ++poll_count;
                     Socket::poll((info,), 10s);
                 }
             } else if (!chunked) {
@@ -2937,7 +2957,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     string getResponseLogString(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
         # do log msg
-        string lstr = sprintf("cid %d: HTTP/1.1 %d %s", cx.id, status_code, HttpServer::HttpCodes{status_code});
+        string http_ver = cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
+        string lstr = sprintf("cid %d: %s %d %s", cx.id, http_ver, status_code, HttpServer::HttpCodes{status_code});
         if (cx.handler_name)
             lstr += sprintf(" handler: %y", cx.handler_name);
         if (cx.user)
@@ -2962,7 +2983,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     logResponse(hash<auto> cx, int code, InputStream body, *hash<auto> hdr) {
         # do log msg
-        string lstr = sprintf("cid %d: HTTP/1.1 %d %s", cx.id, code, HttpServer::HttpCodes{code});
+        string http_ver = cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
+        string lstr = sprintf("cid %d: %s %d %s", cx.id, http_ver, code, HttpServer::HttpCodes{code});
         if (cx.handler_name)
             lstr += sprintf(" handler: %y", cx.handler_name);
         if (cx.user)
@@ -3493,9 +3515,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Handle response: either queue for async sending or connection was handled (dedicated/error)
+        log("handleAsyncRequest: after handleRequest, async_response.code=%y dedicated=%y dedicated_external=%y",
+            async_response.code, dedicated, dedicated_external);
         if (async_response.code) {
             # Update response with phi for keep-alive
             async_response.phi = phi;
+            log("handleAsyncRequest: calling queueAsyncResponse for code=%d", async_response.code);
             # Queue response for async sending - I/O controller will handle keep-alive
             serv.queueAsyncResponse(s, async_response);
         } else if (!dedicated && !dedicated_external) {
@@ -4445,6 +4470,13 @@ class HttpServerIoController {
         @param response the response info to send
     */
     queueResponse(Socket sock, hash<HttpAsyncResponseInfo> response) {
+        # DEBUG: use server's log method
+        server.log("queueResponse: ENTER sock=%y code=%d sock_open=%y has_listener=%y logger=%y",
+            sock ? sock.uniqueHash() : "NULL", response.code, sock ? sock.isOpen() : "no-sock",
+            exists response.listener, exists logger);
+        log(LoggerLevel::INFO, "queueResponse: ENTER sock=%y code=%d sock_open=%y has_listener=%y",
+            sock ? sock.uniqueHash() : "NULL", response.code, sock ? sock.isOpen() : "no-sock",
+            exists response.listener);
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open for response");
         @assert(response.listener, "response must have listener");
@@ -4474,11 +4506,14 @@ class HttpServerIoController {
         };
         @assert(connections{key}.state == "sending_response", "response connection must be in sending_response state");
 
-        @debug(log(LoggerLevel::INFO, "queueResponse: key=%y code=%d is_http2=%y body_size=%d",
-            key, response.code, is_http2, response.body ? response.body.size() : 0));
+        server.log("queueResponse: key=%y code=%d is_http2=%y body_size=%d tid=%y",
+            key, response.code, is_http2, response.body ? response.body.size() : 0, tid);
 
         if (tid) {
             sendCmd(IO_QUEUE_RESPONSE, key);
+            server.log("queueResponse: sent IO_QUEUE_RESPONSE for key=%y", key);
+        } else {
+            server.log("queueResponse: ERROR - tid is NOTHING, cannot send cmd for key=%y", key);
         }
     }
 
@@ -4692,12 +4727,14 @@ class HttpServerIoController {
                     break;
 
                 case "sending_response": {
+                    server.log("getConnectionPollInfo: key=%y state=sending_response is_http2=%y",
+                        key, cinfo.response.cx."header-info".http2);
                     # Check if this is an HTTP/2 response
                     if (cinfo.response.cx."header-info".http2) {
                         int stream_id = cinfo.response.cx."header-info".stream_id;
                         int body_size = cinfo.response.body ? cinfo.response.body.size() : 0;
-                        log(LoggerLevel::DEBUG, "HTTP/2 response: stream=%d, code=%d, body_size=%d",
-                            stream_id, cinfo.response.code, body_size);
+                        log(LoggerLevel::INFO, "HTTP/2 response: key=%y stream=%d, code=%d, body_size=%d",
+                            key, stream_id, cinfo.response.code, body_size);
 
                         # Verify the socket is still open and has an HTTP/2 session
                         if (!cinfo.sock.isOpen()) {
@@ -4713,15 +4750,28 @@ class HttpServerIoController {
                         if (cinfo.response.body && !hdr."Content-Length") {
                             hdr."Content-Length" = string(cinfo.response.body.size());
                         }
-                        @debug(log(LoggerLevel::INFO, "HTTP/2 async response: key=%y stream=%d code=%d Content-Length=%y",
-                            key, stream_id, cinfo.response.code, hdr."Content-Length"));
+                        server.log("HTTP/2 sync response: key=%y stream=%d code=%d Content-Length=%y",
+                            key, stream_id, cinfo.response.code, hdr."Content-Length");
                         try {
-                            cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttp2Response(
+                            # Use synchronous poll loop for HTTP/2 response - async poll returns immediately
+                            # without actually sending data
+                            AbstractPollOperation spop = cinfo.sock.startPollSendHttp2Response(
                                 stream_id,
                                 cinfo.response.code,
                                 hdr,
                                 cinfo.response.body,
                             );
+                            int poll_count = 0;
+                            while (True) {
+                                *hash<SocketPollInfo> poll_info = spop.continuePoll();
+                                if (!poll_info) {
+                                    server.log("HTTP/2: sync send complete after %d polls key=%y",
+                                        poll_count, key);
+                                    break;
+                                }
+                                ++poll_count;
+                                Socket::poll((poll_info,), 10s);
+                            }
                         } catch (hash<ExceptionInfo> ex) {
                             # Log error at ERROR level for visibility
                             log(LoggerLevel::ERROR, "HTTP/2 response failed for key %y stream %d: %s: %s",
@@ -4731,6 +4781,9 @@ class HttpServerIoController {
                         # Mark this as an HTTP/2 connection for proper keep-alive handling
                         # Update both the local copy and the hash entry
                         cinfo.is_http2 = connections{key}.is_http2 = True;
+                        # Response is complete - call handleSendComplete directly
+                        handleSendComplete(key, cinfo);
+                        return NOTHING;
                     } else if (cinfo.response.chunked) {
                         # Chunked responses need special formatting
                         binary data = formatChunkedHttpResponse(cinfo.response);
@@ -4752,12 +4805,16 @@ class HttpServerIoController {
 
         # Continue the poll operation in a loop while data is available
         # This handles cases where data is already buffered
+        server.log("getConnectionPollInfo: key=%y state=%y calling continuePoll", key, cinfo.state);
         auto poll_result;
         while (True) {
             poll_result = cinfo.spop.continuePoll();
+            server.log("getConnectionPollInfo: key=%y continuePoll returned %y",
+                key, poll_result.val() ? "poll_info" : "NOTHING");
 
             if (!poll_result) {
                 # Operation completed
+                server.log("getConnectionPollInfo: key=%y complete, calling handleConnectionComplete", key);
                 handleConnectionComplete(key, cinfo);
                 return NOTHING;
             }
@@ -4779,6 +4836,7 @@ class HttpServerIoController {
             handleConnectionComplete(key, cinfo);
             return NOTHING;
         }
+        server.log("getConnectionPollInfo: key=%y returning poll_info for poll", key);
 
         # Check if HTTP header read is complete (returns hash with 'hdr' key)
         # This only applies to read_header state
@@ -5134,6 +5192,7 @@ class HttpServerIoController {
 
                     case IO_QUEUE_RESPONSE:
                         # Response already added to connections hash - will be picked up in next poll
+                        server.log("ioThread: IO_QUEUE_RESPONSE received, connections=%d", connections.size());
                         break;
                 }
             }

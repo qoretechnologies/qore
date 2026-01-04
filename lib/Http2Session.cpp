@@ -461,6 +461,9 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
         data_prd = &data_provider;
     }
 
+    printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
+        stream_id, status_code, body_len, nva.size());
+
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), data_prd);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit response: %s",
@@ -611,7 +614,8 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 }
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
-    printd(5, "sendPendingData() want_write=%d isServer=%d\n", nghttp2_session_want_write(session), is_server);
+    printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d\n",
+        nghttp2_session_want_write(session), is_server, timeout_ms);
     // First, collect data from nghttp2
     while (nghttp2_session_want_write(session)) {
         const uint8_t* data;
