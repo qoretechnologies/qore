@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,18 +57,28 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
         }
 
         case NT_FLOAT: {
-            return -(v->getAsFloat());
+            // QoreValue(double) may allocate a QoreBigFloatNode for problematic doubles
+            QoreValue result(-(v->getAsFloat()));
+            // If a node was created (stored as pointer), set needs_deref = true
+            needs_deref = result.isPointer();
+            return result;
         }
 
         case NT_DATE: {
+            needs_deref = true;
             return v->get<const DateTimeNode>()->unaryMinus();
         }
 
         case NT_INT: {
-            return -(v->getAsBigInt());
+            // QoreValue(int64) may allocate a QoreBigIntNode for large integers
+            QoreValue result(-(v->getAsBigInt()));
+            // If a node was created (stored as pointer), set needs_deref = true
+            needs_deref = result.isPointer();
+            return result;
         }
     }
 
+    needs_deref = false;
     return QoreValue(0ll);
 }
 

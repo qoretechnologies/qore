@@ -405,7 +405,28 @@ public:
     }
 
     DLLLOCAL QoreValue getReferencedValue() const {
-        return getValue().refSelf();
+        if (!assigned) {
+            return QoreValue();
+        }
+
+        // For QV_Node, ref the existing node before returning
+        if (type == QV_Node) {
+            if (v.n) {
+                v.n->ref();
+            }
+            return QoreValue(v.n);
+        }
+
+        // For scalar types, QoreValue constructor may allocate a new QoreBigIntNode/QoreBigFloatNode
+        // for large values. These are already created with ref count 1, so no additional ref needed.
+        switch (type) {
+            case QV_Bool: return QoreValue(v.b);
+            case QV_Int: return QoreValue(v.i);
+            case QV_Float: return QoreValue(v.f);
+            default: assert(false);
+                // no break
+        }
+        return QoreValue();
     }
 
     DLLLOCAL const ReferenceNode* getReference() const {
@@ -434,15 +455,28 @@ public:
             return QoreValue(v.n);
         }
 
-        needs_deref = false;
-
         switch (type) {
-            case QV_Bool: return QoreValue(v.b);
-            case QV_Int: return QoreValue(v.i);
-            case QV_Float: return QoreValue(v.f);
+            case QV_Bool:
+                needs_deref = false;
+                return QoreValue(v.b);
+            case QV_Int: {
+                // QoreValue(v.i) may allocate a QoreBigIntNode for large integers
+                QoreValue result(v.i);
+                // If a large integer was created (stored as pointer), set needs_deref = true
+                needs_deref = result.isPointer();
+                return result;
+            }
+            case QV_Float: {
+                // QoreValue(v.f) may allocate a QoreBigFloatNode for problematic doubles
+                QoreValue result(v.f);
+                // If a node was created, set needs_deref = true
+                needs_deref = result.isPointer();
+                return result;
+            }
             default: assert(false);
             // no break
         }
+        needs_deref = false;
         return QoreValue();
     }
 
