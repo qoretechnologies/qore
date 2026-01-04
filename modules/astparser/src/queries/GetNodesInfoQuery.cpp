@@ -418,10 +418,11 @@ QoreHashNode* GetNodesInfoQuery::getLocation(const ASTParseLocation& loc, Except
     if (*xsink)
         return nullptr;
 
-    nodeInfo->setKeyValue("start_line", static_cast<int64>(loc.firstLine), xsink);
-    nodeInfo->setKeyValue("start_column", static_cast<int64>(loc.firstCol), xsink);
-    nodeInfo->setKeyValue("end_line", static_cast<int64>(loc.lastLine), xsink);
-    nodeInfo->setKeyValue("end_column", static_cast<int64>(loc.lastCol), xsink);
+    // Convert to 0-indexed (LSP convention) - internal AST uses 1-indexed
+    nodeInfo->setKeyValue("start_line", static_cast<int64>(loc.firstLine - 1), xsink);
+    nodeInfo->setKeyValue("start_column", static_cast<int64>(loc.firstCol - 1), xsink);
+    nodeInfo->setKeyValue("end_line", static_cast<int64>(loc.lastLine - 1), xsink);
+    nodeInfo->setKeyValue("end_column", static_cast<int64>(loc.lastCol - 1), xsink);
     if (*xsink)
         return nullptr;
     return nodeInfo.release();
