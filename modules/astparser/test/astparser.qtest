@@ -96,6 +96,7 @@ namespace Constants {
         addTestCase("Find references", \testFindReferences());
         addTestCase("Hover info", \testHoverInfo());
         addTestCase("getNodesInfo line indexing", \testGetNodesInfo());
+        addTestCase("Scope symbols", \testScopeSymbols());
 %endif
         set_return_value(main());
     }
@@ -403,6 +404,78 @@ class TestClass {
             }
         }
         assertTrue(foundClass, "class node found in getNodesInfo");
+    }
+
+    testScopeSymbols() {
+        # Test scope-aware symbol search
+        string testCode = "
+%new-style
+namespace MyNamespace {
+    class MyClass {
+        public {
+            int memberVar;
+        }
+        int myMethod(int param) {
+            int localVar = 1;
+            return localVar;
+        }
+    }
+    const MY_CONST = 42;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Search for symbols at position inside myMethod body (line 10, col 12)
+        # 0-indexed: line 9, col 11
+        *list scopeSyms = searcher.findScopeSymbols(tree, "test.q", 9, 11);
+        assertEq(True, exists(scopeSyms), "scope symbols found");
+        assertTrue(scopeSyms.size() > 0, "at least one scope symbol");
+
+        # Check that symbols have scope_level field and verify specific symbols
+        bool hasLocalVar = False;
+        bool hasParam = False;
+        bool hasMemberVar = False;
+        bool hasMyMethod = False;
+        bool hasMyClass = False;
+        bool hasNamespace = False;
+        foreach auto s in (scopeSyms) {
+            assertEq(True, exists(s.scope_level), "symbol has scope_level");
+            switch (s.name) {
+                case "localVar":
+                    hasLocalVar = True;
+                    assertEq(0, s.scope_level, "local variable has scope_level 0");
+                    assertEq(ASYK_Variable, s.kind, "localVar is Variable");
+                    break;
+                case "param":
+                    hasParam = True;
+                    assertEq(0, s.scope_level, "parameter has scope_level 0");
+                    assertEq(ASYK_Variable, s.kind, "param is Variable");
+                    break;
+                case "memberVar":
+                    hasMemberVar = True;
+                    assertTrue(s.scope_level > 0, "member has higher scope_level");
+                    break;
+                case "myMethod":
+                    hasMyMethod = True;
+                    assertTrue(s.scope_level > 0, "method has higher scope_level");
+                    break;
+                case "MyClass":
+                    hasMyClass = True;
+                    break;
+                case "MyNamespace":
+                    hasNamespace = True;
+                    assertEq(ASYK_Namespace, s.kind, "MyNamespace is Namespace");
+                    break;
+            }
+        }
+
+        # Verify we found expected symbols - at minimum we should have class and namespace
+        assertTrue(hasMyClass, "found MyClass symbol");
+        assertTrue(hasNamespace, "found MyNamespace symbol");
     }
 %endif
 }
