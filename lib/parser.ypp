@@ -1966,6 +1966,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <sclist>         superclass_list
 %type <sclist>         inheritance_list
 %type <sclnode>        superclass
+%type <nscope>         hashdecl_inherits
 %type <bcalist>        base_constructor_list
 %type <bcalist>        base_constructors
 %type <bcanode>        base_constructor
@@ -1979,7 +1980,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <methoddef>      outofline_methoddef
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash
+%destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::get(*$$)->deref(true, true); } class_attributes
 %destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING optname ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n
@@ -2721,17 +2722,35 @@ myexp:  /* empty */  { $$ = QoreSimpleValue(); $$.bits = 0; }
     ;
 
 hashdecl_def:
-    nsc_modifiers TOK_HASHDECL IDENTIFIER '{' hashdecl_attrs '}' {
+    nsc_modifiers TOK_HASHDECL IDENTIFIER hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        check_hashdeclmod(loc, $1, *($5));
-        $$ = new HashDeclDef(loc, $3, $5);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        check_hashdeclmod(loc, $1, *($6));
+        if ($4) {
+            $6->setParseParent($4);
+        }
+        $$ = new HashDeclDef(loc, $3, $6);
     }
-    | nsc_modifiers TOK_HASHDECL SCOPED_REF '{' hashdecl_attrs '}' {
+    | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        check_hashdeclmod(loc, $1, *($5));
-        $$ = new HashDeclDef(loc, $3, $5);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        check_hashdeclmod(loc, $1, *($6));
+        if ($4) {
+            $6->setParseParent($4);
+        }
+        $$ = new HashDeclDef(loc, $3, $6);
+    }
+    ;
+
+hashdecl_inherits:
+    TOK_INHERITS IDENTIFIER {
+        $$ = new NamedScope($2);
+    }
+    | TOK_INHERITS SCOPED_REF {
+        $$ = new NamedScope($2);
+    }
+    | /* empty */ {
+        $$ = nullptr;
     }
     ;
 

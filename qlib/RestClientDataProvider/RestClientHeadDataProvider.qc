@@ -70,7 +70,7 @@ public class RestClientHeadDataProvider inherits RestClientDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return RestClientDataProvider::makeRequest(rest, "HEAD", NOTHING, getRequestPath(req), req.hdr);
+        return makeRequestWithDebug("HEAD", NOTHING, getRequestPath(req), req.hdr);
     }
 
     #! Makes a request and returnscallwithoutbody

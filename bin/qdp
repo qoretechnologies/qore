@@ -3,7 +3,7 @@
 
 # @file qdp command-line interface for the DataProvider module
 
-/*  Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/*  Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -59,7 +59,7 @@
 class QdpCmd {
     public {
         #! Version string
-        const Version = "1.1.0";
+        const Version = "1.2.0";
 
         static HttpServer http;
 
@@ -309,6 +309,10 @@ class QdpCmd {
                 map provider = provider.getChildProviderEx($1), path;
             }
             provider.setLogger(logger);
+            # Set debug collector if verbose mode is enabled
+            if (opts.verbose) {
+                provider.setDebugCollector(new ConsoleDebugInfoCollector(opts.verbose, color));
+            }
             pctx = new DataProviderContextHelper(provider);
         } catch (hash<ExceptionInfo> ex) {
             if (!NoProviderCmds{ARGV[0]}) {
@@ -2088,21 +2092,25 @@ class MyObserver inherits Observer {
     }
 
     update(string event_id, hash<auto> data_) {
-        string msg = sprintf("received event %y:", event_id);
+        string msg = sprintf("received event %s:", QdpCmd::color.cyan(event_id));
         if (!data_) {
-            msg += " no data";
+            msg += " " + QdpCmd::color.dim("no data");
         }
         if (data_) {
-            msg += sprintf("\n%Y", data_);
+            msg += sprintf("\n%s", QdpCmd::color.formatValue(data_));
         }
         log("<", msg);
         if (info.connection_event == event_id) {
-            log("<", "connected to server");
+            string protocol = data_.http2 ? "HTTP/2" : "HTTP/1.1";
+            log("<", "%s (WebSocket over %s)", QdpCmd::color.success("connected to server"),
+                QdpCmd::color.info(protocol));
         } else if (info.disconnection_event == event_id) {
             if (info.supports_auto_reconnect) {
-                log("<", "disconnected from server%s", QdpCmd::ix ? "; trying to reconnect..." : "");
+                log("<", "%s%s", QdpCmd::color.warning("disconnected from server"),
+                    QdpCmd::ix ? "; trying to reconnect..." : "");
             } else {
-                log("<", "disconnected from server; auto_reconnect not enabled; exiting");
+                log("<", "%s; auto_reconnect not enabled; exiting",
+                    QdpCmd::color.error("disconnected from server"));
                 # restore original terminal attributes
                 stdin.setTerminalAttributes(TCSADRAIN, t);
                 exit(0);
@@ -2115,7 +2123,9 @@ class MyObserver inherits Observer {
         if (QdpCmd::ix) {
             stdout.print("\r");
         }
-        fmt = sprintf("%s %s ", inout, now_us().format("YYYY-MM-DD HH:mm:SS.xx")) + fmt;
+        string direction_color = inout == "<" ? QdpCmd::color.green(inout) : QdpCmd::color.yellow(inout);
+        string timestamp = QdpCmd::color.dim(now_us().format("YYYY-MM-DD HH:mm:SS.xx"));
+        fmt = sprintf("%s %s ", direction_color, timestamp) + fmt;
         string msg = vsprintf(fmt, argv);
 %ifndef NoLinenoise
         msg =~ s/\n/\015\012/g;
@@ -2342,6 +2352,11 @@ class InputHelper {
     }
 
     private formatConnectionInfo(hash<auto> info) {
+        # Format HTTP/2 info if available
+        if (info.hasKey("http2")) {
+            string protocol = info.http2 ? "HTTP/2 (RFC 8441)" : "HTTP/1.1";
+            printf("  %s: %s\n", QdpCmd::color.key("Protocol"), QdpCmd::color.info(protocol));
+        }
         # Format peer info (remote endpoint)
         if (info.peer) {
             string peer_str = info.peer.hostname ?? info.peer.address;

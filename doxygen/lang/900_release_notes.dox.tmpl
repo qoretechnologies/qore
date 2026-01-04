@@ -115,6 +115,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref AsyncApi "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
+      - new @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
+      - new @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT and \@WEBSOCKET documentation blocks
+      - new @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
+      - new \c qore-asyncapi-gen CLI tool for generating schemas from source files
     - @ref AsyncApiDataProvider "AsyncApiDataProvider" module
       - new module providing a data provider API for AsyncAPI schemas
       - protocol-agnostic design with pluggable transports (WebSocket, MQTT, Kafka, etc.)
@@ -148,6 +152,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - supports field refs (\c @field), comparison ops, logical ops, ranges, \c in, and regex
     - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
+      - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code
+      - new @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer" class for parsing \@SCHEMA documentation blocks
+      - new @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper" class for mapping Qore types to OpenAPI types
+      - new \c qore-openapi3-gen CLI tool for generating schemas from source files
     - @ref Qdx "Qdx" module
       - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
         (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)
@@ -590,6 +598,29 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
 
     @subsection qore_2_1_0_new_features New Features in Qore
     - new function @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()"
+    - <b>Hashdecl (typed hash) single inheritance</b>
+      - hashdecls now support single inheritance using the \c inherits keyword:
+        @code{.py}
+hashdecl BaseInfo {
+    string name;
+    int id;
+}
+
+hashdecl ExtendedInfo inherits BaseInfo {
+    date created;
+    *string description;
+}
+
+hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now()};
+        @endcode
+      - child hashdecls inherit all members from the parent
+      - member shadowing (child member with same name as parent member) is a parse error
+      - circular inheritance is detected and reported as a parse error
+      - type compatibility: derived hashdecl values can be assigned to parent hashdecl variables
+      - new public API: @ref TypedHashDecl::getParentHashDecl() "TypedHashDecl::getParentHashDecl()" and
+        @ref TypedHashDecl::inheritsFrom() "TypedHashDecl::inheritsFrom()"
+      - new reflection API: @ref Qore::Reflection::TypedHash::getParentTypedHash() "TypedHash::getParentTypedHash()"
+        and @ref Qore::Reflection::TypedHash::inheritsFrom() "TypedHash::inheritsFrom()"
 
     @subsection qore_2_1_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/Mime/html/index.html">Mime</a> module

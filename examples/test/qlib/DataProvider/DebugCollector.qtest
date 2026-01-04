@@ -1,0 +1,495 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class DebugCollectorTest
+
+#! Test data provider that supports debug collection
+class TestDebugDataProvider inherits AbstractDataProvider {
+    private {
+        string name;
+    }
+
+    constructor(string name = "test") {
+        self.name = name;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    *string getDesc() {
+        return "Test data provider for debug collection";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": name,
+            "desc": "Test data provider for debug collection",
+            "type": "TestDebugDataProvider",
+            "supports_children": False,
+        };
+    }
+
+    #! Simulates an operation and collects debug info
+    simulateOperation(string operation, *string error) {
+        date start_time = now_us();
+        sleep(1ms);  # Small delay to get measurable duration
+
+        hash<DataProviderDebugInfo> debug_info = <DataProviderDebugInfo>{
+            "operation": operation,
+            "start_time": start_time,
+            "end_time": now_us(),
+            "duration_ms": 1,
+            "url": "http://test.example.com/api",
+            "method": "GET",
+            "protocol": "HTTP/1.1",
+            "status_code": error ? 500 : 200,
+            "status_message": error ? "Internal Server Error" : "OK",
+            "request_headers": {"Content-Type": "application/json"},
+            "response_headers": {"Content-Type": "application/json"},
+            "request_body": '{"test": true}',
+            "response_body": '{"result": "success"}',
+            "request_content_type": "application/json",
+            "response_content_type": "application/json",
+            "request_size": 14,
+            "response_size": 20,
+            "http2": False,
+            "tls": False,
+            "error": error,
+        };
+
+        collectDebugInfo(debug_info);
+    }
+}
+
+#! Custom collector for testing
+class TestDebugCollector inherits AbstractDebugInfoCollector {
+    public {
+        list<hash<DataProviderDebugInfo>> collected();
+        int flush_count = 0;
+        int clear_count = 0;
+    }
+
+    collect(hash<DataProviderDebugInfo> info) {
+        collected += info;
+    }
+
+    flush() {
+        flush_count++;
+    }
+
+    clear() {
+        clear_count++;
+        collected = ();
+    }
+}
+
+public class DebugCollectorTest inherits QUnit::Test {
+    constructor() : Test("DebugCollector Test", "1.0") {
+        addTestCase("DataProviderDebugInfo hashdecl test", \debugInfoHashdeclTest());
+        addTestCase("AbstractDebugInfoCollector test", \abstractCollectorTest());
+        addTestCase("BufferedDebugInfoCollector test", \bufferedCollectorTest());
+        addTestCase("ConsoleDebugInfoCollector test", \consoleCollectorTest());
+        addTestCase("AbstractDataProvider debug methods test", \providerDebugMethodsTest());
+        addTestCase("Debug collection integration test", \debugCollectionIntegrationTest());
+
+        set_return_value(main());
+    }
+
+    #! Test DataProviderDebugInfo hashdecl
+    debugInfoHashdeclTest() {
+        # Test creating debug info with all fields
+        hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+            "operation": DPDI_OP_REQUEST,
+            "start_time": now_us(),
+            "end_time": now_us(),
+            "duration_ms": 100,
+            "url": "https://api.example.com/v1/users",
+            "method": "POST",
+            "protocol": "HTTP/2",
+            "status_code": 201,
+            "status_message": "Created",
+            "request_headers": {"Authorization": "Bearer token123"},
+            "response_headers": {"Content-Type": "application/json"},
+            "request_body": '{"name": "test"}',
+            "response_body": '{"id": 1}',
+            "request_content_type": "application/json",
+            "response_content_type": "application/json",
+            "request_size": 16,
+            "response_size": 8,
+            "ws_opcode": NOTHING,
+            "ws_message_type": NOTHING,
+            "http2": True,
+            "h2_stream_id": 1,
+            "tls": True,
+            "tls_version": "TLSv1.3",
+            "peer_info": {"address": "192.168.1.1"},
+            "socket_info": {"port": 443},
+            "error": NOTHING,
+            "info": {"custom": "data"},
+        };
+
+        assertEq(DPDI_OP_REQUEST, info.operation);
+        assertEq("POST", info.method);
+        assertEq(201, info.status_code);
+        assertEq(True, info.http2);
+        assertEq(True, info.tls);
+        assertEq("TLSv1.3", info.tls_version);
+
+        # Test operation type constants
+        assertEq("request", DPDI_OP_REQUEST);
+        assertEq("response", DPDI_OP_RESPONSE);
+        assertEq("connect", DPDI_OP_CONNECT);
+        assertEq("disconnect", DPDI_OP_DISCONNECT);
+        assertEq("send", DPDI_OP_SEND);
+        assertEq("receive", DPDI_OP_RECEIVE);
+
+        # Test with minimal fields
+        hash<DataProviderDebugInfo> minimal = <DataProviderDebugInfo>{
+            "operation": DPDI_OP_CONNECT,
+            "start_time": now_us(),
+        };
+        assertEq(DPDI_OP_CONNECT, minimal.operation);
+        assertEq(NOTHING, minimal.end_time);
+        assertEq(NOTHING, minimal.url);
+    }
+
+    #! Test AbstractDebugInfoCollector
+    abstractCollectorTest() {
+        TestDebugCollector collector();
+
+        # Test collect
+        hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+            "operation": DPDI_OP_REQUEST,
+            "start_time": now_us(),
+        };
+        collector.collect(info);
+        assertEq(1, collector.collected.size());
+        assertEq(DPDI_OP_REQUEST, collector.collected[0].operation);
+
+        # Test flush
+        collector.flush();
+        assertEq(1, collector.flush_count);
+
+        # Test clear
+        collector.clear();
+        assertEq(1, collector.clear_count);
+        assertEq(0, collector.collected.size());
+    }
+
+    #! Test BufferedDebugInfoCollector
+    bufferedCollectorTest() {
+        # Test unlimited buffer
+        {
+            BufferedDebugInfoCollector collector();
+
+            for (int i = 0; i < 100; i++) {
+                collector.collect(<DataProviderDebugInfo>{
+                    "operation": DPDI_OP_REQUEST,
+                    "start_time": now_us(),
+                    "duration_ms": i,
+                });
+            }
+
+            assertEq(100, collector.size());
+            list<hash<DataProviderDebugInfo>> all = collector.getAll();
+            assertEq(100, all.size());
+            assertEq(0, all[0].duration_ms);
+            assertEq(99, all[99].duration_ms);
+        }
+
+        # Test limited buffer
+        {
+            BufferedDebugInfoCollector collector(10);
+
+            for (int i = 0; i < 25; i++) {
+                collector.collect(<DataProviderDebugInfo>{
+                    "operation": DPDI_OP_REQUEST,
+                    "start_time": now_us(),
+                    "duration_ms": i,
+                });
+            }
+
+            assertEq(10, collector.size());
+            list<hash<DataProviderDebugInfo>> all = collector.getAll();
+            assertEq(10, all.size());
+            # Oldest entries should have been removed
+            assertEq(15, all[0].duration_ms);
+            assertEq(24, all[9].duration_ms);
+        }
+
+        # Test getLast
+        {
+            BufferedDebugInfoCollector collector();
+
+            for (int i = 0; i < 10; i++) {
+                collector.collect(<DataProviderDebugInfo>{
+                    "operation": DPDI_OP_REQUEST,
+                    "start_time": now_us(),
+                    "duration_ms": i,
+                });
+            }
+
+            list<hash<DataProviderDebugInfo>> last1 = collector.getLast();
+            assertEq(1, last1.size());
+            assertEq(9, last1[0].duration_ms);
+
+            list<hash<DataProviderDebugInfo>> last3 = collector.getLast(3);
+            assertEq(3, last3.size());
+            assertEq(7, last3[0].duration_ms);
+            assertEq(9, last3[2].duration_ms);
+
+            # Request more than available
+            list<hash<DataProviderDebugInfo>> last20 = collector.getLast(20);
+            assertEq(10, last20.size());
+        }
+
+        # Test clear
+        {
+            BufferedDebugInfoCollector collector();
+            collector.collect(<DataProviderDebugInfo>{
+                "operation": DPDI_OP_REQUEST,
+                "start_time": now_us(),
+            });
+            assertEq(1, collector.size());
+            collector.clear();
+            assertEq(0, collector.size());
+        }
+
+        # Test thread safety (basic)
+        {
+            BufferedDebugInfoCollector collector();
+            Counter cnt(10);
+
+            for (int i = 0; i < 10; i++) {
+                background sub(int idx) {
+                    collector.collect(<DataProviderDebugInfo>{
+                        "operation": DPDI_OP_REQUEST,
+                        "start_time": now_us(),
+                        "duration_ms": idx,
+                    });
+                    cnt.dec();
+                }(i);
+            }
+
+            cnt.waitForZero();
+            assertEq(10, collector.size());
+        }
+    }
+
+    #! Test ConsoleDebugInfoCollector
+    consoleCollectorTest() {
+        # Create a temp file path to capture output
+        string tmp_path = sprintf("/tmp/debug-collector-test-%d-%d.txt", getpid(), clock_getmicros());
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+
+            # Test basic output (verbosity 1)
+            ConsoleDebugInfoCollector collector(1, NOTHING, f);
+
+            hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+                "operation": DPDI_OP_RESPONSE,
+                "start_time": now_us(),
+                "end_time": now_us(),
+                "duration_ms": 150,
+                "url": "https://api.example.com/users",
+                "method": "GET",
+                "protocol": "HTTP/1.1",
+                "status_code": 200,
+                "status_message": "OK",
+            };
+
+            collector.collect(info);
+            f.close();
+        }
+
+        # Read and verify output
+        string output = File::readTextFile(tmp_path);
+        assertTrue(output.find("GET") >= 0, "Output should contain GET");
+        assertTrue(output.find("200") >= 0, "Output should contain status code");
+        assertTrue(output.find("150ms") >= 0, "Output should contain duration");
+
+        # Test verbosity 2 (with headers)
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+
+            ConsoleDebugInfoCollector collector(2, NOTHING, f);
+
+            hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+                "operation": DPDI_OP_RESPONSE,
+                "start_time": now_us(),
+                "end_time": now_us(),
+                "duration_ms": 100,
+                "url": "https://api.example.com/data",
+                "method": "POST",
+                "status_code": 201,
+                "request_headers": {"Content-Type": "application/json", "Authorization": "Bearer xyz"},
+                "response_headers": {"Content-Type": "application/json"},
+            };
+
+            collector.collect(info);
+            f.close();
+        }
+
+        output = File::readTextFile(tmp_path);
+        assertTrue(output.find("Request Headers") >= 0, "Output should contain Request Headers");
+        assertTrue(output.find("Content-Type") >= 0, "Output should contain header name");
+
+        # Test connect operation
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+
+            ConsoleDebugInfoCollector collector(1, NOTHING, f);
+
+            hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+                "operation": DPDI_OP_CONNECT,
+                "start_time": now_us(),
+                "duration_ms": 50,
+                "url": "wss://socket.example.com",
+                "protocol": "HTTP/2",
+                "http2": True,
+                "tls": True,
+                "tls_version": "TLSv1.3",
+            };
+
+            collector.collect(info);
+            f.close();
+        }
+
+        output = File::readTextFile(tmp_path);
+        assertTrue(output.find("CONNECTED") >= 0, "Output should contain CONNECTED");
+        assertTrue(output.find("HTTP/2") >= 0, "Output should contain HTTP/2");
+        assertTrue(output.find("TLS") >= 0, "Output should contain TLS");
+
+        # Test WebSocket send operation
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+
+            ConsoleDebugInfoCollector collector(1, NOTHING, f);
+
+            hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+                "operation": DPDI_OP_SEND,
+                "start_time": now_us(),
+                "duration_ms": 5,
+                "ws_message_type": "text",
+                "request_size": 256,
+            };
+
+            collector.collect(info);
+            f.close();
+        }
+
+        output = File::readTextFile(tmp_path);
+        assertTrue(output.find("SEND") >= 0, "Output should contain SEND");
+        assertTrue(output.find("text") >= 0, "Output should contain message type");
+        assertTrue(output.find("256 bytes") >= 0, "Output should contain size");
+
+        # Test error output
+        {
+            File f();
+            f.open2(tmp_path, O_CREAT | O_WRONLY | O_TRUNC);
+
+            ConsoleDebugInfoCollector collector(1, NOTHING, f);
+
+            hash<DataProviderDebugInfo> info = <DataProviderDebugInfo>{
+                "operation": DPDI_OP_RESPONSE,
+                "start_time": now_us(),
+                "method": "POST",
+                "url": "https://api.example.com/fail",
+                "status_code": 500,
+                "status_message": "Internal Server Error",
+                "error": "Connection reset by peer",
+            };
+
+            collector.collect(info);
+            f.close();
+        }
+
+        output = File::readTextFile(tmp_path);
+        assertTrue(output.find("500") >= 0, "Output should contain error status");
+        assertTrue(output.find("Error") >= 0, "Output should contain Error label");
+        assertTrue(output.find("Connection reset") >= 0, "Output should contain error message");
+    }
+
+    #! Test AbstractDataProvider debug methods
+    providerDebugMethodsTest() {
+        TestDebugDataProvider provider();
+
+        # Initially no collector
+        assertEq(NOTHING, provider.getDebugCollector());
+        assertEq(False, provider.debugCollectionEnabled());
+
+        # Set collector
+        BufferedDebugInfoCollector collector();
+        provider.setDebugCollector(collector);
+
+        assertEq(True, provider.debugCollectionEnabled());
+        assertEq(collector, provider.getDebugCollector());
+
+        # Clear collector
+        provider.setDebugCollector();
+        assertEq(NOTHING, provider.getDebugCollector());
+        assertEq(False, provider.debugCollectionEnabled());
+    }
+
+    #! Test debug collection integration
+    debugCollectionIntegrationTest() {
+        TestDebugDataProvider provider();
+        BufferedDebugInfoCollector collector();
+
+        provider.setDebugCollector(collector);
+
+        # Simulate multiple operations
+        provider.simulateOperation(DPDI_OP_REQUEST);
+        provider.simulateOperation(DPDI_OP_RESPONSE);
+        provider.simulateOperation(DPDI_OP_RESPONSE, "Test error");
+
+        assertEq(3, collector.size());
+
+        list<hash<DataProviderDebugInfo>> all = collector.getAll();
+
+        # Check first operation
+        assertEq(DPDI_OP_REQUEST, all[0].operation);
+        assertEq(200, all[0].status_code);
+        assertEq(NOTHING, all[0].error);
+
+        # Check second operation
+        assertEq(DPDI_OP_RESPONSE, all[1].operation);
+        assertEq(200, all[1].status_code);
+
+        # Check error operation
+        assertEq(DPDI_OP_RESPONSE, all[2].operation);
+        assertEq(500, all[2].status_code);
+        assertEq("Test error", all[2].error);
+
+        # Test getLast
+        list<hash<DataProviderDebugInfo>> last = collector.getLast();
+        assertEq(1, last.size());
+        assertEq("Test error", last[0].error);
+
+        # Test clear
+        collector.clear();
+        assertEq(0, collector.size());
+
+        # Verify operations still work after clear
+        provider.simulateOperation(DPDI_OP_CONNECT);
+        assertEq(1, collector.size());
+    }
+}

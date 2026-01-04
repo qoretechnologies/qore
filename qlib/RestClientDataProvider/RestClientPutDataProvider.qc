@@ -70,7 +70,7 @@ public class RestClientPutDataProvider inherits RestClientDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return RestClientDataProvider::makeRequest(rest, "PUT", req.body, getRequestPath(req), req.hdr);
+        return makeRequestWithDebug("PUT", req.body, getRequestPath(req), req.hdr);
     }
 
     #! Returns the description of a successful request message, if any

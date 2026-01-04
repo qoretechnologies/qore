@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -47,35 +47,46 @@ public:
     //! Name of the hashdecl.
     ASTName name;
 
+    //! Parent hashdecl name (for single inheritance), or nullptr if none.
+    ASTName* parent = nullptr;
+
     //! Member declarations.
     std::vector<ASTHashMemberDeclaration*> declarations;
 
 public:
     ASTHashDeclaration(ASTModifiers mods,
                        ASTName&& n,
+                       ASTName* parentName = nullptr,
                        std::vector<ASTHashMemberDeclaration*>* decllist = nullptr) :
         ASTDeclaration(),
         modifiers(mods),
-        name(std::move(n))
+        name(std::move(n)),
+        parent(parentName)
     {
-        if (decllist)
+        if (decllist) {
             declarations.swap(*decllist);
+        }
     }
 
     ASTHashDeclaration(ASTModifiers mods,
                        const ASTName& n,
+                       ASTName* parentName = nullptr,
                        std::vector<ASTHashMemberDeclaration*>* decllist = nullptr) :
         ASTDeclaration(),
         modifiers(mods),
-        name(n)
+        name(n),
+        parent(parentName)
     {
-        if (decllist)
+        if (decllist) {
             declarations.swap(*decllist);
+        }
     }
 
     virtual ~ASTHashDeclaration() {
-        for (size_t i = 0, count = declarations.size(); i < count; i++)
+        delete parent;
+        for (size_t i = 0, count = declarations.size(); i < count; i++) {
             delete declarations[i];
+        }
         declarations.clear();
     }
 

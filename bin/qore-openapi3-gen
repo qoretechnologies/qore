@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file qore-openapi3-gen CLI tool for generating OpenAPI3 schemas from Qore source files
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires OpenApi3
+%requires Util
+
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
+
+%exec-class OpenApi3GenCmd
+
+class OpenApi3GenCmd {
+    public {
+        #! program options
+        const Opts = {
+            "output":      "o,output=s",
+            "format":      "f,format=s",
+            "title":       "t,title=s",
+            "version":     "V,api-version=s",
+            "description": "d,description=s",
+            "server":      "s,server=s@",
+            "basepath":    "b,base-path=s",
+            "verbose":     "v,verbose:i+",
+            "help":        "h,help",
+        };
+
+        const DefaultFormat = "yaml";
+        const Version = "1.0";
+    }
+
+    private {
+        hash<auto> opt;
+    }
+
+    constructor() {
+        GetOpt g(Opts);
+        opt = g.parse3(\ARGV);
+
+        if (opt.help) {
+            usage();
+            exit(0);
+        }
+
+        if (!ARGV) {
+            stderr.printf("Error: no source files specified\n\n");
+            usage();
+            exit(1);
+        }
+
+        # Check format option
+        string fmt = opt.format ?? DefaultFormat;
+        if (fmt != "yaml" && fmt != "json") {
+            stderr.printf("Error: invalid format '%s', must be 'yaml' or 'json'\n", fmt);
+            exit(1);
+        }
+
+%ifdef NoYaml
+        if (fmt == "yaml") {
+            stderr.printf("Error: YAML format requested but yaml module is not available\n");
+            exit(1);
+        }
+%endif
+
+        try {
+            generateSchema(cast<list<string>>(ARGV));
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("Error: %s: %s\n", ex.err, ex.desc);
+            if (opt.verbose) {
+                stderr.printf("%s\n", get_exception_string(ex));
+            }
+            exit(1);
+        }
+    }
+
+    private usage() {
+        printf("qore-openapi3-gen v%s - Generate OpenAPI 3 schemas from Qore source files\n\n", Version);
+        printf("Usage: qore-openapi3-gen [options] <source-files...>\n\n");
+        printf("Options:\n");
+        printf("  -o, --output=FILE        Output file (default: stdout)\n");
+        printf("  -f, --format=FORMAT      Output format: yaml|json (default: yaml)\n");
+        printf("  -t, --title=TITLE        API title (default: 'API')\n");
+        printf("  -V, --api-version=VER    API version (default: '1.0.0')\n");
+        printf("  -d, --description=DESC   API description\n");
+        printf("  -s, --server=URL         Server URL (can be specified multiple times)\n");
+        printf("  -b, --base-path=PATH     Base path prefix for all endpoints\n");
+        printf("  -v, --verbose            Increase verbosity\n");
+        printf("  -h, --help               Show this help message\n\n");
+        printf("The tool parses @SCHEMA blocks in Qore source files and generates an\n");
+        printf("OpenAPI 3.0.3 specification.\n\n");
+        printf("Example:\n");
+        printf("  qore-openapi3-gen -t 'My API' -V '2.0' -o api.yaml src/*.qclass\n");
+    }
+
+    private generateSchema(list<string> files) {
+        # Filter out empty strings
+        files = select files, $1.val();
+        # Build API info
+        hash<auto> api_info = {
+            "title": opt.title ?? "API",
+            "version": opt{"api-version"} ?? opt.version ?? "1.0.0",
+        };
+
+        if (opt.description) {
+            api_info.description = opt.description;
+        }
+
+        if (opt.server) {
+            api_info.servers = map {"url": $1}, opt.server;
+        }
+
+        # Create generator
+        OpenApi3::OpenApi3SchemaGenerator gen(api_info);
+
+        # Process each source file
+        int total_methods = 0;
+        foreach string filepath in (files) {
+            if (opt.verbose) {
+                stderr.printf("Processing: %s\n", filepath);
+            }
+
+            if (!is_readable(filepath)) {
+                stderr.printf("Warning: cannot read file '%s', skipping\n", filepath);
+                continue;
+            }
+
+            string content = ReadOnlyFile::readTextFile(filepath);
+            list<hash<OpenApi3::RestMethodInfo>> methods = OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(content);
+
+            if (opt.verbose > 1) {
+                stderr.printf("  Found %d methods\n", methods.size());
+            }
+
+            foreach hash<OpenApi3::RestMethodInfo> method in (methods) {
+                string path = method.path;
+                if (opt.basepath) {
+                    path = opt.basepath + path;
+                }
+                gen.addMethod(path, method);
+                total_methods++;
+            }
+        }
+
+        if (opt.verbose) {
+            stderr.printf("Total methods processed: %d\n", total_methods);
+        }
+
+        # Generate output
+        string fmt = opt.format ?? DefaultFormat;
+        string output;
+
+        if (fmt == "yaml") {
+%ifdef NoYaml
+            throw "YAML-ERROR", "YAML format requested but yaml module is not available";
+%else
+            output = gen.toYaml();
+%endif
+        } else {
+            output = gen.toJson();
+        }
+
+        # Write output
+        if (opt.output) {
+            File f();
+            f.open(opt.output, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(output);
+            f.close();
+            if (opt.verbose) {
+                stderr.printf("Output written to: %s\n", opt.output);
+            }
+        } else {
+            print(output);
+        }
+    }
+}

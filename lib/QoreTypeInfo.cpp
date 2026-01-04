@@ -1360,11 +1360,23 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     a specific value type
                 */
                 case QTS_HASHDECL: {
-                    qore_type_result_e rv =
-                        typed_hash_decl_private::get(*t.u.hd)->parseEqual(*typed_hash_decl_private::get(*u.hd))
-                            ? QTI_IDENT
-                            : QTI_NOT_EQUAL;
-                    max_result = rv;
+                    const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                    const typed_hash_decl_private* source = typed_hash_decl_private::get(*t.u.hd);
+                    qore_type_result_e rv;
+                    if (source->parseEqual(*target)) {
+                        // Exact match
+                        rv = QTI_IDENT;
+                    } else if (source->isDescendantOf(*target)) {
+                        // Source is a derived hashdecl of target - compatible
+                        rv = QTI_AMBIGUOUS;
+                    } else if (target->isDescendantOf(*source)) {
+                        // Target is a derived hashdecl of source - may not match at runtime
+                        may_not_match = true;
+                        rv = QTI_AMBIGUOUS;
+                    } else {
+                        rv = QTI_NOT_EQUAL;
+                    }
+                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
                     return rv;
                 }
                 case QTS_TYPE:
@@ -1852,17 +1864,18 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             break;
         }
         case QTS_HASHDECL: {
+            const TypedHashDecl* hd = nullptr;
             if (t == NT_HASH) {
-                const TypedHashDecl* hd = n.get<const QoreHashNode>()->getHashDecl();
-                if (hd && typed_hash_decl_private::get(*hd)->equal(*typed_hash_decl_private::get(*u.hd))) {
-                    ok = true;
-                    break;
-                }
+                hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (t == NT_WEAKREF_HASH) {
-                const TypedHashDecl* hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
-                if (hd && typed_hash_decl_private::get(*hd)->equal(*typed_hash_decl_private::get(*u.hd))) {
+                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+            }
+            if (hd) {
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                // Accept if same hashdecl or source is a descendant of target
+                if (source->equal(*target) || source->isDescendantOf(*target)) {
                     ok = true;
-                    break;
                 }
             }
             break;
@@ -2051,8 +2064,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             } else if (ot == NT_WEAKREF_HASH) {
                 hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
             }
-            if (hd && typed_hash_decl_private::get(*u.hd)->equal(*typed_hash_decl_private::get(*hd))) {
-                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            if (hd) {
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                if (source->equal(*target)) {
+                    return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                // Accept if source is a descendant of target (derived → base)
+                if (source->isDescendantOf(*target)) {
+                    return QTI_AMBIGUOUS;
+                }
             }
             return QTI_NOT_EQUAL;
         }
