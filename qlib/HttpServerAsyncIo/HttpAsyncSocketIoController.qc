@@ -701,6 +701,14 @@ public class HttpAsyncSocketIoController {
         bool is_websocket_connect = request.method == "CONNECT" &&
             request.headers.":protocol" == "websocket";
 
+        # Parse accept-encoding header for compression support
+        *list<string> accept_encoding;
+        if (request.headers."accept-encoding") {
+            # Parse comma-separated list, strip quality values (e.g., "gzip, br;q=1.0")
+            accept_encoding = map trim($1.split(";")[0]),
+                request.headers."accept-encoding".split(",");
+        }
+
         # Convert HTTP/2 request to HttpConnectionInfo format
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
@@ -720,6 +728,7 @@ public class HttpAsyncSocketIoController {
                 "is_websocket_connect": is_websocket_connect,
                 "push_resource": h2op.getPushResourceCallback(),
                 "h2op": h2op,  # Pass for startSendPushedResponse()
+                "accept-encoding": accept_encoding,
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
