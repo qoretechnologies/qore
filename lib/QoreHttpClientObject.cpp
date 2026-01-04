@@ -593,12 +593,24 @@ struct qore_httpclient_priv {
                     if (http2_mode == HTTP2_MODE_REQUIRED) {
                         // HTTP/2 only
                         protocols->push(new QoreStringNode("h2"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
                     } else {
                         // Auto mode: prefer h2, fall back to http/1.1
                         protocols->push(new QoreStringNode("h2"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
                         protocols->push(new QoreStringNode("http/1.1"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
                     }
                     msock->socket->setAlpnProtocols(*protocols, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
                 }
             }
         }
