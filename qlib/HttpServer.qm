@@ -443,6 +443,13 @@ public hashdecl HttpServerOptionInfo {
         using non-blocking I/O, then dispatches request processing to the ThreadPool.
         This allows handling many more concurrent connections with fewer threads.
 
+        @note HTTP/2 support requires async mode to be enabled. When \c async_mode is \c False,
+        the server only supports HTTP/1.x regardless of the \c http_version setting on listeners.
+        This is because HTTP/2 requires:
+        - ALPN (Application-Layer Protocol Negotiation) during the TLS handshake
+        - Non-blocking I/O for HTTP/2 frame processing
+        - Event-driven handling for stream multiplexing
+
         @since HttpServer 1.5
     */
     bool async_mode = True;
@@ -2130,6 +2137,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
             # compress body if eligible for compression
             if (rv.body && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold) {
+                int orig_size = rv.body.size();
                 if (cx.encoding == "br") {
                     rv.hdr."Content-Encoding" = "br";
                     rv.body = brotli(rv.body);
@@ -2145,6 +2153,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 } else if (cx.encoding == "bzip2") {
                     rv.hdr."Content-Encoding" = "bzip2";
                     rv.body = bzip2(rv.body);
+                }
+                if (rv.hdr."Content-Encoding") {
+                    listener.log("cid %d: HTTP/2=%y compressed %s: %d -> %d bytes", cx.id,
+                        cx."header-info".http2, rv.hdr."Content-Encoding", orig_size, rv.body.size());
                 }
             }
 
@@ -2291,11 +2303,37 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         try {
-            if (!chunked) {
-                # send a normal monolithic response
+            # Check if this is an HTTP/2 connection
+            if (cx."header-info".http2) {
+                int stream_id = cx."header-info".stream_id;
+                # HTTP/2: read stream data into memory if needed
+                auto send_body = body;
+                if (chunked && body instanceof InputStream) {
+                    send_body = body.read(-1);
+                }
+                # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
+                hash<auto> hdr = rv.hdr ?? {};
+                remove hdr."Transfer-Encoding";
+                # Set Content-Length for HTTP/2 if body exists
+                auto final_body = send_body ?? rv.body;
+                if (final_body && !hdr."Content-Length") {
+                    hdr."Content-Length" = string(final_body.size());
+                }
+                # Send HTTP/2 response using poll operation
+                AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
+                    final_body);
+                while (True) {
+                    *hash<SocketPollInfo> info = op.continuePoll();
+                    if (!info) {
+                        break;
+                    }
+                    Socket::poll((info,), 10s);
+                }
+            } else if (!chunked) {
+                # HTTP/1.x: send a normal monolithic response
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
             } else {
-                # send a chunked response stream
+                # HTTP/1.x: send a chunked response stream
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, body);
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -2814,10 +2852,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Returns the HTTP version mode for this listener
     /** @return the HTTP version mode: "auto", "1.0", "1.1", or "2.0"
 
+        @note If get_global_http2_mode() returns "disabled", HTTP/2 is not offered even if the listener is
+        configured with "auto" or "2.0"
+
         @since HttpServer 1.6
     */
     string getHttpVersion() {
-        return opts.http_version ?? "auto";
+        string http_version = opts.http_version ?? "auto";
+        # Check global HTTP/2 mode - if disabled, don't offer HTTP/2
+        if (http_version == "auto" || http_version == "2.0" || http_version == "2") {
+            if (get_global_http2_mode() == "disabled") {
+                return "1.1";
+            }
+        }
+        return http_version;
     }
 
     auto removeUserThreadContext(*string k) {
@@ -3466,13 +3514,35 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @assert(response.code, "response.code must be set");
         @debug {
             auto body_size = response.body ? response.body.size() : 0;
-            log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y", response.code,
-                body_size, response.chunked);
+            log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y http2=%y", response.code,
+                body_size, response.chunked, response.cx."header-info".http2);
         }
         try {
-            # Send response (chunked data has already been read into memory in async_response)
-            s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
-                response.hdr ?? {}, response.body);
+            # Check if this is an HTTP/2 connection
+            if (response.cx."header-info".http2) {
+                int stream_id = response.cx."header-info".stream_id;
+                # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
+                hash<auto> hdr = response.hdr ?? {};
+                remove hdr."Transfer-Encoding";
+                # Set Content-Length for HTTP/2 if body exists
+                if (response.body && !hdr."Content-Length") {
+                    hdr."Content-Length" = string(response.body.size());
+                }
+                # Send HTTP/2 response using poll operation
+                AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
+                    response.body);
+                while (True) {
+                    *hash<SocketPollInfo> info = op.continuePoll();
+                    if (!info) {
+                        break;
+                    }
+                    Socket::poll((info,), 10s);
+                }
+            } else {
+                # Send HTTP/1.x response (chunked data has already been read into memory in async_response)
+                s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
+                    response.hdr ?? {}, response.body);
+            }
         } catch (hash<ExceptionInfo> ex) {
             log("ERROR: Failed to send response synchronously: %s: %s", ex.err, ex.desc);
             rethrow;
@@ -3524,10 +3594,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 date start = now_us();
-                while (!s.isDataAvailable(poll_interval)) {
-                    if (!s.isOpen()) {
-                        return;
-                    }
+                while (s.isOpen() && !s.isDataAvailable(poll_interval)) {
                     # Check for idle timeout only if persistence has been released
                     # (persistent connections have no idle timeout while active)
                     if (!phi.handler || !phi.handler.isPersistent()) {
@@ -4324,18 +4391,24 @@ class HttpServerIoController {
         }
 
         date now = now_us();
+        # Check if this is an HTTP/2 connection - preserve HTTP/2 state
+        bool is_http2 = cx."is_http2" || cx."header-info".http2;
         connections{key} = <HttpConnectionPollInfo>{
             "sock": sock,
             "spop": NOTHING,
-            "state": "idle",
+            "state": is_http2 ? "http2" : "idle",
             "timeout_date": now + server.getTtl(),
             "start": now,
             "listener_id": listener.getId(),
             "listener": listener,
             "cx": cx,
             "phi": phi,
+            "is_http2": is_http2,
         };
-        @assert(connections{key}.state == "idle", "new connection must be in idle state");
+        @assert(connections{key}.state == (is_http2 ? "http2" : "idle"), "new connection must be in correct state");
+
+        @debug(log(LoggerLevel::DEBUG, "returnConnection(): connection %y state=%y is_http2=%y", key,
+            connections{key}.state, is_http2));
 
         if (tid) {
             sendCmd(IO_RETURN_CONNECTION, key);
@@ -4369,7 +4442,6 @@ class HttpServerIoController {
         @assert(response.code >= 100 && response.code < 600, "response code must be valid HTTP status");
         AutoLock al(m);
         string key = sock.uniqueHash();
-        @debug(log(LoggerLevel::DEBUG, "queueResponse(): queuing response %d for %y", response.code, key));
 
         # Remove any existing connection entry (connection might be in "dispatched" state)
         remove connections{key};
@@ -4507,6 +4579,9 @@ class HttpServerIoController {
                                 if (!poll_timeout || conn_timeout < poll_timeout) {
                                     poll_timeout = conn_timeout;
                                 }
+                            } else if (!cinfo.sock.isOpen()) {
+                                # Socket was closed - mark for removal
+                                to_remove{key} = True;
                             }
                         } catch (hash<ExceptionInfo> ex) {
                             log(LoggerLevel::ERROR, "Error with connection %y: %s: %s", key, ex.err, ex.desc);
@@ -4530,10 +4605,17 @@ class HttpServerIoController {
                 # Cap poll timeout at 100ms for responsiveness
                 timeout_ms = min(timeout_ms, 100);
 
-                # Poll all sockets
-                @debug(log(LoggerLevel::DEBUG, "ioThread: polling %d items, timeout=%d", poll_list.size(), timeout_ms));
-                Socket::poll(poll_list, timeout_ms);
-                @debug(log(LoggerLevel::DEBUG, "ioThread: poll returned"));
+                # Filter out any closed sockets from poll_list before calling poll
+                # This handles the race condition where a socket closes between building
+                # the poll_list and calling Socket::poll()
+                poll_list = map $1, poll_list, !($1.socket instanceof Socket) || cast<Socket>($1.socket).isOpen();
+
+                # Poll all sockets (skip if empty after filtering)
+                if (poll_list) {
+                    @debug(log(LoggerLevel::DEBUG, "ioThread: polling %d items, timeout=%d", poll_list.size(), timeout_ms));
+                    Socket::poll(poll_list, timeout_ms);
+                    @debug(log(LoggerLevel::DEBUG, "ioThread: poll returned"));
+                }
 
                 # Process any commands
                 if (processCommands()) {
@@ -4541,7 +4623,13 @@ class HttpServerIoController {
                 }
 
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error in I/O thread: %s", get_exception_string(ex));
+                # Handle SOCKET-NOT-OPEN gracefully - this can happen in rare race conditions
+                # where a socket closes between our isOpen() check and the poll() call
+                if (ex.err == "SOCKET-NOT-OPEN") {
+                    @debug(log(LoggerLevel::DEBUG, "Socket closed during poll preparation: %s", ex.desc));
+                } else {
+                    log(LoggerLevel::ERROR, "Error in I/O thread: %s", get_exception_string(ex));
+                }
             }
         }
 
@@ -4557,6 +4645,11 @@ class HttpServerIoController {
         SSL handshake is handled by HttpAcceptPollOperation for new connections
     */
     private *hash<SocketPollInfo> getConnectionPollInfo(string key, hash<HttpConnectionPollInfo> cinfo) {
+        # First check if socket is still open (client may have closed connection)
+        if (!cinfo.sock.isOpen()) {
+            return NOTHING;
+        }
+
         # Initialize poll operation if needed
         if (!cinfo.spop) {
             switch (cinfo.state) {
@@ -4586,11 +4679,22 @@ class HttpServerIoController {
                     # Check if this is an HTTP/2 response
                     if (cinfo.response.cx."header-info".http2) {
                         int stream_id = cinfo.response.cx."header-info".stream_id;
-                        @debug(log(LoggerLevel::DEBUG, "sending HTTP/2 response for stream %d", stream_id));
+                        int body_size = cinfo.response.body ? cinfo.response.body.size() : 0;
+                        log(LoggerLevel::DEBUG, "HTTP/2 response: stream=%d, code=%d, body_size=%d",
+                            stream_id, cinfo.response.code, body_size);
+                        # Remove Transfer-Encoding header - HTTP/2 uses DATA frames, not chunked encoding
+                        hash<auto> hdr = cinfo.response.hdr ?? {};
+                        remove hdr."Transfer-Encoding";
+                        # Set Content-Length for HTTP/2 if body exists (helps clients know expected size)
+                        if (cinfo.response.body && !hdr."Content-Length") {
+                            hdr."Content-Length" = string(cinfo.response.body.size());
+                        }
+                        log(LoggerLevel::DEBUG, "HTTP/2 response: starting send, Content-Length=%y",
+                            hdr."Content-Length");
                         cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttp2Response(
                             stream_id,
                             cinfo.response.code,
-                            cinfo.response.hdr,
+                            hdr,
                             cinfo.response.body,
                         );
                         # Mark this as an HTTP/2 connection for proper keep-alive handling
@@ -4633,7 +4737,8 @@ class HttpServerIoController {
             }
 
             # Check if data is available and we should continue immediately
-            if (!cinfo.sock.isDataAvailable(0ms)) {
+            # First check if socket is still open (client may have closed connection)
+            if (!cinfo.sock.isOpen() || !cinfo.sock.isDataAvailable(0ms)) {
                 break;
             }
         }
@@ -4776,16 +4881,28 @@ class HttpServerIoController {
                     hdr.path = request.path;
                     hdr.":authority" = request.authority;
                     hdr.":scheme" = request.scheme;
+                    # Map :authority to host for HTTP/1.x compatibility (many handlers expect host header)
+                    hdr.host = request.authority;
+                    # Set HTTP version for logging and version checks
+                    hdr.http_version = "HTTP/2";
 
                     # Store request info
                     connections{key}.hdr = hdr;
                     # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
                     bool is_ws_connect = (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
+                    # Parse accept-encoding header for compression support
+                    *list<string> accept_encoding;
+                    if (hdr."accept-encoding") {
+                        # Parse comma-separated list, strip quality values (e.g., "gzip, br;q=1.0")
+                        accept_encoding = map trim($1.split(";")[0]),
+                            hdr."accept-encoding".split(",");
+                    }
                     connections{key}.header_info = {
                         "http2": True,
                         "stream_id": request.stream_id,
                         "is_websocket_connect": is_ws_connect,
                         "body": request.body,  # HTTP/2 body is already read by poll operation
+                        "accept-encoding": accept_encoding,
                     };
 
                     # Dispatch to ThreadPool for handling
@@ -4881,8 +4998,9 @@ class HttpServerIoController {
 
     #! Handles completion of sending a response
     private handleSendComplete(string key, hash<HttpConnectionPollInfo> cinfo) {
-        log(LoggerLevel::DEBUG, "Response sent for %y (close: %y, is_http2: %y)", key, cinfo.response.close,
-            cinfo.is_http2);
+        int body_size = cinfo.response.body ? cinfo.response.body.size() : 0;
+        log(LoggerLevel::DEBUG, "Response sent for %y (close: %y, is_http2: %y, body_size: %d, Content-Length: %y)",
+            key, cinfo.response.close, cinfo.is_http2, body_size, cinfo.response.hdr."Content-Length");
 
         if (cinfo.response.close || !cinfo.sock.isOpen()) {
             # Close the connection

@@ -463,6 +463,30 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
     }
+%else
+    #! Stub for incoming message validation when AsyncAPI is not available
+    /** @param msg the message to validate (reference, may be modified)
+        @param headers optional headers hash for validation
+
+        @note This is a no-op stub when AsyncAPI is not available
+
+        @since WebSocketHandler 2.2
+    */
+    validateIncomingMessage(reference<auto> msg, hash<auto> headers = {}) {
+        # no-op when AsyncAPI is not available
+    }
+
+    #! Stub for outgoing message validation when AsyncAPI is not available
+    /** @param msg the message to validate
+        @param headers reference to headers (may be modified)
+
+        @note This is a no-op stub when AsyncAPI is not available
+
+        @since WebSocketHandler 2.2
+    */
+    validateOutgoingMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        # no-op when AsyncAPI is not available
+    }
 %endif
 
     #! Sets the active extensions for this connection

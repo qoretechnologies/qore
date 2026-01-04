@@ -581,6 +581,40 @@ struct qore_httpclient_priv {
             ? proxy_connection.ssl
             : connection.ssl;
 
+        // Set up ALPN protocols for HTTP/2 if not already set and http2_mode allows HTTP/2
+        if (connect_ssl && (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)) {
+            // Check global HTTP/2 mode - don't set ALPN if globally disabled
+            int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+            bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+            if (global_mode != HTTP2_MODE_DISABLED && !lib_disabled) {
+                // Set ALPN protocols if not already configured
+                if (!msock->socket->priv->hasAlpnProtocols()) {
+                    ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+                    if (http2_mode == HTTP2_MODE_REQUIRED) {
+                        // HTTP/2 only
+                        protocols->push(new QoreStringNode("h2"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
+                    } else {
+                        // Auto mode: prefer h2, fall back to http/1.1
+                        protocols->push(new QoreStringNode("h2"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
+                        protocols->push(new QoreStringNode("http/1.1"), xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
+                    }
+                    msock->socket->setAlpnProtocols(*protocols, xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                }
+            }
+        }
+
         int rc;
         if (connect_ssl) {
             rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms, msock->cert, msock->pk);
@@ -2636,6 +2670,13 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
+    // Check if HTTP/2 is active - poll operations don't support HTTP/2
+    if (client->http_priv->http2_active) {
+        xsink->raiseException("HTTP2-POLL-ERROR", "poll operations are not supported with HTTP/2 connections; "
+            "use the synchronous send() method or disable HTTP/2 with http_version=1.1");
+        return -1;
+    }
+
     qore_socket_private* spriv = client->http_priv->msock->socket->priv;
 
     assert(!poll_state);
@@ -3659,6 +3700,13 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
 
     // Use HTTP/2 if active
     if (http2_active && getH2Session()) {
+        // HTTP/2 doesn't support streaming callbacks - raise an error if they are used
+        if (send_callback || is || trailer_callback) {
+            xsink->raiseException("HTTP2-CALLBACK-ERROR", "streaming callbacks (send_callback, InputStream, "
+                "trailer_callback) are not supported with HTTP/2 connections; use the synchronous send() method "
+                "or disable HTTP/2 with http_version=1.1");
+            return nullptr;
+        }
         return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
             info, timeout_ms, code, xsink);
     }
@@ -3854,6 +3902,10 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
 
     if (info) {
         info->setKeyValue("response-headers", response->refSelf(), xsink);
+        // Set response-uri for compatibility with HTTP/1.x clients (e.g., rest -l)
+        QoreStringNode* response_uri = new QoreStringNode();
+        response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
+        info->setKeyValue("response-uri", response_uri, xsink);
     }
 
     return response.release();
