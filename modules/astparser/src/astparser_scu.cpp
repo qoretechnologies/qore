@@ -20,6 +20,7 @@
 #include "queries/FindNodeAndParentsQuery.cpp"
 #include "queries/FindNodeQuery.cpp"
 #include "queries/FindReferencesQuery.cpp"
+#include "queries/FindScopeSymbolsQuery.cpp"
 #include "queries/FindSymbolInfoQuery.cpp"
 #include "queries/FindSymbolsQuery.cpp"
 #include "queries/GetNodesInfoQuery.cpp"

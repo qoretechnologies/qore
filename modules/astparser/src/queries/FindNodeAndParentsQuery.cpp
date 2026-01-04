@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -142,6 +142,14 @@ std::vector<ASTNode*>* FindNodeAndParentsQuery::inDeclaration(ASTDeclaration* de
         case ASTDeclarationKind::ADK_VarList: {
             ASTVarListDeclaration* d = static_cast<ASTVarListDeclaration*>(decl);
             result = inExpression(d->variables.get(), line, col);
+            if (result) { result->push_back(decl); return result; }
+            break;
+        }
+        case ASTDeclarationKind::ADK_Typedef: {
+            ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
+            result = inName(d->name, line, col);
+            if (result) { result->push_back(decl); return result; }
+            result = inName(d->typeName, line, col);
             if (result) { result->push_back(decl); return result; }
             break;
         }

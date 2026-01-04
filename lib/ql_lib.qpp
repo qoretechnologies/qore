@@ -299,15 +299,34 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
         return -1;
     }
 
-    // wait for child to exit
+    // wait for child to exit with interrupt checking
     int status;
     while (true) {
-        int rc = waitpid(pid, &status, 0);
+        // check for sandbox interrupt
+        if (qore_check_io_interrupt(xsink, "process wait")) {
+            // kill the child process on interrupt
+            kill(pid, SIGKILL);
+            waitpid(pid, &status, 0);
+            return -1;
+        }
+
+        // use WNOHANG for non-blocking check
+        int rc = waitpid(pid, &status, WNOHANG);
+        if (rc == pid) {
+            // child has exited
+            break;
+        }
+        if (rc == 0) {
+            // child still running, sleep briefly and retry
+            usleep(QORE_IO_POLL_INTERVAL_MS * 1000);
+            continue;
+        }
 #ifdef EINTR
         if (rc == -1 && errno == EINTR) {
             continue;
         }
 #endif
+        // error
         break;
     }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;

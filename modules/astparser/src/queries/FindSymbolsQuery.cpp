@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -104,6 +104,11 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_VarList: {
             ASTVarListDeclaration* d = static_cast<ASTVarListDeclaration*>(decl);
             inExpression(vec, d->variables.get());
+            break;
+        }
+        case ASTDeclarationKind::ADK_Typedef: {
+            ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
+            vec->push_back(ASTSymbolInfo(ASYK_TypeAlias, &d->name));
             break;
         }
         default:

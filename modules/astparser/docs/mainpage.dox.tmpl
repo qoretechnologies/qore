@@ -22,4 +22,13 @@
     @section astparserreleasenotes astparser Module Release Notes
 
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    @subsection astparser_2_2 astparser Module Version 2.2
+    - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"
+      for scope-aware symbol completion
+    - added @ref ADK_Typedef constant for typedef declarations
+    - added @ref ASYK_TypeAlias constant for typedef symbol kind
+    - added @ref ASUK_TypedefDeclName and @ref ASUK_TypedefTypeName constants for typedef usage kinds
+    - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
+      (now returns 0-indexed values consistent with LSP convention)
 */
