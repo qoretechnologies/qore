@@ -3888,6 +3888,10 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
 
     if (info) {
         info->setKeyValue("response-headers", response->refSelf(), xsink);
+        // Set response-uri for compatibility with HTTP/1.x clients (e.g., rest -l)
+        QoreStringNode* response_uri = new QoreStringNode();
+        response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
+        info->setKeyValue("response-uri", response_uri, xsink);
     }
 
     return response.release();

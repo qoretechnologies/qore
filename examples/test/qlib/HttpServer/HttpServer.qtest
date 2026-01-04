@@ -1104,6 +1104,19 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 version, h2client.isHttp2Active());
         }
 
+        # Test that response-uri is set correctly for HTTP/2 responses
+        # This is needed for tools like 'rest -l' that display the response status line
+        {
+            hash<auto> info;
+            h2client.send(NOTHING, "GET", "/http2-test", NOTHING, False, \info);
+            # Verify response-uri is set in the format "HTTP/2 <code> <message>"
+            assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
+            assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 response-uri: %y\n", info."response-uri");
+            }
+        }
+
         # Test keep-alive with multiple requests (verifies HTTP/2 connection state preservation)
         # This is critical for browser compatibility - browsers reuse HTTP/2 connections
         for (int i = 1; i <= 5; i++) {
