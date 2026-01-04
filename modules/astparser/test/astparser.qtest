@@ -71,6 +71,19 @@ public hashdecl PersonInfo {
 }
 ";
 
+        const HashDeclInheritanceCode = "
+%new-style
+public hashdecl BaseInfo {
+    string name;
+    int id;
+}
+
+public hashdecl ExtendedInfo inherits BaseInfo {
+    date created;
+    *string description;
+}
+";
+
         const ConstantCode = "
 %new-style
 namespace Constants {
@@ -90,6 +103,7 @@ namespace Constants {
         addTestCase("Namespace parsing", \testNamespaceParsing());
         addTestCase("Function parsing", \testFunctionParsing());
         addTestCase("Hashdecl parsing", \testHashdeclParsing());
+        addTestCase("Hashdecl inheritance parsing", \testHashdeclInheritanceParsing());
         addTestCase("Constant parsing", \testConstantParsing());
         addTestCase("Symbol kind constants", \testSymbolKindConstants());
         addTestCase("Find symbol info", \testFindSymbolInfo());
@@ -248,6 +262,40 @@ namespace Constants {
             }
         }
         testAssertion("hash members found", \equals(), (fieldCount, 3));
+    }
+
+    testHashdeclInheritanceParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(HashDeclInheritanceCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors for hashdecl inheritance");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find both base and derived hashdecl symbols (ASYK_Interface)
+        bool foundBase = False;
+        bool foundExtended = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Interface && s.name == "BaseInfo") {
+                foundBase = True;
+            }
+            if (s.kind == ASYK_Interface && s.name == "ExtendedInfo") {
+                foundExtended = True;
+            }
+        }
+        testAssertion("base hashdecl found", \equals(), (foundBase, True));
+        testAssertion("extended hashdecl found", \equals(), (foundExtended, True));
+
+        # Find all hash member symbols (ASYK_Field): 2 in base + 2 in extended = 4 total
+        int fieldCount = 0;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Field) {
+                fieldCount++;
+            }
+        }
+        testAssertion("hash members found", \equals(), (fieldCount, 4));
     }
 
     testConstantParsing() {
