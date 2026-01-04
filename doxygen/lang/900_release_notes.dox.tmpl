@@ -346,6 +346,20 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - when used with @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", performs atomic rollback of only the pending parse transaction
       - preserves all previously committed program state (variables, functions, classes, etc.)
       - enables REPL-style interactive programming where parse errors don't destroy the @ref Qore::Program "Program" object
+    - <a href="../../modules/astparser/html/index.html">astparser</a> module
+      - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
+        scope-aware symbol completion with scope level information
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added @ref ADK_Typedef "ADK_Typedef" constant for typedef declarations
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added @ref ASYK_TypeAlias "ASYK_TypeAlias" constant for typedef symbol kind
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added @ref ASUK_TypedefDeclName "ASUK_TypedefDeclName" and @ref ASUK_TypedefTypeName "ASUK_TypedefTypeName"
+        constants for typedef usage kinds
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
+        (now returns 0-indexed values consistent with LSP convention)
+        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now

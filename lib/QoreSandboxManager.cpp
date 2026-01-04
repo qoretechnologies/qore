@@ -809,6 +809,26 @@ int QoreSandboxManager::getMaxRecursionDepth() const {
 
 void QoreSandboxManager::requestInterrupt() {
     interrupt_requested.store(true, std::memory_order_release);
+
+    // Copy callbacks under lock, then invoke outside lock to avoid deadlock
+    // (callbacks may call unregisterCancelCallback() which needs the lock)
+    std::vector<cancel_callback_t> callbacks_copy;
+    {
+        std::lock_guard<std::mutex> lock(cancel_mutex);
+        callbacks_copy.reserve(cancel_callbacks.size());
+        for (const auto& cb : cancel_callbacks) {
+            callbacks_copy.push_back(cb.second);
+        }
+    }
+
+    // Call all registered cancel callbacks without holding the lock
+    for (auto& cb : callbacks_copy) {
+        try {
+            cb();
+        } catch (...) {
+            // Ignore exceptions from callbacks
+        }
+    }
 }
 
 void QoreSandboxManager::clearInterrupt() {
@@ -817,6 +837,19 @@ void QoreSandboxManager::clearInterrupt() {
 
 bool QoreSandboxManager::isInterruptRequested() const {
     return interrupt_requested.load(std::memory_order_acquire);
+}
+
+void QoreSandboxManager::registerCancelCallback(void* context, cancel_callback_t callback) {
+    std::lock_guard<std::mutex> lock(cancel_mutex);
+    cancel_callbacks.emplace_back(context, std::move(callback));
+}
+
+void QoreSandboxManager::unregisterCancelCallback(void* context) {
+    std::lock_guard<std::mutex> lock(cancel_mutex);
+    cancel_callbacks.erase(
+        std::remove_if(cancel_callbacks.begin(), cancel_callbacks.end(),
+            [context](const auto& pair) { return pair.first == context; }),
+        cancel_callbacks.end());
 }
 
 bool QoreSandboxManager::checkIOInterrupt(ExceptionSink* xsink, const char* operation) const {

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
 #ifdef HAVE_SYS_WAIT_H
@@ -91,6 +92,13 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
 
     // read in result string
     while (true) {
+        // check for interrupt before blocking read
+        if (qore_check_io_interrupt(xsink, "backquote read")) {
+            pclose(p);
+            rc = -1;
+            return nullptr;
+        }
+
         char buf[READ_BLOCK];
         int size = fread(buf, 1, READ_BLOCK, p);
 

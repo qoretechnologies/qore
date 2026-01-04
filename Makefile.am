@@ -475,6 +475,8 @@ MODULE_EXTRA_SRC = modules/astparser/src/QC_AstParser.qpp \
 	modules/astparser/src/queries/FindNodeQuery.h \
 	modules/astparser/src/queries/FindReferencesQuery.cpp \
 	modules/astparser/src/queries/FindReferencesQuery.h \
+	modules/astparser/src/queries/FindScopeSymbolsQuery.cpp \
+	modules/astparser/src/queries/FindScopeSymbolsQuery.h \
 	modules/astparser/src/queries/FindSymbolInfoQuery.cpp \
 	modules/astparser/src/queries/FindSymbolInfoQuery.h \
 	modules/astparser/src/queries/FindSymbolsQuery.cpp \
