@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,8 @@ void AstPrinter::printDeclExpression(std::ostream& os, ASTDeclExpression* de) {
         printVariableSignature(os, static_cast<ASTVariableDeclaration*>(decl));
     else if (decl->getKind() == ASTDeclarationKind::ADK_Constant)
         printConstantSignature(os, static_cast<ASTConstantDeclaration*>(decl));
+    else if (decl->getKind() == ASTDeclarationKind::ADK_Typedef)
+        printTypedefSignature(os, static_cast<ASTTypedefDeclaration*>(decl));
 }
 
 void AstPrinter::printListExpression(std::ostream& os, ASTListExpression* le) {
@@ -217,6 +219,16 @@ void AstPrinter::printHashMemberSignature(std::ostream& os, ASTHashMemberDeclara
     if (!d->typeName.name.empty())
         os << d->typeName.name << " ";
     os << d->name.name;
+}
+
+void AstPrinter::printTypedefSignature(std::ostream& os, ASTTypedefDeclaration* d) {
+    if (!d)
+        return;
+    if (!d->modifiers.empty()) {
+        AstTreePrinter::printModifiers(os, d->modifiers, 0, true);
+        os << " ";
+    }
+    os << "typedef " << d->name.name << " = " << d->typeName.name;
 }
 
 void AstPrinter::printVariableSignature(std::ostream& os, ASTVariableDeclaration* d) {

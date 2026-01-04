@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -195,6 +195,15 @@ void AstTreePrinter::printDeclaration(std::ostream& os, ASTDeclaration* decl, in
             } else {
                 printString(os, "<empty>\n", indent+1);
             }
+            break;
+        }
+        case ASTDeclarationKind::ADK_Typedef: {
+            ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
+            printString(os, "TypedefDecl ", indent);
+            printLocation(os, d->loc, 0);
+            printModifiers(os, d->modifiers, indent+1);
+            printName(os, d->name, indent+1);
+            printName(os, d->typeName, indent+1, true, true, "typeName: ");
             break;
         }
         default:

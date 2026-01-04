@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@
 
 class ASTNode;
 class ASTTree;
+struct ASTScopeSymbolInfo;
 
 class AstTreeSearcher {
 public:
@@ -49,6 +50,7 @@ public:
     static std::vector<ASTNode*>* findReferences(ASTTree* tree, ast_loc_t line, ast_loc_t col, bool includeDecl);
     static ASTSymbolInfo findSymbolInfo(ASTTree* tree, ast_loc_t line, ast_loc_t col);
     static std::vector<ASTSymbolInfo>* findSymbols(ASTTree* tree, bool fixSymbols = true, bool bareNames = false);
+    static std::vector<ASTScopeSymbolInfo>* findScopeSymbols(ASTTree* tree, ast_loc_t line, ast_loc_t col);
 };
 
 #endif // _QLS_ASTTREESEARCHER_H

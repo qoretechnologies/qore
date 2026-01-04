@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,7 @@
 #include "queries/FindNodeAndParentsQuery.h"
 #include "queries/FindReferencesQuery.h"
 #include "queries/FindSymbolInfoQuery.h"
+#include "queries/FindScopeSymbolsQuery.h"
 #include "queries/FindSymbolsQuery.h"
 
 std::vector<ASTSymbolInfo>* AstTreeSearcher::findMatchingSymbols(ASTTree* tree, const std::string& query, bool exactMatch, bool fixSymbols, bool bareNames) {
@@ -82,4 +83,8 @@ ASTSymbolInfo AstTreeSearcher::findSymbolInfo(ASTTree* tree, ast_loc_t line, ast
 
 std::vector<ASTSymbolInfo>* AstTreeSearcher::findSymbols(ASTTree* tree, bool fixSymbols, bool bareNames) {
     return FindSymbolsQuery::find(tree, fixSymbols, bareNames);
+}
+
+std::vector<ASTScopeSymbolInfo>* AstTreeSearcher::findScopeSymbols(ASTTree* tree, ast_loc_t line, ast_loc_t col) {
+    return FindScopeSymbolsQuery::find(tree, line, col);
 }
