@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -152,6 +152,13 @@ QoreHashNode* GetNodesInfoQuery::getDeclaration(ASTTree* tree, ASTDeclaration* d
             ASTVarListDeclaration* d = static_cast<ASTVarListDeclaration*>(decl);
             nodeInfo->setKeyValue("modifiers", getModifiers(d->modifiers), xsink);
             nodeInfo->setKeyValue("variables", getExpression(tree, d->variables.get(), xsink), xsink);
+            break;
+        }
+        case ASTDeclarationKind::ADK_Typedef: {
+            ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
+            nodeInfo->setKeyValue("modifiers", getModifiers(d->modifiers), xsink);
+            nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);
+            nodeInfo->setKeyValue("typeName", getName(tree, d->typeName, xsink), xsink);
             break;
         }
         default:

@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,7 @@
 #include "ast/ASTDeclaration.h"
 #include "ast/ASTSymbolInfo.h"
 #include "ast/ASTTree.h"
+#include "ast/declarations/ASTTypedefDeclaration.h"
 
 #include "QC_AstTree.h"
 
@@ -64,6 +65,9 @@ int64_t getSymbolKind(ASTDeclaration* decl) {
         case ASTDeclarationKind::ADK_Variable:
             return static_cast<int64_t>(ASYK_Variable);
         case ASTDeclarationKind::ADK_VarList:
+            break;
+        case ASTDeclarationKind::ADK_Typedef:
+            return static_cast<int64_t>(ASYK_TypeAlias);
         default:
             break;
     }
@@ -138,6 +142,8 @@ AstTreeSearcher::constructor() {
         AstPrinter::printHashDeclSignature(hoverInfo, reinterpret_cast<ASTHashDeclaration*>(decl));
     else if (kind == ASYK_Variable)
         AstPrinter::printVariableSignature(hoverInfo, reinterpret_cast<ASTVariableDeclaration*>(decl));
+    else if (kind == ASYK_TypeAlias)
+        AstPrinter::printTypedefSignature(hoverInfo, reinterpret_cast<ASTTypedefDeclaration*>(decl));
 
     result->setKeyValue("description", new QoreStringNode(hoverInfo.str()), xsink);
     if (xsink && *xsink)

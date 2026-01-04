@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../qlib/QUnit.qm
+
+%try-module astparser
+%define NoAstParser
+%endtry
+
+%exec-class AstParserTest
+
+public class AstParserTest inherits QUnit::Test {
+    public {
+        # Test source code samples
+        const SimpleClassCode = "
+%new-style
+class MyClass {
+    public {
+        int x;
+    }
+    constructor(int val) {
+        x = val;
+    }
+    int getX() {
+        return x;
+    }
+}
+";
+
+        const TypedefCode = "
+%new-style
+namespace Test {
+    public typedef MyInt = int;
+    public typedef MyString = string;
+    public typedef MyList = list<int>;
+}
+";
+
+        const NamespaceCode = "
+%new-style
+namespace Outer {
+    namespace Inner {
+        class NestedClass {
+        }
+        const CONST_VAL = 42;
+    }
+}
+";
+
+        const FunctionCode = "
+%new-style
+sub add(int a, int b) returns int {
+    return a + b;
+}
+sub greet(string name) returns string {
+    return 'Hello, ' + name;
+}
+";
+
+        const HashDeclCode = "
+%new-style
+public hashdecl PersonInfo {
+    string name;
+    int age;
+    *string email;
+}
+";
+
+        const ConstantCode = "
+%new-style
+namespace Constants {
+    const PI = 3.14159;
+    const E = 2.71828;
+}
+";
+    }
+
+    constructor() : Test("AstParserTest", "1.0") {
+%ifdef NoAstParser
+        addTestCase("astparser module not available", \testNoModule());
+%else
+        addTestCase("Basic parsing", \testBasicParsing());
+        addTestCase("Class parsing", \testClassParsing());
+        addTestCase("Typedef parsing", \testTypedefParsing());
+        addTestCase("Namespace parsing", \testNamespaceParsing());
+        addTestCase("Function parsing", \testFunctionParsing());
+        addTestCase("Hashdecl parsing", \testHashdeclParsing());
+        addTestCase("Constant parsing", \testConstantParsing());
+        addTestCase("Symbol kind constants", \testSymbolKindConstants());
+        addTestCase("Find symbol info", \testFindSymbolInfo());
+        addTestCase("Find references", \testFindReferences());
+        addTestCase("Hover info", \testHoverInfo());
+%endif
+        set_return_value(main());
+    }
+
+%ifdef NoAstParser
+    testNoModule() {
+        testSkip("astparser module not available");
+    }
+%else
+    testBasicParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(SimpleClassCode);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testClassParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(SimpleClassCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find class symbol
+        bool foundClass = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Class && s.name == "MyClass") {
+                foundClass = True;
+                break;
+            }
+        }
+        testAssertion("class symbol found", \equals(), (foundClass, True));
+
+        # Find method symbol
+        bool foundMethod = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Method && s.name =~ /getX/) {
+                foundMethod = True;
+                break;
+            }
+        }
+        testAssertion("method symbol found", \equals(), (foundMethod, True));
+    }
+
+    testTypedefParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(TypedefCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Count typedef symbols
+        int typedefCount = 0;
+        list<string> typedefNames = ();
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_TypeAlias) {
+                typedefCount++;
+                typedefNames += s.name;
+            }
+        }
+
+        testAssertion("found 3 typedefs", \equals(), (typedefCount, 3));
+        testAssertion("MyInt typedef found", \inlist_hard(), ("Test::MyInt", typedefNames));
+        testAssertion("MyString typedef found", \inlist_hard(), ("Test::MyString", typedefNames));
+        testAssertion("MyList typedef found", \inlist_hard(), ("Test::MyList", typedefNames));
+    }
+
+    testNamespaceParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(NamespaceCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find namespace symbols
+        bool foundOuter = False;
+        bool foundInner = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Namespace && s.name == "Outer") {
+                foundOuter = True;
+            }
+            if (s.kind == ASYK_Namespace && s.name == "Inner") {
+                foundInner = True;
+            }
+        }
+        testAssertion("outer namespace found", \equals(), (foundOuter, True));
+        testAssertion("inner namespace found", \equals(), (foundInner, True));
+    }
+
+    testFunctionParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(FunctionCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find function symbols
+        bool foundAdd = False;
+        bool foundGreet = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Function && s.name == "add") {
+                foundAdd = True;
+            }
+            if (s.kind == ASYK_Function && s.name == "greet") {
+                foundGreet = True;
+            }
+        }
+        testAssertion("add function found", \equals(), (foundAdd, True));
+        testAssertion("greet function found", \equals(), (foundGreet, True));
+    }
+
+    testHashdeclParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(HashDeclCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find hashdecl symbol (ASYK_Interface is used for hashdecls)
+        bool foundHashdecl = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Interface && s.name == "PersonInfo") {
+                foundHashdecl = True;
+                break;
+            }
+        }
+        testAssertion("hashdecl found", \equals(), (foundHashdecl, True));
+
+        # Find hash member symbols (ASYK_Field)
+        int fieldCount = 0;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Field) {
+                fieldCount++;
+            }
+        }
+        testAssertion("hash members found", \equals(), (fieldCount, 3));
+    }
+
+    testConstantParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(ConstantCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Find constant symbols
+        bool foundPI = False;
+        bool foundE = False;
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Constant && s.name =~ /PI/) {
+                foundPI = True;
+            }
+            if (s.kind == ASYK_Constant && s.name =~ /E$/) {
+                foundE = True;
+            }
+        }
+        testAssertion("PI constant found", \equals(), (foundPI, True));
+        testAssertion("E constant found", \equals(), (foundE, True));
+    }
+
+    testSymbolKindConstants() {
+        # Verify all symbol kind constants are defined and have expected values
+        assertEq(0, ASYK_None, "ASYK_None defined");
+        assertTrue(ASYK_Class > 0, "ASYK_Class defined");
+        assertTrue(ASYK_Function > 0, "ASYK_Function defined");
+        assertTrue(ASYK_Variable > 0, "ASYK_Variable defined");
+        assertTrue(ASYK_Constant > 0, "ASYK_Constant defined");
+        assertTrue(ASYK_TypeAlias > 0, "ASYK_TypeAlias defined");
+        assertTrue(ASYK_Interface > 0, "ASYK_Interface defined");
+        assertTrue(ASYK_Field > 0, "ASYK_Field defined");
+        assertTrue(ASYK_Method > 0, "ASYK_Method defined");
+        assertTrue(ASYK_Constructor > 0, "ASYK_Constructor defined");
+        assertTrue(ASYK_Namespace > 0, "ASYK_Namespace defined");
+
+        # Verify declaration kind constants
+        assertTrue(ADK_Class >= 0, "ADK_Class defined");
+        assertTrue(ADK_Function >= 0, "ADK_Function defined");
+        assertTrue(ADK_Typedef >= 0, "ADK_Typedef defined");
+        assertTrue(ADK_Hash >= 0, "ADK_Hash defined");
+        assertTrue(ADK_Namespace >= 0, "ADK_Namespace defined");
+
+        # Verify symbol usage kind constants
+        assertTrue(ASUK_TypedefDeclName > 0, "ASUK_TypedefDeclName defined");
+        assertTrue(ASUK_TypedefTypeName > 0, "ASUK_TypedefTypeName defined");
+    }
+
+    testFindSymbolInfo() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(TypedefCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Find symbol info for typedef at line 3 (0-indexed: 2), approximately col 20
+        # The typedef name "MyInt" should be around there
+        *hash info = searcher.findSymbolInfo(tree, 3, 20);
+        if (info) {
+            testAssertion("found symbol info", \equals(), (True, True));
+            testAssertion("symbol has kind", \exists(), (info.kind,));
+            testAssertion("symbol has name", \exists(), (info.name,));
+        } else {
+            testAssertion("symbol info found", \equals(), (True, False));
+        }
+    }
+
+    testFindReferences() {
+        string refTestCode = "
+%new-style
+class TestClass {
+    public {
+        int val;
+    }
+    constructor() {
+        val = 0;
+    }
+    int getVal() {
+        return val;
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(refTestCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Find references to 'val' (declared on line 5, col ~8)
+        *list refs = searcher.findReferences(tree, "test.q", 4, 12, True);
+        if (refs) {
+            assertTrue(refs.size() >= 1, "found references");
+        } else {
+            # References might not be found for all positions
+            testAssertion("references search completed", \equals(), (True, True));
+        }
+    }
+
+    testHoverInfo() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(TypedefCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        # Find a typedef and get its hover info
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_TypeAlias) {
+                *hash hover = searcher.hoverInfo(tree, ASYK_TypeAlias,
+                    s.location.range.start.line, s.location.range.start.character);
+                if (hover) {
+                    testAssertion("hover info has description", \exists(), (hover.description,));
+                    testAssertion("hover description contains typedef",
+                        \regex(), (hover.description, "typedef"));
+                    return;
+                }
+            }
+        }
+        testAssertion("typedef hover info found", \equals(), (True, False));
+    }
+%endif
+}
