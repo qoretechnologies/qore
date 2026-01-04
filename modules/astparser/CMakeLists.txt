@@ -42,6 +42,7 @@ set(ASTPARSER_CPP_SRC
     src/queries/FindNodeQuery.cpp
     src/queries/FindNodeAndParentsQuery.cpp
     src/queries/FindReferencesQuery.cpp
+    src/queries/FindScopeSymbolsQuery.cpp
     src/queries/FindSymbolInfoQuery.cpp
     src/queries/FindSymbolsQuery.cpp
     src/queries/GetNodesInfoQuery.cpp

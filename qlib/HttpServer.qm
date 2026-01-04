@@ -443,6 +443,13 @@ public hashdecl HttpServerOptionInfo {
         using non-blocking I/O, then dispatches request processing to the ThreadPool.
         This allows handling many more concurrent connections with fewer threads.
 
+        @note HTTP/2 support requires async mode to be enabled. When \c async_mode is \c False,
+        the server only supports HTTP/1.x regardless of the \c http_version setting on listeners.
+        This is because HTTP/2 requires:
+        - ALPN (Application-Layer Protocol Negotiation) during the TLS handshake
+        - Non-blocking I/O for HTTP/2 frame processing
+        - Event-driven handling for stream multiplexing
+
         @since HttpServer 1.5
     */
     bool async_mode = True;

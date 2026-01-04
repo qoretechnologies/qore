@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -53,6 +53,7 @@ enum ASTSymbolKind {
     ASYK_Number = 16,
     ASYK_Boolean = 17,
     ASYK_Array = 18,
+    ASYK_TypeAlias = 19, // used for typedef
 };
 
 #endif // _QLS_AST_ASTSYMBOLKIND_H

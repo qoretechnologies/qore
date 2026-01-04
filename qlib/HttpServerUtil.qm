@@ -535,7 +535,11 @@ public hashdecl HttpListenerOptionInfo {
         - \c "1.1": HTTP/1.1 only
         - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
 
-        @note HTTP/2 requires TLS; non-TLS connections always use HTTP/1.x
+        @note HTTP/2 requires:
+        - TLS (non-TLS connections always use HTTP/1.x)
+        - Async I/O mode enabled on the HttpServer (\c async_mode: \c True, which is the default)
+
+        When async mode is disabled, the server only supports HTTP/1.x regardless of this setting.
 
         @since HttpServer 1.6
     */

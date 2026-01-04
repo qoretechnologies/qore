@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -252,11 +252,43 @@ void SymbolInfoFixes::fixVariableInfo(ASTTree* tree, ASTSymbolInfo& si, bool bar
     }
 }
 
+void SymbolInfoFixes::fixTypedefInfo(ASTTree* tree, ASTSymbolInfo& si, bool bareNames) {
+    if (bareNames)
+        return;
+
+    // Target node is first, all the parents follow.
+    std::unique_ptr<std::vector<ASTNode*> > nodes(astparser_intern::getNodes(tree, si));
+    if (!nodes)
+        return;
+
+    size_t nextNode = 0;
+    size_t nodeCount = nodes->size();
+    for (; nextNode < nodeCount; nextNode++) {
+        ASTNode* node = nodes->at(nextNode);
+        if (node->getNodeType() != ANT_Declaration)
+            continue;
+        ASTDeclaration* decl = static_cast<ASTDeclaration*>(node);
+        if (decl->getKind() == ASTDeclarationKind::ADK_Typedef) {
+            nextNode++;
+            break;
+        }
+    }
+
+    for (; nextNode < nodeCount; nextNode++) {
+        ASTNode* node = nodes->at(nextNode);
+        if (node->getNodeType() == ANT_Declaration) {
+            ASTDeclaration* decl = static_cast<ASTDeclaration*>(node);
+            if (decl->getKind() == ASTDeclarationKind::ADK_Namespace)
+                si.name.insert(0, static_cast<ASTNamespaceDeclaration*>(decl)->name.name + "::");
+        }
+    }
+}
+
 void SymbolInfoFixes::fixSymbolInfos(ASTTree* tree, std::vector<ASTSymbolInfo>& vec, bool bareNames) {
     for (size_t i = 0, count = vec.size(); i < count; i++) {
         ASTSymbolInfo& si = vec[i];
 
-        // Do this only for classes, constants, functions, variables, hashdecl and hash members.
+        // Do this only for classes, constants, functions, variables, hashdecl, hash members, and typedefs.
         if (!(si.kind == ASYK_Constructor ||
               si.kind == ASYK_Function ||
               si.kind == ASYK_Method ||
@@ -264,7 +296,8 @@ void SymbolInfoFixes::fixSymbolInfos(ASTTree* tree, std::vector<ASTSymbolInfo>& 
               si.kind == ASYK_Class ||
               si.kind == ASYK_Constant ||
               si.kind == ASYK_Field ||
-              si.kind == ASYK_Interface))
+              si.kind == ASYK_Interface ||
+              si.kind == ASYK_TypeAlias))
             continue;
 
         // Fix the symbol info.
@@ -283,6 +316,8 @@ void SymbolInfoFixes::fixSymbolInfos(ASTTree* tree, std::vector<ASTSymbolInfo>& 
                 fixHashDeclInfo(tree, si, bareNames); break;
             case ASYK_Variable:
                 fixVariableInfo(tree, si, bareNames); break;
+            case ASYK_TypeAlias:
+                fixTypedefInfo(tree, si, bareNames); break;
             default:
                 break;
         }

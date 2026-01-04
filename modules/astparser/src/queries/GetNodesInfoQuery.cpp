@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -152,6 +152,13 @@ QoreHashNode* GetNodesInfoQuery::getDeclaration(ASTTree* tree, ASTDeclaration* d
             ASTVarListDeclaration* d = static_cast<ASTVarListDeclaration*>(decl);
             nodeInfo->setKeyValue("modifiers", getModifiers(d->modifiers), xsink);
             nodeInfo->setKeyValue("variables", getExpression(tree, d->variables.get(), xsink), xsink);
+            break;
+        }
+        case ASTDeclarationKind::ADK_Typedef: {
+            ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
+            nodeInfo->setKeyValue("modifiers", getModifiers(d->modifiers), xsink);
+            nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);
+            nodeInfo->setKeyValue("typeName", getName(tree, d->typeName, xsink), xsink);
             break;
         }
         default:
@@ -411,10 +418,11 @@ QoreHashNode* GetNodesInfoQuery::getLocation(const ASTParseLocation& loc, Except
     if (*xsink)
         return nullptr;
 
-    nodeInfo->setKeyValue("start_line", static_cast<int64>(loc.firstLine), xsink);
-    nodeInfo->setKeyValue("start_column", static_cast<int64>(loc.firstCol), xsink);
-    nodeInfo->setKeyValue("end_line", static_cast<int64>(loc.lastLine), xsink);
-    nodeInfo->setKeyValue("end_column", static_cast<int64>(loc.lastCol), xsink);
+    // Convert to 0-indexed (LSP convention) - internal AST uses 1-indexed
+    nodeInfo->setKeyValue("start_line", static_cast<int64>(loc.firstLine - 1), xsink);
+    nodeInfo->setKeyValue("start_column", static_cast<int64>(loc.firstCol - 1), xsink);
+    nodeInfo->setKeyValue("end_line", static_cast<int64>(loc.lastLine - 1), xsink);
+    nodeInfo->setKeyValue("end_column", static_cast<int64>(loc.lastCol - 1), xsink);
     if (*xsink)
         return nullptr;
     return nodeInfo.release();
