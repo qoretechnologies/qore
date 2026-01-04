@@ -45,7 +45,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.5.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -163,6 +163,92 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     If a processor does not support the bulk API, but bulk data is submitted, then the bulk data will be separately
     iterated, and each record will be passed separately to the processor with a significant performance penalty when
     processing large volumes of data.
+
+    @section dataprovider_debugging Debugging Data Providers
+
+    Data providers support an opt-in debug info collection mechanism that allows capturing technical details about
+    operations such as HTTP requests, WebSocket messages, and connection events. This is useful for debugging,
+    logging, and monitoring data provider interactions.
+
+    @subsection debug_collector_classes Debug Collector Classes
+
+    The following classes are provided for debug info collection:
+    - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class - implement
+      your own collector by overriding the @ref DataProvider::AbstractDebugInfoCollector::collect() "collect()" method
+    - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for
+      later retrieval and analysis
+    - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to the console
+      immediately, with optional colorized output
+
+    @subsection debug_info_structure Debug Info Structure
+
+    Debug info is captured in the @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo" hashdecl which
+    includes:
+    - Operation type (request, response, connect, disconnect, send, receive)
+    - Timestamps and duration
+    - URL, HTTP method, and protocol (HTTP/1.1 or HTTP/2)
+    - Request and response headers
+    - Request and response bodies
+    - Status codes and error messages
+    - WebSocket message types and sizes
+    - TLS/SSL information
+
+    @subsection debug_usage Using Debug Collection
+
+    To enable debug collection, register a debug collector with a data provider:
+
+    @code{.py}
+# Using BufferedDebugInfoCollector for programmatic access
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Make some requests
+auto response = provider.doRequest(request);
+
+# Retrieve collected debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+foreach hash<DataProviderDebugInfo> debug in (info) {
+    printf("%s %s -> %d (%dms)\n", debug.method, debug.url, debug.status_code, debug.duration_ms);
+}
+
+# Clear the buffer when done
+collector.clear();
+    @endcode
+
+    @code{.py}
+# Using ConsoleDebugInfoCollector for immediate output
+# Verbosity: 1 = basic, 2 = headers, 3 = full with bodies
+ConsoleDebugInfoCollector collector(2);
+provider.setDebugCollector(collector);
+
+# Debug info is printed to console as operations occur
+auto response = provider.doRequest(request);
+
+# Disable debug collection when done
+provider.setDebugCollector();
+    @endcode
+
+    @subsection debug_custom_collector Custom Debug Collectors
+
+    You can create custom debug collectors by inheriting from
+    @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector":
+
+    @code{.py}
+class MyDebugCollector inherits AbstractDebugInfoCollector {
+    collect(hash<DataProviderDebugInfo> info) {
+        # Log to a file, send to monitoring system, etc.
+        logger.info("Operation: %s %s -> %d", info.method, info.url, info.status_code);
+    }
+
+    flush() {
+        # Called when the data provider is done - flush any buffers
+    }
+
+    clear() {
+        # Called to clear any collected data
+    }
+}
+    @endcode
 
     @section dataprovider_dpql DPQL - Data Provider Query Language
 
@@ -330,6 +416,17 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_5 DataProvider v3.5
+    - added debug info collection infrastructure for data providers
+      - @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo": Hashdecl for technical debug information
+      - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class for debug collectors
+      - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for later retrieval
+      - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to console immediately
+      - @ref DataProvider::AbstractDataProvider::setDebugCollector() "AbstractDataProvider::setDebugCollector()": Register debug collector
+      - @ref DataProvider::AbstractDataProvider::getDebugCollector() "AbstractDataProvider::getDebugCollector()": Get current debug collector
+      - @ref DataProvider::AbstractDataProvider::debugCollectionEnabled() "AbstractDataProvider::debugCollectionEnabled()": Check if debug collection is enabled
+    - debug info includes HTTP headers, request/response bodies, timing, protocol info (HTTP/2), and more
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added DPQL (Data Provider Query Language) support for human-readable query expressions

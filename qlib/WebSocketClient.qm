@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebSocketClient.qm WebSocket client implementation
 
-/*  WebSocketClient.qm Copyright 2013 - 2025 Qore Technologies, s.r.o.
+/*  WebSocketClient.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,7 +54,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.5";
+    version = "2.6";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -178,6 +178,40 @@ Counter c(1);
 c.waitForZero();
     @endcode
 
+    @section websocketclient_debug Debug Info Collection
+
+    WebSocket data providers support debug info collection for capturing technical details about WebSocket
+    connections and message operations.
+
+    @par Example: Capturing WebSocket Debug Info
+    @code{.py}
+%requires WebSocketClient
+
+# Create a WebSocket data provider
+WebSocketClientDataProvider provider({"url": "wss://api.example.com/ws"});
+
+# Enable debug collection
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Connect and send messages
+provider.connect();
+provider.sendMessage(MESSAGE_WS_DATA, {"message": "Hello"});
+
+# Analyze debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+foreach hash<DataProviderDebugInfo> debug in (info) {
+    printf("%s: %s\n", debug.operation, debug.ws_message_type);
+    printf("  Duration: %dms\n", debug.duration_ms);
+    printf("  Size: %d bytes\n", debug.request_size ?? debug.response_size);
+    if (debug.http2) {
+        printf("  Protocol: HTTP/2 WebSocket\n");
+    }
+}
+    @endcode
+
+    See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
+
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_6 v2.6
@@ -185,6 +219,12 @@ c.waitForZero();
       - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
         HTTP/2 WebSocket is being used
+      - added \c http2 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
+        "WebSocketClient::getConnectionInfo()"
+      - data provider's \c ws-connected-event now includes \c http2 field indicating HTTP/2 usage
+    - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
+      "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
+    - debug info includes WebSocket message type, size, timing, connection protocol, and error info
 
     @subsection wsc_v2_5 v2.5
     - added WebSocket extension support with permessage-deflate compression
@@ -797,16 +837,20 @@ ws.connect();
     #! Returns information about the current connection
     /** @returns a hash with the following keys:
         - \c cid: the WebSocket client connection ID
+        - \c http2: @ref True if using HTTP/2 WebSocket (RFC 8441)
         - \c num_connects: how many times has the client connected to the server
         - \c peer: information about the connected server socket (see
           @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
         - \c socket: information about the connected local socket (see
           @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
+
+        @since WebSocketClient 2.6 added \c http2
     */
     *hash<auto> getConnectionInfo() {
         # use += to keep "hash<auto>"
         hash<auto> rv += {
             "cid": cid,
+            "http2": http2_websocket,
             "num_connects": num_connects,
         };
         try {
@@ -2046,8 +2090,15 @@ class MyObserver inherits Observer {
     private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
         hash<auto> rv = WebSocketClient::connectIntern(opts, \info, reconnect);
         logDebug("Reconnected; raising reconnect event: %y", observer_map);
-        notifyObservers(EVENT_WS_CONNECTED, {});
+        notifyObservers(EVENT_WS_CONNECTED, getConnectionEventInfo());
         return rv;
+    }
+
+    #! Returns event info for the connection event
+    private hash<auto> getConnectionEventInfo() {
+        return {
+            "http2": isHttp2(),
+        };
     }
 
     #! Returns the Accept header value
@@ -2759,7 +2810,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         return {
             EVENT_WS_CONNECTED: <DataProviderMessageInfo>{
                 "desc": "The event signaling that the channel has been connected",
-                "type": new HashDataType(),
+                "type": WebSocketClientConnectedEventDataType,
             },
             EVENT_WS_DATA: <DataProviderMessageInfo>{
                 "desc": "A data event; data will be deserialized according to the serialization option",
@@ -2822,6 +2873,8 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         @param send_message_options the options for sending the message
     */
     private sendMessageImpl(string message_id, auto msg, *hash<auto> send_message_options) {
+        date start_time = now_us();
+        *string error_msg;
         try {
             switch (message_id) {
                 case MESSAGE_WS_DATA:
@@ -2845,10 +2898,64 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                         keys getMessageTypesImpl());
             }
         } catch (hash<ExceptionInfo> ex) {
+            error_msg = sprintf("%s: %s", ex.err, ex.desc);
             if (logger) {
                 logger.error("error sending WebSocket message: %s", get_exception_string(ex));
             }
         }
+
+        # Collect debug info if collector is registered
+        if (debugCollectionEnabled()) {
+            collectWsDebugInfo(DPDI_OP_SEND, message_id, msg, start_time, error_msg);
+        }
+    }
+
+    #! Collects WebSocket debug info for send operations
+    private collectWsDebugInfo(string operation, string message_id, auto msg, date start_time, *string error_msg) {
+        date end_time = now_us();
+        int duration_ms = (end_time - start_time).durationMilliseconds();
+
+        # Determine message type
+        string ws_message_type;
+        switch (message_id) {
+            case MESSAGE_WS_DATA:
+            case MESSAGE_WS_RAW:
+                ws_message_type = msg.typeCode() == NT_BINARY ? "binary" : "text";
+                break;
+            case MESSAGE_WS_PING:
+                ws_message_type = "ping";
+                break;
+            case MESSAGE_WS_PONG:
+                ws_message_type = "pong";
+                break;
+            default:
+                ws_message_type = message_id;
+        }
+
+        # Get message size
+        int msg_size = 0;
+        if (msg.typeCode() == NT_BINARY) {
+            msg_size = msg.size();
+        } else if (msg.typeCode() == NT_STRING) {
+            msg_size = msg.length();
+        }
+
+        hash<DataProviderDebugInfo> debug_info = <DataProviderDebugInfo>{
+            "operation": operation,
+            "start_time": start_time,
+            "end_time": end_time,
+            "duration_ms": duration_ms,
+            "url": client.getUrl(),
+            "protocol": client.isHttp2() ? "HTTP/2" : "HTTP/1.1",
+            "request_body": msg,
+            "request_size": msg_size,
+            "ws_message_type": ws_message_type,
+            "http2": client.isHttp2(),
+            "tls": client.getUrl() =~ /^wss:/i,
+            "error": error_msg,
+        };
+
+        collectDebugInfo(debug_info);
     }
 
     #! Returns options from a template
@@ -2988,6 +3095,20 @@ public class WebSocketClientEventDataType inherits HashDataType {
 
 #! WebSocket event data type constant
 public const WebSocketClientEventDataType = new WebSocketClientEventDataType();
+
+#! WebSocket connected event data type
+/** @since WebSocketClient 2.6
+*/
+public class WebSocketClientConnectedEventDataType inherits HashDataType {
+    #! Creates the type
+    constructor() {
+        addField(new QoreDataField("http2", "True if using HTTP/2 WebSocket (RFC 8441), False if using HTTP/1.1",
+            AbstractDataProviderType::get(BoolType)));
+    }
+}
+
+#! WebSocket connected event data type constant
+public const WebSocketClientConnectedEventDataType = new WebSocketClientConnectedEventDataType();
 
 #! WebSocket client wait for message from server API data provider
 public class WebSocketClientWaitForMessageDataProvider inherits AbstractDataProvider {
