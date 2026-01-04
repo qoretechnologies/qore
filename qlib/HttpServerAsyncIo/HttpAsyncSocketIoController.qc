@@ -276,6 +276,11 @@ public class HttpAsyncSocketIoController {
                     foreach string key in (keys connections) {
                         if (!active_polls{key}) {
                             hash<HttpActiveConnectionInfo> cinfo = connections{key};
+                            # Check if socket is still open
+                            if (!cinfo.sock.isOpen()) {
+                                remove connections{key};
+                                continue;
+                            }
                             switch (cinfo.state) {
                                 case "idle": {
                                     HttpIdlePollOperation op(cinfo.sock, cinfo.ttl);
@@ -385,8 +390,13 @@ public class HttpAsyncSocketIoController {
                 # Remove completed operations
                 map remove active_polls{$1}, keys to_remove;
 
-                # Perform the poll
-                Socket::poll(poll_list, poll_timeout);
+                # Filter out any closed sockets from poll_list before calling poll
+                poll_list = map $1, poll_list, !($1.socket instanceof Socket) || cast<Socket>($1.socket).isOpen();
+
+                # Perform the poll (skip if empty after filtering)
+                if (poll_list) {
+                    Socket::poll(poll_list, poll_timeout);
+                }
 
                 # Process commands
                 if (processCommands()) {
@@ -394,7 +404,12 @@ public class HttpAsyncSocketIoController {
                 }
 
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "I/O thread error: %s: %s", ex.err, ex.desc);
+                # Handle SOCKET-NOT-OPEN gracefully
+                if (ex.err == "SOCKET-NOT-OPEN") {
+                    @debug(log(LoggerLevel::DEBUG, "Socket closed during poll: %s", ex.desc));
+                } else {
+                    log(LoggerLevel::ERROR, "I/O thread error: %s: %s", ex.err, ex.desc);
+                }
             }
         }
     }
@@ -694,6 +709,10 @@ public class HttpAsyncSocketIoController {
                 "path": request.path,
                 ":authority": request.authority,
                 ":scheme": request.scheme,
+                # Map :authority to host for HTTP/1.x compatibility (many handlers expect host header)
+                "host": request.authority,
+                # Set HTTP version for logging and version checks
+                "http_version": "HTTP/2",
             },
             "header_info": {
                 "http2": True,

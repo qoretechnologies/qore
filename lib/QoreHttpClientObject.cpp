@@ -581,6 +581,28 @@ struct qore_httpclient_priv {
             ? proxy_connection.ssl
             : connection.ssl;
 
+        // Set up ALPN protocols for HTTP/2 if not already set and http2_mode allows HTTP/2
+        if (connect_ssl && (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)) {
+            // Check global HTTP/2 mode - don't set ALPN if globally disabled
+            int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+            bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+            if (global_mode != HTTP2_MODE_DISABLED && !lib_disabled) {
+                // Set ALPN protocols if not already configured
+                if (!msock->socket->priv->hasAlpnProtocols()) {
+                    ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+                    if (http2_mode == HTTP2_MODE_REQUIRED) {
+                        // HTTP/2 only
+                        protocols->push(new QoreStringNode("h2"), xsink);
+                    } else {
+                        // Auto mode: prefer h2, fall back to http/1.1
+                        protocols->push(new QoreStringNode("h2"), xsink);
+                        protocols->push(new QoreStringNode("http/1.1"), xsink);
+                    }
+                    msock->socket->setAlpnProtocols(*protocols, xsink);
+                }
+            }
+        }
+
         int rc;
         if (connect_ssl) {
             rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms, msock->cert, msock->pk);

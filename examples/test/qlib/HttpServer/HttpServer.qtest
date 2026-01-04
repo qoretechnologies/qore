@@ -60,6 +60,11 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
             #printf("h: %N\n", h);
             return makeResponse(200, new BinaryInputStream(h.part[1].body), {"Content-Type": h.part[1].hdr."content-type"});
+        } else if (*list<*string> m = (rpath =~ x/largeresponse\/(\d+)/)) {
+            # Return a response of specified size for testing large HTTP/2 transfers
+            int size = int(m[0]);
+            string data = strmul("X", size);
+            return makeResponse(200, data, {"Content-Type": "text/plain"});
         }
 
         if (hdr.method == "POST") {
@@ -1099,9 +1104,61 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 version, h2client.isHttp2Active());
         }
 
-        # Test keep-alive with multiple requests
-        assertEq("GET, test1, /test1", h2client.get("/test1"));
-        assertEq("GET, test2, /test2", h2client.get("/test2"));
+        # Test keep-alive with multiple requests (verifies HTTP/2 connection state preservation)
+        # This is critical for browser compatibility - browsers reuse HTTP/2 connections
+        for (int i = 1; i <= 5; i++) {
+            string path = sprintf("/test%d", i);
+            string expected = sprintf("GET, test%d, %s", i, path);
+            assertEq(expected, h2client.get(path));
+        }
+
+        # Verify HTTP/2 is still active after multiple requests
+        assertTrue(h2client.isHttp2Active());
+
+        # Test larger payloads - this exercises the HTTP/2 DATA frame handling with substantial data
+        # These sizes are chosen to test different scenarios:
+        # - 50KB: moderate size
+        # - 100KB: larger response
+        # - 500KB: tests flow control and multiple DATA frames
+        list<int> sizes = (50000, 100000, 500000);
+        for (int i = 0; i < sizes.size(); i++) {
+            int size = sizes[i];
+            hash<auto> large_resp = h2client.send(NOTHING, "GET", "/largeresponse/" + size, NOTHING, True);
+            assertEq(200, large_resp.status_code);
+            assertEq(size, large_resp.body.size());
+            # Verify HTTP/2 connection is still active after large transfer
+            assertTrue(h2client.isHttp2Active());
+        }
+
+        # Test HTTP/2 compression - this was a bug where Accept-Encoding wasn't being parsed for HTTP/2
+        # The server should compress responses > 1KB when Accept-Encoding is provided
+        {
+            # Create a new HTTP/2 client that doesn't auto-decompress
+            HTTPClient h2compress({
+                "url": asyncSslUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",
+            });
+            h2compress.connect();
+            on_exit h2compress.disconnect();
+
+            # Request a 5KB response (well above the 1KB compression threshold)
+            # Send explicit Accept-Encoding header
+            hash<auto> hdr = {
+                "Accept-Encoding": "gzip, deflate, br",
+            };
+            hash<auto> info;
+            h2compress.send(NOTHING, "GET", "/largeresponse/5000", hdr, False, \info);
+            # Verify the response was compressed (Content-Encoding should be set)
+            # Note: HTTPClient auto-decompresses, so we check the original response headers
+            *string content_encoding = info."response-headers"."content-encoding"
+                ?? info."response-headers"."Content-Encoding";
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
+            }
+            assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
+        }
 
         # Test POST request
         hash<auto> postResp = h2client.send("http2-data", "POST", "/http2-post");
@@ -1128,7 +1185,47 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # This should work with HTTP/1.1
         assertEq("GET, h1test, /h1test", h1client.get("/h1test"));
         assertFalse(h1client.isHttp2Active());
+
+        # Test set_global_http2_mode("disabled") - server should not offer HTTP/2
+        {
+            # Save original mode
+            string orig_mode = get_global_http2_mode();
+            on_exit set_global_http2_mode(orig_mode);
+
+            # Disable HTTP/2 globally
+            set_global_http2_mode("disabled");
+            assertEq("disabled", get_global_http2_mode());
+
+            # Create a new HTTPS listener that will be affected by the global mode
+            # The async server's listeners are cached, so we need a new one to test
+            hash<auto> linfo = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            on_exit mAsyncServer.stopListenerID(linfo.id);
+
+            string disabledUrl = "https://localhost:" + linfo.port;
+
+            # Create an HTTP/2 client and try to connect - it should fall back to HTTP/1.1
+            # because the server won't offer HTTP/2 via ALPN
+            HTTPClient h2disabled({
+                "url": disabledUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",    # Client wants HTTP/2
+            });
+            h2disabled.connect();
+            on_exit h2disabled.disconnect();
+
+            # The client should fall back to HTTP/1.1 because server doesn't offer HTTP/2
+            assertFalse(h2disabled.isHttp2Active(), "HTTP/2 should not be active when globally disabled");
+
+            # Request should still work via HTTP/1.1
+            assertEq("GET, h2disabled, /h2disabled", h2disabled.get("/h2disabled"));
+        }
     }
+
 }
 
 #! Test handler that supports persistent connections
