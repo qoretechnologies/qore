@@ -102,7 +102,7 @@ int typed_hash_decl_private::parseInit() {
         parse_parent = nullptr;
 
         if (!parentHashDecl) {
-            parse_error(*loc, "cannot resolve parent hashdecl in hashdecl '%s'", name.c_str());
+            // parseFindHashDecl already reports the error for undefined hashdecl
             err = -1;
         } else {
             // Initialize parent first
