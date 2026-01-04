@@ -1,0 +1,719 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%requires reflection
+
+%exec-class DpqlTest
+
+public class DpqlTest inherits QUnit::Test {
+    constructor() : Test("DPQL Test", "1.0") {
+        addTestCase("tokenizer tests", \tokenizerTests());
+        addTestCase("parser basic tests", \parserBasicTests());
+        addTestCase("parser operator tests", \parserOperatorTests());
+        addTestCase("parser complex tests", \parserComplexTests());
+        addTestCase("parser function tests", \parserFunctionTests());
+        addTestCase("parser error tests", \parserErrorTests());
+        addTestCase("serializer tests", \serializerTests());
+        addTestCase("round-trip tests", \roundTripTests());
+        addTestCase("completion tests", \completionTests());
+        addTestCase("static API tests", \staticApiTests());
+        addTestCase("validation tests", \validationTests());
+        addTestCase("stress tests", \stressTests());
+
+        # Return for compatibility with test harnesses that check the return value.
+        set_return_value(main());
+    }
+
+    private hash<string, AbstractDataField> getTestFields() {
+        return {
+            "name": new QoreDataField("name", "User name", new QoreStringDataType()),
+            "age": new QoreDataField("age", "User age", new QoreIntDataType()),
+            "email": new QoreDataField("email", "Email address", new QoreStringDataType()),
+            "status": new QoreDataField("status", "Account status", new QoreStringDataType()),
+            "score": new QoreDataField("score", "User score", new QoreFloatDataType()),
+            "active": new QoreDataField("active", "Is active", new QoreBoolDataType()),
+        };
+    }
+
+    tokenizerTests() {
+        # Test basic tokens
+        {
+            DpqlTokenizer tok('@name == "John"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(5, tokens.size());
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@name", tokens[0].value);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_OP_EQ, tokens[2].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[3].type);
+            assertEq(DPQL_TOK_STRING, tokens[4].type);
+            assertEq('"John"', tokens[4].value);
+        }
+
+        # Test all comparison operators
+        {
+            DpqlTokenizer tok("== != < <= > >=");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_EQ, tokens[0].type);
+            assertEq(DPQL_TOK_OP_NE, tokens[2].type);
+            assertEq(DPQL_TOK_OP_LT, tokens[4].type);
+            assertEq(DPQL_TOK_OP_LE, tokens[6].type);
+            assertEq(DPQL_TOK_OP_GT, tokens[8].type);
+            assertEq(DPQL_TOK_OP_GE, tokens[10].type);
+        }
+
+        # Test logical operators
+        {
+            DpqlTokenizer tok("&& || !");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_AND, tokens[0].type);
+            assertEq(DPQL_TOK_OP_OR, tokens[2].type);
+            assertEq(DPQL_TOK_OP_NOT, tokens[4].type);
+        }
+
+        # Test regex operator
+        {
+            DpqlTokenizer tok('=~ /pattern/i');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_REGEX, tokens[0].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_REGEX, tokens[2].type);
+            assertEq("/pattern/i", tokens[2].value);
+        }
+
+        # Test numbers
+        {
+            DpqlTokenizer tok("123 -456 78.90 -12.34");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_NUMBER, tokens[0].type);
+            assertEq("123", tokens[0].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("-456", tokens[2].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[4].type);
+            assertEq("78.90", tokens[4].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[6].type);
+            assertEq("-12.34", tokens[6].value);
+        }
+
+        # Test quoted field reference
+        {
+            DpqlTokenizer tok('@"field with spaces"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"field with spaces"', tokens[0].value);
+        }
+
+        # Test keywords and boolean/null
+        {
+            DpqlTokenizer tok("true false null between and in");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_BOOLEAN, tokens[0].type);
+            assertEq("true", tokens[0].value);
+            assertEq(DPQL_TOK_BOOLEAN, tokens[2].type);
+            assertEq("false", tokens[2].value);
+            assertEq(DPQL_TOK_NULL, tokens[4].type);
+            assertEq("null", tokens[4].value);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[6].type);
+            assertEq("between", tokens[6].value);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[8].type);
+            assertEq("and", tokens[8].value);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[10].type);
+            assertEq("in", tokens[10].value);
+        }
+
+        # Test position tracking
+        {
+            DpqlTokenizer tok("@name\n@age");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(1, tokens[0].line);
+            assertEq(1, tokens[0].column);
+            assertEq(2, tokens[2].line);
+            assertEq(1, tokens[2].column);
+        }
+
+        # Test string escape sequences
+        {
+            DpqlTokenizer tok('"hello\\nworld"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_STRING, tokens[0].type);
+            assertEq('"hello\\nworld"', tokens[0].value);
+        }
+
+        # Test parentheses and comma
+        {
+            DpqlTokenizer tok("(a, b)");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_LPAREN, tokens[0].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[1].type);
+            assertEq(DPQL_TOK_COMMA, tokens[2].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[4].type);
+            assertEq(DPQL_TOK_RPAREN, tokens[5].type);
+        }
+    }
+
+    parserBasicTests() {
+        # Test simple equality
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq("name", exp.args[0].field);
+            assertEq("John", exp.args[1]);
+        }
+
+        # Test with quoted field name
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"field name" == "value"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("field name", exp.args[0].field);
+        }
+
+        # Test numeric comparison
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@age > 18');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("age", exp.args[0].field);
+            assertEq(18, exp.args[1]);
+        }
+
+        # Test float comparison
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@score >= 75.5');
+            assertEq(DP_SEARCH_OP_GE, exp.exp);
+            assertEq("score", exp.args[0].field);
+            assertEq(75.5, exp.args[1]);
+        }
+
+        # Test negative number
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@temp < -10');
+            assertEq(DP_SEARCH_OP_LT, exp.exp);
+            assertEq(-10, exp.args[1]);
+        }
+
+        # Test boolean literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@active == true');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(True, exp.args[1]);
+        }
+
+        # Test null literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@value != null');
+            assertEq(DP_SEARCH_OP_NE, exp.exp);
+            assertEq(NOTHING, exp.args[1]);
+        }
+    }
+
+    parserOperatorTests() {
+        # Test AND operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name == "John" && @age > 18');
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(DP_SEARCH_OP_EQ, exp.args[0].exp);
+            assertEq(DP_SEARCH_OP_GT, exp.args[1].exp);
+        }
+
+        # Test OR operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@status == "active" || @status == "pending"');
+            assertEq(DP_OP_OR, exp.exp);
+            assertEq(2, exp.args.size());
+        }
+
+        # Test NOT operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '!(@deleted == true)');
+            assertEq(DP_SEARCH_OP_NOT, exp.exp);
+            assertEq(1, exp.args.size());
+            assertEq(DP_SEARCH_OP_EQ, exp.args[0].exp);
+        }
+
+        # Test BETWEEN operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@age between 18 and 65');
+            assertEq(DP_SEARCH_OP_BETWEEN, exp.exp);
+            assertEq(3, exp.args.size());
+            assertEq("age", exp.args[0].field);
+            assertEq(18, exp.args[1]);
+            assertEq(65, exp.args[2]);
+        }
+
+        # Test IN operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@role in ("admin", "editor", "moderator")');
+            assertEq(DP_SEARCH_OP_IN, exp.exp);
+            assertEq(4, exp.args.size());
+            assertEq("role", exp.args[0].field);
+            assertEq("admin", exp.args[1]);
+            assertEq("editor", exp.args[2]);
+            assertEq("moderator", exp.args[3]);
+        }
+
+        # Test regex operator (simple pattern without escapes)
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@email =~ /example.com$/i');
+            assertEq(DP_SEARCH_OP_REGEX, exp.exp);
+            assertEq("email", exp.args[0].field);
+            assertEq("example.com$", exp.args[1]);
+            # Check for case-insensitive flag
+            assertEq(RE_Caseless, exp.args[2]);
+        }
+
+        # Test regex with combined flags
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@text =~ /^start.*end$/ims');
+            assertEq(DP_SEARCH_OP_REGEX, exp.exp);
+            assertEq("text", exp.args[0].field);
+            assertEq("^start.*end$", exp.args[1]);
+            # Check all flags are present
+            assertTrue(exp.args.size() >= 4);
+            list<int> flags = exp.args[2..];
+            assertTrue(inlist(RE_Caseless, flags));
+            assertTrue(inlist(RE_MultiLine, flags));
+            assertTrue(inlist(RE_DotAll, flags));
+        }
+
+        # Test scientific notation
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@value == 1.5e10');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("value", exp.args[0].field);
+            assertEq(1.5e10, exp.args[1]);
+        }
+
+        # Test negative scientific notation
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@value > -2.5E-3');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("value", exp.args[0].field);
+            assertEq(-2.5e-3, exp.args[1]);
+        }
+    }
+
+    parserComplexTests() {
+        # Test operator precedence (AND binds tighter than OR)
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@a == 1 || @b == 2 && @c == 3');
+            assertEq(DP_OP_OR, exp.exp);
+            assertEq(2, exp.args.size());
+            # First arg is simple comparison
+            assertEq(DP_SEARCH_OP_EQ, exp.args[0].exp);
+            # Second arg is AND expression
+            assertEq(DP_OP_AND, exp.args[1].exp);
+        }
+
+        # Test grouping with parentheses
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '(@a == 1 || @b == 2) && @c == 3');
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq(2, exp.args.size());
+            # First arg is OR expression
+            assertEq(DP_OP_OR, exp.args[0].exp);
+            # Second arg is simple comparison
+            assertEq(DP_SEARCH_OP_EQ, exp.args[1].exp);
+        }
+
+        # Test multiple AND expressions
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@a == 1 && @b == 2 && @c == 3');
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq(3, exp.args.size());
+        }
+
+        # Test nested grouping
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '(@a == 1 && (@b == 2 || @c == 3)) || @d == 4');
+            assertEq(DP_OP_OR, exp.exp);
+            assertEq(2, exp.args.size());
+        }
+
+        # Test dotted field names
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@address.city == "NYC"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("address.city", exp.args[0].field);
+        }
+    }
+
+    parserFunctionTests() {
+        # Test function call in expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'calculate(@score, 100) > 50');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("calculate", exp.args[0].exp);
+            assertEq(2, exp.args[0].args.size());
+            assertEq("score", exp.args[0].args[0].field);
+            assertEq(100, exp.args[0].args[1]);
+            assertEq(50, exp.args[1]);
+        }
+
+        # Test function with no arguments
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'now() > @created');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("now", exp.args[0].exp);
+            assertEq(0, exp.args[0].args.size());
+        }
+
+        # Test nested function calls
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'upper(trim(@name)) == "JOHN"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("upper", exp.args[0].exp);
+            assertEq("trim", exp.args[0].args[0].exp);
+            assertEq("name", exp.args[0].args[0].args[0].field);
+        }
+    }
+
+    parserErrorTests() {
+        # Test unterminated string
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name == "John');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E002", result.diagnostics[0].code);
+        }
+
+        # Test invalid operator
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name = "John"');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+        }
+
+        # Test missing closing parenthesis
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('(@name == "John"');
+            assertFalse(result.success);
+        }
+
+        # Test incomplete field reference
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@ == "value"');
+            assertFalse(result.success);
+        }
+
+        # Test missing value after operator
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name ==');
+            assertFalse(result.success);
+        }
+
+        # Test parse throws exception
+        {
+            bool caught = False;
+            try {
+                DataProvider::parseDpqlExpression('@name == "John');
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("DPQL-PARSE-ERROR", ex.err);
+            }
+            assertTrue(caught);
+        }
+    }
+
+    serializerTests() {
+        # Test simple equality
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@name == "John"', dpql);
+        }
+
+        # Test AND expression
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 18),
+                    },
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@name == "John" && @age > 18', dpql);
+        }
+
+        # Test NOT expression
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NOT,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (<DataProviderFieldReference>{"field": "deleted"}, True),
+                    },
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('!(@deleted == true)', dpql);
+        }
+
+        # Test BETWEEN expression
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_BETWEEN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "age"},
+                    18,
+                    65,
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@age between 18 and 65", dpql);
+        }
+
+        # Test IN expression
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_IN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "role"},
+                    "admin",
+                    "editor",
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@role in ("admin", "editor")', dpql);
+        }
+
+        # Test quoted field name
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "field name"}, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@"field name" == "value"', dpql);
+        }
+
+        # Test null value
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NE,
+                "args": (<DataProviderFieldReference>{"field": "value"}, NOTHING),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@value != null", dpql);
+        }
+    }
+
+    roundTripTests() {
+        # Test various expressions for round-trip consistency
+        list<string> expressions = (
+            '@name == "John"',
+            '@age > 18',
+            '@name == "John" && @age > 18',
+            '@status == "active" || @status == "pending"',
+            '@age between 18 and 65',
+            '@role in ("admin", "editor")',
+            '!(@deleted == true)',
+            '(@a == 1 || @b == 2) && @c == 3',
+            '@active == true',
+            '@value != null',
+            '@score >= 75.5',
+            '@temp < -10',
+        );
+
+        foreach string expr in (expressions) {
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            # Compare the expressions
+            assertEq(parsed.exp, reparsed.exp, sprintf("Round-trip failed for: %s", expr));
+            assertEq(parsed.args.size(), reparsed.args.size(), sprintf("Round-trip args size for: %s", expr));
+        }
+    }
+
+    completionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Test field completions after @
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@', 1, fields);
+            assertTrue(items.size() > 0);
+            # Should have field completions
+            assertTrue((select items, $1.kind == "field").size() > 0);
+        }
+
+        # Test field prefix filtering
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3, fields);
+            # Should only include "name"
+            list<hash<DpqlCompletionItem>> field_items = select items, $1.kind == "field";
+            assertEq(1, field_items.size());
+            assertEq("name", field_items[0].label);
+        }
+
+        # Test operator completions after field
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields);
+            # Should have operator completions
+            assertTrue((select items, $1.kind == "operator").size() > 0);
+        }
+
+        # Test value completions after operator
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name == ', 9, fields);
+            # Should suggest fields and keywords
+            assertTrue(items.size() > 0);
+        }
+
+        # Test keyword completions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name == tr', 11, fields);
+            list<hash<DpqlCompletionItem>> keyword_items = select items, $1.kind == "keyword" && $1.label == "true";
+            assertTrue(keyword_items.size() > 0);
+        }
+    }
+
+    staticApiTests() {
+        # Test getDpqlTokens
+        {
+            list<hash<DpqlTokenInfo>> tokens = DataProvider::getDpqlTokens('@name == "John"');
+            assertTrue(tokens.size() > 0);
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+        }
+
+        # Test parseDpqlExpression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+        }
+
+        # Test parseDpqlExpressionWithInfo
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@name == "John"');
+            assertTrue(result.success);
+            assertEq(DP_SEARCH_OP_EQ, result.expression.exp);
+            assertTrue(result.tokens.size() > 0);
+        }
+
+        # Test serializeDpqlExpression
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@name == "John"', dpql);
+        }
+    }
+
+    validationTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # Test valid expression
+        {
+            list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+                '@name == "John"', fields);
+            assertEq(0, errors.size());
+        }
+
+        # Test unknown field
+        {
+            list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+                '@unknown_field == "value"', fields);
+            assertTrue(errors.size() > 0);
+            assertEq("DPQL-E010", errors[0].code);
+        }
+
+        # Test multiple unknown fields
+        {
+            list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+                '@unknown1 == "a" && @unknown2 == "b"', fields);
+            assertTrue(errors.size() >= 2);
+        }
+
+        # Test valid nested expression
+        {
+            list<hash<DpqlDiagnostic>> errors = DataProvider::validateDpqlExpression(
+                '(@name == "John" && @age > 18) || @status == "admin"', fields);
+            assertEq(0, errors.size());
+        }
+    }
+
+    stressTests() {
+        # Test deeply nested expressions
+        {
+            # Build expression: (((((@a == 1) && @b == 2) && @c == 3) ...
+            string dpql = "@a == 1";
+            for (int i = 0; i < 20; ++i) {
+                dpql = "(" + dpql + " && @x" + string(i) + " == " + string(i) + ")";
+            }
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_AND, exp.exp);
+
+            # Round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            hash<DataProviderExpression> exp2 = DataProvider::parseDpqlExpression(serialized);
+            assertEq(exp.exp, exp2.exp);
+        }
+
+        # Test long OR chain
+        {
+            list<string> conditions = ();
+            for (int i = 0; i < 50; ++i) {
+                conditions += "@field" + string(i) + " == " + string(i);
+            }
+            string dpql = conditions.join(" || ");
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_OR, exp.exp);
+            assertEq(50, exp.args.size());
+        }
+
+        # Test complex mixed expression
+        {
+            string dpql = '(@a == 1 || @b == 2) && (@c == 3 || @d == 4) && ' +
+                '(@e in (1, 2, 3) || @f between 10 and 20) && !(@g == "deleted")';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_OP_AND, exp.exp);
+
+            # Round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            hash<DataProviderExpression> exp2 = DataProvider::parseDpqlExpression(serialized);
+            assertEq(exp.exp, exp2.exp);
+            assertEq(exp.args.size(), exp2.args.size());
+        }
+    }
+}
