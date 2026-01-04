@@ -8,12 +8,12 @@
     @ref variable_implicit_construction "variable implicit construction".
 
     @section hashdecl_syntax hashdecl Declaration Syntax
-    <tt><b>hashdecl</b></tt> <em>hashdecl_identifier</em> <tt>{</tt> \n
+    <tt><b>hashdecl</b></tt> <em>hashdecl_identifier</em> <tt>[<b>inherits</b></tt> <em>parent_hashdecl</em><tt>]</tt> <tt>{</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;<em>@ref data_type_declarations "member_type"</em><tt> </tt><em>member_name</em> <tt>[= </tt><em>@ref expressions "initialization_expression"</em><tt>];</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;[...] \n
     <tt>}</tt>
 
-    At least one member must be defined; it's not possible to declare an empty type-safe hash.
+    At least one member must be defined in the hashdecl or inherited from a parent; it's not possible to declare an empty type-safe hash.
 
     @par Example
     @code{.py}
@@ -116,6 +116,56 @@ hash<Container2> c3 = cast<hash<Container2>>(cast<hash>(h - "other"));
 
     @see @ref cast "cast<>"
 
+    @section hashdecl_inheritance Hashdecl Inheritance
+
+    Type-safe hashes support single inheritance, allowing child hashdecls to inherit all members from a parent
+    hashdecl. This is achieved using the \c inherits keyword.
+
+    @par Example:
+    @code{.py}
+hashdecl BaseInfo {
+    string name;
+    int id;
+}
+
+hashdecl ExtendedInfo inherits BaseInfo {
+    date created;
+    *string description;
+}
+
+# Access inherited members
+hash<ExtendedInfo> ext = <ExtendedInfo>{
+    "name": "test",
+    "id": 123,
+    "created": now(),
+};
+printf("name: %s, id: %d\n", ext.name, ext.id);
+    @endcode
+
+    @subsection hashdecl_inheritance_rules Inheritance Rules
+    - <b>Single inheritance only:</b> A hashdecl can inherit from at most one parent hashdecl
+    - <b>All members public:</b> All inherited members are public (hashdecls have no access modifiers)
+    - <b>No member shadowing:</b> Child hashdecls cannot declare a member with the same name as a parent member;
+      this will result in a parse error
+    - <b>Circular inheritance:</b> Circular inheritance (A inherits B, B inherits A) is detected and reported
+      as a parse error
+    - <b>Member initialization:</b> Parent members are initialized first, followed by child members
+
+    @subsection hashdecl_inheritance_type_compat Inheritance Type Compatibility
+    Values of a derived hashdecl type can be assigned to variables of the parent hashdecl type:
+
+    @code{.py}
+hashdecl Parent { int x; }
+hashdecl Child inherits Parent { int y; }
+
+hash<Child> c = <Child>{"x": 1, "y": 2};
+hash<Parent> p = c;  # OK: Child can be assigned to Parent
+printf("x: %d\n", p.x);  # Prints: x: 1
+    @endcode
+
+    @note The reverse is not true: assigning a parent hashdecl value to a child hashdecl variable requires an
+    explicit cast.
+
     @section hashdecl_object_comparison Comparison of Type-Safe Hashes and Objects
 
     Type-safe hashes are similar to objects in that they have members, but there are some important
@@ -123,5 +173,5 @@ hash<Container2> c3 = cast<hash<Container2>>(cast<hash>(h - "other"));
     - type-safe hashes are always passed by value whereas objects are always passed by reference
     - object classes can have methods, type-safe hashes cannot
     - object classes allow for class members to have access restrictions; type-safe hashes are made up exclusively of public members
-    - object classes can participate in a hierarchy, type-safe hashes cannot
+    - object classes support multiple inheritance, type-safe hashes support single inheritance only
 */

@@ -109,6 +109,7 @@ typedef void* yyscan_t;
     ASTHashElementExpression* hashelem;
     ASTHashMemberDeclaration* hashmember;
     std::vector<ASTHashMemberDeclaration*>* hashmemberlist;
+    ASTName* astname;
     ASTListExpression* list;
     ASTMemberGroupDeclaration* membergroup;
     ASTNameExpression* nameexpr;
@@ -371,6 +372,7 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <hashelem>       hash_element
 %type <hashmemberlist> hashdecl_attributes
 %type <hashdecl>       hashdecl_def
+%type <astname>        hashdecl_inherits
 %type <hashmember>     hashdecl_member
 %type <typedefdecl>    typedef_def
 %type <string>         ident_openparen
@@ -419,7 +421,7 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <constdecl>      unscoped_const_decl
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod exp exp_c exp_n gvardecl hash hash_element hashdecl_def hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement uncqtypedef unscoped_const_decl
+%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod exp exp_c exp_n gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement uncqtypedef unscoped_const_decl
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 
@@ -1146,26 +1148,42 @@ myexp:
         | error      { $$ = 0; }
         ;
 
+hashdecl_inherits:
+        TOK_INHERITS IDENTIFIER {
+            $$ = new ASTName($2, ASTNameKind::ANK_Identifier);
+            $$->loc = @2;
+            free($2);
+        }
+        | TOK_INHERITS SCOPED_REF {
+            $$ = new ASTName($2, ASTNameKind::ANK_ScopedRef);
+            $$->loc = @2;
+            free($2);
+        }
+        | /* empty */ {
+            $$ = nullptr;
+        }
+        ;
+
 hashdecl_def:
-        nsc_modifiers TOK_HASHDECL IDENTIFIER '{' hashdecl_attributes '}' {
+        nsc_modifiers TOK_HASHDECL IDENTIFIER hashdecl_inherits '{' hashdecl_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_Identifier);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTHashDeclaration(mods, std::move(name), $5);
-            $$->loc.set(@1, @6);
-            delete $5;
+            $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
+            delete $6;
         }
-        | nsc_modifiers TOK_HASHDECL SCOPED_REF '{' hashdecl_attributes '}' {
+        | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_ScopedRef);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTHashDeclaration(mods, std::move(name), $5);
-            $$->loc.set(@1, @6);
-            delete $5;
+            $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
+            delete $6;
         }
         ;
 

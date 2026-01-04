@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,7 @@
 #include <string>
 
 class typed_hash_decl_private;
+class NamedScope;
 
 class HashDeclMemberInfo : public QoreMemberInfoBase {
 public:
@@ -78,6 +79,7 @@ public:
         assert(!refs.reference_count());
         delete typeInfo;
         delete orNothingTypeInfo;
+        delete parse_parent;
     }
 
     DLLLOCAL TypedHashDecl* newTypedHashDecl(const char* n) {
@@ -153,26 +155,7 @@ public:
         return false;
     }
 
-    DLLLOCAL int parseInit() {
-        if (parse_init_done || sys) {
-            return 0;
-        }
-        parse_init_done = true;
-
-        int err = 0;
-
-        // initialize new members
-        for (auto& i : members.member_list) {
-            if (i.second) {
-                if (i.second->parseInit(i.first, true) && !err) {
-                    err = -1;
-                }
-            }
-            // check new members for conflicts in base hashdecls
-            //parseCheckMemberInBaseHashDecl(i.first, i.second);
-        }
-        return err;
-    }
+    DLLLOCAL int parseInit();
 
     DLLLOCAL int parseInitHashDeclInitialization(const QoreProgramLocation* loc, QoreParseContext& parse_context,
             QoreParseListNode* args, bool& runtime_check) const;
@@ -195,7 +178,7 @@ public:
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
 
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
-        const HashDeclMemberInfo* mem = members.find(key);
+        const HashDeclMemberInfo* mem = findMember(key);
         if (!mem) {
             xsink->raiseException("HASHDECL-KEY-ERROR", "cannot assign unknown key '%s' to hashdecl '%s'", key, name.c_str());
             return -1;
@@ -212,7 +195,14 @@ public:
             const QoreTypeInfo*& memberTypeInfo, int pflag) const;
 
     DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
-        return members.find(m);
+        const HashDeclMemberInfo* mi = members.find(m);
+        if (mi) {
+            return mi;
+        }
+        if (parentHashDecl) {
+            return get(*parentHashDecl)->findMember(m);
+        }
+        return nullptr;
     }
 
     DLLLOCAL void parseAdd(std::pair<char*, HashDeclMemberInfo*> pair) {
@@ -220,7 +210,13 @@ public:
     }
 
     DLLLOCAL bool hasMember(const char* name) const {
-        return members.inList(name);
+        if (members.inList(name)) {
+            return true;
+        }
+        if (parentHashDecl) {
+            return get(*parentHashDecl)->hasMember(name);
+        }
+        return false;
     }
 
     DLLLOCAL void setSystemPublic() {
@@ -283,6 +279,30 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Sets the parse-time parent hashdecl scope to be resolved during parseInit
+    DLLLOCAL void setParseParent(NamedScope* parent) {
+        assert(!parse_parent);
+        parse_parent = parent;
+    }
+
+    //! Returns the resolved parent hashdecl or nullptr if none
+    DLLLOCAL const TypedHashDecl* getParentHashDecl() const {
+        return parentHashDecl;
+    }
+
+    //! Returns true if this hashdecl is a descendant of the given hashdecl
+    DLLLOCAL bool isDescendantOf(const typed_hash_decl_private& ancestor) const {
+        const typed_hash_decl_private* current = this;
+        while (current->parentHashDecl) {
+            const typed_hash_decl_private* parent = get(*current->parentHashDecl);
+            if (parent == &ancestor || parent->orig == ancestor.orig) {
+                return true;
+            }
+            current = parent;
+        }
+        return false;
+    }
+
 protected:
     // references
     mutable QoreReferenceCounter refs;
@@ -304,6 +324,11 @@ protected:
 
     // member information
     HashDeclMemberMap members;
+
+    // parent hashdecl (resolved after parseInit)
+    const TypedHashDecl* parentHashDecl = nullptr;
+    // parse-time parent scope (to be resolved during parseInit)
+    NamedScope* parse_parent = nullptr;
 
     bool pub = false;
     bool sys = false;
