@@ -60,6 +60,14 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
             #printf("h: %N\n", h);
             return makeResponse(200, new BinaryInputStream(h.part[1].body), {"Content-Type": h.part[1].hdr."content-type"});
+        } else if (*list<*string> m = (rpath =~ x/largeresponse\/(\d+)/)) {
+            # Return a response of specified size for testing large HTTP/2 transfers
+            int size = int(m[0]);
+            string data = strmul("X", size);
+            return makeResponse(200, data, {"Content-Type": "text/plain"});
+        } else if (rpath =~ /^echo-body/) {
+            # Echo back the request body for testing large POST bodies
+            return makeResponse(200, body, {"Content-Type": "application/octet-stream"});
         }
 
         if (hdr.method == "POST") {
@@ -1099,14 +1107,97 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 version, h2client.isHttp2Active());
         }
 
-        # Test keep-alive with multiple requests
-        assertEq("GET, test1, /test1", h2client.get("/test1"));
-        assertEq("GET, test2, /test2", h2client.get("/test2"));
+        # Test that response-uri is set correctly for HTTP/2 responses
+        # This is needed for tools like 'rest -l' that display the response status line
+        {
+            hash<auto> info;
+            h2client.send(NOTHING, "GET", "/http2-test", NOTHING, False, \info);
+            # Verify response-uri is set in the format "HTTP/2 <code> <message>"
+            assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
+            assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 response-uri: %y\n", info."response-uri");
+            }
+        }
+
+        # Test keep-alive with multiple requests (verifies HTTP/2 connection state preservation)
+        # This is critical for browser compatibility - browsers reuse HTTP/2 connections
+        for (int i = 1; i <= 5; i++) {
+            string path = sprintf("/test%d", i);
+            string expected = sprintf("GET, test%d, %s", i, path);
+            assertEq(expected, h2client.get(path));
+        }
+
+        # Verify HTTP/2 is still active after multiple requests
+        assertTrue(h2client.isHttp2Active());
+
+        # Test larger payloads - this exercises the HTTP/2 DATA frame handling with substantial data
+        # These sizes are chosen to test different scenarios:
+        # - 50KB: moderate size
+        # - 100KB: larger response
+        # - 500KB: tests flow control and multiple DATA frames
+        list<int> sizes = (50000, 100000, 500000);
+        for (int i = 0; i < sizes.size(); i++) {
+            int size = sizes[i];
+            hash<auto> large_resp = h2client.send(NOTHING, "GET", "/largeresponse/" + size, NOTHING, True);
+            assertEq(200, large_resp.status_code);
+            assertEq(size, large_resp.body.size());
+            # Verify HTTP/2 connection is still active after large transfer
+            assertTrue(h2client.isHttp2Active());
+        }
+
+        # Test HTTP/2 compression - this was a bug where Accept-Encoding wasn't being parsed for HTTP/2
+        # The server should compress responses > 1KB when Accept-Encoding is provided
+        {
+            # Create a new HTTP/2 client that doesn't auto-decompress
+            HTTPClient h2compress({
+                "url": asyncSslUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",
+            });
+            h2compress.connect();
+            on_exit h2compress.disconnect();
+
+            # Request a 5KB response (well above the 1KB compression threshold)
+            # Send explicit Accept-Encoding header
+            hash<auto> hdr = {
+                "Accept-Encoding": "gzip, deflate, br",
+            };
+            hash<auto> info;
+            h2compress.send(NOTHING, "GET", "/largeresponse/5000", hdr, False, \info);
+            # Verify the response was compressed (Content-Encoding should be set)
+            # Note: HTTPClient auto-decompresses, so we check the original response headers
+            *string content_encoding = info."response-headers"."content-encoding"
+                ?? info."response-headers"."Content-Encoding";
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
+            }
+            assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
+        }
 
         # Test POST request
         hash<auto> postResp = h2client.send("http2-data", "POST", "/http2-post");
         assertEq(200, postResp.status_code);
         assertEq("POST, http2-data, http2-post, /http2-post", postResp.body);
+
+        # Test HTTP/2 POST with large request bodies
+        # This exercises HTTP/2 DATA frame handling for request bodies
+        # These sizes test different scenarios:
+        # - 50KB: moderate size, multiple DATA frames
+        # - 100KB: larger request body
+        # - 500KB: tests flow control with large uploads
+        list<int> post_sizes = (50000, 100000, 500000);
+        for (int j = 0; j < post_sizes.size(); j++) {
+            int post_size = post_sizes[j];
+            string large_body = strmul("X", post_size);
+            hash<auto> post_resp = h2client.send(large_body, "POST", "/echo-body");
+            assertEq(200, post_resp.status_code, sprintf("HTTP/2 POST %d bytes should succeed", post_size));
+            assertEq(post_size, post_resp.body.size(), sprintf("HTTP/2 POST %d bytes - response body size", post_size));
+            assertEq(large_body, post_resp.body, sprintf("HTTP/2 POST %d bytes - body content", post_size));
+            # Verify HTTP/2 connection is still active after large upload
+            assertTrue(h2client.isHttp2Active(), sprintf("HTTP/2 active after %d byte POST", post_size));
+        }
 
         # Test HTTP/2 disabled mode
         HTTPClient h1client({
@@ -1128,7 +1219,47 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # This should work with HTTP/1.1
         assertEq("GET, h1test, /h1test", h1client.get("/h1test"));
         assertFalse(h1client.isHttp2Active());
+
+        # Test set_global_http2_mode("disabled") - server should not offer HTTP/2
+        {
+            # Save original mode
+            string orig_mode = get_global_http2_mode();
+            on_exit set_global_http2_mode(orig_mode);
+
+            # Disable HTTP/2 globally
+            set_global_http2_mode("disabled");
+            assertEq("disabled", get_global_http2_mode());
+
+            # Create a new HTTPS listener that will be affected by the global mode
+            # The async server's listeners are cached, so we need a new one to test
+            hash<auto> linfo = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            on_exit mAsyncServer.stopListenerID(linfo.id);
+
+            string disabledUrl = "https://localhost:" + linfo.port;
+
+            # Create an HTTP/2 client and try to connect - it should fall back to HTTP/1.1
+            # because the server won't offer HTTP/2 via ALPN
+            HTTPClient h2disabled({
+                "url": disabledUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",    # Client wants HTTP/2
+            });
+            h2disabled.connect();
+            on_exit h2disabled.disconnect();
+
+            # The client should fall back to HTTP/1.1 because server doesn't offer HTTP/2
+            assertFalse(h2disabled.isHttp2Active(), "HTTP/2 should not be active when globally disabled");
+
+            # Request should still work via HTTP/1.1
+            assertEq("GET, h2disabled, /h2disabled", h2disabled.get("/h2disabled"));
+        }
     }
+
 }
 
 #! Test handler that supports persistent connections

@@ -1408,7 +1408,28 @@ public class AbstractStreamRequest {
             return rv;
         }
 
-        # send chunked response
+        # For HTTP/2 connections, buffer the response data
+        # HTTP/2 doesn't support raw chunked transfer encoding - data must go in DATA frames
+        if (cx."header-info".http2) {
+            # Buffer all the data from the callback (can be string or binary)
+            binary data;
+            auto chunk;
+            while (chunk = send()) {
+                if (chunk.typeCode() == NT_STRING) {
+                    data += binary(chunk);
+                } else if (chunk.typeCode() == NT_BINARY) {
+                    data += chunk;
+                }
+            }
+            # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
+            remove rv.hdr."Transfer-Encoding";
+            # Don't set Content-Length here - the body may be compressed later in HttpServer::sendReply()
+            # which would change the size. Content-Length will be set correctly by doResponse/startPollSendHttp2Response
+            rv.body = data;
+            return rv;
+        }
+
+        # HTTP/1.x: send chunked response
         s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
             timeout_ms);
         rv.reply_sent = True;

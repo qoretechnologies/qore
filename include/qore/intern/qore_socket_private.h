@@ -611,6 +611,11 @@ struct qore_socket_private {
         return sock != QORE_INVALID_SOCKET;
     }
 
+    //! Returns true if ALPN protocols have been configured
+    DLLLOCAL bool hasAlpnProtocols() const {
+        return !alpn_protocols.empty();
+    }
+
     DLLLOCAL int close() {
         return close_internal();
     }
