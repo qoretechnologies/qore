@@ -48,6 +48,9 @@ public class MaxThreadCountTest inherits QUnit::Test {
             while (True) {
                 c0.inc();
                 on_error {
+                    # Capture thread count BEFORE signaling threads to exit
+                    # This fixes race condition where threads exit before we can count them
+                    limit = num_threads();
                     c.dec();
                     c0.dec();
                 }
@@ -55,7 +58,6 @@ public class MaxThreadCountTest inherits QUnit::Test {
             }
         } catch (hash<ExceptionInfo> ex) {
             assertEq("THREAD-CREATION-FAILURE", ex.err, "found thread count limit");
-            limit = num_threads();
             # Log diagnostic info when thread limit is suspiciously low
             if (limit < 100) {
                 printf("WARNING: low thread limit detected: %d\n", limit);
