@@ -1621,16 +1621,16 @@ public namespace DebugCmdLine {
                         if (args[0] != "" && exists c.validate && (opts & fcValidate)) {
                             c.validate(self, result.path, args);
                         }
-                        if (args.size() == 1 && exists c.enum) {
-                            result.variants = c.enum;
+                        if (args.size() == 1 && exists c{"enum"}) {
+                            result.variants = c{"enum"};
                         }
                         push result.path, shift args;
                         ++last_param;
                         result.cmd = c;
                     } else if (exists c."**") {
                         c = c."**";
-                        if (exists c.enum) {
-                            result.variants = c.enum;
+                        if (exists c{"enum"}) {
+                            result.variants = c{"enum"};
                         }
                         push result.path, shift args;
                         ++last_param;

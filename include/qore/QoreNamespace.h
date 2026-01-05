@@ -52,6 +52,7 @@ class QoreExternalFunction;
 class QoreExternalConstant;
 class QoreExternalGlobalVar;
 class QoreProgram;
+class QoreEnumDecl;
 
 //! namespace class handler function type
 /** called when a class cannot be found in the namespace
@@ -277,6 +278,11 @@ public:
     /** @since %Qore 0.9
     */
     DLLEXPORT const TypedHashDecl* findLocalTypedHash(const char* name) const;
+
+    //! find an enum in the current namespace; returns nullptr if not found
+    /** @since %Qore 2.1
+    */
+    DLLEXPORT const QoreEnumDecl* findLocalEnum(const char* name) const;
 
     //! returns the path for the namespace
     /** @param anchored if true then the namespace will be prefixed with "::" for the unnamed root namespace
@@ -664,6 +670,33 @@ private:
     QoreNamespaceTypedHashIterator& operator=(const QoreNamespaceTypedHashIterator&) = delete;
 
     class ConstHashDeclListIterator* priv;
+};
+
+//! allows enums in a namespace to be iterated
+/** @since %Qore 2.1
+*/
+class QoreNamespaceEnumIterator {
+public:
+    //! creates the iterator
+    DLLEXPORT QoreNamespaceEnumIterator(const QoreNamespace& ns);
+
+    //! destroys the iterator
+    DLLEXPORT virtual ~QoreNamespaceEnumIterator();
+
+    //! moves to the next position; returns true if the iterator is pointing to a valid element
+    DLLEXPORT bool next();
+
+    //! returns the enum
+    DLLEXPORT const QoreEnumDecl& get() const;
+
+private:
+    //! this function is not implemented
+    QoreNamespaceEnumIterator(const QoreNamespaceEnumIterator&) = delete;
+
+    //! this function is not implemented
+    QoreNamespaceEnumIterator& operator=(const QoreNamespaceEnumIterator&) = delete;
+
+    class ConstEnumListIterator* priv;
 };
 
 #endif // QORE_NAMESPACE_H

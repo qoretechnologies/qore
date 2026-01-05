@@ -38,6 +38,7 @@
 #include "QC_GlobalVar.h"
 #include "QC_TypedHash.h"
 #include "QC_Constant.h"
+#include "QC_Enum.h"
 
 QoreReflectionNamespace::QoreReflectionNamespace(ExceptionSink* xsink, const QoreString& name, QoreProgram* pgm)
     : AbstractReflectionObject(pgm) {
@@ -833,6 +834,65 @@ list<TypedHash> Namespace::getTypedHashes() [flags=RET_VALUE_ONLY] {
     QoreNamespaceTypedHashIterator i(*n->ns);
     while (i.next()) {
         l->push(new QoreObject(QC_TYPEDHASH, n->pgm, new QoreReflectionTypedHash(n->pgm, &i.get(), n->ns)), xsink);
+    }
+
+    return l.release();
+}
+
+//! Returns the given direct child enum declared in this namespace or throws an exception if the enum is not defined
+/** @par Example:
+    @code{.py}
+Enum e = n.getEnum(name);
+    @endcode
+
+    @return given enum or throws an exception if the enum is not defined in this namespace
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw UNKNOWN-ENUM thrown if the enum cannot be found
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+
+    @since %Qore 2.1
+*/
+Enum Namespace::getEnum(string name) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the namespace ptr must be valid
+    const QoreEnumDecl* rv = n->ns->findLocalEnum(tname->c_str());
+    if (!rv) {
+        xsink->raiseException("UNKNOWN-ENUM", "enum '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_ENUM, n->pgm, new QoreReflectionEnum(n->pgm, rv, n->ns));
+}
+
+//! Returns a list of all declared enums in the namespace
+/** @par Example:
+    @code{.py}
+list<Enum> l = n.getEnums();
+    @endcode
+
+    @return a list of all declared enums in the namespace
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+
+    @since %Qore 2.1
+*/
+list<Enum> Namespace::getEnums() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, n->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the namespace ptr must be valid
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ENUM->getTypeInfo()), xsink);
+    QoreNamespaceEnumIterator i(*n->ns);
+    while (i.next()) {
+        l->push(new QoreObject(QC_ENUM, n->pgm, new QoreReflectionEnum(n->pgm, &i.get(), n->ns)), xsink);
     }
 
     return l.release();

@@ -96,6 +96,7 @@ void ParseOptionMap::static_init() {
     DO_MAP("no-reflection",            PO_NO_REFLECTION);
     DO_MAP("no-transient",             PO_NO_TRANSIENT);
     DO_MAP("no-typedef",               PO_NO_TYPEDEF);
+    DO_MAP("no-enum",                  PO_NO_ENUM);
     DO_MAP("broken-sprintf",           PO_BROKEN_SPRINTF);
     DO_MAP("broken-cast",              PO_BROKEN_CAST);
     DO_MAP("allow-returns",            PO_ALLOW_RETURNS);

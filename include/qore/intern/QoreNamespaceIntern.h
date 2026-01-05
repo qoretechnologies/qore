@@ -34,6 +34,7 @@
 
 #include "qore/intern/QoreClassList.h"
 #include "qore/intern/HashDeclList.h"
+#include "qore/intern/EnumList.h"
 #include "qore/intern/QoreNamespaceList.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/FunctionList.h"
@@ -93,6 +94,7 @@ public:
 
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
+    EnumList enumList;             // enum map
     ConstantList constant;         // constant map
     typedef_map_t typedefMap;      // typedef map
     QoreNamespaceList nsl;         // namespace map
@@ -108,6 +110,7 @@ public:
     std::vector<std::string> pending_class_names;    // Classes added in pending parse
     std::vector<std::string> pending_const_names;    // Constants added in pending parse
     std::vector<std::string> pending_hashdecl_names; // Hashdecls added in pending parse
+    std::vector<std::string> pending_enum_names;     // Enums added in pending parse
     std::vector<std::string> pending_typedef_names;  // Typedefs added in pending parse
     std::vector<std::string> pending_ns_names;       // Child namespaces added in pending parse
 
@@ -174,6 +177,7 @@ public:
             ns(ns),
             classList(old.classList, po, this),
             hashDeclList(old.hashDeclList, po, this),
+            enumList(old.enumList, po, this),
             constant(old.constant, po, this),
             nsl(old.nsl, po, *this),
             func_list(old.func_list, this, po),
@@ -284,6 +288,8 @@ public:
 
         hashDeclList.reset();
 
+        enumList.reset();
+
         nsl.reset();
     }
 
@@ -342,6 +348,10 @@ public:
     DLLLOCAL int parseAddPendingHashDecl(const QoreProgramLocation* loc, const NamedScope& n,
             TypedHashDecl* hashdecl);
     DLLLOCAL int parseAddPendingHashDecl(const QoreProgramLocation* loc, TypedHashDecl* hashdecl);
+
+    DLLLOCAL int parseAddPendingEnum(const QoreProgramLocation* loc, const NamedScope& n,
+            QoreEnumDecl* enumdecl);
+    DLLLOCAL int parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnumDecl* enumdecl);
 
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);
 
@@ -452,6 +462,10 @@ public:
         return hashDeclList.find(name);
     }
 
+    DLLLOCAL QoreEnumDecl* parseFindLocalEnum(const char* name) {
+        return enumList.find(name);
+    }
+
     DLLLOCAL QoreValue getConstantValue(const char* name, const QoreTypeInfo*& typeInfo, bool& found);
     DLLLOCAL QoreClass* parseFindLocalClass(const char* name);
     DLLLOCAL qore_ns_private* parseAddNamespace(QoreNamespace* nns);
@@ -479,6 +493,8 @@ public:
 
     DLLLOCAL const TypedHashDecl* runtimeMatchHashDecl(const NamedScope& nscope, const qore_ns_private*& rns) const;
 
+    DLLLOCAL const QoreEnumDecl* runtimeMatchEnum(const NamedScope& nscope, const qore_ns_private*& rns) const;
+
     DLLLOCAL const FunctionEntry* runtimeMatchFunctionEntry(const NamedScope& nscope) const;
     DLLLOCAL const qore_ns_private* runtimeMatchAddFunction(const NamedScope& nscope, bool& fnd) const;
 
@@ -490,6 +506,7 @@ public:
     DLLLOCAL QoreNamespace* parseMatchNamespace(const NamedScope& nscope, unsigned& matched) const;
 
     DLLLOCAL TypedHashDecl* parseMatchScopedHashDecl(const NamedScope& name, unsigned& matched);
+    DLLLOCAL const QoreEnumDecl* parseMatchScopedEnum(const NamedScope& name, unsigned& matched);
 
     DLLLOCAL QoreClass* parseMatchScopedClass(const NamedScope& name, unsigned& matched);
     DLLLOCAL QoreClass* parseMatchScopedClassWithMethod(const NamedScope& nscope, unsigned& matched);
@@ -1114,6 +1131,8 @@ typedef RootMap<QoreClass> clmap_t;
 
 typedef RootMap<TypedHashDecl> thdmap_t;
 
+typedef RootMap<QoreEnumDecl> edmap_t;
+
 typedef RootMap<Var> varmap_t;
 
 typedef RootMap<TypedefEntry> tdmap_t;
@@ -1243,6 +1262,17 @@ protected:
             ns = i->second.ns;
             //printd(5, "qore_root_ns_private::runtimeFindHashDeclIntern() this: %p %s found in ns: '%s' depth: %d\n",
             //  this, name, ns->name.c_str(), ns->depth);
+            return i->second.obj;
+        }
+
+        return nullptr;
+    }
+
+    DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
+        edmap_t::iterator i = edmap.find(name);
+
+        if (i != edmap.end()) {
+            ns = i->second.ns;
             return i->second.obj;
         }
 
@@ -1417,6 +1447,27 @@ protected:
         return nullptr;
     }
 
+    DLLLOCAL const QoreEnumDecl* parseFindEnumIntern(const char* ename) {
+        {
+            // try to check in current namespace first
+            qore_ns_private* nscx = parse_get_ns();
+            if (nscx) {
+                const QoreEnumDecl* ed = nscx->enumList.find(ename);
+                if (ed) {
+                    return ed;
+                }
+            }
+        }
+
+        edmap_t::iterator i = edmap.find(ename);
+
+        if (i != edmap.end()) {
+            return i->second.obj;
+        }
+
+        return nullptr;
+    }
+
     DLLLOCAL TypedefEntry* parseFindTypedefIntern(const char* tdname) {
         {
             // try to check in current namespace first
@@ -1541,6 +1592,8 @@ protected:
     DLLLOCAL void parseAddClassIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc);
 
     DLLLOCAL void parseAddHashDeclIntern(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd);
+
+    DLLLOCAL void parseAddEnumIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreEnumDecl* ed);
 
     DLLLOCAL void parseAddTypedefIntern(const QoreProgramLocation* loc, const NamedScope& name,
             const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub);
@@ -1682,6 +1735,12 @@ protected:
             thdmap.update(hdli.getName(), ns, hdli.get());
     }
 
+    DLLLOCAL static void rebuildEnumIndexes(edmap_t& edmap, EnumList& el, qore_ns_private* ns) {
+        EnumListIterator eli(el);
+        while (eli.next())
+            edmap.update(eli.getName(), ns, eli.get());
+    }
+
     DLLLOCAL static void rebuildTypedefIndexes(tdmap_t& tdmap, typedef_map_t& tdm, qore_ns_private* ns) {
         for (typedef_map_t::iterator i = tdm.begin(), e = tdm.end(); i != e; ++i)
             tdmap.update(i->first, ns, i->second);
@@ -1712,6 +1771,9 @@ protected:
 
         // process hashdecl indexes
         rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
+
+        // process enum indexes
+        rebuildEnumIndexes(edmap, ns->enumList, ns);
 
         // process typedef indexes
         rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
@@ -1746,6 +1808,9 @@ protected:
         // process hashdecl indexes
         rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
 
+        // process enum indexes
+        rebuildEnumIndexes(edmap, ns->enumList, ns);
+
         // process typedef indexes
         rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
 
@@ -1771,6 +1836,8 @@ public:
     clmap_t clmap;       // root class map
 
     thdmap_t thdmap;     // root hashdecl map
+
+    edmap_t edmap;       // root enum map
 
     tdmap_t tdmap;       // root typedef map
 
@@ -1925,6 +1992,7 @@ public:
         varmap.clear();
         clmap.clear();
         thdmap.clear();
+        edmap.clear();
         tdmap.clear();
         nsmap.clear();
 
@@ -1936,7 +2004,24 @@ public:
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);
 
+    DLLLOCAL const QoreEnumDecl* parseFindScopedEnumIntern(const NamedScope& name, unsigned& matched);
+    DLLLOCAL const QoreEnumDecl* parseFindEnum(const QoreProgramLocation* loc, const NamedScope& name);
+
+    //! Tries to find an enum without raising a parse error
+    /** @param name the name/scope of the enum
+        @return the enum declaration if found, nullptr otherwise
+    */
+    DLLLOCAL const QoreEnumDecl* parseTryFindEnum(const NamedScope& name) {
+        if (name.size() == 1) {
+            return parseFindEnumIntern(name.ostr);
+        }
+        unsigned m = 0;
+        return parseFindScopedEnumIntern(name, m);
+    }
+
     DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const NamedScope& name, const qore_ns_private*& ns);
+
+    DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const NamedScope& name, const qore_ns_private*& ns);
 
     DLLLOCAL QoreNamespace* runtimeFindCreateNamespacePath(const NamedScope& nspath, bool pub, bool user) {
         assert(nspath.size());
@@ -1973,6 +2058,10 @@ public:
 
     DLLLOCAL void runtimeRebuildHashDeclIndexes(qore_ns_private* ns) {
         rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
+    }
+
+    DLLLOCAL void runtimeRebuildEnumIndexes(qore_ns_private* ns) {
+        rebuildEnumIndexes(edmap, ns->enumList, ns);
     }
 
     DLLLOCAL void runtimeRebuildFunctionIndexes(qore_ns_private* ns) {
@@ -2083,6 +2172,15 @@ public:
             return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
         }
         return rns.rpriv->runtimeFindHashDeclIntern(name, ns);
+    }
+
+    DLLLOCAL static const QoreEnumDecl* runtimeFindEnum(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindEnumIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindEnumIntern(name, ns);
     }
 
     DLLLOCAL static const QoreFunction* runtimeFindFunction(RootQoreNamespace& rns, const char* name,
@@ -2198,6 +2296,10 @@ public:
 
     DLLLOCAL static void parseAddHashDecl(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd) {
         getRootNS()->rpriv->parseAddHashDeclIntern(loc, name, hd);
+    }
+
+    DLLLOCAL static void parseAddEnum(const QoreProgramLocation* loc, const NamedScope& name, QoreEnumDecl* ed) {
+        getRootNS()->rpriv->parseAddEnumIntern(loc, name, ed);
     }
 
     DLLLOCAL static void parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& name,

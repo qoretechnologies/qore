@@ -1030,6 +1030,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%no-reflection{WS}*$                   parse_set_parse_options(yylloc, PO_NO_REFLECTION);
 ^%no-transient{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TRANSIENT);
 ^%no-typedef{WS}*$                      parse_set_parse_options(yylloc, PO_NO_TYPEDEF);
+^%no-enum{WS}*$                         parse_set_parse_options(yylloc, PO_NO_ENUM);
 ^%push-parse-options{WS}*$              push_parse_options();
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);
@@ -1945,6 +1946,12 @@ typedef                                 {
                                                 yylval->string = strdup("typedef"); return IDENTIFIER;
                                             }
                                             return TOK_TYPEDEF;
+                                        }
+enum                                    {
+                                            if (getProgram()->getParseOptions64() & PO_NO_ENUM) {
+                                                yylval->string = strdup("enum"); return IDENTIFIER;
+                                            }
+                                            return TOK_ENUM;
                                         }
 map                                     { push_ignore_numeric_argv_ref(); return TOK_MAP; }
 foldr                                   { push_ignore_numeric_argv_ref(); return TOK_FOLDR; }

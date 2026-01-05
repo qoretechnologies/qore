@@ -86,8 +86,15 @@ int ScopedRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context
         parse_context.typeInfo, found);
     if (found) {
         //printd(5, "ScopedRefNode::parseInit() '%s' => rv: %s\n", scoped_ref->ostr, rv.getFullTypeName());
+        // Save the typeInfo from the constant lookup (e.g., for enum constants)
+        const QoreTypeInfo* constantTypeInfo = parse_context.typeInfo;
         parse_context.typeInfo = nullptr;
         err = parse_init_value(rv, parse_context);
+        // Restore the constant's typeInfo - this is important for enum constants which have
+        // enum type info that should be preserved over the underlying base type
+        if (constantTypeInfo) {
+            parse_context.typeInfo = constantTypeInfo;
+        }
         val = rv;
         delete this;
     }

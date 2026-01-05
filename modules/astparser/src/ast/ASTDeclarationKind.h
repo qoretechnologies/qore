@@ -47,6 +47,8 @@ enum ASTDeclarationKind {
     ADK_Variable = 10,      //!< Identifies instances of \ref ASTVariableDeclaration.
     ADK_VarList = 11,       //!< Identifies instances of \ref ASTVarListDeclaration.
     ADK_Typedef = 12,       //!< Identifies instances of \ref ASTTypedefDeclaration.
+    ADK_Enum = 13,          //!< Identifies instances of \ref ASTEnumDeclaration.
+    ADK_EnumMember = 14,    //!< Identifies instances of \ref ASTEnumMemberDeclaration.
 };
 
 #endif // _QLS_AST_ASTDECLARATIONKIND_H

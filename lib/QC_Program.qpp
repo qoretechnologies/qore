@@ -813,6 +813,12 @@ const PO_NO_TYPEDEF = PO_NO_TYPEDEF;
     @since %Qore 2.3
 */
 const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
+
+//! Do not allow enum declarations
+/**
+    @since %Qore 2.3
+*/
+const PO_NO_ENUM = PO_NO_ENUM;
 ///@}
 
 /** @defgroup warning_constants Warning Constants
