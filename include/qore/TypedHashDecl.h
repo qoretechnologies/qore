@@ -123,6 +123,15 @@ public:
     */
     DLLEXPORT bool inheritsFrom(const TypedHashDecl* parent) const;
 
+    //! Sets the parent hashdecl for system hashdecl inheritance
+    /** @param parent the parent hashdecl
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setParent(const TypedHashDecl* parent);
+
 protected:
     //! deletes the object and frees all memory
     DLLEXPORT ~TypedHashDecl();
