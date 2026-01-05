@@ -2,10 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %requires QUnit
 %requires reflection
@@ -27,7 +24,7 @@ class EnumNegativeTest inherits QUnit::Test {
     testNoEnumRestriction() {
         # Test that PO_NO_ENUM prevents enum declarations
         string code = "
-%new-style
+%modern
 %no-enum
 public enum TestEnum : int {
     A = 1,
@@ -41,7 +38,7 @@ public enum TestEnum : int {
     testInvalidBaseType() {
         # Test invalid base type for enum
         string code = "
-%new-style
+%modern
 public enum TestEnum : bool {
     A = True,
 }
@@ -58,7 +55,7 @@ public enum TestEnum : bool {
     testUnknownEnumMember() {
         # Create a simple enum for testing
         string code = "
-%new-style
+%modern
 public enum SimpleEnum : int {
     A = 1,
 }
@@ -82,8 +79,7 @@ public enum SimpleEnum : int {
     testCastParseTimeMismatch() {
         # Test that casting from incompatible type at parse time raises error
         string code = "
-%new-style
-%require-types
+%modern
 public enum Status : string {
     Active = \"active\",
 }
@@ -99,8 +95,7 @@ sub test() {
     testCastUnknownEnum() {
         # Test that casting to unknown enum at parse time raises error
         string code = "
-%new-style
-%require-types
+%modern
 sub test() {
     string s = \"test\";
     auto x = cast<enum<NonExistentEnum>>(s);

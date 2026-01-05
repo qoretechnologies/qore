@@ -4,10 +4,7 @@
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 
-%new-style
-%require-types
-%enable-all-warnings
-%strict-args
+%modern
 
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/SqlUtil

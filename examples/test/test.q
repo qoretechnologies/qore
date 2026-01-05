@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # allow child Program objects to have more liberal restrictions than the parent
 %no-child-restrictions

@@ -24,10 +24,7 @@
 
 %requires qore >= 2.0
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires(reexport) RestClient >= 2.2.0
 %requires(reexport) ConnectionProvider >= 2.0
@@ -65,10 +62,7 @@ module ZeyosRestClient {
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires ZeyosRestClient
 

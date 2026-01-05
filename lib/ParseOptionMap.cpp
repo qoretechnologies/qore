@@ -105,6 +105,8 @@ void ParseOptionMap::static_init() {
     DO_MAP("broken-varargs",           PO_BROKEN_VARARGS);
     DO_MAP("broken-list-range",        PO_BROKEN_LIST_RANGE);
     DO_MAP("enable-debug",             PO_ENABLE_DEBUG);
+    DO_MAP("new-style",                PO_NEW_STYLE);
+    DO_MAP("modern",                   PO_MODERN);
 
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);

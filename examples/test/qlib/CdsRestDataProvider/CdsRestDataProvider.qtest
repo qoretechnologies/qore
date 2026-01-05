@@ -18,10 +18,7 @@
 
 %requires qore >= 2.0
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %exec-class CdsRestDataProviderTest
 

@@ -73,10 +73,7 @@
     {'name': 'subdir', 'mode': 0755}
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # execute the restServer class as the application object
 %exec-class restServer

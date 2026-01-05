@@ -1,14 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 
 %try-module xml >= 1.3
 %define NoXml
