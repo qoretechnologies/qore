@@ -616,6 +616,12 @@ public:
     */
     DLLLOCAL static const class QoreComplexCodeTypeInfo* getComplexCodeType(const QoreTypeInfo* ti);
 
+    //! Returns the union type info if this is a union type
+    /** @param ti the type to check
+        @return the QoreUnionTypeInfo pointer if this is a union type, nullptr otherwise
+    */
+    DLLLOCAL static const class QoreUnionTypeInfo* getUnionType(const QoreTypeInfo* ti);
+
     //! Checks if two typed callable types have compatible signatures
     /** This is used for additional type checking when assigning closures/call references
         to typed code variables. Standard variance rules apply:
@@ -4051,6 +4057,19 @@ public:
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
         return orNothing;
+    }
+
+    //! Returns the member types of this union
+    DLLLOCAL type_vec_t getMemberTypes() const {
+        type_vec_t result;
+        for (const auto& rt : return_vec) {
+            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
+            // Skip NOTHING type for or-nothing unions
+            if (ti && ti != nothingTypeInfo) {
+                result.push_back(ti);
+            }
+        }
+        return result;
     }
 
 protected:
