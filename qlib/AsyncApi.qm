@@ -2375,6 +2375,24 @@ public class AsyncApiSchemaTokenizer {
     }
 
     #! Parse the @info section of an event block
+    /** Handles nested field definitions with proper indentation tracking.
+
+        Nested fields under arrays become the array's items schema.
+        Nested fields under objects become the object's properties.
+
+        Example:
+        @code
+        @info
+        - messages (list): shutdown messages
+          - title (string): message title
+          - content (string): message content
+        - count (int): message count
+        @endcode
+
+        Results in:
+        - messages: array with items having properties: title, content
+        - count: integer field at top level
+    */
     private static hash<auto> parseInfoSchema(string block) {
         if (block !~ /@info/) {
             return {
@@ -2393,28 +2411,110 @@ public class AsyncApiSchemaTokenizer {
         }
         string info_section = info_match[0];
 
-        hash<auto> props;
+        hash<auto> root_props;
         list<string> lines = info_section.split("\n");
 
-        foreach string line in (lines) {
-            # Parse field: - name (type): description (use Qore identifier pattern)
-            auto field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
-            if (field_match.typeCode() == NT_LIST && field_match[0] && field_match[1]) {
-                string field_name = field_match[0];
-                string field_type = field_match[1];
-                *string field_desc = field_match[2];
+        # Stack to track parent fields: each entry has {indent, schema_ref, is_array}
+        # schema_ref points to the properties hash where new fields should be added
+        list<hash<auto>> stack = ();
 
-                hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
-                if (field_desc) {
-                    field_schema.description = trim(field_desc);
+        # Determine minimum indentation (first field's indentation)
+        *int min_indent;
+        foreach string line in (lines) {
+            auto indent_match = (line =~ x/^(\s*)-/);
+            if (indent_match.typeCode() == NT_LIST && indent_match[0]) {
+                min_indent = indent_match[0].length();
+                break;
+            }
+        }
+        if (!min_indent.val()) {
+            min_indent = 0;
+        }
+
+        foreach string line in (lines) {
+            # Parse field: - name (type): description
+            auto field_match = (line =~ x/^(\s*)-\s+([A-Za-z_][A-Za-z0-9_-]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match.typeCode() != NT_LIST || !field_match[1] || !field_match[2]) {
+                continue;
+            }
+
+            int indent = field_match[0] ? field_match[0].length() : 0;
+            string field_name = field_match[1];
+            string field_type = field_match[2];
+            *string field_desc = field_match[3];
+
+            hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
+            if (field_desc) {
+                field_schema.description = trim(field_desc);
+            }
+
+            # Pop stack until we find a parent with smaller indentation
+            while (stack && stack.last().indent >= indent) {
+                pop stack;
+            }
+
+            if (!stack) {
+                # Top-level field
+                root_props{field_name} = field_schema;
+
+                # If this field can have nested fields (array or object), push to stack
+                if (field_schema.type == "array" || field_schema.type == "object") {
+                    push stack, {
+                        "indent": indent,
+                        "field_name": field_name,
+                        "props_ref": \root_props,
+                        "is_array": field_schema.type == "array",
+                    };
                 }
-                props{field_name} = field_schema;
+            } else {
+                # Nested field - add to parent
+                # Use reference to access the parent's schema correctly
+                reference<hash<auto>> parent_props = stack.last().props_ref;
+                string parent_name = stack.last().field_name;
+                bool is_array = stack.last().is_array;
+
+                if (is_array) {
+                    # Add to array's items schema
+                    if (!parent_props{parent_name}.items) {
+                        parent_props{parent_name}.items = {
+                            "type": "object",
+                            "properties": {},
+                        };
+                    }
+                    parent_props{parent_name}.items.properties{field_name} = field_schema;
+
+                    # If this nested field can have further nesting, push to stack
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.items.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                } else {
+                    # Add to object's properties
+                    if (!parent_props{parent_name}.properties) {
+                        parent_props{parent_name}.properties = {};
+                    }
+                    parent_props{parent_name}.properties{field_name} = field_schema;
+
+                    # If this nested field can have further nesting, push to stack
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                }
             }
         }
 
         return {
             "type": "object",
-            "properties": props,
+            "properties": root_props,
         };
     }
 
