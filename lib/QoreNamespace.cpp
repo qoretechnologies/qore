@@ -39,6 +39,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreRegex.h"
 
 // include files for default object classes
@@ -1043,6 +1044,10 @@ const TypedHashDecl* QoreNamespace::findLocalTypedHash(const char* name) const {
     return priv->hashDeclList.find(name);
 }
 
+const QoreEnumDecl* QoreNamespace::findLocalEnum(const char* name) const {
+    return priv->enumList.find(name);
+}
+
 std::string QoreNamespace::getPath(bool anchored) const {
     std::string rv;
     priv->getPath(rv, anchored);
@@ -1551,6 +1556,58 @@ TypedHashDecl* qore_root_ns_private::parseFindHashDecl(const QoreProgramLocation
     return hd;
 }
 
+const QoreEnumDecl* qore_root_ns_private::parseFindScopedEnumIntern(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    // iterate all namespaces with the initial name and look for the match
+    {
+        NamespaceMapIterator nmi(nsmap, nscope[0]);
+        while (nmi.next()) {
+            const QoreEnumDecl* ed;
+            if ((ed = nmi.get()->parseMatchScopedEnum(nscope, matched))) {
+                return ed;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocation* loc, const NamedScope& nscope) {
+    const QoreEnumDecl* ed;
+    // if there is no namespace specified, then just find enum
+    if (nscope.size() == 1) {
+        ed = parseFindEnumIntern(nscope.ostr);
+        if (!ed) {
+            parse_error(*loc, "reference to undefined enum '%s'", nscope.ostr);
+        }
+        return ed;
+    }
+
+    unsigned m = 0;
+    ed = parseFindScopedEnumIntern(nscope, m);
+    if (ed) {
+        return ed;
+    }
+
+    if (m != (nscope.size() - 1)) {
+        parse_error(*loc, "cannot resolve namespace '%s' in '%s'", nscope[m], nscope.ostr);
+    } else {
+        QoreString err;
+        err.sprintf("cannot find enum '%s' in any namespace '", nscope.getIdentifier());
+        for (unsigned i = 0; i < (nscope.size() - 1); i++) {
+            err.concat(nscope[i]);
+            if (i != (nscope.size() - 2)) {
+                err.concat("::");
+            }
+        }
+        err.concat("'");
+        parse_error(*loc, err.getBuffer());
+    }
+
+    return ed;
+}
+
 const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethod(const NamedScope& scname) const {
     // must have at least 2 elements
     assert(scname.size() > 1);
@@ -1751,6 +1808,19 @@ void qore_root_ns_private::parseAddHashDeclIntern(const QoreProgramLocation* loc
     } else {
         //printd(5, "qore_root_ns_private::parseAddHashDeclIntern() hashdecl '%s' not added: '%s' namespace not found\n", hd->getName(), nscope.ostr);
         typed_hash_decl_private::get(*hd)->deref();
+    }
+}
+
+void qore_root_ns_private::parseAddEnumIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreEnumDecl* ed) {
+    qore_ns_private* sns = parseResolveNamespace(loc, name);
+
+    if (sns) {
+        // add to pending enum map if add was successful
+        if (!sns->parseAddPendingEnum(loc, ed)) {
+            edmap.update(ed->getName(), sns, ed);
+        }
+    } else {
+        qore_enum_decl_private::get(*ed)->deref();
     }
 }
 
@@ -1996,6 +2066,23 @@ const TypedHashDecl* qore_root_ns_private::runtimeFindHashDeclIntern(const Named
     while (nmi.next()) {
         if ((c = nmi.get()->runtimeMatchHashDecl(name, ns)))
             return c;
+    }
+
+    return nullptr;
+}
+
+const QoreEnumDecl* qore_root_ns_private::runtimeFindEnumIntern(const NamedScope& name, const qore_ns_private*& ns) {
+    if (name.size() == 1) {
+        return runtimeFindEnumIntern(name.ostr, ns);
+    }
+
+    // iterate all namespaces with the initial name and look for the match
+    const QoreEnumDecl* e = nullptr;
+    NamespaceMapIterator nmi(nsmap, name.get(0));
+    while (nmi.next()) {
+        if ((e = nmi.get()->runtimeMatchEnum(name, ns))) {
+            return e;
+        }
     }
 
     return nullptr;
@@ -2928,6 +3015,88 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, con
    return sns->priv->parseAddPendingHashDecl(loc, thd.release());
 }
 
+// public, only called either in single-threaded initialization or
+// while the program-level parse lock is held
+int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnumDecl* enumdecl) {
+    QoreEnumDeclHolder ed(enumdecl);
+
+    const char* enum_name = enumdecl->getName();
+    qore_enum_decl_private* priv = qore_enum_decl_private::get(*enumdecl);
+
+    if (!imported && !pub && priv->isPublic()
+        && parse_check_parse_option(PO_IN_MODULE)) {
+        qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
+            "enum '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(),
+            enum_name, name.c_str());
+    }
+
+    // Check for name conflicts with existing namespaces, classes, etc.
+    if (nsl.find(enum_name)) {
+        parse_error(*loc, "enum '%s' conflicts with existing namespace '%s' in namespace '%s::'",
+            enum_name, enum_name, name.c_str());
+        return -1;
+    }
+    if (classList.find(enum_name)) {
+        parse_error(*loc, "enum '%s' conflicts with existing class '%s' in namespace '%s::'",
+            enum_name, enum_name, name.c_str());
+        return -1;
+    }
+
+    priv->setNamespace(this);
+    if (enumList.add(enumdecl)) {
+        parse_error(*loc, "enum '%s' is already defined in namespace '%s::'", enum_name, name.c_str());
+        return -1;
+    }
+
+    // Create a namespace for enum member access (e.g., EnumName::MemberName)
+    QoreNamespace* enum_ns = new QoreNamespace(enum_name);
+    qore_ns_private* ens_priv = qore_ns_private::get(*enum_ns);
+    if (priv->isPublic()) {
+        ens_priv->setPublic();
+    }
+
+    // Add enum members as constants in the namespace with enum type info
+    // This ensures enum constants have the enum type, not the base type
+    const std::vector<QoreEnumMember*>& members = priv->getMembers();
+    for (auto* member : members) {
+        QoreValue val = member->getValue();
+        val.ref();  // Add a reference for the constant
+        ens_priv->constant.add(member->getName(), val, priv->getTypeInfo());
+    }
+
+    // Add the enum namespace to this namespace
+    qore_ns_private* new_ns = parseAddNamespace(enum_ns);
+    if (!new_ns) {
+        // This shouldn't happen since we check for conflicts above, but handle it gracefully
+        parse_error(*loc, "failed to create namespace for enum '%s' in namespace '%s::'",
+            enum_name, name.c_str());
+        return -1;
+    }
+
+    // Index the new namespace and its constants in the root namespace
+    qore_root_ns_private* rns = getRoot();
+    if (rns) {
+        rns->rebuildIndexes(new_ns);
+    }
+
+    ed.release();
+
+    return 0;
+}
+
+// public, only called when parsing unattached namespaces
+int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, const NamedScope& n,
+        QoreEnumDecl* enumdecl) {
+    QoreEnumDeclHolder ed(enumdecl);
+
+    QoreNamespace* sns = resolveNameScope(loc, n);
+    if (!sns) {
+        return -1;
+    }
+
+    return sns->priv->parseAddPendingEnum(loc, ed.release());
+}
+
 int qore_ns_private::parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& mname,
         MethodVariantBase* qcmethod, bool static_flag) {
    std::unique_ptr<MethodVariantBase> v(qcmethod);
@@ -3301,6 +3470,11 @@ const TypedHashDecl* qore_ns_private::runtimeMatchHashDecl(const NamedScope& nsc
     return rns ? rns->hashDeclList.find(nscope.getIdentifier()) : nullptr;
 }
 
+const QoreEnumDecl* qore_ns_private::runtimeMatchEnum(const NamedScope& nscope, const qore_ns_private*& rns) const {
+    rns = runtimeMatchNamespace(nscope, 1);
+    return rns ? rns->enumList.find(nscope.getIdentifier()) : nullptr;
+}
+
 const FunctionEntry* qore_ns_private::runtimeMatchFunctionEntry(const NamedScope& nscope) const {
     const qore_ns_private* fns = runtimeMatchNamespace(nscope, 1);
     return fns ? fns->func_list.findNode(nscope.getIdentifier(), true) : nullptr;
@@ -3368,6 +3542,36 @@ TypedHashDecl* qore_ns_private::parseMatchScopedHashDecl(const NamedScope& nscop
         }
     }
     return fns->priv->hashDeclList.find(nscope[nscope.size() - 1]);
+}
+
+const QoreEnumDecl* qore_ns_private::parseMatchScopedEnum(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    if (nscope[0] != name) {
+        QoreNamespace* fns = nsl.find(nscope[0]);
+        return fns ? fns->priv->parseMatchScopedEnum(nscope, matched) : nullptr;
+    }
+
+    // mark first namespace as matched
+    if (!matched) {
+        matched = 1;
+    }
+
+    QoreNamespace* fns = ns;
+
+    // if we need to follow the namespaces, then do so
+    if (nscope.size() > 2) {
+        for (unsigned i = 1; i < (nscope.size() - 1); ++i) {
+            fns = fns->priv->parseFindLocalNamespace(nscope[i]);
+            if (!fns) {
+                return nullptr;
+            }
+            if (i >= matched) {
+                matched = i + 1;
+            }
+        }
+    }
+    return fns->priv->enumList.find(nscope[nscope.size() - 1]);
 }
 
 QoreClass* qore_ns_private::parseMatchScopedClass(const NamedScope& nscope, unsigned& matched) {
@@ -3871,5 +4075,20 @@ bool QoreNamespaceTypedHashIterator::next() {
 }
 
 const TypedHashDecl& QoreNamespaceTypedHashIterator::get() const {
+    return *priv->get();
+}
+
+QoreNamespaceEnumIterator::QoreNamespaceEnumIterator(const QoreNamespace& ns) : priv(new ConstEnumListIterator(qore_ns_private::get(ns)->enumList)) {
+}
+
+QoreNamespaceEnumIterator::~QoreNamespaceEnumIterator() {
+    delete priv;
+}
+
+bool QoreNamespaceEnumIterator::next() {
+    return priv->next();
+}
+
+const QoreEnumDecl& QoreNamespaceEnumIterator::get() const {
     return *priv->get();
 }

@@ -60,6 +60,8 @@
 #include "QC_GlobalVar.h"
 #include "QC_TypedHash.h"
 #include "QC_TypedHashMember.h"
+#include "QC_Enum.h"
+#include "QC_EnumMember.h"
 
 QoreStringNode* reflection_module_init();
 void reflection_module_ns_init(QoreNamespace *rns, QoreNamespace *qns);
@@ -119,6 +121,8 @@ QoreStringNode* reflection_module_init() {
     preinitGlobalVarClass();
     preinitTypedHashClass();
     preinitTypedHashMemberClass();
+    preinitEnumClass();
+    preinitEnumMemberClass();
 
     // now add hashdecls
     hashdeclClassAccessInfo = init_hashdecl_ClassAccessInfo(ReflectionNS);
@@ -158,6 +162,8 @@ QoreStringNode* reflection_module_init() {
     ReflectionNS.addSystemClass(initGlobalVarClass(ReflectionNS));
     ReflectionNS.addSystemClass(initTypedHashClass(ReflectionNS));
     ReflectionNS.addSystemClass(initTypedHashMemberClass(ReflectionNS));
+    ReflectionNS.addSystemClass(initEnumClass(ReflectionNS));
+    ReflectionNS.addSystemClass(initEnumMemberClass(ReflectionNS));
 
     return nullptr;
 }

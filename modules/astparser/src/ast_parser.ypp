@@ -105,6 +105,9 @@ typedef void* yyscan_t;
     ASTHashExpression* hash;
     ASTHashDeclaration* hashdecl;
     ASTHashdeclHashExpression* hashdeclhash;
+    ASTEnumDeclaration* enumdecl;
+    ASTEnumMemberDeclaration* enummember;
+    std::vector<ASTEnumMemberDeclaration*>* enummemberlist;
     ASTTypedefDeclaration* typedefdecl;
     ASTHashElementExpression* hashelem;
     ASTHashMemberDeclaration* hashmember;
@@ -190,6 +193,7 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %token TOK_HASHDECL "hashdecl"
 %token TOK_TRANSIENT "transient"
 %token TOK_TYPEDEF "typedef"
+%token TOK_ENUM "enum"
 %token TOK_NULL "NULL"
 %token TOK_NOTHING "NOTHING"
 %token TOK_TRUE "True"
@@ -374,6 +378,9 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <hashdecl>       hashdecl_def
 %type <astname>        hashdecl_inherits
 %type <hashmember>     hashdecl_member
+%type <enumdecl>       enum_def
+%type <enummemberlist> enum_members
+%type <enummember>     enum_member
 %type <typedefdecl>    typedef_def
 %type <string>         ident_openparen
 %type <hashdeclhash>   immediate_typed_hash
@@ -448,6 +455,9 @@ top_level_command:
             $$ = $1;
         }
         | hashdecl_def {
+            $$ = $1;
+        }
+        | enum_def {
             $$ = $1;
         }
         | typedef_def {
@@ -752,6 +762,7 @@ namespace_decl:
         | unscoped_const_decl { $$ = $1; }
         | class_def { $$ = $1; }
         | hashdecl_def { $$ = $1; }
+        | enum_def { $$ = $1; }
         | typedef_def { $$ = $1; }
         | sub_def { $$ = $1; }
         | scoped_sub_def { $$ = $1; }
@@ -1184,6 +1195,88 @@ hashdecl_def:
             $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
             $$->loc.set(@1, @7);
             delete $6;
+        }
+        ;
+
+enum_def:
+        nsc_modifiers TOK_ENUM IDENTIFIER '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
+            $$->loc.set(@1, @6);
+            delete $5;
+        }
+        | nsc_modifiers TOK_ENUM IDENTIFIER ':' uncqtypedef '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+            ASTName baseTypeName($5, ASTNameKind::ANK_UncQTypedef);
+            baseTypeName.loc = @5;
+            delete $5;
+            ASTNameExpression* baseType = new ASTNameExpression(std::move(baseTypeName));
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
+            $$->loc.set(@1, @8);
+            delete $7;
+        }
+        | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
+            $$->loc.set(@1, @6);
+            delete $5;
+        }
+        | nsc_modifiers TOK_ENUM SCOPED_REF ':' uncqtypedef '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+            ASTName baseTypeName($5, ASTNameKind::ANK_UncQTypedef);
+            baseTypeName.loc = @5;
+            delete $5;
+            ASTNameExpression* baseType = new ASTNameExpression(std::move(baseTypeName));
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
+            $$->loc.set(@1, @8);
+            delete $7;
+        }
+        ;
+
+enum_members:
+        enum_member {
+            $$ = new std::vector<ASTEnumMemberDeclaration*>();
+            $$->push_back($1);
+        }
+        | enum_members ',' enum_member {
+            $$ = $1;
+            $$->push_back($3);
+        }
+        | enum_members ',' {
+            $$ = $1;  // trailing comma is allowed
+        }
+        ;
+
+enum_member:
+        IDENTIFIER {
+            ASTName name($1, ASTNameKind::ANK_Identifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTEnumMemberDeclaration(std::move(name), nullptr);
+            $$->loc = @1;
+        }
+        | IDENTIFIER '=' exp {
+            ASTName name($1, ASTNameKind::ANK_Identifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTEnumMemberDeclaration(std::move(name), $3);
+            $$->loc.set(@1, @3);
         }
         ;
 

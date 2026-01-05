@@ -1585,6 +1585,41 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
             }
             return QTI_NOT_EQUAL;
         }
+        case QTS_ENUM: {
+            // Enum types match only if they are the same enum
+            switch (t.typespec) {
+                case QTS_ENUM: {
+                    // Same enum declaration = exact match
+                    if (u.ed == t.u.ed) {
+                        max_result = QTI_IDENT;
+                        return QTI_IDENT;
+                    }
+                    // Different enums = no match
+                    return QTI_NOT_EQUAL;
+                }
+                case QTS_TYPE: {
+                    // Check if the base type matches (for compatibility with underlying type)
+                    qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+                    if (t.u.t == bt) {
+                        // Base type matches - this is ambiguous at best, but we want strict matching
+                        // so return NOT_EQUAL to force cast
+                        return QTI_NOT_EQUAL;
+                    }
+                    if (t.u.t == NT_ALL) {
+                        // if the type may not match at runtime, then return no match with %strict-types
+                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
+                            return QTI_NOT_EQUAL;
+                        }
+                        may_not_match = true;
+                        max_result = QTI_IDENT;
+                        return QTI_AMBIGUOUS;
+                    }
+                    return QTI_NOT_EQUAL;
+                }
+                default:
+                    return QTI_NOT_EQUAL;
+            }
+        }
         case QTS_TYPE:
             if (u.t == NT_REFERENCE) {
                 if (known_initial_assignment) {
@@ -1732,6 +1767,10 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
             return QoreTypeInfo::parseAcceptsReturns(u.ti, t) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
         }
         return QTI_WILDCARD;
+    } else if (typespec == QTS_ENUM) {
+        // Enum types match their underlying base type at runtime
+        qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+        return t == bt ? QTI_IDENT : QTI_NOT_EQUAL;
     }
     if (u.t == NT_ALL || u.t == NT_REFERENCE) {
         return QTI_WILDCARD;
@@ -1983,6 +2022,16 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 ok = true;
             }
             break;
+
+        case QTS_ENUM: {
+            // Enum values at runtime have the base type, so check if the value type matches
+            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+            if (n.getType() == bt) {
+                // Value has the right base type - accept it
+                ok = true;
+            }
+            break;
+        }
     }
 
     if (ok) {
@@ -2024,6 +2073,8 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
             return QoreTypeInfo::equal(u.ti, other.u.ti);
         case QTS_HARDREF:
              return true;
+        case QTS_ENUM:
+            return u.ed == other.u.ed;
     }
     return false;
 }
@@ -2177,6 +2228,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             break;
+
+        case QTS_ENUM: {
+            // Enum values at runtime have the base type, so check if the value type matches
+            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+            if (ot == bt) {
+                // Value has the right base type - at runtime we trust it's a valid enum value
+                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
+        }
 
         default:
             assert(false);
@@ -2430,6 +2491,19 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         // resolve class
         return resolveRuntimeClass(*subtypes[0]->cscope, or_nothing);
     }
+    if (!strcmp(cscope->ostr, "enum")) {
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        // resolve enum
+        const qore_ns_private* ns;
+        const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->runtimeFindEnumIntern(*subtypes[0]->cscope, ns);
+        if (!ed) {
+            return nullptr;
+        }
+        return ed->getTypeInfo(or_nothing);
+    }
     if (!strcmp(cscope->ostr, "union")) {
         if (subtypes.empty() || subtypes.size() > QORE_MAX_UNION_MEMBERS) {
             return nullptr;
@@ -2584,6 +2658,21 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
 
         // resolve class
         return resolveClass(loc, *subtypes[0]->cscope, or_nothing, err);
+    }
+    if (!strcmp(cscope->ostr, "enum")) {
+        if (subtypes.size() != 1) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'enum' takes a single enum " \
+                "name as a subtype argument", getName());
+            err = -1;
+            return or_nothing ? bigIntOrNothingTypeInfo : bigIntTypeInfo;
+        }
+
+        // resolve enum
+        const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->parseFindEnum(loc, *subtypes[0]->cscope);
+        if (!ed) {
+            return or_nothing ? bigIntOrNothingTypeInfo : bigIntTypeInfo;
+        }
+        return ed->getTypeInfo(or_nothing);
     }
     if (!strcmp(cscope->ostr, "union")) {
         // Validate union constraints
@@ -2839,8 +2928,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         }
     }
 
-    // resolve class
-    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, cscope);
+    // resolve class (don't raise error - we'll check for enum as fallback)
+    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, cscope, false);
 
     if (qc && or_nothing) {
         const QoreTypeInfo* rv = qc->getOrNothingTypeInfo();
@@ -2853,8 +2942,20 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         return rv;
     }
 
-    // qc maybe NULL when the class is not found
-    return qc ? qc->getTypeInfo() : objectTypeInfo;
+    if (qc) {
+        return qc->getTypeInfo();
+    }
+
+    // if not a class, check for enum (use internal lookup to avoid parse error)
+    const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->parseTryFindEnum(cscope);
+    if (ed) {
+        return ed->getTypeInfo(or_nothing);
+    }
+
+    // type not found - raise error
+    parse_error(*loc, "reference to undefined type '%s'", cscope.ostr);
+    err = -1;
+    return objectTypeInfo;
 }
 
 QoreValue QoreHashDeclTypeInfo::getDefaultQoreValueImpl() const {

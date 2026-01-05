@@ -83,6 +83,54 @@ Document WebSocket channels using the `@WEBSOCKET` block format:
 */
 ```
 
+### Multiple Message Types Per Channel
+
+A channel can define multiple `@subscribe` and/or `@publish` message types. This is useful for channels that handle different kinds of requests and responses:
+
+```qore
+/** @WEBSOCKET /api
+    @ASYNCAPI
+    @summary Multi-purpose API endpoint
+    @desc WebSocket endpoint supporting multiple message types.
+
+    @subscribe CommandMessage
+    - action (string): Command action
+    - command (string): Command to execute
+    - args (*hash<auto>): Command arguments
+
+    @subscribe QueryMessage
+    - action (string): Query action
+    - query (string): Query expression
+    - limit (*int): Maximum results
+
+    @subscribe PingMessage
+    - action (string): Ping action
+    - timestamp (date): Client timestamp
+
+    @publish CommandResponse
+    - ok (bool): Success status
+    - result (*hash<auto>): Command result
+    - error (*string): Error message if failed
+
+    @publish QueryResponse
+    - ok (bool): Success status
+    - data (*list<hash<auto>>): Query results
+    - total (int): Total matching records
+
+    @publish PongMessage
+    - ok (bool): Success status
+    - server_time (date): Server timestamp
+    - latency_ms (int): Round-trip latency
+
+    @ENDASYNCAPI
+*/
+```
+
+When parsing channels with multiple message types:
+- `subscribe_schemas` list contains all `@subscribe` message schemas
+- `publish_schemas` list contains all `@publish` message schemas
+- For backwards compatibility, `subscribe_schema` and `publish_schema` contain the first message of each type
+
 ### WebSocket Block Structure
 
 | Tag | Description | Required |
@@ -91,8 +139,8 @@ Document WebSocket channels using the `@WEBSOCKET` block format:
 | `@ASYNCAPI` | Marks the start of AsyncAPI schema | Yes |
 | `@summary` | Brief one-line description | No |
 | `@desc` | Detailed description | No |
-| `@subscribe` | Message schema for client-to-server messages | No |
-| `@publish` | Message schema for server-to-client messages | No |
+| `@subscribe` | Message schema for client-to-server messages (can appear multiple times) | No |
+| `@publish` | Message schema for server-to-client messages (can appear multiple times) | No |
 | `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
 
 ### Message Field Definitions

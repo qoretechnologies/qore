@@ -602,6 +602,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreXSinkException.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
+    lib/QoreEnumDecl.cpp
     lib/QoreReflection.cpp
     lib/Context.cpp
     lib/FindNode.cpp
@@ -637,6 +638,7 @@ set(LIBQORE_CPP_SRC
     lib/ConstantList.cpp
     lib/QoreClassList.cpp
     lib/HashDeclList.cpp
+    lib/EnumList.cpp
     lib/thread.cpp
     lib/AbstractThreadResource.cpp
     lib/ThreadResourceList.cpp
@@ -875,6 +877,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreXSinkException.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClass.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/TypedHashDecl.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEnumDecl.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreReflection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/Context.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FindNode.cpp\"
@@ -906,6 +909,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ConstantList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClassList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/HashDeclList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/EnumList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/thread.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractThreadResource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadResourceList.cpp\"

@@ -34,15 +34,23 @@ public hashdecl SocketPollOperationInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout
+    #! I/O timeout; use 0s to disable timeout (operation will wait indefinitely)
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Free-form data to be returned when the operation completes
     *hash<auto> other;
+
+    #! Optional result Queue; if provided, results will be pushed to this Queue instead of a new one
+    /** This allows multiple operations to share a single result Queue for easier coordination
+    */
+    *Queue resultQueue;
 }
 
 #! Socket poll result
 public hashdecl SocketPollResultInfo {
+    #! The socket that completed the operation
+    Socket sock;
+
     #! The poll operation that completed
     AbstractPollOperation spop;
 
@@ -203,7 +211,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced
 
-        @return Queue a Queue that will have the result of the operation pushed to it
+        @return Queue a Queue that will have the result of the operation pushed to it; if \a info.resultQueue is
+        provided, that Queue is returned
 
         @throw CONTROLLER-ADD-ERROR invalid or incomplete data in \a info; a different operation on this socket is
         already in progress
@@ -220,7 +229,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         hash<PollInfo> cinfo;
         {
             AutoLock al(m);
-            if (*hash<PollInfo> info = cache{uh}) {
+            if (*hash<PollInfo> existing = cache{uh}) {
                 if (replace) {
                     cancelIntern(uh);
                 } else {
@@ -233,7 +242,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "spop": info.spop,
                 "to": info.to,
                 "other": info.other,
+                "q": info.resultQueue ?? new Queue(),
             };
+            @debug(log(LoggerLevel::INFO, "submit: added operation for socket %s goal=%y to=%y cache_size=%d",
+                uh, info.other.goal, info.to, cache.size()));
             if (!tid) {
                 startIntern();
             }
@@ -370,13 +382,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     hash<string, bool> dmap;
                     while ((*string key = (cache - keys dmap).firstKey()).val()) {
                         hash<PollInfo> cinfo = cache{key};
-                        if (!cinfo.timeout_date) {
+                        # Only set timeout_date if a positive timeout was specified (0 or less means no timeout)
+                        if (!cinfo.timeout_date && cinfo.to > 0s) {
                             cinfo.timeout_date = cache{key}.timeout_date = now_us() + cinfo.to;
                         }
                         dmap{key} = True;
                         Socket sock = cinfo.sock;
                         try {
-                            if (cinfo.timeout_date < now) {
+                            # Only check for timeout if timeout_date is set (not set when to <= 0)
+                            if (cinfo.timeout_date && cinfo.timeout_date < now) {
                                 throw "SOCKET-TIMEOUT", sprintf("The I/O operation did not complete in the timeout "
                                     "period (%y)", cinfo.to);
                             }
@@ -391,13 +405,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 # operation successful
                                 remove cache{key};
                                 cinfo.q.push(<SocketPollResultInfo>{
+                                    "sock": cinfo.sock,
                                     "spop": cinfo.spop,
                                     "other": cinfo.other,
                                 });
                                 remove dmap{key};
                             } else {
                                 poll_list += info;
-                                if (!poll_timeout || (poll_timeout < cinfo.timeout_date)) {
+                                # Find the MINIMUM (earliest) timeout so poll returns in time to handle it
+                                # Only consider operations with timeouts
+                                if (cinfo.timeout_date && (!poll_timeout || (poll_timeout > cinfo.timeout_date))) {
                                     poll_timeout = cinfo.timeout_date;
                                 }
                             }
@@ -406,6 +423,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             # poll operation failed with an exception
                             remove cache{key};
                             cinfo.q.push(<SocketPollResultInfo>{
+                                "sock": cinfo.sock,
                                 "spop": cinfo.spop,
                                 "ex": ex,
                                 "other": cinfo.other,
@@ -414,10 +432,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                     }
 
-                    log(LoggerLevel::DEBUG, "poll_list: %y", poll_timeout, (map $1 + {
+                    @debug(log(LoggerLevel::INFO, "poll_list: cache=%d items=%d poll_list: %y", cache.size(), poll_list.size(), (map $1 + {
                         "events": PollEventMap{$1.events} ?? "unknown",
                         "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
-                    }, poll_list));
+                    }, poll_list)));
 
                     if (!cache && autostop) {
                         log(LoggerLevel::DEBUG, "All operations have completed; exiting the I/O thread");
@@ -426,7 +444,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     }
                 }
                 # ignore return value, all active ping operations are sent in each poll call
-                Socket::poll(poll_list, poll_timeout);
+                # Use -1 (infinite wait) when no timeout is set - the semaphore pipe in poll_list
+                # ensures we wake up immediately when commands are sent via sendCmd()
+                log(LoggerLevel::DEBUG, "calling poll() with %d items, timeout=%y", poll_list.size(),
+                    poll_timeout ?? "infinite");
+                Socket::poll(poll_list, poll_timeout ?? -1);
+                log(LoggerLevel::DEBUG, "poll() returned");
 
                 # first process commands, if any
                 if (processCommands()) {
@@ -488,6 +511,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
         # push cancelation message on the queue
         cinfo.q.push(<SocketPollResultInfo>{
+            "sock": cinfo.sock,
             "spop": cinfo.spop,
             "canceled": True,
             "other": cinfo.other,
@@ -514,8 +538,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 namespace Priv {
 # internal poll info
 hashdecl PollInfo {
-    #! Poll start timestamp
-    date timeout_date;
+    #! Poll start timestamp; not set if timeout is disabled (to <= 0)
+    *date timeout_date;
 
     #! Socket connection
     Socket sock;
@@ -523,7 +547,7 @@ hashdecl PollInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout
+    #! I/O timeout; 0s or less means no timeout
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Other data stored alongside the socket

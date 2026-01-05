@@ -2384,8 +2384,6 @@ DLLLOCAL int SSL_write_ex(SSL* ssl, const void* buf, size_t num, size_t* written
 */
 int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size,
         SslAction action, size_t& real_io) {
-    //printd(5, "SSLSocketHelper::doNonBlockingIo() %s size: %ld action: %s\n", mname, size,
-    //    get_action_method(action));
     assert(xsink);
     assert(size);
     assert(!real_io);
@@ -2406,10 +2404,13 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 break;
         }
 
-        //printd(5, "SSLSocketHelper::doNonBlockingIo() %s size: %ld action: %s rc: %d real_io: %ld\n", mname, size,
-        //    get_action_method(action), rc, real_io);
-
         if (rc > 0) {
+            // SSL accepted the data, but check if it still has pending encrypted data to write
+            // This happens when SSL_write encrypts data but the socket would block
+            if (action == WRITE && SSL_want_write(ssl)) {
+                rc = SOCK_POLLOUT;
+                break;
+            }
             rc = 0;
             break;
         }
@@ -5056,10 +5057,12 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     if (*xsink) {
         return nullptr;
     }
-    ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+    // Store result in member variable for getOutput() - don't return it from continuePoll()
+    out = new QoreHashNode(autoTypeInfo);
     out->setKeyValue("hdr", hdr.release(), xsink);
     out->setKeyValue("info", info.release(), xsink);
-    return out.release();
+    // Return nullptr to indicate operation is complete; result is available via getOutput()
+    return nullptr;
 }
 
 QoreValue SocketReadHttpHeaderPollOperation::getOutput() const {
@@ -5160,6 +5163,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     // Would block - need to poll for read
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
+                if (rv == 1) {
+                    // Connection closed by peer - check if we have a completed request first
+                    if (!h2_session->hasCompletedStreams()) {
+                        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection closed by peer before "
+                            "request was complete");
+                        return nullptr;
+                    }
+                    // Fall through to handle the completed request
+                }
 
                 // Check if we have a completed request
                 if (h2_session->hasCompletedStreams()) {
@@ -5177,14 +5189,22 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 if (*xsink) {
                     return nullptr;
                 }
+                // sendPendingData returns:
+                //   0: success
+                //   SOCK_POLLIN: need to poll for read (TLS renegotiation)
+                //   SOCK_POLLOUT: need to poll for write
+                //   -1: error (exception set)
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
+                }
 
                 // If we were receiving preface, move to reading state
                 if (h2_state == H2S_RECV_PREFACE) {
                     h2_state = H2S_READING;
                 }
 
-                // Poll based on what the session wants
-                if (h2_session->wantWrite()) {
+                // Poll based on what the session wants (check buffer + nghttp2 state)
+                if (h2_session->hasPendingData() || h2_session->wantWrite()) {
                     return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
                 }
                 return getSocketPollInfoHash(xsink, SOCK_POLLIN);
@@ -5312,6 +5332,8 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         // Regular HTTP/2 response with body and END_STREAM
         const void* body_ptr = body ? body->getPtr() : nullptr;
         size_t body_len = body ? body->size() : 0;
+        printd(5, "SocketHttp2SendResponsePollOperation() submitting response stream_id=%d status=%d body_len=%zu\n",
+            stream_id, status_code, body_len);
         rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
     }
     if (rv != 0 || *xsink) {
@@ -5320,6 +5342,8 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         return;
     }
 
+    printd(5, "SocketHttp2SendResponsePollOperation() submitResponse succeeded, want_write=%d\n",
+        nghttp2_session_want_write(session->getSession()));
     h2_state = H2S_SENDING;
 }
 
@@ -5339,27 +5363,85 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
     while (true) {
         switch (h2_state) {
             case H2S_SENDING: {
-                // Send pending data
+                // Send pending data using proper async I/O (non-blocking)
                 int rv = session->sendPendingData(0, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == -1) {
-                    // Would block - need to poll for write
+                // sendPendingData returns:
+                //   0: success
+                //   SOCK_POLLIN: need to poll for read (TLS renegotiation)
+                //   SOCK_POLLOUT: need to poll for write
+                //   -1: error (exception set)
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    // Need to poll for the direction SSL indicated
+                    return getSocketPollInfoHash(xsink, rv);
+                }
+
+                // Check if there's still data in our buffer that wasn't sent yet
+                if (session->hasPendingData()) {
+                    // More data in buffer - poll for POLLOUT and retry
                     return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
                 }
 
-                // Check if more data needs to be sent
+                // Check if nghttp2 has more data to produce
                 if (session->wantWrite()) {
+                    continue;
+                }
+
+                // Data has been written to the socket buffer - transition to FLUSHING
+                // to poll for POLLOUT one more time and verify all data is sent
+                h2_state = H2S_FLUSHING;
+                return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+            }
+
+            case H2S_FLUSHING: {
+                // After POLLOUT, try to send any remaining buffered data (non-blocking)
+                // Try to send any remaining data (non-blocking)
+                int rv = session->sendPendingData(0, xsink);
+
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                // sendPendingData returns:
+                //   0: success
+                //   SOCK_POLLIN: need to poll for read (TLS renegotiation)
+                //   SOCK_POLLOUT: need to poll for write
+                //   -1: error (exception set)
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    // SSL/socket would block - need to poll for the indicated direction
+                    return getSocketPollInfoHash(xsink, rv);
+                }
+
+                // Check if there's still data in our send buffer that wasn't sent yet
+                if (session->hasPendingData()) {
+                    // More data in buffer - poll for POLLOUT and retry
                     return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
                 }
 
+                if (session->wantWrite()) {
+                    // nghttp2 has more data to produce (flow control, etc.)
+                    h2_state = H2S_SENDING;
+                    continue;
+                }
+
+                // All done - both nghttp2 and our buffer are empty
                 h2_state = H2S_SENT;
+                // Goal reached - clear non-block flag so subsequent operations can proceed
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
                 return nullptr;
             }
 
             case H2S_SENT:
-                // Goal reached
+                // Goal reached - clear non-block flag so subsequent operations can proceed
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
                 return nullptr;
 
             default:

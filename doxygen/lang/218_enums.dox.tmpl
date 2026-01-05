@@ -1,0 +1,229 @@
+/** @page enums Enums: Type-Safe Enumerated Constants
+
+    @tableofcontents
+
+    @section enum_overview Enum Overview
+    The <tt><b>enum</b></tt> keyword allows for type-safe enumerated constants to be declared with a
+    specific base type. Enums provide named constants that are grouped together and can be used for
+    type-safe programming where only specific values are valid.
+
+    Enum values are distinct from their underlying base type - assigning a raw value of the base type
+    to an enum variable requires an explicit @ref cast "cast<>" operation, while enum constants
+    can be freely used where the base type is expected.
+
+    @section enum_syntax Enum Declaration Syntax
+    <tt>[<b>public</b>]</tt> <tt><b>enum</b></tt> <em>enum_identifier</em> <tt><b>:</b></tt> <em>base_type</em> <tt>{</tt> \n
+    &nbsp;&nbsp;&nbsp;&nbsp;<em>member_name</em> <tt>=</tt> <em>value</em><tt>,</tt> \n
+    &nbsp;&nbsp;&nbsp;&nbsp;[...] \n
+    <tt>}</tt>
+
+    @par Supported Base Types
+    - @ref int_type "int" - integer values
+    - @ref string_type "string" - string values
+    - @ref float_type "float" - floating-point values
+    - @ref number_type "number" - arbitrary-precision numeric values
+
+    @par Example: Integer Enum
+    @code{.py}
+public enum Priority : int {
+    Low = 0,
+    Medium = 5,
+    High = 10,
+    Critical = 100,
+}
+
+# Use enum constants
+Priority p = Priority::High;
+printf("Priority value: %d\n", p);  # Prints: Priority value: 10
+    @endcode
+
+    @par Example: String Enum
+    @code{.py}
+public enum Status : string {
+    Active = "active",
+    Inactive = "inactive",
+    Pending = "pending",
+}
+
+# Use enum constants
+Status s = Status::Active;
+printf("Status: %s\n", s);  # Prints: Status: active
+    @endcode
+
+    @section enum_type_safety Enum Type Safety
+    Enums in Qore are strictly typed. While enum values can be used where the base type is expected
+    (for comparison, assignment to base type variables, etc.), the reverse requires an explicit cast.
+
+    @par Example: Strict Type Enforcement
+    @code{.py}
+public enum Color : int {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+
+# Enum to base type - OK
+int i = Color::Red;  # i = 1
+
+# Base type to enum - requires cast
+int rawValue = 2;
+Color c = cast<enum<Color>>(rawValue);  # c = Color::Green
+
+# Function with enum parameter
+sub processColor(Color c) {
+    printf("Color value: %d\n", c);
+}
+
+processColor(Color::Blue);        # OK: enum constant
+# processColor(3);                # ERROR: int cannot be passed directly
+processColor(cast<enum<Color>>(3));  # OK: explicit cast
+    @endcode
+
+    @section enum_cast Casting to Enum Types
+    The @ref cast "cast<>" operator can be used to convert base type values to enum values. The cast
+    performs runtime validation to ensure the value is a valid enum member.
+
+    @par Syntax
+    <tt><b>cast</b>&lt;<b>enum</b>&lt;<em>EnumName</em>&gt;&gt;(</tt><em>expression</em><tt>)</tt> \n
+    <tt><b>cast</b>&lt;<b>*enum</b>&lt;<em>EnumName</em>&gt;&gt;(</tt><em>expression</em><tt>)</tt> - allows NOTHING
+
+    @par Example: Valid Cast
+    @code{.py}
+public enum Status : string {
+    Active = "active",
+    Inactive = "inactive",
+}
+
+string s = "active";
+Status st = cast<enum<Status>>(s);  # OK: "active" is a valid Status value
+    @endcode
+
+    @par Example: Invalid Cast (Runtime Error)
+    @code{.py}
+string s = "unknown";
+Status st = cast<enum<Status>>(s);  # RUNTIME-CAST-ERROR: "unknown" is not a valid Status value
+    @endcode
+
+    @par Example: Wrong Base Type (Runtime Error)
+    @code{.py}
+auto v = 123;
+Status st = cast<enum<Status>>(v);  # RUNTIME-CAST-ERROR: expected string value, got integer
+    @endcode
+
+    @par Example: Or-Nothing Cast
+    @code{.py}
+*string s;  # NOTHING
+*Status st = cast<*enum<Status>>(s);  # OK: st is NOTHING
+
+*string s2 = "active";
+*Status st2 = cast<*enum<Status>>(s2);  # OK: st2 is Status::Active
+    @endcode
+
+    @section enum_namespaces Namespaced Enums
+    Enums can be declared within namespaces and accessed using the namespace path.
+
+    @par Example
+    @code{.py}
+namespace MyApp {
+    public enum LogLevel : int {
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3,
+    }
+}
+
+# Access namespaced enum
+MyApp::LogLevel level = MyApp::LogLevel::Warning;
+    @endcode
+
+    @section enum_switch Using Enums in Switch Statements
+    Enum constants can be used in switch statements for pattern matching.
+
+    @par Example
+    @code{.py}
+public enum Status : string {
+    Active = "active",
+    Inactive = "inactive",
+    Pending = "pending",
+}
+
+sub getStatusMessage(Status s) returns string {
+    switch (s) {
+        case Status::Active:
+            return "The item is active";
+        case Status::Inactive:
+            return "The item is inactive";
+        case Status::Pending:
+            return "The item is pending";
+    }
+}
+    @endcode
+
+    @section enum_reflection Enum Reflection
+    Enums can be inspected at runtime using the reflection module.
+
+    @par Example
+    @code{.py}
+%requires reflection
+
+public enum Priority : int {
+    Low = 1,
+    Medium = 2,
+    High = 3,
+}
+
+# Get enum by name
+Enum e = Enum::forName("Priority");
+printf("Enum name: %s\n", e.getName());
+printf("Base type: %s\n", e.getBaseType().getName());
+
+# Iterate over members
+foreach EnumMember m in (e.getMembers()) {
+    printf("  %s = %y\n", m.getName(), m.getValue());
+}
+
+# Validate values
+printf("Is 2 valid? %y\n", e.isValidValue(2));   # True
+printf("Is 99 valid? %y\n", e.isValidValue(99)); # False
+    @endcode
+
+    @section enum_type_name Direct Enum Type Names
+    Enum names can be used directly as type names without the <tt>enum&lt;...&gt;</tt> wrapper.
+    Both syntaxes are equivalent.
+
+    @par Example
+    @code{.py}
+public enum Status : string {
+    Active = "active",
+}
+
+# These are equivalent:
+Status s1 = Status::Active;
+enum<Status> s2 = Status::Active;
+
+# Or-nothing variants:
+*Status s3;
+*enum<Status> s4;
+
+# In function parameters:
+sub process(Status s) { }
+sub process2(enum<Status> s) { }
+    @endcode
+
+    @section enum_restrictions Parse Option Restrictions
+    Enum declarations can be disabled using the @ref PO_NO_ENUM parse option or the
+    <tt>%no-enum</tt> parse directive.
+
+    @code{.py}
+%no-enum
+
+# The following will cause a parse error:
+# public enum Status : string { Active = "active" }
+    @endcode
+
+    @see
+    - @ref cast "cast<>"
+    - @ref Qore::Reflection::Enum "Enum class"
+    - @ref Qore::Reflection::EnumMember "EnumMember class"
+*/

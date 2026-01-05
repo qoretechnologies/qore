@@ -3373,15 +3373,29 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         return nullptr;
     }
 
-    // Send the request
-    if (http_priv->getH2Session()->sendPendingData(http_priv->timeout, xsink) < 0) {
+    // Send the request (use blocking version for client-side operations)
+    if (http_priv->getH2Session()->sendPendingDataBlocking(http_priv->timeout, xsink) < 0) {
         return nullptr;
     }
 
     // Read the response
     while (true) {
-        if (http_priv->getH2Session()->receiveData(http_priv->timeout, xsink) < 0) {
+        int rv = http_priv->getH2Session()->receiveData(http_priv->timeout, xsink);
+        if (rv < 0) {
             return nullptr;
+        }
+        if (rv == 1) {
+            // Connection was closed by peer - check if we got a response first
+            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+            if (stream && stream->headers_complete) {
+                // Process the response we received before connection close
+                // Fall through to normal processing
+            } else {
+                // Connection closed without receiving a complete response
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "HTTP/2 connection closed by peer before CONNECT response was received");
+                return nullptr;
+            }
         }
 
         // Check if we have a response
@@ -3437,8 +3451,8 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
         return -1;
     }
 
-    // Send pending data
-    return http_priv->getH2Session()->sendPendingData(timeout_ms, xsink);
+    // Send pending data (use blocking version for client-side operations)
+    return http_priv->getH2Session()->sendPendingDataBlocking(timeout_ms, xsink);
 }
 
 BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
@@ -3460,12 +3474,20 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
     }
 
     // No data in buffer, try to receive data
-    if (http_priv->getH2Session()->receiveData(timeout_ms, xsink) < 0) {
+    int recv_rv = http_priv->getH2Session()->receiveData(timeout_ms, xsink);
+    if (recv_rv < 0) {
         return nullptr;
     }
 
     // Get stream data again
     stream = http_priv->getH2Session()->getStream(stream_id);
+
+    if (recv_rv == 1) {
+        // Connection closed - return any data we have, or nullptr
+        if (!stream || stream->body.empty()) {
+            return nullptr;
+        }
+    }
     if (!stream || stream->body.empty()) {
         return nullptr;
     }
@@ -3827,8 +3849,8 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         return nullptr;
     }
 
-    // Send pending data (the request)
-    if (h2_session->sendPendingData(timeout_ms, xsink)) {
+    // Send pending data (the request) - use blocking version for client-side operations
+    if (h2_session->sendPendingDataBlocking(timeout_ms, xsink)) {
         return nullptr;
     }
 
@@ -3845,8 +3867,8 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
             }
             break;
         }
-        // Send any pending data (e.g., WINDOW_UPDATE, ACKs)
-        h2_session->sendPendingData(timeout_ms, xsink);
+        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) - use blocking version
+        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -4216,8 +4238,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     // code >= 300 && < 400 is already handled above
 
     // For HTTP/2, the body is already in the response hash (as binary)
-    // We need to extract it and convert to string if appropriate
-    if (http2_active && !os && !recv_callback) {
+    // We need to handle it here and skip the HTTP/1.x body reading logic
+    if (http2_active && !os) {
         QoreValue h2_body = ans->getKeyValue("body");
         if (h2_body.getType() == NT_BINARY) {
             const BinaryNode* bin = h2_body.get<const BinaryNode>();
@@ -4244,7 +4266,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                         }
                     }
                 }
-                if (!*xsink) {
+                if (!*xsink && !recv_callback) {
+                    // Only process body encoding/conversion when no recv_callback
                     // Check content-encoding for compression
                     content_encoding = get_string_header(xsink, **ans, "content-encoding");
                     if (!*xsink && content_encoding && !encoding_passthru) {
@@ -4295,11 +4318,30 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
         }
         // For HTTP/2, set response-body in info if needed
-        if (info) {
+        if (info && !recv_callback) {
             QoreValue body_val = ans->getKeyValue("body");
             if (body_val) {
                 info->setKeyValue("response-body", body_val.refSelf(), xsink);
             }
+        }
+        // For recv_callback, call it with the body data and then signal completion
+        if (recv_callback) {
+            QoreValue body_val = ans->getKeyValue("body");
+            sl.unlock();
+            // Call data callback with body
+            if (body_val) {
+                if (msock->socket->priv->runDataCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
+                        body_val.getInternalNode(), false)) {
+                    return nullptr;
+                }
+            }
+            // Call header callback with no argument to signal completion
+            if (msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
+                    nullptr, nullptr, send_aborted, obj)) {
+                return nullptr;
+            }
+            // For recv_callback, return nullptr (data was sent to callback)
+            return nullptr;
         }
         // Skip the HTTP/1.x body reading logic
         goto http2_body_done;

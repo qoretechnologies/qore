@@ -285,9 +285,9 @@ class QdpCmd {
             # first extract any data provider options
             string name = shift ARGV;
             # get expression in curly brackets, if any, respecting balanced brackets
-            *string opts = (name =~ x/({(?:(?>[^{}]*)|(?0))*})/)[0];
-            if (opts) {
-                name = replace(name, opts, "");
+            *string dp_opts = (name =~ x/({(?:(?>[^{}]*)|(?0))*})/)[0];
+            if (dp_opts) {
+                name = replace(name, dp_opts, "");
             } else {
                 # remove empty options; the above regex does not catch them :(
                 name =~ s/{}//;
@@ -302,10 +302,10 @@ class QdpCmd {
                 }
                 app = path[0];
                 action = path[1];
-                provider = getDataProviderForAppAction(app, action, opts);
+                provider = getDataProviderForAppAction(app, action, dp_opts);
             } else {
                 list<string> path = name.split("/");
-                provider = getDataProvider((shift path) + opts);
+                provider = getDataProvider((shift path) + dp_opts);
                 map provider = provider.getChildProviderEx($1), path;
             }
             provider.setLogger(logger);
