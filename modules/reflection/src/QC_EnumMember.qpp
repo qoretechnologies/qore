@@ -1,0 +1,163 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_EnumMember.cpp EnumMember class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore_reflection.h"
+#include "QC_EnumMember.h"
+#include "QC_Enum.h"
+#include "QC_Type.h"
+
+//! This class provides information about %Qore enum members
+/**
+    @since %Qore 2.1
+ */
+qclass EnumMember [ns=Qore::Reflection; arg=QoreReflectionEnumMember* m; dom=REFLECTION];
+
+//! Throws an exception; this class cannot be created directly or used in a user class hierarchy
+/** @throw ENUMMEMBER-CONSTRUCTOR-ERROR the EnumMember class cannot be constructed directly or inherited directly by a user-defined class
+ */
+EnumMember::constructor() {
+    xsink->raiseException("ENUMMEMBER-CONSTRUCTOR-ERROR", "this class cannot be constructed directly or inherited directly by a user-defined class");
+}
+
+//! returns the member name
+/** @par Example:
+    @code{.py}
+string name = member.getName();
+    @endcode
+
+    @return the member name
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+string EnumMember::getName() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return new QoreStringNode(m->name);
+}
+
+//! returns the member value
+/** @par Example:
+    @code{.py}
+auto val = member.getValue();
+    @endcode
+
+    @return the member value
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+auto EnumMember::getValue() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return m->member->getValue().refSelf();
+}
+
+//! Returns the type of the member (same as the enum's base type)
+/** @par Example:
+    @code{.py}
+Type t = member.getType();
+    @endcode
+
+    @return the type object for this member
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+Type EnumMember::getType() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_TYPE, m->pgm, new QoreType(m->ed->getBaseTypeInfo()));
+}
+
+//! Returns the enum that this member belongs to
+/** @par Example:
+    @code{.py}
+Enum e = member.getEnum();
+    @endcode
+
+    @return the enum that this member belongs to
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+Enum EnumMember::getEnum() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_ENUM, m->pgm, new QoreReflectionEnum(m->pgm, m->ed));
+}
+
+//! returns @ref True if the enum defining the member is a builtin enum
+/** @par Example:
+    @code{.py}
+bool b = member.isBuiltin();
+    @endcode
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+bool EnumMember::isBuiltin() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return m->ed->isSystem();
+}
+
+//! returns @ref True if the enum defining the member is a user enum
+/** @par Example:
+    @code{.py}
+bool b = member.isUser();
+    @endcode
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+bool EnumMember::isUser() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return !m->ed->isSystem();
+}

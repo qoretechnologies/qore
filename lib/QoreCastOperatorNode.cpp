@@ -34,6 +34,7 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/qore_enum_decl_private.h"
 
 QoreString QoreParseCastOperatorNode::cast_str("cast operator expression");
 
@@ -237,6 +238,34 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreComplexListCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                return err;
+            }
+        }
+    }
+
+    {
+        const QoreEnumDecl* ed = or_nothing
+            ? QoreTypeInfo::getReturnEnum(parse_context.typeInfo)
+            : QoreTypeInfo::getUniqueReturnEnum(parse_context.typeInfo);
+        if (ed) {
+            // Get the enum's base type to check if the expression can be cast
+            qore_type_t base_type = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
+
+            // Check if expression can return the enum's base type
+            qore_type_result_e r = QoreTypeInfo::parseReturns(expTypeInfo, base_type);
+            if (r == QTI_NOT_EQUAL) {
+                // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
+                if (!or_nothing || QoreTypeInfo::parseReturns(expTypeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+                    parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to %s",
+                        QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
+                        QoreTypeInfo::getName(expTypeInfo), QoreTypeInfo::getName(parse_context.typeInfo));
+                    err = -1;
+                }
+            }
+
+            if (exp) {
+                ReferenceHolder<> holder(this, nullptr);
+                val = new QoreEnumCastOperatorNode(loc, ed, parse_context.typeInfo, takeExp(), or_nothing);
                 return err;
             }
         }
@@ -473,4 +502,50 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
     }
 
     return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink);
+}
+
+// checks if the value matches the expected enum type
+int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
+    // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
+    if (val.isNothing() && or_nothing) {
+        return 0;
+    }
+
+    // Check that the value's type matches the enum's base type
+    qore_type_t base_type = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
+    if (val.getType() != base_type) {
+        xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to enum '%s'; expected %s value",
+            val.getTypeName(), ed->getName(), QoreTypeInfo::getName(ed->getBaseTypeInfo()));
+        return -1;
+    }
+
+    // Validate that the value is a valid enum member
+    if (!ed->isValidValue(val)) {
+        QoreStringMaker desc("cannot cast value ");
+        if (base_type == NT_STRING) {
+            desc.sprintf("'%s'", val.get<const QoreStringNode>()->c_str());
+        } else if (base_type == NT_INT) {
+            desc.sprintf("%lld", val.getAsBigInt());
+        } else {
+            desc.sprintf("of type '%s'", val.getTypeName());
+        }
+        desc.sprintf(" to enum '%s'; value is not a valid enum member", ed->getName());
+        xsink->raiseException("RUNTIME-CAST-ERROR", desc.c_str());
+        return -1;
+    }
+
+    return 0;
+}
+
+QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (QoreEnumCastOperatorNode::checkValue(xsink, *rv, false)) {
+        return QoreValue();
+    }
+
+    return rv.takeValue(needs_deref);
 }
