@@ -1884,6 +1884,10 @@ ws.setEventQueue();
         h2_stream_id = 0;
         logDebug("Using HTTP/2 WebSocket handshake (RFC 8441)");
 
+        # Merge HTTPClient's default headers (includes Authorization from token option)
+        # with the request headers - default headers have lower priority
+        hdr = hc.getDefaultHeaders() + hdr;
+
         # Remove :protocol from headers - it's handled by sendHttp2Connect
         remove hdr.":protocol";
 
