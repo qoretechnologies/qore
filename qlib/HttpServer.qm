@@ -4605,7 +4605,7 @@ class HttpServerIoController {
             server.getGlobalAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": linfo.listener,
                 "spop": accept_op,
-                "to": DefaultSslTimeout,
+                "to": 0s,  # No timeout - listeners wait indefinitely for connections
                 "resultQueue": resultQueue,
                 "other": {"goal": "listener:" + key},
             });

@@ -159,6 +159,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
+        addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
         # POST test has encoding issues - skip for now
@@ -230,6 +231,38 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         if (m_options.verbose > 1) {
             printf("Basic HTTP/2 response: OK (http_version: %y)\n", resp.http_version);
+        }
+    }
+
+    #! Tests multiple sequential requests from SEPARATE connections
+    /** This is the key regression test for the bug where the listener stops accepting
+        new connections after the first accept completes. Each request uses a new
+        RestClient instance to force a new TCP connection/TLS handshake.
+    */
+    testMultipleSeparateConnections() {
+        int num_connections = 5;
+
+        for (int i = 0; i < num_connections; i++) {
+            # Create a NEW client for each request - forces new connection
+            RestClient rc = getClient(10000);
+            on_exit delete rc;
+
+            if (m_options.verbose > 1) {
+                printf("Connection %d: making request...\n", i);
+            }
+
+            hash<auto> resp = rc.get("/simple");
+            assertEq(200, resp.status_code, sprintf("Connection %d should return 200", i));
+            assertEq("OK", resp.body, sprintf("Connection %d response should be 'OK'", i));
+
+            if (m_options.verbose > 1) {
+                printf("Connection %d: OK (http_version: %y)\n", i, resp.http_version);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("Multiple separate connections: %d requests from %d different connections succeeded\n",
+                num_connections, num_connections);
         }
     }
 

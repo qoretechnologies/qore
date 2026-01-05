@@ -34,7 +34,7 @@ public hashdecl SocketPollOperationInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout
+    #! I/O timeout; use 0s to disable timeout (operation will wait indefinitely)
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Free-form data to be returned when the operation completes
@@ -382,13 +382,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     hash<string, bool> dmap;
                     while ((*string key = (cache - keys dmap).firstKey()).val()) {
                         hash<PollInfo> cinfo = cache{key};
-                        if (!cinfo.timeout_date) {
+                        # Only set timeout_date if a positive timeout was specified (0 or less means no timeout)
+                        if (!cinfo.timeout_date && cinfo.to > 0s) {
                             cinfo.timeout_date = cache{key}.timeout_date = now_us() + cinfo.to;
                         }
                         dmap{key} = True;
                         Socket sock = cinfo.sock;
                         try {
-                            if (cinfo.timeout_date < now) {
+                            # Only check for timeout if timeout_date is set (not set when to <= 0)
+                            if (cinfo.timeout_date && cinfo.timeout_date < now) {
                                 throw "SOCKET-TIMEOUT", sprintf("The I/O operation did not complete in the timeout "
                                     "period (%y)", cinfo.to);
                             }
@@ -410,7 +412,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 remove dmap{key};
                             } else {
                                 poll_list += info;
-                                if (!poll_timeout || (poll_timeout < cinfo.timeout_date)) {
+                                # Find the MINIMUM (earliest) timeout so poll returns in time to handle it
+                                # Only consider operations with timeouts
+                                if (cinfo.timeout_date && (!poll_timeout || (poll_timeout > cinfo.timeout_date))) {
                                     poll_timeout = cinfo.timeout_date;
                                 }
                             }
@@ -534,8 +538,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 namespace Priv {
 # internal poll info
 hashdecl PollInfo {
-    #! Poll start timestamp
-    date timeout_date;
+    #! Poll start timestamp; not set if timeout is disabled (to <= 0)
+    *date timeout_date;
 
     #! Socket connection
     Socket sock;
@@ -543,7 +547,7 @@ hashdecl PollInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout
+    #! I/O timeout; 0s or less means no timeout
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Other data stored alongside the socket
