@@ -40,6 +40,13 @@
 #include <cinttypes>
 #include <cstring>
 
+// nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
+// Use the new API when available for better cross-platform compatibility
+#include <nghttp2/nghttp2ver.h>
+#if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
+#define QORE_USE_NGHTTP2_MEM_SEND2 1
+#endif
+
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
 }
@@ -621,14 +628,22 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d send_buffer.size=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, send_buffer.size());
-    // First, collect data from nghttp2 using the non-deprecated API
+    // First, collect data from nghttp2
     size_t total_collected = 0;
     while (nghttp2_session_want_write(session)) {
         const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
         nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
-        printd(5, "sendPendingData() nghttp2_session_mem_send2 len=%zd\n", (ssize_t)len);
+#else
+        ssize_t len = nghttp2_session_mem_send(session, &data);
+#endif
+        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
         if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
             xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
+            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
                 nghttp2_strerror(static_cast<int>(len)));
             return -1;
         }
@@ -730,13 +745,21 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
     printd(5, "sendPendingDataBlocking() want_write=%d send_buffer.size=%zu timeout_ms=%d\n",
         nghttp2_session_want_write(session), send_buffer.size(), timeout_ms);
 
-    // First, collect any additional data from nghttp2 using the non-deprecated API
+    // First, collect any additional data from nghttp2
     while (nghttp2_session_want_write(session)) {
         const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
         nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
-        printd(5, "sendPendingDataBlocking() nghttp2_session_mem_send2 len=%zd\n", (ssize_t)len);
+#else
+        ssize_t len = nghttp2_session_mem_send(session, &data);
+#endif
+        printd(5, "sendPendingDataBlocking() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
         if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
             xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
+            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
                 nghttp2_strerror(static_cast<int>(len)));
             return -1;
         }
@@ -793,10 +816,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         return -1;
     }
     if (len == 0) {
-        // This could be SSL_ERROR_ZERO_RETURN (clean shutdown) or just no data
-        // For HTTP/2, we'll treat this as "no data available" rather than fatal
-        printd(5, "receiveData() len=0 (connection closed or no data)\n");
-        return 0;  // Not fatal for HTTP/2, just no data
+        // EOF received - connection was closed by peer
+        printd(5, "receiveData() len=0 (connection closed by peer)\n");
+        return 1;  // Connection closed - distinct from timeout (0)
     }
 
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
@@ -832,12 +854,20 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 void Http2Session::markStreamComplete(int32_t stream_id) {
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
-        // For CONNECT streams, we need to keep the stream in the map so we can respond
+        // Prevent duplicate entries in completed_streams
+        if (it->second->marked_complete) {
+            printd(5, "markStreamComplete(%d) already marked complete, skipping\n", stream_id);
+            return;
+        }
+        it->second->marked_complete = true;
+
+        // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
+        // For client-side sessions, we also keep the stream in the map so the caller can access it
         // Create a copy for completed_streams instead of moving
-        if (it->second->is_connect) {
+        if (it->second->is_connect || !is_server) {
             auto copy = std::make_unique<Http2StreamInfo>(*it->second);
             completed_streams.push(std::move(copy));
-            // Keep the original in streams for submitConnectResponse to find
+            // Keep the original in streams for the caller to find
         } else {
             completed_streams.push(std::move(it->second));
             streams.erase(it);

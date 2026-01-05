@@ -204,6 +204,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
+        addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
         addTestCase("async mode persistent connection close", \asyncModePersistentConnectionCloseTest());
@@ -619,6 +621,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeHttpsTest() {
+        # Verify the async I/O controller is running
+        assertTrue(mAsyncServer.getGlobalAsyncCtrl().running(), "globalAsyncCtrl should be running");
+
+        # Debug: check listener SSL detection
+        hash<auto> info = mAsyncServer.getGlobalAsyncCtrl().getInfo();
+        if (m_options.verbose > 2) {
+            printf("DEBUG: globalAsyncCtrl info: %N\n", info);
+        }
+
         # Test HTTPS connections with async mode
         HTTPClient client({
             "url": asyncSslUrl,
@@ -747,6 +758,83 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world", receivedMsg);
+    }
+
+    asyncModeWebSocketSslTest() {
+        # Test WebSocket protocol upgrade with async mode over SSL (wss://)
+        # This test uses HTTP/2 by default (via ALPN)
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://)
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're using HTTP/2 (default behavior)
+        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketSslHttp1Test() {
+        # Test WebSocket protocol upgrade with async mode over SSL using HTTP/1.1
+        # This explicitly disables HTTP/2 to test the HTTP/1.1 upgrade path
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://) with HTTP/2 disabled
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "1.1",  # Force HTTP/1.1 - disables HTTP/2 ALPN negotiation
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're NOT using HTTP/2
+        assertFalse(wsc.isHttp2(), "WebSocket should use HTTP/1.1 when HTTP/2 is disabled");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl-http1", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl-http1", receivedMsg);
     }
 
     asyncModePersistentHandlerTest() {

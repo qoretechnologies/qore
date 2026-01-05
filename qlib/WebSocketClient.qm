@@ -2529,15 +2529,25 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "HTTP version to use (`1.0` or `1.1`, defaults to `1.1`)",
-                "default_value": "1.1",
+                "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
+                    "or `2.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN",
+                "default_value": "auto",
                 "allowed_values": (
                     <AllowedValueInfo>{
+                        "value": "auto",
+                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                    },
+                    <AllowedValueInfo>{
                         "value": "1.0",
-                        "desc": "Use HTTP version \"1.0\"",
-                    }, <AllowedValueInfo>{
+                        "desc": "HTTP/1.0 only",
+                    },
+                    <AllowedValueInfo>{
                         "value": "1.1",
-                        "desc": "Use HTTP version \"1.1\" (the default)",
+                        "desc": "HTTP/1.1 only",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "2.0",
+                        "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
                     },
                 ),
             },

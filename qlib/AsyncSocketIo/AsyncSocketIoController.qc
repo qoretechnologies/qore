@@ -244,6 +244,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "other": info.other,
                 "q": info.resultQueue ?? new Queue(),
             };
+            @debug(log(LoggerLevel::INFO, "submit: added operation for socket %s goal=%y to=%y cache_size=%d",
+                uh, info.other.goal, info.to, cache.size()));
             if (!tid) {
                 startIntern();
             }
@@ -426,10 +428,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                     }
 
-                    log(LoggerLevel::DEBUG, "poll_list: %y", poll_timeout, (map $1 + {
+                    @debug(log(LoggerLevel::INFO, "poll_list: cache=%d items=%d poll_list: %y", cache.size(), poll_list.size(), (map $1 + {
                         "events": PollEventMap{$1.events} ?? "unknown",
                         "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
-                    }, poll_list));
+                    }, poll_list)));
 
                     if (!cache && autostop) {
                         log(LoggerLevel::DEBUG, "All operations have completed; exiting the I/O thread");
@@ -438,7 +440,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     }
                 }
                 # ignore return value, all active ping operations are sent in each poll call
-                Socket::poll(poll_list, poll_timeout);
+                # Use -1 (infinite wait) when no timeout is set - the semaphore pipe in poll_list
+                # ensures we wake up immediately when commands are sent via sendCmd()
+                log(LoggerLevel::DEBUG, "calling poll() with %d items, timeout=%y", poll_list.size(),
+                    poll_timeout ?? "infinite");
+                Socket::poll(poll_list, poll_timeout ?? -1);
+                log(LoggerLevel::DEBUG, "poll() returned");
 
                 # first process commands, if any
                 if (processCommands()) {

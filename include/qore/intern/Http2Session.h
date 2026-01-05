@@ -95,6 +95,7 @@ struct Http2StreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     bool reset = false;
+    bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -256,7 +257,7 @@ public:
 
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
-        @return 0 on success, -1 on error or timeout
+        @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
     DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
 

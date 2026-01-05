@@ -5057,10 +5057,12 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     if (*xsink) {
         return nullptr;
     }
-    ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+    // Store result in member variable for getOutput() - don't return it from continuePoll()
+    out = new QoreHashNode(autoTypeInfo);
     out->setKeyValue("hdr", hdr.release(), xsink);
     out->setKeyValue("info", info.release(), xsink);
-    return out.release();
+    // Return nullptr to indicate operation is complete; result is available via getOutput()
+    return nullptr;
 }
 
 QoreValue SocketReadHttpHeaderPollOperation::getOutput() const {
@@ -5160,6 +5162,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 if (rv == -1) {
                     // Would block - need to poll for read
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                }
+                if (rv == 1) {
+                    // Connection closed by peer - check if we have a completed request first
+                    if (!h2_session->hasCompletedStreams()) {
+                        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection closed by peer before "
+                            "request was complete");
+                        return nullptr;
+                    }
+                    // Fall through to handle the completed request
                 }
 
                 // Check if we have a completed request
@@ -5417,11 +5428,20 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
 
                 // All done - both nghttp2 and our buffer are empty
                 h2_state = H2S_SENT;
+                // Goal reached - clear non-block flag so subsequent operations can proceed
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
                 return nullptr;
             }
 
             case H2S_SENT:
-                // Goal reached
+                // Goal reached - clear non-block flag so subsequent operations can proceed
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
                 return nullptr;
 
             default:

@@ -3380,8 +3380,22 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
 
     // Read the response
     while (true) {
-        if (http_priv->getH2Session()->receiveData(http_priv->timeout, xsink) < 0) {
+        int rv = http_priv->getH2Session()->receiveData(http_priv->timeout, xsink);
+        if (rv < 0) {
             return nullptr;
+        }
+        if (rv == 1) {
+            // Connection was closed by peer - check if we got a response first
+            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+            if (stream && stream->headers_complete) {
+                // Process the response we received before connection close
+                // Fall through to normal processing
+            } else {
+                // Connection closed without receiving a complete response
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "HTTP/2 connection closed by peer before CONNECT response was received");
+                return nullptr;
+            }
         }
 
         // Check if we have a response
@@ -3460,12 +3474,20 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
     }
 
     // No data in buffer, try to receive data
-    if (http_priv->getH2Session()->receiveData(timeout_ms, xsink) < 0) {
+    int recv_rv = http_priv->getH2Session()->receiveData(timeout_ms, xsink);
+    if (recv_rv < 0) {
         return nullptr;
     }
 
     // Get stream data again
     stream = http_priv->getH2Session()->getStream(stream_id);
+
+    if (recv_rv == 1) {
+        // Connection closed - return any data we have, or nullptr
+        if (!stream || stream->body.empty()) {
+            return nullptr;
+        }
+    }
     if (!stream || stream->body.empty()) {
         return nullptr;
     }
