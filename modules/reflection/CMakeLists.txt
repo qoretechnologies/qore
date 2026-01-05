@@ -55,6 +55,8 @@ set(REFLECTION_QPP_SRC
     src/QC_GlobalVar.qpp
     src/QC_TypedHash.qpp
     src/QC_TypedHashMember.qpp
+    src/QC_Enum.qpp
+    src/QC_EnumMember.qpp
 )
 
 set(REFLECTION_CPP_SRC
@@ -100,6 +102,8 @@ set(REFLECTION_H_SRC
     src/QC_TypedHash.h
     src/QC_TypedHashMember.h
     src/QC_Type.h
+    src/QC_Enum.h
+    src/QC_EnumMember.h
 )
 
 set(QORE_DOX_REFLECTION_TMPL_SRC

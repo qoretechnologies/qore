@@ -173,6 +173,8 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_BROKEN_VARARGS, "PO_BROKEN_ELLIPSES");
     // 62
     doMap(PO_BROKEN_LIST_RANGE, "PO_BROKEN_LIST_RANGE");
+    // 63
+    doMap(PO_NO_ENUM, "PO_NO_ENUM", "ENUM");
 }
 
 // program serialization magic
@@ -2440,6 +2442,15 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
         pns = pns_priv->ns;
     }
     return th;
+}
+
+const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    const qore_ns_private* pns_priv;
+    const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
+    if (e) {
+        pns = pns_priv->ns;
+    }
+    return e;
 }
 
 // issue #1796: include a non-const variant for binary modules

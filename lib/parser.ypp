@@ -72,6 +72,7 @@
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/qore_list_private.h"
 
 #include <cstdio>
@@ -253,6 +254,123 @@ public:
     DLLLOCAL TypedHashDecl* takeHashDecl() {
         TypedHashDecl* rv = hashdecl;
         hashdecl = nullptr;
+        return rv;
+    }
+};
+
+// Represents a single enum member (name = value)
+struct EnumMemberInfo {
+    const QoreProgramLocation* loc;
+    char* name;
+    QoreValue value;
+    bool has_value;
+
+    DLLLOCAL EnumMemberInfo(const QoreProgramLocation* loc, char* n) :
+        loc(loc), name(n), has_value(false) {
+    }
+
+    DLLLOCAL EnumMemberInfo(const QoreProgramLocation* loc, char* n, QoreValue v) :
+        loc(loc), name(n), value(v), has_value(true) {
+    }
+
+    DLLLOCAL ~EnumMemberInfo() {
+        if (name) {
+            free(name);
+        }
+        value.discard(nullptr);
+    }
+};
+
+// List of enum members
+class EnumMemberList {
+public:
+    typedef std::vector<EnumMemberInfo*> member_list_t;
+    member_list_t members;
+
+    DLLLOCAL EnumMemberList() {
+    }
+
+    DLLLOCAL ~EnumMemberList() {
+        for (auto& m : members) {
+            delete m;
+        }
+    }
+
+    DLLLOCAL void add(EnumMemberInfo* m) {
+        members.push_back(m);
+    }
+};
+
+// Represents an enum declaration
+class EnumDef {
+public:
+    const QoreProgramLocation* loc;
+    NamedScope* name;
+    QoreEnumDecl* enumdecl;
+
+    DLLLOCAL EnumDef(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* bt, EnumMemberList* m) :
+            loc(loc), name(new NamedScope(n)), enumdecl(nullptr) {
+        init(bt, m);
+    }
+
+    DLLLOCAL EnumDef(const QoreProgramLocation* loc, NamedScope* n, const QoreTypeInfo* bt, EnumMemberList* m) :
+            loc(loc), name(n), enumdecl(nullptr) {
+        init(bt, m);
+    }
+
+    DLLLOCAL ~EnumDef() {
+        delete name;
+        if (enumdecl) {
+            qore_enum_decl_private::get(*enumdecl)->deref();
+        }
+    }
+
+    DLLLOCAL void init(const QoreTypeInfo* bt, EnumMemberList* m) {
+        checkName();
+        // Validate base type - only simple immutable value types are allowed
+        if (bt != bigIntTypeInfo &&
+            bt != stringTypeInfo &&
+            bt != floatTypeInfo &&
+            bt != numberTypeInfo) {
+            parse_error(*loc, "enum base type must be 'int', 'string', 'float', or 'number'; got '%s'",
+                QoreTypeInfo::getName(bt));
+            delete m;
+            return;
+        }
+
+        // Create the enum declaration
+        qore_enum_decl_private* priv = new qore_enum_decl_private(loc);
+        enumdecl = priv->newEnumDecl(name->getIdentifier(), bt);
+
+        // Add members
+        if (m) {
+            for (auto& member : m->members) {
+                if (member->has_value) {
+                    // Take the value from the member and pass to parseAddMember
+                    // parseAddMember will ref the value internally, so we discard our reference after
+                    QoreValue val = member->value;
+                    member->value = QoreValue();  // Clear without discarding - we're transferring our reference
+                    member->has_value = false;    // Mark as no longer having value
+                    priv->parseAddMember(member->name, val);
+                    val.discard(nullptr);  // Discard our reference; parseAddMember has added its own
+                } else {
+                    // Auto-value not yet supported - need to compute next value based on base type
+                    parse_error(*loc, "enum member '%s' must have an explicit value", member->name);
+                }
+            }
+            delete m;
+        }
+    }
+
+    DLLLOCAL void checkName() {
+        if (!strcmp(name->getIdentifier(), "auto")) {
+            parse_error(*loc, "an enum may not have the name 'auto'; this name has a special meaning in complex types; please choose another name for your enum");
+        }
+    }
+
+    DLLLOCAL QoreEnumDecl* takeEnumDecl() {
+        QoreEnumDecl* rv = enumdecl;
+        enumdecl = nullptr;
         return rv;
     }
 };
@@ -701,12 +819,14 @@ static AbstractQoreNode* parse_map(const QoreProgramLocation* loc, QoreValue exp
 #define NSN_TYPEDEF  9
 #define NSN_VAR      7
 #define NSN_METH     8
+#define NSN_ENUM     10
 
 struct NSNode {
     int type;
     union {
         ObjClassDef* ocd;
         HashDeclDef* hashdecl;
+        EnumDef* enumdef;
         ConstNode* cn;
         TypedefNode* td;
         QoreNamespace* ns;
@@ -718,6 +838,7 @@ struct NSNode {
 
     DLLLOCAL NSNode(ObjClassDef* o) { type = NSN_OCD; n.ocd = o; }
     DLLLOCAL NSNode(HashDeclDef* h) { type = NSN_HASHDECL; n.hashdecl = h; }
+    DLLLOCAL NSNode(EnumDef* e) { type = NSN_ENUM; n.enumdef = e; }
     DLLLOCAL NSNode(ConstNode* c) { type = NSN_CONST; n.cn = c; }
     DLLLOCAL NSNode(TypedefNode* t) { type = NSN_TYPEDEF; n.td = t; }
     DLLLOCAL NSNode(QoreNamespace* s) { type = NSN_NS; n.ns = s; }
@@ -743,6 +864,9 @@ struct NSNode {
                 break;
             case NSN_HASHDECL:
                 delete n.hashdecl;
+                break;
+            case NSN_ENUM:
+                delete n.enumdef;
                 break;
             case NSN_CONST:
                 delete n.cn;
@@ -782,6 +906,12 @@ struct NSNode {
             case NSN_HASHDECL:
                 ns.parseAddPendingHashDecl(n.hashdecl->loc, *(n.hashdecl->name), n.hashdecl->takeHashDecl());
                 delete n.hashdecl;
+                break;
+            case NSN_ENUM:
+                if (n.enumdef->enumdecl) {
+                    ns.parseAddPendingEnum(n.enumdef->loc, *(n.enumdef->name), n.enumdef->takeEnumDecl());
+                }
+                delete n.enumdef;
                 break;
             case NSN_CONST:
                 ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub);
@@ -1399,6 +1529,30 @@ static void check_hashdeclmod(const QoreProgramLocation* loc, int mod, typed_has
       parse_error(*loc, "illegal 'abstract' modifier in hashdecl");
 }
 
+static void check_enummod(const QoreProgramLocation* loc, int mod, qore_enum_decl_private& enumdecl) {
+    if (mod & (OFM_PRIVATE|OFM_INTERNAL)) {
+        parse_error(*loc, "illegal 'private' modifier in enum declaration");
+    }
+    if (mod & OFM_SYNCED) {
+        parse_error(*loc, "illegal 'synchronized' modifier in enum declaration");
+    }
+    if (mod & OFM_STATIC) {
+        parse_error(*loc, "illegal 'static' modifier in enum declaration");
+    }
+    if (mod & OFM_PUBLIC) {
+        enumdecl.setPublic();
+    }
+    if (mod & OFM_DEPRECATED) {
+        parse_error(*loc, "illegal 'deprecated' modifier in enum declaration");
+    }
+    if (mod & OFM_FINAL) {
+        parse_error(*loc, "illegal 'final' modifier in enum declaration");
+    }
+    if (mod & OFM_ABSTRACT) {
+        parse_error(*loc, "illegal 'abstract' modifier in enum declaration");
+    }
+}
+
 static void check_nsmod(const QoreProgramLocation* loc, int mod, qore_ns_private& ns) {
    if (mod & (OFM_PRIVATE|OFM_INTERNAL))
       parse_error(*loc, "illegal 'private' modifier in namespace declaration");
@@ -1696,6 +1850,9 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     struct NSNode* nsn;
     class ObjClassDef* classdef;
     class HashDeclDef* hashdecldef;
+    class EnumDef* enumdef;
+    class EnumMemberList* enummemberlist;
+    struct EnumMemberInfo* enummemberinfo;
     DateTimeNode* datetime;
     QoreRegexSubst* RegexSubst;
     QoreTransliteration* Trans;
@@ -1784,6 +1941,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token TOK_HASHDECL "hashdecl"
 %token TOK_TRANSIENT "transient"
 %token TOK_TYPEDEF "typedef"
+%token TOK_ENUM "enum"
 %token TOK_NULL "NULL"
 %token TOK_NOTHING "NOTHING"
 %token TOK_TRUE "True"
@@ -1948,6 +2106,9 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <hashdeclpriv>   hashdecl_attrs
 %type <classdef>       class_def
 %type <hashdecldef>    hashdecl_def
+%type <enumdef>        enum_def
+%type <enummemberlist> enum_members
+%type <enummemberinfo> enum_member
 %type <ns>             top_namespace_decl
 %type <nsnlist>        namespace_decls
 %type <nsn>            namespace_decl
@@ -1980,7 +2141,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <methoddef>      outofline_methoddef
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
+%destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::get(*$$)->deref(true, true); } class_attributes
 %destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING optname ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n
@@ -2008,6 +2169,12 @@ top_level_command:
     }
     | hashdecl_def {
         qore_root_ns_private::parseAddHashDecl($1->loc, *($1->name), $1->takeHashDecl());
+        delete $1;
+    }
+    | enum_def {
+        if ($1->enumdecl) {
+            qore_root_ns_private::parseAddEnum($1->loc, *($1->name), $1->takeEnumDecl());
+        }
         delete $1;
     }
     | typedef_decl {
@@ -2278,6 +2445,9 @@ namespace_decl:
         $$ = new NSNode($1);
     }
     | hashdecl_def {
+        $$ = new NSNode($1);
+    }
+    | enum_def {
         $$ = new NSNode($1);
     }
     | sub_def {
@@ -2751,6 +2921,68 @@ hashdecl_inherits:
     }
     | /* empty */ {
         $$ = nullptr;
+    }
+    ;
+
+enum_def:
+    nsc_modifiers TOK_ENUM IDENTIFIER '{' enum_members '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        $$ = new EnumDef(loc, $3, bigIntTypeInfo, $5);
+        if ($$->enumdecl) {
+            check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
+        }
+    }
+    | nsc_modifiers TOK_ENUM IDENTIFIER ':' uncqtypedef '{' enum_members '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        $$ = new EnumDef(loc, $3, $5->getTypeInfo(), $7);
+        delete $5;
+        if ($$->enumdecl) {
+            check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
+        }
+    }
+    | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        $$ = new EnumDef(loc, $3, bigIntTypeInfo, $5);
+        if ($$->enumdecl) {
+            check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
+        }
+    }
+    | nsc_modifiers TOK_ENUM SCOPED_REF ':' uncqtypedef '{' enum_members '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        $$ = new EnumDef(loc, $3, $5->getTypeInfo(), $7);
+        delete $5;
+        if ($$->enumdecl) {
+            check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
+        }
+    }
+    ;
+
+enum_members:
+    enum_member {
+        $$ = new EnumMemberList();
+        $$->add($1);
+    }
+    | enum_members ',' enum_member {
+        $$ = $1;
+        $$->add($3);
+    }
+    | enum_members ',' {
+        $$ = $1;  // trailing comma is allowed
+    }
+    ;
+
+enum_member:
+    IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        $$ = new EnumMemberInfo(loc, $1);
+    }
+    | IDENTIFIER '=' exp {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        $$ = new EnumMemberInfo(loc, $1, $3);
     }
     ;
 

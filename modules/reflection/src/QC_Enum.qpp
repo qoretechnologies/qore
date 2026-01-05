@@ -1,0 +1,454 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_Enum.cpp Enum class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore_reflection.h"
+#include "QC_Enum.h"
+#include "QC_EnumMember.h"
+#include "QC_Type.h"
+#include "QC_Namespace.h"
+
+QoreReflectionEnum::QoreReflectionEnum(ExceptionSink* xsink, const char* path, QoreProgram* pgm)
+    : AbstractReflectionObject(pgm) {
+    ed = pgm->findEnum(path, ns);
+
+    if (!ed) {
+        xsink->raiseException("UNKNOWN-ENUM", "cannot resolve enum '%s'", path);
+        return;
+    }
+}
+
+//! The base class for %Qore enums
+/**
+    @since %Qore 2.1
+ */
+qclass Enum [ns=Qore::Reflection; arg=QoreReflectionEnum* e; dom=REFLECTION];
+
+//! Creates the object from the enum name or namespace-justified path as a string
+/** @par Example:
+    @code{.py}
+Enum e("::Color");
+    @endcode
+
+    @param path the enum name or namespace-justified path as a string
+
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+
+    @see forName()
+ */
+Enum::constructor(string path) {
+    TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str()), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ENUM, en.release());
+}
+
+//! Returns @ref True if the enum passed as an argument is equal to the current object; @ref False if not
+/** @par Example:
+    @code{.py}
+bool b = e1.isEqual(e2);
+    @endcode
+
+    @param en the enum to check with the current object for equality
+
+    @return @ref True if the object passed as an argument is equal to the current object; @ref False if not
+
+    @note if this method is called on user enums created from the same source code but in different
+    @ref Qore::Program "Program" containers, it will return @ref False
+*/
+bool Enum::isEqual(Enum[QoreReflectionEnum] en) [flags=CONSTANT] {
+    ReferenceHolder<QoreReflectionEnum> holder(en, xsink);
+
+    return e->ed->equal(en->ed);
+}
+
+//! returns the enum name
+/** @par Example:
+    @code{.py}
+string name = e.getName();
+    @endcode
+
+    @return the enum name
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @see getPathName()
+ */
+string Enum::getName() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return new QoreStringNode(e->ed->getName());
+}
+
+//! returns the enum's full namespace-justified path name
+/** @par Example:
+    @code{.py}
+string name = e.getPathName();
+    @endcode
+
+    @return the enum's full namespace-justified path name
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @see getName()
+ */
+string Enum::getPathName() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
+    rv->concat(e->ed->getNamespacePath());
+    return rv.release();
+}
+
+//! Returns the module name providing the enum or @ref nothing if the enum was not provided by a module
+/** @par Example:
+    @code{.py}
+*string str = e.getModuleName();
+    @endcode
+
+    @return the module name providing the enum or @ref nothing if the enum was not provided by a module
+*/
+*string Enum::getModuleName() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    const char* mod = e->ed->getModuleName();
+    return mod ? new QoreStringNode(mod) : QoreValue();
+}
+
+//! returns @ref True if the enum is a builtin enum
+/** @par Example:
+    @code{.py}
+bool b = e.isBuiltin();
+    @endcode
+
+    @return @ref True if the enum is a builtin enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @note complementary to @ref isUser()
+*/
+bool Enum::isBuiltin() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return e->ed->isSystem();
+}
+
+//! returns @ref True if the enum is a user enum
+/** @par Example:
+    @code{.py}
+bool b = e.isUser();
+    @endcode
+
+    @return @ref True if the enum is a user enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @note complementary to @ref isBuiltin()
+*/
+bool Enum::isUser() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return !e->ed->isSystem();
+}
+
+//! Returns the source location of the enum declaration
+/** @par Example:
+    @code{.py}
+hash<SourceLocationInfo> loc = e.getSourceLocation();
+    @endcode
+
+    @return the source location of the enum declaration
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+hash<SourceLocationInfo> Enum::getSourceLocation() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return e->ed->getSourceLocation()->getHash();
+}
+
+//! Returns the type object for this enum
+/** @par Example:
+    @code{.py}
+Type t = e.getType();
+    @endcode
+
+    @return the type object for this enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @see getOrNothingType()
+*/
+Type Enum::getType() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getTypeInfo()));
+}
+
+//! Returns the "or nothing" type object for this enum
+/** @par Example:
+    @code{.py}
+Type t = e.getOrNothingType();
+    @endcode
+
+    @return the "or nothing" type object for this enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+
+    @see getType()
+*/
+Type Enum::getOrNothingType() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getTypeInfo(true)));
+}
+
+//! Returns the base type of the enum (e.g., int, string)
+/** @par Example:
+    @code{.py}
+Type t = e.getBaseType();
+    @endcode
+
+    @return the base type of the enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+Type Enum::getBaseType() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getBaseTypeInfo()));
+}
+
+//! Returns the namespace for the enum
+/** @par Example:
+    @code{.py}
+Namespace ns = e.getNamespace();
+    @endcode
+
+    @return the namespace for the enum
+ */
+Namespace Enum::getNamespace() [flags=CONSTANT] {
+    return new QoreObject(QC_NAMESPACE, e->pgm, new QoreReflectionNamespace(e->pgm, e->ns));
+}
+
+//! returns the requested member or throws an exception if the member is not defined in the enum
+/**  @par Example:
+    @code{.py}
+EnumMember m = e.getMember(name);
+    @endcode
+
+    @return the requested member or throws an exception if the member is not defined in the enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+    @throw UNKNOWN-MEMBER if the requested member is not defined in the enum
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+*/
+EnumMember Enum::getMember(string name) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    const QoreEnumMember* member = e->ed->findMember(tname->c_str());
+    if (!member) {
+        xsink->raiseException("UNKNOWN-MEMBER", "member '%s' is not defined in enum '%s'", tname->c_str(), e->ed->getName());
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_ENUMMEMBER, e->pgm, new QoreReflectionEnumMember(e->pgm, e->ed, member));
+}
+
+//! returns a list of all declared enum members in declaration order
+/** @par Example:
+    @code{.py}
+list<EnumMember> l = e.getMembers();
+    @endcode
+
+    @return a list of all declared enum members in declaration order
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+list<EnumMember> Enum::getMembers() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ENUMMEMBER->getTypeInfo()), xsink);
+
+    QoreEnumMemberIterator i(*e->ed);
+    while (i.next()) {
+        l->push(new QoreObject(QC_ENUMMEMBER, e->pgm, new QoreReflectionEnumMember(e->pgm, e->ed, i.getMember())), xsink);
+    }
+
+    return l.release();
+}
+
+//! Returns @ref True if the given value is a valid member of this enum
+/** @par Example:
+    @code{.py}
+bool valid = e.isValidValue(1);
+    @endcode
+
+    @param val the value to check
+
+    @return @ref True if the value is a valid member of this enum
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
+*/
+bool Enum::isValidValue(auto val) [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, e->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the enum ptr must be valid
+    return e->ed->isValidValue(val);
+}
+
+//! Returns an Enum object corresponding to the name or namespace-justified path provided as an argument
+/** @par Example:
+    @code{.py}
+Enum e = Enum::forName("::Color");
+    @endcode
+
+    @param path the enum name or namespace-justified path as a string
+
+    @return an Enum object corresponding to the name or namespace-justified path provided as an argument
+
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+ */
+static Enum Enum::forName(string path) [flags=RET_VALUE_ONLY] {
+    TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str()), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(*en);
+
+    QoreProgram* enum_pgm = en->pgm;
+    return new QoreObject(QC_ENUM, enum_pgm, en.release());
+}
+
+//! Returns an Enum object corresponding to the name or namespace-justified path provided as an argument
+/** @par Example:
+    @code{.py}
+Enum e = Enum::forName(pgm, "::Color");
+    @endcode
+
+    @param pgm the Program object to search
+    @param path the enum name or namespace-justified path as a string
+
+    @return an Enum object corresponding to the name or namespace-justified path provided as an argument
+
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+ */
+static Enum Enum::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
+    TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), pgm), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreProgram* enum_pgm = en->pgm;
+    return new QoreObject(QC_ENUM, enum_pgm, en.release());
+}

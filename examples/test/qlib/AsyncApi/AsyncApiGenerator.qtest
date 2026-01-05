@@ -60,6 +60,9 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("unknown types fallback", \testUnknownTypesFallback());
         addTestCase("nested hash types", \testNestedHashTypes());
         addTestCase("list types", \testListTypes());
+        addTestCase("nullable list type", \testNullableListType());
+        addTestCase("multiple message blocks", \testMultipleMessageBlocks());
+        addTestCase("message block field parsing", \testMessageBlockFieldParsing());
         set_return_value(main());
     }
 
@@ -577,5 +580,162 @@ trailing code";
         # Plain list without type parameter
         result = AsyncApi::AsyncApiTypeMapper::mapType("list");
         assertEq("array", result.type, "Plain list maps to array");
+    }
+
+    testNullableListType() {
+        # Test *list (nullable list without type parameter) - was causing type narrowing issues
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("*list");
+        assertEq("array", result.type, "*list maps to array");
+        assertTrue(result.nullable, "*list is nullable");
+
+        # Test *list<string>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<string>");
+        assertEq("array", result.type, "*list<string> maps to array");
+        assertTrue(result.nullable, "*list<string> is nullable");
+        assertTrue(result.hasKey("items"), "*list<string> should have items");
+        assertEq("string", result.items.type, "*list<string> item type");
+
+        # Test *list<int>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<int>");
+        assertEq("array", result.type, "*list<int> maps to array");
+        assertTrue(result.nullable, "*list<int> is nullable");
+        assertEq("integer", result.items.type, "*list<int> item type");
+
+        # Test *list<hash<auto>>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<hash<auto>>");
+        assertEq("array", result.type, "*list<hash<auto>> maps to array");
+        assertTrue(result.nullable, "*list<hash<auto>> is nullable");
+    }
+
+    testMultipleMessageBlocks() {
+        # Test parsing a channel with multiple @subscribe and @publish blocks
+        string content = "/** @WEBSOCKET /multi-msg
+    @ASYNCAPI
+    @summary Multi-message channel test
+    @desc Channel with multiple subscribe and publish message types
+
+    @subscribe FirstMessage
+    - action (string): first action
+    - data (hash): first data
+
+    @subscribe SecondMessage
+    - action (string): second action
+    - items (list<string>): list of items
+
+    @subscribe ThirdMessage
+    - action (string): third action
+    - count (int): count value
+
+    @publish ResponseOne
+    - ok (bool): success status
+    - message (string): response message
+
+    @publish ResponseTwo
+    - ok (bool): success status
+    - data (hash<auto>): response data
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+
+        assertEq(1, channels.size(), "Should find 1 channel");
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+
+        assertEq("/multi-msg", channel.path, "Channel path should match");
+        assertEq("Multi-message channel test", channel.summary, "Summary should match");
+
+        # Check subscribe schemas
+        assertTrue(exists channel.subscribe_schemas, "Should have subscribe_schemas list");
+        assertEq(3, channel.subscribe_schemas.size(), "Should have 3 subscribe messages");
+
+        assertEq("FirstMessage", channel.subscribe_schemas[0].name, "First subscribe message name");
+        assertEq("SecondMessage", channel.subscribe_schemas[1].name, "Second subscribe message name");
+        assertEq("ThirdMessage", channel.subscribe_schemas[2].name, "Third subscribe message name");
+
+        # Check that first one is also in singular field for backwards compatibility
+        assertTrue(exists channel.subscribe_schema, "Should have subscribe_schema for backwards compat");
+        assertEq("FirstMessage", channel.subscribe_schema.name, "Backwards compat subscribe name");
+
+        # Check publish schemas
+        assertTrue(exists channel.publish_schemas, "Should have publish_schemas list");
+        assertEq(2, channel.publish_schemas.size(), "Should have 2 publish messages");
+
+        assertEq("ResponseOne", channel.publish_schemas[0].name, "First publish message name");
+        assertEq("ResponseTwo", channel.publish_schemas[1].name, "Second publish message name");
+
+        # Check backwards compat
+        assertTrue(exists channel.publish_schema, "Should have publish_schema for backwards compat");
+        assertEq("ResponseOne", channel.publish_schema.name, "Backwards compat publish name");
+    }
+
+    testMessageBlockFieldParsing() {
+        # Test that field types in message blocks are correctly parsed
+        string content = "/** @WEBSOCKET /field-test
+    @ASYNCAPI
+    @summary Field parsing test
+
+    @subscribe TestMessage
+    - str_field (string): a string field
+    - int_field (int): an integer field
+    - opt_str (*string): an optional string
+    - opt_int (*int): an optional int
+    - opt_list (*list): an optional list
+    - hash_field (hash): a hash field
+    - hash_auto (hash<auto>): a hash<auto> field
+    - list_str (list<string>): a list of strings
+    - typed_hash (hash<EventInfo>): a typed hash reference
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 channel");
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+        assertTrue(exists channel.subscribe_schemas, "Should have subscribe_schemas");
+        assertEq(1, channel.subscribe_schemas.size(), "Should have 1 subscribe message");
+
+        hash<auto> msg = channel.subscribe_schemas[0];
+        assertEq("TestMessage", msg.name, "Message name should match");
+
+        hash<auto> props = msg.schema.properties;
+
+        # Check string field
+        assertTrue(props.hasKey("str_field"), "Should have str_field");
+        assertEq("string", props.str_field.type, "str_field type");
+
+        # Check integer field
+        assertTrue(props.hasKey("int_field"), "Should have int_field");
+        assertEq("integer", props.int_field.type, "int_field type");
+
+        # Check optional string
+        assertTrue(props.hasKey("opt_str"), "Should have opt_str");
+        assertEq("string", props.opt_str.type, "opt_str type");
+        assertTrue(props.opt_str.nullable, "opt_str should be nullable");
+
+        # Check optional int
+        assertTrue(props.hasKey("opt_int"), "Should have opt_int");
+        assertEq("integer", props.opt_int.type, "opt_int type");
+        assertTrue(props.opt_int.nullable, "opt_int should be nullable");
+
+        # Check optional list - this was causing type narrowing issues
+        assertTrue(props.hasKey("opt_list"), "Should have opt_list");
+        assertEq("array", props.opt_list.type, "opt_list type");
+        assertTrue(props.opt_list.nullable, "opt_list should be nullable");
+
+        # Check hash field
+        assertTrue(props.hasKey("hash_field"), "Should have hash_field");
+        assertEq("object", props.hash_field.type, "hash_field type");
+
+        # Check list of strings
+        assertTrue(props.hasKey("list_str"), "Should have list_str");
+        assertEq("array", props.list_str.type, "list_str type");
+        assertEq("string", props.list_str.items.type, "list_str items type");
+
+        # Check typed hash reference
+        assertTrue(props.hasKey("typed_hash"), "Should have typed_hash");
+        assertTrue(props.typed_hash.hasKey("$ref"), "typed_hash should have $ref");
+        assertEq("#/components/schemas/EventInfo", props.typed_hash{"$ref"}, "typed_hash $ref");
     }
 }

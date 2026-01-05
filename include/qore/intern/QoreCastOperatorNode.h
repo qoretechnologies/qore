@@ -228,4 +228,36 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 };
 
+class QoreEnumCastOperatorNode : public QoreCastOperatorNode {
+public:
+    DLLLOCAL QoreEnumCastOperatorNode(const QoreProgramLocation* loc, const QoreEnumDecl* ed,
+            const QoreTypeInfo* typeInfo, QoreValue exp, bool or_nothing)
+            : QoreCastOperatorNode(loc, exp), ed(ed), typeInfo(typeInfo), or_nothing(or_nothing) {
+    }
+
+    DLLLOCAL virtual ~QoreEnumCastOperatorNode() = default;
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
+    }
+
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
+        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreEnumCastOperatorNode(loc, ed, typeInfo, n_exp.release(), or_nothing);
+    }
+
+    // checks if the value matches the expected type
+    DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+protected:
+    const QoreEnumDecl* ed;
+    const QoreTypeInfo* typeInfo;
+    bool or_nothing;
+
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+};
+
 #endif

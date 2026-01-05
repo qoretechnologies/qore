@@ -63,6 +63,16 @@ val = "string";      # OK
     - Use @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF" when setting up a @ref Qore::Program "Program" object
     @endparblock
 
+    @par New enum Keyword
+    @parblock
+    The new @ref enums "enum" keyword for type-safe enumerated constants may conflict with existing code that uses
+    \c enum as an identifier (variable name, function name, etc.).
+
+    <b>Workaround:</b>
+    - Use the @ref no-enum "%no-enum" parse directive to disable the \c enum keyword
+    - Use @ref Qore::PO_NO_ENUM "PO_NO_ENUM" when setting up a @ref Qore::Program "Program" object
+    @endparblock
+
     @par New code<> Typed Callable Syntax
     @parblock
     The new @ref code_complex_type "code<ReturnType(ParamTypes...)>" syntax enables parse-time type checking
@@ -230,7 +240,11 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
-    - new method in the @ref reflection "reflection" module:
+    - new classes and methods in the @ref reflection "reflection" module:
+      - @ref Qore::Reflection::Enum "Enum" class for enum reflection
+      - @ref Qore::Reflection::EnumMember "EnumMember" class for enum member reflection
+      - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
+      - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
     - new builtin methods:
       - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
@@ -293,6 +307,17 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - supports or-nothing variant: \c *code<int(string)>
       - works with complex types: \c code<list<int>(hash<string, \c int>)>
       - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
+    - new @ref enums "enum" keyword for type-safe enumerated constants
+      - syntax: \c public \c enum \c Status \c : \c string \c { \c Active \c = \c "active", \c Inactive \c = \c "inactive" \c }
+      - supports \c int, \c string, \c float, and \c number base types
+      - enum constants are accessed with \c :: syntax: \c Status::Active
+      - strict type enforcement: base type values require explicit \c cast<enum<Name>>() to convert to enum type
+      - runtime validation: cast operations verify that the value is a valid enum member
+      - enum names can be used directly as type names: \c Status \c s or \c enum<Status> \c s (equivalent)
+      - or-nothing support: \c *Status, \c *enum<Status>, and \c cast<*enum<Status>>()
+      - namespace support: enums can be declared in namespaces
+      - reflection support via @ref Qore::Reflection::Enum "Enum" and @ref Qore::Reflection::EnumMember "EnumMember" classes
+      - can be disabled with \c %%no-enum parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
     - @ref ElasticSearchDataProvider "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
@@ -364,7 +389,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
       - added @ref ASUK_TypedefDeclName "ASUK_TypedefDeclName" and @ref ASUK_TypedefTypeName "ASUK_TypedefTypeName"
         constants for typedef usage kinds
-        (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - added @ref ADK_Enum "ADK_Enum" constant for enum declarations
+      - added @ref ASYK_Enum "ASYK_Enum" constant for enum symbol kind
+      - added @ref ASUK_EnumDeclName "ASUK_EnumDeclName" and @ref ASUK_EnumMemberName "ASUK_EnumMemberName"
+        constants for enum usage kinds
       - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
         (now returns 0-indexed values consistent with LSP convention)
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)

@@ -494,7 +494,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
         optional_field(objType, oh, "maxItems", NT_INT, \maxItems);
         optional_field(objType, oh, "minItems", NT_INT, \minItems);
         optional_field(objType, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
-        optional_field(objType, oh, "enum", SwaggerListToAnySet, \enum);
+        optional_field(objType, oh, "enum", SwaggerListToAnySet, \enumValues);
         optional_field(objType, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
     }
 
@@ -503,7 +503,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
         self += map {$1: other.$1}, (
             "maximum", "minimum", "exclusiveMax", "exclusiveMin",
             "maxLength", "minLength", "pattern", "maxItems", "minItems",
-            "uniqueItems", "enum", "multipleOf"), exists other.$1;
+            "uniqueItems", "enumValues", "multipleOf"), exists other.$1;
     }
 
     #! Private constructor
@@ -512,8 +512,8 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
 
     #! returns an example value for the given type
     private auto getExampleValueWithFormat(string type, *string format, *string fname) {
-        if (enum) {
-            auto rv = enum.firstKey();
+        if (enumValues) {
+            auto rv = enumValues.firstKey();
             switch (type) {
                 case "integer": {
                     rv = rv.toInt();
@@ -612,10 +612,10 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
             throw "SCHEMA-VALIDATION-ERROR",
                 sprintf("Parameter %y for path %y and method %y does not fit the parameter string pattern "
                     "(pattern: %y, value: %y)", name, path, method, pattern, value);
-        if (enum && !enum{value})
+        if (enumValues && !enumValues{value})
             throw "SCHEMA-VALIDATION-ERROR",
                 sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, "
-                    "actual: %y)", name, path, method, keys enum, value);
+                    "actual: %y)", name, path, method, keys enumValues, value);
     }
 
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -678,10 +678,10 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
             }
         }
 
-        if (enum && !enum{value})
+        if (enumValues && !enumValues{value})
             throw "SCHEMA-VALIDATION-ERROR",
                 sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, actual: %d)",
-                    name, path, method, keys enum, value);
+                    name, path, method, keys enumValues, value);
     }
 
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -726,10 +726,10 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
             }
         }
 
-        if (enum && !enum{value}) {
+        if (enumValues && !enumValues{value}) {
             throw "SCHEMA-VALIDATION-ERROR",
                 sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, "
-                    "actual: %f)", name, path, method, keys enum, value);
+                    "actual: %f)", name, path, method, keys enumValues, value);
         }
 
         switch (format) {
@@ -4772,7 +4772,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 "name": name,
                 "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
                 "type": AutoType,
-                "allowed_values": keys enum,
+                "allowed_values": keys enumValues,
                 "default_value": default_value,
             } + (required ? {
                 "attr": {
@@ -4790,7 +4790,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             "name": name,
             "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
             "type": AutoType,
-            "allowed_values": keys enum,
+            "allowed_values": keys enumValues,
             "default_value": default_value,
         });
         fieldmap{name}{rstr} = field;
