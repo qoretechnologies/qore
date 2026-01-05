@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,10 @@ public:
         return copyBackgroundExplicit<QoreSquareBracketsOperatorNode>(xsink);
     }
 
+    DLLLOCAL static QoreValue doSquareBracketsListRange(RuntimeConfig& rc, const QoreValue l,
+            const QoreParseListNode* pln, ExceptionSink* xsink);
+
+    // Shim for code paths without RuntimeConfig - gets RuntimeConfig from TLS
     DLLLOCAL static QoreValue doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
             ExceptionSink* xsink);
 
@@ -61,12 +65,12 @@ protected:
     DLLLOCAL int parseCheckValueTypes(const QoreParseListNode* pln);
     DLLLOCAL int parseCheckValueTypes(const QoreListNode* ln);
 
-    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
-    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
-            ExceptionSink* xsink) const;
+    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc,
+            FunctionalValueType& value_type, ExceptionSink* xsink) const override;
 
     DLLLOCAL static int doString(SimpleRefHolder<QoreStringNode>& ret, const QoreValue l, const QoreValue r,
             bool list_ok, ExceptionSink* xsink);

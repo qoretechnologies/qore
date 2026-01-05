@@ -35,7 +35,7 @@
 class QoreIntPostDecrementOperatorNode : public QoreIntPostIncrementOperatorNode {
 OP_COMMON
 protected:
-    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink *xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const;
 
 public:
     DLLLOCAL QoreIntPostDecrementOperatorNode(const QoreProgramLocation* loc, QoreValue exp)

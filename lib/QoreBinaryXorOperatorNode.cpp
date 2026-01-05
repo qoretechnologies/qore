@@ -33,10 +33,10 @@
 
 QoreString QoreBinaryXorOperatorNode::op_str("^ (binary xor) operator expression");
 
-QoreValue QoreBinaryXorOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+QoreValue QoreBinaryXorOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
     if (*xsink) return QoreValue();
 
     return lh->getAsBigInt() ^ rh->getAsBigInt();
@@ -96,7 +96,8 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreBinaryXorOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder v(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

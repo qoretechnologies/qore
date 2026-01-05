@@ -34,6 +34,7 @@
 #include "qore/intern/CaseNodeWithOperator.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -84,13 +85,13 @@ void SwitchStatement::addCase(CaseNode *c) {
     }
 }
 
-int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+int SwitchStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalOptimizedRefHolder se(sexp, xsink);
+    ValueEvalOptimizedRefHolder se(rconfig, sexp, xsink);
 
     if (!*xsink) {
         // find match
@@ -107,7 +108,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         while (w && !rc && !*xsink) {
             if (w->code) {
-                rc = w->code->execImpl(return_value, xsink);
+                rc = w->code->execImpl(rconfig, return_value, xsink);
             }
 
             w = w->next;
@@ -169,7 +170,8 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
                 continue;
             }
 
-            ValueEvalOptimizedRefHolder se(w->val, &xsink);
+            RuntimeConfig parse_rc = rc_get_parse_time();
+            ValueEvalOptimizedRefHolder se(parse_rc, w->val, &xsink);
             if (!xsink) {
                 QoreValue nv = se.takeReferencedValue();
                 w->val.discard(nullptr);

@@ -375,10 +375,17 @@ int typed_hash_decl_private::parseCheckMemberAccess(const QoreProgramLocation* l
 
 QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bool runtime_check,
         ExceptionSink* xsink) const {
+    RuntimeConfig lrc = rc_get_current();
+    return newHash(lrc, args, runtime_check, xsink);
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(RuntimeConfig& rc, const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink) const {
     assert(!args || args->empty() || args->size() == 1);
-    ValueEvalOptimizedRefHolder a(args && !args->empty() ? args->get(0) : QoreValue(), xsink);
-    if (*xsink)
+    ValueEvalOptimizedRefHolder a(rc, args && !args->empty() ? args->get(0) : QoreValue(), xsink);
+    if (*xsink) {
         return nullptr;
+    }
 
     const QoreHashNode* init = nullptr;
     if (a->getType() != NT_NOTHING) {
@@ -390,11 +397,17 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bo
         init = a->get<const QoreHashNode>();
     }
 
-    return newHash(init, runtime_check, xsink);
+    return newHash(rc, init, runtime_check, xsink);
 }
 
 QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
         QoreHashNode* rv) const {
+    RuntimeConfig lrc = rc_get_current();
+    return newHash(lrc, init, runtime_check, xsink, rv);
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(RuntimeConfig& rc, const QoreHashNode* init, bool runtime_check,
+        ExceptionSink* xsink, QoreHashNode* rv) const {
     if (runtime_check) {
         ConstHashIterator i(init);
         while (i.next()) {
@@ -412,12 +425,18 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
     } else {
         h = qore_hash_private::newHashDecl(thd);
     }
-    initHash(*h, init, xsink);
+    initHash(rc, *h, init, xsink);
     return *xsink ? nullptr : h.release();
 }
 
 int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
-    int rc = initHashIntern(h, init, xsink);
+    RuntimeConfig lrc = rc_get_current();
+    return initHash(lrc, h, init, xsink);
+}
+
+int typed_hash_decl_private::initHash(RuntimeConfig& lrc, QoreHashNode* h, const QoreHashNode* init,
+        ExceptionSink* xsink) const {
+    int rc = initHashIntern(lrc, h, init, xsink);
     // xsink may be nullptr when being executed in a try block
     if (xsink && *xsink) {
         assert(rc);
@@ -427,6 +446,12 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
 }
 
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
+    RuntimeConfig lrc = rc_get_current();
+    return initHashIntern(lrc, h, init, xsink);
+}
+
+int typed_hash_decl_private::initHashIntern(RuntimeConfig& rc, QoreHashNode* h, const QoreHashNode* init,
+        ExceptionSink* xsink) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
@@ -435,7 +460,7 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
     // Initialize parent members first
     if (parentHashDecl) {
-        if (get(*parentHashDecl)->initHashIntern(h, init, xsink)) {
+        if (get(*parentHashDecl)->initHashIntern(rc, h, init, xsink)) {
             return -1;
         }
     }
@@ -473,7 +498,7 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             QoreValue& v = h_priv->getValueRef(i.first);
             assert(v.isNothing());
 
-            ValueEvalOptimizedRefHolder val(i.second->exp, xsink);
+            ValueEvalOptimizedRefHolder val(rc, i.second->exp, xsink);
             if (*xsink) {
                 return -1;
             }

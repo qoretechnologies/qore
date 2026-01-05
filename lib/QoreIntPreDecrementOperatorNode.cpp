@@ -32,8 +32,8 @@
 
 QoreString QoreIntPreDecrementOperatorNode::op_str("-- (pre-decrement) operator expression");
 
-QoreValue QoreIntPreDecrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    LValueHelper n(exp, xsink);
+QoreValue QoreIntPreDecrementOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    LValueHelper n(rc, exp, xsink);
     if (!n)
         return QoreValue();
     return n.preDecrementBigInt("<-- (pre) operator>");

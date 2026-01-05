@@ -52,10 +52,10 @@ private:
 
 protected:
     //! returns the value of the reference
-    DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! returns the value of the reference
-    DLLEXPORT QoreValue doEval(ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue doEval(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     //! frees all memory and destroys the object
     DLLEXPORT virtual ~ReferenceNode();

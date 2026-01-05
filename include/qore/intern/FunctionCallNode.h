@@ -84,7 +84,7 @@ protected:
     // such as when the node was created during background operation execution
     bool tmp_args = false;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const = 0;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const = 0;
 
     DLLLOCAL void doFlags(int64 flags) {
         if (flags & QCF_RET_VALUE_ONLY) {
@@ -145,7 +145,7 @@ protected:
     const QoreClass* qc;
 
     using AbstractQoreNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         str.sprintf("new object for class '%s'", qc->getName());
@@ -287,7 +287,7 @@ protected:
     bool finalized = false;
 
     using AbstractFunctionCallNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* a, qore_type_t n_type)
             : AbstractFunctionCallNode(loc, n_type, a), c_str(name), finalized(false) {
@@ -344,6 +344,9 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
 
+    //! Execute method with RuntimeConfig for optimized class context access
+    DLLLOCAL QoreValue exec(RuntimeConfig& rc, QoreObject* o, const char* cstr, ExceptionSink* xsink) const;
+
     DLLLOCAL const QoreClass* getClass() const {
         return qc;
     }
@@ -374,7 +377,13 @@ public:
     using AbstractMethodCallNode::exec;
     DLLLOCAL QoreValue exec(QoreObject* o, ExceptionSink* xsink) const;
 
+    //! Execute method with RuntimeConfig for optimized class context access
+    DLLLOCAL QoreValue exec(RuntimeConfig& rc, QoreObject* o, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
+
+    //! Execute pseudo-method with RuntimeConfig for optimized class context access
+    DLLLOCAL QoreValue execPseudo(RuntimeConfig& rc, const QoreValue n, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const char* getName() const {
         return c_str ? c_str : "copy";
@@ -453,7 +462,7 @@ protected:
     bool pseudo = false;
 
     using AbstractFunctionCallNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         assert(false);
         return QoreValue();
     }
@@ -503,7 +512,7 @@ public:
     }
 
     using AbstractFunctionCallNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
@@ -527,7 +536,7 @@ public:
     DLLLOCAL SetSelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args);
 
     using AbstractFunctionCallNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     using AbstractFunctionCallNode::deref;
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -549,7 +558,7 @@ protected:
     const QoreMethod* method = nullptr;
 
     using AbstractFunctionCallNode::evalImpl;
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 

@@ -66,8 +66,8 @@ public:
 protected:
     DLLLOCAL static QoreString logical_not_equals_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        QoreValue rv = QoreLogicalEqualsOperatorNode::evalImpl(needs_deref, xsink);
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+        QoreValue rv = QoreLogicalEqualsOperatorNode::evalImpl(rc, needs_deref, xsink);
         if (*xsink)
             return QoreValue();
         return !rv.getAsBool();

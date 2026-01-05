@@ -67,7 +67,7 @@ protected:
     DLLLOCAL static QoreString cast_str;
     QoreParseTypeInfo* pti;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         assert(false);
         return QoreValue();
     }
@@ -134,7 +134,7 @@ protected:
     const QoreClass* qc;
     bool or_nothing;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 class QoreHashDeclCastOperatorNode : public QoreCastOperatorNode {
@@ -164,7 +164,7 @@ protected:
     const TypedHashDecl* hd;
     bool or_nothing;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 class QoreComplexHashCastOperatorNode : public QoreCastOperatorNode {
@@ -195,7 +195,7 @@ protected:
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 class QoreComplexListCastOperatorNode : public QoreCastOperatorNode {
@@ -225,7 +225,7 @@ protected:
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 #endif

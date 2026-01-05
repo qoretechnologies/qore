@@ -35,6 +35,8 @@
 
 #include <qore/common.h>
 
+struct RuntimeConfig;
+
 #define RC_RETURN       1
 #define RC_BREAK        2
 #define RC_CONTINUE     3
@@ -71,6 +73,8 @@ public:
     DLLLOCAL virtual ~AbstractStatement();
 
     DLLLOCAL int exec(QoreValue& return_value, ExceptionSink* xsink);
+    //! Optimized version with RuntimeConfig
+    DLLLOCAL int exec(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int parseInit(QoreParseContext& parse_context);
 
     DLLLOCAL void finalizeBlock(int sline, int eline);
@@ -106,7 +110,8 @@ protected:
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
 
-    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) = 0;
+    //! Execute the statement with RuntimeConfig for optimized execution
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) = 0;
 
     //! Returns -1 = parse error raised, 0 = OK
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context) = 0;

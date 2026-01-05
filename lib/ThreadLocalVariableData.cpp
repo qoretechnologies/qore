@@ -32,6 +32,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/RuntimeConfig.h"
 
 int ThreadLocalVariableData::getFrame(int frame, Block*& w, int& p) {
     assert(frame >= 0);
@@ -70,6 +71,7 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
     if (getFrame(frame, w, p))
         return;
 
+    RuntimeConfig rc = rc_get_current();
     while (true) {
         while (p) {
             --p;
@@ -79,7 +81,7 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
 
             ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
             v->setKeyValue("type", new QoreStringNode("local"), xsink);
-            v->setKeyValue("value", var.eval(xsink), xsink);
+            v->setKeyValue("value", var.eval(rc, xsink), xsink);
             h.setKeyValue(var.id, v.release(), xsink);
         }
         w = w->prev;

@@ -31,8 +31,9 @@
 #include <qore/Qore.h>
 #include "qore/intern/SummarizeStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/RuntimeConfig.h"
 
-int SummarizeStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+int SummarizeStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
     QoreValue sort = sort_ascending ? sort_ascending : sort_descending;
     int sort_type = sort_ascending ? CM_SORT_ASCENDING : (sort_descending ? CM_SORT_DESCENDING : -1);
@@ -40,22 +41,23 @@ int SummarizeStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    // create the context
-    ReferenceHolder<Context> context(new Context(name, xsink, exp, where_exp, sort_type, sort, summarize), xsink);
+    // create the context - pass RuntimeConfig to avoid TLS lookups
+    ReferenceHolder<Context> context(new Context(rconfig, name, xsink, exp, where_exp, sort_type, sort, summarize), xsink);
 
     // execute the statements
     if (code) {
-        if (context->max_group_pos && !xsink->isEvent())
-        do {
-            if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
-                rc = 0;
-                break;
-            } else if (rc == RC_RETURN) {
-                break;
-            } else if (rc == RC_CONTINUE) {
-                rc = 0;
-            }
-        } while (!xsink->isEvent() && context->next_summary());
+        if (context->max_group_pos && !xsink->isEvent()) {
+            do {
+                if (((rc = code->execImpl(rconfig, return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
+                    rc = 0;
+                    break;
+                } else if (rc == RC_RETURN) {
+                    break;
+                } else if (rc == RC_CONTINUE) {
+                    rc = 0;
+                }
+            } while (!xsink->isEvent() && context->next_summary());
+        }
     }
 
     return rc;

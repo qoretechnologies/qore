@@ -34,6 +34,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -215,7 +216,13 @@ const QoreTypeInfo* QoreExternalMemberBase::getTypeInfo() const {
 }
 
 QoreValue QoreExternalMemberBase::getDefaultValue(ExceptionSink* xsink) const {
-    return reinterpret_cast<const QoreMemberInfoBase*>(this)->exp.eval(xsink);
+    RuntimeConfig rc = rc_get_current();
+    bool needs_deref = true;
+    QoreValue rv = reinterpret_cast<const QoreMemberInfoBase*>(this)->exp.eval(rc, needs_deref, xsink);
+    if (!needs_deref) {
+        rv = rv.refSelf();
+    }
+    return rv;
 }
 
 const QoreExternalProgramLocation* QoreExternalMemberBase::getSourceLocation() const {
@@ -321,8 +328,9 @@ unsigned QoreExternalFunction::numVariants() const {
 
 QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
         QoreProgram* pgm, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
     return reinterpret_cast<const QoreFunction*>(this)->evalFunction(
-        reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, xsink
+        rc, reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, xsink
     );
 }
 

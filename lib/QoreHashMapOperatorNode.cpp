@@ -111,8 +111,8 @@ QoreHashNode* QoreHashMapOperatorNode::getNewHash() const {
     return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
 }
 
-QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder arg_lst(e[2], xsink);
+QoreValue QoreHashMapOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder arg_lst(rc, e[2], xsink);
     if (*xsink || arg_lst->isNothing())
         return QoreValue();
 
@@ -131,17 +131,17 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             if (*xsink)
                 return QoreValue();
             if (h)
-                return mapIterator(h, xsink); // TODO!!
+                return mapIterator(rc, h, xsink);
             // passed iterator
         }
 
         // check if value can be mapped
         SingleArgvContextHelper argv_helper(arg_lst.takeReferencedValue(), xsink);
-        ValueEvalOptimizedRefHolder arg_key(e[0], xsink);
+        ValueEvalOptimizedRefHolder arg_key(rc, e[0], xsink);
         if (*xsink)
             return QoreValue();
 
-        ValueEvalOptimizedRefHolder arg_val(e[1], xsink);
+        ValueEvalOptimizedRefHolder arg_val(rc, e[1], xsink);
         if (*xsink)
             return QoreValue();
 
@@ -166,12 +166,12 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     } else { // List of values
         ConstListIterator li(arg_lst->get<const QoreListNode>());
         while (li.next()) {
-            // set offset in thread-local data for "$#"
-            ImplicitElementHelper eh(li.index());
+            // set offset in RuntimeConfig for "$#"
+            RuntimeConfigElementHelper eh(rc, li.index());
             SingleArgvContextHelper argv_helper(li.getReferencedValue(), xsink);
 
             {
-                ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+                ValueEvalOptimizedRefHolder ekey(rc, e[0], xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -180,7 +180,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                 if (*xsink)
                     return QoreValue();
 
-                ValueEvalOptimizedRefHolder val(e[1], xsink);
+                ValueEvalOptimizedRefHolder val(rc, e[1], xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -219,7 +219,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     return ret_val.release();
 }
 
-QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const {
+QoreValue QoreHashMapOperatorNode::mapIterator(RuntimeConfig& rc, AbstractIteratorHelper& h, ExceptionSink* xsink) const {
     ReferenceHolder<QoreHashNode> rv(ref_rv ? getNewHash() : nullptr, xsink);
 
     // try to find a common value type, if any
@@ -227,7 +227,6 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
     const QoreTypeInfo* valueType = nullptr;
 
     size_t i = 0;
-    // set offset in thread-local data for "$#"
     while (true) {
         bool has_next = h.next(xsink);
         if (*xsink)
@@ -235,7 +234,8 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
         if (!has_next)
             break;
 
-        ImplicitElementHelper eh(i++);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(rc, i++);
 
         ValueHolder iv(h.getValue(xsink), xsink);
         if (*xsink)
@@ -245,7 +245,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
         {
-            ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+            ValueEvalOptimizedRefHolder ekey(rc, e[0], xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -254,7 +254,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
             if (*xsink)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder val(e[1], xsink);
+            ValueEvalOptimizedRefHolder val(rc, e[1], xsink);
             if (*xsink)
                 return QoreValue();
 

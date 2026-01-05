@@ -41,6 +41,7 @@
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <atomic>
 
@@ -168,7 +169,7 @@ public:
             const QoreTypeInfo* refTypeInfo) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo);
 
-    DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());
         if (val.getType() == NT_REFERENCE) {
@@ -177,7 +178,7 @@ public:
             if (!helper)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
+            ValueEvalOptimizedRefHolder erh(rc, lvalue_ref::get(ref)->vexp, xsink);
             return erh.takeValue(needs_deref);
         }
 
@@ -199,14 +200,14 @@ public:
         return val.getReferencedValue(needs_deref);
     }
 
-    DLLLOCAL QoreValue eval(ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, ExceptionSink* xsink) const {
         if (val.getType() == NT_REFERENCE) {
             ReferenceNode* ref = const_cast<ReferenceNode*>(val.get<ReferenceNode>());
             LocalRefHelper<LocalVarValue> helper(this, *ref, xsink);
             if (!helper)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
+            ValueEvalOptimizedRefHolder erh(rc, lvalue_ref::get(ref)->vexp, xsink);
             return *xsink ? QoreValue() : erh.takeReferencedValue();
         }
 
@@ -281,13 +282,13 @@ public:
         return VarValueBase::finalize();
     }
 
-    DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         QoreSafeVarRWReadLocker sl(rml);
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(needs_deref, xsink) : QoreValue();
+            return helper ? lvalue_ref::get(*ref)->vexp.eval(rc, needs_deref, xsink) : QoreValue();
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -308,13 +309,17 @@ public:
         return val.getReferencedValue();
     }
 
-    DLLLOCAL QoreValue eval(ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, ExceptionSink* xsink) const {
         QoreSafeVarRWReadLocker sl(rml);
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(xsink) : QoreValue();
+            if (!helper) {
+                return QoreValue();
+            }
+            bool needs_deref = true;
+            return lvalue_ref::get(*ref)->vexp.eval(rc, needs_deref, xsink);
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -441,16 +446,16 @@ public:
         }
     }
 
-    DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         if (!closure_use) {
             LocalVarValue* val = get_var();
             //printd(5, "LocalVar::eval '%s' typeInfo: %p '%s'\n", name.c_str(), typeInfo,
             //    QoreTypeInfo::getName(typeInfo));
-            return val->eval(needs_deref, xsink);
+            return val->eval(rc, needs_deref, xsink);
         }
 
         ClosureVarValue* val = thread_find_closure_var(name.c_str());
-        return val->eval(needs_deref, xsink);
+        return val->eval(rc, needs_deref, xsink);
     }
 
     // returns true if the value could contain an object or a closure

@@ -32,16 +32,19 @@
 
 QoreString QoreLogicalGreaterThanOrEqualsOperatorNode::op_str(">= operator expression");
 
-QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-   if (pfunc)
-      return (this->*pfunc)(xsink);
+QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+   if (pfunc) {
+      return (this->*pfunc)(rc, xsink);
+   }
 
-   ValueEvalOptimizedRefHolder lh(left, xsink);
-   if (*xsink)
+   ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+   if (*xsink) {
       return QoreValue();
-   ValueEvalOptimizedRefHolder rh(right, xsink);
-   if (*xsink)
+   }
+   ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+   if (*xsink) {
       return QoreValue();
+   }
 
    return doGreaterThanOrEquals(*lh, *rh, xsink);
 }
@@ -88,20 +91,28 @@ int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name
     return err;
 }
 
-bool QoreLogicalGreaterThanOrEqualsOperatorNode::floatGreaterThanOrEquals(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
-    if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink) return false;
+bool QoreLogicalGreaterThanOrEqualsOperatorNode::floatGreaterThanOrEquals(RuntimeConfig& rc, ExceptionSink *xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    if (*xsink) {
+        return false;
+    }
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
+        return false;
+    }
 
     return lh->getAsFloat() >= rh->getAsFloat();
 }
 
-bool QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
-    if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink) return false;
+bool QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals(RuntimeConfig& rc, ExceptionSink *xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    if (*xsink) {
+        return false;
+    }
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
+        return false;
+    }
 
     return lh->getAsBigInt() >= rh->getAsBigInt();
 }

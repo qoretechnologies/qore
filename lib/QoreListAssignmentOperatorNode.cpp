@@ -114,7 +114,7 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     return li.hasError() || ri.hasError() || err ? -1 : 0;
 }
 
-QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreListAssignmentOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(left.getType() == NT_PARSE_LIST);
     const QoreParseListNode* llv = left.get<const QoreParseListNode>();
 
@@ -123,7 +123,7 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         for the variable assignment - however it does need to be
         copied/referenced for the return value
     */
-    ValueEvalOptimizedRefHolder new_value(right, xsink);
+    ValueEvalOptimizedRefHolder new_value(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -134,7 +134,7 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         QoreValue lv = llv->get(i);
 
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(lv, xsink);
+        LValueHelper v(rc, lv, xsink);
         if (!v)
             return QoreValue();
 

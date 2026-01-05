@@ -421,7 +421,7 @@ protected:
     /** return value requires a deref(xsink) if needs_deref is true
         @see AbstractQoreNode::eval()
     */
-    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! deletes the object, cannot be called directly (use deref(ExceptionSink*) instead)
     /** @see AbstractQoreNode::deref()

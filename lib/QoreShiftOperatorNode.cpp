@@ -82,11 +82,11 @@ int QoreShiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
-QoreValue QoreShiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreShiftOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     //printd(5, "QoreShiftOperatorNode::evalImpl(%p, isEvent=%d)\n", exp, xsink->isEvent());
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper val(exp, xsink);
+    LValueHelper val(rc, exp, xsink);
     if (!val)
         return QoreValue();
 

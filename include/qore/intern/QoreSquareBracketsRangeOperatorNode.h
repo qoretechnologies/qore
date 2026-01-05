@@ -75,17 +75,17 @@ protected:
 
     DLLLOCAL static QoreString op_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL static QoreValue doSquareBrackets(QoreValue v0, QoreValue v1, QoreValue v2, ExceptionSink* xsink);
 
-    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
-            ExceptionSink* xsink) const;
+    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc,
+            FunctionalValueType& value_type, ExceptionSink* xsink) const;
 
-    DLLLOCAL bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,
-            bool broken_list_range, ExceptionSink* xsink) const;
+    DLLLOCAL bool getEffectiveRange(RuntimeConfig& rc, const QoreValue& seq, int64& start, int64& stop,
+            int64& seq_size, bool broken_list_range, ExceptionSink* xsink) const;
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

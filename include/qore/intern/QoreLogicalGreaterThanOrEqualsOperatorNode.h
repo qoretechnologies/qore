@@ -49,11 +49,11 @@ public:
 
 protected:
     // type of pointer to optimized versions depending on arguments found at parse-time
-    typedef bool(QoreLogicalGreaterThanOrEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;
+    typedef bool(QoreLogicalGreaterThanOrEqualsOperatorNode::*eval_t)(RuntimeConfig& rc, ExceptionSink *xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time
     eval_t pfunc = nullptr;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink *xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitIntern(op_str.c_str(), val, parse_context);
@@ -61,8 +61,8 @@ protected:
 
     DLLLOCAL int parseInitIntern(const char* name, QoreValue& val, QoreParseContext& parse_context);
 
-    DLLLOCAL bool floatGreaterThanOrEquals(ExceptionSink *xsink) const;
-    DLLLOCAL bool bigIntGreaterThanOrEquals(ExceptionSink *xsink) const;
+    DLLLOCAL bool floatGreaterThanOrEquals(RuntimeConfig& rc, ExceptionSink *xsink) const;
+    DLLLOCAL bool bigIntGreaterThanOrEquals(RuntimeConfig& rc, ExceptionSink *xsink) const;
 };
 
 #endif

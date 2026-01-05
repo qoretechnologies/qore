@@ -37,6 +37,7 @@
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 // dlopen() flags
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
@@ -261,7 +262,13 @@ int QoreModuleDefContext::init(QoreProgram& pgm, ExceptionSink& xsink) {
             return -1;
         }
 
-        ValueHolder cn(init_c.eval(&xsink), &xsink);
+        RuntimeConfig rc = rc_get_current();
+        bool needs_deref = true;
+        QoreValue cn_val = init_c.eval(rc, needs_deref, &xsink);
+        if (!needs_deref) {
+            cn_val = cn_val.refSelf();
+        }
+        ValueHolder cn(cn_val, &xsink);
         assert(!xsink);
         assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
         cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);
@@ -417,7 +424,13 @@ QoreUserModule::~QoreUserModule() {
     if (del) {
         ProgramThreadCountContextHelper tch(&xsink, pgm, true);
         if (!xsink) {
-            ValueHolder cn(del->eval(&xsink), &xsink);
+            RuntimeConfig rc = rc_get_current();
+            bool needs_deref = true;
+            QoreValue cn_val = del->eval(rc, needs_deref, &xsink);
+            if (!needs_deref) {
+                cn_val = cn_val.refSelf();
+            }
+            ValueHolder cn(cn_val, &xsink);
             assert(!xsink);
             assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
             cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);

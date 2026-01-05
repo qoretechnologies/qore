@@ -554,6 +554,7 @@ set(LIBQORE_CPP_SRC
     lib/ClassRefNode.cpp
     lib/ScopedRefNode.cpp
     lib/AbstractQoreNode.cpp
+    lib/RuntimeConfig.cpp
     lib/QoreStringNode.cpp
     lib/DateTimeNode.cpp
     lib/qore_date_private.cpp
@@ -819,6 +820,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ClassRefNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ScopedRefNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractQoreNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RuntimeConfig.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreStringNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTimeNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/qore_date_private.cpp\"

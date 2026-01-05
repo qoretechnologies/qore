@@ -34,12 +34,12 @@
 
 QoreString QoreLogicalComparisonOperatorNode::logical_comparison_str("logical comparison (<=>) operator expression");
 
-QoreValue QoreLogicalComparisonOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder l(left, xsink);
+QoreValue QoreLogicalComparisonOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder l(rc, left, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder r(right, xsink);
+    ValueEvalOptimizedRefHolder r(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -64,7 +64,8 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalComparisonOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder v(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)

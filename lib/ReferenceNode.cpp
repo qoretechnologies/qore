@@ -73,10 +73,11 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, QoreObject*& self, cons
     }
 
     if (ntype == NT_OPERATOR) {
+        RuntimeConfig rc = rc_get_current();
         {
             QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode());
             if (op) {
-                ValueEvalOptimizedRefHolder rh(op->getRight(), xsink);
+                ValueEvalOptimizedRefHolder rh(rc, op->getRight(), xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -92,7 +93,7 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, QoreObject*& self, cons
             QoreHashObjectDereferenceOperatorNode* op =
                 dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
             if (op) {
-                ValueEvalOptimizedRefHolder rh(op->getRight(), xsink);
+                ValueEvalOptimizedRefHolder rh(rc, op->getRight(), xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -230,7 +231,8 @@ AbstractQoreNode* ReferenceNode::realCopy() const {
 
 // the type passed must always be equal to the current type
 bool ReferenceNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    ValueHolder val(ReferenceNode::doEval(xsink), xsink);
+    RuntimeConfig rc = rc_get_current();
+    ValueHolder val(ReferenceNode::doEval(rc, xsink), xsink);
     if (*xsink)
         return false;
     if (!val)
@@ -239,7 +241,8 @@ bool ReferenceNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsin
 }
 
 bool ReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    ValueHolder val(ReferenceNode::doEval(xsink), xsink);
+    RuntimeConfig rc = rc_get_current();
+    ValueHolder val(ReferenceNode::doEval(rc, xsink), xsink);
     if (*xsink)
         return false;
     if (!val)
@@ -257,7 +260,7 @@ bool ReferenceNode::derefImpl(ExceptionSink* xsink) {
     return true;
 }
 
-QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
+QoreValue ReferenceNode::doEval(RuntimeConfig& rc, ExceptionSink* xsink) const {
     LValueHelper lvh(this, xsink);
     if (!lvh) {
         return QoreValue();
@@ -265,12 +268,16 @@ QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(lvh.getReferencedValue(), xsink);
     // the value here must always require a dereference
-    return val->needsEval() ? val->eval(xsink) : val.release();
+    if (val->needsEval()) {
+        bool nd = true;
+        return val->eval(rc, nd, xsink);
+    }
+    return val.release();
 }
 
-QoreValue ReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue ReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref == true);
-    return doEval(xsink);
+    return doEval(rc, xsink);
 }
 
 const QoreTypeInfo* ReferenceNode::getTypeInfo() const {

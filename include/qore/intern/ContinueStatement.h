@@ -48,7 +48,7 @@ public:
     }
 
 private:
-    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
         return RC_CONTINUE;
     }
 

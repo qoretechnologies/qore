@@ -35,12 +35,12 @@ QoreString QoreLogicalAbsoluteEqualsOperatorNode::logical_absolute_equals_str("l
 QoreString QoreLogicalAbsoluteNotEqualsOperatorNode::logical_absolute_not_equals_str("logical absolute not equals " \
     "(!==) operator expression");
 
-QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder l(left, xsink);
+QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder l(rc, left, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder r(right, xsink);
+    ValueEvalOptimizedRefHolder r(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 

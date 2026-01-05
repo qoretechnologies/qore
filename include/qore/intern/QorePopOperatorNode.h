@@ -37,7 +37,7 @@ class QorePopOperatorNode : public QoreShiftOperatorNode {
 protected:
     DLLLOCAL static QoreString pop_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QorePopOperatorNode(const QoreProgramLocation* loc, QoreValue exp) : QoreShiftOperatorNode(loc, exp) {

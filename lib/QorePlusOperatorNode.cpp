@@ -36,11 +36,11 @@
 
 QoreString QorePlusOperatorNode::plus_str("+ operator expression");
 
-QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+QoreValue QorePlusOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -203,7 +203,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QorePlusOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder rv(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder rv(parse_rc, this, *xsink);
         QoreValue result = rv.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)

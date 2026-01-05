@@ -32,8 +32,8 @@
 
 QoreString QoreIntPostDecrementOperatorNode::op_str("-- (post-decrement) operator expression");
 
-QoreValue QoreIntPostDecrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    LValueHelper n(exp, xsink);
+QoreValue QoreIntPostDecrementOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+    LValueHelper n(rc, exp, xsink);
     if (!n)
         return QoreValue();
     return n.postDecrementBigInt("<-- (post) operator>");

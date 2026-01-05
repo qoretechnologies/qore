@@ -70,6 +70,7 @@ class QoreClosureNode;
 class QoreObjectClosureNode;
 class qore_class_private;
 class qore_ns_private;
+struct RuntimeConfig;
 
 class QoreClosureParseNode : public ParseNode, public DeferredCodeObject {
     friend class QoreClosureParseNodeBackground;
@@ -119,7 +120,7 @@ private:
     bool lambda, in_method,
         is_deferred = false;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
@@ -128,6 +129,8 @@ private:
 
     DLLLOCAL QoreClosureNode* evalClosure() const;
     DLLLOCAL QoreObjectClosureNode* evalObjectClosure() const;
+    //! RuntimeConfig-aware version - uses rc.obj and rc.cls instead of TLS lookup
+    DLLLOCAL QoreObjectClosureNode* evalObjectClosure(RuntimeConfig& rc) const;
 };
 
 #endif

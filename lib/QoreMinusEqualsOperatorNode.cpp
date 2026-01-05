@@ -80,14 +80,14 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
     return err;
 }
 
-QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder new_right(right, xsink);
+QoreValue QoreMinusEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder new_right(rc, right, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink);
+    LValueHelper v(rc, left, xsink);
     if (!v) {
         return QoreValue();
     }

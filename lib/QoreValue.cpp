@@ -36,6 +36,7 @@
 #include <qore/QoreBigFloatNode.h>
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/RuntimeConfig.h"
 
 // Type name constants
 const char* qoreBoolTypeName = "bool";
@@ -697,28 +698,7 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
 // Evaluation
 // ============================================================================
 
-QoreValue QoreValue::eval(ExceptionSink* xsink) const {
-    if (!isPointer()) {
-        return *this;
-    }
-    AbstractQoreNode* n = getPointerUnsafe();
-    if (!n) {
-        return *this;
-    }
-    // Need to use internal evaluation - AbstractQoreNode::eval returns QoreValue
-    // which is now the new NaN-boxed type
-    bool needs_deref = true;
-    QoreValue result = n->eval(needs_deref, xsink);
-    // If needs_deref is false, the node returned itself without adding a reference.
-    // Since the caller of this single-arg version expects a referenced value,
-    // we need to add a reference.
-    if (!needs_deref) {
-        result.ref();
-    }
-    return result;
-}
-
-QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreValue::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref == true);
     if (!isPointer()) {
         needs_deref = false;
@@ -729,7 +709,7 @@ QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
         needs_deref = false;
         return *this;
     }
-    return n->eval(needs_deref, xsink);
+    return n->eval(rc, needs_deref, xsink);
 }
 
 // ============================================================================
@@ -903,62 +883,62 @@ QoreValue ValueOptionalRefHolder::takeReferencedValue() {
     return v;
 }
 
-ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
 ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
 }
 
-int ValueEvalRefHolder::evalIntern(const AbstractQoreNode* exp) {
+ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    evalIntern(rc, exp);
+}
+
+ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const QoreValue exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    evalIntern(rc, exp);
+}
+
+int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp) {
     if (!exp) {
         needs_deref = false;
         return 0;
     }
     needs_deref = true;
-    v = exp->eval(needs_deref, xsink);
+    v = exp->eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
 }
 
-int ValueEvalRefHolder::evalIntern(const QoreValue& exp) {
+int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const QoreValue& exp) {
     needs_deref = true;
-    v = exp.eval(needs_deref, xsink);
+    v = exp.eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
 }
 
-int ValueEvalRefHolder::eval(const AbstractQoreNode* exp) {
+int ValueEvalRefHolder::eval(RuntimeConfig& rc, const AbstractQoreNode* exp) {
     v.discard(xsink);
-    return evalIntern(exp);
+    return evalIntern(rc, exp);
 }
 
-int ValueEvalRefHolder::eval(const QoreValue exp) {
+int ValueEvalRefHolder::eval(RuntimeConfig& rc, const QoreValue exp) {
     v.discard(xsink);
-    return evalIntern(exp);
-}
-
-ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)
-    : ValueEvalRefHolder(xs) {
-    eval(exp);
+    return evalIntern(rc, exp);
 }
 
 ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(ExceptionSink* xs)
     : ValueEvalRefHolder(xs) {
 }
 
-int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
+ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(RuntimeConfig& rc, const QoreValue& exp, ExceptionSink* xs)
+    : ValueEvalRefHolder(xs) {
+    eval(rc, exp);
+}
+
+int ValueEvalOptimizedRefHolder::eval(RuntimeConfig& rc, const QoreValue& exp) {
     if (!exp.needsEval()) {
         needs_deref = false;
         v = exp;
         return 0;
     }
     needs_deref = true;
-    v = exp.eval(needs_deref, xsink);
+    v = exp.eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
 }

@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
@@ -52,13 +54,22 @@ const char* SelfVarrefNode::getTypeName() const {
     return "in-object variable reference";
 }
 
-QoreValue SelfVarrefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    assert(runtime_get_stack_object());
+QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    // IMPORTANT: Must use runtime_get_stack_object() here, NOT rc.obj
+    // rc.obj might be from an outer scope when there are nested method calls
+    // SelfVarrefNode is for accessing members on "self", which is the current stack object
+    QoreObject* self = runtime_get_stack_object();
+    assert(self);
     assert(needs_deref);
     // issue 3523: evaluate in case the value is a reference
-    ValueHolder val(runtime_get_stack_object()->getReferencedMemberNoMethod(str, xsink), xsink);
+    // Use RuntimeConfig-aware version to avoid TLS lookup for class context
+    ValueHolder val(qore_object_private::get(*self)->getReferencedMemberNoMethod(rc, str, xsink), xsink);
     // the value here must always require a dereference
-    return val->needsEval() ? val->eval(xsink) : val.release();
+    if (val->needsEval()) {
+        bool nd = true;
+        return val->eval(rc, nd, xsink);
+    }
+    return val.release();
 }
 
 char* SelfVarrefNode::takeString() {

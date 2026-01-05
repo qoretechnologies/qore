@@ -30,12 +30,14 @@
 
 #include <qore/Qore.h>
 
-QoreValue QoreIntPlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink)
+QoreValue QoreIntPlusEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
         return QoreValue();
-    LValueHelper v(left, xsink);
-    if (*xsink)
+    }
+    LValueHelper v(rc, left, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
     return v.plusEqualsBigInt(rh->getAsBigInt(), "<+= operator>");
 }

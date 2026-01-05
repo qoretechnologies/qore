@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreRangeOperatorNode::op_str(".. (range) operator expression");
 
@@ -72,9 +73,9 @@ int QoreRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
-QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> fit(getFunctionalIterator(value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> fit(getFunctionalIterator(rc, value_type, xsink));
     if (*xsink || value_type != list)
         return QoreValue();
 
@@ -94,20 +95,22 @@ QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
-        ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
-    if (*xsink)
+FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    if (*xsink) {
         return nullptr;
+    }
     int64 start = lh->getAsBigInt();
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink)
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
         return nullptr;
+    }
     int64 stop = rh->getAsBigInt();
 
     value_type = list;
-    if (!(runtime_get_parse_options() & PO_BROKEN_RANGE)) {
+    if (!(rc.po & PO_BROKEN_RANGE)) {
         if (start <= stop) {
             ++stop;
         } else {

@@ -43,9 +43,9 @@ int QorePostDecrementOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     return err;
 }
 
-QoreValue QorePostDecrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QorePostDecrementOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper n(exp, xsink);
+    LValueHelper n(rc, exp, xsink);
     if (!n)
         return QoreValue();
 

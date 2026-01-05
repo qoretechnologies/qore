@@ -173,9 +173,18 @@ public:
 
     DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const;
 
+    //! RuntimeConfig-aware version - avoids TLS lookup
+    DLLLOCAL QoreHashNode* newHash(RuntimeConfig& rc, const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
+    //! RuntimeConfig-aware version - avoids TLS lookup
+    DLLLOCAL QoreHashNode* newHash(RuntimeConfig& rc, const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
+
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+
+    //! RuntimeConfig-aware version - avoids TLS lookup
+    DLLLOCAL int initHash(RuntimeConfig& rc, QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
 
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
         const HashDeclMemberInfo* mem = findMember(key);
@@ -343,6 +352,9 @@ protected:
     }
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+
+    //! RuntimeConfig-aware version - avoids TLS lookup
+    DLLLOCAL int initHashIntern(RuntimeConfig& rc, QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
 };
 
 #endif

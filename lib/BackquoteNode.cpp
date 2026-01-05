@@ -68,9 +68,9 @@ const char *BackquoteNode::getTypeName() const {
 }
 
 // eval(): return value requires a deref(xsink)
-QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    int rc;
-    return backquoteEval(str, rc, xsink);
+QoreValue BackquoteNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    int ret_code;
+    return backquoteEval(str, ret_code, xsink);
 }
 
 #ifndef READ_BLOCK

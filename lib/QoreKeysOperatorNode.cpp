@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreKeysOperatorNode::keys_str("keys operator expression");
 
@@ -79,7 +80,8 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         qore_type_t t = exp.getType();
         if (t == NT_HASH || t == NT_OBJECT) {
             ReferenceHolder<> holder(this, 0);
-            ValueEvalOptimizedRefHolder rv(this, 0);
+            RuntimeConfig parse_rc = rc_get_parse_time();
+            ValueEvalOptimizedRefHolder rv(parse_rc, this, nullptr);
             QoreValue result = rv.takeReferencedValue();
             // only use parse-time folding if we got a valid result
             // (constants may not be fully resolved at parse time, resulting in NOTHING)
@@ -102,11 +104,13 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
-QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreKeysOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(rc, value_type, xsink));
     if ((xsink && *xsink) || value_type != list || !ref_rv)
         return QoreValue();
+    // Set RuntimeConfig for sub-expression evaluation (even though keys doesn't need it for iteration)
+    f->setRuntimeConfig(&rc);
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
 
@@ -124,22 +128,27 @@ QoreValue QoreKeysOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
-        ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder marg(exp, xsink);
+FunctionalOperatorInterface* QoreKeysOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
+    // Use RuntimeConfig-aware evaluation
+    ValueEvalOptimizedRefHolder marg(rc, exp, xsink);
     if (xsink && *xsink)
         return nullptr;
 
     qore_type_t t = marg->getType();
     if (t == NT_HASH) {
         value_type = list;
-        return new QoreFunctionalKeysOperator(marg.takeReferencedNode<QoreHashNode>(), xsink);
+        FunctionalOperatorInterface* result = new QoreFunctionalKeysOperator(marg.takeReferencedNode<QoreHashNode>(), xsink);
+        result->setRuntimeConfig(&rc);
+        return result;
     }
     if (t == NT_OBJECT) {
         value_type = list;
-        return new QoreFunctionalKeysOperator(
+        FunctionalOperatorInterface* result = new QoreFunctionalKeysOperator(
             qore_object_private::get(*marg->get<QoreObject>())->getRuntimeMemberHash(xsink), xsink
         );
+        result->setRuntimeConfig(&rc);
+        return result;
     }
     value_type = nothing;
     return nullptr;

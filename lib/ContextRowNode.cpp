@@ -58,7 +58,7 @@ const char* ContextRowNode::getTypeName() const {
     return "context row reference";
 }
 
-QoreValue ContextRowNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue ContextRowNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     return eval_context_row(xsink);
 }
 

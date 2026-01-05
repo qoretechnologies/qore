@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda)
         : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(false) {
@@ -58,8 +59,18 @@ QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {
     return new QoreObjectClosureNode(o, c_ctx, this);
 }
 
-QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return in_method ? (AbstractQoreNode*)evalObjectClosure() : (AbstractQoreNode*)evalClosure();
+QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure(RuntimeConfig& rc) const {
+    // IMPORTANT: Must use runtime_get_object_and_class() here, NOT rc.obj/rc.cls
+    // rc.obj/rc.cls might be from an outer scope when there are nested calls
+    // This closure needs to capture the current method's object context
+    QoreObject* o;
+    const qore_class_private* c_ctx;
+    runtime_get_object_and_class(o, c_ctx);
+    return new QoreObjectClosureNode(o, c_ctx, this);
+}
+
+QoreValue QoreClosureParseNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return in_method ? (AbstractQoreNode*)evalObjectClosure(rc) : (AbstractQoreNode*)evalClosure();
 }
 
 int QoreClosureParseNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {

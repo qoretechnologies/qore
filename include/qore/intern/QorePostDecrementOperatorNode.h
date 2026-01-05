@@ -38,7 +38,7 @@ OP_COMMON
 protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QorePostDecrementOperatorNode(const QoreProgramLocation* loc, QoreValue exp)

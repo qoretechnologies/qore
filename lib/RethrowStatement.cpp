@@ -31,10 +31,11 @@
 #include <qore/Qore.h>
 #include "qore/intern/RethrowStatement.h"
 #include "qore/intern/QoreException.h"
+#include "qore/intern/RuntimeConfig.h"
 
-int RethrowStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+int RethrowStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     if (args) {
-        ValueEvalOptimizedRefHolder v(args, xsink);
+        ValueEvalOptimizedRefHolder v(rconfig, args, xsink);
         if (!*xsink) {
             QoreException* ex = catch_get_exception()->replaceTop(*v->get<QoreListNode>(), *xsink);
             qore_es_private::get(*xsink)->rethrow(ex);

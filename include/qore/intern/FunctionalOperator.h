@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #define _QORE_INTERN_FUNCTIONALOPERATOR_H
 
 class FunctionalOperatorInterface;
+struct RuntimeConfig;
 
 class FunctionalOperator {
 public:
@@ -42,9 +43,10 @@ public:
    DLLLOCAL virtual ~FunctionalOperator() {
    }
 
-   DLLLOCAL FunctionalOperatorInterface* getFunctionalIterator(FunctionalValueType& value_type, ExceptionSink* xsink) const;
+   // Get a functional iterator with RuntimeConfig for optimized TLS access
+   DLLLOCAL FunctionalOperatorInterface* getFunctionalIterator(RuntimeConfig& rc, FunctionalValueType& value_type, ExceptionSink* xsink) const;
 
-   DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type, ExceptionSink* xsink) const = 0;
+   DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc, FunctionalValueType& value_type, ExceptionSink* xsink) const = 0;
 };
 
 #endif

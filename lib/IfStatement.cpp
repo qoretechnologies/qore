@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/IfStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/RuntimeConfig.h"
 
 IfStatement::IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e)
         : AbstractStatement(start_line, end_line), cond(c), if_code(i), else_code(e) {
@@ -43,12 +44,11 @@ IfStatement::~IfStatement() {
     delete lvars;
 }
 
-// only executed by Statement::exec()
-int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+int IfStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalOptimizedRefHolder val(cond, xsink);
+    ValueEvalOptimizedRefHolder val(rconfig, cond, xsink);
     if (*xsink) {
         return 0;
     }
@@ -56,11 +56,11 @@ int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     int rc = 0;
     if (val->getAsBool()) {
         if (if_code) {
-            rc = if_code->execImpl(return_value, xsink);
+            rc = if_code->execImpl(rconfig, return_value, xsink);
         }
     } else {
         if (else_code) {
-            rc = else_code->execImpl(return_value, xsink);
+            rc = else_code->execImpl(rconfig, return_value, xsink);
         }
     }
 

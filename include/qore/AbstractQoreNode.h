@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,6 +41,9 @@
 #include <cstring>
 
 #include <cassert>
+
+// Forward declaration for runtime config
+struct RuntimeConfig;
 
 #define FMT_YAML_LONG  -3
 #define FMT_YAML_SHORT -2
@@ -210,39 +213,21 @@ public:
     */
     DLLEXPORT virtual const char* getTypeName() const = 0;
 
-    //! evaluates the object and returns a value (or 0)
-    /** return value requires a deref(xsink) (if not 0).  If needs_eval() returns false,
-        then this function just returns refSelf().  Otherwise evalImpl() is returned.
-        @code
-        ValueHolder value(n->eval(xsink));
-        if (!*value) // note that if a qore-language exception occured, then value = 0
-            return 0;
-        ...
-        return value.release();
-        @endcode
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-        @return the result of the evaluation, if the return value contains a referenced value, it must be dereferenced manually
+    //! evaluates the object with explicit runtime configuration
+    /** Return value requires a dereference if needs_deref is true.
+        If needs_eval() is true, needs_deref = true, returns evalImpl().
+        Otherwise needs_deref = false returns "this".
 
-        @see
-        - @ref ValueHolder
-        - @ref ValueEvalRefHolder
-    */
-    DLLEXPORT QoreValue eval(ExceptionSink* xsink) const;
-
-    //! optionally evaluates the argument
-    /** return value requires a dereference if needs_deref is true
-        if needs_eval() is true, needs_deref = true, returns evalImpl()
-        otherwise needs_deref = false returns "this"
-
-        @param needs_deref this is an output parameter, if needs_deref is true then the value returned must be dereferenced
-
-        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param rc runtime configuration passed through the call chain
+        @param needs_deref output parameter indicating if the result needs dereferencing
+        @param xsink exception sink for error reporting
+        @return the result of evaluation
 
         @note do not use this function directly, use the ValueEvalRefHolder class instead
 
         @see ValueEvalRefHolder
     */
-    DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! returns true if the node represents a value
     /**
@@ -324,7 +309,16 @@ public:
 
         @see eval(bool&, ExceptionSink*)
     */
-    DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const = 0;
+    //! evaluates the object with explicit runtime configuration
+    /** This method allows passing runtime configuration explicitly instead of
+        looking it up from thread-local storage on each access.
+
+        @param rc runtime configuration passed through the call chain
+        @param needs_deref output parameter indicating if the result needs dereferencing
+        @param xsink exception sink for error reporting
+        @return the result of evaluation
+    */
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const = 0;
 
     //! decrements the reference count
     /** deletes the object when the reference count = 0.
@@ -408,7 +402,7 @@ protected:
     //! should never be called for value types
     /** in debugging builds of the library, calls to this function will abort
     */
-    DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 //! this class is for value types that will exists only once in the Qore library, reference counting is disabled

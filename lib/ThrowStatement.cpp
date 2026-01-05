@@ -30,11 +30,13 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ThrowStatement.h"
+#include "qore/intern/RuntimeConfig.h"
 
-int ThrowStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
-    ValueEvalOptimizedRefHolder a(args, xsink);
-    if (*xsink)
+int ThrowStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalOptimizedRefHolder a(rconfig, args, xsink);
+    if (*xsink) {
         return 0;
+    }
 
     assert(a->getType() == NT_LIST);
 

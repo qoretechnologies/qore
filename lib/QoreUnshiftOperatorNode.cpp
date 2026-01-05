@@ -78,13 +78,13 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     return err;
 }
 
-QoreValue QoreUnshiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder res(right, xsink);
+QoreValue QoreUnshiftOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder res(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper val(left, xsink);
+    LValueHelper val(rc, left, xsink);
     if (!val)
         return QoreValue();
 

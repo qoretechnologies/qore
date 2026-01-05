@@ -32,10 +32,11 @@
 
 QoreString QoreRegexNMatchOperatorNode::op_str("regex negative match (!~) operator expression");
 
-QoreValue QoreRegexNMatchOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
-    if (*xsink)
+QoreValue QoreRegexNMatchOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, exp, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
 
     QoreStringNodeValueHelper str(*lh);
     return !regex->exec(*str, xsink);

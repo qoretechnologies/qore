@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,13 @@
 #include "qore/Qore.h"
 
 #include "qore/intern/FunctionalOperator.h"
+#include "qore/intern/FunctionalOperatorInterface.h"
+#include "qore/intern/RuntimeConfig.h"
 
-FunctionalOperatorInterface* FunctionalOperator::getFunctionalIterator(FunctionalValueType& value_type, ExceptionSink* xsink) const {
-    return getFunctionalIteratorImpl(value_type, xsink);
+FunctionalOperatorInterface* FunctionalOperator::getFunctionalIterator(RuntimeConfig& rc, FunctionalValueType& value_type, ExceptionSink* xsink) const {
+    FunctionalOperatorInterface* result = getFunctionalIteratorImpl(rc, value_type, xsink);
+    if (result) {
+        result->setRuntimeConfig(&rc);
+    }
+    return result;
 }

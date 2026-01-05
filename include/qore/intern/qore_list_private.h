@@ -571,7 +571,7 @@ struct qore_list_private {
         obj_count += dt;
     }
 
-    DLLLOCAL QoreListNode* eval(ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* eval(RuntimeConfig& rc, ExceptionSink* xsink);
 
     DLLLOCAL void weakRef() {
         weakRefs.ROreference();
@@ -605,6 +605,10 @@ struct qore_list_private {
     DLLLOCAL static QoreListNode* newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args,
             ExceptionSink* xsink);
 
+    //! RuntimeConfig-aware version - avoids TLS lookup
+    DLLLOCAL static QoreListNode* newComplexList(RuntimeConfig& rc, const QoreTypeInfo* typeInfo,
+            const QoreValue args, ExceptionSink* xsink);
+
     // caller owns any reference in "init"
     DLLLOCAL static QoreListNode* newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
             ExceptionSink* xsink);
@@ -624,6 +628,10 @@ struct qore_list_private {
     DLLLOCAL static void incScanCount(const QoreListNode& l, int dt) {
         l.priv->incScanCount(dt);
     }
+
+    //! RuntimeConfig-aware evalList - avoids TLS lookup
+    DLLLOCAL static QoreListNode* evalList(const QoreListNode& l, RuntimeConfig& rc, bool& needs_deref,
+            ExceptionSink* xsink);
 };
 
 #endif

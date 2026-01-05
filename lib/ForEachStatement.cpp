@@ -33,6 +33,7 @@
 #include "qore/intern/ForEachStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/AbstractIteratorHelper.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <memory>
 
@@ -46,16 +47,18 @@ ForEachStatement::~ForEachStatement() {
     delete lvars;
 }
 
-int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+int ForEachStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     if (is_ref)
-        return execRef(return_value, xsink);
+        return execRef(rconfig, return_value, xsink);
 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
     // get iterator object
     FunctionalOperator::FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(iterator_func
+        ? iterator_func->getFunctionalIterator(rconfig, value_type, xsink)
+        : FunctionalOperatorInterface::getFunctionalIterator(rconfig, value_type, list, true, "foreach statement", xsink));
     if (*xsink || value_type == FunctionalOperator::nothing || !code)
         return 0;
 
@@ -89,11 +92,11 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
                 break;
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(i++);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(rconfig, i++);
 
         // execute "foreach" body
-        if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc = code->execImpl(rconfig, return_value, xsink)) == RC_BREAK) || *xsink) {
             rc = 0;
             break;
         }
@@ -107,7 +110,7 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return rc;
 }
 
-int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
+int ForEachStatement::execRef(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
     // instantiate local variables
@@ -122,7 +125,12 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     }
 
     // get the current value of the lvalue expression
-    ValueHolder tlist(vr->eval(xsink), xsink);
+    bool tlist_needs_deref = true;
+    QoreValue tlist_val = vr->eval(rconfig, tlist_needs_deref, xsink);
+    if (!tlist_needs_deref) {
+        tlist_val = tlist_val.refSelf();
+    }
+    ValueHolder tlist(tlist_val, xsink);
     if (!code || *xsink || tlist->isNothing()) {
         return 0;
     }
@@ -139,7 +147,6 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     if (l_tlist) {
         ln = new QoreListNode(autoTypeInfo);
     }
-    //printd(5, "ForEachStatement::execRef() l_tlist: %p ln: %s\n", l_tlist, ln->getFullTypeName());
 
     while (true) {
         // Check for sandbox interrupt
@@ -161,17 +168,17 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             }
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(rconfig, l_tlist ? (int)i : 0);
 
         // execute "for" body
-        rc = code->execImpl(return_value, xsink);
+        rc = code->execImpl(rconfig, return_value, xsink);
         if (*xsink) {
             return 0;
         }
 
         // get value of foreach variable
-        ValueEvalOptimizedRefHolder nv(var, xsink);
+        ValueEvalOptimizedRefHolder nv(rconfig, var, xsink);
         if (*xsink) {
             return 0;
         }

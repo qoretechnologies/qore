@@ -659,7 +659,7 @@ protected:
     //! should never be called, does nothing
     /** in debugging builds calls to this function will abort
     */
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! custom reference handler
     DLLLOCAL virtual void customRef() const;

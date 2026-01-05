@@ -35,10 +35,24 @@
 
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/intern/FunctionalOperator.h"
+#include "qore/intern/RuntimeConfig.h"
 
 class FunctionalOperatorInterface {
 public:
+    DLLLOCAL FunctionalOperatorInterface() : rc(nullptr) {
+    }
+
     DLLLOCAL virtual ~FunctionalOperatorInterface() {
+    }
+
+    // Set the RuntimeConfig for this iterator (called by parent after construction)
+    DLLLOCAL void setRuntimeConfig(RuntimeConfig* n_rc) {
+        rc = n_rc;
+    }
+
+    // Get the RuntimeConfig for evaluation
+    DLLLOCAL RuntimeConfig* getRuntimeConfig() const {
+        return rc;
     }
 
     // returns the next value, if done iterating, then done is returned as true and the return value is NOTHING
@@ -57,6 +71,14 @@ public:
     DLLLOCAL static FunctionalOperatorInterface* getFunctionalIterator(
             FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
             ExceptionSink* xsink);
+
+    // RuntimeConfig-aware version
+    DLLLOCAL static FunctionalOperatorInterface* getFunctionalIterator(RuntimeConfig& rc,
+            FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
+            ExceptionSink* xsink);
+
+protected:
+    RuntimeConfig* rc;
 };
 
 class QoreFunctionalListOperator : public FunctionalOperatorInterface, public ConstListIterator {

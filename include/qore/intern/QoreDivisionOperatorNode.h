@@ -39,11 +39,11 @@ protected:
     const QoreTypeInfo* typeInfo = nullptr;
 
     // type of pointer to optimized versions depending on arguments found at parse-time
-    typedef QoreValue (QoreDivisionOperatorNode::*eval_t)(ExceptionSink* xsink) const;
+    typedef QoreValue (QoreDivisionOperatorNode::*eval_t)(RuntimeConfig& rc, ExceptionSink* xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time
     eval_t pfunc = nullptr;
 
-    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitIntern(op_str.c_str(), val, parse_context);
@@ -51,8 +51,8 @@ protected:
 
     DLLLOCAL int parseInitIntern(const char* name, QoreValue& val, QoreParseContext& parse_context);
 
-    DLLLOCAL QoreValue floatDivision(ExceptionSink* xsink) const;
-    DLLLOCAL QoreValue bigIntDivision(ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue floatDivision(RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue bigIntDivision(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreDivisionOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)

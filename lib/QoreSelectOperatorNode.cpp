@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <memory>
 
@@ -113,11 +114,13 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     return err;
 }
 
-QoreValue QoreSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreSelectOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(rc, value_type, xsink));
     if (*xsink || value_type == nothing)
         return QoreValue();
+    // Set RuntimeConfig for sub-expression evaluation
+    f->setRuntimeConfig(&rc);
 
     ReferenceHolder<QoreListNode> rv(ref_rv && (value_type != single) ? new QoreListNode(f->getValueType()) : nullptr,
         xsink);
@@ -160,18 +163,21 @@ QoreValue QoreSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
-        ExceptionSink* xsink) const {
+FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
     if (iterator_func) {
-        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(value_type, xsink));
+        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(rc, value_type, xsink));
         if (*xsink || value_type == nothing)
-            return 0;
-        return new QoreFunctionalSelectOperator(this, f.release());
+            return nullptr;
+        FunctionalOperatorInterface* result = new QoreFunctionalSelectOperator(this, f.release());
+        result->setRuntimeConfig(&rc);
+        return result;
     }
 
-    ValueEvalOptimizedRefHolder marg(left, xsink);
+    // Use RuntimeConfig-aware evaluation for the left operand
+    ValueEvalOptimizedRefHolder marg(rc, left, xsink);
     if (*xsink)
-        return 0;
+        return nullptr;
 
     qore_type_t t = marg->getType();
     if (t != NT_LIST) {
@@ -179,25 +185,31 @@ FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(F
             AbstractIteratorHelper h(xsink, "select operator",
                 const_cast<QoreObject*>(marg->get<const QoreObject>()));
             if (*xsink)
-                return 0;
+                return nullptr;
             if (h) {
                 bool temp = marg.isTemp();
                 marg.clearTemp();
                 value_type = list;
-                return new QoreFunctionalSelectIteratorOperator(this, temp, h, xsink);
+                FunctionalOperatorInterface* result = new QoreFunctionalSelectIteratorOperator(this, temp, h, xsink);
+                result->setRuntimeConfig(&rc);
+                return result;
             }
         }
         if (t == NT_NOTHING) {
             value_type = nothing;
-            return 0;
+            return nullptr;
         }
 
         value_type = single;
-        return new QoreFunctionalSelectSingleValueOperator(this, marg.getReferencedValue(), xsink);
+        FunctionalOperatorInterface* result = new QoreFunctionalSelectSingleValueOperator(this, marg.getReferencedValue(), xsink);
+        result->setRuntimeConfig(&rc);
+        return result;
     }
 
     value_type = list;
-    return new QoreFunctionalSelectListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    FunctionalOperatorInterface* result = new QoreFunctionalSelectListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    result->setRuntimeConfig(&rc);
+    return result;
 }
 
 bool QoreFunctionalSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
@@ -205,12 +217,13 @@ bool QoreFunctionalSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, 
         if (!next())
             return true;
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(index());
         SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
 
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        assert(rc);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(*rc, index());
+        ValueEvalOptimizedRefHolder result(*rc, select->right, xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())
@@ -232,7 +245,8 @@ bool QoreFunctionalSelectSingleValueOperator::getNextImpl(ValueOptionalRefHolder
     SingleArgvContextHelper argv_helper(v.refSelf(), xsink);
 
     // check if value can be selected
-    ValueEvalOptimizedRefHolder result(select->right, xsink);
+    assert(rc);
+    ValueEvalOptimizedRefHolder result(*rc, select->right, xsink);
     if (*xsink)
         return false;
     if (!result->getAsBool())
@@ -251,9 +265,6 @@ bool QoreFunctionalSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder& v
         if (*xsink)
             return false;
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(index++);
-
         // get the current value
         ValueHolder iv(h.getValue(xsink), xsink);
         if (*xsink)
@@ -261,7 +272,10 @@ bool QoreFunctionalSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder& v
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        assert(rc);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(*rc, index++);
+        ValueEvalOptimizedRefHolder result(*rc, select->right, xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())
@@ -281,13 +295,13 @@ bool QoreFunctionalSelectOperator::getNextImpl(ValueOptionalRefHolder& val, Exce
         if (*xsink)
             return false;
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(index++);
-
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        assert(rc);
+        // set offset in RuntimeConfig for "$#"
+        RuntimeConfigElementHelper eh(*rc, index++);
+        ValueEvalOptimizedRefHolder result(*rc, select->right, xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())

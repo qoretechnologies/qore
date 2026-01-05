@@ -32,13 +32,15 @@
 
 QoreString QoreMultiplicationOperatorNode::multiplication_str("* operator expression");
 
-QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
-    if (*xsink)
+QoreValue QoreMultiplicationOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    if (*xsink) {
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink)
+    }
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
 
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
@@ -78,7 +80,8 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     if (!err && right.isValue() && left.isValue()) {
         SimpleRefHolder<QoreMultiplicationOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder rv(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder rv(parse_rc, this, *xsink);
         QoreValue result = rv.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)

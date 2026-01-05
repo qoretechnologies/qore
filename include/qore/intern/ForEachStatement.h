@@ -57,8 +57,8 @@ private:
     FunctionalOperator* iterator_func = nullptr;
     bool is_ref = false;
 
-    DLLLOCAL int execRef(QoreValue& return_value, ExceptionSink* xsink);
-    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL int execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

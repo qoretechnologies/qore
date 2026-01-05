@@ -36,15 +36,17 @@ int QoreXorEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     return parseInitIntLValue(op_str.c_str(), parse_context);
 }
 
-QoreValue QoreXorEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder new_right(right, xsink);
-    if (*xsink)
+QoreValue QoreXorEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder new_right(rc, right, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
     int64 val = new_right->getAsBigInt();
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink);
-    if (!v)
+    LValueHelper v(rc, left, xsink);
+    if (!v) {
         return QoreValue();
+    }
     return v.xorEqualsBigInt(val, "<^= operator>");
 }

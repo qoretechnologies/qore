@@ -40,7 +40,15 @@ bool FunctionalOperatorInterface::getNext(ValueOptionalRefHolder& val, Exception
 FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
             FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
             ExceptionSink* xsink) {
-    ValueEvalOptimizedRefHolder marg(exp, xsink);
+    // Shim: get RuntimeConfig from TLS and delegate to RuntimeConfig version
+    RuntimeConfig rc = rc_get_current();
+    return getFunctionalIterator(rc, value_type, exp, fwd, who, xsink);
+}
+
+FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(RuntimeConfig& rc,
+            FunctionalOperator::FunctionalValueType& value_type, QoreValue exp, bool fwd, const char* who,
+            ExceptionSink* xsink) {
+    ValueEvalOptimizedRefHolder marg(rc, exp, xsink);
     if (*xsink)
         return nullptr;
 
@@ -54,7 +62,9 @@ FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
                 bool temp = marg.isTemp();
                 marg.clearTemp();
                 value_type = FunctionalOperator::list;
-                return new QoreFunctionalIteratorOperator(temp, h, xsink);
+                FunctionalOperatorInterface* result = new QoreFunctionalIteratorOperator(temp, h, xsink);
+                result->setRuntimeConfig(&rc);
+                return result;
             }
         }
         if (t == NT_NOTHING) {
@@ -63,11 +73,15 @@ FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
         }
 
         value_type = FunctionalOperator::single;
-        return new QoreFunctionalSingleValueOperator(marg.takeReferencedValue(), xsink);
+        FunctionalOperatorInterface* result = new QoreFunctionalSingleValueOperator(marg.takeReferencedValue(), xsink);
+        result->setRuntimeConfig(&rc);
+        return result;
     }
 
     value_type = FunctionalOperator::list;
-    return new QoreFunctionalListOperator(fwd, marg.takeReferencedNode<QoreListNode>(), xsink);
+    FunctionalOperatorInterface* result = new QoreFunctionalListOperator(fwd, marg.takeReferencedNode<QoreListNode>(), xsink);
+    result->setRuntimeConfig(&rc);
+    return result;
 }
 
 

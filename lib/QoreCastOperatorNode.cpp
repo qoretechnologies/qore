@@ -280,8 +280,8 @@ int QoreClassCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue&
     return 0;
 }
 
-QoreValue QoreClassCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+QoreValue QoreClassCastOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -325,8 +325,8 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
     return 0;
 }
 
-QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+QoreValue QoreHashDeclCastOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -380,9 +380,9 @@ int QoreComplexHashCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
     return 0;
 }
 
-QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreComplexHashCastOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -441,9 +441,9 @@ int QoreComplexListCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
     return 0;
 }
 
-QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreComplexListCastOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

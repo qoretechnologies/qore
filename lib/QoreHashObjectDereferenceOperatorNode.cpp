@@ -32,6 +32,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
 
@@ -203,33 +205,39 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     return err;
 }
 
-QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
-    if (*xsink)
+QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    if (*xsink) {
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
-    if (*xsink)
+    }
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
 
     if (lh->getType() == NT_HASH) {
         const QoreHashNode* h = lh->get<const QoreHashNode>();
 
-        if (rh->getType() == NT_LIST)
+        if (rh->getType() == NT_LIST) {
             return h->getSlice(rh->get<const QoreListNode>(), xsink);
+        }
 
         QoreStringNodeValueHelper key(*rh);
         QoreValue v = h->getKeyValue(**key, xsink);
         return *xsink ? QoreValue() : v.refSelf();
     }
-    if (lh->getType() != NT_OBJECT)
+    if (lh->getType() != NT_OBJECT) {
         return QoreValue();
+    }
 
     QoreObject* o = const_cast<QoreObject*>(lh->get<const QoreObject>());
 
-    if (rh->getType() == NT_LIST)
+    if (rh->getType() == NT_LIST) {
         return o->getSlice(rh->get<const QoreListNode>(), xsink);
+    }
 
+    // Use RuntimeConfig-aware version to avoid TLS lookup for class context
     QoreStringNodeValueHelper key(*rh);
-    ValueHolder rv(o->evalMember(*key, xsink), xsink);
+    ValueHolder rv(qore_object_private::get(*o)->evalMember(rc, key->c_str(), xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
 }

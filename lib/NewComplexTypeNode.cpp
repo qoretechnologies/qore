@@ -105,14 +105,14 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     return -1;
 }
 
-QoreValue NewHashDeclNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return typed_hash_decl_private::get(*hd)->newHash(args, runtime_check, xsink);
+QoreValue NewHashDeclNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return typed_hash_decl_private::get(*hd)->newHash(rc, args, runtime_check, xsink);
 }
 
-QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_hash_private::newComplexHash(typeInfo, args, xsink);
+QoreValue NewComplexHashNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return qore_hash_private::newComplexHash(rc, typeInfo, args, xsink);
 }
 
-QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_list_private::newComplexList(typeInfo, args, xsink);
+QoreValue NewComplexListNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return qore_list_private::newComplexList(rc, typeInfo, args, xsink);
 }

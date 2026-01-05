@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <memory>
 
@@ -140,12 +141,14 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     return err;
 }
 
-QoreValue QoreMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreMapOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(rc, value_type, xsink));
     if (*xsink || value_type == nothing) {
         return QoreValue();
     }
+    // Set RuntimeConfig for sub-expression evaluation
+    f->setRuntimeConfig(&rc);
 
     ReferenceHolder<QoreListNode> rv(ref_rv && (value_type != single) ? new QoreListNode(expTypeInfo) : nullptr,
         xsink);
@@ -188,21 +191,21 @@ QoreValue QoreMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
-        ExceptionSink* xsink) const {
+FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
     if (iterator_func) {
-        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(value_type, xsink));
+        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(rc, value_type, xsink));
         if (*xsink || value_type == nothing)
             return nullptr;
-        return new QoreFunctionalMapOperator(this, f.release());
+        FunctionalOperatorInterface* result = new QoreFunctionalMapOperator(this, f.release());
+        result->setRuntimeConfig(&rc);
+        return result;
     }
 
-    ValueEvalOptimizedRefHolder marg(right, xsink);
+    // Use RuntimeConfig-aware evaluation for the right operand
+    ValueEvalOptimizedRefHolder marg(rc, right, xsink);
     if (*xsink)
         return nullptr;
-
-    //printd(5, "QoreMapOperatorNode::getFunctionalIteratorImpl() this: %p marg: '%s'\n", this,
-    //  marg->getFullTypeName());
 
     qore_type_t t = marg->getType();
     if (t != NT_LIST) {
@@ -214,7 +217,9 @@ FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(Func
                 bool temp = marg.isTemp();
                 marg.clearTemp();
                 value_type = list;
-                return new QoreFunctionalMapIteratorOperator(this, temp, h, xsink);
+                FunctionalOperatorInterface* result = new QoreFunctionalMapIteratorOperator(this, temp, h, xsink);
+                result->setRuntimeConfig(&rc);
+                return result;
             }
         }
         if (t == NT_NOTHING) {
@@ -223,21 +228,26 @@ FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(Func
         }
 
         value_type = single;
-        return new QoreFunctionalMapSingleValueOperator(this, marg.getReferencedValue(), xsink);
+        FunctionalOperatorInterface* result = new QoreFunctionalMapSingleValueOperator(this, marg.getReferencedValue(), xsink);
+        result->setRuntimeConfig(&rc);
+        return result;
     }
 
     value_type = list;
-    return new QoreFunctionalMapListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    FunctionalOperatorInterface* result = new QoreFunctionalMapListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    result->setRuntimeConfig(&rc);
+    return result;
 }
 
 bool QoreFunctionalMapListOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     if (!next())
         return true;
 
-    // set offset in thread-local data for "$#"
-    ImplicitElementHelper eh(index());
     SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    assert(rc);
+    // set offset in RuntimeConfig for "$#"
+    RuntimeConfigElementHelper eh(*rc, index());
+    ValueEvalOptimizedRefHolder tval(*rc, map->left, xsink);
     if (!*xsink) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -253,7 +263,8 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
 
     SingleArgvContextHelper argv_helper(v, xsink);
     v.clear();
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    assert(rc);
+    ValueEvalOptimizedRefHolder tval(*rc, map->left, xsink);
     if (!*xsink) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -268,15 +279,16 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
     if (*xsink)
         return false;
 
-    // set offset in thread-local data for "$#"
-    ImplicitElementHelper eh(index++);
-
     // check if value can be mapped
     ValueHolder iv(h.getValue(xsink), xsink);
-    if (*xsink)
+    if (*xsink) {
         return false;
+    }
     SingleArgvContextHelper argv_helper(iv.release(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    assert(rc);
+    // set offset in RuntimeConfig for "$#"
+    RuntimeConfigElementHelper eh(*rc, index++);
+    ValueEvalOptimizedRefHolder tval(*rc, map->left, xsink);
     if (!*xsink) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -286,14 +298,18 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
 
 bool QoreFunctionalMapOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     ValueOptionalRefHolder iv(xsink);
-    if (f->getNext(iv, xsink))
+    if (f->getNext(iv, xsink)) {
         return true;
-    if (*xsink)
+    }
+    if (*xsink) {
         return false;
+    }
 
-    ImplicitElementHelper eh(index++);
     SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    assert(rc);
+    // set offset in RuntimeConfig for "$#"
+    RuntimeConfigElementHelper eh(*rc, index++);
+    ValueEvalOptimizedRefHolder tval(*rc, map->left, xsink);
     if (!*xsink) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);

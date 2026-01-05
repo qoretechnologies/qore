@@ -66,9 +66,10 @@ const char* FindNode::getTypeName() const {
     return "find expression";
 }
 
-QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue FindNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ValueHolder rv(xsink);
-    ReferenceHolder<Context> context(new Context(nullptr, xsink, find_exp), xsink);
+    // Pass RuntimeConfig to avoid TLS lookups
+    ReferenceHolder<Context> context(new Context(rc, nullptr, xsink, find_exp), xsink);
     if (*xsink)
         return QoreValue();
 
@@ -82,8 +83,7 @@ QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
             continue;
 
         printd(4, "FindNode::eval() GOT IT: %d\n", context->pos);
-        ValueEvalOptimizedRefHolder result(exp, xsink);
-        //ValueHolder result(exp->eval(xsink), xsink);
+        ValueEvalOptimizedRefHolder result(rc, exp, xsink);
         if (*xsink) {
             return QoreValue();
         }

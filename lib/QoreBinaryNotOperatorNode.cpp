@@ -44,8 +44,8 @@ int QoreBinaryNotOperatorNode::getAsString(QoreString& str, int foff, ExceptionS
     return 0;
 }
 
-QoreValue QoreBinaryNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+QoreValue QoreBinaryNotOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder v(rc, exp, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -71,7 +71,8 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     if (!err && exp.isValue()) {
         SimpleRefHolder<QoreBinaryNotOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder v(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

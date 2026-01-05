@@ -186,7 +186,7 @@ protected:
         return true;
     }
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL void resolve(const QoreTypeInfo* typeInfo);
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool is_new = false);
@@ -430,7 +430,7 @@ protected:
     QoreValue new_args{};
     bool runtime_check = false;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     // initializes during parsing
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);

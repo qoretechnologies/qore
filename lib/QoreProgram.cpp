@@ -44,6 +44,7 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <string>
 #include <set>
@@ -1875,7 +1876,9 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
-    return priv->sb.exec(xsink);
+    // Create RuntimeConfig once at the entry point and pass it through
+    RuntimeConfig rc = rc_get_current();
+    return priv->sb.exec(rc, xsink);
 }
 
 QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
@@ -1900,7 +1903,15 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     // we assign the args to 0 below so that they will not be deleted
     fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
-    QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
+    QoreValue rv;
+    if (!*xsink) {
+        RuntimeConfig rc = rc_get_current();
+        bool needs_deref = true;
+        rv = fc->eval(rc, needs_deref, xsink);
+        if (!needs_deref) {
+            rv = rv.refSelf();
+        }
+    }
 
     // let caller delete function arguments if necessary
     fc->takeArgs();

@@ -33,11 +33,11 @@
 
 QoreString QorePopOperatorNode::pop_str("pop operator expression");
 
-QoreValue QorePopOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QorePopOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     //printd(5, "QorePopOperatorNode::evalImpl(%p, isEvent=%d)\n", exp, xsink->isEvent());
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper val(exp, xsink);
+    LValueHelper val(rc, exp, xsink);
     if (!val)
         return QoreValue();
 

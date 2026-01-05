@@ -32,8 +32,8 @@
 
 QoreString QoreIntPreIncrementOperatorNode::op_str("++ (pre-increment) operator expression");
 
-QoreValue QoreIntPreIncrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    LValueHelper n(exp, xsink);
+QoreValue QoreIntPreIncrementOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    LValueHelper n(rc, exp, xsink);
     if (!n)
         return QoreValue();
     return QoreValue(n.preIncrementBigInt("<++ (pre) operator>"));

@@ -32,10 +32,11 @@
 
 QoreString QoreRegexExtractOperatorNode::op_str("regex extract (=~ x//) operator expression");
 
-QoreValue QoreRegexExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(exp, xsink);
-    if (*xsink)
+QoreValue QoreRegexExtractOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, exp, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
 
     QoreStringNodeValueHelper str(*lh);
     return regex->extractSubstrings(*str, xsink);
@@ -59,7 +60,8 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     if (exp.isValue()) {
         SimpleRefHolder<QoreRegexMatchOperatorNode> del(this);
         ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder v(this, *xsink);
+        RuntimeConfig parse_rc = rc_get_parse_time();
+        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

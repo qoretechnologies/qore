@@ -323,7 +323,32 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
     QoreHashNode* init = nullptr;
 
     if (args && !args->empty()) {
-        ValueEvalOptimizedRefHolder a(args->get(0), xsink);
+        RuntimeConfig rc = rc_get_current();
+        ValueEvalOptimizedRefHolder a(rc, args->get(0), xsink);
+        if (*xsink)
+            return nullptr;
+
+        if (a->getType() != NT_HASH) {
+            xsink->raiseException("HASH-INIT-ERROR", "typed hash initializer value must be a hash; got type '%s' "
+                "instead", a->getTypeName());
+            return nullptr;
+        }
+
+        init = a.takeReferencedNode<QoreHashNode>();
+    }
+
+    return newComplexHashFromHash(typeInfo, init, xsink);
+}
+
+// RuntimeConfig-aware version - avoids TLS lookup
+QoreHashNode* qore_hash_private::newComplexHash(RuntimeConfig& rc, const QoreTypeInfo* typeInfo,
+        const QoreParseListNode* args, ExceptionSink* xsink) {
+    assert(!args || args->empty() || args->size() == 1);
+
+    QoreHashNode* init = nullptr;
+
+    if (args && !args->empty()) {
+        ValueEvalOptimizedRefHolder a(rc, args->get(0), xsink);
         if (*xsink)
             return nullptr;
 
@@ -576,7 +601,7 @@ QoreHashNode* QoreHashNode::hashRefSelf() const {
 }
 
 // returns a hash with the same order
-QoreValue QoreHashNode::evalImpl(bool &needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreHashNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     if (value) {
         needs_deref = false;

@@ -43,8 +43,8 @@ int QoreDeleteOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink
     return 0;
 }
 
-QoreValue QoreDeleteOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    LValueRemoveHelper lvrh(exp, xsink, true);
+QoreValue QoreDeleteOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    LValueRemoveHelper lvrh(rc, exp, xsink, true);
     if (lvrh)
         lvrh.deleteLValue();
     return QoreValue();

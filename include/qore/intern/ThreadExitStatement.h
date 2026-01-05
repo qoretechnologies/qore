@@ -37,7 +37,7 @@
 
 class ThreadExitStatement : public AbstractStatement {
 private:
-    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
         xsink->raiseThreadExit();
         return 0;
     }

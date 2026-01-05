@@ -31,10 +31,10 @@
 #include <qore/Qore.h>
 #include "qore/intern/ReturnStatement.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
-int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
-    //QORE_TRACE("ReturnStatement::execImpl()");
-    ValueEvalOptimizedRefHolder val(exp, xsink);
+int ReturnStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalOptimizedRefHolder val(rconfig, exp, xsink);
     if (!*xsink) {
         return_value = val.takeReferencedValue();
 

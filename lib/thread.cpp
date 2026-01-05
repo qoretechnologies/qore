@@ -42,6 +42,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/RuntimeConfig.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -920,8 +921,17 @@ public:
     }
 
     DLLLOCAL QoreValue exec(ExceptionSink* xsink) {
+        RuntimeConfig rc = rc_get_current();
+        return exec(rc, xsink);
+    }
+
+    DLLLOCAL QoreValue exec(RuntimeConfig& rc, ExceptionSink* xsink) {
         //printd(5, "BGThreadParams::exec() this: %p fc: %p (%s %d)\n", this, fc, fc->getTypeName(), fc->getType());
-        QoreValue rv = fc.eval(xsink);
+        bool needs_deref = true;
+        QoreValue rv = fc.eval(rc, needs_deref, xsink);
+        if (!needs_deref && rv) {
+            rv.refSelf();
+        }
         fc.discard(xsink);
         fc = QoreValue();
         return rv;
@@ -1210,6 +1220,10 @@ void thread_set_closure_parse_env(ClosureParseEnvironment* cenv) {
 
 ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
     return thread_data.get()->closure_rt_env->find(id);
+}
+
+const QoreClosureBase* thread_get_runtime_closure_env() {
+    return thread_data.get()->closure_rt_env;
 }
 
 ClosureParseEnvironment* thread_get_closure_parse_env() {
@@ -1567,6 +1581,15 @@ void update_runtime_stack_location(const QoreStackLocation* stack_loc, const Qor
     QoreAutoRWReadLocker l(thread_list.stack_lck);
     td->current_stack_location = stack_loc;
     td->runtime_loc = runtime_loc;
+}
+
+void set_thread_stack_location(const QoreStackLocation* stack_loc) {
+    // Note: caller must hold thread_list.stack_lck
+    thread_data.get()->current_stack_location = stack_loc;
+}
+
+void update_runtime_location(const QoreProgramLocation* loc) {
+    thread_data.get()->runtime_loc = loc;
 }
 
 const AbstractStatement* get_runtime_statement() {
@@ -2113,6 +2136,8 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
+    // restore runtime parse options for the previous program context
+    td->runtime_po = old_runtime_po;
 
     qore_program_private::decThreadCount(*pgm, td->tid);
 }
@@ -2131,6 +2156,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
     old_ctx = td->current_pgm_ctx;
+    old_runtime_po = td->runtime_po;
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
         "pgmid:%d new_pgm: %p new_pgmid:%d cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
@@ -2146,12 +2172,15 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // set up thread stacks
     restore = true;
     td->current_pgm = pgm;
+    // update runtime parse options for the new program context
+    td->runtime_po = pgm->getParseOptions64();
     init_tlpd = td->tpd->saveProgram(runtime, xsink); // set new td->tlpd
     td->current_pgm_ctx = this;
     save_frameCount = td->tlpd->lvstack.getFrameCount();
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
-        "init_tlpd:%d\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd
+        "init_tlpd:%d runtime_po:0x%llx\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd,
+        (long long)td->runtime_po
     );
 
     if (!td->tlpd->dbgIsAttached()) {
@@ -2799,8 +2828,10 @@ namespace {
                     if (tlpd) {
                         tlpd->dbgAttach(&xsink);
                     }
-                    // run thread expression
-                    rv = btp->exec(&xsink);
+                    // Create RuntimeConfig from current thread state (after CodeContextHelper has set up TLS)
+                    RuntimeConfig rc = rc_get_current();
+                    // run thread expression with explicit RuntimeConfig
+                    rv = btp->exec(rc, &xsink);
                     if (tlpd) {
                         // notify return value and notify thread detach to program
                         tlpd->dbgExit(nullptr, rv, &xsink);

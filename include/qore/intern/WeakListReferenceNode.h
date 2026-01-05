@@ -67,7 +67,7 @@ protected:
 
     DLLLOCAL virtual ~WeakListReferenceNode() = default;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         assert(needs_deref);
         needs_deref = false;
         return l;

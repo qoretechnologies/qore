@@ -139,7 +139,8 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     // evaluate immediately
     SimpleRefHolder<QoreParseHashNode> holder(this);
     ExceptionSink xsink;
-    ValueEvalOptimizedRefHolder rv(this, &xsink);
+    RuntimeConfig rcc = rc_get_current();
+    ValueEvalOptimizedRefHolder rv(rcc, this, &xsink);
     assert(!xsink);
     QoreValue result = rv.takeReferencedValue();
     // only use parse-time folding if we got a valid result
@@ -154,7 +155,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     return 0;
 }
 
-QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreParseHashNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
     // complex type will be added before returning if applicable
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -166,13 +167,13 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
     bool vcommon = false;
 
     for (size_t i = 0; i < keys.size(); ++i) {
-        ValueEvalOptimizedRefHolder k(keys[i], xsink);
+        ValueEvalOptimizedRefHolder k(rc, keys[i], xsink);
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();
         }
 
-        ValueEvalOptimizedRefHolder v(values[i], xsink);
+        ValueEvalOptimizedRefHolder v(rc, values[i], xsink);
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();

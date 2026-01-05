@@ -36,14 +36,16 @@ int QoreAndEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     return parseInitIntLValue(op_str.c_str(), parse_context);
 }
 
-QoreValue QoreAndEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder val(right, xsink);
-    if (*xsink)
+QoreValue QoreAndEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+    ValueEvalOptimizedRefHolder val(rc, right, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink);
-    if (!v)
+    LValueHelper v(rc, left, xsink);
+    if (!v) {
         return QoreValue();
+    }
     return v.andEqualsBigInt(val->getAsBigInt(), "<&= operator>");
 }

@@ -39,7 +39,7 @@ QoreNothingNode::~QoreNothingNode() {
    //printd(0, "QoreNothingNode::~QoreNothingNode() called this=%p\n", this);
 }
 
-QoreValue QoreNothingNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreNothingNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     assert(false);
     return QoreValue();

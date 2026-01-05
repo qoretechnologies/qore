@@ -38,7 +38,7 @@ OP_COMMON
 protected:
     const QoreTypeInfo* typeInfo;
 
-    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 

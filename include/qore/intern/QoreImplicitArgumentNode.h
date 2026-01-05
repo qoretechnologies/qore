@@ -51,7 +51,7 @@ public:
 private:
     int offset;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink *xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const;
 
     DLLLOCAL const QoreValue get() const;
 

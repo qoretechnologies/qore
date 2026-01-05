@@ -33,15 +33,15 @@
 QoreString QoreLogicalEqualsOperatorNode::logical_equals_str("logical equals operator expression");
 QoreString QoreLogicalNotEqualsOperatorNode::logical_not_equals_str("logical not equals operator expression");
 
-QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreLogicalEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     if (pfunc)
-        return (this->*pfunc)(xsink);
+        return (this->*pfunc)(rc, xsink);
 
-    ValueEvalOptimizedRefHolder l(left, xsink);
+    ValueEvalOptimizedRefHolder l(rc, left, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder r(right, xsink);
+    ValueEvalOptimizedRefHolder r(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -171,28 +171,28 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
     return ln->is_equal_soft(rn, xsink);
 }
 
-bool QoreLogicalEqualsOperatorNode::floatSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+bool QoreLogicalEqualsOperatorNode::floatSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
     if (*xsink) return false;
 
     return lh->getAsFloat() == rh->getAsFloat();
 }
 
-bool QoreLogicalEqualsOperatorNode::bigIntSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+bool QoreLogicalEqualsOperatorNode::bigIntSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBigInt() == rh->getAsBigInt();
 }
 
-bool QoreLogicalEqualsOperatorNode::boolSoftEqual(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+bool QoreLogicalEqualsOperatorNode::boolSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const {
+    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBool() == rh->getAsBool();

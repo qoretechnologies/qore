@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <cassert>
 #include <cstdio>
@@ -156,23 +157,14 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     }
 }
 
-QoreValue AbstractQoreNode::eval(ExceptionSink* xsink) const {
-    if (!needs_eval_flag)
-        return refSelf();
-
-    bool needs_deref = true;
-    QoreValue rv = evalImpl(needs_deref, xsink);
-    return !needs_deref ? rv.refSelf() : rv;
-}
-
-QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     if (!needs_eval_flag) {
         needs_deref = false;
         return this;
     }
 
     needs_deref = true;
-    QoreValue rv = evalImpl(needs_deref, xsink);
+    QoreValue rv = evalImpl(rc, needs_deref, xsink);
 
     switch (rv.getType()) {
         case NT_WEAKREF: {
@@ -476,20 +468,31 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
         case NT_SELF_CALL:
             return crlr_selfcall_copy(n.get<const SelfFunctionCallNode>(), xsink);
 
-        case NT_SELF_VARREF:
-            return n.eval(xsink);
+        case NT_SELF_VARREF: {
+            RuntimeConfig rc = rc_get_current();
+            bool needs_deref = true;
+            QoreValue rv = n.eval(rc, needs_deref, xsink);
+            return !needs_deref ? rv.refSelf() : rv;
+        }
 
         case NT_FUNCTION_CALL:
         case NT_PROGRAM_FUNC_CALL:
             return crlr_fcall_copy(n.get<const FunctionCallNode>(), xsink);
 
-        case NT_FIND:
-            return n.eval(xsink);
+        case NT_FIND: {
+            RuntimeConfig rc = rc_get_current();
+            bool needs_deref = true;
+            QoreValue rv = n.eval(rc, needs_deref, xsink);
+            return !needs_deref ? rv.refSelf() : rv;
+        }
 
         case NT_VARREF: {
             const VarRefNode* var_ref = n.get<const VarRefNode>();
             if (var_ref->getType() != VT_GLOBAL) {
-                return n.eval(xsink);
+                RuntimeConfig rc = rc_get_current();
+                bool needs_deref = true;
+                QoreValue rv = n.eval(rc, needs_deref, xsink);
+                return !needs_deref ? rv.refSelf() : rv;
             }
             break;
         }
@@ -525,7 +528,7 @@ void SimpleQoreNode::deref() {
         delete this;
 }
 
-QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue SimpleValueQoreNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
    assert(false);
    return QoreValue();
 }

@@ -126,22 +126,24 @@ void VarRefNode::resolve(const QoreTypeInfo* typeInfo) {
     }
 }
 
-QoreValue VarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue VarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     QoreValue v{};
     if (type == VT_LOCAL) {
-        v = ref.id->eval(needs_deref, xsink);
+        v = ref.id->eval(rc, needs_deref, xsink);
         //printd(5, "VarRefNode::evalImpl() this: %p lvar %p (%s) v: '%s' pgm: %p\n", this, ref.id, ref.id->getName(),
         //    v.getTypeName(), getProgram());
     } else if (type == VT_CLOSURE) {
         printd(5, "VarRefNode::evalImpl() this: %p closure var %p (%s)\n", this, ref.id, ref.id->getName());
-        ClosureVarValue *val = thread_get_runtime_closure_var(ref.id);
-        v = val->eval(needs_deref, xsink);
+        // Always use thread closure var lookup - it searches the full closure stack
+        ClosureVarValue* val = thread_get_runtime_closure_var(ref.id);
+        v = val->eval(rc, needs_deref, xsink);
     } else if (type == VT_LOCAL_TS) {
         printd(5, "VarRefNode::evalImpl() this: %p local thread-safe var %p (%s)\n", this, ref.id, ref.id->getName());
-        ClosureVarValue *val = thread_find_closure_var(ref.id->getName());
-        v = val->eval(needs_deref, xsink);
+        // Use thread closure var lookup for thread-safe locals
+        ClosureVarValue* val = thread_find_closure_var(ref.id->getName());
+        v = val->eval(rc, needs_deref, xsink);
     } else if (type == VT_IMMEDIATE)
-        v = ref.cvv->eval(needs_deref, xsink);
+        v = ref.cvv->eval(rc, needs_deref, xsink);
     else {
         assert(needs_deref);
         printd(5, "VarRefNode::evalImpl() this: %p %s var: %p (%s)\n", this,
@@ -153,7 +155,7 @@ QoreValue VarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     if (n && n->getType() == NT_REFERENCE) {
         ReferenceNode* r = reinterpret_cast<ReferenceNode*>(n);
         bool nd = true;
-        QoreValue nv = r->eval(nd, xsink);
+        QoreValue nv = r->eval(rc, nd, xsink);
         if (needs_deref)
             discard(v.getInternalNode(), xsink);
         needs_deref = nd;
@@ -489,7 +491,7 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     return err;
 }
 
-QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ReferenceHolder<> value(xsink);
 
     switch (vrn_type) {
@@ -503,15 +505,15 @@ QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
 
         case VRN_HASHDECL:
             value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))
-                ->newHash(parse_args, runtime_check, xsink);
+                ->newHash(rc, parse_args, runtime_check, xsink);
             break;
 
         case VRN_COMPLEXHASH:
-            value = qore_hash_private::newComplexHash(typeInfo, parse_args, xsink);
+            value = qore_hash_private::newComplexHash(rc, typeInfo, parse_args, xsink);
             break;
 
         case VRN_COMPLEXLIST:
-            value = qore_list_private::newComplexList(typeInfo, new_args, xsink);
+            value = qore_list_private::newComplexList(rc, typeInfo, new_args, xsink);
             break;
 
         default:

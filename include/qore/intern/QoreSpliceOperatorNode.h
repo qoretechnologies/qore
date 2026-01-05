@@ -85,7 +85,7 @@ protected:
 
     DLLLOCAL static QoreString splice_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL ~QoreSpliceOperatorNode() {
         lvalue_exp.discard(nullptr);
