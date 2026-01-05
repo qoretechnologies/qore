@@ -28,6 +28,7 @@
 %requires Util >= 1.0
 %requires(reexport) HttpServerUtil >= 1.0
 %requires Logger
+%requires AsyncSocketIo
 %requires HttpServerAsyncIo
 
 %try-module sysconf
@@ -603,6 +604,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Async I/O controller (when async mode is enabled)
         *Priv::HttpServerIoController asyncIo;
+
+        #! Global async socket I/O controller for all async operations
+        AsyncSocketIo::AsyncSocketIoController globalAsyncCtrl(False);
 
         #! Cached HTTP date header value
         static string cached_date_header;
@@ -1431,16 +1435,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Check if this is an HTTP/2 connection
             if (cx."header-info".http2) {
                 int stream_id = cx."header-info".stream_id;
-                # Send HTTP/2 response using poll operation
+                # Send HTTP/2 response using global async I/O controller
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, status_code, hdr,
                     response_msg ?? chunked_msg);
-                while (True) {
-                    *hash<SocketPollInfo> info = op.continuePoll();
-                    if (!info) {
-                        break;
-                    }
-                    Socket::poll((info,), 10s);
-                }
+                execHttp2PollOperation(s, op);
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
                     response_msg ?? chunked_msg);
@@ -2214,15 +2212,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         listener.log("cid %d: HTTP/2 WebSocket - sending 200 OK on stream %d", cx.id, stream_id);
 
                         try {
-                            # Send 200 OK using HTTP/2 CONNECT response (keeps stream open)
+                            # Send 200 OK using HTTP/2 CONNECT response via global async I/O controller
                             AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id, 200, rv.hdr);
-                            while (True) {
-                                *hash<SocketPollInfo> info = op.continuePoll();
-                                if (!info) {
-                                    break;
-                                }
-                                Socket::poll((info,), 10s);
-                            }
+                            execHttp2PollOperation(s, op);
                             listener.log("cid %d: HTTP/2 CONNECT response sent", cx.id);
 
                             # Set the active stream so socket read/write use HTTP/2 DATA frames
@@ -2271,6 +2263,30 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         "shutting down", cx.id, cx.handler_name);
                 }
             }
+        }
+    }
+
+    #! Executes an HTTP/2 poll operation using the global async I/O controller
+    /** @par Internal Method
+        This method is for internal use only and should not be called directly by user code.
+
+        This method sends an HTTP/2 response using the shared AsyncSocketIoController for efficient
+        I/O multiplexing. It blocks until the response is fully sent, but the underlying I/O is
+        handled asynchronously by the controller's I/O thread.
+
+        @param s the socket to send on
+        @param op the poll operation to execute
+
+        @throw any exception raised during the I/O operation
+    */
+    execHttp2PollOperation(Socket s, AbstractPollOperation op) {
+        hash<SocketPollResultInfo> result = globalAsyncCtrl.exec(<SocketPollOperationInfo>{
+            "sock": s,
+            "spop": op,
+            "to": 30s,
+        });
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
         }
     }
 
@@ -2334,21 +2350,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 if (final_body && !hdr."Content-Length") {
                     hdr."Content-Length" = string(final_body.size());
                 }
-                # Send HTTP/2 response using poll operation
-                listener.log("doResponse: HTTP/2 sync send starting stream=%d code=%d body_size=%d",
+                # Send HTTP/2 response using global async I/O controller
+                listener.log("doResponse: HTTP/2 send starting stream=%d code=%d body_size=%d",
                     stream_id, rv."code", final_body ? final_body.size() : 0);
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
                     final_body);
-                int poll_count = 0;
-                while (True) {
-                    *hash<SocketPollInfo> info = op.continuePoll();
-                    if (!info) {
-                        listener.log("doResponse: HTTP/2 sync send complete after %d polls", poll_count);
-                        break;
-                    }
-                    ++poll_count;
-                    Socket::poll((info,), 10s);
-                }
+                execHttp2PollOperation(s, op);
+                listener.log("doResponse: HTTP/2 send complete");
             } else if (!chunked) {
                 # HTTP/1.x: send a normal monolithic response
                 s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
@@ -3559,16 +3567,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (response.body && !hdr."Content-Length") {
                     hdr."Content-Length" = string(response.body.size());
                 }
-                # Send HTTP/2 response using poll operation
+                # Send HTTP/2 response using global async I/O controller
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
                     response.body);
-                while (True) {
-                    *hash<SocketPollInfo> info = op.continuePoll();
-                    if (!info) {
-                        break;
-                    }
-                    Socket::poll((info,), 10s);
-                }
+                serv.execHttp2PollOperation(s, op);
             } else {
                 # Send HTTP/1.x response (chunked data has already been read into memory in async_response)
                 s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
@@ -4750,40 +4752,20 @@ class HttpServerIoController {
                         if (cinfo.response.body && !hdr."Content-Length") {
                             hdr."Content-Length" = string(cinfo.response.body.size());
                         }
-                        server.log("HTTP/2 sync response: key=%y stream=%d code=%d Content-Length=%y",
-                            key, stream_id, cinfo.response.code, hdr."Content-Length");
-                        try {
-                            # Use synchronous poll loop for HTTP/2 response - async poll returns immediately
-                            # without actually sending data
-                            AbstractPollOperation spop = cinfo.sock.startPollSendHttp2Response(
-                                stream_id,
-                                cinfo.response.code,
-                                hdr,
-                                cinfo.response.body,
-                            );
-                            int poll_count = 0;
-                            while (True) {
-                                *hash<SocketPollInfo> poll_info = spop.continuePoll();
-                                if (!poll_info) {
-                                    server.log("HTTP/2: sync send complete after %d polls key=%y",
-                                        poll_count, key);
-                                    break;
-                                }
-                                ++poll_count;
-                                Socket::poll((poll_info,), 10s);
-                            }
-                        } catch (hash<ExceptionInfo> ex) {
-                            # Log error at ERROR level for visibility
-                            log(LoggerLevel::ERROR, "HTTP/2 response failed for key %y stream %d: %s: %s",
-                                key, stream_id, ex.err, ex.desc);
-                            rethrow;
-                        }
+                        server.log("HTTP/2 async response: key=%y stream=%d code=%d Content-Length=%y body_type=%s",
+                            key, stream_id, cinfo.response.code, hdr."Content-Length",
+                            cinfo.response.body.type());
+                        # Create HTTP/2 response poll operation - use async pattern like HTTP/1.x
+                        # Store in cinfo.spop so main I/O loop handles it asynchronously
+                        cinfo.spop = connections{key}.spop = cinfo.sock.startPollSendHttp2Response(
+                            stream_id,
+                            cinfo.response.code,
+                            hdr,
+                            cinfo.response.body,
+                        );
+                        server.log("HTTP/2 spop created: key=%y goal=%y", key, cinfo.spop.getGoal());
                         # Mark this as an HTTP/2 connection for proper keep-alive handling
-                        # Update both the local copy and the hash entry
                         cinfo.is_http2 = connections{key}.is_http2 = True;
-                        # Response is complete - call handleSendComplete directly
-                        handleSendComplete(key, cinfo);
-                        return NOTHING;
                     } else if (cinfo.response.chunked) {
                         # Chunked responses need special formatting
                         binary data = formatChunkedHttpResponse(cinfo.response);
@@ -4805,22 +4787,32 @@ class HttpServerIoController {
 
         # Continue the poll operation in a loop while data is available
         # This handles cases where data is already buffered
-        server.log("getConnectionPollInfo: key=%y state=%y calling continuePoll", key, cinfo.state);
+        server.log("getConnectionPollInfo: key=%y state=%y spop_goal=%y calling continuePoll",
+            key, cinfo.state, cinfo.spop.getGoal());
         auto poll_result;
         while (True) {
             poll_result = cinfo.spop.continuePoll();
-            server.log("getConnectionPollInfo: key=%y continuePoll returned %y",
-                key, poll_result.val() ? "poll_info" : "NOTHING");
+            server.log("getConnectionPollInfo: key=%y continuePoll returned %y (events=%y)",
+                key, poll_result.val() ? "poll_info" : "NOTHING", poll_result.events);
 
             if (!poll_result) {
                 # Operation completed
-                server.log("getConnectionPollInfo: key=%y complete, calling handleConnectionComplete", key);
+                server.log("getConnectionPollInfo: key=%y spop_goal=%y complete, calling handleConnectionComplete",
+                    key, cinfo.spop.getGoal());
                 handleConnectionComplete(key, cinfo);
                 return NOTHING;
             }
 
             # Check if header is complete
             if (poll_result.hasKey("hdr")) {
+                break;
+            }
+
+            # For send operations (POLLOUT), don't check isDataAvailable - that's for reading
+            # Break and let the main poll loop handle the write
+            if (poll_result.events & SOCK_POLLOUT) {
+                server.log("getConnectionPollInfo: key=%y send needs poll for events=%y (state=%y is_http2=%y)",
+                    key, poll_result.events, cinfo.state, cinfo.is_http2);
                 break;
             }
 
@@ -4836,7 +4828,8 @@ class HttpServerIoController {
             handleConnectionComplete(key, cinfo);
             return NOTHING;
         }
-        server.log("getConnectionPollInfo: key=%y returning poll_info for poll", key);
+        server.log("getConnectionPollInfo: key=%y returning poll_info for poll, events=%y",
+            key, poll_result.events);
 
         # Check if HTTP header read is complete (returns hash with 'hdr' key)
         # This only applies to read_header state
@@ -4952,6 +4945,8 @@ class HttpServerIoController {
 
             case "sending_response":
                 # Response sent - check if we should keep alive or close
+                server.log("handleConnectionComplete: key=%y sending_response complete, is_http2=%y",
+                    key, cinfo.is_http2);
                 handleSendComplete(key, cinfo);
                 break;
 

@@ -39,10 +39,18 @@ public hashdecl SocketPollOperationInfo {
 
     #! Free-form data to be returned when the operation completes
     *hash<auto> other;
+
+    #! Optional result Queue; if provided, results will be pushed to this Queue instead of a new one
+    /** This allows multiple operations to share a single result Queue for easier coordination
+    */
+    *Queue resultQueue;
 }
 
 #! Socket poll result
 public hashdecl SocketPollResultInfo {
+    #! The socket that completed the operation
+    Socket sock;
+
     #! The poll operation that completed
     AbstractPollOperation spop;
 
@@ -203,7 +211,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced
 
-        @return Queue a Queue that will have the result of the operation pushed to it
+        @return Queue a Queue that will have the result of the operation pushed to it; if \a info.resultQueue is
+        provided, that Queue is returned
 
         @throw CONTROLLER-ADD-ERROR invalid or incomplete data in \a info; a different operation on this socket is
         already in progress
@@ -220,7 +229,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         hash<PollInfo> cinfo;
         {
             AutoLock al(m);
-            if (*hash<PollInfo> info = cache{uh}) {
+            if (*hash<PollInfo> existing = cache{uh}) {
                 if (replace) {
                     cancelIntern(uh);
                 } else {
@@ -233,6 +242,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "spop": info.spop,
                 "to": info.to,
                 "other": info.other,
+                "q": info.resultQueue ?? new Queue(),
             };
             if (!tid) {
                 startIntern();
@@ -391,6 +401,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 # operation successful
                                 remove cache{key};
                                 cinfo.q.push(<SocketPollResultInfo>{
+                                    "sock": cinfo.sock,
                                     "spop": cinfo.spop,
                                     "other": cinfo.other,
                                 });
@@ -406,6 +417,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             # poll operation failed with an exception
                             remove cache{key};
                             cinfo.q.push(<SocketPollResultInfo>{
+                                "sock": cinfo.sock,
                                 "spop": cinfo.spop,
                                 "ex": ex,
                                 "other": cinfo.other,
@@ -488,6 +500,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
         # push cancelation message on the queue
         cinfo.q.push(<SocketPollResultInfo>{
+            "sock": cinfo.sock,
             "spop": cinfo.spop,
             "canceled": True,
             "other": cinfo.other,

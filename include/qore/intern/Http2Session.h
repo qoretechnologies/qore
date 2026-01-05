@@ -242,11 +242,17 @@ public:
         return local_settings.enable_connect_protocol != 0;
     }
 
-    //! Send all pending data
-    /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
-        @return 0 on success, -1 on error
+    //! Send all pending data (async, non-blocking)
+    /** @param timeout_ms Timeout in milliseconds (ignored, always non-blocking)
+        @return 0 on success, -1 if need to poll for POLLOUT
     */
     DLLLOCAL int sendPendingData(int timeout_ms, ExceptionSink* xsink);
+
+    //! Send all pending data (blocking with timeout to ensure flush)
+    /** @param timeout_ms Timeout in milliseconds
+        @return 0 on success, -1 if still have data to send
+    */
+    DLLLOCAL int sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink);
 
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
@@ -278,11 +284,20 @@ public:
     //! Returns true if the session wants to write
     DLLLOCAL bool wantWrite() const;
 
+    //! Returns true if there is data in the send buffer waiting to be sent
+    /** This is separate from wantWrite() because nghttp2_session_want_write()
+        only accounts for data inside nghttp2's internal buffers, not our send_buffer.
+    */
+    DLLLOCAL bool hasPendingData() const { return !send_buffer.empty(); }
+
     //! Get current settings
     DLLLOCAL Http2Settings getSettings() const { return local_settings; }
 
     //! Get remote peer settings
     DLLLOCAL Http2Settings getRemoteSettings() const { return remote_settings; }
+
+    //! Get the underlying nghttp2 session handle
+    DLLLOCAL nghttp2_session* getSession() const { return session; }
 
 private:
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
