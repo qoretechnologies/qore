@@ -161,7 +161,8 @@ public:
     DLLEXPORT virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);
 
     // the following function must be defined, but is never called
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    // Note: must be DLLEXPORT because external modules can derive from this class
+    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! Increments the weak reference count
     DLLLOCAL void weakRef() {
