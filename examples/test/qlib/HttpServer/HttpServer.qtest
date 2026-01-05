@@ -98,6 +98,38 @@ class TestWsHandler inherits WebSocketHandler {
     }
 }
 
+# WebSocket handler with token authentication for testing 401 rejection
+class AuthenticatingWsHandler inherits WebSocketHandler {
+    public {
+        const ValidToken = "valid-test-token";
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    # Authenticate request - check for valid token in Authorization header
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        # Check for token in Authorization header (Bearer token)
+        *string auth = hdr.authorization;
+        *string token;
+        if (auth && auth.lwr().startsWith("bearer ")) {
+            token = auth.substr(7);
+        }
+        if (!token || token != ValidToken) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "body": "Unauthorized: Invalid or missing token",
+            };
+        }
+        return NOTHING;  # Authentication successful
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestWsConnection(self);
+    }
+}
+
 public class HttpServerTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -204,6 +236,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
+        addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
+        addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
         addTestCase("async mode persistent connection close", \asyncModePersistentConnectionCloseTest());
@@ -619,6 +654,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeHttpsTest() {
+        # Verify the async I/O controller is running
+        assertTrue(mAsyncServer.getGlobalAsyncCtrl().running(), "globalAsyncCtrl should be running");
+
+        # Debug: check listener SSL detection
+        hash<auto> info = mAsyncServer.getGlobalAsyncCtrl().getInfo();
+        if (m_options.verbose > 2) {
+            printf("DEBUG: globalAsyncCtrl info: %N\n", info);
+        }
+
         # Test HTTPS connections with async mode
         HTTPClient client({
             "url": asyncSslUrl,
@@ -747,6 +791,175 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world", receivedMsg);
+    }
+
+    asyncModeWebSocketSslTest() {
+        # Test WebSocket protocol upgrade with async mode over SSL (wss://)
+        # This test uses HTTP/2 by default (via ALPN)
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://)
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're using HTTP/2 (default behavior)
+        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketSslHttp1Test() {
+        # Test WebSocket protocol upgrade with async mode over SSL using HTTP/1.1
+        # This explicitly disables HTTP/2 to test the HTTP/1.1 upgrade path
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://) with HTTP/2 disabled
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "1.1",  # Force HTTP/1.1 - disables HTTP/2 ALPN negotiation
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're NOT using HTTP/2
+        assertFalse(wsc.isHttp2(), "WebSocket should use HTTP/1.1 when HTTP/2 is disabled");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl-http1", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl-http1", receivedMsg);
+    }
+
+    asyncModeWebSocket401ThenSuccessTest() {
+        # Test WebSocket connection rejection with 401 followed by successful connection
+        # This tests the scenario where a wss:// connection is rejected, then another succeeds
+        # Uses HTTP/2 via ALPN (default for wss://)
+
+        # Create a separate async server with authenticating WebSocket handler
+        Logger authLogger("auth-ws-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            authLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> auth_opts = <HttpServerOptionInfo>{
+            "logger": authLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer authServer(auth_opts);
+        on_exit authServer.stop();
+
+        # Add authenticating WebSocket handler
+        AuthenticatingWsHandler authWsHandler({"logger": authLogger});
+        authServer.setHandler("auth-ws", "/ws", NOTHING, authWsHandler);
+
+        # Add HTTPS listener
+        int authSslPort = authServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+
+        # Wait for async I/O to start
+        sleep(100ms);
+
+        # First attempt: Connect WITHOUT valid token - should get 401
+        string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
+        bool gotRejection = False;
+        try {
+            WebSocketClient wscBad(sub (*data msg) {}, {
+                "url": wssUrlNoToken,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+            });
+            wscBad.connect();
+            # If we get here, connection succeeded when it shouldn't have
+            wscBad.disconnect();
+            assertFalse(True, "Connection without token should have been rejected with 401");
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - should get an error due to 401 rejection
+            # HTTP/2 WebSocket uses CONNECT method which gives HTTP2-CONNECT-ERROR on rejection
+            gotRejection = True;
+            if (m_options.verbose > 2) {
+                printf("Got expected error on 401 rejection: %s: %s\n", ex.err, ex.desc);
+            }
+            # Verify the error mentions 401 or is a WebSocket/HTTP2 error
+            assertTrue(ex.desc.regex("401") || ex.desc.regex("[Uu]nauthorized") ||
+                ex.err == "WEBSOCKET-ERROR" || ex.err == "HTTP-CLIENT-RECEIVE-ERROR" ||
+                ex.err == "HTTP2-CONNECT-ERROR",
+                sprintf("Error should be related to 401 rejection, got: %s: %s", ex.err, ex.desc));
+        }
+        assertTrue(gotRejection, "First connection without token should be rejected");
+
+        # Second attempt: Connect WITH valid token - should succeed
+        Counter msgReceived(1);
+        string receivedMsg;
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        string wssUrl = "wss://localhost:" + authSslPort + "/ws";
+        WebSocketClient wscGood(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+        });
+        wscGood.connect({
+            "hdr": {
+                "Authorization": "Bearer " + AuthenticatingWsHandler::ValidToken,
+            },
+        });
+        on_exit wscGood.disconnect();
+
+        # Verify connection is using HTTP/2
+        assertTrue(wscGood.isHttp2(), "WebSocket with valid token should use HTTP/2 over SSL");
+
+        # Send a message and verify echo
+        wscGood.send("authenticated-message");
+        assertEq(0, msgReceived.waitForZero(5s), "Should receive echo message");
+        assertEq("ECHO:authenticated-message", receivedMsg);
     }
 
     asyncModePersistentHandlerTest() {

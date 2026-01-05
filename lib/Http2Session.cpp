@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,7 +37,15 @@
 #include "qore/intern/qore_socket_private.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cstring>
+
+// nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
+// Use the new API when available for better cross-platform compatibility
+#include <nghttp2/nghttp2ver.h>
+#if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
+#define QORE_USE_NGHTTP2_MEM_SEND2 1
+#endif
 
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
@@ -134,7 +142,8 @@ int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
             nghttp2_strerror(rv));
         return -1;
     }
-    return sendPendingData(-1, xsink);
+    // Use blocking version to ensure preface is sent completely
+    return sendPendingDataBlocking(-1, xsink);
 }
 
 int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* xsink) {
@@ -468,9 +477,12 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit response: %s",
             nghttp2_strerror(rv));
+        printd(5, "submitResponse() FAILED: %s\n", nghttp2_strerror(rv));
         return -1;
     }
 
+    printd(5, "submitResponse() SUCCESS: stream_id=%d want_write=%d want_read=%d\n",
+        stream_id, nghttp2_session_want_write(session), nghttp2_session_want_read(session));
     return 0;
 }
 
@@ -614,15 +626,140 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 }
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
-    printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d\n",
-        nghttp2_session_want_write(session), is_server, timeout_ms);
+    printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d send_buffer.size=%zu\n",
+        nghttp2_session_want_write(session), is_server, timeout_ms, send_buffer.size());
     // First, collect data from nghttp2
+    size_t total_collected = 0;
     while (nghttp2_session_want_write(session)) {
         const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+        nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
+#else
         ssize_t len = nghttp2_session_mem_send(session, &data);
-        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", len);
+#endif
+        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
         if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
             xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
+                nghttp2_strerror(static_cast<int>(len)));
+            return -1;
+        }
+        if (len == 0) {
+            break;
+        }
+        send_buffer.insert(send_buffer.end(), data, data + len);
+        total_collected += len;
+    }
+    printd(5, "sendPendingData() collected %zu bytes from nghttp2, send_buffer.size=%zu\n",
+        total_collected, send_buffer.size());
+
+    // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
+    if (!send_buffer.empty()) {
+        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", send_buffer.size(), sock->ssl);
+
+        // Always use non-blocking mode for async I/O
+        OptionalNonBlockingHelper nbh(*sock, true, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        // Loop until buffer is empty or we need to poll
+        while (!send_buffer.empty()) {
+            ssize_t rc;
+            if (sock->ssl) {
+                // Use doNonBlockingIo for proper async SSL I/O
+                // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
+                size_t real_io = 0;
+                printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", send_buffer.size());
+                rc = sock->ssl->doNonBlockingIo(xsink, "sendPendingData",
+                    const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data())),
+                    send_buffer.size(), SslAction::WRITE, real_io);
+                printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
+                if (*xsink) {
+                    return -1;
+                }
+
+                // Erase sent data immediately (even if we need to poll after)
+                if (real_io > 0) {
+                    send_buffer.erase(send_buffer.begin(), send_buffer.begin() + real_io);
+                    printd(5, "sendPendingData() erased %zu bytes, remaining=%zu\n", real_io, send_buffer.size());
+                }
+
+                if (!rc) {
+                    // Data was written successfully and SSL doesn't need to poll - continue loop
+                    continue;
+                }
+                if (rc == SOCK_POLLOUT || rc == SOCK_POLLIN) {
+                    // SSL needs to wait for socket - return the actual poll direction
+                    // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
+                    printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
+                        rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size());
+                    return rc;  // Return actual poll direction needed
+                }
+                // rc < 0 but no exception - shouldn't happen
+                printd(5, "sendPendingData() SSL unexpected: rc=%zd (breaking)\n", rc);
+                break;
+            } else {
+                // Non-SSL: use regular send
+                rc = ::send(sock->sock, send_buffer.data(), send_buffer.size(), 0);
+                printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
+                if (rc >= 0) {
+                    // Erase sent data immediately
+                    if (rc > 0) {
+                        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + rc);
+                    }
+                    continue;
+                }
+                sock_get_error();
+                if (errno == EINTR) {
+                    continue;
+                }
+                if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+                    || errno == EWOULDBLOCK
+#endif
+                ) {
+                    // Would block - signal poll needed
+                    printd(5, "sendPendingData() socket would block, remaining=%zu\n", send_buffer.size());
+                    return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
+                }
+                xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
+                return -1;
+            }
+        }
+
+        printd(5, "sendPendingData() all data sent, buffer empty\n");
+    } else {
+        printd(5, "sendPendingData() no data to send\n");
+    }
+
+    printd(5, "sendPendingData() complete, want_write=%d send_buffer.size=%zu\n",
+        nghttp2_session_want_write(session), send_buffer.size());
+    return 0;
+}
+
+int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
+    printd(5, "sendPendingDataBlocking() want_write=%d send_buffer.size=%zu timeout_ms=%d\n",
+        nghttp2_session_want_write(session), send_buffer.size(), timeout_ms);
+
+    // First, collect any additional data from nghttp2
+    while (nghttp2_session_want_write(session)) {
+        const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+        nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
+#else
+        ssize_t len = nghttp2_session_mem_send(session, &data);
+#endif
+        printd(5, "sendPendingDataBlocking() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
+        if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
+            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
                 nghttp2_strerror(static_cast<int>(len)));
             return -1;
         }
@@ -632,40 +769,56 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         send_buffer.insert(send_buffer.end(), data, data + len);
     }
 
-    // Send buffered data
-    printd(5, "sendPendingData() send_buffer.size=%zu\n", send_buffer.size());
+    // Send buffered data using blocking I/O with timeout
     if (!send_buffer.empty()) {
-        // CRITICAL: Pass bypass_h2=true to send raw HTTP/2 frames directly to the socket,
-        // bypassing the HTTP/2 DATA frame path which would cause infinite recursion
-        int rc = sock->send(xsink, "Http2Session", "sendPendingData",
-            send_buffer.data(), send_buffer.size(), timeout_ms, QORE_SOURCE_SOCKET,
-            true);  // bypass_h2=true
-        if (rc < 0) {
+        printd(5, "sendPendingDataBlocking() sending %zu bytes with blocking timeout=%d\n",
+            send_buffer.size(), timeout_ms);
+
+        int64 total_sent = 0;
+        ssize_t rc = sock->sendIntern(xsink, "Http2Session", "sendPendingDataBlocking",
+            reinterpret_cast<const char*>(send_buffer.data()), send_buffer.size(),
+            timeout_ms, total_sent);
+
+        printd(5, "sendPendingDataBlocking() sendIntern returned rc=%zd total_sent=%" PRId64 "\n", rc, total_sent);
+
+        if (total_sent > 0) {
+            send_buffer.erase(send_buffer.begin(), send_buffer.begin() + total_sent);
+        }
+
+        if (!send_buffer.empty()) {
+            printd(5, "sendPendingDataBlocking() buffer not empty, remaining=%zu\n", send_buffer.size());
+            return -1;  // Still have data to send
+        }
+
+        if (*xsink) {
             return -1;
         }
-        // Clear buffer after sending
-        send_buffer.clear();
     }
 
+    printd(5, "sendPendingDataBlocking() complete, want_write=%d send_buffer.size=%zu\n",
+        nghttp2_session_want_write(session), send_buffer.size());
     return 0;
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     char* buf;
+    printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
     // Use suppress_exception=true to avoid exception on timeout
     ssize_t len = sock->brecv(xsink, "receiveData", buf, 16384, 0, timeout_ms, false, true);
-    printd(5, "receiveData() brecv len=%zd isServer=%d\n", len, is_server);
+    printd(5, "receiveData() brecv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
     if (len < 0) {
         // Check for timeout (QSE_TIMEOUT = -3)
         if (len == QSE_TIMEOUT) {
+            printd(5, "receiveData() timeout (no data)\n");
             return 0;  // Not an error, just no data available
         }
+        printd(5, "receiveData() error len=%zd\n", len);
         return -1;
     }
     if (len == 0) {
-        // This could be SSL_ERROR_ZERO_RETURN (clean shutdown) or just no data
-        // For HTTP/2, we'll treat this as "no data available" rather than fatal
-        return 0;  // Not fatal for HTTP/2, just no data
+        // EOF received - connection was closed by peer
+        printd(5, "receiveData() len=0 (connection closed by peer)\n");
+        return 1;  // Connection closed - distinct from timeout (0)
     }
 
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
@@ -701,12 +854,20 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 void Http2Session::markStreamComplete(int32_t stream_id) {
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
-        // For CONNECT streams, we need to keep the stream in the map so we can respond
+        // Prevent duplicate entries in completed_streams
+        if (it->second->marked_complete) {
+            printd(5, "markStreamComplete(%d) already marked complete, skipping\n", stream_id);
+            return;
+        }
+        it->second->marked_complete = true;
+
+        // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
+        // For client-side sessions, we also keep the stream in the map so the caller can access it
         // Create a copy for completed_streams instead of moving
-        if (it->second->is_connect) {
+        if (it->second->is_connect || !is_server) {
             auto copy = std::make_unique<Http2StreamInfo>(*it->second);
             completed_streams.push(std::move(copy));
-            // Keep the original in streams for submitConnectResponse to find
+            // Keep the original in streams for the caller to find
         } else {
             completed_streams.push(std::move(it->second));
             streams.erase(it);
@@ -747,8 +908,8 @@ ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data
 int Http2Session::onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
-    printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d\n",
-        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server);
+    printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d fd=%d\n",
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server, h2->sock->sock);
 
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
@@ -776,11 +937,17 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
         }
 
         case NGHTTP2_DATA:
+            printd(5, "onFrameRecvCallback DATA: stream_id=%d flags=%d END_STREAM=%d isServer=%d\n",
+                frame->hd.stream_id, frame->hd.flags,
+                (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) != 0, h2->is_server);
             if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
                 Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
+                printd(5, "onFrameRecvCallback DATA END_STREAM: stream=%p headers_complete=%d\n",
+                    stream, stream ? stream->headers_complete : -1);
                 if (stream) {
                     stream->body_complete = true;
                     if (stream->headers_complete) {
+                        printd(5, "onFrameRecvCallback: calling markStreamComplete(%d)\n", frame->hd.stream_id);
                         h2->markStreamComplete(frame->hd.stream_id);
                     }
                 }

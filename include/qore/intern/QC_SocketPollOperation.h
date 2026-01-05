@@ -427,7 +427,8 @@ constexpr int H2S_RECV_PREFACE = 2;
 constexpr int H2S_READING = 3;
 constexpr int H2S_REQUEST_READY = 4;
 constexpr int H2S_SENDING = 5;
-constexpr int H2S_SENT = 6;
+constexpr int H2S_FLUSHING = 6;  // Poll for POLLOUT to ensure data is flushed
+constexpr int H2S_SENT = 7;
 
 //! Poll operation for reading HTTP/2 requests on a server connection
 /** This poll operation handles HTTP/2 server-side request reading:
@@ -541,6 +542,7 @@ public:
         switch (h2_state) {
             case H2S_NONE: return "none";
             case H2S_SENDING: return "sending";
+            case H2S_FLUSHING: return "flushing";
             case H2S_SENT: return "sent";
             default: return "unknown";
         }

@@ -1096,19 +1096,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     ON_BLOCK_EXIT(module_load_clear, feature);
 
     QoreParseCountContextHelper pcch;
-    // parse options for the module
-    int64 parseOptions = USER_MOD_PO;
-    // add in parse options from the current program, if any, disabling style and types options already set with
-    // USER_MOD_PO
-    if (pgm) {
-        parseOptions |= (pgm->getParseOptions64() & ~(PO_FREE_OPTIONS | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS));
-    }
 
-    QoreString modulePath(path);
-    modulePath += QORE_DIR_SEP_STR;
-    modulePath += feature;
-    modulePath += ".qm";
-
+    // Find the best program to inherit options from
     QoreProgram* p = pgm ? pgm : path_pgm;
     if (!p) {
         p = mpgm;
@@ -1116,6 +1105,26 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             p = getProgram();
         }
     }
+
+    // parse options for the module
+    int64 parseOptions = USER_MOD_PO;
+    // add in parse options from the current program, if any, disabling style and types options already set with
+    // USER_MOD_PO
+    if (p) {
+        int64 parent_po = p->getParseOptions64();
+        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
+        parseOptions |= (parent_po & ~(PO_FREE_OPTIONS | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG));
+        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
+        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
+            parseOptions |= PO_ENABLE_DEBUG;
+        }
+    }
+
+    QoreString modulePath(path);
+    modulePath += QORE_DIR_SEP_STR;
+    modulePath += feature;
+    modulePath += ".qm";
+
     const char* td = p ? p->parseGetScriptDir() : nullptr;
 
     if (mpgm) {
@@ -1436,14 +1445,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     QoreParseCountContextHelper pcch;
 
-    // parse options for the module
-    int64 po = USER_MOD_PO;
-    // add in parse options from the current program, if any, disabling style and types options already set with
-    // USER_MOD_PO
-    if (tpgm) {
-        po |= (tpgm->getParseOptions64() & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_NO_GLOBAL_VARS));
-    }
-
+    // Find the best program to inherit options from
     QoreProgram* p = tpgm ? tpgm : path_pgm;
     if (!p) {
         p = mpgm;
@@ -1451,6 +1453,21 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
             p = getProgram();
         }
     }
+
+    // parse options for the module
+    int64 po = USER_MOD_PO;
+    // add in parse options from the current program, if any, disabling style and types options already set with
+    // USER_MOD_PO
+    if (p) {
+        int64 parent_po = p->getParseOptions64();
+        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
+        po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_NO_GLOBAL_VARS|PO_ENABLE_DEBUG));
+        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
+        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
+            po |= PO_ENABLE_DEBUG;
+        }
+    }
+
     const char* td = p ? p->parseGetScriptDir() : nullptr;
 
     if (mpgm) {
@@ -1521,12 +1538,27 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     QoreParseCountContextHelper pcch;
 
+    // Find the best program to inherit options from
+    QoreProgram* p = tpgm;
+    if (!p) {
+        p = mpgm;
+        if (!p) {
+            p = getProgram();
+        }
+    }
+
     // parse options for the module
     int64 po = USER_MOD_PO;
     // add in parse options from the current program, if any, disabling style and types options already set with
     // USER_MOD_PO
-    if (tpgm) {
-        po |= (tpgm->getParseOptions64() & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES));
+    if (p) {
+        int64 parent_po = p->getParseOptions64();
+        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
+        po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_ENABLE_DEBUG));
+        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
+        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
+            po |= PO_ENABLE_DEBUG;
+        }
     }
 
     if (mpgm) {

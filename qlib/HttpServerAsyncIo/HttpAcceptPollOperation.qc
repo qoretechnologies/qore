@@ -143,8 +143,14 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
             switch (state) {
                 case STATE_ACCEPTING: {
                     # Accept complete - get the client socket
-                    client_sock = spop.getOutput();
-                    @assert(client_sock, "accept must produce client socket");
+                    # Note: getOutput() may return NOTHING if the listener was closed during accept
+                    *Socket sock = spop.getOutput();
+                    if (!sock) {
+                        # Listener closed - operation aborted
+                        state = STATE_COMPLETE;
+                        return NOTHING;
+                    }
+                    client_sock = sock;
                     @assert(client_sock.isOpen(), "accepted socket must be open");
                     # Set TCP_NODELAY to ensure responses are sent immediately
                     client_sock.setNoDelay(True);
