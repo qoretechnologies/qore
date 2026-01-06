@@ -442,6 +442,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       references; the TreeMap class now supports deterministic garbage collection
       (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
     - fixed a potential crash when raising parse warnings with no associated @ref Qore::Program "Program" object
+    - fixed a bug where empty hash and list literals (\c {} and \c ()) were not accepted as function arguments
+      for complex hash and list types (e.g. \c hash<string,X> or \c list<X>) at runtime, even though assignment
+      to typed variables worked correctly
+      (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
