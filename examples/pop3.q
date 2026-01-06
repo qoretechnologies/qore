@@ -27,10 +27,7 @@
     * 2012-06-23 v1.0: simple example program using the Pop3Client user module to retrieve emails from the command line from a POP3 server
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %exec-class pop3
 

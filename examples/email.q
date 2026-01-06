@@ -28,10 +28,7 @@
     * 1.0: simple example program using the SmtpClient user module to send emails from the command line
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %exec-class mail
 

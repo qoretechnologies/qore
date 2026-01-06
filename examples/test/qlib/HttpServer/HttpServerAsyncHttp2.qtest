@@ -30,10 +30,7 @@
     was blocked in a synchronous poll loop.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm

@@ -310,10 +310,10 @@ public class SmtpClient {
         bool nosend = False;
 
         # optional info log closure
-        *code log_info;
+        *code<nothing(string)> log_info;
 
         # optional debug log closure
-        *code log_debug;
+        *code<nothing(string)> log_debug;
 
         # tls flag (ie \c "STARTTLS" flag; ie application layer security)
         bool tls = False;

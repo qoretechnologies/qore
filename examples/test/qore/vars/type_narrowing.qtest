@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../../qlib/QUnit.qm
 
@@ -1054,7 +1051,6 @@ sub test() {
     autoNoNarrowingBasicTest() {
         # With auto!, the variable should not be narrowed (same as auto)
         string code = "%new-style
-%require-types
 sub test() {
     auto! h = {\"a\": 1};  # Initially a hash
     h = \"string value\";   # Works - pure auto doesn't narrow
@@ -1074,7 +1070,6 @@ sub test() {
         # auto! works the same as auto for pure auto type
         # Note: hash<auto> still narrows - the ! is for pure auto only
         string code = "%new-style
-%require-types
 sub test() {
     auto! data = {\"key\": \"value\"};
     data = 12345;  # Works - pure auto doesn't narrow
@@ -1088,7 +1083,6 @@ sub test() {
 
         # Note: pure auto (without !) also works - it doesn't narrow
         string code_also_works = "%new-style
-%require-types
 sub test() {
     auto data = {\"key\": \"value\"};
     data = 12345;  # Also works - pure auto doesn't narrow
@@ -1104,7 +1098,6 @@ sub test() {
     # auto! syntax is accepted for list initialization
     autoNoNarrowingListTest() {
         string code = "%new-style
-%require-types
 sub test() {
     auto! data = (1, 2, 3);
     data = \"now a string\";  # Works - pure auto doesn't narrow
@@ -1118,7 +1111,6 @@ sub test() {
 
         # Note: pure auto (without !) also works
         string code_also_works = "%new-style
-%require-types
 sub test() {
     auto data = (1, 2, 3);
     data = \"now a string\";  # Also works - pure auto doesn't narrow
@@ -1134,7 +1126,6 @@ sub test() {
     # auto! can be used as a function return type
     autoNoNarrowingFunctionTest() {
         string code = "%new-style
-%require-types
 auto! sub getFlexibleData() {
     auto! result = {\"initial\": \"hash\"};
     result = (1, 2, 3);
@@ -1157,7 +1148,6 @@ sub test() {
         # With hash<auto>, this would give PARSE-TYPE-ERROR
         # With hash<auto!>, parsing should succeed
         string code = "%new-style
-%require-types
 sub test() {
     hash<auto!> h = {\"x\": 1};  # creates hash<string, int> at runtime
     h.y = \"string\";  # With hash<auto> this is PARSE-TYPE-ERROR, with hash<auto!> parsing succeeds
@@ -1171,7 +1161,6 @@ sub test() {
 
         # Verify that hash<auto> (without !) still gives PARSE-TYPE-ERROR
         string code_narrowing = "%new-style
-%require-types
 sub test() {
     hash<auto> h = {\"x\": 1};
     h.y = \"string\";  # Should fail - type is narrowed to hash<string, int>
@@ -1184,7 +1173,6 @@ sub test() {
 
         # hash<auto!> whole hash reassignment should work at parse time
         string code_reassign = "%new-style
-%require-types
 sub test() {
     hash<auto!> h = {\"x\": 1};
     h = {\"y\": \"string\"};  # Should succeed - different hash value
@@ -1198,7 +1186,6 @@ sub test() {
 
         # *hash<auto!> or-nothing variant should also work
         string code_or_nothing = "%new-style
-%require-types
 sub test() {
     *hash<auto!> h = {\"x\": 1};
     h.y = \"string\";  # Should not give PARSE-TYPE-ERROR
@@ -1216,7 +1203,6 @@ sub test() {
         # With list<auto>, this would give PARSE-TYPE-ERROR
         # With list<auto!>, parsing should succeed
         string code = "%new-style
-%require-types
 sub test() {
     list<auto!> l = (1, 2, 3);  # creates list<int> at runtime
     l += \"string\";  # With list<auto> this is PARSE-TYPE-ERROR, with list<auto!> parsing succeeds
@@ -1230,7 +1216,6 @@ sub test() {
 
         # Verify that list<auto> (without !) still gives PARSE-TYPE-ERROR
         string code_narrowing = "%new-style
-%require-types
 sub test() {
     list<auto> l = (1, 2, 3);
     l += \"string\";  # Should fail - type is narrowed to list<int>
@@ -1243,7 +1228,6 @@ sub test() {
 
         # list<auto!> whole list reassignment should work at parse time
         string code_reassign = "%new-style
-%require-types
 sub test() {
     list<auto!> l = (1, 2, 3);
     l = (\"a\", \"b\", \"c\");  # Should succeed - different list value
@@ -1257,7 +1241,6 @@ sub test() {
 
         # *list<auto!> or-nothing variant should also work
         string code_or_nothing = "%new-style
-%require-types
 sub test() {
     *list<auto!> l = (1, 2, 3);
     l += \"string\";  # Should not give PARSE-TYPE-ERROR
@@ -1274,7 +1257,6 @@ sub test() {
     hashStringAutoNoNarrowTest() {
         # hash<string, auto!> should prevent parse-time narrowing
         string code = "%new-style
-%require-types
 sub test() {
     hash<string, auto!> h = {\"x\": 1};
     h.y = \"string\";  # Should not give PARSE-TYPE-ERROR
@@ -1288,7 +1270,6 @@ sub test() {
 
         # Verify hash<string, auto> (without !) still gives PARSE-TYPE-ERROR
         string code_narrowing = "%new-style
-%require-types
 sub test() {
     hash<string, auto> h = {\"x\": 1};
     h.y = \"string\";  # Should fail
@@ -1304,7 +1285,6 @@ sub test() {
     autoNoNarrowFunctionParamsTest() {
         # Function with hash<auto!> parameter should accept different hash types
         string code = "%new-style
-%require-types
 sub processData(hash<auto!> data) {
     # Can receive hashes with any value type
 }
@@ -1322,7 +1302,6 @@ sub test() {
 
         # Function with hash<auto!> return type
         string code_return = "%new-style
-%require-types
 hash<auto!> sub getFlexibleData(bool flag) {
     if (flag) {
         return {\"value\": 42};
@@ -1343,7 +1322,6 @@ sub test() {
 
         # list<auto!> parameter
         string code_list_param = "%new-style
-%require-types
 sub processList(list<auto!> data) {
     # Can receive lists with any element type
 }
@@ -1364,7 +1342,6 @@ sub test() {
     autoNoNarrowClassMemberTest() {
         # Class with hash<auto!> member - uses public { } block syntax
         string code = "%new-style
-%require-types
 class FlexibleContainer {
     public {
         hash<auto!> data;
@@ -1391,7 +1368,6 @@ class FlexibleContainer {
 
         # Class with list<auto!> member
         string code_list = "%new-style
-%require-types
 class ListContainer {
     public {
         list<auto!> items;
@@ -1414,7 +1390,6 @@ class ListContainer {
 
         # Private member with auto!
         string code_private = "%new-style
-%require-types
 class PrivateFlexible {
     private {
         hash<auto!> config;
@@ -1484,7 +1459,6 @@ sub test() {
     softlistAutoNoNarrowTest() {
         # softlist<auto!> should be accepted
         string code = "%new-style
-%require-types
 sub test() {
     softlist<auto!> sl = (1, 2, 3);
     sl = (\"a\", \"b\");  # Should not give PARSE-TYPE-ERROR
@@ -1498,7 +1472,6 @@ sub test() {
 
         # *softlist<auto!> or-nothing variant
         string code_or_nothing = "%new-style
-%require-types
 sub test() {
     *softlist<auto!> sl = (1, 2, 3);
     sl = (\"a\", \"b\");
@@ -1513,7 +1486,6 @@ sub test() {
 
         # softlist<auto!> in function parameter
         string code_param = "%new-style
-%require-types
 sub processSoftList(softlist<auto!> data) {
     # Can receive softlists with any element type
 }

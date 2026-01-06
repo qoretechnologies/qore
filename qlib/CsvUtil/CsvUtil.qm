@@ -31,10 +31,7 @@
 %requires(reexport) FileLocationHandler
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 module CsvUtil {
     version = "1.11";
@@ -163,10 +160,7 @@ module CsvUtil {
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires CsvUtil
 
@@ -204,10 +198,7 @@ UK,1234567893,"Sony, Xperia S",31052012
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires CsvUtil
 
@@ -273,10 +264,7 @@ while (i.next())
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires CsvUtil
 

@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 %allow-weak-references
 
 # make sure we have the required qore version
@@ -333,19 +330,19 @@ public class FtpPoller {
         *softint minage;
 
         #! optional info log closure
-        *code log_info;
+        *code<nothing(string, ...)> log_info;
 
         #! optional detail log closure
-        *code log_detail;
+        *code<nothing(string, ...)> log_detail;
 
         #! optional debug log closure
-        *code log_debug;
+        *code<nothing(string, ...)> log_debug;
 
         #! optional start thread closure
-        *code start_thread;
+        *code<int(code<nothing()>)> start_thread;
 
         #! optional sleep closure
-        *code sleep;
+        *code<nothing(int)> sleep;
 
         #! Connection to update while polling
         FtpClient new_ftp;

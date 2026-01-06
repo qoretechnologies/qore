@@ -643,6 +643,10 @@ bool TypedHashDecl::inheritsFrom(const TypedHashDecl* parent) const {
     return priv->isDescendantOf(*typed_hash_decl_private::get(*parent));
 }
 
+void TypedHashDecl::setParent(const TypedHashDecl* parent) {
+    priv->setParentHashDecl(parent);
+}
+
 TypedHashDeclHolder::~TypedHashDeclHolder() {
     if (thd) {
         typed_hash_decl_private::get(*thd)->deref();

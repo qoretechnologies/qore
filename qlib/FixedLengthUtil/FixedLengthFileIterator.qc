@@ -22,9 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
@@ -34,10 +32,7 @@ public namespace FixedLengthUtil {
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires FixedLengthUtil
 

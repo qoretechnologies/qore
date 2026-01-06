@@ -24,19 +24,24 @@
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
-#! Name and description info
-public hashdecl NameDescInfo {
-    #! The name of the type
-    string name;
-
-    #! The display name for the type
+#! Display name and description info (without name field)
+/** @since %DataProvider 3.1
+*/
+public hashdecl DisplayDescInfo {
+    #! The display name
     string display_name;
 
-    #! The short plain-text description for the type
-    string short_desc;
+    #! The short plain-text description
+    *string short_desc;
 
-    #! The markdown description for the type
+    #! The markdown description
     string desc;
+}
+
+#! Name and description info
+public hashdecl NameDescInfo inherits DisplayDescInfo {
+    #! The name of the type
+    string name;
 }
 
 #! Type info for the QoreDataType constructor

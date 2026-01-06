@@ -31,13 +31,10 @@
 %requires Mime >= 1.3
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
+%modern
 # require type declarations everywhere
-%require-types
 # disallows access to backwards-compatible "noop" variants
-%strict-args
 # enables all warnings
-%enable-all-warnings
 
 module MailMessage {
     version = "1.4";

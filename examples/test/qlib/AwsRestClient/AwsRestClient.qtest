@@ -13,10 +13,7 @@
 
 %requires qore >= 0.9.3
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %exec-class AwsTest
 

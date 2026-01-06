@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # make sure we have the required qore version
 %requires qore >= 1.7.3
@@ -95,10 +92,7 @@ module Swagger {
 
     @par Client Example
     @code{.py}
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 # the RestClient module imports and reexports the Swagger module automatically
 %requires RestClient
@@ -139,10 +133,7 @@ schema.setBasePath("/new/path");
 
     @par Server Example
     @code{.py}
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires RestHandler
 %requires Swagger

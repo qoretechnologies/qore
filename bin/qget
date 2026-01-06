@@ -54,10 +54,7 @@
 %requires qore >= 1.0
 
 %require-our
-%enable-all-warnings
-%new-style
-%require-types
-%strict-args
+%modern
 
 %requires ConnectionProvider
 

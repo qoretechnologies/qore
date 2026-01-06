@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires HttpServer
 %requires Util

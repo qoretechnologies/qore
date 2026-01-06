@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 public namespace MongoDbDataProvider {
 #! MongoDB database data provider - provides access to collections in a database

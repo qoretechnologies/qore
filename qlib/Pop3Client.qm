@@ -36,10 +36,7 @@
 %endtry
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 module Pop3Client {
     version = "2.0";
@@ -77,10 +74,7 @@ module Pop3Client {
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires Pop3Client
 

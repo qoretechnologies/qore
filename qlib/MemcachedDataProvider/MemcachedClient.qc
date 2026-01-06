@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 #! The main MemcachedDataProvider namespace
 public namespace MemcachedDataProvider {

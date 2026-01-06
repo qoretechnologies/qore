@@ -24,10 +24,7 @@
 
 %requires qore >= 2.0
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 # Optional WebSocket support - enabled if WebSocketHandler is available
 %try-module WebSocketHandler >= 2.0

@@ -23,10 +23,7 @@
 */
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 #! the CsvUtil namespace. All classes used in the CsvUtil module should be inside this namespace
 public namespace CsvUtil {
@@ -127,7 +124,7 @@ public namespace CsvUtil {
             bool optimal_quotes = True;
 
             #! a closure/call reference for informational logging when using write(SQLStatement)
-            *code info_log;
+            *code<nothing(string, ...)> info_log;
 
             #! mapping output field by name
             hash m_out_by_name;

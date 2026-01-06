@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 #! The ConnectionProvider namespace
 /** All public declarations in the %ConnectionProvider module are defined in this namespace

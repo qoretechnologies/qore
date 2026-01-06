@@ -24,7 +24,7 @@
 
 
 %requires qore >= 0.9
-%new-style
+%modern
 
 %try-module xml >= 1.3
 %define NO_XML
@@ -61,10 +61,7 @@ module QUnit {
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../qlib/QUnit.qm
 
@@ -99,10 +96,7 @@ public class QUnitTest inherits QUnit::Test {
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../qlib/QUnit.qm
 

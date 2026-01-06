@@ -106,7 +106,7 @@ on_error ds.rollback();
             list cval_keys;
 
             #! an optional info logging callback; must accept a sprintf()-style format specifier and optional arguments
-            *code info_log;
+            *code<nothing(string, ...)> info_log;
 
             #! row count
             int row_count = 0;
