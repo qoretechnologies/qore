@@ -845,6 +845,20 @@ public:
             }
         }
 
+        // Handle any unconsumed node from val (e.g., BigInt/Float node when storing inline)
+        // This can happen when val contains a QoreBigIntNode or QoreFloatNode that was
+        // converted to an inline scalar value above
+        AbstractQoreNode* val_node = val.takeIfNode();
+        if (val_node) {
+            if (rv) {
+                // We have both an old node and an unconsumed node - deref the val node inline
+                val_node->deref(nullptr);
+            } else {
+                // No old node, so return the val node for cleanup by caller
+                rv = val_node;
+            }
+        }
+
         return rv;
     }
 
