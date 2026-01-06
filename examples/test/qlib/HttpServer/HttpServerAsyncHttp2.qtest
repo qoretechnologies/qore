@@ -87,6 +87,19 @@ class SimpleHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns a configurable status code
+class StatusCodeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Extract status code from path: /status/<code>
+        int code = 200;
+        *list<*string> m = (hdr.path =~ x/status\/(\d+)/);
+        if (m) {
+            code = int(m[0]);
+        }
+        return makeResponse(code, sprintf("Response with status %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
 class HttpServerAsyncHttp2Test inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -159,6 +172,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
+        addTestCase("HTTP/2 status message mapping", \testHttp2StatusMessage());
         # POST test has encoding issues - skip for now
         #addTestCase("HTTP/2 POST with large body", \testHttp2PostLargeBody());
         # These tests take too long
@@ -188,6 +202,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
 
         # Add HTTPS listener for HTTP/2 (HTTP/2 requires HTTPS via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -341,6 +356,68 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         if (m_options.verbose > 1) {
             printf("Concurrent HTTP/2 responses: %d/%d succeeded\n", success_count, num_requests);
+        }
+    }
+
+    #! Tests that HTTP/2 responses have correct status_message mapping
+    /** HTTP/2 only transmits status codes, not messages (unlike HTTP/1.x).
+        The status_message must be synthesized from the status code on the client side.
+        This test verifies that the mapping is complete for common status codes.
+    */
+    testHttp2StatusMessage() {
+        RestClient rc = getClient();
+
+        # Test various status codes and their expected messages
+        # Note: Skip 3xx redirects as they require Location header and cause RestClient exceptions
+        hash<string, int> status_tests = {
+            "OK": 200,
+            "Created": 201,
+            "Accepted": 202,
+            "No Content": 204,
+            "Bad Request": 400,
+            "Unauthorized": 401,
+            "Forbidden": 403,
+            "Not Found": 404,
+            "Method Not Allowed": 405,
+            "Conflict": 409,
+            "Gone": 410,
+            "Unprocessable Entity": 422,
+            "Too Many Requests": 429,
+            "Internal Server Error": 500,
+            "Not Implemented": 501,
+            "Bad Gateway": 502,
+            "Service Unavailable": 503,
+            "Gateway Timeout": 504,
+        };
+
+        foreach string expected_msg in (keys status_tests) {
+            int code = status_tests{expected_msg};
+            try {
+                hash<auto> resp = rc.get(sprintf("/status/%d", code));
+                assertEq(code, resp.status_code, sprintf("Status code for %d", code));
+                assertEq(expected_msg, resp.status_message, sprintf("Status message for %d should be '%s'", code, expected_msg));
+
+                if (m_options.verbose > 1) {
+                    printf("HTTP/2 status %d: %s (http_version: %y)\n", code, resp.status_message, resp.http_version);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Some status codes may throw exceptions (4xx, 5xx) - still check the response
+                if (ex.arg.status_code) {
+                    assertEq(code, ex.arg.status_code, sprintf("Status code for %d (from exception)", code));
+                    assertEq(expected_msg, ex.arg.status_message, sprintf("Status message for %d should be '%s' (from exception)", code, expected_msg));
+
+                    if (m_options.verbose > 1) {
+                        printf("HTTP/2 status %d: %s (from exception, http_version: %y)\n", code, ex.arg.status_message, ex.arg.http_version);
+                    }
+                } else {
+                    # Re-throw if not a REST response exception
+                    rethrow;
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("HTTP/2 status message mapping: all %d status codes verified\n", status_tests.size());
         }
     }
 
