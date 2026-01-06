@@ -2139,19 +2139,28 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
 
         case QTS_COMPLEXHASH: {
             const QoreTypeInfo* ti = nullptr;
-            bool ok = false;
+            const QoreHashNode* h = nullptr;
             if (ot == NT_HASH) {
-                ok = true;
-                ti = n.get<const QoreHashNode>()->getValueTypeInfo();
+                h = n.get<const QoreHashNode>();
+                ti = h->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_HASH) {
-                ok = true;
-                ti = n.get<const WeakHashReferenceNode>()->get()->getValueTypeInfo();
+                h = n.get<const WeakHashReferenceNode>()->get();
+                ti = h->getValueTypeInfo();
             }
-            if (ok && u.ti == autoTypeInfo) {
+            if (!h) {
+                return QTI_NOT_EQUAL;
+            }
+            if (u.ti == autoTypeInfo) {
                 return QTI_NEAR;
             }
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
+            // it will get folded at runtime into the desired type in any case
+            // NOTE: if the hash has a specific type (ti with hasType), it must be compatible - checked above
+            if (h->empty() && !h->getHashDecl() && (!ti || !QoreTypeInfo::hasType(ti))) {
+                return QTI_NEAR;
             }
             return QTI_NOT_EQUAL;
         }
@@ -2159,19 +2168,27 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
         case QTS_COMPLEXLIST:
         case QTS_COMPLEXSOFTLIST: {
             const QoreTypeInfo* ti = nullptr;
-            bool ok = false;
+            const QoreListNode* l = nullptr;
             if (ot == NT_LIST) {
-                ok = true;
-                ti = n.get<const QoreListNode>()->getValueTypeInfo();
+                l = n.get<const QoreListNode>();
+                ti = l->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_LIST) {
-                ok = true;
-                ti = n.get<const WeakListReferenceNode>()->get()->getValueTypeInfo();
+                l = n.get<const WeakListReferenceNode>()->get();
+                ti = l->getValueTypeInfo();
             }
-            if (ok && u.ti == autoTypeInfo) {
-                return QTI_NEAR;
-            }
-            if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
-                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            if (l) {
+                if (u.ti == autoTypeInfo) {
+                    return QTI_NEAR;
+                }
+                if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
+                    return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                // issue #2647: allow an empty list with no specific type to be passed to any complex list type
+                // it will get folded at runtime into the desired type in any case
+                // NOTE: if the list has a specific type (ti with hasType), it must be compatible - checked above
+                if (l->empty() && (!ti || !QoreTypeInfo::hasType(ti))) {
+                    return QTI_NEAR;
+                }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
                 qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(u.ti, n);

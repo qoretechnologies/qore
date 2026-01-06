@@ -151,6 +151,23 @@ sub issue_4419_t2(list<auto> x) {
 sub issue_4419_t2(list<Mutex> x) {
 }
 
+# issue #2647: empty container overload resolution tests
+int sub empty_hash_test(hash<string, Mutex> h) {
+    return 1;
+}
+
+int sub empty_list_test(list<Mutex> l) {
+    return 1;
+}
+
+int sub empty_hash_test_2(hash<string, Mutex> h) {
+    return 1;
+}
+
+int sub empty_hash_test_2(hash<string, int> h) {
+    return 2;
+}
+
 int sub exact_1(Mutex x) {
     return 1;
 }
@@ -170,6 +187,7 @@ public class OverloadTest inherits QUnit::Test {
         addTestCase("varargs", \varargsTest());
         addTestCase("reference matching", \referenceMatching());
         addTestCase("issue 4419", \issue4419());
+        addTestCase("issue 2647 empty containers", \issue2647EmptyContainers());
         addTestCase("softlist overload test", \softlistOverloadTest());
         addTestCase("issue 3861", \issue3861());
         addTestCase("issue 3441", \issue3441());
@@ -223,6 +241,40 @@ public class OverloadTest inherits QUnit::Test {
             list<auto> x = (m,);
             assertNothing(issue_4419_t2(x));
         }
+    }
+
+    # issue #2647: empty containers should be accepted as arguments to functions expecting complex types
+    issue2647EmptyContainers() {
+        # Test 1: empty hash literal {} can be passed to function expecting hash<string, X>
+        assertEq(1, empty_hash_test({}));
+        assertEq(1, call_function(\empty_hash_test(), {}));
+
+        # Test 2: empty list literal () can be passed to function expecting list<X>
+        assertEq(1, empty_list_test(()));
+        assertEq(1, call_function(\empty_list_test(), ()));
+
+        # Test 3: assignment to typed variable then pass to function still works
+        *hash<string, Mutex> h = {};
+        assertEq(1, empty_hash_test(h));
+        assertEq(1, call_function(\empty_hash_test(), h));
+        *list<Mutex> l = ();
+        assertEq(1, empty_list_test(l));
+        assertEq(1, call_function(\empty_list_test(), l));
+
+        # Test 4: typed empty hash with wrong type should fail at runtime
+        auto bad_h = cast<hash<string, string>>({});
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \empty_hash_test(), bad_h);
+
+        # Test 5: typed empty list with wrong type should fail at runtime
+        auto bad_l = cast<list<string>>(());
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \empty_list_test(), bad_l);
+
+        # Test 6: empty hash should match first compatible overload
+        assertEq(1, call_function(\empty_hash_test_2(), {}));
+
+        # Test 7: typed empty hash should match exact type
+        hash<string, int> typed_h = {};
+        assertEq(2, call_function(\empty_hash_test_2(), typed_h));
     }
 
     softlistOverloadTest() {
