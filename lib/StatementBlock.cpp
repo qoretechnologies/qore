@@ -157,11 +157,11 @@ QoreValue StatementBlock::exec(RuntimeConfig& rc, ExceptionSink* xsink) {
     //QORE_TRACE("StatementBlock::exec(rc)");
     QoreValue return_value{};
     ThreadLocalProgramData* tlpd = rc.tlpd;
-    if (tlpd->runtimeCheck()) {
+    if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
     }
     execImpl(rc, return_value, xsink);
-    if (tlpd->runtimeCheck()) {
+    if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionExit(this, return_value, xsink);
     }
     return return_value;
