@@ -233,6 +233,11 @@ private:
 
 /**
  * @brief RAII helper to temporarily change implicit element in RuntimeConfig.
+ *
+ * This helper updates both the passed RuntimeConfig and tl_runtime_config
+ * (the authoritative TLS source) so that code using either mechanism will
+ * see the correct element value. This is necessary because method calls may
+ * create a new RuntimeConfig via rc_get_current() which reads from TLS.
  */
 class RuntimeConfigElementHelper {
 public:

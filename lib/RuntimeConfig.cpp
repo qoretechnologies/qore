@@ -37,18 +37,18 @@
 #include "qore/intern/QoreLibIntern.h"
 
 RuntimeConfig rc_get_current() {
-    // Get loc, stmt, po from the authoritative TLS RuntimeConfig
+    // Get loc, stmt, po, element from the authoritative TLS RuntimeConfig
     RuntimeConfig& tls_rc = rc_get_tls_ref();
     RuntimeConfig rc;
     rc.pgm = getProgram();
     rc.loc = tls_rc.loc;
     rc.stmt = tls_rc.stmt;
     rc.po = tls_rc.po;
+    rc.element = tls_rc.element;  // element is now stored in tl_runtime_config
     rc.tlpd = get_thread_local_program_data();
     runtime_get_object_and_class(rc.obj, rc.cls);
     rc.stack_loc = get_runtime_stack_location();
     rc.return_type_info = getReturnTypeInfo();
-    rc.element = get_implicit_element();
     rc.closure_env = thread_get_runtime_closure_env();
     return rc;
 }
@@ -84,9 +84,8 @@ RuntimeConfig& rc_get_current_ref() {
     runtime_get_object_and_class(tl_runtime_config.obj, tl_runtime_config.cls);
     tl_runtime_config.stack_loc = get_runtime_stack_location();
     tl_runtime_config.return_type_info = getReturnTypeInfo();
-    tl_runtime_config.element = get_implicit_element();
     tl_runtime_config.closure_env = thread_get_runtime_closure_env();
-    // loc, stmt, po are managed by RuntimeConfigLocationHelper - don't overwrite
+    // loc, stmt, po, element are managed by helpers - don't overwrite
     return tl_runtime_config;
 }
 
@@ -160,10 +159,13 @@ RuntimeConfigClosureHelper::~RuntimeConfigClosureHelper() {
 RuntimeConfigElementHelper::RuntimeConfigElementHelper(RuntimeConfig& rc, int new_element)
     : rc(rc), old_element(rc.element) {
     rc.element = new_element;
+    // Update tl_runtime_config directly - it's the authoritative source for element
+    tl_runtime_config.element = new_element;
 }
 
 RuntimeConfigElementHelper::~RuntimeConfigElementHelper() {
     rc.element = old_element;
+    tl_runtime_config.element = old_element;
 }
 
 RuntimeConfigStackHelper::RuntimeConfigStackHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc)

@@ -1769,11 +1769,16 @@ void clear_argv_ref() {
 }
 
 int get_implicit_element() {
-    return thread_data.get()->getElement();
+    // Read from tl_runtime_config - the authoritative source for element
+    return rc_get_tls_ref().element;
 }
 
 int save_implicit_element(int n_element) {
-    return thread_data.get()->saveElement(n_element);
+    // Update tl_runtime_config - the authoritative source for element
+    RuntimeConfig& rc = rc_get_tls_ref();
+    int old = rc.element;
+    rc.element = n_element;
+    return old;
 }
 
 void end_signal_thread(ExceptionSink* xsink) {
