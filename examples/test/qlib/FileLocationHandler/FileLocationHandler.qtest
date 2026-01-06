@@ -73,6 +73,7 @@ class RealTestHttpServer inherits HttpServer {
         # bind on a random port
         listener_opts.service = 0;
         port = addListener(listener_opts).port;
+        waitForAsyncIo();
     }
 
     int getPort() {

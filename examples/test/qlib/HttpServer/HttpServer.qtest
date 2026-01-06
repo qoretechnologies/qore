@@ -299,8 +299,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mWsHandler = new TestWsHandler({"logger": asyncLogger});
         mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
 
-        # Wait for the async I/O thread to start polling
-        sleep(250ms);
+        # Wait for the async I/O to be ready
+        mAsyncServer.waitForAsyncIo();
     }
 
     globalTearDown() {
@@ -896,8 +896,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "key": new SSLPrivateKey(KeyPem),
         }).port;
 
-        # Wait for async I/O to start
-        sleep(100ms);
+        # Wait for async I/O to be ready
+        authServer.waitForAsyncIo();
 
         # First attempt: Connect WITHOUT valid token - should get 401
         string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";

@@ -197,8 +197,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }).port;
         mSslUrl = "https://localhost:" + mSslPort;
 
-        # Wait for async I/O thread to start
-        sleep(100ms);
+        # Wait for async I/O to be ready
+        mServer.waitForAsyncIo();
 
         if (m_options.verbose > 1) {
             printf("HTTPS server started on port %d\n", mSslPort);

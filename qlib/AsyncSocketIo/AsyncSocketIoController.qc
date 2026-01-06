@@ -120,8 +120,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! Cancel operation waiting Condition; socket unique key -> Condition
         hash<string, Condition> cancel_cond_map;
 
-        #! For listener sockets
+        #! Condition to signal when I/O thread is ready
+        Condition ready_cond();
 
+        #! Flag indicating I/O thread is ready
+        bool ready_flag = False;
     }
 
     #! Creates the object
@@ -205,6 +208,32 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Returns @ref True if the I/O thread is running
     bool running() {
         return mcnt.getCount() > 0;
+    }
+
+    #! Waits for the I/O thread to be ready
+    /** This method blocks until the I/O thread has started and is ready to process operations.
+        Use this after submitting operations to ensure the I/O thread is polling before
+        attempting to connect to the socket.
+
+        @param timeout maximum time to wait; use @ref NOTHING for no timeout
+
+        @return @ref True if the I/O thread is ready, @ref False if the timeout expired
+    */
+    bool waitReady(*timeout timeout) {
+        AutoLock al(m);
+        if (ready_flag) {
+            return True;
+        }
+        if (!tid) {
+            return False;
+        }
+        if (timeout) {
+            return ready_cond.wait(m, timeout) == 0 && ready_flag;
+        }
+        while (!ready_flag && tid) {
+            ready_cond.wait(m);
+        }
+        return ready_flag;
     }
 
     #! Submits a socket operation to be performed and returns a Queue where the results will be returned
@@ -362,12 +391,23 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     private ioThread() {
         log(LoggerLevel::INFO, "Started Socket polling operation controller I/O thread");
         on_exit {
-            if (tid) {
+            {
                 AutoLock al(m);
-                remove tid;
+                ready_flag = False;
+                if (tid) {
+                    remove tid;
+                }
+                ready_cond.broadcast();
             }
             log(LoggerLevel::INFO, "Exiting Socket polling operation controller I/O thread");
             mcnt.dec();
+        }
+
+        # Signal that I/O thread is ready
+        {
+            AutoLock al(m);
+            ready_flag = True;
+            ready_cond.broadcast();
         }
 
         while (True) {
