@@ -537,8 +537,8 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
     return 0;
 }
 
-QoreValue QoreEnumCastOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
+QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
