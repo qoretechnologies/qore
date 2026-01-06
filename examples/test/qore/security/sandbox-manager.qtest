@@ -365,7 +365,7 @@ string sub tryReadOutside() {
         # Test chdir inside sandbox works
         p.parse("
 %modern
-sub testChdirInSandbox(string path) {
+list<auto> sub testChdirInSandbox(string path) {
     Dir d();
     d.chdir(path);
     return d.list();
