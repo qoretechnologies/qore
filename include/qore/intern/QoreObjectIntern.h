@@ -57,7 +57,6 @@
 #define QOA_PUB_ERROR    2
 
 class LValueHelper;
-struct RuntimeConfig;
 
 class lthash {
 public:
@@ -378,12 +377,6 @@ public:
     DLLLOCAL void takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l);
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
-
-    //! RuntimeConfig-aware version - uses rc.cls instead of TLS lookup
-    DLLLOCAL QoreValue getReferencedMemberNoMethod(RuntimeConfig& rc, const char* mem, ExceptionSink* xsink) const;
-
-    //! Evaluate a member with optional memberGate - RuntimeConfig-aware version
-    DLLLOCAL QoreValue evalMember(RuntimeConfig& rc, const char* mem, ExceptionSink* xsink) const;
 
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);

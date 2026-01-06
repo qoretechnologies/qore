@@ -45,8 +45,8 @@ int QoreUnaryMinusOperatorNode::getAsString(QoreString& str, int foff, Exception
     return 0;
 }
 
-QoreValue QoreUnaryMinusOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(rc, exp, xsink);
+QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -90,8 +90,7 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     if (!err & exp.isValue()) {
         SimpleRefHolder<QoreUnaryMinusOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         //printd(5, "QoreUnaryMinusOperatorNode::parseInitImpl() parse type: '%s' runtype: '%s'\n", QoreTypeInfo::getName(typeInfo), v->getTypeName());
         QoreValue result = v.takeReferencedValue();

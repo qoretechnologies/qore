@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
-#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -182,8 +181,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     if (!rti_can_be_list && right.isValue() && left.isValue()) {
         SimpleRefHolder<QoreSquareBracketsOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder rv(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder rv(this, *xsink);
         QoreValue result = rv.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)
@@ -253,27 +251,24 @@ int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreListNode* ln)
     return err;
 }
 
-QoreValue QoreSquareBracketsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
-    if (*xsink) {
+QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     // do not evalute RHS if it's a list with ranges
-    if (rhs_list_range) {
-        return doSquareBracketsListRange(rc, *lh, right.get<const QoreParseListNode>(), xsink);
-    }
+    if (rhs_list_range)
+        return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), xsink);
 
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
-    if (*xsink) {
+    ValueEvalOptimizedRefHolder rh(right, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     return doSquareBrackets(*lh, *rh, true, xsink);
 }
 
-QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(RuntimeConfig& rc, const QoreValue l,
-        const QoreParseListNode* pln, ExceptionSink* xsink) {
+QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
+        ExceptionSink* xsink) {
     switch (l.getType()) {
         case NT_LIST: {
             // calculate the runtime element type if possible
@@ -283,10 +278,9 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(RuntimeConfi
             ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
             const QoreParseListNode::nvec_t& vl = pln->getValues();
             for (unsigned i = 0; i < vl.size(); ++i) {
-                ValueEvalOptimizedRefHolder rh(rc, vl[i], xsink);
-                if (*xsink) {
+                ValueEvalOptimizedRefHolder rh(vl[i], xsink);
+                if (*xsink)
                     return QoreValue();
-                }
                 bool is_range = (vl[i].getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
                 ValueHolder entry(doSquareBrackets(l, *rh, is_range, xsink), xsink);
@@ -326,30 +320,26 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(RuntimeConfi
         case NT_STRING: {
             SimpleRefHolder<QoreStringNode> ret(new QoreStringNode);
             for (auto& i : pln->getValues()) {
-                ValueEvalOptimizedRefHolder rh(rc, i, xsink);
-                if (*xsink) {
+                ValueEvalOptimizedRefHolder rh(i, xsink);
+                if (*xsink)
                     return QoreValue();
-                }
                 bool is_range = (i.getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(i.getInternalNode()));
-                if (doString(ret, l, *rh, is_range, xsink)) {
+                if (doString(ret, l, *rh, is_range, xsink))
                     return QoreValue();
-                }
             }
             return ret.release();
         }
         case NT_BINARY: {
             SimpleRefHolder<BinaryNode> bin(new BinaryNode);
             for (auto& i : pln->getValues()) {
-                ValueEvalOptimizedRefHolder rh(rc, i, xsink);
-                if (*xsink) {
+                ValueEvalOptimizedRefHolder rh(i, xsink);
+                if (*xsink)
                     return QoreValue();
-                }
                 bool is_range = (i.getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(i.getInternalNode()));
-                if (doBinary(bin, l, *rh, is_range, xsink)) {
+                if (doBinary(bin, l, *rh, is_range, xsink))
                     return QoreValue();
-                }
             }
             return bin.release();
         }
@@ -357,13 +347,6 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(RuntimeConfi
             break;
     }
     return QoreValue();
-}
-
-// Shim for code paths without RuntimeConfig - gets RuntimeConfig from TLS
-QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-        ExceptionSink* xsink) {
-    RuntimeConfig rc = rc_get_current();
-    return doSquareBracketsListRange(rc, l, pln, xsink);
 }
 
 int QoreSquareBracketsOperatorNode::doString(SimpleRefHolder<QoreStringNode>& ret, const QoreValue l,
@@ -492,12 +475,13 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
     return QoreValue();
 }
 
-FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIteratorImpl(
         FunctionalValueType& value_type, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lhs(rc, left, xsink);
-    if (*xsink) {
+    ValueEvalOptimizedRefHolder lhs(left, xsink);
+    if (*xsink)
         return nullptr;
-    }
+
+    ValueEvalOptimizedRefHolder rhs(xsink);
 
     // do not evaluate the RHS if the RHS is a list with ranges
     if (rhs_list_range) {
@@ -506,38 +490,29 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
             return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(), xsink);
         }
     } else {
-        ValueEvalOptimizedRefHolder rhs(rc, right, xsink);
-        if (*xsink) {
+        if (rhs.eval(right))
             return nullptr;
-        }
 
-        // we only support functional iteration when the lhs is a list and the rhs is a list
+        // we only support functional iteration when the lhd is a list and the rhs is a list
         if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
+            ValueEvalOptimizedRefHolder rhs(right, xsink);
+            if (*xsink)
+                return nullptr;
+
             value_type = list;
             return new QoreFunctionalSquareBracketsOperator(lhs, rhs, xsink);
         }
-
-        // Handle non-list cases
-        ValueHolder res(doSquareBrackets(*lhs, *rhs, true, xsink), xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-        if (res->isNothing()) {
-            value_type = nothing;
-            return nullptr;
-        } else if (res->getType() == NT_LIST) {
-            value_type = list;
-            return new QoreFunctionalListOperator(true, res.release().get<QoreListNode>(), xsink);
-        }
-        value_type = single;
-        return new QoreFunctionalSingleValueOperator(res.release(), xsink);
     }
 
-    // rhs_list_range case where lhs is not a list
-    ValueHolder res(doSquareBracketsListRange(rc, *lhs, right.get<const QoreParseListNode>(), xsink), xsink);
-    if (*xsink) {
+    ValueHolder res(xsink);
+
+    if (rhs_list_range)
+        res = doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), xsink);
+    else
+        res = doSquareBrackets(*lhs, *rhs, true, xsink);
+
+    if (*xsink)
         return nullptr;
-    }
     if (res->isNothing()) {
         value_type = nothing;
         return nullptr;
@@ -578,9 +553,8 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
         QoreValue n = rightParseList->get(offset);
         if (n.getType() == NT_OPERATOR && (range = dynamic_cast<const QoreRangeOperatorNode*>(n.getInternalNode()))) {
             FunctionalOperator::FunctionalValueType value_type;
-            assert(rc);
             rangeIter = std::unique_ptr<QoreFunctionalRangeOperator>((QoreFunctionalRangeOperator*)(
-                range->getFunctionalIterator(*rc, value_type, xsink)
+                range->getFunctionalIterator(value_type, xsink)
             ));
         }
 
@@ -597,11 +571,9 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
         } else  // set the value using the index from the inner subrange
             val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rangeVal, false, xsink), true);
     } else {
-        assert(rc);
-        ValueEvalOptimizedRefHolder rh(*rc, rightParseList->get(offset), xsink);
-        if (*xsink) {
+        ValueEvalOptimizedRefHolder rh(rightParseList->get(offset), xsink);
+        if (*xsink)
             return false;
-        }
 
         // set the value using the top-level index
         val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rh, false, xsink), true);

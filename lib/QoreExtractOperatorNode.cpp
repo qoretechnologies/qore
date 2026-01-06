@@ -114,26 +114,26 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     return err;
 }
 
-QoreValue QoreExtractOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     printd(5, "QoreExtractOperatorNode::splice() lvalue_exp: %s, offset_exp: %s, length_exp: %s, new_exp: %s, " \
         "isEvent: %d\n", lvalue_exp.getTypeName(), offset_exp.getTypeName(), length_exp.getTypeName(),
         new_exp.getTypeName(), xsink->isEvent());
 
     // evaluate arguments
-    ValueEvalOptimizedRefHolder eoffset(rc, offset_exp, xsink);
+    ValueEvalOptimizedRefHolder eoffset(offset_exp, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder elength(rc, length_exp, xsink);
+    ValueEvalOptimizedRefHolder elength(length_exp, xsink);
     if (*xsink)
         return QoreValue();
 
-    ValueEvalOptimizedRefHolder exp(rc, new_exp, xsink);
+    ValueEvalOptimizedRefHolder exp(new_exp, xsink);
     if (*xsink)
         return QoreValue();
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper val(rc, lvalue_exp, xsink);
+    LValueHelper val(lvalue_exp, xsink);
     if (!val)
         return QoreValue();
 

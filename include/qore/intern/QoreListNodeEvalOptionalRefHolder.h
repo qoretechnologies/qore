@@ -40,11 +40,6 @@ public:
     DLLLOCAL QoreListNodeEvalOptionalRefHolder(ExceptionSink* n_xsink) : val(nullptr), xsink(n_xsink), needs_deref(false) {
     }
 
-    //! initializes an empty object with RuntimeConfig for optimized evaluation
-    DLLLOCAL QoreListNodeEvalOptionalRefHolder(RuntimeConfig& n_rc, ExceptionSink* n_xsink)
-        : val(nullptr), xsink(n_xsink), rc(&n_rc), needs_deref(false) {
-    }
-
     //! performs an optional evaluation of the list (sets the dereference flag)
     DLLLOCAL QoreListNodeEvalOptionalRefHolder(const QoreListNode* exp, ExceptionSink* n_xsink) : xsink(n_xsink) {
         evalIntern(exp);
@@ -137,7 +132,6 @@ public:
 private:
     QoreListNode* val;
     ExceptionSink* xsink;
-    RuntimeConfig* rc = nullptr;  // optional RuntimeConfig for optimized evaluation
     bool needs_deref;
 
     DLLLOCAL void discardIntern() {
@@ -146,7 +140,17 @@ private:
         }
     }
 
-    DLLLOCAL void evalIntern(const QoreListNode* exp);
+    DLLLOCAL void evalIntern(const QoreListNode* exp) {
+        if (exp) {
+            val = exp->evalList(needs_deref, xsink);
+            //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' "
+            //    "(%d)\n", this, exp, exp ? get_full_type_name(exp) : "n/a", exp->size(), val,
+            //    val ? get_full_type_name(val) : "n/a", val ? val->size() : 0);
+        } else {
+            val = nullptr;
+            needs_deref = false;
+        }
+    }
 
     DLLLOCAL void evalIntern(QoreListNode* exp);
 

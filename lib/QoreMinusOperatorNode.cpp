@@ -33,12 +33,12 @@
 
 QoreString QoreMinusOperatorNode::minus_str("- operator expression");
 
-QoreValue QoreMinusOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -131,8 +131,7 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     if (!err && right.isValue() && left.isValue()) {
         SimpleRefHolder<QoreMinusOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder rv(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder rv(this, *xsink);
         QoreValue result = rv.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)

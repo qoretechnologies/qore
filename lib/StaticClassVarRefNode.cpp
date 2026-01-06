@@ -57,16 +57,12 @@ const char* StaticClassVarRefNode::getTypeName() const {
 }
 
 // evalImpl(): return value requires a deref(xsink) if not 0
-QoreValue StaticClassVarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue StaticClassVarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(vi.getReferencedValue(str.c_str(), xsink), xsink);
     // the value here must always require a dereference
-    if (val->needsEval()) {
-        bool nd = true;
-        return val->eval(rc, nd, xsink);
-    }
-    return val.release();
+    return val->needsEval() ? val->eval(xsink) : val.release();
 }
 
 int StaticClassVarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

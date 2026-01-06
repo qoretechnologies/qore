@@ -598,10 +598,6 @@ public:
     DLLLOCAL static QoreHashNode* newComplexHash(const QoreTypeInfo* typeInfo, const QoreParseListNode* args,
             ExceptionSink* xsink);
 
-    //! RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL static QoreHashNode* newComplexHash(RuntimeConfig& rc, const QoreTypeInfo* typeInfo,
-            const QoreParseListNode* args, ExceptionSink* xsink);
-
     DLLLOCAL static QoreHashNode* newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init,
             ExceptionSink* xsink);
 

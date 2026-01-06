@@ -37,7 +37,7 @@ class QoreRegexNMatchOperatorNode : public QoreRegexMatchOperatorNode {
 protected:
     DLLLOCAL static QoreString op_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitIntern(op_str.c_str(), val, parse_context);

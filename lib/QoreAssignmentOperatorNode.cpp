@@ -33,7 +33,6 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/Variable.h"
-#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
@@ -240,24 +239,22 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     return err;
 }
 
-QoreValue QoreAssignmentOperatorNode::evalIntern(RuntimeConfig& rc, ExceptionSink* xsink, bool& needs_deref,
+QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
         bool weak_assignment) const {
     /* assign new value, this value gets referenced with the
         eval(xsink) call, so there's no need to reference it again
         for the variable assignment - however it does need to be
         copied/referenced for the return value
     */
-    ValueEvalOptimizedRefHolder new_value(rc, right, xsink);
-    if (*xsink) {
+    ValueEvalOptimizedRefHolder new_value(right, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     if (broken_int) {
         // convert the value to an int unconditionally
         new_value.setValue(new_value->getAsBigInt());
-        if (*xsink) {
+        if (*xsink)
             return QoreValue();
-        }
     } else {
         // we have to ensure that the value is referenced before the assignment in case the lvalue
         // is the same value, so it can be copied in the LValueHelper constructor
@@ -265,18 +262,15 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(RuntimeConfig& rc, ExceptionSin
     }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    // use RuntimeConfig-aware constructor to avoid TLS lookups
-    LValueHelper v(rc, left, xsink);
-    if (!v) {
+    LValueHelper v(left, xsink);
+    if (!v)
         return QoreValue();
-    }
 
     assert(!*xsink);
 
     // assign new value
-    if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, weak_assignment)) {
+    if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, weak_assignment))
         return QoreValue();
-    }
 
     // reference return value if necessary
     return ref_rv ? v.getReferencedValue() : QoreValue();

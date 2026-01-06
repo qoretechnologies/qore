@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,9 +44,9 @@ protected:
 
     DLLLOCAL static QoreString foldl_str;
 
-    DLLLOCAL QoreValue doFold(RuntimeConfig& rc, bool fwd, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue doFold(bool fwd, bool& needs_deref, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual ~QoreFoldlOperatorNode() {
     }
@@ -59,7 +59,7 @@ protected:
 
     DLLLOCAL QoreValue foldIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
-    DLLLOCAL FunctionalOperatorInterface* getFunctionalIterator(RuntimeConfig& rc, FunctionalOperator::FunctionalValueType& value_type, bool fwd, ExceptionSink* xsink) const;
+    DLLLOCAL FunctionalOperatorInterface* getFunctionalIterator(FunctionalOperator::FunctionalValueType& value_type, bool fwd, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreFoldlOperatorNode(const QoreProgramLocation* loc, QoreValue l, QoreValue r) : QoreBinaryOperatorNode<>(loc, l, r), returnTypeInfo(nullptr), iterator_func(nullptr) {
@@ -85,7 +85,7 @@ class QoreFoldrOperatorNode : public QoreFoldlOperatorNode {
 protected:
     DLLLOCAL static QoreString foldr_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreFoldrOperatorNode(const QoreProgramLocation* loc, QoreValue l, QoreValue r) : QoreFoldlOperatorNode(loc, l, r) {

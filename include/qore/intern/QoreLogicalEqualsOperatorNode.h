@@ -66,13 +66,13 @@ public:
 
 protected:
     // type of pointer to optimized versions depending on arguments found at parse-time
-    typedef bool(QoreLogicalEqualsOperatorNode::*eval_t)(RuntimeConfig& rc, ExceptionSink *xsink) const;
+    typedef bool(QoreLogicalEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time
     eval_t pfunc;
 
     DLLLOCAL static QoreString logical_equals_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink *xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -80,9 +80,9 @@ protected:
         return boolTypeInfo;
     }
 
-    DLLLOCAL bool floatSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const;
-    DLLLOCAL bool bigIntSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const;
-    DLLLOCAL bool boolSoftEqual(RuntimeConfig& rc, ExceptionSink *xsink) const;
+    DLLLOCAL bool floatSoftEqual(ExceptionSink *xsink) const;
+    DLLLOCAL bool bigIntSoftEqual(ExceptionSink *xsink) const;
+    DLLLOCAL bool boolSoftEqual(ExceptionSink *xsink) const;
 };
 
 #endif

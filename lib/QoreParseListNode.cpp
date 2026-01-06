@@ -114,8 +114,7 @@ int QoreParseListNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
     // evaluate immediately
     SimpleRefHolder<QoreParseListNode> holder(this);
-    RuntimeConfig rcc = rc_get_current();
-    ValueEvalOptimizedRefHolder rv(rcc, this, nullptr);
+    ValueEvalOptimizedRefHolder rv(this, nullptr);
     QoreValue result = rv.takeReferencedValue();
     // only use parse-time folding if we got a valid result
     // (constants may not be fully resolved at parse time, resulting in NOTHING)
@@ -128,7 +127,7 @@ int QoreParseListNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     return 0;
 }
 
-QoreValue QoreParseListNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreParseListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
     qore_list_private* ll = qore_list_private::get(**l);
@@ -141,7 +140,7 @@ QoreValue QoreParseListNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Exce
     bool vcommon = false;
 
     for (size_t i = 0; i < values.size(); ++i) {
-        ValueEvalOptimizedRefHolder v(rc, values[i], xsink);
+        ValueEvalOptimizedRefHolder v(values[i], xsink);
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();

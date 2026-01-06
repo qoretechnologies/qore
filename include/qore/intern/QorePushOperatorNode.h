@@ -37,7 +37,7 @@ class QorePushOperatorNode : public QoreUnshiftOperatorNode {
 protected:
     DLLLOCAL static QoreString push_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QorePushOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)

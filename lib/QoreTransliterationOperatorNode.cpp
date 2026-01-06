@@ -34,9 +34,9 @@
 
 QoreString QoreTransliterationOperatorNode::op_str("transliteration (=~ tr///) operator expression");
 
-QoreValue QoreTransliterationOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+QoreValue QoreTransliterationOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(rc, exp, xsink);
+    LValueHelper v(exp, xsink);
     if (!v)
         return QoreValue();
 

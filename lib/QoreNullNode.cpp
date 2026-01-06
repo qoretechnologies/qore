@@ -36,7 +36,7 @@ QoreNullNode::QoreNullNode() : UniqueValueQoreNode(NT_NULL) {
 QoreNullNode::~QoreNullNode() {
 }
 
-QoreValue QoreNullNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+QoreValue QoreNullNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
     assert(needs_deref);
     assert(false);
     return QoreValue();

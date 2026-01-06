@@ -114,7 +114,7 @@ protected:
             bool n_needs_eval) : ResolvedCallReferenceNodeIntern(loc, n_needs_eval), method(n_method) {
     }
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
 };
 
 class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
@@ -138,7 +138,7 @@ public:
 //! a call reference to a static user method
 class LocalMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
 protected:
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL LocalMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method, bool n_needs_eval) : LocalStaticMethodCallReferenceNode(loc, n_method, n_needs_eval) {
         //printd(5, "LocalMethodCallReferenceNode::LocalStaticMethodCallReferenceNode() this: %p %s::%s() pgm: %p\n", this, method->getClass()->getName(), method->getName(), pgm);
@@ -197,7 +197,7 @@ protected:
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
             bool n_needs_eval);
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function
@@ -245,10 +245,6 @@ class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern 
 public:
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const char* n_method);
-
-    //! Constructor with explicit class context (avoids TLS lookup)
-    DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-            const char* n_method, const qore_class_private* n_qc);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
