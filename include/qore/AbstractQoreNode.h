@@ -402,7 +402,7 @@ protected:
     //! should never be called for value types
     /** in debugging builds of the library, calls to this function will abort
     */
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 //! this class is for value types that will exists only once in the Qore library, reference counting is disabled

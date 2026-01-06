@@ -988,13 +988,25 @@ public:
 class ValueEvalRefHolder : public ValueOptionalRefHolder {
 public:
     //! creates the object with with no evaluation
-    DLLLOCAL ValueEvalRefHolder(ExceptionSink* xs);
+    DLLEXPORT ValueEvalRefHolder(ExceptionSink* xs);
+
+    //! evaluates the exp argument (gets RuntimeConfig from TLS)
+    DLLEXPORT ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs);
+
+    //! evaluates the exp argument (gets RuntimeConfig from TLS)
+    DLLEXPORT ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs);
 
     //! evaluates the exp argument with RuntimeConfig
     DLLLOCAL ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs);
 
     //! evaluates the exp argument with RuntimeConfig
     DLLLOCAL ValueEvalRefHolder(RuntimeConfig& rc, const QoreValue exp, ExceptionSink* xs);
+
+    //! evaluates the argument (gets RuntimeConfig from TLS), returns -1 for error, 0 = OK
+    DLLEXPORT int eval(const AbstractQoreNode* exp);
+
+    //! evaluates the argument (gets RuntimeConfig from TLS), returns -1 for error, 0 = OK
+    DLLEXPORT int eval(const QoreValue exp);
 
     //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
     DLLLOCAL int eval(RuntimeConfig& rc, const AbstractQoreNode* exp);

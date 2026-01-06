@@ -887,6 +887,20 @@ ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
 }
 
+// Backwards-compatible constructor that gets RuntimeConfig from TLS
+ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    RuntimeConfig rc = rc_get_current();
+    evalIntern(rc, exp);
+}
+
+// Backwards-compatible constructor that gets RuntimeConfig from TLS
+ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    RuntimeConfig rc = rc_get_current();
+    evalIntern(rc, exp);
+}
+
 ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
     evalIntern(rc, exp);
@@ -911,6 +925,20 @@ int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const QoreValue& exp) {
     needs_deref = true;
     v = exp.eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
+}
+
+// Backwards-compatible eval that gets RuntimeConfig from TLS
+int ValueEvalRefHolder::eval(const AbstractQoreNode* exp) {
+    v.discard(xsink);
+    RuntimeConfig rc = rc_get_current();
+    return evalIntern(rc, exp);
+}
+
+// Backwards-compatible eval that gets RuntimeConfig from TLS
+int ValueEvalRefHolder::eval(const QoreValue exp) {
+    v.discard(xsink);
+    RuntimeConfig rc = rc_get_current();
+    return evalIntern(rc, exp);
 }
 
 int ValueEvalRefHolder::eval(RuntimeConfig& rc, const AbstractQoreNode* exp) {
