@@ -440,11 +440,44 @@ while (!tok.atEnd()) {
                 return scanHeredoc();
             }
 
+            # Identifier (starts with letter or underscore)
+            if (c =~ /[a-zA-Z_]/) {
+                return scanIdentifier();
+            }
+
             # Any other character
             advance();
             return <TokenInfo>{
                 "type": TOK_OTHER,
                 "value": c,
+                "line": start_line,
+                "column": start_column,
+            };
+        }
+
+        #! Scans an identifier (variable/function/class names, keywords)
+        private:internal hash<TokenInfo> scanIdentifier() {
+            int start_line = line;
+            int start_column = column;
+            string value = "";
+
+            while (pos < len) {
+                *string c = currentChar();
+                if (c =~ /[a-zA-Z0-9_]/) {
+                    value += c;
+                    advance();
+                } else if (c == ":" && peekChar() == ":") {
+                    # Handle :: namespace separator
+                    value += "::";
+                    advance(2);
+                } else {
+                    break;
+                }
+            }
+
+            return <TokenInfo>{
+                "type": TOK_IDENTIFIER,
+                "value": value,
                 "line": start_line,
                 "column": start_column,
             };
@@ -1294,6 +1327,481 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             line =~ s/\\_\\-\\_\\-7\\_\\-/*/g; #//;
 
             return line;
+        }
+    }
+
+    #! Declaration kind constants from astparser (ADK_*)
+    public const ADK_Class = 1;
+    public const ADK_Closure = 2;
+    public const ADK_Constant = 3;
+    public const ADK_Function = 4;
+    public const ADK_Hash = 5;
+    public const ADK_HashMember = 6;
+    public const ADK_MemberGroup = 7;
+    public const ADK_Namespace = 8;
+    public const ADK_Superclass = 9;
+    public const ADK_Variable = 10;
+    public const ADK_VarList = 11;
+    public const ADK_Typedef = 12;
+
+    #! Processes Qore AST to generate doxygen-compatible C++ output
+    /** This class uses astparser AST nodes to transform Qore code
+        into C++-like syntax that doxygen can process.
+
+        @par Example:
+        @code{.py}
+%requires Qdx
+%requires astparser
+
+string qore_source = File::readTextFile("MyModule.qm");
+AstParser parser();
+AstTree tree = parser.parseString(qore_source);
+list<auto> nodes = tree.getNodesInfo();
+
+AstProcessor proc(nodes);
+string doxygen_output = proc.process();
+        @endcode
+    */
+    public class AstProcessor {
+        private {
+            #! The AST nodes to process
+            list<auto> nodes;
+            #! Options for processing
+            hash<auto> opts;
+            #! Output buffer
+            string output = "";
+            #! Current indentation level
+            int indent = 0;
+            #! Document table helper for processing tables in doc comments
+            DocumentTableHelper dth();
+        }
+
+        #! Creates an AstProcessor for the given AST nodes
+        /** @param nodes the AST nodes from AstTree::getNodesInfo()
+            @param opts processing options:
+            - \c no_mainpage: convert \@mainpage to \@page
+        */
+        constructor(list<auto> nodes, *hash<auto> opts) {
+            self.nodes = nodes;
+            self.opts = opts ?? {};
+        }
+
+        #! Processes the AST nodes and returns doxygen-compatible output
+        /** @return the processed output suitable for doxygen
+        */
+        string process() {
+            # Process each top-level node
+            foreach auto node in (nodes) {
+                processNode(node);
+            }
+
+            return output;
+        }
+
+        #! Processes a single AST node
+        private processNode(hash<auto> node) {
+            # Skip parse options
+            if (node.nodetype == 4) {  # ANT_ParseOption
+                return;
+            }
+
+            # Handle declarations
+            if (node.nodetype == 1) {  # ANT_Declaration
+                processDeclaration(node);
+            }
+        }
+
+        #! Processes a declaration node
+        private processDeclaration(hash<auto> decl) {
+            switch (decl.kind) {
+                case ADK_Namespace:
+                    processNamespace(decl);
+                    break;
+                case ADK_Class:
+                    processClass(decl);
+                    break;
+                case ADK_Function:
+                    processFunction(decl);
+                    break;
+                case ADK_Constant:
+                    processConstant(decl);
+                    break;
+                case ADK_Hash:
+                    processHashdecl(decl);
+                    break;
+                case ADK_Typedef:
+                    processTypedef(decl);
+                    break;
+                case ADK_Variable:
+                    processVariable(decl);
+                    break;
+            }
+        }
+
+        #! Processes a namespace declaration
+        private processNamespace(hash<auto> ns) {
+            # Output doc comment if present
+            if (ns.docComment) {
+                writeDocComment(ns.docComment);
+            }
+
+            # Output namespace declaration
+            writeLine(sprintf("namespace %s {", ns.name.name));
+            indent++;
+
+            # Process nested declarations
+            if (ns.declarations) {
+                foreach auto decl in (ns.declarations) {
+                    processDeclaration(decl);
+                }
+            }
+
+            indent--;
+            writeLine("};");
+            writeLine("");
+        }
+
+        #! Processes a class declaration
+        private processClass(hash<auto> cls) {
+            # Output doc comment if present
+            if (cls.docComment) {
+                writeDocComment(cls.docComment);
+            }
+
+            # Build class declaration
+            string decl = "";
+            if (cls.modifiers) {
+                # Remove 'public' from class modifiers for doxygen
+                string mods = cls.modifiers;
+                mods =~ s/public\s*//g;
+                trim mods;
+                if (mods.val()) {
+                    decl += mods + " ";
+                }
+            }
+            decl += "class " + cls.name.name;
+
+            # Handle inheritance
+            if (cls.inherits && cls.inherits.size() > 0) {
+                list<string> bases;
+                foreach auto base in (cls.inherits) {
+                    string access = "public";
+                    if (base.modifiers) {
+                        if (base.modifiers =~ /private:internal/) {
+                            access = "private";
+                        } else if (base.modifiers =~ /private:hierarchy/) {
+                            access = "protected";
+                        } else if (base.modifiers =~ /private/) {
+                            access = "protected";
+                        }
+                    }
+                    bases += access + " " + base.name.name;
+                }
+                decl += " : " + bases.join(", ");
+            }
+
+            decl += " {";
+            writeLine(decl);
+            writeLine("public:");
+            indent++;
+
+            # Process class members
+            if (cls.declarations) {
+                foreach auto member in (cls.declarations) {
+                    processClassMember(member);
+                }
+            }
+
+            indent--;
+            writeLine("};");
+            writeLine("");
+        }
+
+        #! Processes a class member (method, variable, etc.)
+        private processClassMember(hash<auto> member) {
+            switch (member.kind) {
+                case ADK_Function:
+                    processMethod(member);
+                    break;
+                case ADK_MemberGroup:
+                    processMemberGroup(member);
+                    break;
+                case ADK_Constant:
+                    processConstant(member);
+                    break;
+                case ADK_Variable:
+                    processVariable(member);
+                    break;
+            }
+        }
+
+        #! Processes a member group (public/private block)
+        private processMemberGroup(hash<auto> group) {
+            # Determine access level
+            string access = "public";
+            if (group.modifiers) {
+                if (group.modifiers =~ /private:internal/) {
+                    access = "private";
+                } else if (group.modifiers =~ /private:hierarchy/) {
+                    access = "protected";
+                } else if (group.modifiers =~ /private/) {
+                    access = "protected";
+                }
+            }
+
+            if (access != "public") {
+                indent--;
+                writeLine(access + ":");
+                indent++;
+            }
+
+            # Process members
+            if (group.members) {
+                foreach auto member in (group.members) {
+                    # member is an expression containing a declaration
+                    if (member.declaration) {
+                        processDeclaration(member.declaration);
+                    }
+                }
+            }
+
+            if (access != "public") {
+                indent--;
+                writeLine("public:");
+                indent++;
+            }
+        }
+
+        #! Processes a method declaration
+        private processMethod(hash<auto> method) {
+            # Output doc comment if present
+            if (method.docComment) {
+                writeDocComment(method.docComment);
+            }
+
+            # Build method signature
+            string sig = "";
+
+            # Add modifiers (but filter out access modifiers)
+            if (method.modifiers) {
+                string mods = method.modifiers;
+                mods =~ s/public\s*//g;
+                mods =~ s/private:internal\s*//g;
+                mods =~ s/private:hierarchy\s*//g;
+                mods =~ s/private\s*//g;
+                trim mods;
+                if (mods.val()) {
+                    sig += mods + " ";
+                }
+            }
+
+            # Return type
+            if (method.returnType && method.returnType.name) {
+                sig += formatType(method.returnType.name.name) + " ";
+            }
+
+            # Method name
+            sig += method.name.name;
+
+            # Parameters
+            sig += "(";
+            if (method.params) {
+                sig += formatParams(method.params);
+            }
+            sig += ");";
+
+            writeLine(sig);
+        }
+
+        #! Processes a function declaration
+        private processFunction(hash<auto> func) {
+            # Output doc comment if present
+            if (func.docComment) {
+                writeDocComment(func.docComment);
+            }
+
+            # Build function signature
+            string sig = "";
+
+            # Add modifiers
+            if (func.modifiers) {
+                string mods = func.modifiers;
+                mods =~ s/public\s*//g;
+                trim mods;
+                if (mods.val()) {
+                    sig += mods + " ";
+                }
+            }
+
+            # Return type
+            if (func.returnType && func.returnType.name) {
+                sig += formatType(func.returnType.name.name) + " ";
+            }
+
+            # Function name (remove 'sub' prefix if present in name)
+            string name = func.name.name;
+            name =~ s/^sub\s+//;
+            sig += name;
+
+            # Parameters
+            sig += "(";
+            if (func.params) {
+                sig += formatParams(func.params);
+            }
+            sig += ");";
+
+            writeLine(sig);
+            writeLine("");
+        }
+
+        #! Processes a constant declaration
+        private processConstant(hash<auto> con) {
+            # Output doc comment if present
+            if (con.docComment) {
+                writeDocComment(con.docComment);
+            }
+
+            writeLine(sprintf("const %s = ...;", con.name.name));
+        }
+
+        #! Processes a hashdecl declaration
+        private processHashdecl(hash<auto> hd) {
+            # Output doc comment if present
+            if (hd.docComment) {
+                writeDocComment(hd.docComment);
+            }
+
+            # Use 'struct' instead of 'hashdecl'
+            writeLine(sprintf("struct %s {", hd.name.name));
+            indent++;
+
+            # Process members
+            if (hd.declarations) {
+                foreach auto member in (hd.declarations) {
+                    if (member.kind == ADK_HashMember) {
+                        string memberDecl = "";
+                        if (member.typeName && member.typeName.name) {
+                            memberDecl += formatType(member.typeName.name) + " ";
+                        }
+                        memberDecl += member.name.name + ";";
+                        writeLine(memberDecl);
+                    }
+                }
+            }
+
+            indent--;
+            writeLine("};");
+            writeLine("");
+        }
+
+        #! Processes a typedef declaration
+        private processTypedef(hash<auto> td) {
+            # Output doc comment if present
+            if (td.docComment) {
+                writeDocComment(td.docComment);
+            }
+
+            string typeName = td.typeName && td.typeName.name ? td.typeName.name : "auto";
+            writeLine(sprintf("typedef %s %s;", formatType(typeName), td.name.name));
+            writeLine("");
+        }
+
+        #! Processes a variable declaration
+        private processVariable(hash<auto> var) {
+            # Output doc comment if present
+            if (var.docComment) {
+                writeDocComment(var.docComment);
+            }
+
+            string typeName = var.typeName && var.typeName.name ? var.typeName.name : "auto";
+            string varDecl = "";
+            if (var.modifiers && var.modifiers =~ /our/) {
+                varDecl += "extern ";
+            }
+            varDecl += formatType(typeName) + " " + var.name.name + ";";
+            writeLine(varDecl);
+        }
+
+        #! Formats a type name for doxygen
+        /** Handles special cases like *type which becomes __7_ type
+        */
+        private string formatType(string typeName) {
+            # Handle soft types (*type)
+            if (typeName =~ /^\*/) {
+                typeName = "__7_ " + substr(typeName, 1);
+            }
+            # Remove $ from type names
+            typeName =~ s/\$//g;
+            return typeName;
+        }
+
+        #! Formats function/method parameters
+        private string formatParams(hash<auto> params) {
+            if (!params) {
+                return "";
+            }
+
+            # params is typically a list expression
+            if (params.elements) {
+                list<string> paramStrs;
+                foreach auto param in (params.elements) {
+                    paramStrs += formatParam(param);
+                }
+                return paramStrs.join(", ");
+            }
+
+            return "";
+        }
+
+        #! Formats a single parameter
+        private string formatParam(hash<auto> param) {
+            # param could be a declaration expression or variable declaration
+            if (param.declaration) {
+                return formatParam(param.declaration);
+            }
+
+            string result = "";
+            if (param.typeName && param.typeName.name) {
+                result += formatType(param.typeName.name) + " ";
+            }
+            if (param.name && param.name.name) {
+                string name = param.name.name;
+                name =~ s/\$//g;
+                result += name;
+            }
+            return result;
+        }
+
+        #! Writes a doc comment to output
+        private writeDocComment(string comment) {
+            # Handle @mainpage conversion if requested
+            if (opts.no_mainpage && comment =~ /@mainpage/) {
+                if (*string page = (comment =~ x/@mainpage\s+(\w.*)/)[0]) {
+                    string link = page.lwr();
+                    link =~ s/\s+/_/g;
+                    comment = regex_subst(comment, "@mainpage\\s+\\w.*", "@page " + link + " " + page);
+                }
+            }
+
+            # Process each line
+            list<string> lines = comment.split("\n");
+            foreach string line in (\lines) {
+                # Convert #! to //! (line doc comments)
+                line =~ s/^(\s*)#!/$1\/\/!/;
+                # Process tables in doc comments
+                line = dth.process(line);
+            }
+
+            # Write each line with proper indentation
+            foreach string line in (lines) {
+                writeLine(line);
+            }
+        }
+
+        #! Writes a line to output with current indentation
+        private writeLine(string line) {
+            string indentStr = strmul("    ", indent);
+            output += indentStr + line + "\n";
         }
     }
 }

@@ -54,7 +54,7 @@ private:
     bool is_declaration;
     bool is_parse_declaration;
 
-    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };

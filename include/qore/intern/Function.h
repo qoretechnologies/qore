@@ -103,14 +103,9 @@ public:
         return names;
     }
 
-    DLLLOCAL QoreValue evalDefaultArg(RuntimeConfig& rc, unsigned i, ExceptionSink* xsink) const {
+    DLLLOCAL QoreValue evalDefaultArg(unsigned i, ExceptionSink* xsink) const {
         assert(i < defaultArgList.size());
-        bool needs_deref = true;
-        QoreValue rv = defaultArgList[i].eval(rc, needs_deref, xsink);
-        if (!needs_deref) {
-            rv = rv.refSelf();
-        }
-        return rv;
+        return defaultArgList[i].eval(xsink);
     }
 
     DLLLOCAL const char* getSignatureText() const {
@@ -310,49 +305,37 @@ class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCount
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
-        @param rc RuntimeConfig reference for runtime context
-        @param n_xsink exception sink
         @param func the code being called
         @param variant the variant to be called, if known, may be nullptr, in which case it will be resolved in the
         call
-        @param n_name the name of the function/method
-        @param args the arguments
+
+        @param is_copy set to true if this is a call to a copy method
         @param self the object of the call target; not (necessarily) the current contextual object where the call is
         made.  "self" is needed to handle executing default argument expressions for normal (non-static) methods in
         case they reference class members or methods
-        @param n_qc the class context
-        @param n_ct the call type
-        @param is_copy set to true if this is a call to a copy method
-        @param cctx the class context for access control
-        @param pgm_ctx the program context
 
         saves current program location in case there's an exception
     */
-    DLLLOCAL CodeEvaluationHelper(RuntimeConfig& rc, ExceptionSink* n_xsink, const QoreFunction* func,
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
 
-    //! Creates the object for evaluating with destructive args
+    //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
-        @param rc RuntimeConfig reference for runtime context
-        @param n_xsink exception sink
         @param func the code being called
         @param variant the variant to be called, if known, may be nullptr, in which case it will be resolved in the
         call
-        @param n_name the name of the function/method
-        @param args the arguments (will be destroyed)
-        @param self the object of the call target
-        @param n_qc the class context
-        @param n_ct the call type
+
         @param is_copy set to true if this is a call to a copy method
-        @param cctx the class context for access control
-        @param pgm_ctx the program context
+        @param self the object of the call target; not (necessarily) the current contextual object where the call is
+        made.  "self" is needed to handle executing default argument expressions for normal (non-static) methods in
+        case they reference class members or methods
 
         saves current program location in case there's an exception;
         performs destructive evaluation of "args"
     */
-    DLLLOCAL CodeEvaluationHelper(RuntimeConfig& rc, ExceptionSink* n_xsink, const QoreFunction* func,
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
@@ -442,23 +425,6 @@ public:
         return name;
     }
 
-    //! Returns the RuntimeConfig pointer (may be nullptr)
-    DLLLOCAL RuntimeConfig* getRuntimeConfig() const {
-        return rc;
-    }
-
-    //! Build a RuntimeConfig for the callee context
-    /** This method builds a RuntimeConfig deterministically without TLS lookups,
-        using values from this CodeEvaluationHelper and parameters.
-
-        @param self The object context for the call (may be nullptr)
-        @param cls The class context for access control (may be nullptr)
-        @param return_type_info The return type of the function being called
-        @return RuntimeConfig populated with callee context
-    */
-    DLLLOCAL RuntimeConfig buildCalleeRuntimeConfig(QoreObject* self, const qore_class_private* cls,
-            const QoreTypeInfo* return_type_info) const;
-
 protected:
     qore_call_t ct;
     const char* name;
@@ -475,7 +441,6 @@ protected:
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
     bool restore_stack = false;
-    RuntimeConfig* rc = nullptr; // optional RuntimeConfig for optimized stack management
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
@@ -640,8 +605,7 @@ protected:
     // flag to tell if variant has been initialized or not (still in pending list)
     bool init;
 
-    DLLLOCAL QoreValue evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
@@ -1046,27 +1010,14 @@ public:
         return nullptr;
     }
 
-    //! Evaluates function
-    /** @param rc RuntimeConfig reference for runtime context
-        @param variant the variant to execute, or nullptr for runtime resolution
-        @param args the arguments
-        @param pgm the program context
-        @param xsink exception sink
-        @return the return value
-    */
-    DLLLOCAL virtual QoreValue evalFunction(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
-            const QoreListNode* args, QoreProgram* pgm, ExceptionSink* xsink) const;
+    // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+            QoreProgram* pgm, ExceptionSink* xsink) const;
 
-    //! Evaluates function with destructive args
-    /** @param rc RuntimeConfig reference for runtime context
-        @param variant the variant to execute, or nullptr for runtime resolution
-        @param args the arguments (will be destroyed)
-        @param pgm the program context
-        @param xsink exception sink
-        @return the return value
-    */
-    DLLLOCAL virtual QoreValue evalFunctionTmpArgs(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
-            QoreListNode* args, QoreProgram* pgm, ExceptionSink* xsink) const;
+    // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    // this function will use destructive evaluation of "args"
+    DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            QoreProgram* pgm, ExceptionSink* xsink) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, ExceptionSink* xsink) const;
@@ -1093,18 +1044,10 @@ public:
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args, bool only_user, const qore_class_private* class_ctx) const;
 
-    // find variant at runtime with explicit parse options from RuntimeConfig
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args, bool only_user, const qore_class_private* class_ctx, int64_t ppo) const;
-
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
-
-    // finds the best match with the given arg types with explicit parse options
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx, int64_t ppo) const;
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
-    // finds only an exact match with the given arg types with explicit parse options
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx, int64_t ppo) const;
 
     DLLLOCAL void parseAssimilate(QoreFunction& other) {
         while (!other.vlist.empty()) {

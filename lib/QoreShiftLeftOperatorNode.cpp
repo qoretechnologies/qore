@@ -33,10 +33,10 @@
 
 QoreString QoreShiftLeftOperatorNode::op_str("<< (shift left) operator expression");
 
-QoreValue QoreShiftLeftOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+QoreValue QoreShiftLeftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return QoreValue();
 
     return lh->getAsBigInt() << rh->getAsBigInt();
@@ -74,8 +74,7 @@ int QoreShiftLeftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreShiftLeftOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

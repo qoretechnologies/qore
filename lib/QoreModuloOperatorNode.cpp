@@ -32,10 +32,10 @@
 
 QoreString QoreModuloOperatorNode::op_str("% (modula) operator expression");
 
-QoreValue QoreModuloOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+QoreValue QoreModuloOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return false;
     int64 l = lh->getAsBigInt();
     int64 r = rh->getAsBigInt();
@@ -67,8 +67,7 @@ int QoreModuloOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     if (!err && left.isValue() && right.isValue() && right.getAsBigInt()) {
         SimpleRefHolder<QoreModuloOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

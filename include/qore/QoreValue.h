@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -74,7 +74,6 @@ class QoreString;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
-struct RuntimeConfig;
 
 // ============================================================================
 // QoreSimpleValue - Trivially copyable value type for unions and varargs
@@ -717,13 +716,11 @@ public:
     // Evaluation
     // ========================================================================
 
-    //! Evaluates the value with explicit runtime configuration
-    /** @param rc runtime configuration passed through the call chain
-        @param needs_deref output parameter indicating if the result needs dereferencing
-        @param xsink exception sink for error reporting
-        @return the result of evaluation
-    */
-    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    //! Evaluates the value and returns the result
+    DLLEXPORT QoreValue eval(ExceptionSink* xsink) const;
+
+    //! Evaluates the value and returns the result with deref flag
+    DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
 
     // ========================================================================
     // Type information
@@ -1025,14 +1022,14 @@ protected:
 //! evaluates an AbstractQoreNode and dereferences the stored value in the destructor
 class ValueEvalOptimizedRefHolder : public ValueEvalRefHolder {
 public:
+    //! evaluates the exp argument
+    DLLEXPORT ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs);
+
     //! creates the object with with no evaluation
-    DLLLOCAL ValueEvalOptimizedRefHolder(ExceptionSink* xs);
+    DLLEXPORT ValueEvalOptimizedRefHolder(ExceptionSink* xs);
 
-    //! evaluates the exp argument with explicit RuntimeConfig
-    DLLLOCAL ValueEvalOptimizedRefHolder(RuntimeConfig& rc, const QoreValue& exp, ExceptionSink* xs);
-
-    //! evaluates the argument with explicit RuntimeConfig, returns -1 for error, 0 = OK
-    DLLLOCAL int eval(RuntimeConfig& rc, const QoreValue& exp);
+    //! evaluates the argument, returns -1 for error, 0 = OK
+    DLLEXPORT int eval(const QoreValue& exp);
 };
 
 //! "bool"

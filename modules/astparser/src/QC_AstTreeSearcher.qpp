@@ -303,6 +303,9 @@ AstTreeSearcher::constructor() {
         symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
         symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
         symbolInfo->setKeyValue("location", location.release(), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
         if (xsink && *xsink)
             return QoreValue();
         lst->push(symbolInfo.release(), xsink);
@@ -362,6 +365,9 @@ AstTreeSearcher::constructor() {
         symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
         symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
         symbolInfo->setKeyValue("location", location.release(), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
         if (xsink && *xsink)
             return QoreValue();
         lst->push(symbolInfo.release(), xsink);
@@ -429,6 +435,9 @@ AstTreeSearcher::constructor() {
         symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
         symbolInfo->setKeyValue("location", location.release(), xsink);
         symbolInfo->setKeyValue("scope_level", static_cast<int64_t>(ssi.scopeLevel), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
         if (xsink && *xsink)
             return QoreValue();
         lst->push(symbolInfo.release(), xsink);

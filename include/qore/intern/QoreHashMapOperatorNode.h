@@ -72,7 +72,7 @@ protected:
 
     DLLLOCAL static QoreString map_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     /* Destructor
     */
@@ -85,7 +85,7 @@ protected:
         return returnTypeInfo;
     }
 
-    DLLLOCAL QoreValue mapIterator(RuntimeConfig& rc, AbstractIteratorHelper& h, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* getNewHash() const;
 };

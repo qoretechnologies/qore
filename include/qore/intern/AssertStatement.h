@@ -50,7 +50,7 @@ private:
     QoreValue condition{};  //!< The condition to assert
     QoreValue message{};    //!< Optional message/format args on failure (can be list for sprintf)
 
-    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };

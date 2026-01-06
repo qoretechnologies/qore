@@ -35,7 +35,6 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
-#include "qore/intern/RuntimeConfig.h"
 
 #include <cassert>
 #include <cstdio>
@@ -147,15 +146,8 @@ StatementBlock::StatementBlock(int sline, int eline, AbstractStatement* s) : Abs
 
 QoreValue StatementBlock::exec(ExceptionSink* xsink) {
     //QORE_TRACE("StatementBlock::exec()");
-    // Create RuntimeConfig once at the top level
-    RuntimeConfig rc = rc_get_current();
-    return exec(rc, xsink);
-}
-
-// RuntimeConfig-aware version - avoids TLS lookup
-QoreValue StatementBlock::exec(RuntimeConfig& rc, ExceptionSink* xsink) {
-    //QORE_TRACE("StatementBlock::exec(rc)");
     QoreValue return_value{};
+    RuntimeConfig rc = rc_get_current();
     ThreadLocalProgramData* tlpd = rc.tlpd;
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
@@ -191,21 +183,21 @@ void StatementBlock::del() {
     }
 }
 
-int StatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
-    //QORE_TRACE("StatementBlock::execImpl(rc)");
+int StatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    //QORE_TRACE("StatementBlock::execImpl()");
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    return execIntern(rc, return_value, xsink);
+    return execIntern(return_value, xsink);
 }
 
-int StatementBlock::execIntern(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
-    //QORE_TRACE("StatementBlock::execIntern(rc)");
+int StatementBlock::execIntern(QoreValue& return_value, ExceptionSink* xsink) {
+    //QORE_TRACE("StatementBlock::execIntern()");
     int rc = 0;
 
     assert(xsink);
 
-    //printd(5, "StatementBlock::execIntern(rc) this=%p, lvars=%p, %ld vars\n", this, lvars, lvars->size());
+    //printd(5, "StatementBlock::execIntern() this=%p, lvars=%p, %ld vars\n", this, lvars, lvars->size());
 
     bool obe = !on_block_exit_list.empty();
     // push "on block exit" iterator if necessary
@@ -213,8 +205,7 @@ int StatementBlock::execIntern(RuntimeConfig& rconfig, QoreValue& return_value, 
         pushBlock(on_block_exit_list.end());
     }
 
-    // Use RuntimeConfig tlpd to avoid TLS lookup
-    ThreadLocalProgramData* tlpd = rconfig.tlpd;
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     // to execute even when block is empty, e.g. while(true);
     if (tlpd->runtimeCheck()) {
         rc = tlpd->dbgStep(this, nullptr, xsink);
@@ -228,8 +219,7 @@ int StatementBlock::execIntern(RuntimeConfig& rconfig, QoreValue& return_value, 
                     break;
                 }
             }
-            // Pass RuntimeConfig through to child statements
-            rc = i->exec(rconfig, return_value, xsink);
+            rc = i->exec(return_value, xsink);
             if (*xsink && tlpd->runtimeCheck()) {
                 tlpd->dbgException(i, xsink);
                 if (*xsink) {
@@ -258,8 +248,7 @@ int StatementBlock::execIntern(RuntimeConfig& rconfig, QoreValue& return_value, 
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
-                        // Pass RuntimeConfig through to on_block_exit code
-                        nrc = (*i).second->execImpl(rconfig, return_value, &obe_xsink);
+                        nrc = (*i).second->execImpl(return_value, &obe_xsink);
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
                                 xsink->clear();
@@ -661,7 +650,7 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     hwm = statement_list.last();
 }
 
-int TopLevelStatementBlock::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
 
     // Get the parse options from the current program at runtime
@@ -687,8 +676,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rconfig, QoreValue& return_v
             return 0;
         }
 
-        // Use RuntimeConfig tlpd to avoid TLS lookup
-        ThreadLocalProgramData* tlpd = rconfig.tlpd;
+        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
         // Execute only new statements
         for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
             if (tlpd->runtimeCheck()) {
@@ -697,7 +685,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rconfig, QoreValue& return_v
                     break;
                 }
             }
-            rc = (*i)->exec(rconfig, return_value, xsink);
+            rc = (*i)->exec(return_value, xsink);
             // Update ehwm to current statement after successful execution
             // so that on exception, only successfully executed statements are marked
             if (!rc && !*xsink) {
@@ -715,7 +703,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rconfig, QoreValue& return_v
     }
 
     // Normal mode - execute all statements
-    return execIntern(rconfig, return_value, xsink);
+    return execIntern(return_value, xsink);
 }
 
 QoreParseContextLvarHelper::~QoreParseContextLvarHelper() {

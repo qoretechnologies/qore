@@ -40,7 +40,7 @@ OnBlockExitStatement::~OnBlockExitStatement() {
     delete code;
 }
 
-int OnBlockExitStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int OnBlockExitStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // "activate" this block when the block exits in the thread "on block exit" stack
     advance_on_block_exit();
     return 0;

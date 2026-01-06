@@ -44,7 +44,6 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
-#include "qore/intern/RuntimeConfig.h"
 
 #include <string>
 #include <set>
@@ -1878,9 +1877,7 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
-    // Create RuntimeConfig once at the entry point and pass it through
-    RuntimeConfig rc = rc_get_current();
-    return priv->sb.exec(rc, xsink);
+    return priv->sb.exec(xsink);
 }
 
 QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
@@ -1905,15 +1902,7 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     // we assign the args to 0 below so that they will not be deleted
     fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
-    QoreValue rv;
-    if (!*xsink) {
-        RuntimeConfig rc = rc_get_current();
-        bool needs_deref = true;
-        rv = fc->eval(rc, needs_deref, xsink);
-        if (!needs_deref) {
-            rv = rv.refSelf();
-        }
-    }
+    QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
     fc->takeArgs();
@@ -2759,15 +2748,6 @@ QoreBreakpoint* QoreBreakpoint::resolveBreakpointId(unsigned breakpointId) {
             return *i;
     }
     return nullptr;
-}
-
-void QoreBreakpoint::cleanupBreakpoints() {
-    // Note: The global breakpoint list does not own references to breakpoints.
-    // Breakpoints remove themselves from this list in their destructor.
-    // This cleanup just ensures the list is cleared before static destruction
-    // to avoid potential issues with static destruction order.
-    QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);
-    breakpointList.clear();
 }
 
 QoreObject* QoreBreakpoint::getQoreObject() {

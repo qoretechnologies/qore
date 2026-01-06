@@ -60,20 +60,6 @@ QoreValue& QoreListNodeEvalOptionalRefHolder::getEntryReference(size_t index) {
     return qore_list_private::get(*val)->getEntryReference(index);
 }
 
-void QoreListNodeEvalOptionalRefHolder::evalIntern(const QoreListNode* exp) {
-    if (exp) {
-        // Use RuntimeConfig if available to avoid TLS lookup
-        if (rc) {
-            val = qore_list_private::evalList(*exp, *rc, needs_deref, xsink);
-        } else {
-            val = exp->evalList(needs_deref, xsink);
-        }
-    } else {
-        val = nullptr;
-        needs_deref = false;
-    }
-}
-
 // with this variant, we can edit and reuse references from "exp"
 void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     assert(!exp || exp->reference_count() == 1);
@@ -88,8 +74,6 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     qore_list_private* vl = qore_list_private::get(*val);
     vl->reserve(exp->size());
 
-    // Use stored RuntimeConfig if available to avoid TLS lookup
-    RuntimeConfig lrc = rc ? *rc : rc_get_current();
     for (unsigned i = 0; i < exp->size(); ++i) {
         QoreValue& ev = exp->getEntryReference(i);
         QoreValue& vv = val->getEntryReference(i);
@@ -98,15 +82,10 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
             vv.swap(ev);
             continue;
         }
-        bool ev_needs_deref = true;
-        QoreValue ev_val = ev.eval(lrc, ev_needs_deref, xsink);
+        vv = ev.eval(xsink);
         if (*xsink) {
             return;
         }
-        if (!ev_needs_deref) {
-            ev_val = ev_val.refSelf();
-        }
-        vv = ev_val;
     }
     assert(exp->size() == val->size());
 }
@@ -263,24 +242,7 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
     QoreValue val{};
 
     if (!args.isNothing()) {
-        RuntimeConfig lrc = rc_get_current();
-        ValueEvalOptimizedRefHolder a(lrc, args, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-
-        val = a.takeReferencedValue();
-    }
-
-    return newComplexListFromValue(typeInfo, val, xsink);
-}
-
-// RuntimeConfig-aware version - avoids TLS lookup
-QoreListNode* qore_list_private::newComplexList(RuntimeConfig& rc, const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink) {
-    QoreValue val{};
-
-    if (!args.isNothing()) {
-        ValueEvalOptimizedRefHolder a(rc, args, xsink);
+        ValueEvalOptimizedRefHolder a(args, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -513,10 +475,10 @@ QoreValue QoreListNode::pop() {
     return rv;
 }
 
-QoreValue QoreListNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreListNode::evalImpl(bool &needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     if (!value) {
-        return priv->eval(rc, xsink);
+        return priv->eval(xsink);
     }
     needs_deref = false;
     return const_cast<QoreListNode*>(this);
@@ -524,8 +486,7 @@ QoreValue QoreListNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Exception
 
 QoreListNode* QoreListNode::evalList(ExceptionSink* xsink) const {
     if (!value) {
-        RuntimeConfig rc = rc_get_current();
-        return priv->eval(rc, xsink);
+        return priv->eval(xsink);
     }
     ref();
     return const_cast<QoreListNode*>(this);
@@ -534,24 +495,10 @@ QoreListNode* QoreListNode::evalList(ExceptionSink* xsink) const {
 QoreListNode* QoreListNode::evalList(bool &needs_deref, ExceptionSink* xsink) const {
     if (!value) {
         needs_deref = true;
-        RuntimeConfig rc = rc_get_current();
-        return priv->eval(rc, xsink);
+        return priv->eval(xsink);
     }
     needs_deref = false;
     return const_cast<QoreListNode*>(this);
-}
-
-// RuntimeConfig-aware evalList - avoids TLS lookup
-QoreListNode* qore_list_private::evalList(const QoreListNode& l, RuntimeConfig& rc, bool& needs_deref,
-        ExceptionSink* xsink) {
-    if (!l.value) {
-        needs_deref = true;
-        return l.priv->eval(rc, xsink);
-    }
-    // Return the original list without adding a reference, matching the non-RuntimeConfig version
-    // The caller does not own a reference when needs_deref is false
-    needs_deref = false;
-    return const_cast<QoreListNode*>(&l);
 }
 
 QoreListNode* QoreListNode::copy() const {
@@ -677,11 +624,11 @@ QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, 
     return rv.release();
 }
 
-QoreListNode* qore_list_private::eval(RuntimeConfig& rc, ExceptionSink* xsink) {
+QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> nl(getCopy(), xsink);
     //printd(5, "qore_list_private::eval() '%s' -> '%s'\n", QoreTypeInfo::getName(complexTypeInfo), get_full_type_name(*nl));
     for (size_t i = 0; i < length; ++i) {
-        ValueEvalOptimizedRefHolder v(rc, entry[i], xsink);
+        ValueEvalOptimizedRefHolder v(entry[i], xsink);
         if (*xsink) {
             return nullptr;
         }

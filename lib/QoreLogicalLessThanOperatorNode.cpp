@@ -32,15 +32,15 @@
 
 QoreString QoreLogicalLessThanOperatorNode::op_str("< operator expression");
 
-QoreValue QoreLogicalLessThanOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     if (pfunc) {
-        return (this->*pfunc)(rc, xsink);
+        return (this->*pfunc)(xsink);
     }
 
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -88,19 +88,19 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
     return err;
 }
 
-bool QoreLogicalLessThanOperatorNode::floatLessThan(RuntimeConfig& rc, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+bool QoreLogicalLessThanOperatorNode::floatLessThan(ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsFloat() < rh->getAsFloat();
 }
 
-bool QoreLogicalLessThanOperatorNode::bigIntLessThan(RuntimeConfig& rc, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+bool QoreLogicalLessThanOperatorNode::bigIntLessThan(ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBigInt() < rh->getAsBigInt();

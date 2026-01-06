@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
 TryStatement::TryStatement(const QoreProgramLocation* loc, StatementBlock* t, StatementBlock* c, char* p,
         const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, const QoreProgramLocation* vloc)
@@ -47,45 +46,40 @@ TryStatement::~TryStatement() {
     delete parseTypeInfo;
 }
 
-int TryStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueHolder trv(xsink);
 
-    QORE_TRACE("TryStatement::execImpl(RuntimeConfig)");
+    QORE_TRACE("TryStatement::execImpl()");
     int rc = 0;
-    if (try_block) {
-        rc = try_block->execImpl(rconfig, *trv, xsink);
-    }
+    if (try_block)
+        rc = try_block->execImpl(*trv, xsink);
 
     QoreException* except = xsink->catchException();
     if (except) {
-        printd(5, "TryStatement::execImpl(RuntimeConfig) entering catch handler, e=%p\n", except);
+        printd(5, "TryStatement::execImpl() entering catch handler, e=%p\n", except);
 
         if (catch_block) {
             CatchExceptionHelper ceh(except);
 
             // instantiate exception information parameter
-            if (param) {
+            if (param)
                 id->instantiate(except->makeExceptionObject());
-            }
 
-            rc = catch_block->execImpl(rconfig, *trv, xsink);
+            rc = catch_block->execImpl(*trv, xsink);
 
             // uninstantiate extra args
-            if (param) {
+            if (param)
                 id->uninstantiate(xsink);
-            }
-        } else {
+        } else
             rc = 0;
-        }
 
         // delete exception chain
         except->del(xsink);
     }
 
     if (!trv->isNothing()) {
-        if (return_value.isNothing()) {
+        if (return_value.isNothing())
             return_value = trv.release();
-        }
     }
 
     return rc;

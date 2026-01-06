@@ -40,7 +40,6 @@
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
-#include "qore/intern/RuntimeConfig.h"
 
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
         RObject(n_obj->references, true),
@@ -782,30 +781,6 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
     return rv;
 }
 
-// RuntimeConfig-aware version
-QoreValue qore_object_private::getReferencedMemberNoMethod(RuntimeConfig& rc, const char* mem,
-        ExceptionSink* xsink) const {
-    // Must use TLS for class context - rc.cls may be from outer scope
-    const qore_class_private* class_ctx = runtime_get_class();
-    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
-        class_ctx);
-
-    QoreSafeVarRWReadLocker sl(rml);
-
-    if (status == OS_DELETED) {
-        makeAccessDeletedObjectException(xsink, mem, theclass->getName());
-        return QoreValue();
-    }
-
-    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
-
-    QoreValue rv{};
-    if (odata) {
-        rv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(mem);
-    }
-    return rv;
-}
-
 void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
@@ -1385,56 +1360,6 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
     return rv;
 }
 
-// RuntimeConfig-aware version
-QoreValue qore_object_private::evalMember(RuntimeConfig& rc, const char* mem, ExceptionSink* xsink) const {
-    // Must use TLS for class context - rc.cls may be from outer scope
-    const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
-        class_ctx = nullptr;
-    }
-    const qore_class_private* member_class_ctx = nullptr;
-    int access_rc = checkMemberAccess(mem, class_ctx, member_class_ctx);
-    const qore_class_private* cls = qore_class_private::get(*theclass);
-    if (access_rc) {
-        // run memberGate if it exists
-        if (cls->memberGate) {
-            return cls->evalMemberGate(obj, mem, xsink);
-        }
-
-        if (access_rc == QOA_PRIV_ERROR) {
-            doPrivateException(mem, xsink);
-        } else {
-            doPublicException(mem, xsink);
-        }
-        return QoreValue();
-    }
-
-    QoreValue rv{};
-    bool exists;
-    {
-        QoreAutoVarRWReadLocker al(rml);
-
-        if (status == OS_DELETED) {
-            return QoreValue();
-        }
-
-        const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
-        if (!odata) {
-            exists = false;
-        } else {
-            rv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(mem, exists);
-        }
-    }
-
-    // execute memberGate method for objects where no member exists
-    if (!exists && cls->memberGate) {
-        assert(rv.isNothing());
-        return cls->evalMemberGate(obj, mem, xsink);
-    }
-
-    return rv;
-}
-
 // 0 = equal, 1 = not equal
 bool QoreObject::compareSoft(const QoreObject* obj, ExceptionSink* xsink) const {
     // currently objects are only equal if they are the same object
@@ -1906,7 +1831,7 @@ const char* QoreObject::getTypeName() const {
     return getStaticTypeName();
 }
 
-QoreValue QoreObject::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreObject::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(false);
     return QoreValue();
 }

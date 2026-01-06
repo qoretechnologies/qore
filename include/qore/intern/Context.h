@@ -57,9 +57,8 @@ public:
     struct node_row_list_s* group_values = nullptr;
     Context* next;
     int sub;
-    RuntimeConfig* rc = nullptr;  // stored RuntimeConfig to avoid TLS lookups
 
-    DLLLOCAL Context(RuntimeConfig& rc, char *nme, ExceptionSink *xsinkx, QoreValue exp,
+    DLLLOCAL Context(char *nme, ExceptionSink *xsinkx, QoreValue exp,
         QoreValue cond = QoreValue(),
         int sort_type = -1, QoreValue sort = QoreValue(),
         QoreValue summary = QoreValue(), int ignore_key = 0);

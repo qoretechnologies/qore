@@ -58,8 +58,7 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     if (!err && e[0].isValue() && e[1].isValue() && e[2].isValue()) {
         SimpleRefHolder<QoreQuestionMarkOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result
@@ -78,14 +77,14 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     return err;
 }
 
-QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder b(rc, e[0], xsink);
+QoreValue QoreQuestionMarkOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder b(e[0], xsink);
     if (*xsink)
         return QoreValue();
 
     QoreValue exp = b->getAsBool() ? e[1] : e[2];
 
-    ValueEvalOptimizedRefHolder rv(rc, exp, xsink);
+    ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink)
         return QoreValue();
 

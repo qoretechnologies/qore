@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/ContextStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
 ContextModList::ContextModList(ContextMod *cm) {
     push_back(cm);
@@ -109,7 +108,7 @@ ContextStatement::~ContextStatement() {
 }
 
 // FIXME: local vars should only be instantiated if there is a non-null context
-int ContextStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int ContextStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     int rc = 0;
     QoreValue sort = sort_ascending ? sort_ascending : sort_descending;
     int sort_type = sort_ascending ? CM_SORT_ASCENDING : (sort_descending ? CM_SORT_DESCENDING : -1);
@@ -117,21 +116,22 @@ int ContextStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    // create the context - pass RuntimeConfig to avoid TLS lookups
-    ReferenceHolder<Context> context(new Context(rconfig, name, xsink, exp, where_exp, sort_type, sort), xsink);
-    if (*xsink || !code) {
+    // create the context
+    ReferenceHolder<Context> context(new Context(name, xsink, exp, where_exp, sort_type, sort), xsink);
+    if (*xsink || !code)
         return rc;
-    }
 
     // execute the statements
     for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
         printd(4, "ContextStatement::exec() iteration %d/%d\n", context->pos, context->max_pos);
-        if (((rc = code->execImpl(rconfig, return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
             rc = 0;
             break;
-        } else if (rc == RC_RETURN) {
+        }
+        else if (rc == RC_RETURN) {
             break;
-        } else if (rc == RC_CONTINUE) {
+        }
+        else if (rc == RC_CONTINUE) {
             rc = 0;
         }
     }

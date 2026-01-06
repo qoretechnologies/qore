@@ -36,8 +36,6 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
-#include "qore/intern/RuntimeConfig.h"
-#include "qore/intern/QoreThreadList.h"
 
 #include <cassert>
 #include <cctype>
@@ -175,13 +173,13 @@ static void add_args(QoreStringNode &desc, const QoreListNode* args) {
     }
 }
 
-CodeEvaluationHelper::CodeEvaluationHelper(RuntimeConfig& n_rc, ExceptionSink* n_xsink, const QoreFunction* func,
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx)
     : ct(n_ct), name(n_name), xsink(n_xsink), qc(n_qc),
-        loc(n_rc.loc),
-        tmp(n_rc, n_xsink), returnTypeInfo((const QoreTypeInfo*)-1), rc(&n_rc) {
+        loc(get_runtime_location()),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
     if (self && !self->isValid()) {
         assert(n_qc);
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
@@ -198,14 +196,13 @@ CodeEvaluationHelper::CodeEvaluationHelper(RuntimeConfig& n_rc, ExceptionSink* n
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
-// RuntimeConfig-aware constructor (destructive args)
-CodeEvaluationHelper::CodeEvaluationHelper(RuntimeConfig& n_rc, ExceptionSink* n_xsink, const QoreFunction* func,
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx)
     : ct(n_ct), name(n_name), xsink(n_xsink), qc(n_qc),
-        loc(n_rc.loc),
-        tmp(n_rc, n_xsink), returnTypeInfo((const QoreTypeInfo*)-1), rc(&n_rc) {
+        loc(get_runtime_location()),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
     if (self && !self->isValid()) {
         assert(n_qc);
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
@@ -224,59 +221,15 @@ CodeEvaluationHelper::CodeEvaluationHelper(RuntimeConfig& n_rc, ExceptionSink* n
 
 CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_stack) {
-        assert(rc);
-        // Update RuntimeConfig
-        rc->stack_loc = stack_loc;
-        // Sync to TLS for cross-thread access
-        QoreAutoRWReadLocker l(thread_list.stack_lck);
-        set_thread_stack_location(stack_loc);
-        if (ct == CT_BUILTIN && old_runtime_loc) {
-            // Also update runtime location for builtin calls
-            update_runtime_location(old_runtime_loc);
+        if (ct == CT_BUILTIN) {
+            update_runtime_stack_location(stack_loc, old_runtime_loc);
+        } else {
+            update_runtime_stack_location(stack_loc);
         }
     }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
     }
-}
-
-RuntimeConfig CodeEvaluationHelper::buildCalleeRuntimeConfig(QoreObject* self, const qore_class_private* cls,
-        const QoreTypeInfo* return_type_info) const {
-    RuntimeConfig callee_rc;
-
-    // Program context - use new program if context was switched, otherwise use rc's program
-    QoreProgram* new_pgm = getNewProgram();
-    callee_rc.pgm = new_pgm ? new_pgm : (rc ? rc->pgm : nullptr);
-
-    // Thread-local program data - use new tlpd if context was switched
-    ThreadLocalProgramData* new_tlpd = getNewThreadLocalProgramData();
-    callee_rc.tlpd = new_tlpd ? new_tlpd : (rc ? rc->tlpd : nullptr);
-
-    // Parse options - use new runtime parse options if context was switched
-    int64 new_po = getNewRuntimeParseOptions();
-    callee_rc.po = new_po ? new_po : (rc ? rc->po : 0);
-
-    // Location and statement - from this CodeEvaluationHelper
-    callee_rc.loc = loc;
-    callee_rc.stmt = stmt;
-
-    // Stack location - this CEH is the new stack frame
-    callee_rc.stack_loc = this;
-
-    // Object and class context - from parameters (set by CodeContextHelper)
-    callee_rc.obj = self;
-    callee_rc.cls = cls;
-
-    // Return type info - from the function signature
-    callee_rc.return_type_info = return_type_info;
-
-    // Element - reset for new function call
-    callee_rc.element = 0;
-
-    // Closure environment - not set here, will be set by closure evaluation if needed
-    callee_rc.closure_env = nullptr;
-
-    return callee_rc;
 }
 
 void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
@@ -348,40 +301,12 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     setCallType(variant->getCallType());
     setReturnTypeInfo(variant->getReturnTypeInfo());
 
-    // add call to call stack using RuntimeConfig
-    assert(rc);
-
-    // Get program context: first check if set() was called on this helper (returns new_pgm),
-    // otherwise fall back to TLS via the global ::getProgram() function.
-    //
-    // IMPORTANT: Must use ::getProgram() (global scope) here, NOT getProgram() (unqualified).
-    // CodeEvaluationHelper inherits from QoreStackLocation which has a virtual getProgram()
-    // member function that returns the 'pgm' member variable. Without the :: qualifier,
-    // C++ resolves to the member function, which returns nullptr since 'pgm' hasn't been
-    // set yet at this point. The global ::getProgram() reads td->current_pgm from TLS.
-    QoreProgram* new_pgm = getNewProgram();
-    pgm = new_pgm ? new_pgm : ::getProgram();
-    stmt = rc->stmt;
-
-    stack_loc = rc->stack_loc;
-    setNext(stack_loc);
-
-    // Update RuntimeConfig
-    rc->stack_loc = this;
-
-    // Sync to TLS for cross-thread access
-    {
-        QoreAutoRWReadLocker l(thread_list.stack_lck);
-        set_thread_stack_location(this);
-    }
-
-    // Handle builtin location
+    // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
-        old_runtime_loc = rc->loc;
-        rc->loc = &loc_builtin;
-        update_runtime_location(&loc_builtin);
+        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
+    } else {
+        stack_loc = update_get_runtime_stack_location(this, stmt, pgm);
     }
-
     restore_stack = true;
 }
 
@@ -436,16 +361,9 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                // Use stored RuntimeConfig to avoid TLS lookup
-                assert(rc);
-                bool needs_deref = true;
-                p = defaultArgList[i].eval(*rc, needs_deref, xsink);
+                p = defaultArgList[i].eval(xsink);
                 if (*xsink) {
                     return -1;
-                }
-                // Ensure the value is referenced since the argument list will deref it later
-                if (!needs_deref) {
-                    p = p.refSelf();
                 }
 
                 // process default argument with accepting type's filter if necessary
@@ -950,8 +868,7 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
         } else {
             // get actual value and include in warning
             ExceptionSink xsink;
-            RuntimeConfig rc = rc_get_current();
-            CodeEvaluationHelper ceh(rc, &xsink, func, variant, "noop-dummy");
+            CodeEvaluationHelper ceh(&xsink, func, variant, "noop-dummy");
             ValueHolder v(variant->evalFunction(nullptr, ceh), nullptr);
             //ReferenceHolder<AbstractQoreNode> v(variant->evalFunction(func->getName(), ceh, 0), 0);
             if (v->isNothing())
@@ -1111,13 +1028,8 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx) const {
-    return runtimeFindVariant(xsink, args, only_user, class_ctx, runtime_get_parse_options());
-}
-
-// finds a variant at runtime with explicit parse options
-const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx, int64_t ppo) const {
     unsigned nargs = args ? args->size() : 0;
+    int64 ppo = runtime_get_parse_options();
 
     // the lowest score length with the highest score wins
     int score_len = -1;
@@ -1364,12 +1276,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx) const {
-    return runtimeFindVariant(xsink, args, class_ctx, runtime_get_parse_options());
-}
-
-// finds a variant at runtime with explicit parse options
-const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
-        const qore_class_private* class_ctx, int64_t ppo) const {
     int match = -1;
 
     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -1384,6 +1290,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     // parent class while iterating
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
+
+    int64 ppo = runtime_get_parse_options();
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -1547,12 +1455,6 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx) const {
-    return runtimeFindExactVariant(xsink, args, class_ctx, runtime_get_parse_options());
-}
-
-// finds a variant at runtime with explicit parse options
-const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args,
-        const qore_class_private* class_ctx, int64_t ppo) const {
     const AbstractQoreFunctionVariant* variant = nullptr;
 
     //printd(5, "QoreFunction::runtimeFindExactVariant() this: %p %s%s%s() vlist: %d ilist: %d args: %p (%d)\n", this,
@@ -1564,6 +1466,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
     // parent class while iterating
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
+
+    int64 ppo = runtime_get_parse_options();
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -1981,10 +1885,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     return variant;
 }
 
-// if the variant was identified at parse time, then variant will not be NULL,
-// otherwise if NULL, then it is identified at run time
-QoreValue QoreFunction::evalFunction(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
-        const QoreListNode* args, QoreProgram *pgm, ExceptionSink* xsink) const {
+// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
+// identified at run time
+QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        QoreProgram *pgm, ExceptionSink* xsink) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -2005,29 +1909,25 @@ QoreValue QoreFunction::evalFunction(RuntimeConfig& rc, const AbstractQoreFuncti
         return QoreValue();
     }
 
-    // Pass pgm to CodeEvaluationHelper so it can set program context before creating stack frame
-    // This ensures getProgram() returns the correct program when building the stack location
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available for qore_get_call_program_context() API
+    // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
-// if the variant was identified at parse time, then variant will not be NULL,
-// otherwise if NULL, then it is identified at run time
-// this function will use destructive evaluation of "args"
-QoreValue QoreFunction::evalFunctionTmpArgs(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
-        QoreListNode* args, QoreProgram *pgm, ExceptionSink* xsink) const {
+// if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
+// identified at run time
+QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+        QoreProgram *pgm, ExceptionSink* xsink) const {
     const char* fname = getName();
-    // Pass pgm to CodeEvaluationHelper so it can set program context before creating stack frame
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available for qore_get_call_program_context() API
+    // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
@@ -2035,10 +1935,9 @@ QoreValue QoreFunction::evalFunctionTmpArgs(RuntimeConfig& rc, const AbstractQor
 // finds a variant and checks variant capabilities against current
 // program parse options
 QoreValue QoreFunction::evalDynamic(const QoreListNode* args, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
     const char* fname = getName();
-    const AbstractQoreFunctionVariant* variant = nullptr;
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args);
+    const AbstractQoreFunctionVariant* variant = 0;
+    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
@@ -2176,15 +2075,13 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     return 0;
 }
 
-QoreValue UserVariantBase::evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink) const {
+QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
     QoreValue val{};  // value-initialized to NOTHING (bits=0)
     if (statements) {
         // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid) {
+        if (self && signature.selfid)
             signature.selfid->instantiateSelf(self);
-        }
 
         // instantiate argv and push id on stack
         assert(signature.argvid);
@@ -2195,8 +2092,8 @@ QoreValue UserVariantBase::evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreLis
 
             // enter gate if necessary
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // execute function with the callee's RuntimeConfig
-                val = statements->exec(rc, xsink);
+                // execute function
+                val = statements->exec(xsink);
 
                 // exit gate if necessary
                 if (gate) {
@@ -2249,23 +2146,8 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
 
-    // Get the class context for this call - same logic as CodeContextHelper uses
-    const qore_class_private* cls_ctx = qc ? qc : (ceh ? ceh->getClass() : nullptr);
-
-    CodeContextHelper cch(xsink, CT_USER, name, self, cls_ctx);
-
-    // Build the callee's RuntimeConfig deterministically without TLS lookups
-    if (ceh) {
-        RuntimeConfig callee_rc = ceh->buildCalleeRuntimeConfig(self, cls_ctx, signature.getReturnTypeInfo());
-        return evalIntern(callee_rc, uveh.getArgv(), self, xsink);
-    } else {
-        // No CodeEvaluationHelper - need to build RuntimeConfig from TLS
-        RuntimeConfig callee_rc = rc_get_current();
-        callee_rc.obj = self;
-        callee_rc.cls = cls_ctx;
-        callee_rc.return_type_info = signature.getReturnTypeInfo();
-        return evalIntern(callee_rc, uveh.getArgv(), self, xsink);
-    }
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr));
+    return evalIntern(uveh.getArgv(), self, xsink);
 }
 
 void UserVariantBase::parseCommit() {

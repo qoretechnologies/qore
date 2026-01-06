@@ -32,19 +32,16 @@
 
 QoreString QoreDivisionOperatorNode::op_str("/ operator expression");
 
-QoreValue QoreDivisionOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-   if (pfunc) {
-      return (this->*pfunc)(rc, xsink);
-   }
+QoreValue QoreDivisionOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+   if (pfunc)
+      return (this->*pfunc)(xsink);
 
-   ValueEvalOptimizedRefHolder lh(rc, left, xsink);
-   if (*xsink) {
+   ValueEvalOptimizedRefHolder lh(left, xsink);
+   if (*xsink)
       return QoreValue();
-   }
-   ValueEvalOptimizedRefHolder rh(rc, right, xsink);
-   if (*xsink) {
+   ValueEvalOptimizedRefHolder rh(right, xsink);
+   if (*xsink)
       return QoreValue();
-   }
 
    return doDivision(*lh, *rh, xsink);
 }
@@ -98,15 +95,11 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
     return err;
 }
 
-QoreValue QoreDivisionOperatorNode::floatDivision(RuntimeConfig& rc, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
+QoreValue QoreDivisionOperatorNode::floatDivision(ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
+    if (*xsink) return QoreValue();
+    ValueEvalOptimizedRefHolder rh(right, xsink);
+    if (*xsink) return QoreValue();
 
     double r = rh->getAsFloat();
 
@@ -118,15 +111,11 @@ QoreValue QoreDivisionOperatorNode::floatDivision(RuntimeConfig& rc, ExceptionSi
     return lh->getAsFloat() / r;
 }
 
-QoreValue QoreDivisionOperatorNode::bigIntDivision(RuntimeConfig& rc, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
+QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
+    if (*xsink) return QoreValue();
+    ValueEvalOptimizedRefHolder rh(right, xsink);
+    if (*xsink) return QoreValue();
 
     int64 r = rh->getAsBigInt();
 

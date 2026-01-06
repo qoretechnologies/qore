@@ -78,10 +78,10 @@ public:
         name(n) {}
 
     //! Copy constructor.
-    ASTSymbolInfo(const ASTSymbolInfo& si) : ASTNode(si.loc), kind(si.kind), usage(si.usage), name(si.name) {}
+    ASTSymbolInfo(const ASTSymbolInfo& si) : ASTNode(si.loc), kind(si.kind), usage(si.usage), name(si.name), docComment(si.docComment) {}
 
     //! Move constructor.
-    ASTSymbolInfo(ASTSymbolInfo&& si) : ASTNode(si.loc), kind(si.kind), usage(si.usage), name(std::move(si.name)) {
+    ASTSymbolInfo(ASTSymbolInfo&& si) : ASTNode(si.loc), kind(si.kind), usage(si.usage), name(std::move(si.name)), docComment(std::move(si.docComment)) {
         si.kind = ASYK_None;
         si.usage = ASUK_None;
     }
@@ -92,6 +92,7 @@ public:
         kind = si.kind;
         usage = si.usage;
         name = si.name;
+        docComment = si.docComment;
         return *this;
     }
 
@@ -101,6 +102,7 @@ public:
         kind = si.kind;
         usage = si.usage;
         name = std::move(si.name);
+        docComment = std::move(si.docComment);
         si.kind = ASYK_None;
         si.usage = ASUK_None;
         return *this;
@@ -114,6 +116,9 @@ public:
 
     //! Symbol's name.
     std::string name;
+
+    //! Documentation comment (if any).
+    std::string docComment;
 };
 
 #endif // _QLS_AST_ASTSYMBOLINFO_H

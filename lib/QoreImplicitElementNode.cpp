@@ -30,8 +30,8 @@
 
 #include <qore/Qore.h>
 
-QoreValue QoreImplicitElementNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
-    return (int64)rc.element;
+QoreValue QoreImplicitElementNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
+    return (int64)get_implicit_element();
 }
 
 int QoreImplicitElementNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {

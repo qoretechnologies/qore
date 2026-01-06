@@ -54,7 +54,7 @@ protected:
     /** @see AbstractQoreNode::evalImpl()
     */
     using SimpleValueQoreNode::evalImpl;
-    DLLLOCAL QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLEXPORT QoreNothingNode();

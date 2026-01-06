@@ -141,7 +141,6 @@ libqore_la_SOURCES = \
 	ScopedRefNode.cpp \
 	ClassRefNode.cpp \
 	AbstractQoreNode.cpp \
-	RuntimeConfig.cpp \
 	QoreStringNode.cpp \
 	DateTimeNode.cpp \
 	qore_date_private.cpp \

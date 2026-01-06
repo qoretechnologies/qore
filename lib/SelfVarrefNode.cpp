@@ -29,8 +29,6 @@
 */
 
 #include <qore/Qore.h>
-#include "qore/intern/QoreObjectIntern.h"
-#include "qore/intern/RuntimeConfig.h"
 
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
@@ -54,31 +52,13 @@ const char* SelfVarrefNode::getTypeName() const {
     return "in-object variable reference";
 }
 
-QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    // IMPORTANT: Must use runtime_get_stack_object() here, NOT rc.obj
-    // rc.obj might be from an outer scope when there are nested method calls
-    // SelfVarrefNode is for accessing members on "self", which is the current stack object
-    QoreObject* self = runtime_get_stack_object();
-    assert(self);
+QoreValue SelfVarrefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(runtime_get_stack_object());
     assert(needs_deref);
     // issue 3523: evaluate in case the value is a reference
-    // Use RuntimeConfig-aware version to avoid TLS lookup for class context
-    ValueHolder val(qore_object_private::get(*self)->getReferencedMemberNoMethod(rc, str, xsink), xsink);
+    ValueHolder val(runtime_get_stack_object()->getReferencedMemberNoMethod(str, xsink), xsink);
     // the value here must always require a dereference
-    if (val->needsEval()) {
-        bool nd = true;
-        QoreValue rv = val->eval(rc, nd, xsink);
-        // IMPORTANT: The RuntimeConfig-aware eval(rc, nd, xsink) may return an unreferenced value
-        // (indicated by nd=false), unlike the legacy eval(xsink) which always returns referenced.
-        // Since our caller expects a referenced value (needs_deref is asserted true above),
-        // we must call refSelf() when nd is false to maintain the reference counting contract.
-        // Failing to do this causes premature object destruction and use-after-free crashes.
-        if (!nd) {
-            rv = rv.refSelf();
-        }
-        return rv;
-    }
-    return val.release();
+    return val->needsEval() ? val->eval(xsink) : val.release();
 }
 
 char* SelfVarrefNode::takeString() {

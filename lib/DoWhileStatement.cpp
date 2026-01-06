@@ -32,9 +32,8 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/DoWhileStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
-int DoWhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int DoWhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -49,7 +48,7 @@ int DoWhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, 
         }
 
         if (code) {
-            rc = code->execImpl(rconfig, return_value, xsink);
+            rc = code->execImpl(return_value, xsink);
             if (*xsink || rc == RC_BREAK) {
                 rc = 0;
                 break;
@@ -62,7 +61,7 @@ int DoWhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, 
             }
         }
 
-        ValueEvalOptimizedRefHolder val(rconfig, cond, xsink);
+        ValueEvalOptimizedRefHolder val(cond, xsink);
         if (*xsink) {
             break;
         }

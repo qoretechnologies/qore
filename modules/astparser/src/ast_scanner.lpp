@@ -210,6 +210,161 @@ bool PO_BROKEN_OPERATORS = false;
 bool PO_NO_TRANSIENT = false;
 bool PO_NO_TYPEDEF = false;
 bool PO_NO_ENUM = false;
+
+// Pending doc comment - accumulates doc comment text to be attached to the next declaration
+static std::string* pendingDocComment = nullptr;
+// Tracks whether we're in a consecutive doc comment block
+static bool inDocCommentBlock = false;
+// Claimed doc comment for class declarations - stored separately so class body members don't steal it
+static std::string* pendingClassDocComment = nullptr;
+// Claimed doc comment for hashdecl declarations - stored separately so hashdecl body members don't steal it
+static std::string* pendingHashdeclDocComment = nullptr;
+// Claimed doc comment for namespace declarations - stored separately so namespace body members don't steal it
+static std::string* pendingNamespaceDocComment = nullptr;
+
+// Conditional parsing stack entry
+struct ConditionalEntry {
+    bool elseSeen;      // Have we seen %else for this level?
+    bool inElseBranch;  // Are we currently in the else branch?
+
+    ConditionalEntry() : elseSeen(false), inElseBranch(false) {}
+};
+
+// Stack of conditional parsing levels
+static std::vector<ConditionalEntry> conditionalStack;
+
+// Push a new conditional level
+static void cond_push() {
+    conditionalStack.push_back(ConditionalEntry());
+}
+
+// Pop a conditional level, returns true if stack was not empty
+static bool cond_pop() {
+    if (conditionalStack.empty()) {
+        return false;
+    }
+    conditionalStack.pop_back();
+    return true;
+}
+
+// Check if we're in a conditional block
+static bool cond_in_block() {
+    return !conditionalStack.empty();
+}
+
+// Check if %else was already seen at current level
+static bool cond_has_else() {
+    if (conditionalStack.empty()) {
+        return false;
+    }
+    return conditionalStack.back().elseSeen;
+}
+
+// Mark that we've seen %else at current level
+static void cond_mark_else() {
+    if (!conditionalStack.empty()) {
+        conditionalStack.back().elseSeen = true;
+        conditionalStack.back().inElseBranch = true;
+    }
+}
+
+// Get current nesting depth
+static size_t cond_depth() {
+    return conditionalStack.size();
+}
+
+// Clears the pending doc comment
+static void clearPendingDocComment() {
+    delete pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a class declaration
+// This should be called when the scanner sees the 'class' keyword, before the class body is parsed
+static void claimClassDocComment() {
+    delete pendingClassDocComment;
+    pendingClassDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a hashdecl declaration
+// This should be called when the scanner sees the 'hashdecl' keyword, before the hashdecl body is parsed
+static void claimHashdeclDocComment() {
+    delete pendingHashdeclDocComment;
+    pendingHashdeclDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a namespace declaration
+// This should be called when the scanner sees the 'namespace' keyword, before the namespace body is parsed
+static void claimNamespaceDocComment() {
+    delete pendingNamespaceDocComment;
+    pendingNamespaceDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Called when starting a new doc comment
+// If we're continuing a consecutive doc comment block, append; otherwise replace
+static void startDocComment(const char* text) {
+    if (inDocCommentBlock && pendingDocComment) {
+        // Append to existing doc comment
+        pendingDocComment->append("\n");
+        pendingDocComment->append(text);
+    } else {
+        // Start fresh
+        delete pendingDocComment;
+        pendingDocComment = new std::string(text);
+    }
+    inDocCommentBlock = true;
+}
+
+// Appends text to the current doc comment
+static void appendDocComment(const char* text) {
+    if (pendingDocComment) {
+        pendingDocComment->append(text);
+    }
+}
+
+// Called when we see any non-doc-comment, non-whitespace token
+static void endDocCommentBlock() {
+    inDocCommentBlock = false;
+}
+
+// Takes ownership of the pending doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takePendingDocComment() {
+    std::string* result = pendingDocComment;
+    pendingDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed class doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeClassDocComment() {
+    std::string* result = pendingClassDocComment;
+    pendingClassDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed hashdecl doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeHashdeclDocComment() {
+    std::string* result = pendingHashdeclDocComment;
+    pendingHashdeclDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed namespace doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeNamespaceDocComment() {
+    std::string* result = pendingNamespaceDocComment;
+    pendingNamespaceDocComment = nullptr;
+    return result;
+}
 %}
 
 %option noyywrap nomain noyy_top_state warn
@@ -219,7 +374,7 @@ bool PO_NO_ENUM = false;
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -422,111 +577,74 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             return PARSE_OPTION_END;
                                         }
 <p_def><<EOF>>                          { AST_FLEX_DO_EOF }
-^%ifdef{WS}*$                           { /*parse_error("missing argument to %%ifdef");*/ }
+^%ifdef{WS}*$                           { /* %ifdef with no argument - ignore */ }
 ^%ifdef{WS}+                            BEGIN(p_ifdef);
 <p_ifdef>{
     [^\n\r]+$                           {
-                                            /*parse_cond_push(true);
-                                            if (parse_is_defined(yytext)) {
-                                                //printd(5, "ifdef: '%s' is defined\n", yytext);
-                                                BEGIN(INITIAL);
-                                            }
-                                            else {
-                                                //printd(5, "ifdef: '%s' is not defined\n", yytext);
-                                                // skip to the next %else or %endif
-                                                BEGIN(p_skip_to_endif_or_else);
-                                            }*/
+                                            // Push conditional level and continue parsing
+                                            // For AST parsing, we include all code from all branches
+                                            cond_push();
                                             BEGIN(INITIAL);
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
-^%ifndef{WS}*$                          { /*parse_error("missing argument to %%ifndef");*/ }
+^%ifndef{WS}*$                          { /* %ifndef with no argument - ignore */ }
 ^%ifndef{WS}+                           BEGIN(p_ifndef);
 <p_ifndef>{
     [^\n\r]+$                           {
-                                            /*parse_cond_push(true);
-                                            if (!parse_is_defined(yytext)) {
-                                                //printd(5, "ifndef: '%s' is not defined\n", yytext);
-                                                BEGIN(INITIAL);
+                                            // Push conditional level and continue parsing
+                                            // For AST parsing, we include all code from all branches
+                                            cond_push();
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             { AST_FLEX_DO_EOF }
+}
+^%if{WS}*$                              { /* %if with no expression - ignore */ }
+^%if{WS}+                               BEGIN(p_if);
+<p_if>{
+    [^\n\r]+$                           {
+                                            // Push conditional level and continue parsing
+                                            // For AST parsing, we don't evaluate the expression
+                                            cond_push();
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             { AST_FLEX_DO_EOF }
+}
+^%elif{WS}*$                            {
+                                            // %elif with no expression
+                                            if (!cond_in_block()) {
+                                                // %elif without %if - just ignore
+                                            } else if (cond_has_else()) {
+                                                // %elif after %else - ignore (would be error in real parser)
                                             }
-                                            else {
-                                                //printd(5, "ifndef: '%s' is defined\n", yytext);
-                                                // skip to the next %else or %endif
-                                                BEGIN(p_skip_to_endif_or_else);
-                                            }*/
+                                            // Continue parsing - we include all branches
+                                        }
+^%elif{WS}+                             BEGIN(p_elif);
+<p_elif>{
+    [^\n\r]+$                           {
+                                            // %elif with expression - just continue parsing
+                                            // For AST parsing, we don't evaluate and include all branches
                                             BEGIN(INITIAL);
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 ^%else{WS}*$                            {
-                                            /*if (!parse_cond_else()) {
-                                                parse_error("%%else found without %%if");
+                                            if (!cond_in_block()) {
+                                                // %else without %if - just ignore for AST parsing
+                                            } else if (cond_has_else()) {
+                                                // Duplicate %else - ignore (would be error in real parser)
+                                            } else {
+                                                // Mark that we've seen %else at this level
+                                                cond_mark_else();
                                             }
-                                            else {
-                                                BEGIN(p_skip_to_endif);
-                                            }*/
-                                            BEGIN(INITIAL);
+                                            // Continue parsing - we include all branches
                                         }
-<p_skip_to_endif>{
-    ^%endif{WS}*$                       {
-                                            /*if (parse_cond_pop()) {
-                                                printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
-                                                BEGIN(INITIAL);
-                                            }*/
-                                            BEGIN(INITIAL);
-#ifdef DEBUG
-                                            /*//else
-                                            //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);*/
-#endif
+^%endif{WS}*$                           {
+                                            // Pop the conditional level
+                                            if (!cond_pop()) {
+                                                // %endif without matching %if/%ifdef/%ifndef - ignore for AST parsing
+                                            }
                                         }
-    ^.*                                 {
-                                            /*if (!strncmp("%ifdef", yytext, 6)) {
-                                                //printd(5, "p_skip_to_endif: found %%ifdef (%s); skipping\n", yytext);
-                                                parse_cond_push();
-                                            }*/
-                                            BEGIN(INITIAL);
-#ifdef DEBUG
-                                            /*// ignore other text
-                                            //printd(5, "p_skip_to_endif: %s\n", yytext);*/
-#endif
-                                        }
-    \n                                  /* ignore */
-    <<EOF>>                             { AST_FLEX_DO_EOF }
-}
-<p_skip_to_endif_or_else>{
-    ^%else{WS}*$                        {
-                                            //printd(5, "p_skip_to_endif_or_else: found %else\n");
-                                            /*if (parse_cond_test()) {
-                                                BEGIN(INITIAL);
-                                            }*/
-                                            BEGIN(INITIAL);
-                                        }
-    ^%endif{WS}*$                       {
-                                            /*if (parse_cond_pop()) {
-                                                //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
-                                                BEGIN(INITIAL);
-                                            }*/
-                                            BEGIN(INITIAL);
-#ifdef DEBUG
-                                            //else
-                                            //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (not final)\n", yytext);
-#endif
-                                        }
-    ^.*                                 {
-                                            /*if (!strncmp("%ifdef", yytext, 6)) {
-                                                //printd(5, "p_skip_to_endif_or_else: found %%ifdef (%s); skipping\n", yytext);
-                                                parse_cond_push();
-                                            }*/
-                                            BEGIN(INITIAL);
-#ifdef DEBUG
-                                            /*// ignore other text
-                                            //printd(5, "p_skip_to_endif_or_else: %s\n", yytext);*/
-#endif
-                                        }
-    \n                                  /* ignore */
-    <<EOF>>                             { AST_FLEX_DO_EOF }
-}
-^%endif{WS}*$                           {} /* parse_cond_pop(); */
 ^%include{WS}*$                         { yylval->parseopt = new ASTStringParseOption(APOK_INCLUDE); return PARSE_OPTION_FULL; }
 ^%include{WS}+                          { BEGIN(incl); return PARSE_OPTION_BEGIN; }
 <incl>{WS}*                             /* ignore white space */
@@ -721,9 +839,26 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             AST_FLEX_DO_EOF
                                         }
 }
+\#!                                     { yylval->String = new std::string("#!"); BEGIN(doc_line_comment); }
 \#                                      BEGIN(line_comment);
+<doc_line_comment>{
+    [\n\r]                              {
+                                            // Doc line comment complete - store it
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             {
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    [^\n\r]                             { yylval->String->push_back(yytext[0]); }
+}
 <line_comment>{
-    [\n\r]                              BEGIN(INITIAL);
+    [\n\r]                              { clearPendingDocComment(); BEGIN(INITIAL); }
     <<EOF>>                             AST_FLEX_DO_EOF
     [^\n\r]                             // ignore any other character until EOL
 }
@@ -803,7 +938,7 @@ static                                  return TOK_STATIC;
 (::(Qore::)?)?NULL                      return TOK_NULL;
 (::(Qore::)?)?True                      return TOK_TRUE;
 (::(Qore::)?)?False                     return TOK_FALSE;
-hashdecl                                return TOK_HASHDECL;
+hashdecl                                { claimHashdeclDocComment(); return TOK_HASHDECL; }
 transient                               {
                                             if (PO_NO_TRANSIENT) {
                                                 yylval->string = strdup("transient");
@@ -980,10 +1115,10 @@ cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->st
 {BINARY}                                { yylval->string = strdup(yytext); return BINARY; }
 \$\.{WORD}                              { yylval->string = strdup(yytext + 2); return SELF_REF; }
 \${WORD}                                { yylval->string = strdup(yytext + 1); return VAR_REF; }
-class{WS}+({WORD}::)+{WORD}             { yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
-class{WS}+(::{WORD})+                   { yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
-class{WS}+{WORD}                        { yylval->string = trim(yytext + 6); return CLASS_STRING; }
-namespace{WS}+{WORD}                    { yylval->string = trim(yytext + 10); return NAMESPACE; }
+class{WS}+({WORD}::)+{WORD}             { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+(::{WORD})+                   { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+{WORD}                        { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
+namespace{WS}+{WORD}                    { claimNamespaceDocComment(); yylval->string = trim(yytext + 10); return NAMESPACE; }
 module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
 \<{WORD}\>\{                            {
@@ -1099,14 +1234,32 @@ hash\<{WORD}\>\{                        {
 \<{WS}+\<{WS}*=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 \<{WS}*\<{WS}+=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 
+\/\*\*                                  { yylval->String = new std::string("/**"); BEGIN(doc_block_comment); }
 \/\*                                    BEGIN(block_comment1);
+<doc_block_comment>{
+    \*\/                                {
+                                            // Doc block comment complete - store it
+                                            yylval->String->append("*/");
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             {
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    .|\n                                { yylval->String->append(yytext); }
+}
 <block_comment1>{
     \*                                  BEGIN(block_comment2);
     <<EOF>>                             { AST_FLEX_DO_EOF }
     [^\*]                               // ignore other input
 }
 <block_comment2>{
-    \/                                  BEGIN(INITIAL);
+    \/                                  { clearPendingDocComment(); BEGIN(INITIAL); }
     \*                                  // ignore
     <<EOF>>                             { AST_FLEX_DO_EOF }
     [^\/\*]                             BEGIN(block_comment1);
@@ -1131,5 +1284,5 @@ hash\<{WORD}\>\{                        {
 =\~                                     { BEGIN(regex_googleplex); return REGEX_MATCH; }
 \!\~                                    { BEGIN(regex_negative_universe); return REGEX_NMATCH; }
 {WSNL}+                                 /* ignore whitespace */
-.                                       return yytext[0];
+.                                       { endDocCommentBlock(); return yytext[0]; }
 %%

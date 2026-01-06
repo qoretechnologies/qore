@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,6 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
-#include "qore/intern/RuntimeConfig.h"
 
 #include <memory>
 
@@ -121,14 +120,12 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     return err;
 }
 
-QoreValue QoreMapSelectOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+QoreValue QoreMapSelectOperatorNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(rc, value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
     if (*xsink || value_type == nothing) {
         return QoreValue();
     }
-    // Set RuntimeConfig for sub-expression evaluation
-    f->setRuntimeConfig(&rc);
 
     ReferenceHolder<QoreListNode> rv(ref_rv && (value_type != single) ? new QoreListNode(expTypeInfo) : nullptr,
         xsink);
@@ -171,52 +168,43 @@ QoreValue QoreMapSelectOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_der
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreMapSelectOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
-        FunctionalValueType& value_type, ExceptionSink* xsink) const {
+FunctionalOperatorInterface* QoreMapSelectOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
+        ExceptionSink* xsink) const {
     if (iterator_func) {
-        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(rc, value_type, xsink));
+        std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(value_type, xsink));
         if (*xsink || value_type == nothing)
-            return nullptr;
-        FunctionalOperatorInterface* result = new QoreFunctionalMapSelectOperator(this, f.release());
-        result->setRuntimeConfig(&rc);
-        return result;
+            return 0;
+        return new QoreFunctionalMapSelectOperator(this, f.release());
     }
 
-    // Use RuntimeConfig-aware evaluation
-    ValueEvalOptimizedRefHolder marg(rc, e[1], xsink);
+    ValueEvalOptimizedRefHolder marg(e[1], xsink);
     if (*xsink)
-        return nullptr;
+        return 0;
 
     qore_type_t t = marg->getType();
     if (t != NT_LIST) {
         if (t == NT_OBJECT) {
             AbstractIteratorHelper h(xsink, "map operator", const_cast<QoreObject*>(marg->get<const QoreObject>()));
             if (*xsink)
-                return nullptr;
+                return 0;
             if (h) {
                 bool temp = marg.isTemp();
                 marg.clearTemp();
                 value_type = list;
-                FunctionalOperatorInterface* result = new QoreFunctionalMapSelectIteratorOperator(this, temp, h, xsink);
-                result->setRuntimeConfig(&rc);
-                return result;
+                return new QoreFunctionalMapSelectIteratorOperator(this, temp, h, xsink);
             }
         }
         if (t == NT_NOTHING) {
             value_type = nothing;
-            return nullptr;
+            return 0;
         }
 
         value_type = single;
-        FunctionalOperatorInterface* result = new QoreFunctionalMapSelectSingleValueOperator(this, marg.getReferencedValue(), xsink);
-        result->setRuntimeConfig(&rc);
-        return result;
+        return new QoreFunctionalMapSelectSingleValueOperator(this, marg.getReferencedValue(), xsink);
     }
 
     value_type = list;
-    FunctionalOperatorInterface* result = new QoreFunctionalMapSelectListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
-    result->setRuntimeConfig(&rc);
-    return result;
+    return new QoreFunctionalMapSelectListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
 }
 
 bool QoreFunctionalMapSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
@@ -224,19 +212,18 @@ bool QoreFunctionalMapSelectListOperator::getNextImpl(ValueOptionalRefHolder& va
         if (!next())
             return true;
 
+        // set offset in thread-local data for "$#"
+        ImplicitElementHelper eh(index());
         SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
 
         // check if value can be mapped
-        assert(rc);
-        // set offset in RuntimeConfig for "$#"
-        RuntimeConfigElementHelper eh(*rc, index());
-        ValueEvalOptimizedRefHolder result(*rc, map->e[2], xsink);
+        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())
             continue;
-        // evaluate map expression
-        ValueEvalOptimizedRefHolder tval(*rc, map->e[0], xsink);
+
+        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
         if (!*xsink) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -256,15 +243,13 @@ bool QoreFunctionalMapSelectSingleValueOperator::getNextImpl(ValueOptionalRefHol
     v.clear();
 
     // check if value can be mapped
-    assert(rc);
-    ValueEvalOptimizedRefHolder result(*rc, map->e[2], xsink);
+    ValueEvalOptimizedRefHolder result(map->e[2], xsink);
     if (*xsink)
         return false;
     if (!result->getAsBool())
         return true;
 
-    // evaluate map expression
-    ValueEvalOptimizedRefHolder tval(*rc, map->e[0], xsink);
+    ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
     if (!*xsink) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -280,6 +265,9 @@ bool QoreFunctionalMapSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder
         if (*xsink)
             return false;
 
+        // set offset in thread-local data for "$#"
+        ImplicitElementHelper eh(index++);
+
         // get current value
         ValueHolder iv(h.getValue(xsink), xsink);
         if (*xsink)
@@ -287,16 +275,13 @@ bool QoreFunctionalMapSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
         // check if value can be mapped
-        assert(rc);
-        // set offset in RuntimeConfig for "$#"
-        RuntimeConfigElementHelper eh(*rc, index++);
-        ValueEvalOptimizedRefHolder result(*rc, map->e[2], xsink);
+        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())
             continue;
-        // evaluate map expression
-        ValueEvalOptimizedRefHolder tval(*rc, map->e[0], xsink);
+
+        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
         if (!*xsink) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -316,19 +301,17 @@ bool QoreFunctionalMapSelectOperator::getNextImpl(ValueOptionalRefHolder& val, E
         if (*xsink)
             return false;
 
+        ImplicitElementHelper eh(index++);
         SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
 
         // check if value can be mapped
-        assert(rc);
-        // set offset in RuntimeConfig for "$#"
-        RuntimeConfigElementHelper eh(*rc, index++);
-        ValueEvalOptimizedRefHolder result(*rc, map->e[2], xsink);
+        ValueEvalOptimizedRefHolder result(map->e[2], xsink);
         if (*xsink)
             return false;
         if (!result->getAsBool())
             continue;
-        // evaluate map expression
-        ValueEvalOptimizedRefHolder tval(*rc, map->e[0], xsink);
+
+        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
         if (!*xsink) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);

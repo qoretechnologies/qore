@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/DebugStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
 DebugStatement::DebugStatement(int start_line, int end_line, QoreValue exp)
         : AbstractStatement(start_line, end_line), expression(exp), code(nullptr) {
@@ -46,13 +45,13 @@ DebugStatement::~DebugStatement() {
     delete code;
 }
 
-int DebugStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int DebugStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     if (code) {
         // Execute the statement block
-        return code->execImpl(rconfig, return_value, xsink);
+        return code->execImpl(return_value, xsink);
     }
     // Simply evaluate the expression for its side effects (e.g., logging)
-    ValueEvalOptimizedRefHolder val(rconfig, expression, xsink);
+    ValueEvalOptimizedRefHolder val(expression, xsink);
     // The result is discarded; we just want the side effects
     return *xsink ? -1 : 0;
 }

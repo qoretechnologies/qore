@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/qore_program_private.h"
-#include "qore/intern/RuntimeConfig.h"
 
 #include <typeinfo>
 
@@ -39,11 +38,9 @@ QoreBreakpointList_t::QoreBreakpointList_t() {
 }
 
 QoreBreakpointList_t::~QoreBreakpointList_t() {
-    // Note: These lists do not own references to the breakpoints.
-    // Breakpoints are ref-counted through their QoreObject wrapper.
-    // The QoreBreakpoint constructor/destructor manages adding/removing
-    // from the global list, while statement assignment is managed separately.
-    // We just need to clear the list without calling deref().
+    for (auto& i : *this) {
+        i->deref();
+    }
     clear();
 }
 
@@ -88,27 +85,13 @@ void AbstractStatement::finalizeBlock(int sline, int eline) {
 
 int AbstractStatement::exec(QoreValue& return_value, ExceptionSink *xsink) {
     //QORE_TRACE("AbstractStatement::exec()");
-    // Create RuntimeConfig once at the top level and delegate to the RuntimeConfig version
-    RuntimeConfig rc = rc_get_current();
-    return exec(rc, return_value, xsink);
-}
-
-int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink *xsink) {
-    //QORE_TRACE("AbstractStatement::exec(rc)");
-    printd(1, "AbstractStatement::exec(rc) this: %p file: %s:%d\n", this, loc->getFile(), loc->start_line);
-    // Update RuntimeConfig with current statement location
-    RuntimeConfigLocationHelper loc_helper(rc, loc, this, pwo.parse_options);
+    printd(1, "AbstractStatement::exec() this: %p file: %s:%d\n", this, loc->getFile(), loc->start_line);
+    QoreProgramLocationHelper stack_loc(xsink, loc, this, pwo.parse_options);
     //pthread_testcancel();
-#ifdef QORE_MANAGE_STACK
-    // Check stack limit - this was done by QoreProgramLocationHelper in the original code
-    if (check_stack(xsink)) {
-        return 0;
-    }
-#endif
     if (*xsink) {
         return 0;
     }
-    return execImpl(rc, return_value, xsink);
+    return execImpl(return_value, xsink);
 }
 
 int AbstractStatement::parseInit(QoreParseContext& parse_context) {

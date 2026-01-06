@@ -238,10 +238,6 @@ DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(Qore
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc);
-//! Sets the thread-local stack location (caller must hold stack_lck)
-DLLLOCAL void set_thread_stack_location(const QoreStackLocation* stack_loc);
-//! Sets the thread-local runtime location
-DLLLOCAL void update_runtime_location(const QoreProgramLocation* loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
@@ -583,7 +579,6 @@ DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
-DLLLOCAL const QoreClosureBase* thread_get_runtime_closure_env();
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
 
 typedef std::vector<ClosureVarValue*> cvv_vec_t;
@@ -776,32 +771,13 @@ public:
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
 
-    //! Returns the new program set by this context helper (nullptr if not set or same as old)
-    DLLLOCAL QoreProgram* getNewProgram() const {
-        return new_pgm;
-    }
-
-    //! Returns the ThreadLocalProgramData for the new program context
-    DLLLOCAL ThreadLocalProgramData* getNewThreadLocalProgramData() const {
-        return new_tlpd;
-    }
-
-    //! Returns the runtime parse options for the new program context
-    DLLLOCAL int64 getNewRuntimeParseOptions() const {
-        return new_runtime_po;
-    }
-
 protected:
     QoreProgram* old_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
-    QoreProgram* new_pgm = nullptr;           //!< the new program context (nullptr if unchanged)
-    ThreadLocalProgramData* new_tlpd = nullptr; //!< the new tlpd (nullptr if unchanged)
-    int64 new_runtime_po = 0;                 //!< the new runtime parse options
     // frame count of tlpd when context is started
     int save_frameCount = 0;
     int old_frameCount = 0;
-    int64 old_runtime_po = 0;
     bool restore = false;
     bool init_tlpd = false;
 };

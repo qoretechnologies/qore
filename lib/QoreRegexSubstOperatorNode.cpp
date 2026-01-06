@@ -34,9 +34,9 @@
 
 QoreString QoreRegexSubstOperatorNode::op_str("regex subst (=~ s///) operator expression");
 
-QoreValue QoreRegexSubstOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+QoreValue QoreRegexSubstOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(rc, exp, xsink);
+    LValueHelper v(exp, xsink);
     if (!v)
         return QoreValue();
 

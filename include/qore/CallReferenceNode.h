@@ -86,7 +86,7 @@ protected:
     //! this function should never be called for function references; this function should never be called directly
     /** in debug mode this function calls assert(false)
     */
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     //! protected constructor for subclasses that are not reference-counted
     DLLLOCAL AbstractCallReferenceNode(bool n_needs_eval, bool n_there_can_be_only_one,
@@ -161,8 +161,7 @@ public:
     DLLEXPORT virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);
 
     // the following function must be defined, but is never called
-    // Note: must be DLLEXPORT because external modules can derive from this class
-    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     //! Increments the weak reference count
     DLLLOCAL void weakRef() {

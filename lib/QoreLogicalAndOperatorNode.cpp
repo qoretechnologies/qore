@@ -32,16 +32,16 @@
 
 QoreString QoreLogicalAndOperatorNode::logical_and_str("logical and (&&) operator expression");
 
-QoreValue QoreLogicalAndOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreLogicalAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     // if left side is 0, then do not evaluate right side (logical short circuiting)
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
     if (!lh->getAsBool()) {
         return false;
     }
 
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
     return rh->getAsBool();
@@ -63,8 +63,7 @@ int QoreLogicalAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalAndOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

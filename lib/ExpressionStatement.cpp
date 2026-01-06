@@ -30,7 +30,6 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ExpressionStatement.h"
-#include "qore/intern/RuntimeConfig.h"
 
 ExpressionStatement::ExpressionStatement(const QoreProgramLocation* loc, QoreValue v)
         : AbstractStatement(loc), exp(v) {
@@ -62,8 +61,8 @@ ExpressionStatement::~ExpressionStatement() {
     exp.discard(nullptr);
 }
 
-int ExpressionStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
-    ValueEvalOptimizedRefHolder erh(rconfig, exp, xsink);
+int ExpressionStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalOptimizedRefHolder erh(exp, xsink);
     return 0;
 }
 

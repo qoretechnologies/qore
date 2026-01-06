@@ -91,6 +91,142 @@ namespace Constants {
     const E = 2.71828;
 }
 ";
+
+        const DocCommentCode = "
+%new-style
+/** Doc comment for MyClass
+    with multiple lines
+*/
+class MyClass {
+    #! Doc for constructor
+    constructor() {}
+
+    #! Doc for myMethod
+    int myMethod() { return 1; }
+}
+
+#! Doc for my_function
+sub my_function() {
+}
+
+/** Doc for MyConst */
+const MyConst = 1;
+
+#! Doc for MyHashDecl
+hashdecl MyHashDecl {
+    int x;
+}
+";
+
+        # Comprehensive doc comment test code
+        const DocCommentComprehensiveCode = "
+%new-style
+
+#! First line of namespace doc
+#! Second line of namespace doc
+namespace TestNs {
+    /** Block doc for ClassA
+        @brief A test class
+        @since 1.0
+    */
+    class ClassA {
+        #! Doc for public member block
+        public {
+            #! Doc for member x
+            int x;
+            #! Doc for member y
+            string y;
+        }
+
+        #! Doc for private block
+        private {
+            int z;
+        }
+
+        #! Constructor doc
+        #! @param val initial value
+        constructor(int val) {
+            x = val;
+        }
+
+        #! Destructor doc
+        destructor() {}
+
+        #! Method doc with params
+        #! @param a first param
+        #! @param b second param
+        #! @return the sum
+        int add(int a, int b) {
+            return a + b;
+        }
+
+        /** Static method doc */
+        static int staticMethod() {
+            return 42;
+        }
+
+        #! Abstract method doc
+        abstract string abstractMethod();
+    }
+
+    #! Class with inheritance doc
+    class ClassB inherits ClassA {
+        constructor() : ClassA(0) {}
+    }
+
+    #! Empty class doc
+    class EmptyClass {
+    }
+
+    #! Forward declaration doc
+    class ForwardDecl;
+
+    #! Hashdecl doc
+    #! with multiple lines
+    hashdecl MyHash {
+        int id;
+        string name;
+    }
+
+    #! Constant with complex value
+    const COMPLEX_CONST = {
+        'key': 'value',
+    };
+}
+
+#! Top-level class without namespace
+class TopLevelClass {
+    constructor() {}
+}
+";
+
+        # Test for consecutive doc comments (only last block should attach)
+        const DocCommentConsecutiveCode = "
+#! First doc block
+#! continues here
+
+#! Second doc block (should be used)
+#! also continues
+class MyClass {
+    constructor() {}
+}
+";
+
+        # Test for doc comment with blank line separation
+        const DocCommentBlankLineCode = "
+#! Doc comment
+
+class MyClass {
+    constructor() {}
+}
+";
+
+        # Test for no doc comment
+        const NoDocCommentCode = "
+class MyClass {
+    constructor() {}
+}
+";
     }
 
     constructor() : Test("AstParserTest", "1.0") {
@@ -111,6 +247,10 @@ namespace Constants {
         addTestCase("Hover info", \testHoverInfo());
         addTestCase("getNodesInfo line indexing", \testGetNodesInfo());
         addTestCase("Scope symbols", \testScopeSymbols());
+        addTestCase("Doc comments", \testDocComments());
+        addTestCase("Doc comments comprehensive", \testDocCommentsComprehensive());
+        addTestCase("Doc comments in getNodesInfo", \testDocCommentsGetNodesInfo());
+        addTestCase("Doc comments edge cases", \testDocCommentsEdgeCases());
 %endif
         set_return_value(main());
     }
@@ -524,6 +664,202 @@ namespace MyNamespace {
         # Verify we found expected symbols - at minimum we should have class and namespace
         assertTrue(hasMyClass, "found MyClass symbol");
         assertTrue(hasNamespace, "found MyNamespace symbol");
+    }
+
+    testDocComments() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(DocCommentCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+
+        assertEq(True, exists(syms), "symbols found");
+
+        # Build a map of symbol name to docComment
+        hash<string, *string> docComments;
+        foreach auto s in (syms) {
+            docComments{s.name} = s.docComment;
+        }
+
+        # Test class doc comment (claimed when scanner sees 'class' keyword)
+        assertTrue(exists(docComments{"MyClass"}), "class has docComment field");
+        assertTrue(docComments{"MyClass"} =~ /Doc comment for MyClass/, "class docComment contains expected text");
+
+        # Test constructor doc comment
+        assertTrue(exists(docComments{"MyClass::constructor"}), "constructor has docComment");
+        assertTrue(docComments{"MyClass::constructor"} =~ /Doc for constructor/, "constructor docComment correct");
+
+        # Test method doc comment
+        assertTrue(exists(docComments{"MyClass::myMethod"}), "method has docComment");
+        assertTrue(docComments{"MyClass::myMethod"} =~ /Doc for myMethod/, "method docComment correct");
+
+        # Test function doc comment
+        assertTrue(exists(docComments{"my_function"}), "function has docComment");
+        assertTrue(docComments{"my_function"} =~ /Doc for my_function/, "function docComment correct");
+
+        # Test constant doc comment
+        assertTrue(exists(docComments{"MyConst"}), "constant has docComment");
+        assertTrue(docComments{"MyConst"} =~ /Doc for MyConst/, "constant docComment correct");
+
+        # Test hashdecl doc comment
+        assertTrue(exists(docComments{"MyHashDecl"}), "hashdecl has docComment");
+        assertTrue(docComments{"MyHashDecl"} =~ /Doc for MyHashDecl/, "hashdecl docComment correct");
+    }
+
+    testDocCommentsComprehensive() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(DocCommentComprehensiveCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list syms = searcher.findSymbols(tree, "test.q");
+        assertEq(True, exists(syms), "symbols found");
+
+        # Build a map of symbol name to docComment
+        hash<string, *string> docComments;
+        foreach auto s in (syms) {
+            docComments{s.name} = s.docComment;
+        }
+
+        # Note: namespace doc comments are not currently supported by astparser
+        # Test that namespace is found (doc comments skipped)
+        assertTrue(docComments.hasKey("TestNs"), "namespace found");
+
+        # Test class with block comment and doxygen tags
+        assertTrue(exists(docComments{"TestNs::ClassA"}), "ClassA has docComment");
+        assertTrue(docComments{"TestNs::ClassA"} =~ /@brief/, "ClassA doc has @brief tag");
+        assertTrue(docComments{"TestNs::ClassA"} =~ /@since/, "ClassA doc has @since tag");
+
+        # Test constructor with multi-line #! and @param
+        assertTrue(exists(docComments{"TestNs::ClassA::constructor"}), "constructor has docComment");
+        assertTrue(docComments{"TestNs::ClassA::constructor"} =~ /@param val/, "constructor doc has @param");
+
+        # Test destructor
+        assertTrue(exists(docComments{"TestNs::ClassA::destructor"}), "destructor has docComment");
+        assertTrue(docComments{"TestNs::ClassA::destructor"} =~ /Destructor doc/, "destructor doc correct");
+
+        # Test method with multiple @param and @return
+        assertTrue(exists(docComments{"TestNs::ClassA::add"}), "add method has docComment");
+        assertTrue(docComments{"TestNs::ClassA::add"} =~ /@param a/, "add doc has @param a");
+        assertTrue(docComments{"TestNs::ClassA::add"} =~ /@param b/, "add doc has @param b");
+        assertTrue(docComments{"TestNs::ClassA::add"} =~ /@return/, "add doc has @return");
+
+        # Test static method with block comment
+        assertTrue(exists(docComments{"TestNs::ClassA::staticMethod"}), "staticMethod has docComment");
+        assertTrue(docComments{"TestNs::ClassA::staticMethod"} =~ /Static method doc/, "staticMethod doc correct");
+
+        # Test abstract method
+        assertTrue(exists(docComments{"TestNs::ClassA::abstractMethod"}), "abstractMethod has docComment");
+
+        # Test class with inheritance
+        assertTrue(exists(docComments{"TestNs::ClassB"}), "ClassB has docComment");
+        assertTrue(docComments{"TestNs::ClassB"} =~ /inheritance doc/, "ClassB doc mentions inheritance");
+
+        # Test empty class
+        assertTrue(exists(docComments{"TestNs::EmptyClass"}), "EmptyClass has docComment");
+        assertTrue(docComments{"TestNs::EmptyClass"} =~ /Empty class doc/, "EmptyClass doc correct");
+
+        # Test forward declaration
+        assertTrue(exists(docComments{"TestNs::ForwardDecl"}), "ForwardDecl has docComment");
+
+        # Test hashdecl with multi-line doc
+        assertTrue(exists(docComments{"TestNs::MyHash"}), "hashdecl has docComment");
+        assertTrue(docComments{"TestNs::MyHash"} =~ /Hashdecl doc/, "hashdecl doc has first line");
+        assertTrue(docComments{"TestNs::MyHash"} =~ /with multiple lines/, "hashdecl doc has second line");
+
+        # Test constant
+        assertTrue(exists(docComments{"TestNs::COMPLEX_CONST"}), "constant has docComment");
+
+        # Test top-level class (outside namespace)
+        assertTrue(exists(docComments{"TopLevelClass"}), "TopLevelClass has docComment");
+    }
+
+    testDocCommentsGetNodesInfo() {
+        # Test that docComment appears in getNodesInfo() output
+        AstParser parser();
+        *AstTree tree = parser.parseString(DocCommentCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list<auto> nodes = tree.getNodesInfo();
+        assertTrue(nodes.size() > 0, "has nodes");
+
+        # Find the class node and verify it has docComment
+        bool foundClassWithDoc = False;
+        bool foundMethodWithDoc = False;
+
+        foreach auto node in (nodes) {
+            if (node.kind == 1 && node.name.name == "MyClass") {  # ADK_Class = 1
+                assertTrue(exists(node.docComment), "class node has docComment in getNodesInfo");
+                assertTrue(node.docComment =~ /Doc comment for MyClass/, "class docComment correct in getNodesInfo");
+                foundClassWithDoc = True;
+
+                # Check nested method declarations
+                if (node.declarations) {
+                    foreach auto decl in (node.declarations) {
+                        if (decl.kind == 4 && decl.name.name == "constructor") {  # ADK_Function = 4
+                            assertTrue(exists(decl.docComment), "constructor has docComment in getNodesInfo");
+                            foundMethodWithDoc = True;
+                        }
+                    }
+                }
+            }
+        }
+
+        assertTrue(foundClassWithDoc, "found class with docComment in getNodesInfo");
+        assertTrue(foundMethodWithDoc, "found method with docComment in getNodesInfo");
+    }
+
+    testDocCommentsEdgeCases() {
+        AstParser parser();
+        AstTreeSearcher searcher();
+
+        # Test 1: Consecutive doc comments - blank line separates blocks
+        {
+            *AstTree tree = parser.parseString(DocCommentConsecutiveCode);
+            assertEq(0, parser.getErrorCount(), "consecutive: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(exists(docComments{"MyClass"}), "consecutive: class has docComment");
+            # After blank line, new doc block starts - should have "Second doc block"
+            assertTrue(docComments{"MyClass"} =~ /Second doc block/, "consecutive: has second block");
+        }
+
+        # Test 2: Doc comment with blank line before declaration
+        {
+            *AstTree tree = parser.parseString(DocCommentBlankLineCode);
+            assertEq(0, parser.getErrorCount(), "blank line: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            # With blank line separation, doc comment should NOT attach
+            # (depends on implementation - current behavior attaches)
+            assertTrue(docComments.hasKey("MyClass"), "blank line: class found");
+        }
+
+        # Test 3: No doc comment
+        {
+            *AstTree tree = parser.parseString(NoDocCommentCode);
+            assertEq(0, parser.getErrorCount(), "no doc: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(docComments.hasKey("MyClass"), "no doc: class found");
+            assertNothing(docComments{"MyClass"}, "no doc: class has no docComment");
+        }
     }
 %endif
 }

@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreParseListNode.h"
-#include "qore/intern/RuntimeConfig.h"
 
 AssertStatement::AssertStatement(int start_line, int end_line, QoreValue exp)
         : AbstractStatement(start_line, end_line) {
@@ -70,9 +69,9 @@ AssertStatement::~AssertStatement() {
     message.discard(nullptr);
 }
 
-int AssertStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     // Evaluate the condition
-    ValueEvalOptimizedRefHolder cond_val(rconfig, condition, xsink);
+    ValueEvalOptimizedRefHolder cond_val(condition, xsink);
     if (*xsink) {
         return 0;
     }
@@ -82,7 +81,7 @@ int AssertStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, E
         // Assertion failed - get the message if provided
         QoreStringNode* msg_str = nullptr;
         if (message) {
-            ValueEvalOptimizedRefHolder msg_val(rconfig, message, xsink);
+            ValueEvalOptimizedRefHolder msg_val(message, xsink);
             if (*xsink) {
                 return 0;
             }
