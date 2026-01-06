@@ -142,6 +142,8 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 extern std::string* takePendingDocComment();
 // Defined in ast_scanner.lpp - takes ownership of claimed class doc comment
 extern std::string* takeClassDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed hashdecl doc comment
+extern std::string* takeHashdeclDocComment();
 
 // Helper macro to attach pending doc comment to a declaration
 #define ATTACH_DOC_COMMENT(decl) \
@@ -156,6 +158,15 @@ extern std::string* takeClassDocComment();
 #define ATTACH_CLASS_DOC_COMMENT(decl) \
     do { \
         std::string* doc = takeClassDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach hashdecl doc comment (claimed when scanner saw 'hashdecl' keyword)
+#define ATTACH_HASHDECL_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeHashdeclDocComment(); \
         if (doc && decl) { \
             (decl)->setDocComment(doc); \
         } \
@@ -480,7 +491,7 @@ top_level_command:
             $$ = $1;
         }
         | hashdecl_def {
-            ATTACH_DOC_COMMENT($1);
+            ATTACH_HASHDECL_DOC_COMMENT($1);
             $$ = $1;
         }
         | enum_def {
@@ -793,7 +804,7 @@ namespace_decl:
         scoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | unscoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | class_def { $$ = $1; }
-        | hashdecl_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | hashdecl_def { ATTACH_HASHDECL_DOC_COMMENT($1); $$ = $1; }
         | enum_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | typedef_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }

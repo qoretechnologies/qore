@@ -217,6 +217,8 @@ static std::string* pendingDocComment = nullptr;
 static bool inDocCommentBlock = false;
 // Claimed doc comment for class declarations - stored separately so class body members don't steal it
 static std::string* pendingClassDocComment = nullptr;
+// Claimed doc comment for hashdecl declarations - stored separately so hashdecl body members don't steal it
+static std::string* pendingHashdeclDocComment = nullptr;
 
 // Clears the pending doc comment
 static void clearPendingDocComment() {
@@ -230,6 +232,15 @@ static void clearPendingDocComment() {
 static void claimClassDocComment() {
     delete pendingClassDocComment;
     pendingClassDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a hashdecl declaration
+// This should be called when the scanner sees the 'hashdecl' keyword, before the hashdecl body is parsed
+static void claimHashdeclDocComment() {
+    delete pendingHashdeclDocComment;
+    pendingHashdeclDocComment = pendingDocComment;
     pendingDocComment = nullptr;
     inDocCommentBlock = false;
 }
@@ -274,6 +285,14 @@ std::string* takePendingDocComment() {
 std::string* takeClassDocComment() {
     std::string* result = pendingClassDocComment;
     pendingClassDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed hashdecl doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeHashdeclDocComment() {
+    std::string* result = pendingHashdeclDocComment;
+    pendingHashdeclDocComment = nullptr;
     return result;
 }
 %}
@@ -886,7 +905,7 @@ static                                  return TOK_STATIC;
 (::(Qore::)?)?NULL                      return TOK_NULL;
 (::(Qore::)?)?True                      return TOK_TRUE;
 (::(Qore::)?)?False                     return TOK_FALSE;
-hashdecl                                return TOK_HASHDECL;
+hashdecl                                { claimHashdeclDocComment(); return TOK_HASHDECL; }
 transient                               {
                                             if (PO_NO_TRANSIENT) {
                                                 yylval->string = strdup("transient");
