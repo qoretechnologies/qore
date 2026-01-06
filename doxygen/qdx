@@ -447,9 +447,23 @@ class qdx {
 
             # skip module declarations for now
             if (line =~ /^[[:space:]]*module[[:space:]]+/) {
-                while (line.val() && !regex(line, "}$") && ins.next()) {
+                # use tokenizer-based brace counting to correctly skip the module block
+                hash<auto> bc = count_braces(line);
+                int brace_count = bc.open - bc.close;
+                while (brace_count > 0 && ins.next()) {
                     line = ins.getValue();
+                    bc = count_braces(line);
+                    brace_count += (bc.open - bc.close);
                 }
+                continue;
+            }
+
+            # Handle #! documentation comments early to prevent fcall logic from merging them with next lines
+            # These comments often contain parentheses that would otherwise trigger the multi-line joining logic
+            if (line =~ /^[[:space:]]*#!/) {
+                # Convert Qore doc comment to C++ doc comment
+                line =~ s/#!/\/\/!/;
+                w.write(line);
                 continue;
             }
 
