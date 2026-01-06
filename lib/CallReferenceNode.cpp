@@ -464,7 +464,8 @@ QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, 
     //printd(5, "RunTimeObjectMethodReferenceNode::exec() this: %p obj: %p %s::%s() qc: %p (%s)\n", this, obj,
     //    obj->getClassName(), method.c_str(), qc, qc ? qc->name.c_str() : "n/a");
     // issue #2145: set class context after evaluating arguments
-    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, xsink);
+    // Pass the object's program as the program context to ensure proper sandboxing
+    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, xsink, obj->getProgram());
 }
 
 QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {

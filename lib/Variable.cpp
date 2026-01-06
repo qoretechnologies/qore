@@ -626,8 +626,9 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove) {
     clearPtr();
 
     // get the current class context for possible internal data
-    // use RuntimeConfig if available to avoid TLS lookup
-    const qore_class_private* class_ctx = (rc && rc->cls) ? rc->cls : runtime_get_class();
+    // IMPORTANT: Must always use runtime_get_class() here, NOT rc->cls
+    // rc->cls might be from an outer scope when there are nested method calls or object creation
+    const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
@@ -748,16 +749,17 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
     } else if (ntype == NT_SELF_VARREF) {
         const SelfVarrefNode* v = n.get<const SelfVarrefNode>();
         // note that getStackObject() is guaranteed to return a value here (self varref is only valid in a method)
-        // use RuntimeConfig if available to avoid TLS lookup
-        QoreObject* obj = (rc && rc->obj) ? rc->obj : runtime_get_stack_object();
+        // IMPORTANT: Must use runtime_get_stack_object() here, NOT rc->obj
+        // rc->obj might be from an outer scope when there are nested method calls or object creation
+        QoreObject* obj = runtime_get_stack_object();
         assert(obj);
 
         // clear ocvec when we get to an object
         ocvec.clear();
         clearPtr();
 
-        // use RuntimeConfig if available to avoid TLS lookup for class context
-        const qore_class_private* class_ctx = (rc && rc->cls) ? rc->cls : runtime_get_class();
+        // IMPORTANT: Must use runtime_get_class() here, NOT rc->cls - same reason as above
+        const qore_class_private* class_ctx = runtime_get_class();
         if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;

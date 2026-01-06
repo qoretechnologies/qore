@@ -319,7 +319,12 @@ public:
                 return QoreValue();
             }
             bool needs_deref = true;
-            return lvalue_ref::get(*ref)->vexp.eval(rc, needs_deref, xsink);
+            QoreValue rv = lvalue_ref::get(*ref)->vexp.eval(rc, needs_deref, xsink);
+            // This method always returns a referenced value
+            if (!needs_deref) {
+                rv = rv.refSelf();
+            }
+            return rv;
         }
 
         if (val.getType() == NT_WEAKREF) {

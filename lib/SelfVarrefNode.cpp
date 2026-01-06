@@ -67,7 +67,16 @@ QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excepti
     // the value here must always require a dereference
     if (val->needsEval()) {
         bool nd = true;
-        return val->eval(rc, nd, xsink);
+        QoreValue rv = val->eval(rc, nd, xsink);
+        // IMPORTANT: The RuntimeConfig-aware eval(rc, nd, xsink) may return an unreferenced value
+        // (indicated by nd=false), unlike the legacy eval(xsink) which always returns referenced.
+        // Since our caller expects a referenced value (needs_deref is asserted true above),
+        // we must call refSelf() when nd is false to maintain the reference counting contract.
+        // Failing to do this causes premature object destruction and use-after-free crashes.
+        if (!nd) {
+            rv = rv.refSelf();
+        }
+        return rv;
     }
     return val.release();
 }

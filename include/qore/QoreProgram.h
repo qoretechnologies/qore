@@ -1165,6 +1165,13 @@ public:
     */
     DLLEXPORT static QoreBreakpoint* resolveBreakpointId(unsigned breakpointId);
 
+    //! cleanup the global breakpoint list - called from qore_cleanup()
+    /** This method must be called during qore library shutdown before static
+        destruction begins to ensure proper cleanup of breakpoints.
+        @since %Qore 2.1
+    */
+    DLLLOCAL static void cleanupBreakpoints();
+
     DLLEXPORT void setQoreObject(QoreObject* n_qo);
 
     DLLEXPORT QoreObject* getQoreObject();

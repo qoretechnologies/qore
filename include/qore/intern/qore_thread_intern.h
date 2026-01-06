@@ -776,10 +776,28 @@ public:
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
 
+    //! Returns the new program set by this context helper (nullptr if not set or same as old)
+    DLLLOCAL QoreProgram* getNewProgram() const {
+        return new_pgm;
+    }
+
+    //! Returns the ThreadLocalProgramData for the new program context
+    DLLLOCAL ThreadLocalProgramData* getNewThreadLocalProgramData() const {
+        return new_tlpd;
+    }
+
+    //! Returns the runtime parse options for the new program context
+    DLLLOCAL int64 getNewRuntimeParseOptions() const {
+        return new_runtime_po;
+    }
+
 protected:
     QoreProgram* old_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
+    QoreProgram* new_pgm = nullptr;           //!< the new program context (nullptr if unchanged)
+    ThreadLocalProgramData* new_tlpd = nullptr; //!< the new tlpd (nullptr if unchanged)
+    int64 new_runtime_po = 0;                 //!< the new runtime parse options
     // frame count of tlpd when context is started
     int save_frameCount = 0;
     int old_frameCount = 0;

@@ -323,9 +323,10 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
+// NOTE: runtime_loc, runtime_statement, and runtime_po are now stored in tl_runtime_config
+// in RuntimeConfig.cpp - they're the authoritative source for these values
 class ThreadData {
 public:
-    int64 runtime_po = 0;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -334,10 +335,6 @@ public:
     ProgramParseContext* plStack = nullptr;
     // current runtime stack location
     const QoreStackLocation* current_stack_location = nullptr;
-    // current dynamic runtime location
-    const QoreProgramLocation* runtime_loc = &loc_builtin;
-    // current dynamic runtime statement
-    const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
     const char* parse_file = nullptr; // the current file or label being parsed
     const char* parse_source = nullptr; // the current source being parsed
@@ -819,7 +816,7 @@ public:
             ThreadData* td = thread_data.get();
             call_obj = td->current_obj;
             class_ctx = td->current_class;
-            loc = td->runtime_loc;
+            loc = rc_get_tls_ref().loc;
         }
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
@@ -1531,7 +1528,7 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     ThreadData* td = thread_data.get();
 
     current_pgm = td->current_pgm;
-    current_stmt = td->runtime_statement;
+    current_stmt = rc_get_tls_ref().stmt;
 
     const QoreStackLocation* rv = td->current_stack_location;
 
@@ -1547,9 +1544,10 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
         const QoreProgramLocation*& old_runtime_loc) {
     ThreadData* td = thread_data.get();
+    RuntimeConfig& rc = rc_get_tls_ref();
 
     current_pgm = td->current_pgm;
-    current_stmt = td->runtime_statement;
+    current_stmt = rc.stmt;
 
     const QoreStackLocation* rv = td->current_stack_location;
 
@@ -1558,8 +1556,8 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     QoreAutoRWReadLocker l(thread_list.stack_lck);
     td->current_stack_location = stack_loc;
     stack_loc->setNext(rv);
-    old_runtime_loc = td->runtime_loc;
-    td->runtime_loc = &loc_builtin;
+    old_runtime_loc = rc.loc;
+    rc.loc = &loc_builtin;
     return rv;
 }
 
@@ -1580,7 +1578,7 @@ void update_runtime_stack_location(const QoreStackLocation* stack_loc, const Qor
     // locking is necessary due to the fact that thread stacks can be read from other threads
     QoreAutoRWReadLocker l(thread_list.stack_lck);
     td->current_stack_location = stack_loc;
-    td->runtime_loc = runtime_loc;
+    rc_get_tls_ref().loc = runtime_loc;
 }
 
 void set_thread_stack_location(const QoreStackLocation* stack_loc) {
@@ -1589,29 +1587,29 @@ void set_thread_stack_location(const QoreStackLocation* stack_loc) {
 }
 
 void update_runtime_location(const QoreProgramLocation* loc) {
-    thread_data.get()->runtime_loc = loc;
+    rc_get_tls_ref().loc = loc;
 }
 
 const AbstractStatement* get_runtime_statement() {
-    return thread_data.get()->runtime_statement;
+    return rc_get_tls_ref().stmt;
 }
 
 const QoreProgramLocation* get_runtime_location() {
-    return thread_data.get()->runtime_loc;
+    return rc_get_tls_ref().loc;
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
         int64 po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, int64& old_po) {
-    ThreadData* td = thread_data.get();
-    old_stmt = td->runtime_statement;
-    old_loc = td->runtime_loc;
-    old_po = td->runtime_po;
-    td->runtime_statement = stmt;
-    td->runtime_loc = loc;
-    td->runtime_po = po;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_stmt = rc.stmt;
+    old_loc = rc.loc;
+    old_po = rc.po;
+    rc.stmt = stmt;
+    rc.loc = loc;
+    rc.po = po;
 
 #ifdef QORE_MANAGE_STACK
-    return check_stack_intern(xsink, td);
+    return check_stack_intern(xsink, thread_data.get());
 #else
     return 0;
 #endif
@@ -1619,25 +1617,25 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
 
 void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc) {
-    ThreadData* td = thread_data.get();
-    old_stmt = td->runtime_statement;
-    old_loc = td->runtime_loc;
-    td->runtime_statement = nullptr;
-    td->runtime_loc = loc;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_stmt = rc.stmt;
+    old_loc = rc.loc;
+    rc.stmt = nullptr;
+    rc.loc = loc;
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
         int64 po) {
-    ThreadData* td = thread_data.get();
-    td->runtime_statement = stmt;
-    td->runtime_loc = loc;
-    td->runtime_po = po;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.stmt = stmt;
+    rc.loc = loc;
+    rc.po = po;
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc) {
-    ThreadData* td = thread_data.get();
-    td->runtime_statement = stmt;
-    td->runtime_loc = loc;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.stmt = stmt;
+    rc.loc = loc;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -2137,7 +2135,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
     // restore runtime parse options for the previous program context
-    td->runtime_po = old_runtime_po;
+    rc_get_tls_ref().po = old_runtime_po;
 
     qore_program_private::decThreadCount(*pgm, td->tid);
 }
@@ -2156,7 +2154,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
     old_ctx = td->current_pgm_ctx;
-    old_runtime_po = td->runtime_po;
+    old_runtime_po = rc_get_tls_ref().po;
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
         "pgmid:%d new_pgm: %p new_pgmid:%d cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
@@ -2173,14 +2171,20 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     restore = true;
     td->current_pgm = pgm;
     // update runtime parse options for the new program context
-    td->runtime_po = pgm->getParseOptions64();
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.po = pgm->getParseOptions64();
     init_tlpd = td->tpd->saveProgram(runtime, xsink); // set new td->tlpd
     td->current_pgm_ctx = this;
     save_frameCount = td->tlpd->lvstack.getFrameCount();
 
+    // Store new context values for deterministic RuntimeConfig building
+    new_pgm = pgm;
+    new_tlpd = td->tlpd;
+    new_runtime_po = rc.po;
+
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
         "init_tlpd:%d runtime_po:0x%llx\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd,
-        (long long)td->runtime_po
+        (long long)rc.po
     );
 
     if (!td->tlpd->dbgIsAttached()) {
@@ -2399,7 +2403,6 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
 QoreProgram* getProgram() {
     ThreadData* td = thread_data.get();
-    printd(5, "getProgram(): (td: %p) %p\n", td, td ? td->current_pgm : nullptr);
     assert(td);
     QoreProgram* rv = td->current_pgm;
     return rv ? rv : td->call_program_context;
@@ -2415,7 +2418,7 @@ int64 parse_get_parse_options() {
 }
 
 int64 runtime_get_parse_options() {
-    return (thread_data.get())->runtime_po;
+    return rc_get_tls_ref().po;
 }
 
 int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
@@ -2819,7 +2822,7 @@ namespace {
                         btp->getContextObject(), btp->class_ctx);
                     QoreInternalCallStackLocationHelper stack_loc(*btp->loc, "<background operator>", CT_NEWTHREAD);
                     // save runtime location of thread creation call
-                    td->runtime_loc = btp->loc;
+                    rc_get_tls_ref().loc = btp->loc;
 
                     // dereference call object if present
                     btp->derefCallObj();
@@ -3142,10 +3145,8 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
 }
 
 void delete_thread_local_data() {
-    ThreadData* td = thread_data.get();
-
     // clear runtime location
-    td->runtime_loc = nullptr;
+    rc_get_tls_ref().loc = nullptr;
 
     ExceptionSink xsink;
     // delete any thread data
