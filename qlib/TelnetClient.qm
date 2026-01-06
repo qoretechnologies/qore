@@ -295,8 +295,8 @@ public class TelnetClient {
         *string user;
 
         # logging closures
-        *code log_info;
-        *code log_debug;
+        *code<nothing(string)> log_info;
+        *code<nothing(string)> log_debug;
 
         # hash of features the telnet server has asked for
         hash fh;

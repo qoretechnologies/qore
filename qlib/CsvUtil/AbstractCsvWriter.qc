@@ -124,7 +124,7 @@ public namespace CsvUtil {
             bool optimal_quotes = True;
 
             #! a closure/call reference for informational logging when using write(SQLStatement)
-            *code info_log;
+            *code<nothing(string, ...)> info_log;
 
             #! mapping output field by name
             hash m_out_by_name;

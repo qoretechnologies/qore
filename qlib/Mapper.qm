@@ -634,19 +634,19 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         *string name;
 
         #! an optional info logging callback; must accept a sprintf()-style format specifier and optional arguments
-        *code info_log;
+        *code<nothing(string, ...)> info_log;
 
         #! an optional input data logging callback; must accept a hash giving the input data hash
-        *code input_log;
+        *code<nothing(hash<auto>)> input_log;
 
         #! an optional output data logging callback; must accept a hash giving the output data hash
-        *code output_log;
+        *code<nothing(hash<auto>)> output_log;
 
         #! an optional callback for retrieving a nested mapper; sig: <tt>sub (string name, *hash<auto> opts) {}</tt>
-        *code submapper_get;
+        *code<Mapper(string, *hash<auto>)> submapper_get;
 
         #! an optional callback for substituting templated values
-        *code template_subst;
+        *code<hash<auto>(hash<auto>, hash<auto>)> template_subst;
 
         #! global transformation options; can be overridden on a per-field basis
         hash<auto> global_transform_opts = {} + {

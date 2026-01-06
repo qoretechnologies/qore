@@ -87,22 +87,22 @@ public hashdecl PipelineOptionInfo {
     #! a closure or call reference for debug logging
     /** it must take a single format string and then optional arguments corresponding to the placeholders in the format string
     */
-    *code debug_log;
+    *code<nothing(string, ...)> debug_log;
 
     #! a closure or call reference for error logging
     /** it must take a single format string and then optional arguments corresponding to the placeholders in the format string
     */
-    *code error_log;
+    *code<nothing(string, ...)> error_log;
 
     #! a closure or call reference for info logging
     /** it must take a single format string and then optional arguments corresponding to the placeholders in the format string
     */
-    *code info_log;
+    *code<nothing(string, ...)> info_log;
 
     #! a closure or call reference for setting thread-local data in new pipeline queue threads
     /* it is called in the new pipeline queue thread with no arguments
     */
-    *code thread_callback;
+    *code<nothing()> thread_callback;
 
     #! the name of the pipeline for logging purposes; if this key is not included, a generic name will be generated
     *string name;
@@ -424,18 +424,18 @@ public class DataProviderPipeline {
         int record_count = 0;
 
         #! Info log closure; takes a single format string and then arguments for format placeholders
-        *code info_log;
+        *code<nothing(string, ...)> info_log;
 
         #! Error log closure; takes a single format string and then arguments for format placeholders
-        *code error_log;
+        *code<nothing(string, ...)> error_log;
 
         #! Debug log closure; takes a single format string and then arguments for format placeholders
-        *code debug_log;
+        *code<nothing(string, ...)> debug_log;
 
         #! a closure or call reference for setting thread-local data in new pipeline queue threads
         /* it is called in the new pipeline queue thread with no arguments
         */
-        *code thread_callback;
+        *code<nothing()> thread_callback;
 
         #! Atomic lock
         Mutex lck();

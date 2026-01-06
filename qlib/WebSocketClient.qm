@@ -506,9 +506,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         int cid = -1;
 
         #! callable object to yield the current thread's execution
-        *code yield;
+        *code<nothing()> yield;
         #! callable value to start a new thread; must take a callable object as a parameter and return an integer TID
-        *code start_thread;
+        *code<int(code<nothing()>)> start_thread;
 
         #! Total number of connections made
         int num_connects;
