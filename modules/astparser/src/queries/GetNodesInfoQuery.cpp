@@ -46,6 +46,10 @@ QoreHashNode* GetNodesInfoQuery::getDeclaration(ASTTree* tree, ASTDeclaration* d
     nodeInfo->setKeyValue("nodetype", static_cast<int64>(ANT_Declaration), xsink);
     nodeInfo->setKeyValue("kind", static_cast<int64>(decl->getKind()), xsink);
     nodeInfo->setKeyValue("loc", getLocation(decl->loc, xsink), xsink);
+    // Include doc comment if present
+    if (decl->hasDocComment()) {
+        nodeInfo->setKeyValue("docComment", new QoreStringNode(*decl->getDocComment()), xsink);
+    }
     switch (decl->getKind()) {
         case ASTDeclarationKind::ADK_Class: {
             ASTClassDeclaration* d = static_cast<ASTClassDeclaration*>(decl);

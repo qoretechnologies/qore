@@ -138,6 +138,29 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
     errorLog->reportError(*loc, str);
 }
 
+// Defined in ast_scanner.lpp - takes ownership of pending doc comment
+extern std::string* takePendingDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed class doc comment
+extern std::string* takeClassDocComment();
+
+// Helper macro to attach pending doc comment to a declaration
+#define ATTACH_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takePendingDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach class doc comment (claimed when scanner saw 'class' keyword)
+#define ATTACH_CLASS_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeClassDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
 %}
 
 // define string aliases for token names for more user-friendly error reporting
@@ -446,30 +469,38 @@ top_level_commands:
 
 top_level_command:
         sub_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | scoped_sub_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | class_def {
             $$ = $1;
         }
         | hashdecl_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | enum_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | typedef_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | scoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | unscoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | outofline_methoddef {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | statement {
@@ -482,6 +513,7 @@ top_level_command:
             $$ = $2;
         }
         | top_namespace_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | TOK_MODULE '{' module_decls '}' { $$ = nullptr; }
@@ -758,17 +790,17 @@ namespace_decls:
         ;
 
 namespace_decl:
-        scoped_const_decl { $$ = $1; }
-        | unscoped_const_decl { $$ = $1; }
+        scoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | unscoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | class_def { $$ = $1; }
-        | hashdecl_def { $$ = $1; }
-        | enum_def { $$ = $1; }
-        | typedef_def { $$ = $1; }
-        | sub_def { $$ = $1; }
-        | scoped_sub_def { $$ = $1; }
-        | gvardecl ';' { $$ = $1; }
-        | top_namespace_decl { $$ = $1; }
-        | outofline_methoddef { $$ = $1; }
+        | hashdecl_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | enum_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | typedef_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | scoped_sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | gvardecl ';' { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | top_namespace_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | outofline_methoddef { ATTACH_DOC_COMMENT($1); $$ = $1; }
         ;
 
 unscoped_const_decl:
@@ -1340,6 +1372,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
             $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
             delete $5;
         }
@@ -1351,6 +1384,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
             $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
             delete $5;
         }
@@ -1362,6 +1396,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @4);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
@@ -1372,6 +1407,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @4);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_STRING inheritance_list '{' '}' {
@@ -1382,6 +1418,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @5);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
@@ -1392,6 +1429,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @5);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         ;
@@ -1552,6 +1590,7 @@ hashdecl_attributes:
 
 class_attributes:
         inline_methoddef {
+            ATTACH_DOC_COMMENT($1);
             $$ = new std::vector<ASTDeclaration*>;
             $$->push_back($1);
         }
@@ -1568,10 +1607,12 @@ class_attributes:
             $$->push_back($1);
         }
         | unscoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = new std::vector<ASTDeclaration*>;
             $$->push_back($1);
         }
         | class_attributes inline_methoddef {
+            ATTACH_DOC_COMMENT($2);
             $$ = $1;
             $1->push_back($2);
         }
@@ -1588,6 +1629,7 @@ class_attributes:
             $1->push_back($2);
         }
         | class_attributes unscoped_const_decl {
+            ATTACH_DOC_COMMENT($2);
             $$ = $1;
             $1->push_back($2);
         }

@@ -41,6 +41,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Class: {
             ASTClassDeclaration* d = static_cast<ASTClassDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Class, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             for (size_t i = 0, count = d->inherits.size(); i < count; i++)
                 inDeclaration(vec, d->inherits[i]);
             for (size_t i = 0, count = d->declarations.size(); i < count; i++)
@@ -57,12 +60,18 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Constant: {
             ASTConstantDeclaration* d = static_cast<ASTConstantDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Constant, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             inExpression(vec, d->value.get());
             break;
         }
         case ASTDeclarationKind::ADK_Function: {
             ASTFunctionDeclaration* d = static_cast<ASTFunctionDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Function, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             inExpression(vec, d->returnType.get());
             inExpression(vec, d->params.get());
             inExpression(vec, d->inits.get());
@@ -72,6 +81,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Hash: {
             ASTHashDeclaration* d = static_cast<ASTHashDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Interface, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             for (size_t i = 0, count = d->declarations.size(); i < count; i++)
                 inDeclaration(vec, d->declarations[i]);
             break;
@@ -79,6 +91,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_HashMember: {
             ASTHashMemberDeclaration* d = static_cast<ASTHashMemberDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Field, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             break;
         }
         case ASTDeclarationKind::ADK_MemberGroup: {
@@ -90,6 +105,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Namespace: {
             ASTNamespaceDeclaration* d = static_cast<ASTNamespaceDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Namespace, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             for (size_t i = 0, count = d->declarations.size(); i < count; i++)
                 inDeclaration(vec, d->declarations[i]);
             break;
@@ -99,6 +117,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Variable: {
             ASTVariableDeclaration* d = static_cast<ASTVariableDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_Variable, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             break;
         }
         case ASTDeclarationKind::ADK_VarList: {
@@ -109,6 +130,9 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
         case ASTDeclarationKind::ADK_Typedef: {
             ASTTypedefDeclaration* d = static_cast<ASTTypedefDeclaration*>(decl);
             vec->push_back(ASTSymbolInfo(ASYK_TypeAlias, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
             break;
         }
         default:

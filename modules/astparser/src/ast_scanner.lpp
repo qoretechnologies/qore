@@ -210,6 +210,72 @@ bool PO_BROKEN_OPERATORS = false;
 bool PO_NO_TRANSIENT = false;
 bool PO_NO_TYPEDEF = false;
 bool PO_NO_ENUM = false;
+
+// Pending doc comment - accumulates doc comment text to be attached to the next declaration
+static std::string* pendingDocComment = nullptr;
+// Tracks whether we're in a consecutive doc comment block
+static bool inDocCommentBlock = false;
+// Claimed doc comment for class declarations - stored separately so class body members don't steal it
+static std::string* pendingClassDocComment = nullptr;
+
+// Clears the pending doc comment
+static void clearPendingDocComment() {
+    delete pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a class declaration
+// This should be called when the scanner sees the 'class' keyword, before the class body is parsed
+static void claimClassDocComment() {
+    delete pendingClassDocComment;
+    pendingClassDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Called when starting a new doc comment
+// If we're continuing a consecutive doc comment block, append; otherwise replace
+static void startDocComment(const char* text) {
+    if (inDocCommentBlock && pendingDocComment) {
+        // Append to existing doc comment
+        pendingDocComment->append("\n");
+        pendingDocComment->append(text);
+    } else {
+        // Start fresh
+        delete pendingDocComment;
+        pendingDocComment = new std::string(text);
+    }
+    inDocCommentBlock = true;
+}
+
+// Appends text to the current doc comment
+static void appendDocComment(const char* text) {
+    if (pendingDocComment) {
+        pendingDocComment->append(text);
+    }
+}
+
+// Called when we see any non-doc-comment, non-whitespace token
+static void endDocCommentBlock() {
+    inDocCommentBlock = false;
+}
+
+// Takes ownership of the pending doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takePendingDocComment() {
+    std::string* result = pendingDocComment;
+    pendingDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed class doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeClassDocComment() {
+    std::string* result = pendingClassDocComment;
+    pendingClassDocComment = nullptr;
+    return result;
+}
 %}
 
 %option noyywrap nomain noyy_top_state warn
@@ -219,7 +285,7 @@ bool PO_NO_ENUM = false;
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -721,9 +787,26 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             AST_FLEX_DO_EOF
                                         }
 }
+\#!                                     { yylval->String = new std::string("#!"); BEGIN(doc_line_comment); }
 \#                                      BEGIN(line_comment);
+<doc_line_comment>{
+    [\n\r]                              {
+                                            // Doc line comment complete - store it
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             {
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    [^\n\r]                             { yylval->String->push_back(yytext[0]); }
+}
 <line_comment>{
-    [\n\r]                              BEGIN(INITIAL);
+    [\n\r]                              { clearPendingDocComment(); BEGIN(INITIAL); }
     <<EOF>>                             AST_FLEX_DO_EOF
     [^\n\r]                             // ignore any other character until EOL
 }
@@ -980,9 +1063,9 @@ cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->st
 {BINARY}                                { yylval->string = strdup(yytext); return BINARY; }
 \$\.{WORD}                              { yylval->string = strdup(yytext + 2); return SELF_REF; }
 \${WORD}                                { yylval->string = strdup(yytext + 1); return VAR_REF; }
-class{WS}+({WORD}::)+{WORD}             { yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
-class{WS}+(::{WORD})+                   { yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
-class{WS}+{WORD}                        { yylval->string = trim(yytext + 6); return CLASS_STRING; }
+class{WS}+({WORD}::)+{WORD}             { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+(::{WORD})+                   { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+{WORD}                        { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
 namespace{WS}+{WORD}                    { yylval->string = trim(yytext + 10); return NAMESPACE; }
 module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
@@ -1099,14 +1182,32 @@ hash\<{WORD}\>\{                        {
 \<{WS}+\<{WS}*=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 \<{WS}*\<{WS}+=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 
+\/\*\*                                  { yylval->String = new std::string("/**"); BEGIN(doc_block_comment); }
 \/\*                                    BEGIN(block_comment1);
+<doc_block_comment>{
+    \*\/                                {
+                                            // Doc block comment complete - store it
+                                            yylval->String->append("*/");
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             {
+                                            startDocComment(yylval->String->c_str());
+                                            delete yylval->String;
+                                            yylval->String = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    .|\n                                { yylval->String->append(yytext); }
+}
 <block_comment1>{
     \*                                  BEGIN(block_comment2);
     <<EOF>>                             { AST_FLEX_DO_EOF }
     [^\*]                               // ignore other input
 }
 <block_comment2>{
-    \/                                  BEGIN(INITIAL);
+    \/                                  { clearPendingDocComment(); BEGIN(INITIAL); }
     \*                                  // ignore
     <<EOF>>                             { AST_FLEX_DO_EOF }
     [^\/\*]                             BEGIN(block_comment1);
@@ -1131,5 +1232,5 @@ hash\<{WORD}\>\{                        {
 =\~                                     { BEGIN(regex_googleplex); return REGEX_MATCH; }
 \!\~                                    { BEGIN(regex_negative_universe); return REGEX_NMATCH; }
 {WSNL}+                                 /* ignore whitespace */
-.                                       return yytext[0];
+.                                       { endDocCommentBlock(); return yytext[0]; }
 %%
