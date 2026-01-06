@@ -4298,6 +4298,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                                 is_text = true;
                             } else if (!strncasecmp(ct, "application/json", 16) ||
                                        !strncasecmp(ct, "application/xml", 15) ||
+                                       !strncasecmp(ct, "application/yaml", 16) ||
+                                       !strncasecmp(ct, "application/x-yaml", 18) ||
                                        !strncasecmp(ct, "application/javascript", 22) ||
                                        !strncasecmp(ct, "application/x-www-form-urlencoded", 33)) {
                                 is_text = true;
