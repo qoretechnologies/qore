@@ -145,6 +145,9 @@ extern std::string* takeClassDocComment();
 // Defined in ast_scanner.lpp - takes ownership of claimed hashdecl doc comment
 extern std::string* takeHashdeclDocComment();
 
+// Defined in ast_scanner.lpp - takes ownership of claimed namespace doc comment
+extern std::string* takeNamespaceDocComment();
+
 // Helper macro to attach pending doc comment to a declaration
 #define ATTACH_DOC_COMMENT(decl) \
     do { \
@@ -167,6 +170,15 @@ extern std::string* takeHashdeclDocComment();
 #define ATTACH_HASHDECL_DOC_COMMENT(decl) \
     do { \
         std::string* doc = takeHashdeclDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach namespace doc comment (claimed when scanner saw 'namespace' keyword)
+#define ATTACH_NAMESPACE_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeNamespaceDocComment(); \
         if (doc && decl) { \
             (decl)->setDocComment(doc); \
         } \
@@ -767,6 +779,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name), $4);
             $$->loc.set(@1, @5);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
             delete $4;
         }
         | nsc_modifiers NAMESPACE ';' {
@@ -776,6 +789,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name));
             $$->loc.set(@1, @3);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
         }
         | nsc_modifiers NAMESPACE '{' '}' {
             ASTName name($2, ASTNameKind::ANK_Namespace);
@@ -784,6 +798,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name));
             $$->loc.set(@1, @4);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
         }
         ;
 

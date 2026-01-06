@@ -219,6 +219,8 @@ static bool inDocCommentBlock = false;
 static std::string* pendingClassDocComment = nullptr;
 // Claimed doc comment for hashdecl declarations - stored separately so hashdecl body members don't steal it
 static std::string* pendingHashdeclDocComment = nullptr;
+// Claimed doc comment for namespace declarations - stored separately so namespace body members don't steal it
+static std::string* pendingNamespaceDocComment = nullptr;
 
 // Clears the pending doc comment
 static void clearPendingDocComment() {
@@ -241,6 +243,15 @@ static void claimClassDocComment() {
 static void claimHashdeclDocComment() {
     delete pendingHashdeclDocComment;
     pendingHashdeclDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a namespace declaration
+// This should be called when the scanner sees the 'namespace' keyword, before the namespace body is parsed
+static void claimNamespaceDocComment() {
+    delete pendingNamespaceDocComment;
+    pendingNamespaceDocComment = pendingDocComment;
     pendingDocComment = nullptr;
     inDocCommentBlock = false;
 }
@@ -293,6 +304,14 @@ std::string* takeClassDocComment() {
 std::string* takeHashdeclDocComment() {
     std::string* result = pendingHashdeclDocComment;
     pendingHashdeclDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed namespace doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeNamespaceDocComment() {
+    std::string* result = pendingNamespaceDocComment;
+    pendingNamespaceDocComment = nullptr;
     return result;
 }
 %}
@@ -1085,7 +1104,7 @@ cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->st
 class{WS}+({WORD}::)+{WORD}             { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
 class{WS}+(::{WORD})+                   { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
 class{WS}+{WORD}                        { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
-namespace{WS}+{WORD}                    { yylval->string = trim(yytext + 10); return NAMESPACE; }
+namespace{WS}+{WORD}                    { claimNamespaceDocComment(); yylval->string = trim(yytext + 10); return NAMESPACE; }
 module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
 \<{WORD}\>\{                            {

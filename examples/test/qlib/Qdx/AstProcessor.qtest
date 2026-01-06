@@ -43,6 +43,7 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Access modifiers", \testAccessModifiers());
         addTestCase("Class with members", \testClassWithMembers());
         addTestCase("Hashdecl with doc comment", \testHashdeclDocComment());
+        addTestCase("Namespace with doc comment", \testNamespaceDocComment());
         set_return_value(main());
     }
 
@@ -204,5 +205,21 @@ hashdecl MyStruct {
 
         assertTrue(output =~ /\/\/! This is a hashdecl doc comment/, "hashdecl doc comment converted");
         assertTrue(output =~ /struct MyStruct \{/, "hashdecl becomes struct");
+    }
+
+    testNamespaceDocComment() {
+        string code = "
+#! This is a namespace doc comment
+namespace MyNamespace {
+    class MyClass { }
+}
+";
+        list<auto> nodes = parseCode(code);
+        AstProcessor proc(nodes);
+        string output = proc.process();
+
+        assertTrue(output =~ /\/\/! This is a namespace doc comment/, "namespace doc comment converted");
+        assertTrue(output =~ /namespace MyNamespace \{/, "namespace declaration");
+        assertTrue(output =~ /class MyClass/, "class inside namespace");
     }
 }
