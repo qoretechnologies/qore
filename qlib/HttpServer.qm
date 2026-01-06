@@ -1578,6 +1578,42 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return asyncMode;
     }
 
+    #! Waits for async I/O to be ready to accept connections
+    /** This method blocks until the async I/O controller and its coordinator thread are ready
+        to process connections. Use this after calling @ref addListener() and before making
+        client connections in tests to ensure the server is ready.
+
+        @param timeout maximum time to wait; use @ref NOTHING for no timeout (default: 5 seconds)
+
+        @return @ref True if async I/O is ready, @ref False if the timeout expired or async mode
+        is not enabled
+
+        @note This method is primarily useful for testing scenarios where clients connect
+        immediately after server setup. In production, the async I/O typically starts fast enough
+        that this wait is unnecessary.
+
+        @since HttpServer 1.1.4
+    */
+    bool waitForAsyncIo(*timeout timeout) {
+        if (!asyncMode || !asyncIo) {
+            return False;
+        }
+        timeout = timeout ?? 5s;
+        date start = now_us();
+        # Wait for coordinator thread to be ready
+        if (!asyncIo.waitReady(timeout)) {
+            return False;
+        }
+        # Calculate remaining timeout for second wait
+        date elapsed = now_us() - start;
+        timeout remaining = timeout - elapsed;
+        if (remaining <= 0) {
+            return False;
+        }
+        # Wait for globalAsyncCtrl I/O thread to be ready
+        return globalAsyncCtrl.waitReady(remaining);
+    }
+
     startConnection(code c) {
         threadPool.submit(c);
     }
@@ -4302,6 +4338,12 @@ class HttpServerIoController {
         #! Shared result queue for all async operations from globalAsyncCtrl
         Queue resultQueue();
 
+        #! Condition to signal when coordinator thread is ready
+        Condition ready_cond();
+
+        #! Flag indicating coordinator thread is ready
+        bool ready_flag = False;
+
         #! Default send timeout
         const DefaultSendTimeout = 30s;
     }
@@ -4354,6 +4396,32 @@ class HttpServerIoController {
     */
     int getTid() {
         return tid ?? 0;
+    }
+
+    #! Waits for the coordinator thread to be ready
+    /** This method blocks until the coordinator thread has started and is ready to process
+        accept operations. Use this after adding listeners to ensure the async I/O is ready
+        before clients attempt to connect.
+
+        @param timeout maximum time to wait; use @ref NOTHING for no timeout
+
+        @return @ref True if the coordinator is ready, @ref False if the timeout expired
+    */
+    bool waitReady(*timeout timeout) {
+        AutoLock al(m);
+        if (ready_flag) {
+            return True;
+        }
+        if (!tid) {
+            return False;
+        }
+        if (timeout) {
+            return ready_cond.wait(m, timeout) == 0 && ready_flag;
+        }
+        while (!ready_flag && tid) {
+            ready_cond.wait(m);
+        }
+        return ready_flag;
     }
 
     #! Adds a listener socket to be polled for accepts
@@ -4539,7 +4607,9 @@ class HttpServerIoController {
         on_exit {
             {
                 AutoLock al(m);
+                ready_flag = False;
                 remove tid;
+                ready_cond.broadcast();
             }
             @debug(log(LoggerLevel::INFO, "HttpServer coordinator thread exiting"));
             mcnt.dec();
@@ -4551,6 +4621,13 @@ class HttpServerIoController {
             foreach string key in (keys listeners) {
                 startAcceptOperation(key, listeners{key});
             }
+        }
+
+        # Signal that coordinator thread is ready
+        {
+            AutoLock al(m);
+            ready_flag = True;
+            ready_cond.broadcast();
         }
 
         while (!exit_flag) {
