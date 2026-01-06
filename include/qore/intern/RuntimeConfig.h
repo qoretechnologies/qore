@@ -142,17 +142,6 @@ DLLLOCAL RuntimeConfig rc_get_parse_time();
 DLLLOCAL RuntimeConfig& rc_get_current_ref();
 
 /**
- * @brief Get a direct reference to the thread-local RuntimeConfig.
- *
- * This returns a reference to the authoritative TLS RuntimeConfig that stores
- * runtime location, statement, and parse options. Use this for direct updates
- * instead of calling separate TLS update functions.
- *
- * @return Reference to the thread-local RuntimeConfig
- */
-DLLLOCAL RuntimeConfig& rc_get_tls_ref();
-
-/**
  * @brief Sync runtime config changes back to thread-local storage.
  *
  * Call this when the RuntimeConfig has been modified and those changes

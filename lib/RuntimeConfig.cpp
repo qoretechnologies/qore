@@ -34,16 +34,13 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreThreadList.h"
-#include "qore/intern/QoreLibIntern.h"
 
 RuntimeConfig rc_get_current() {
-    // Get loc, stmt, po from the authoritative TLS RuntimeConfig
-    RuntimeConfig& tls_rc = rc_get_tls_ref();
     RuntimeConfig rc;
     rc.pgm = getProgram();
-    rc.loc = tls_rc.loc;
-    rc.stmt = tls_rc.stmt;
-    rc.po = tls_rc.po;
+    rc.loc = get_runtime_location();
+    rc.stmt = get_runtime_statement();
+    rc.po = runtime_get_parse_options();
     rc.tlpd = get_thread_local_program_data();
     runtime_get_object_and_class(rc.obj, rc.cls);
     rc.stack_loc = get_runtime_stack_location();
@@ -58,35 +55,26 @@ RuntimeConfig rc_get_parse_time() {
     // For parse-time, we only need the program for parse options access
     // Other fields are left as defaults (nullptr/0)
     rc.pgm = getProgram();
-    rc.po = rc_get_tls_ref().po;
+    rc.po = runtime_get_parse_options();
     // tlpd may be available during parsing, but we don't require it
     rc.tlpd = get_thread_local_program_data();
     return rc;
 }
 
-// Thread-local RuntimeConfig - the authoritative source for runtime context
-// Updated by RuntimeConfigLocationHelper and other helpers
+// Thread-local RuntimeConfig for use when we want to avoid stack allocation
 static thread_local RuntimeConfig tl_runtime_config;
 
-// Get a reference to the TLS RuntimeConfig for direct updates
-// Ensures loc is initialized to &loc_builtin if not yet set
-RuntimeConfig& rc_get_tls_ref() {
-    if (!tl_runtime_config.loc) {
-        tl_runtime_config.loc = &loc_builtin;
-    }
-    return tl_runtime_config;
-}
-
 RuntimeConfig& rc_get_current_ref() {
-    // Update fields not managed by helpers from TLS
     tl_runtime_config.pgm = getProgram();
+    tl_runtime_config.loc = get_runtime_location();
+    tl_runtime_config.stmt = get_runtime_statement();
+    tl_runtime_config.po = runtime_get_parse_options();
     tl_runtime_config.tlpd = get_thread_local_program_data();
     runtime_get_object_and_class(tl_runtime_config.obj, tl_runtime_config.cls);
     tl_runtime_config.stack_loc = get_runtime_stack_location();
     tl_runtime_config.return_type_info = getReturnTypeInfo();
     tl_runtime_config.element = get_implicit_element();
     tl_runtime_config.closure_env = thread_get_runtime_closure_env();
-    // loc, stmt, po are managed by RuntimeConfigLocationHelper - don't overwrite
     return tl_runtime_config;
 }
 
@@ -119,9 +107,6 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
     if (new_po >= 0) {
         rc.po = new_po;
     }
-    // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
-    // without RuntimeConfig access) gets the correct location
-    update_runtime_statement_location(rc.stmt, rc.loc, rc.po);
 }
 
 RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
@@ -130,8 +115,6 @@ RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     if (restore_po) {
         rc.po = old_po;
     }
-    // Restore TLS to old values
-    update_runtime_statement_location(old_stmt, old_loc, restore_po ? old_po : rc.po);
 }
 
 RuntimeConfigObjectHelper::RuntimeConfigObjectHelper(RuntimeConfig& rc,

@@ -240,45 +240,6 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     }
 }
 
-RuntimeConfig CodeEvaluationHelper::buildCalleeRuntimeConfig(QoreObject* self, const qore_class_private* cls,
-        const QoreTypeInfo* return_type_info) const {
-    RuntimeConfig callee_rc;
-
-    // Program context - use new program if context was switched, otherwise use rc's program
-    QoreProgram* new_pgm = getNewProgram();
-    callee_rc.pgm = new_pgm ? new_pgm : (rc ? rc->pgm : nullptr);
-
-    // Thread-local program data - use new tlpd if context was switched
-    ThreadLocalProgramData* new_tlpd = getNewThreadLocalProgramData();
-    callee_rc.tlpd = new_tlpd ? new_tlpd : (rc ? rc->tlpd : nullptr);
-
-    // Parse options - use new runtime parse options if context was switched
-    int64 new_po = getNewRuntimeParseOptions();
-    callee_rc.po = new_po ? new_po : (rc ? rc->po : 0);
-
-    // Location and statement - from this CodeEvaluationHelper
-    callee_rc.loc = loc;
-    callee_rc.stmt = stmt;
-
-    // Stack location - this CEH is the new stack frame
-    callee_rc.stack_loc = this;
-
-    // Object and class context - from parameters (set by CodeContextHelper)
-    callee_rc.obj = self;
-    callee_rc.cls = cls;
-
-    // Return type info - from the function signature
-    callee_rc.return_type_info = return_type_info;
-
-    // Element - reset for new function call
-    callee_rc.element = 0;
-
-    // Closure environment - not set here, will be set by closure evaluation if needed
-    callee_rc.closure_env = nullptr;
-
-    return callee_rc;
-}
-
 void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
     if (qc) {
         callName = qc->name.c_str();
@@ -350,19 +311,6 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
     // add call to call stack using RuntimeConfig
     assert(rc);
-
-    // Get program context: first check if set() was called on this helper (returns new_pgm),
-    // otherwise fall back to TLS via the global ::getProgram() function.
-    //
-    // IMPORTANT: Must use ::getProgram() (global scope) here, NOT getProgram() (unqualified).
-    // CodeEvaluationHelper inherits from QoreStackLocation which has a virtual getProgram()
-    // member function that returns the 'pgm' member variable. Without the :: qualifier,
-    // C++ resolves to the member function, which returns nullptr since 'pgm' hasn't been
-    // set yet at this point. The global ::getProgram() reads td->current_pgm from TLS.
-    QoreProgram* new_pgm = getNewProgram();
-    pgm = new_pgm ? new_pgm : ::getProgram();
-    stmt = rc->stmt;
-
     stack_loc = rc->stack_loc;
     setNext(stack_loc);
 
@@ -2005,13 +1953,11 @@ QoreValue QoreFunction::evalFunction(RuntimeConfig& rc, const AbstractQoreFuncti
         return QoreValue();
     }
 
-    // Pass pgm to CodeEvaluationHelper so it can set program context before creating stack frame
-    // This ensures getProgram() returns the correct program when building the stack location
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available for qore_get_call_program_context() API
+    // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
@@ -2022,12 +1968,11 @@ QoreValue QoreFunction::evalFunction(RuntimeConfig& rc, const AbstractQoreFuncti
 QoreValue QoreFunction::evalFunctionTmpArgs(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
         QoreListNode* args, QoreProgram *pgm, ExceptionSink* xsink) const {
     const char* fname = getName();
-    // Pass pgm to CodeEvaluationHelper so it can set program context before creating stack frame
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(rc, xsink, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
-    // issue #3024: make the caller's call context available for qore_get_call_program_context() API
+    // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
@@ -2176,15 +2121,13 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     return 0;
 }
 
-QoreValue UserVariantBase::evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink) const {
+QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
     QoreValue val{};  // value-initialized to NOTHING (bits=0)
     if (statements) {
         // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid) {
+        if (self && signature.selfid)
             signature.selfid->instantiateSelf(self);
-        }
 
         // instantiate argv and push id on stack
         assert(signature.argvid);
@@ -2195,8 +2138,8 @@ QoreValue UserVariantBase::evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreLis
 
             // enter gate if necessary
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // execute function with the callee's RuntimeConfig
-                val = statements->exec(rc, xsink);
+                // execute function
+                val = statements->exec(xsink);
 
                 // exit gate if necessary
                 if (gate) {
@@ -2249,23 +2192,8 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
 
-    // Get the class context for this call - same logic as CodeContextHelper uses
-    const qore_class_private* cls_ctx = qc ? qc : (ceh ? ceh->getClass() : nullptr);
-
-    CodeContextHelper cch(xsink, CT_USER, name, self, cls_ctx);
-
-    // Build the callee's RuntimeConfig deterministically without TLS lookups
-    if (ceh) {
-        RuntimeConfig callee_rc = ceh->buildCalleeRuntimeConfig(self, cls_ctx, signature.getReturnTypeInfo());
-        return evalIntern(callee_rc, uveh.getArgv(), self, xsink);
-    } else {
-        // No CodeEvaluationHelper - need to build RuntimeConfig from TLS
-        RuntimeConfig callee_rc = rc_get_current();
-        callee_rc.obj = self;
-        callee_rc.cls = cls_ctx;
-        callee_rc.return_type_info = signature.getReturnTypeInfo();
-        return evalIntern(callee_rc, uveh.getArgv(), self, xsink);
-    }
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr));
+    return evalIntern(uveh.getArgv(), self, xsink);
 }
 
 void UserVariantBase::parseCommit() {

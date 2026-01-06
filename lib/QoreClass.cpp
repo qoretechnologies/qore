@@ -3860,7 +3860,7 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
-QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreProgram* pgm_ctx) const {
+QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
     QORE_TRACE("qore_class_private::evalMethod()");
     assert(self);
 
@@ -3878,7 +3878,7 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
     }
 
     if (w) {
-        return qore_method_private::eval(*w, xsink, self, args, class_ctx, pgm_ctx);
+        return qore_method_private::eval(*w, xsink, self, args, class_ctx);
     }
 
     // first see if there is a pseudo-method for this
@@ -5223,12 +5223,10 @@ UserConstructorVariant::~UserConstructorVariant() {
 void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     UserVariantExecHelper uveh(this, &ceh, xsink);
-    if (!uveh) {
+    if (!uveh)
         return;
-    }
 
-    const qore_class_private* cls_ctx = qore_class_private::get(thisclass);
-    CodeContextHelper cch(xsink, CT_USER, "constructor", self, cls_ctx, false);
+    CodeContextHelper cch(xsink, CT_USER, "constructor", self, qore_class_private::get(thisclass), false);
 
     // instantiate "self" before executing base class constructors in case base class constructor arguments reference
     // "self"
@@ -5243,16 +5241,12 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     }
 
     if (!constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink)) {
-        // Build RuntimeConfig for constructor - self is nullptr here because constructor
-        // body doesn't use "self" directly (it's accessed via signature.selfid)
-        RuntimeConfig callee_rc = ceh.buildCalleeRuntimeConfig(self, cls_ctx, nothingTypeInfo);
-        evalIntern(callee_rc, uveh.getArgv(), nullptr, xsink).discard(xsink);
+        evalIntern(uveh.getArgv(), 0, xsink).discard(xsink);
     }
 
     // uninstantiate argv
-    if (bcl) {
+    if (bcl)
         signature.argvid->uninstantiate(xsink);
-    }
 
     // if self then uninstantiate
     signature.selfid->uninstantiateSelf();
@@ -5331,8 +5325,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
         return;
     }
 
-    const qore_class_private* cls_ctx = qore_class_private::get(thisclass);
-    CodeContextHelper cch(xsink, CT_USER, "copy", self, cls_ctx);
+    CodeContextHelper cch(xsink, CT_USER, "copy", self, qore_class_private::get(thisclass));
 
     if (scl) {
         scl->sml.execCopyMethods(self, old, xsink);
@@ -5341,9 +5334,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
         }
     }
 
-    // Build RuntimeConfig for copy method
-    RuntimeConfig callee_rc = ceh.buildCalleeRuntimeConfig(self, cls_ctx, nothingTypeInfo);
-    evalIntern(callee_rc, uveh.getArgv(), self, xsink).discard(xsink);
+    evalIntern(uveh.getArgv(), self, xsink).discard(xsink);
 }
 
 int UserCopyVariant::parseInit(QoreFunction* f) {

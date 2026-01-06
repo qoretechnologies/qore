@@ -232,9 +232,6 @@ void qore_cleanup() {
         purge_thread_resources(&xsink);
     }
 
-    // cleanup global breakpoint list before static destruction
-    QoreBreakpoint::cleanupBreakpoints();
-
     // first delete all user modules
     QMM.delUser();
 

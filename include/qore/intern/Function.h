@@ -442,23 +442,6 @@ public:
         return name;
     }
 
-    //! Returns the RuntimeConfig pointer (may be nullptr)
-    DLLLOCAL RuntimeConfig* getRuntimeConfig() const {
-        return rc;
-    }
-
-    //! Build a RuntimeConfig for the callee context
-    /** This method builds a RuntimeConfig deterministically without TLS lookups,
-        using values from this CodeEvaluationHelper and parameters.
-
-        @param self The object context for the call (may be nullptr)
-        @param cls The class context for access control (may be nullptr)
-        @param return_type_info The return type of the function being called
-        @return RuntimeConfig populated with callee context
-    */
-    DLLLOCAL RuntimeConfig buildCalleeRuntimeConfig(QoreObject* self, const qore_class_private* cls,
-            const QoreTypeInfo* return_type_info) const;
-
 protected:
     qore_call_t ct;
     const char* name;
@@ -640,8 +623,7 @@ protected:
     // flag to tell if variant has been initialized or not (still in pending list)
     bool init;
 
-    DLLLOCAL QoreValue evalIntern(RuntimeConfig& rc, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)

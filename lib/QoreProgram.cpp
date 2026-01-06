@@ -2761,15 +2761,6 @@ QoreBreakpoint* QoreBreakpoint::resolveBreakpointId(unsigned breakpointId) {
     return nullptr;
 }
 
-void QoreBreakpoint::cleanupBreakpoints() {
-    // Note: The global breakpoint list does not own references to breakpoints.
-    // Breakpoints remove themselves from this list in their destructor.
-    // This cleanup just ensures the list is cleared before static destruction
-    // to avoid potential issues with static destruction order.
-    QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);
-    breakpointList.clear();
-}
-
 QoreObject* QoreBreakpoint::getQoreObject() {
     QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);   // reuse global lock, local would be enough
     if (qo) {

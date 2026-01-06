@@ -548,9 +548,8 @@ QoreListNode* qore_list_private::evalList(const QoreListNode& l, RuntimeConfig& 
         needs_deref = true;
         return l.priv->eval(rc, xsink);
     }
-    // Return the original list without adding a reference, matching the non-RuntimeConfig version
-    // The caller does not own a reference when needs_deref is false
     needs_deref = false;
+    l.ref();
     return const_cast<QoreListNode*>(&l);
 }
 

@@ -39,11 +39,9 @@ QoreBreakpointList_t::QoreBreakpointList_t() {
 }
 
 QoreBreakpointList_t::~QoreBreakpointList_t() {
-    // Note: These lists do not own references to the breakpoints.
-    // Breakpoints are ref-counted through their QoreObject wrapper.
-    // The QoreBreakpoint constructor/destructor manages adding/removing
-    // from the global list, while statement assignment is managed separately.
-    // We just need to clear the list without calling deref().
+    for (auto& i : *this) {
+        i->deref();
+    }
     clear();
 }
 
@@ -99,12 +97,6 @@ int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, Exceptio
     // Update RuntimeConfig with current statement location
     RuntimeConfigLocationHelper loc_helper(rc, loc, this, pwo.parse_options);
     //pthread_testcancel();
-#ifdef QORE_MANAGE_STACK
-    // Check stack limit - this was done by QoreProgramLocationHelper in the original code
-    if (check_stack(xsink)) {
-        return 0;
-    }
-#endif
     if (*xsink) {
         return 0;
     }
