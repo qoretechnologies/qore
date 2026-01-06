@@ -25,10 +25,7 @@
 # requires at least this qore version to run
 %requires qore >= 0.8.12
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires Sap4HanaRestClient
 %requires Util
