@@ -25,6 +25,10 @@ class MyWsConnection inherits WebSocketConnection {
         map send($1), WebSocketClientTest::Data;
     }
 
+    sendLargeData() {
+        send(WebSocketClientTest::LargeData);
+    }
+
     gotMessage(string msg) {
         send("RESPONSE:" + msg);
         #printf("GOT MSG: %y\n", msg);
@@ -40,6 +44,9 @@ class MyWsHandler inherits WebSocketHandler {
         MyWsConnection conn(self);
         if (hdr."send-data") {
             conn.sendData();
+        }
+        if (hdr."send-large-data") {
+            conn.sendLargeData();
         }
         return conn;
     }
@@ -80,6 +87,9 @@ class WebSocketClientTest inherits QUnit::Test {
             <beeffeed>,
             "test3",
         );
+
+        # Large data for testing HTTP/2 frame fragmentation (32KB - larger than default HTTP/2 frame size of 16384)
+        const LargeData = strmul("X", 32768);
 
         # Test SSL certificate (self-signed for testing)
         # NOTE: Certificate and key must match - they are a valid pair
@@ -460,6 +470,44 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
                 testSkip(sprintf("HTTP/2 isHttp2() test: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
+        }
+
+        # Test 4: Large message handling (tests HTTP/2 frame fragmentation)
+        # Large WebSocket frames are split across multiple HTTP/2 DATA frames (~16KB each)
+        {
+            *string received_msg;
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    received_msg = msg;
+                    c.dec();
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            try {
+                # Connect with Send-Large-Data header to trigger server sending 32KB message
+                wsc.connect({"hdr": {"Send-Large-Data": "1"}});
+
+                if (!wsc.isHttp2()) {
+                    testSkip("HTTP/2 not negotiated");
+                }
+
+                c.waitForZero(10s);
+                assertEq(LargeData.size(), received_msg.size(),
+                    "HTTP/2 WebSocket should receive complete large message (32KB)");
+                assertEq(LargeData, received_msg, "HTTP/2 WebSocket large message content matches");
+
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("HTTP/2 WebSocket large message test: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }

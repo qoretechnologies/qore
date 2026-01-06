@@ -1749,12 +1749,39 @@ ws.setEventQueue();
     private hash<WsMsgInfo> readWsMessage() {
         if (http2_websocket && h2_stream_id > 0) {
             # HTTP/2: Read data from HTTP/2 stream and parse WebSocket frame
-            *binary data = hc.readHttp2StreamData(h2_stream_id, timeout_ms);
-            if (!data) {
-                throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
+            # Large WebSocket frames may be split across multiple HTTP/2 DATA frames,
+            # so we need to accumulate data until we have a complete WebSocket frame
+            binary buf;
+            date start = now_us();
+            date deadline = start + timeout_ms;
+            while (True) {
+                # Calculate remaining time for this read
+                date remaining = deadline - now_us();
+                if (remaining <= 0s) {
+                    *int needed = ws_get_frame_size(buf);
+                    throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from HTTP/2 stream "
+                        "(have %d bytes, need %s)", buf.size(), exists needed ? needed.toString() : "unknown");
+                }
+
+                # Use remaining time but cap at 100ms to allow checking for complete frames
+                int read_timeout_ms = min(get_milliseconds(remaining), 100);
+                *binary data = hc.readHttp2StreamData(h2_stream_id, read_timeout_ms);
+                if (data) {
+                    buf += data;
+                }
+
+                # Check if we have enough data for a complete frame
+                *int needed = ws_get_frame_size(buf);
+                if (exists needed) {
+                    if (buf.size() >= needed) {
+                        # We have a complete frame
+                        return ws_parse_frame(buf);
+                    }
+                    # Need more data - continue reading
+                } else if (!data && buf.empty()) {
+                    throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
+                }
             }
-            # Parse WebSocket frame from the data
-            return ws_parse_frame(data);
         } else {
             # HTTP/1.1: Read WebSocket message directly from socket
             return ws_read_message(hc, timeout_ms);

@@ -525,6 +525,54 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         return h;
     }
 
+    #! Returns the total size needed for a complete WebSocket frame, or NOTHING if not enough header data
+    /** @param buf the buffer containing at least the beginning of a WebSocket frame
+
+        @return the total number of bytes needed for a complete frame, or NOTHING if the buffer doesn't contain
+        enough data to determine the frame size (need at least 2 bytes for header, plus extended length bytes
+        if applicable)
+
+        @since WebSocketUtil 1.7
+    */
+    public *int sub ws_get_frame_size(binary buf) {
+        int len = buf.size();
+        if (len < 2) {
+            return NOTHING;  # Need at least 2 bytes for basic header
+        }
+
+        int pos = 1;  # Skip first byte (opcode + flags)
+        int b1 = buf[pos++];
+        softbool masked = b1 & 0x80;
+        int payload_len = b1 & 0x7f;
+
+        int header_size;
+        if (payload_len < 126) {
+            header_size = 2;
+        } else if (payload_len == 126) {
+            if (len < 4) {
+                return NOTHING;  # Need extended length bytes
+            }
+            payload_len = (buf[2] << 8) | buf[3];
+            header_size = 4;
+        } else {
+            # payload_len == 127
+            if (len < 10) {
+                return NOTHING;  # Need 8-byte extended length
+            }
+            payload_len = 0;
+            for (int i = 0; i < 8; ++i) {
+                payload_len = (payload_len << 8) | buf[2 + i];
+            }
+            header_size = 10;
+        }
+
+        if (masked) {
+            header_size += 4;  # 4-byte mask
+        }
+
+        return header_size + payload_len;
+    }
+
     #! returns a string response key from the binary key and the WebSocket GUID value
     /** @param key the base64-encoded key received in the \c Sec-WebSocket-Key header
 
