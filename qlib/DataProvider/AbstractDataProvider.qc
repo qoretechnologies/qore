@@ -1118,6 +1118,21 @@ public const RegularExpressionArgInfo = (
     },
 );
 
+#! Returns all member names of a typed hash including inherited members
+/** @param th the TypedHash to get member names from
+    @return a list of all member names including inherited members
+
+    @since %DataProvider 3.1
+*/
+list<string> sub dp_get_all_typed_hash_member_names(TypedHash th) {
+    list<string> rv = map $1.getName(), th.getMembers();
+    *TypedHash parent = th.getParentTypedHash();
+    if (parent) {
+        rv += dp_get_all_typed_hash_member_names(parent);
+    }
+    return rv;
+}
+
 #! The AbstractDataProvider class
 public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
     public {
@@ -1524,9 +1539,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         */
         const GenericExpressions = map {$1.key: $1.value.exp}, GenericExpressionImplementations.pairIterator();
 
-        #! A list of members names of the DataProviderSummaryInfoKeys hashdecl
-        const DataProviderSummaryInfoKeys = map $1.getName(),
-            TypedHash::forName("DataProviderSummaryInfo").getMembers();
+        #! A list of member names of the DataProviderSummaryInfo hashdecl (including inherited members)
+        const DataProviderSummaryInfoKeys = dp_get_all_typed_hash_member_names(
+            TypedHash::forName("DataProviderSummaryInfo"));
 
         #! 'Requires Result' option info
         const RequiresResultOption = <DataProviderOptionInfo>{
