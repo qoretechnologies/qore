@@ -44,17 +44,46 @@ public const UpsertResultUnchanged = "unchanged";
 public const UpsertResultDeleted = "deleted";
 #/@}
 
+#! Base option info with common fields shared by DataProviderOptionInfo, ActionOptionInfo, and ConnectionOptionInfo
+/** @since %DataProvider 3.1
+*/
+public hashdecl BaseOptionInfo inherits DisplayDescInfo {
+    #! Is the option value sensitive?
+    bool sensitive = False;
+
+    #! List of allowed values (enum)
+    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    bool allowed_values_creatable = False;
+
+    #! List of allowed values for elements of list types (enum)
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable = False;
+
+    #! Any default value
+    auto default_value;
+
+    #! Any optional example value for the option
+    auto example_value;
+
+    #! Free-form metadata on options
+    *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
+}
+
 #! Data provider option info
-public hashdecl DataProviderOptionInfo {
-    #! Option display name
-    string display_name;
-
-    #! Option short description in plain text
-    *string short_desc;
-
-    #! The option description
-    string desc;
-
+public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! The option value type or types
     softlist<AbstractDataProviderType> type;
 
@@ -72,31 +101,6 @@ public hashdecl DataProviderOptionInfo {
 
     #! Is the option exclusive with other options?
     *softlist<string> exclusive_with;
-
-    #! Any default value
-    auto default_value;
-
-    #! Is the option value sensitive?
-    bool sensitive = False;
-
-    #! List of allowed values (enum)
-    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
-
-    #! Does the option accept values not defined in allowed_values too?
-    bool allowed_values_creatable;
-
-    #! List of allowed values for elements of list types (enum)
-    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
-    */
-    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
-
-    #! Does the option accept values for elements not defined in element_allowed_values too?
-    bool element_allowed_values_creatable;
-
-    #! Any optional example value for the option
-    /** This value must be in the one of the types in the \c type list
-    */
-    auto example_value;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -120,34 +124,10 @@ public hashdecl DataProviderOptionInfo {
 
     #! Any information about how to react to changes
     *softlist<softstring> on_change;
-
-    #! Free-form metadata on options
-    *hash<auto> metadata;
-
-    #! Messages related to the option
-    *list<hash<UiMessageInfo>> messages;
-
-    #! Any icon info for the option
-    *string icon;
-
-    #! Any image info for the option
-    *string image;
 }
 
 #! Data provider summary info
-public hashdecl DataProviderSummaryInfo {
-    #! The name of the data provider
-    string name;
-
-    #! Data provider display name
-    string display_name;
-
-    #! Data provider short description in plain text
-    *string short_desc;
-
-    #! The description of the data provider; supports markdown
-    string desc;
-
+public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     #! The name of the provider type
     string type;
 
