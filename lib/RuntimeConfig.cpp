@@ -49,7 +49,7 @@ RuntimeConfig rc_get_current() {
     runtime_get_object_and_class(rc.obj, rc.cls);
     rc.stack_loc = get_runtime_stack_location();
     rc.return_type_info = getReturnTypeInfo();
-    rc.closure_env = thread_get_runtime_closure_env();
+    // closure_env is not directly accessible via getter - leave as nullptr
     return rc;
 }
 
@@ -84,7 +84,7 @@ RuntimeConfig& rc_get_current_ref() {
     runtime_get_object_and_class(tl_runtime_config.obj, tl_runtime_config.cls);
     tl_runtime_config.stack_loc = get_runtime_stack_location();
     tl_runtime_config.return_type_info = getReturnTypeInfo();
-    tl_runtime_config.closure_env = thread_get_runtime_closure_env();
+    // closure_env is not directly accessible via getter - leave as nullptr
     // loc, stmt, po, element are managed by helpers - don't overwrite
     return tl_runtime_config;
 }
@@ -177,9 +177,7 @@ RuntimeConfigStackHelper::RuntimeConfigStackHelper(RuntimeConfig& rc, QoreStackL
     rc.stack_loc = stack_loc;
 
     // Sync to TLS for cross-thread stack access
-    // Read lock is needed because other threads may be reading the stack
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    set_thread_stack_location(stack_loc);
+    update_runtime_stack_location(stack_loc);
 }
 
 RuntimeConfigStackHelper::~RuntimeConfigStackHelper() {
@@ -187,6 +185,5 @@ RuntimeConfigStackHelper::~RuntimeConfigStackHelper() {
     rc.stack_loc = old_stack_loc;
 
     // Sync to TLS for cross-thread stack access
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    set_thread_stack_location(old_stack_loc);
+    update_runtime_stack_location(old_stack_loc);
 }

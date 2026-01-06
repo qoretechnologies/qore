@@ -74,6 +74,7 @@ class QoreString;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
+struct RuntimeConfig;
 
 // ============================================================================
 // QoreSimpleValue - Trivially copyable value type for unions and varargs
@@ -721,6 +722,9 @@ public:
 
     //! Evaluates the value and returns the result with deref flag
     DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! Evaluates the value with RuntimeConfig and returns the result with deref flag
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     // ========================================================================
     // Type information

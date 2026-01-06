@@ -125,6 +125,7 @@
 #include "ConstantList.cpp"
 #include "QoreClassList.cpp"
 #include "HashDeclList.cpp"
+#include "RuntimeConfig.cpp"
 #include "thread.cpp"
 #include "AbstractThreadResource.cpp"
 #include "ThreadResourceList.cpp"

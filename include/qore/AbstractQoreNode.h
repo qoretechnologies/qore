@@ -49,8 +49,9 @@
 
 class LocalVar;
 
-// forward declaration
+// forward declarations
 struct QoreParseContext;
+struct RuntimeConfig;
 
 //! The base class for all value and parse types in Qore expression trees
 /**
@@ -244,6 +245,15 @@ public:
     */
     DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! optionally evaluates the argument with RuntimeConfig
+    /** return value requires a dereference if needs_deref is true
+        @param rc the runtime configuration
+        @param needs_deref this is an output parameter, if needs_deref is true then the value returned must be dereferenced
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @see ValueEvalRefHolder
+    */
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     //! returns true if the node represents a value
     /**
         @return true if the object is a value, false if not
@@ -326,6 +336,13 @@ public:
     */
     DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const = 0;
 
+    //! evaluates the object with RuntimeConfig and returns the value of the type
+    /** @param rc the runtime configuration (ignored in base implementation)
+        @param needs_deref if true then the return value requires dereferencing
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+    */
+    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     //! decrements the reference count
     /** deletes the object when the reference count = 0.
         The ExceptionSink argument is needed for those types that could throw an exception when they are deleted (ex: QoreObject)
@@ -406,6 +423,11 @@ public:
 
 protected:
     //! should never be called for value types
+    /** in debugging builds of the library, calls to this function will abort
+    */
+    DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! should never be called for value types (RuntimeConfig version)
     /** in debugging builds of the library, calls to this function will abort
     */
     DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;

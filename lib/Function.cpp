@@ -2461,9 +2461,8 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // setup call, save runtime position
     // issue #1303: do not check for object validity here in the call, we already have a weak reference to the object,
     // so it will stay valid, if the closure code itself refers to the object, it will fail then if the object is invalid
-    RuntimeConfig rc = rc_get_current();
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
-    CodeEvaluationHelper ceh(rc, xsink, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
+    CodeEvaluationHelper ceh(xsink, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
         false, nullptr, pgm);
     if (*xsink) {
         return QoreValue();

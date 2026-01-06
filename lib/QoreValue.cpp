@@ -732,6 +732,20 @@ QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
     return n->eval(needs_deref, xsink);
 }
 
+QoreValue QoreValue::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref == true);
+    if (!isPointer()) {
+        needs_deref = false;
+        return *this;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        needs_deref = false;
+        return *this;
+    }
+    return n->eval(rc, needs_deref, xsink);
+}
+
 // ============================================================================
 // Type information
 // ============================================================================
@@ -901,16 +915,6 @@ QoreValue ValueOptionalRefHolder::takeReferencedValue() {
         needs_deref = false;
     }
     return v;
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
 }
 
 ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)

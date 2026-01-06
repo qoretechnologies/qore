@@ -147,12 +147,11 @@ StatementBlock::StatementBlock(int sline, int eline, AbstractStatement* s) : Abs
 QoreValue StatementBlock::exec(ExceptionSink* xsink) {
     //QORE_TRACE("StatementBlock::exec()");
     QoreValue return_value{};
-    RuntimeConfig rc = rc_get_current();
-    ThreadLocalProgramData* tlpd = rc.tlpd;
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
     }
-    execImpl(rc, return_value, xsink);
+    execImpl(return_value, xsink);
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionExit(this, return_value, xsink);
     }

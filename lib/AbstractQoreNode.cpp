@@ -33,6 +33,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <cassert>
 #include <cstdio>
@@ -173,6 +174,47 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
 
     needs_deref = true;
     QoreValue rv = evalImpl(needs_deref, xsink);
+
+    switch (rv.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = rv.get<WeakReferenceNode>()->get();
+            if (needs_deref) {
+                o->ref();
+                rv.discard(xsink);
+            }
+            return o;
+        }
+
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
+            if (needs_deref) {
+                h->ref();
+                rv.discard(xsink);
+            }
+            return h;
+        }
+
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
+            if (needs_deref) {
+                l->ref();
+                rv.discard(xsink);
+            }
+            return l;
+        }
+    }
+
+    return rv;
+}
+
+QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    if (!needs_eval_flag) {
+        needs_deref = false;
+        return this;
+    }
+
+    needs_deref = true;
+    QoreValue rv = evalImpl(rc, needs_deref, xsink);
 
     switch (rv.getType()) {
         case NT_WEAKREF: {
@@ -515,6 +557,11 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
     return n.refSelf();
 }
 
+// Default implementation - forwards to non-RuntimeConfig version for backwards compatibility
+QoreValue AbstractQoreNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImpl(needs_deref, xsink);
+}
+
 void SimpleQoreNode::deref() {
     if (there_can_be_only_one) {
         assert(is_unique());
@@ -526,6 +573,11 @@ void SimpleQoreNode::deref() {
 }
 
 QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+   assert(false);
+   return QoreValue();
+}
+
+QoreValue SimpleValueQoreNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
    assert(false);
    return QoreValue();
 }
