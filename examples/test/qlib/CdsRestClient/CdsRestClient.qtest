@@ -18,10 +18,7 @@
 
 %requires qore >= 0.9
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %exec-class CdsTest
 

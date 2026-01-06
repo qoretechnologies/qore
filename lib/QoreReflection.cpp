@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -117,6 +118,37 @@ bool qore_type_has_default_value(const QoreTypeInfo* ti) {
 
 QoreValue qore_type_get_default_value(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getDefaultQoreValue(ti);
+}
+
+bool qore_type_is_typed_code(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::getComplexCodeType(ti) != nullptr;
+}
+
+const QoreTypeInfo* qore_type_get_code_return_type(const QoreTypeInfo* ti) {
+    const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
+    return code_type ? code_type->getReturnType() : nullptr;
+}
+
+const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti) {
+    const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
+    return code_type ? &code_type->getParamTypes() : nullptr;
+}
+
+bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
+    const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
+    return code_type && code_type->hasVarArgs();
+}
+
+bool qore_type_is_union(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::getUnionType(ti) != nullptr;
+}
+
+type_vec_t* qore_type_get_union_member_types(const QoreTypeInfo* ti) {
+    const QoreUnionTypeInfo* union_type = QoreTypeInfo::getUnionType(ti);
+    if (!union_type) {
+        return nullptr;
+    }
+    return new type_vec_t(union_type->getMemberTypes());
 }
 
 const QoreClass* QoreExternalVariant::getClass() const {

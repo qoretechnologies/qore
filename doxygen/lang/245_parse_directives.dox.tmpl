@@ -6,11 +6,12 @@
 
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
-    The following are the recommended parse directives for %Qore programming (note that %Qore is moving toward establishing @ref new-style "%new-style" as the default syntax; all examples given in the %Qore documentation are given assuming @ref new-style "%new-style"):
-    - @ref new-style "%new-style"
-    - @ref strict-args "%strict-args"
-    - @ref require-types "%require-types"
-    - @ref enable-all-warnings "%enable-all-warnings"
+    The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
+    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", and enables all warnings
+
+    Alternatively, files with the \c .qr extension automatically enable @ref modern "%modern" mode without any parse directive.
+
+    @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings") are still supported for backward compatibility and fine-grained control.
 
     <b>Parse Directives</b>
     |!Directive|!Description
@@ -67,6 +68,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
     |@ref loose-types "%loose-types"|reverts the effect of the @ref strict-types "%strict-types" parse options
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
@@ -1236,6 +1238,41 @@ sub validate_input(int value, int max_value) {
     @since %Qore 0.9.4
 
     <hr>
+    @section modern %modern
+
+    @par Parse Directive:
+    <tt>%%modern</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-set-parse-option=modern</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_MODERN
+
+    @par Description:
+    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings.
+
+    This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
+
+    @par File Extension:
+    Files with the \c .qr extension automatically enable \c %%modern mode without requiring any parse directive. This allows for cleaner code:
+
+    @code{.qore}
+    # hello.qr - no parse directives needed!
+    string sub greet(string name) {
+        return "Hello, " + name + "!";
+    }
+    printf("%s\n", greet("World"));
+    @endcode
+
+    @note
+    - All examples in the %Qore documentation assume @ref modern "%modern" mode.
+    - When using this option, the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them.
+    - All declarations require type information.
+
+    @since %Qore 2.3
+
+    <hr>
     @section new-style %new-style
 
     @par Parse Directive:
@@ -1250,10 +1287,10 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example.
 
-    @see @ref old-style "%old-style"
+    @see @ref old-style "%old-style", @ref modern "%modern"
 
     @note
-    - %Qore is moving toward establishing @ref new-style "%new-style" as the default syntax; all examples given in the %Qore documentation are given assuming @ref new-style "%new-style".
+    - For new code, consider using @ref modern "%modern" instead, which includes @ref new-style "%new-style" plus additional recommended options.
     - when using this option (or @ref allow-bare-refs "%allow-bare-refs) the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
 
     @since %Qore 0.8.1

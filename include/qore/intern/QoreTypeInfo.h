@@ -616,6 +616,12 @@ public:
     */
     DLLLOCAL static const class QoreComplexCodeTypeInfo* getComplexCodeType(const QoreTypeInfo* ti);
 
+    //! Returns the union type info if this is a union type
+    /** @param ti the type to check
+        @return the QoreUnionTypeInfo pointer if this is a union type, nullptr otherwise
+    */
+    DLLLOCAL static const class QoreUnionTypeInfo* getUnionType(const QoreTypeInfo* ti);
+
     //! Checks if two typed callable types have compatible signatures
     /** This is used for additional type checking when assigning closures/call references
         to typed code variables. Standard variance rules apply:
@@ -1129,8 +1135,31 @@ public:
         desc->sprintf("expects type '%s', but got ", tname.c_str());
         QoreTypeInfo::getNodeType(*desc, n);
         desc->concat(" instead");
+        // Add a hint about type narrowing for lvalue/key assignments when the expected type is a simple type
+        // that could have come from type narrowing of hash<auto>
+        if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
+            desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
+                "different types, use 'hash<auto!> h()' or 'hash h = cast<hash>({...})'");
+        }
         xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
         return -1;
+    }
+
+    //! Returns true if this type looks like it could have come from type narrowing
+    /** Simple scalar types like int, string, float, etc. that appear in hash value positions
+        are likely to have come from type narrowing of hash<auto>.
+
+        @note We only check hard types (not soft types) since type narrowing typically produces
+        hard types. We don't include nothing/null since those represent absence of value rather
+        than narrowed types.
+
+        @since %Qore 2.1
+    */
+    DLLLOCAL bool isSimpleTypeNarrowed() const {
+        // Check if this is a simple type that could be the result of hash<auto> narrowing
+        return this == bigIntTypeInfo || this == stringTypeInfo || this == floatTypeInfo
+            || this == boolTypeInfo || this == dateTypeInfo || this == binaryTypeInfo
+            || this == numberTypeInfo;
     }
 
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
@@ -4051,6 +4080,19 @@ public:
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
         return orNothing;
+    }
+
+    //! Returns the member types of this union
+    DLLLOCAL type_vec_t getMemberTypes() const {
+        type_vec_t result;
+        for (const auto& rt : return_vec) {
+            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
+            // Skip NOTHING type for or-nothing unions
+            if (ti && ti != nothingTypeInfo) {
+                result.push_back(ti);
+            }
+        }
+        return result;
     }
 
 protected:

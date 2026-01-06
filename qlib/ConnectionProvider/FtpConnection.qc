@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 #! the ConnectionProvider namespace. All classes used in the ConnectionProvider module should be inside this namespace
 public namespace ConnectionProvider {

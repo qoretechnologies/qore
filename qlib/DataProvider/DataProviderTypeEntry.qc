@@ -23,13 +23,10 @@
 */
 
 # assume local scope for variables, do not use "$" signs
-%new-style
+%modern
 # require type definitions everywhere
-%require-types
 # strict argument handling
-%strict-args
 # enable all warnings
-%enable-all-warnings
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {

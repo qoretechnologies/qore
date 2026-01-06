@@ -26,12 +26,9 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
-%strict-args
-%new-style
+%modern
 
 %requires Util >= 1.0
 %requires(reexport) ConnectionProvider >= 1.4

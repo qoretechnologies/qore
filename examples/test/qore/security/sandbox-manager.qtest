@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 
 %requires QUnit
@@ -318,7 +315,7 @@ class SandboxManagerTest inherits QUnit::Test {
 
         # Test reading file inside sandbox works
         p.parse("
-%new-style
+%modern
 string sub readTest(string path) {
     File f();
     f.open2(path, O_RDONLY);
@@ -333,7 +330,7 @@ string sub readTest(string path) {
         Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
         p2.setSandboxManager(sm);
         p2.parse("
-%new-style
+%modern
 string sub tryReadOutside() {
     File f();
     f.open2(\"/etc/passwd\", O_RDONLY);
@@ -367,8 +364,8 @@ string sub tryReadOutside() {
 
         # Test chdir inside sandbox works
         p.parse("
-%new-style
-sub testChdirInSandbox(string path) {
+%modern
+list<auto> sub testChdirInSandbox(string path) {
     Dir d();
     d.chdir(path);
     return d.list();
@@ -382,7 +379,7 @@ sub testChdirInSandbox(string path) {
         Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
         p2.setSandboxManager(sm);
         p2.parse("
-%new-style
+%modern
 sub testChdirOutsideSandbox() {
     Dir d();
     d.chdir(\"/etc\");
@@ -402,7 +399,7 @@ sub testChdirOutsideSandbox() {
         Program p3(PO_NO_CHILD_PO_RESTRICTIONS);
         p3.setSandboxManager(sm);
         p3.parse("
-%new-style
+%modern
 sub testMkdirInSandbox(string path) {
     Dir d();
     d.chdir(\"/tmp\");
@@ -425,7 +422,7 @@ sub testMkdirInSandbox(string path) {
 
         # Test while loop interrupt
         p.parse("
-%new-style
+%modern
 sub whileLoop() {
     while (True) {
         # infinite loop
@@ -448,7 +445,7 @@ sub whileLoop() {
         Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
         p2.setSandboxManager(sm);
         p2.parse("
-%new-style
+%modern
 sub forLoop() {
     for (;;) {
         # infinite loop
@@ -471,7 +468,7 @@ sub forLoop() {
         Program p3(PO_NO_CHILD_PO_RESTRICTIONS);
         p3.setSandboxManager(sm);
         p3.parse("
-%new-style
+%modern
 sub foreachLoop() {
     list<int> bigList = ();
     for (int i = 0; i < 1000000; i++) {
@@ -498,7 +495,7 @@ sub foreachLoop() {
         Program p4(PO_NO_CHILD_PO_RESTRICTIONS);
         p4.setSandboxManager(sm);
         p4.parse("
-%new-style
+%modern
 sub doWhileLoop() {
     do {
         # infinite loop
@@ -525,7 +522,7 @@ sub doWhileLoop() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 our int counter = 0;
 sub runLoop() {
     while (True) {
@@ -578,7 +575,7 @@ int sub getCounter() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doSleep() {
     sleep(10);
 }
@@ -600,7 +597,7 @@ sub doSleep() {
         p2.setSandboxManager(sm2);
 
         p2.parse("
-%new-style
+%modern
 sub doUsleep() {
     usleep(10s);
 }
@@ -642,7 +639,7 @@ sub doUsleep() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doLock() {
     Mutex m();
     m.lock();
@@ -668,7 +665,7 @@ sub doLock() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doReadLock() {
     RWLock rwl();
     rwl.readLock();
@@ -707,7 +704,7 @@ sub doWriteLock() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doAutoLock() {
     Mutex m();
     AutoLock al(m);
@@ -759,7 +756,7 @@ sub doAutoWriteLock() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doQueueGet() {
     Queue q();
     q.get();
@@ -798,7 +795,7 @@ sub doQueuePop() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doCounterWait() {
     Counter c(1);
     c.waitForZero();
@@ -824,7 +821,7 @@ sub doCounterWait() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doConditionWait() {
     Mutex m();
     Condition cond();
@@ -852,7 +849,7 @@ sub doConditionWait() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doGateEnter() {
     Gate g();
     g.enter();
@@ -940,7 +937,7 @@ sub doGateEnter() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub connectToLocalhost() {
     Socket s();
     s.connect('127.0.0.1:80', 1000);
@@ -966,7 +963,7 @@ sub connectToLocalhost() {
         p2.setSandboxManager(sm2);
 
         p2.parse("
-%new-style
+%modern
 sub connectToPublic() {
     Socket s();
     # This will likely fail to connect but should not be blocked by security
@@ -1008,7 +1005,7 @@ sub connectToPublic() {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doSleepTest(Queue resultQueue) {
     resultQueue.push('ready');
 
@@ -1051,7 +1048,7 @@ sub doSleepTest(Queue resultQueue) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doQueueTest(Queue resultQueue) {
     Queue emptyQueue();
 
@@ -1097,7 +1094,7 @@ sub doQueueTest(Queue resultQueue) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doCounterTest(Queue resultQueue) {
     Counter cnt(1);  # Will never reach zero without dec()
 
@@ -1143,7 +1140,7 @@ sub doCounterTest(Queue resultQueue) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
+%modern
 sub doConditionTest(Queue resultQueue) {
     Mutex mtx();
     Condition cond();
@@ -1196,9 +1193,7 @@ sub doConditionTest(Queue resultQueue) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
-%require-types
-%strict-args
+%modern
 
 # Simulates a blocking operation that would be cancelled by the callback
 sub blockingOperation(Queue q) {
@@ -1245,9 +1240,7 @@ sub blockingOperation(Queue q) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
-%require-types
-%strict-args
+%modern
 
 sub multipleBlockers(Queue q, int count) {
     Counter ready(count);
@@ -1312,9 +1305,7 @@ sub multipleBlockers(Queue q, int count) {
         p.setSandboxManager(sm);
 
         p.parse("
-%new-style
-%require-types
-%strict-args
+%modern
 
 # Perform multiple short operations - each would register/unregister a cancel callback
 sub shortOperations(Queue q, int count) {
@@ -1341,7 +1332,7 @@ sub shortOperations(Queue q, int count) {
         p2.setSandboxManager(sm);
 
         p2.parse("
-%new-style
+%modern
 sub blockAfterManyOps(Queue q) {
     q.push('ready');
     Queue blockingQ();
@@ -1384,9 +1375,7 @@ sub blockAfterManyOps(Queue q) {
             p.setSandboxManager(sm);
 
             p.parse("
-%new-style
-%require-types
-%strict-args
+%modern
 
 sub quickBlockingOp(Queue q) {
     q.push('started');
@@ -1430,7 +1419,7 @@ sub quickBlockingOp(Queue q) {
             p.setSandboxManager(sm);
 
             p.parse("
-%new-style
+%modern
 sub noOp() {}
             ", "rapid_noop");
 

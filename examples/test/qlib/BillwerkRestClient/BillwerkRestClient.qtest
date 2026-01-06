@@ -17,10 +17,7 @@
 
 %requires qore >= 0.9.4
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %disable-warning deprecated
 

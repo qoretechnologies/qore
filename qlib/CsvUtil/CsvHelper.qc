@@ -23,10 +23,7 @@
 */
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 class CsvHelper {
     private {

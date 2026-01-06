@@ -33,10 +33,7 @@
     SIGINT which is handled like other signals)
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # execute the httpServer class as the application object
 %exec-class httpServer

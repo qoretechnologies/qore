@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 %enable-debug
 
@@ -326,8 +323,6 @@ class AssertDebugTest inherits QUnit::Test {
             File f();
             f.open2(modulefile, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("%new-style
-%strict-args
-%require-types
 
 module TestDebugModule {
     version = \"1.0\";
@@ -379,8 +374,6 @@ printf(\"%%d\\n\", TestDebugModule::DebugTracker::testDebug());
             File f();
             f.open2(modulefile2, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("%new-style
-%strict-args
-%require-types
 
 module TestDebugModule2 {
     version = \"1.0\";
@@ -425,8 +418,6 @@ printf(\"%%d\\n\", TestDebugModule2::DebugTracker::testDebug());
             File f();
             f.open2(modulefile3, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("%new-style
-%strict-args
-%require-types
 
 module TestDebugModule3 {
     version = \"1.0\";

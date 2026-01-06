@@ -29,10 +29,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) FileLocationHandler
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 module FixedLengthUtil {
     version = "1.6";
@@ -258,10 +255,7 @@ const Specs = (
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires FixedLengthUtil
 
@@ -299,10 +293,7 @@ while (i.next()) {
     @code{.py}
 #!/usr/bin/env qore
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires FixedLengthUtil
 

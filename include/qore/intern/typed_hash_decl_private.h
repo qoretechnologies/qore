@@ -290,6 +290,11 @@ public:
         return parentHashDecl;
     }
 
+    //! Sets the parent hashdecl directly (for system hashdecls)
+    DLLLOCAL void setParentHashDecl(const TypedHashDecl* parent) {
+        parentHashDecl = parent;
+    }
+
     //! Returns true if this hashdecl is a descendant of the given hashdecl
     DLLLOCAL bool isDescendantOf(const typed_hash_decl_private& ancestor) const {
         const typed_hash_decl_private* current = this;

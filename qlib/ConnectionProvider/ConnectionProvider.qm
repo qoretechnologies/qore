@@ -25,10 +25,7 @@
 # minimum required Qore module
 %requires qore >= 2.0
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 %requires(reexport) Util
 %requires Logger

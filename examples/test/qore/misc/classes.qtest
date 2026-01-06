@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../../qlib/QUnit.qm
 
@@ -1179,7 +1176,7 @@ sub test() {
         } catch (hash<ExceptionInfo> nex) {
             ex = nex;
         }
-        assertEq(564, ex.callstack[0].line);
+        assertEq(561, ex.callstack[0].line);
 
         Child2 c2();
         Child1 c1(c2);

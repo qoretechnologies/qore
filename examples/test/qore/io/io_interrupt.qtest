@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %disable-warning unreferenced-variable
 
 %requires ../../../../qlib/Util.qm
@@ -251,9 +248,7 @@ public class IOInterruptTest inherits QUnit::Test {
         p.setSandboxManager(sm);
 
         p.parse("
-%require-types
-%new-style
-%strict-args
+%modern
 
 *binary sub read_pipe() {
     StreamPipe pipe(True, 30000, 1024);
@@ -285,9 +280,7 @@ public class IOInterruptTest inherits QUnit::Test {
         p.setSandboxManager(sm);
 
         p.parse("
-%require-types
-%new-style
-%strict-args
+%modern
 
 sub write_pipe() {
     StreamPipe pipe(True, 30000, 16);  # Small buffer
@@ -327,9 +320,7 @@ sub write_pipe() {
         p.setSandboxManager(sm);
 
         p.parse("
-%require-types
-%new-style
-%strict-args
+%modern
 
 auto sub shift_queue() {
     Queue q();
@@ -360,9 +351,7 @@ auto sub shift_queue() {
         p.setSandboxManager(sm);
 
         p.parse("
-%require-types
-%new-style
-%strict-args
+%modern
 
 sub push_queue() {
     Queue q(1);  # Max size 1
@@ -431,9 +420,7 @@ sub push_queue() {
         p.setSandboxManager(sm);
 
         p.parse("
-%require-types
-%new-style
-%strict-args
+%modern
 
 int sub wait_counter() {
     Counter c(1);  # Counter at 1, will never reach 0

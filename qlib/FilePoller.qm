@@ -73,10 +73,7 @@ module FilePoller {
     };
 }
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 %allow-weak-references
 
 %requires Util

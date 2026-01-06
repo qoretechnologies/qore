@@ -1137,6 +1137,14 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
 }
 
+const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    // Check if the type is a QoreUnionTypeInfo by attempting a dynamic_cast
+    return dynamic_cast<const QoreUnionTypeInfo*>(ti);
+}
+
 bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source) {
     // Get complex code types
     const QoreComplexCodeTypeInfo* target_code = getComplexCodeType(target);
@@ -2527,6 +2535,121 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         return qore_get_union_type(member_types, or_nothing);
     }
+    if (!strcmp(cscope->ostr, "code")) {
+        // Parse typed callable: code<ReturnType(ParamType1, ParamType2, ...)>
+        // Expected format: subtypes[0] contains "ReturnType(ParamType1, ParamType2, ...)"
+        // NOTE: Similar parsing logic exists in resolveSubtype() for parse-time resolution with error messages
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        const char* sig_str = subtypes[0]->cscope->ostr;
+
+        // Find the opening parenthesis to split return type from params
+        // Handle complex return types like hash<string, int> by tracking angle bracket depth
+        const char* paren_open = nullptr;
+        int angle_depth = 0;
+        for (const char* p = sig_str; *p; ++p) {
+            if (*p == '<') {
+                ++angle_depth;
+            } else if (*p == '>') {
+                --angle_depth;
+            } else if (*p == '(' && angle_depth == 0) {
+                paren_open = p;
+                break;
+            }
+        }
+        if (!paren_open) {
+            return nullptr;
+        }
+
+        // Find closing parenthesis
+        const char* paren_close = strrchr(sig_str, ')');
+        if (!paren_close || paren_close < paren_open) {
+            return nullptr;
+        }
+
+        // Extract return type string
+        std::string return_type_str(sig_str, paren_open - sig_str);
+        // Trim whitespace
+        while (!return_type_str.empty() && isspace(return_type_str.back())) {
+            return_type_str.pop_back();
+        }
+        while (!return_type_str.empty() && isspace(return_type_str.front())) {
+            return_type_str.erase(0, 1);
+        }
+
+        // Resolve return type
+        const QoreTypeInfo* returnType = nullptr;
+        if (!return_type_str.empty() && return_type_str != "nothing") {
+            returnType = qore_get_type_from_string_intern(return_type_str.c_str());
+            if (!returnType) {
+                return nullptr;
+            }
+        }
+        // If empty or "nothing", returnType stays nullptr (means nothing return)
+
+        // Extract parameter types string
+        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
+
+        // Check for varargs
+        bool has_varargs = false;
+        size_t dotdotdot_pos = params_str.rfind("...");
+        if (dotdotdot_pos != std::string::npos) {
+            has_varargs = true;
+            // Remove "..." from params_str
+            params_str = params_str.substr(0, dotdotdot_pos);
+            // Trim trailing comma and whitespace
+            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
+                params_str.pop_back();
+            }
+        }
+
+        // Parse parameter types
+        type_vec_t param_types;
+        if (!params_str.empty()) {
+            // Split on commas, handling nested angle brackets and parentheses
+            std::string current_param;
+            int param_angle_depth = 0;
+            int param_paren_depth = 0;
+            for (size_t i = 0; i <= params_str.size(); ++i) {
+                char c = i < params_str.size() ? params_str[i] : '\0';
+                if (c == '<') {
+                    ++param_angle_depth;
+                    current_param += c;
+                } else if (c == '>') {
+                    --param_angle_depth;
+                    current_param += c;
+                } else if (c == '(') {
+                    ++param_paren_depth;
+                    current_param += c;
+                } else if (c == ')') {
+                    --param_paren_depth;
+                    current_param += c;
+                } else if ((c == ',' || c == '\0') && param_angle_depth == 0 && param_paren_depth == 0) {
+                    // Trim whitespace from current_param
+                    while (!current_param.empty() && isspace(current_param.back())) {
+                        current_param.pop_back();
+                    }
+                    while (!current_param.empty() && isspace(current_param.front())) {
+                        current_param.erase(0, 1);
+                    }
+                    if (!current_param.empty()) {
+                        const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
+                        if (!param_type) {
+                            return nullptr;
+                        }
+                        param_types.push_back(param_type);
+                    }
+                    current_param.clear();
+                } else {
+                    current_param += c;
+                }
+            }
+        }
+
+        return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
+    }
     return nullptr;
 }
 
@@ -2749,6 +2872,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
     if (!strcmp(cscope->ostr, "code")) {
         // Parse typed callable: code<ReturnType(ParamType1, ParamType2, ...)>
         // Expected format: subtypes[0] contains "ReturnType(ParamType1, ParamType2, ...)"
+        // NOTE: Similar parsing logic exists in resolveRuntimeSubtype() for runtime resolution without error messages
         if (subtypes.size() != 1) {
             parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; 'code' type takes a single callable " \
                 "signature specification in the form 'ReturnType(ParamTypes...)'", getName());

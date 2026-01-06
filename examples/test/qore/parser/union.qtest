@@ -25,10 +25,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 
 %requires ../../../../qlib/Util.qm

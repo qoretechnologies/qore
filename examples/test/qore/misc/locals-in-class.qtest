@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 
 %requires ../../../../qlib/QUnit.qm
@@ -26,7 +23,7 @@ public class LocalsInClassTest inherits QUnit::Test {
         p.replaceParseOptions(PO_DEFAULT);
         assertThrows("PARSE-EXCEPTION", "illegal local variable declaration in member initialization expression",
             \p.parse(), ("
-%new-style
+%modern
 class C {
     private {
         int i = int j;
@@ -41,7 +38,7 @@ class C {
         p.replaceParseOptions(PO_DEFAULT);
         assertThrows("PARSE-EXCEPTION", "illegal local variable declaration in class static variable initialization expression",
             \p.parse(), ("
-%new-style
+%modern
 class C {
     private {
         static int i = int j;

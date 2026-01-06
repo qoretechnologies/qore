@@ -989,6 +989,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%assume-global{WS}*$                   parse_disable_parse_options(yylloc, PO_ASSUME_LOCAL);
 ^%new-style{WS}*$                       parse_set_parse_options(yylloc, PO_NEW_STYLE);
 ^%old-style{WS}*$                       parse_disable_parse_options(yylloc, PO_NEW_STYLE);
+^%modern{WS}*$                          {
+                                           parse_set_parse_options(yylloc, PO_MODERN);
+                                           getProgram()->setWarningMask(-1);
+                                        }
 ^%perl-bool-eval{WS}*$                  parse_disable_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
 ^%strict-bool-eval{WS}*$                parse_set_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
 ^%strong-encapsulation{WS}*$            parse_set_parse_options(yylloc, PO_STRONG_ENCAPSULATION);

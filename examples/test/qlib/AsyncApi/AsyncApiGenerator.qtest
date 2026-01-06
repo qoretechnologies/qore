@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm

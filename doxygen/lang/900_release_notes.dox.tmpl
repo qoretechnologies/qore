@@ -91,6 +91,14 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
+    - <b>New @ref modern "%%modern" parse directive and \c .qr file extension</b>
+      - new @ref modern "%%modern" parse directive combines all recommended parse options into one:
+        @ref new-style "%%new-style", @ref require-types "%%require-types", @ref strict-args "%%strict-args",
+        and enables all warnings
+      - files with the \c .qr extension automatically enable @ref modern "%%modern" mode without any
+        parse directive required
+      - new @ref Qore::PO_MODERN "PO_MODERN" parse option constant
+      - this is now the recommended way to write new %Qore code
     - <b>NaN-boxing optimization for internal value representation</b>
       (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
       - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction in value storage overhead)
