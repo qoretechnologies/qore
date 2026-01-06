@@ -60,7 +60,6 @@ class ScopedObjectCallNode;
 class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
-struct RuntimeConfig;
 
 union qore_gvar_ref_u {
     bool b;
@@ -433,9 +432,6 @@ private:
 
     RObject* robj = nullptr;
 
-    //! RuntimeConfig for TLS optimization (may be nullptr)
-    RuntimeConfig* rc = nullptr;
-
 public:
     QoreLValueGeneric* val = nullptr;
     QoreValue* qv = nullptr;
@@ -443,9 +439,6 @@ public:
 
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
-
-    //! RuntimeConfig-aware constructor - avoids TLS lookups for object/class context
-    DLLLOCAL LValueHelper(RuntimeConfig& rc, const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink);
 
@@ -708,17 +701,12 @@ private:
 protected:
     ExceptionSink* xsink;
     QoreLValueGeneric rv;
-    //! RuntimeConfig for TLS optimization (may be nullptr)
-    RuntimeConfig* rc = nullptr;
     bool for_del,
         direct_list = false;
 
 public:
     DLLLOCAL LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* n_xsink, bool fd);
     DLLLOCAL LValueRemoveHelper(const QoreValue& exp, ExceptionSink* n_xsink, bool fd);
-
-    //! RuntimeConfig-aware constructor - avoids TLS lookups
-    DLLLOCAL LValueRemoveHelper(RuntimeConfig& n_rc, const QoreValue& exp, ExceptionSink* n_xsink, bool fd);
 
     DLLLOCAL void doRemove(QoreValue exp);
 

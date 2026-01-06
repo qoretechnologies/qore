@@ -32,7 +32,6 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
-#include "qore/intern/RuntimeConfig.h"
 
 #include <vector>
 
@@ -72,17 +71,6 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, xsink);
-}
-
-// RuntimeConfig-aware version
-QoreValue AbstractMethodCallNode::exec(RuntimeConfig& rc, QoreObject* o, const char* c_str,
-        ExceptionSink* xsink) const {
-    // Must use TLS for class context - rc.cls may be from outer scope
-    const qore_class_private* ctx = runtime_get_class();
-    if (ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), ctx)) {
-        ctx = nullptr;
-    }
-    return exec(o, c_str, ctx, xsink);
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
@@ -280,10 +268,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     return err;
 }
 
-QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    // IMPORTANT: Must use runtime_get_stack_object() here, NOT rc.obj
-    // rc.obj might be from an outer scope when there are nested method calls
-    // SelfFunctionCallNode is for calls to methods on "self", which is the current stack object
+QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreObject* self = runtime_get_stack_object();
     assert(self);
 
@@ -306,10 +291,9 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 
     assert(method);
 
-    // Use RuntimeConfig-aware versions to avoid TLS lookup
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, rc, xsink, self, args)
-        : qore_method_private::eval(*method, rc, xsink, self, args);
+        ? qore_method_private::evalTmpArgs(*method, xsink, self, args)
+        : qore_method_private::eval(*method, xsink, self, args);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
@@ -424,9 +408,9 @@ SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SelfFunctionCallNode& old
     self->ref();
 }
 
-QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue SetSelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ObjectSubstitutionHelper osh(self, cls);
-    QoreValue rv = SelfFunctionCallNode::evalImpl(rc, needs_deref, xsink);
+    QoreValue rv = SelfFunctionCallNode::evalImpl(needs_deref, xsink);
     self->deref(xsink);
     deref_self = false;
     return rv;
@@ -451,13 +435,13 @@ QoreString* FunctionCallNode::getAsString(bool& del, int foff, ExceptionSink* xs
 }
 
 // eval(): return value requires a deref(xsink)
-QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreFunction* func = fe->getFunction();
     printd(5, "FunctionCallNode::evalImpl() this: %p '%s' tmp_args: %d args: %p '%s' (%zd)\n", this,
         func->getName(), tmp_args, args, args ? get_full_type_name(args) : "n/a", args ? args->size() : 0);
     return tmp_args
-        ? func->evalFunctionTmpArgs(rc, variant, args, pgm, xsink)
-        : func->evalFunction(rc, variant, args, pgm, xsink);
+        ? func->evalFunctionTmpArgs(variant, args, pgm, xsink)
+        : func->evalFunction(variant, args, pgm, xsink);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -644,7 +628,7 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
     }
 }
 
-QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return qore_class_private::execConstructor(*qc, variant, args, xsink);
 }
 
@@ -719,7 +703,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
-QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue ScopedObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return qore_class_private::execConstructor(*oc, variant, args, xsink);
 }
 
@@ -735,22 +719,10 @@ QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
 QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
    // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
-   if (n.isNothing() && qc != QC_PSEUDONOTHING) {
+   if (n.isNothing() && qc != QC_PSEUDONOTHING)
       return qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, n, method->getName(), args, xsink);
-   } else {
+   else
       return qore_class_private::evalPseudoMethod(qc, method, variant, n, args, xsink);
-   }
-}
-
-// RuntimeConfig-aware version - uses rc.cls instead of TLS lookup
-QoreValue MethodCallNode::exec(RuntimeConfig& rc, QoreObject* o, ExceptionSink* xsink) const {
-    return AbstractMethodCallNode::exec(rc, o, c_str, xsink);
-}
-
-// RuntimeConfig-aware version for pseudo-methods
-QoreValue MethodCallNode::execPseudo(RuntimeConfig& rc, const QoreValue n, ExceptionSink* xsink) const {
-    // Pseudo-methods don't use class context, so just delegate to the non-RuntimeConfig version
-    return execPseudo(n, xsink);
 }
 
 AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
@@ -891,11 +863,10 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
-QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    // Use RuntimeConfig-aware versions to avoid TLS lookup
+QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, rc, xsink, nullptr, args)
-        : qore_method_private::eval(*method, rc, xsink, nullptr, args);
+        ? qore_method_private::evalTmpArgs(*method, xsink, nullptr, args)
+        : qore_method_private::eval(*method, xsink, nullptr, args);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {

@@ -426,8 +426,8 @@ protected:
         return ce->typeInfo;
     }
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-        return ce->saved_val.eval(rc, needs_deref, xsink);
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        return ce->saved_val.eval(needs_deref, xsink);
     }
 
     DLLLOCAL ~RuntimeConstantRefNode() {

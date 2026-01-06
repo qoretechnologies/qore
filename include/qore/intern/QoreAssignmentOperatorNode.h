@@ -51,15 +51,14 @@ protected:
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool weak_assignment);
 
-    DLLLOCAL QoreValue evalIntern(RuntimeConfig& rc, ExceptionSink* xsink, bool& needs_deref,
-            bool weak_assignment) const;
+    DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, bool weak_assignment) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitIntern(parse_context, false);
     }
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(rc, xsink, needs_deref, false);
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalIntern(xsink, needs_deref, false);
     }
 };
 
@@ -79,8 +78,8 @@ protected:
         return parseInitIntern(parse_context, true);
     }
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(rc, xsink, needs_deref, true);
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalIntern(xsink, needs_deref, true);
     }
 };
 

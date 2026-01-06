@@ -30,7 +30,6 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
-#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -117,20 +116,19 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     return err;
 }
 
-QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder seq(rc, e[0], xsink);
+QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder seq(e[0], xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    bool broken_list_range = rc.po & PO_BROKEN_LIST_RANGE;
+    bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
 
     qore_type_t seq_type = seq->getType();
     int64 start, stop, seq_size;
-    bool empty = !getEffectiveRange(rc, *seq, start, stop, seq_size, broken_list_range, xsink);
-    if (*xsink) {
+    bool empty = !getEffectiveRange(*seq, start, stop, seq_size, broken_list_range, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     switch (seq_type) {
         case NT_LIST: {
@@ -187,19 +185,18 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
 }
 
 FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalIteratorImpl(
-        RuntimeConfig& rc, FunctionalValueType& value_type, ExceptionSink* xsink) const {
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
     value_type = list;
 
-    ValueEvalOptimizedRefHolder seq(rc, e[0], xsink);
-    if (*xsink) {
+    ValueEvalOptimizedRefHolder seq(e[0], xsink);
+    if (*xsink)
         return nullptr;
-    }
 
     if (seq->getType() == NT_LIST) {
-        bool broken_list_range = rc.po & PO_BROKEN_LIST_RANGE;
+        bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
         int64 start, stop, seq_size;
-        if (getEffectiveRange(rc, *seq, start, stop, seq_size, broken_list_range, xsink)) {
-            if (!(rc.po & PO_BROKEN_RANGE)) {
+        if (getEffectiveRange(*seq, start, stop, seq_size, broken_list_range, xsink)) {
+            if (!(runtime_get_parse_options() & PO_BROKEN_RANGE)) {
                 if (start <= stop) {
                     ++stop;
                 } else {
@@ -211,7 +208,7 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     }
 
     bool needs_deref;
-    ValueHolder res(evalImpl(rc, needs_deref, xsink), xsink);
+    ValueHolder res(evalImpl(needs_deref, xsink), xsink);
 
     if (*xsink) {
         return nullptr;
@@ -259,16 +256,14 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
 }
 
 // returns true iff the range is nonempty
-bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(RuntimeConfig& rc, const QoreValue& seq, int64& start,
-        int64& stop, int64& seq_size, bool broken_list_range, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder start_index(rc, e[1], xsink);
-    if (*xsink) {
+bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop,
+        int64& seq_size, bool broken_list_range, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder start_index(e[1], xsink);
+    if (*xsink)
         return false;
-    }
-    ValueEvalOptimizedRefHolder stop_index(rc, e[2], xsink);
-    if (*xsink) {
+    ValueEvalOptimizedRefHolder stop_index(e[2], xsink);
+    if (*xsink)
         return false;
-    }
 
     return getEffectiveRange(seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
 }

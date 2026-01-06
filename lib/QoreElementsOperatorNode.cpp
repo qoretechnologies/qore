@@ -45,8 +45,8 @@ int QoreElementsOperatorNode::getAsString(QoreString& str, int foff, ExceptionSi
     return 0;
 }
 
-QoreValue QoreElementsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(rc, exp, xsink);
+QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -89,8 +89,7 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
     if (!err && exp.isValue()) {
         SimpleRefHolder<QoreElementsOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

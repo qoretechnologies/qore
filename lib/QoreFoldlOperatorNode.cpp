@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -104,18 +104,15 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
-QoreValue QoreFoldlOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-   return doFold(rc, true, needs_deref, xsink);
+QoreValue QoreFoldlOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+   return doFold(true, needs_deref, xsink);
 }
 
-QoreValue QoreFoldlOperatorNode::doFold(RuntimeConfig& rc, bool fwd, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalOperator::FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(rc, value_type, fwd, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, fwd, xsink));
     if (*xsink || value_type == FunctionalOperator::nothing)
         return QoreValue();
-
-    // Set RuntimeConfig for sub-expression evaluation
-    f->setRuntimeConfig(&rc);
 
     // get first value
     ValueOptionalRefHolder iv(xsink);
@@ -138,9 +135,7 @@ QoreValue QoreFoldlOperatorNode::doFold(RuntimeConfig& rc, bool fwd, bool& needs
         args->push(result.release(), xsink);
         args->push(iv.takeReferencedValue(), xsink);
         ArgvContextHelper argv_helper(args, xsink);
-        // Use RuntimeConfig-aware evaluation
-        bool nd = true;
-        result = left.eval(rc, nd, xsink);
+        result = left.eval(xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -149,18 +144,13 @@ QoreValue QoreFoldlOperatorNode::doFold(RuntimeConfig& rc, bool fwd, bool& needs
     return result.release();
 }
 
-FunctionalOperatorInterface* QoreFoldlOperatorNode::getFunctionalIterator(RuntimeConfig& rc,
+FunctionalOperatorInterface* QoreFoldlOperatorNode::getFunctionalIterator(
         FunctionalOperator::FunctionalValueType& value_type, bool fwd, ExceptionSink* xsink) const {
     // we can only use the iterator_func with foldl
-    if (iterator_func && fwd) {
-        FunctionalOperatorInterface* result = iterator_func->getFunctionalIterator(rc, value_type, xsink);
-        if (result) {
-            result->setRuntimeConfig(&rc);
-        }
-        return result;
-    }
+    if (iterator_func && fwd)
+        return iterator_func->getFunctionalIterator(value_type, xsink);
 
-    return FunctionalOperatorInterface::getFunctionalIterator(rc, value_type, right, fwd,
+    return FunctionalOperatorInterface::getFunctionalIterator(value_type, right, fwd,
         fwd ? "foldl operator" : "foldr operator", xsink);
 }
 
@@ -175,6 +165,6 @@ int QoreFoldrOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink*
     return 0;
 }
 
-QoreValue QoreFoldrOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    return doFold(rc, false, needs_deref, xsink);
+QoreValue QoreFoldrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return doFold(false, needs_deref, xsink);
 }

@@ -32,7 +32,6 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
 WhileStatement::WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), cond(c), code(cd) {
@@ -44,7 +43,7 @@ WhileStatement::~WhileStatement() {
     delete lvars;
 }
 
-int WhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -58,7 +57,7 @@ int WhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, Ex
             break;
         }
 
-        ValueEvalOptimizedRefHolder val(rconfig, cond, xsink);
+        ValueEvalOptimizedRefHolder val(cond, xsink);
         if (*xsink) {
             break;
         }
@@ -68,7 +67,7 @@ int WhileStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, Ex
         }
 
         if (code) {
-            rc = code->execImpl(rconfig, return_value, xsink);
+            rc = code->execImpl(return_value, xsink);
             if (*xsink || rc == RC_BREAK) {
                 rc = 0;
                 break;

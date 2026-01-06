@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -42,7 +42,7 @@ protected:
 
     DLLLOCAL static QoreString keys_str;
 
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -50,8 +50,8 @@ protected:
         return returnTypeInfo;
     }
 
-    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc,
-            FunctionalValueType& value_type, ExceptionSink* xsink) const override;
+    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreKeysOperatorNode(const QoreProgramLocation* loc, QoreValue exp)

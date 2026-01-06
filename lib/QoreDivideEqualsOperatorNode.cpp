@@ -36,17 +36,15 @@ int QoreDivideEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     return parseInitIntern(op_str.c_str(), parse_context);
 }
 
-QoreValue QoreDivideEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder res(rc, right, xsink);
-    if (*xsink) {
+QoreValue QoreDivideEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder res(right, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(rc, left, xsink);
-    if (!v) {
+    LValueHelper v(left, xsink);
+    if (!v)
         return QoreValue();
-    }
 
     // is either side a number?
     if (res->getType() == NT_NUMBER || v.getType() == NT_NUMBER) {

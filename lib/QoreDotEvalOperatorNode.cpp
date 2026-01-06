@@ -31,7 +31,6 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
-#include "qore/intern/RuntimeConfig.h"
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
@@ -43,16 +42,15 @@ static const AbstractQoreNode* check_call_ref(const AbstractQoreNode *op, const 
     return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
 }
 
-QoreValue QoreDotEvalOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder op(rc, left, xsink);
-    if (*xsink) {
+QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder op(left, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     switch (op->getType()) {
         case NT_WEAKREF: {
             // FIXME: inefficient
-            return m->exec(rc, op->get<WeakReferenceNode>()->get(), xsink);
+            return m->exec(op->get<WeakReferenceNode>()->get(), xsink);
         }
 
         case NT_WEAKREF_HASH: {
@@ -67,7 +65,7 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
         case NT_OBJECT: {
             QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(op->getInternalNode()));
             // FIXME: inefficient
-            return m->exec(rc, o, xsink);
+            return m->exec(o, xsink);
         }
 
         case NT_HASH: {
@@ -84,7 +82,7 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
 
     // FIXME: inefficient
     if (m->isPseudo()) {
-        return m->execPseudo(rc, *op, xsink);
+        return m->execPseudo(*op, xsink);
     }
 
     return pseudo_classes_eval(*op, m->getName(), m->getArgs(), xsink);

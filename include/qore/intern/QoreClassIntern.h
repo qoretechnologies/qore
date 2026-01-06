@@ -708,19 +708,9 @@ public:
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const;
 
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue evalMethod(RuntimeConfig& rc, ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-            QoreObject* self, const QoreListNode* args, const qore_class_private* cctx = nullptr,
-            QoreProgram* pgm_ctx = nullptr) const;
-
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
             QoreObject* self, QoreListNode* args, const qore_class_private* cctx = nullptr) const;
-
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue evalMethodTmpArgs(RuntimeConfig& rc, ExceptionSink* xsink,
-            const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalPseudoMethod(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
@@ -744,18 +734,9 @@ public:
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
             const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const;
 
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue evalMethod(RuntimeConfig& rc, ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
-            const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const;
-
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
             QoreListNode* args, const qore_class_private* cctx = nullptr) const;
-
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue evalMethodTmpArgs(RuntimeConfig& rc, ExceptionSink* xsink,
-            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -3650,16 +3631,6 @@ public:
         return SMETHF(func)->evalMethod(xsink, 0, args, cctx, pgm_ctx);
     }
 
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue eval(RuntimeConfig& rc, ExceptionSink* xsink, QoreObject* self, const QoreListNode* args,
-            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const {
-        if (!static_flag) {
-            assert(self);
-            return NMETHF(func)->evalMethod(rc, xsink, 0, self, args, cctx, pgm_ctx);
-        }
-        return SMETHF(func)->evalMethod(rc, xsink, 0, args, cctx, pgm_ctx);
-    }
-
     DLLLOCAL QoreValue evalTmpArgs(ExceptionSink* xsink, QoreObject* self, QoreListNode* args,
             const qore_class_private* cctx = nullptr) const {
         if (!static_flag) {
@@ -3667,16 +3638,6 @@ public:
             return NMETHF(func)->evalMethodTmpArgs(xsink, nullptr, self, args, cctx);
         }
         return SMETHF(func)->evalMethodTmpArgs(xsink, nullptr, args, cctx);
-    }
-
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL QoreValue evalTmpArgs(RuntimeConfig& rc, ExceptionSink* xsink, QoreObject* self, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const {
-        if (!static_flag) {
-            assert(self);
-            return NMETHF(func)->evalMethodTmpArgs(rc, xsink, nullptr, self, args, cctx);
-        }
-        return SMETHF(func)->evalMethodTmpArgs(rc, xsink, nullptr, args, cctx);
     }
 
     DLLLOCAL QoreValue evalPseudoMethod(const AbstractQoreFunctionVariant* variant, const QoreValue n,
@@ -3717,21 +3678,9 @@ public:
         return m.priv->eval(xsink, self, args, cctx, pgm_ctx);
     }
 
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL static QoreValue eval(const QoreMethod& m, RuntimeConfig& rc, ExceptionSink* xsink, QoreObject* self,
-            const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) {
-        return m.priv->eval(rc, xsink, self, args, cctx, pgm_ctx);
-    }
-
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, QoreObject* self,
             QoreListNode* args, const qore_class_private* cctx = nullptr) {
         return m.priv->evalTmpArgs(xsink, self, args, cctx);
-    }
-
-    // RuntimeConfig-aware version - avoids TLS lookup
-    DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, RuntimeConfig& rc, ExceptionSink* xsink,
-            QoreObject* self, QoreListNode* args, const qore_class_private* cctx = nullptr) {
-        return m.priv->evalTmpArgs(rc, xsink, self, args, cctx);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

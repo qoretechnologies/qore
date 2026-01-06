@@ -122,11 +122,10 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     return err;
 }
 
-QoreValue QorePlusEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder new_right(rc, right, xsink);
-    if (*xsink) {
+QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder new_right(right, xsink);
+    if (*xsink)
         return QoreValue();
-    }
 
     // we have to ensure that the value is referenced before the assignment in case the lvalue
     // is the same value, so it can be copied in the LValueHelper constructor
@@ -136,10 +135,9 @@ QoreValue QorePlusEqualsOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_de
     SafeDerefHelper sdh(xsink);
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(rc, left, xsink);
-    if (!v) {
+    LValueHelper v(left, xsink);
+    if (!v)
         return QoreValue();
-    }
 
     // dereferences happen in each section so that the
     // already referenced value can be passed to list->push()

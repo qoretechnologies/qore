@@ -32,10 +32,10 @@
 
 QoreString QoreBinaryAndOperatorNode::op_str("& (binary and) operator expression");
 
-QoreValue QoreBinaryAndOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(rc, left, xsink);
+QoreValue QoreBinaryAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(rc, right, xsink);
+    ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink) return QoreValue();
 
     return lh->getAsBigInt() & rh->getAsBigInt();
@@ -67,8 +67,7 @@ int QoreBinaryAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreBinaryAndOperatorNode> del(this);
         ParseExceptionSink xsink;
-        RuntimeConfig parse_rc = rc_get_parse_time();
-        ValueEvalOptimizedRefHolder v(parse_rc, this, *xsink);
+        ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result

@@ -128,7 +128,7 @@ private:
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const = 0;
 
 protected:
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         assert(false);
         return QoreValue();
     }

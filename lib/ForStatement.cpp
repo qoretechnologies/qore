@@ -32,7 +32,6 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/StatementBlock.h"
-#include "qore/intern/RuntimeConfig.h"
 
 ForStatement::ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), assignment(a), cond(c), iterator(i), code(cd) {
@@ -46,13 +45,13 @@ ForStatement::~ForStatement() {
     delete lvars;
 }
 
-int ForStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, ExceptionSink* xsink) {
+int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
     // evaluate assignment expression and discard results if any
     if (assignment) {
-        ValueEvalOptimizedRefHolder tmp(rconfig, assignment, xsink);
+        ValueEvalOptimizedRefHolder tmp(assignment, xsink);
         if (*xsink) {
             return 0;
         }
@@ -71,7 +70,7 @@ int ForStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, Exce
 
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
-            ValueEvalOptimizedRefHolder val(rconfig, cond, xsink);
+            ValueEvalOptimizedRefHolder val(cond, xsink);
             if (*xsink || !val->getAsBool()) {
                 break;
             }
@@ -79,7 +78,7 @@ int ForStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, Exce
 
         // otherwise, execute "for" body
         if (code) {
-            rc = code->execImpl(rconfig, return_value, xsink);
+            rc = code->execImpl(return_value, xsink);
             if (*xsink || rc == RC_BREAK) {
                 rc = 0;
                 break;
@@ -94,7 +93,7 @@ int ForStatement::execImpl(RuntimeConfig& rconfig, QoreValue& return_value, Exce
 
         // evaluate iterator expression and discard results if any
         if (iterator) {
-            ValueEvalOptimizedRefHolder tmp(rconfig, iterator, xsink);
+            ValueEvalOptimizedRefHolder tmp(iterator, xsink);
             if (*xsink) {
                 break;
             }

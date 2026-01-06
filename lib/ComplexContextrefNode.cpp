@@ -91,7 +91,7 @@ const char *ComplexContextrefNode::getTypeName() const {
 }
 
 // evalImpl(): return value requires a deref(xsink) if not 0
-QoreValue ComplexContextrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink*xsink) const {
+QoreValue ComplexContextrefNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
     int count = 0;
 
     Context *cs = get_context_stack();

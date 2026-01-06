@@ -34,7 +34,7 @@
 
 class QoreIntPlusEqualsOperatorNode : public QorePlusEqualsOperatorNode {
 protected:
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreIntPlusEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)

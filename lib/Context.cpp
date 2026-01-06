@@ -88,9 +88,9 @@ static int in_list(QoreValue val, node_row_list_s* nlist, int max, int row, Exce
  */
 
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
-Context::Context(RuntimeConfig& n_rc, char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
+Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
                  int sort_type, QoreValue sort, QoreValue summary,
-                 int ignore_key) : rc(&n_rc) {
+                 int ignore_key) {
     int allocated = 0;
     //int sense, lcolumn = -1, fcolumn = -1
     //class Key *key = 0;
@@ -119,8 +119,7 @@ Context::Context(RuntimeConfig& n_rc, char* nme, ExceptionSink* xsink, QoreValue
         }
     } else { // copy object (query) list
         name = nme ? strdup(nme) : nullptr;
-        // Use stored RuntimeConfig to avoid TLS lookup
-        ValueEvalOptimizedRefHolder rv(*rc, exp, xsink);
+        ValueEvalOptimizedRefHolder rv(exp, xsink);
 
         // push context on stack
         next = get_context_stack();
@@ -217,10 +216,10 @@ Context::Context(RuntimeConfig& n_rc, char* nme, ExceptionSink* xsink, QoreValue
         master_max_pos = max_pos;
         master_row_list = row_list;
         allocated = 0;
-        // find unique values in summary node - use stored RuntimeConfig
+        // find unique values in summary node
         for (pos = 0; pos < master_max_pos; pos++) {
             printd(5, "Context::Context() summary value %d/%d\n", pos, master_max_pos);
-            ValueEvalOptimizedRefHolder val(*rc, summary, xsink);
+            ValueEvalOptimizedRefHolder val(summary, xsink);
             if (*xsink) {
                 break;
             }
@@ -308,9 +307,7 @@ Context::~Context() {
 
 int Context::check_condition(QoreValue cond, ExceptionSink *xsinkx) {
     QORE_TRACE("Context::check_condition()");
-    // Use stored RuntimeConfig to avoid TLS lookup
-    assert(rc);
-    ValueEvalOptimizedRefHolder val(*rc, cond, xsinkx);
+    ValueEvalOptimizedRefHolder val(cond, xsinkx);
     return *xsinkx ? -1 : (int)val->getAsBigInt();
 }
 
@@ -405,10 +402,9 @@ void Context::Sort(QoreValue snode, int sort_type) {
     Templist* list = new Templist[max_pos];
     // NOTE: Solaris CC doesn't allow non-constant array sizes
     //Templist list[max_pos];
-    // get list of results to be sorted - use stored RuntimeConfig
-    assert(rc);
+    // get list of results to be sorted
     for (pos = 0; pos < max_pos; ++pos) {
-        ValueEvalOptimizedRefHolder val(*rc, snode, sort_xsink);
+        ValueEvalOptimizedRefHolder val(snode, sort_xsink);
         if (*sort_xsink) {
             delete [] list;
             return;
