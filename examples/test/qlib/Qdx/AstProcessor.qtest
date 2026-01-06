@@ -44,6 +44,9 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Class with members", \testClassWithMembers());
         addTestCase("Hashdecl with doc comment", \testHashdeclDocComment());
         addTestCase("Namespace with doc comment", \testNamespaceDocComment());
+        addTestCase("Conditional parsing ifdef/endif", \testConditionalIfdef());
+        addTestCase("Conditional parsing if/elif/else/endif", \testConditionalIfElif());
+        addTestCase("Nested conditionals", \testNestedConditionals());
         set_return_value(main());
     }
 
@@ -221,5 +224,67 @@ namespace MyNamespace {
         assertTrue(output =~ /\/\/! This is a namespace doc comment/, "namespace doc comment converted");
         assertTrue(output =~ /namespace MyNamespace \{/, "namespace declaration");
         assertTrue(output =~ /class MyClass/, "class inside namespace");
+    }
+
+    testConditionalIfdef() {
+        # Test that code from all branches of %ifdef/%else/%endif is included
+        string code = "
+%ifdef SOME_DEFINE
+class DefinedClass { }
+%else
+class UndefinedClass { }
+%endif
+class AlwaysClass { }
+";
+        list<auto> nodes = parseCode(code);
+        AstProcessor proc(nodes);
+        string output = proc.process();
+
+        # All classes should be in the output - astparser includes all branches
+        assertTrue(output =~ /class DefinedClass/, "class from ifdef branch");
+        assertTrue(output =~ /class UndefinedClass/, "class from else branch");
+        assertTrue(output =~ /class AlwaysClass/, "class after endif");
+    }
+
+    testConditionalIfElif() {
+        # Test %if/%elif/%else/%endif
+        string code = "
+%if defined(OPTION_A)
+class OptionA { }
+%elif defined(OPTION_B)
+class OptionB { }
+%else
+class DefaultOption { }
+%endif
+";
+        list<auto> nodes = parseCode(code);
+        AstProcessor proc(nodes);
+        string output = proc.process();
+
+        # All classes should be in the output
+        assertTrue(output =~ /class OptionA/, "class from if branch");
+        assertTrue(output =~ /class OptionB/, "class from elif branch");
+        assertTrue(output =~ /class DefaultOption/, "class from else branch");
+    }
+
+    testNestedConditionals() {
+        # Test nested %ifdef/%endif
+        string code = "
+%ifdef OUTER
+class OuterClass { }
+%ifdef INNER
+class InnerClass { }
+%endif
+%endif
+class AfterNested { }
+";
+        list<auto> nodes = parseCode(code);
+        AstProcessor proc(nodes);
+        string output = proc.process();
+
+        # All classes should be in the output
+        assertTrue(output =~ /class OuterClass/, "class from outer ifdef");
+        assertTrue(output =~ /class InnerClass/, "class from inner ifdef");
+        assertTrue(output =~ /class AfterNested/, "class after nested endif");
     }
 }
