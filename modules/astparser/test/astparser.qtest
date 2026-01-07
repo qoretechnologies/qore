@@ -227,6 +227,24 @@ class MyClass {
     constructor() {}
 }
 ";
+
+        const DateSubtypeCode = "
+%new-style
+public typedef AbsDate = date<absolute>;
+public typedef RelDate = date<relative>;
+
+class DateTypes {
+    public {
+        date<absolute> abs;
+        date<relative> rel;
+    }
+}
+
+public hashdecl DateInfo {
+    date<absolute> created;
+    date<relative> offset;
+}
+";
     }
 
     constructor() : Test("AstParserTest", "1.0") {
@@ -251,6 +269,7 @@ class MyClass {
         addTestCase("Doc comments comprehensive", \testDocCommentsComprehensive());
         addTestCase("Doc comments in getNodesInfo", \testDocCommentsGetNodesInfo());
         addTestCase("Doc comments edge cases", \testDocCommentsEdgeCases());
+        addTestCase("Date subtype parsing", \testDateSubtypeParsing());
 %endif
         set_return_value(main());
     }
@@ -860,6 +879,23 @@ namespace MyNamespace {
             assertTrue(docComments.hasKey("MyClass"), "no doc: class found");
             assertNothing(docComments{"MyClass"}, "no doc: class has no docComment");
         }
+    }
+
+    testDateSubtypeParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(DateSubtypeCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        hash<string, bool> types;
+        foreach auto node in (nodes) {
+            if (exists(node.typeName) && exists(node.typeName.name)) {
+                types{node.typeName.name} = True;
+            }
+        }
+
+        assertTrue(exists(types{"date<absolute>"}), "date<absolute> typeName found");
+        assertTrue(exists(types{"date<relative>"}), "date<relative> typeName found");
     }
 %endif
 }

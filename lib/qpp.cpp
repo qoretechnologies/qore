@@ -1427,6 +1427,18 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             else
                 qc = "qore_get_complex_reference_type(" + subtype_qt + ")";
             log(LL_DEBUG, "registering complex reference return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 5, "date<")) {
+            // extract subtype name
+            std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
+            if (subtype == "absolute") {
+                qc = on ? "dateAbsoluteOrNothingTypeInfo" : "dateAbsoluteTypeInfo";
+            } else if (subtype == "relative") {
+                qc = on ? "dateRelativeOrNothingTypeInfo" : "dateRelativeTypeInfo";
+            } else {
+                log(LL_CRITICAL, "unsupported date subtype '%s' in '%s'\n", subtype.c_str(), qt.c_str());
+                assert(false);
+            }
+            log(LL_DEBUG, "registering date subtype return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 6, "union<")) {
             // extract subtypes: union<type1, type2, ...>
             std::string subtypes_str = qt.substr((on ? 7 : 6), qt.size() - (on ? 8 : 7));
