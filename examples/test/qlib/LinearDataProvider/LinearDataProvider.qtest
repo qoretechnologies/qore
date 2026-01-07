@@ -62,6 +62,9 @@ public class LinearDataProviderTest inherits QUnit::Test {
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require LINEAR_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
@@ -106,6 +109,13 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertEq("Linear data provider factory", factory.getInfo().desc);
         assertTrue(factory.getInfo().children_can_support_apis);
         assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("token"));
+        assertTrue(factoryOpts.hasKey("linearrestclient"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_id"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_secret"));
     }
 
     #! Metadata tests - verify provider info structure
@@ -182,6 +192,11 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(issueFields.hasKey("cycle"));
         assertTrue(issueFields.hasKey("labels"));
 
+        # Verify example_value is set for key fields
+        assertEq("a1b2c3d4-e5f6-7890-abcd-ef1234567890", issueFields.id.getExampleValue());
+        assertEq("ENG-123", issueFields.identifier.getExampleValue());
+        assertEq("Fix login button not responding", issueFields.title.getExampleValue());
+
         # Test team data type
         LinearDataProvider::LinearTeamDataType teamType();
         hash<string, AbstractDataField> teamFields = teamType.getFields();
@@ -189,6 +204,10 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(teamFields.hasKey("name"));
         assertTrue(teamFields.hasKey("key"));
         assertTrue(teamFields.hasKey("description"));
+
+        # Verify example_value for team fields
+        assertEq("Engineering", teamFields.name.getExampleValue());
+        assertEq("ENG", teamFields.key.getExampleValue());
 
         # Test project data type
         LinearDataProvider::LinearProjectDataType projectType();
@@ -208,6 +227,10 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(cycleFields.hasKey("startsAt"));
         assertTrue(cycleFields.hasKey("endsAt"));
 
+        # Verify example_value for cycle fields
+        assertEq("Sprint 23", cycleFields.name.getExampleValue());
+        assertEq(23, cycleFields.number.getExampleValue());
+
         # Test label data type
         LinearDataProvider::LinearLabelDataType labelType();
         hash<string, AbstractDataField> labelFields = labelType.getFields();
@@ -215,12 +238,145 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(labelFields.hasKey("name"));
         assertTrue(labelFields.hasKey("color"));
 
+        # Verify example_value for label fields
+        assertEq("bug", labelFields.name.getExampleValue());
+        assertEq("#FF5733", labelFields.color.getExampleValue());
+
         # Test comment data type
         LinearDataProvider::LinearCommentDataType commentType();
         hash<string, AbstractDataField> commentFields = commentType.getFields();
         assertTrue(commentFields.hasKey("id"));
         assertTrue(commentFields.hasKey("body"));
         assertTrue(commentFields.hasKey("user"));
+
+        # Verify example_value for comment fields
+        assertEq("This looks good, but we should add more tests.", commentFields.body.getExampleValue());
+
+        # Test issue create data type
+        LinearDataProvider::LinearIssueCreateDataType issueCreateType();
+        hash<string, AbstractDataField> issueCreateFields = issueCreateType.getFields();
+        assertTrue(issueCreateFields.hasKey("teamId"));
+        assertTrue(issueCreateFields.hasKey("title"));
+        assertTrue(issueCreateFields.hasKey("description"));
+        assertTrue(issueCreateFields.hasKey("priority"));
+
+        # Test issue update data type
+        LinearDataProvider::LinearIssueUpdateDataType issueUpdateType();
+        hash<string, AbstractDataField> issueUpdateFields = issueUpdateType.getFields();
+        assertTrue(issueUpdateFields.hasKey("title"));
+        assertTrue(issueUpdateFields.hasKey("description"));
+        assertTrue(issueUpdateFields.hasKey("priority"));
+        assertFalse(issueUpdateFields.hasKey("teamId"));  # teamId not in update type
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        LinearDataProvider::LinearDataProvider prov({"token": "invalid-token"});
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test getting issues provider and trying to get non-existent child
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            issues.getChildProvider("nonexistent-id").getChildProviderEx("invalid-child");
+        });
+
+        # Test factory - providers can be created without options (lazy connection)
+        # The error occurs when trying to make API calls, not during construction
+        AbstractDataProviderFactory factory = DataProvider::getFactory("linear");
+        AbstractDataProvider emptyProv = factory.create({});
+        assertEq("linear", emptyProv.getName());
+
+        # Test that data types handle field validation
+        LinearDataProvider::LinearIssueDataType issueType();
+        hash<string, AbstractDataField> fields = issueType.getFields();
+
+        # Verify field types are correct
+        assertEq("string", fields.id.getType().getName());
+        assertEq("*string", fields.description.getType().getName());
+        assertEq("*int", fields.priority.getType().getName());
+    }
+
+    #! Corner case tests - test edge cases and boundary conditions
+    cornerCaseTests() {
+        LinearDataProvider::LinearDataProvider prov({"token": "test-token"});
+
+        # Test empty child provider list iteration
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.size() > 0);
+
+        # Test multiple getChildProvider calls return consistent results
+        AbstractDataProvider issues1 = prov.getChildProvider("issues");
+        AbstractDataProvider issues2 = prov.getChildProvider("issues");
+        assertEq(issues1.getName(), issues2.getName());
+        assertEq(issues1.getInfo().type, issues2.getInfo().type);
+
+        # Test provider info consistency
+        hash<DataProviderInfo> info1 = prov.getInfo();
+        hash<DataProviderInfo> info2 = prov.getInfo();
+        assertEq(info1.name, info2.name);
+        assertEq(info1.type, info2.type);
+
+        # Test data type field count consistency
+        LinearDataProvider::LinearIssueDataType issueType1();
+        LinearDataProvider::LinearIssueDataType issueType2();
+        assertEq(issueType1.getFields().size(), issueType2.getFields().size());
+
+        # Test all child providers have valid info
+        foreach string childName in (children) {
+            AbstractDataProvider child = prov.getChildProvider(childName);
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.name.val());
+            assertTrue(childInfo.type.val());
+        }
+
+        # Test issue provider hierarchy - issues -> issue -> comments
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        # Getting a specific issue provider with a fake ID should work (it's just metadata)
+        AbstractDataProvider issueProvider = issues.getChildProvider("fake-issue-id");
+        assertEq("fake-issue-id", issueProvider.getName());
+
+        # The issue provider should have a comments child
+        list<string> issueChildren = issueProvider.getChildProviderNames();
+        assertTrue(issueChildren.contains("comments"));
+
+        # Test teams are read-only (no create support)
+        AbstractDataProvider teams = prov.getChildProvider("teams");
+        hash<DataProviderInfo> teamsInfo = teams.getInfo();
+        assertFalse(teamsInfo.supports_create ?? False);
+
+        # Test project state allowed_values
+        LinearDataProvider::LinearProjectDataType projectType();
+        hash<string, AbstractDataField> projectFields = projectType.getFields();
+        # Note: allowed_values is only available if the field was defined with it
+        assertEq("started", projectFields.state.getExampleValue());
+    }
+
+    #! Connection tests - test connection provider functionality
+    connectionTests() {
+        # Test connection scheme is registered
+        hash<auto> schemeInfo = ConnectionSchemeCache::getScheme("linear");
+        assertTrue(schemeInfo.hasKey("cls"));
+        assertEq("LinearRestConnection", schemeInfo.cls.getName());
+
+        # Test connection creation
+        LinearRestClient::LinearRestConnection conn("test-conn", "Test Connection",
+            "linear://api.linear.app/graphql", {}, {"token": "test-token"});
+        assertEq("linear", conn.getType());
+        assertTrue(conn.hasDataProvider());
+        assertEq("Linear", conn.getAppName());
+
+        # Test connection scheme info
+        hash<ConnectionSchemeInfo> connScheme = conn.getConnectionSchemeInfo();
+        assertEq("Linear REST Connection", connScheme.display_name);
+        assertTrue(connScheme.schemes.hasKey("linear"));
+
+        # Test connection URL handling
+        string url = conn.getUrl();
+        assertTrue(url.val());
     }
 
     #! Integration tests - require actual Linear credentials
@@ -431,6 +587,28 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertEq(1, commentIssueDeleted);
         if (m_options.verbose) {
             printf("Archived comment test issue: %s\n", commentTestIssue.identifier);
+        }
+
+        # ============================================
+        # Test search with filters (integration negative test)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Search with Filters ---\n");
+        }
+
+        # Search for issues with a filter that should return no results
+        # Use a non-existent project ID to ensure no results
+        AbstractDataProviderRecordIterator emptyIter = issues.searchRecords(
+            NOTHING,
+            {"projectId": "00000000-0000-0000-0000-000000000000", "limit": 10}
+        );
+        int emptyCount = 0;
+        while (emptyIter.next()) {
+            emptyCount++;
+        }
+        assertEq(0, emptyCount);
+        if (m_options.verbose) {
+            printf("Verified empty search results work correctly\n");
         }
 
         if (m_options.verbose) {

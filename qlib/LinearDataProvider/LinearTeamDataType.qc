@@ -27,63 +27,69 @@ public namespace LinearDataProvider {
 
 #! Linear team record type
 public class LinearTeamDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions for Linear teams
         const Fields = {
             "id": {
+                "type": StringType,
                 "display_name": "ID",
                 "short_desc": "The unique identifier of the team",
                 "desc": "The unique identifier of the team",
-                "type": StringType,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
+                "type": StringType,
                 "display_name": "Name",
                 "short_desc": "The team name",
                 "desc": "The name of the team",
-                "type": StringType,
+                "example_value": "Engineering",
             },
             "key": {
+                "type": StringType,
                 "display_name": "Key",
                 "short_desc": "The team key",
                 "desc": "The unique key of the team used in issue identifiers",
-                "type": StringType,
+                "example_value": "ENG",
             },
             "description": {
+                "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The team description",
                 "desc": "The description of the team",
-                "type": StringOrNothingType,
+                "example_value": "Core engineering team responsible for platform development",
             },
             "private": {
+                "type": BoolOrNothingType,
                 "display_name": "Private",
                 "short_desc": "Whether the team is private",
                 "desc": "Whether the team is private (only visible to members)",
-                "type": BoolOrNothingType,
+                "example_value": False,
             },
             "timezone": {
+                "type": StringOrNothingType,
                 "display_name": "Timezone",
                 "short_desc": "The team timezone",
                 "desc": "The timezone of the team",
-                "type": StringOrNothingType,
+                "example_value": "America/Los_Angeles",
             },
             "createdAt": {
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the team was created",
                 "desc": "The date and time when the team was created",
-                "type": DateOrNothingType,
             },
             "updatedAt": {
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the team was last updated",
                 "desc": "The date and time when the team was last updated",
-                "type": DateOrNothingType,
             },
         };
     }
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField({"name": $1.key} + $1.value)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

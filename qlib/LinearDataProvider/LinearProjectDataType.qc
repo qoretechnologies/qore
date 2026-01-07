@@ -27,81 +27,88 @@ public namespace LinearDataProvider {
 
 #! Linear project record type
 public class LinearProjectDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions for Linear projects
         const Fields = {
             "id": {
+                "type": StringType,
                 "display_name": "ID",
                 "short_desc": "The unique identifier of the project",
                 "desc": "The unique identifier of the project",
-                "type": StringType,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
+                "type": StringType,
                 "display_name": "Name",
                 "short_desc": "The project name",
                 "desc": "The name of the project",
-                "type": StringType,
+                "example_value": "Q1 Product Launch",
             },
             "description": {
+                "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The project description",
                 "desc": "The description of the project",
-                "type": StringOrNothingType,
+                "example_value": "Launch new product features for Q1 release",
             },
             "slugId": {
+                "type": StringOrNothingType,
                 "display_name": "Slug ID",
                 "short_desc": "The project slug ID",
                 "desc": "The unique slug identifier for the project URL",
-                "type": StringOrNothingType,
+                "example_value": "q1-product-launch",
             },
             "state": {
+                "type": StringOrNothingType,
                 "display_name": "State",
                 "short_desc": "The project state",
                 "desc": "The current state of the project (planned, started, paused, completed, canceled)",
-                "type": StringOrNothingType,
+                "example_value": "started",
+                "allowed_values": ("planned", "backlog", "started", "paused", "completed", "canceled"),
             },
             "url": {
+                "type": StringOrNothingType,
                 "display_name": "URL",
                 "short_desc": "The project URL",
                 "desc": "The URL to the project in Linear",
-                "type": StringOrNothingType,
+                "example_value": "https://linear.app/myteam/project/q1-product-launch",
             },
             "startDate": {
+                "type": DateOrNothingType,
                 "display_name": "Start Date",
                 "short_desc": "The project start date",
                 "desc": "The planned start date of the project",
-                "type": DateOrNothingType,
             },
             "targetDate": {
+                "type": DateOrNothingType,
                 "display_name": "Target Date",
                 "short_desc": "The project target date",
                 "desc": "The target completion date of the project",
-                "type": DateOrNothingType,
             },
             "lead": {
+                "type": AutoHashOrNothingType,
                 "display_name": "Lead",
                 "short_desc": "The project lead",
                 "desc": "The user leading the project",
-                "type": AutoHashOrNothingType,
             },
             "createdAt": {
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the project was created",
                 "desc": "The date and time when the project was created",
-                "type": DateOrNothingType,
             },
             "updatedAt": {
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the project was last updated",
                 "desc": "The date and time when the project was last updated",
-                "type": DateOrNothingType,
             },
         };
     }
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField({"name": $1.key} + $1.value)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

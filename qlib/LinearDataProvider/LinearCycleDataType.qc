@@ -27,63 +27,66 @@ public namespace LinearDataProvider {
 
 #! Linear cycle (sprint) record type
 public class LinearCycleDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions for Linear cycles
         const Fields = {
             "id": {
+                "type": StringType,
                 "display_name": "ID",
                 "short_desc": "The unique identifier of the cycle",
                 "desc": "The unique identifier of the cycle",
-                "type": StringType,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
+                "type": StringOrNothingType,
                 "display_name": "Name",
                 "short_desc": "The cycle name",
                 "desc": "The name of the cycle",
-                "type": StringOrNothingType,
+                "example_value": "Sprint 23",
             },
             "number": {
+                "type": IntOrNothingType,
                 "display_name": "Number",
                 "short_desc": "The cycle number",
                 "desc": "The number of the cycle within the team",
-                "type": IntOrNothingType,
+                "example_value": 23,
             },
             "startsAt": {
+                "type": DateOrNothingType,
                 "display_name": "Starts At",
                 "short_desc": "When the cycle starts",
                 "desc": "The start date of the cycle",
-                "type": DateOrNothingType,
             },
             "endsAt": {
+                "type": DateOrNothingType,
                 "display_name": "Ends At",
                 "short_desc": "When the cycle ends",
                 "desc": "The end date of the cycle",
-                "type": DateOrNothingType,
             },
             "team": {
+                "type": AutoHashOrNothingType,
                 "display_name": "Team",
                 "short_desc": "The team",
                 "desc": "The team the cycle belongs to",
-                "type": AutoHashOrNothingType,
             },
             "createdAt": {
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the cycle was created",
                 "desc": "The date and time when the cycle was created",
-                "type": DateOrNothingType,
             },
             "updatedAt": {
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the cycle was last updated",
                 "desc": "The date and time when the cycle was last updated",
-                "type": DateOrNothingType,
             },
         };
     }
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField({"name": $1.key} + $1.value)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

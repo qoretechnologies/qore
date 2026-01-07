@@ -99,6 +99,8 @@ public class DataProvider {
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            "linear": "LinearDataProvider",
+
             # provided by the json module
             "mcpclient": "McpClientDataProvider",
 

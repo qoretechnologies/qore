@@ -27,57 +27,61 @@ public namespace LinearDataProvider {
 
 #! Linear label record type
 public class LinearLabelDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions for Linear labels
         const Fields = {
             "id": {
+                "type": StringType,
                 "display_name": "ID",
                 "short_desc": "The unique identifier of the label",
                 "desc": "The unique identifier of the label",
-                "type": StringType,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
+                "type": StringType,
                 "display_name": "Name",
                 "short_desc": "The label name",
                 "desc": "The name of the label",
-                "type": StringType,
+                "example_value": "bug",
             },
             "description": {
+                "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The label description",
                 "desc": "The description of the label",
-                "type": StringOrNothingType,
+                "example_value": "Issues related to bugs and defects",
             },
             "color": {
+                "type": StringOrNothingType,
                 "display_name": "Color",
                 "short_desc": "The label color",
                 "desc": "The color of the label in hex format",
-                "type": StringOrNothingType,
+                "example_value": "#FF5733",
             },
             "team": {
+                "type": AutoHashOrNothingType,
                 "display_name": "Team",
                 "short_desc": "The team",
                 "desc": "The team the label belongs to (null for workspace labels)",
-                "type": AutoHashOrNothingType,
             },
             "createdAt": {
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the label was created",
                 "desc": "The date and time when the label was created",
-                "type": DateOrNothingType,
             },
             "updatedAt": {
+                "type": DateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "When the label was last updated",
                 "desc": "The date and time when the label was last updated",
-                "type": DateOrNothingType,
             },
         };
     }
 
     #! Creates the type
     constructor() {
-        map addField(new QoreDataField({"name": $1.key} + $1.value)), Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
