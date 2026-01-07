@@ -161,7 +161,7 @@ class QoreExternalConstant;
 class QoreNamespace;
 class QoreHashNode;
 
-struct QoreValue;
+class QoreValue;
 
 typedef std::vector<const QoreClass*> class_vec_t;
 typedef std::vector<std::pair<const TypedHashDecl*, const QoreNamespace*>> hashdecl_vec_t;

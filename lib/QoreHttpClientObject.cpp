@@ -3889,22 +3889,72 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     // Add status code and message
     response->setKeyValue("status_code", code, xsink);
 
-    // Map common status codes to messages
+    // Map status codes to messages (HTTP/2 only transmits status code, not message)
     const char* status_msg = "Unknown";
     switch (code) {
+        // 1xx: Informational
+        case 100: status_msg = "Continue"; break;
+        case 101: status_msg = "Switching Protocols"; break;
+        case 102: status_msg = "Processing"; break;
+        // 2xx: Success
         case 200: status_msg = "OK"; break;
         case 201: status_msg = "Created"; break;
+        case 202: status_msg = "Accepted"; break;
+        case 203: status_msg = "Non-Authoritative Information"; break;
         case 204: status_msg = "No Content"; break;
+        case 205: status_msg = "Reset Content"; break;
+        case 206: status_msg = "Partial Content"; break;
+        case 207: status_msg = "Multi-Status"; break;
+        case 208: status_msg = "Already Reported"; break;
+        case 226: status_msg = "IM Used"; break;
+        // 3xx: Redirection
+        case 300: status_msg = "Multiple Choices"; break;
         case 301: status_msg = "Moved Permanently"; break;
         case 302: status_msg = "Found"; break;
+        case 303: status_msg = "See Other"; break;
         case 304: status_msg = "Not Modified"; break;
+        case 305: status_msg = "Use Proxy"; break;
+        case 307: status_msg = "Temporary Redirect"; break;
+        case 308: status_msg = "Permanent Redirect"; break;
+        // 4xx: Client Errors
         case 400: status_msg = "Bad Request"; break;
         case 401: status_msg = "Unauthorized"; break;
+        case 402: status_msg = "Payment Required"; break;
         case 403: status_msg = "Forbidden"; break;
         case 404: status_msg = "Not Found"; break;
+        case 405: status_msg = "Method Not Allowed"; break;
+        case 406: status_msg = "Not Acceptable"; break;
+        case 407: status_msg = "Proxy Authentication Required"; break;
+        case 408: status_msg = "Request Timeout"; break;
+        case 409: status_msg = "Conflict"; break;
+        case 410: status_msg = "Gone"; break;
+        case 411: status_msg = "Length Required"; break;
+        case 412: status_msg = "Precondition Failed"; break;
+        case 413: status_msg = "Request Entity Too Large"; break;
+        case 414: status_msg = "Request-URI Too Long"; break;
+        case 415: status_msg = "Unsupported Media Type"; break;
+        case 416: status_msg = "Requested Range Not Satisfiable"; break;
+        case 417: status_msg = "Expectation Failed"; break;
+        case 418: status_msg = "I'm a teapot"; break;
+        case 420: status_msg = "Enhance Your Calm"; break;
+        case 422: status_msg = "Unprocessable Entity"; break;
+        case 423: status_msg = "Locked"; break;
+        case 424: status_msg = "Failed Dependency"; break;
+        case 425: status_msg = "Unordered Collection"; break;
+        case 426: status_msg = "Upgrade Required"; break;
+        case 428: status_msg = "Precondition Required"; break;
+        case 429: status_msg = "Too Many Requests"; break;
+        case 431: status_msg = "Request Header Fields Too Large"; break;
+        // 5xx: Server Errors
         case 500: status_msg = "Internal Server Error"; break;
+        case 501: status_msg = "Not Implemented"; break;
         case 502: status_msg = "Bad Gateway"; break;
         case 503: status_msg = "Service Unavailable"; break;
+        case 504: status_msg = "Gateway Timeout"; break;
+        case 505: status_msg = "HTTP Version Not Supported"; break;
+        case 509: status_msg = "Bandwidth Limit Exceeded"; break;
+        case 510: status_msg = "Not Extended"; break;
+        case 511: status_msg = "Network Authentication Required"; break;
     }
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
