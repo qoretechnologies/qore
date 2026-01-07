@@ -172,7 +172,7 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
         try {
             auto d = parse_yaml(msg);
             if (requestFlag.getCount() > 0) {
-                if ((d.type == "response" && pendingUid == d.uid && !connecting) ||
+                if (((d.type == "response" || d.type == "error") && pendingUid == d.uid && !connecting) ||
                     (d.type == "event" && d.cmd == "welcome" && connecting) ) {
                     recData = d;
                     requestFlag.dec();

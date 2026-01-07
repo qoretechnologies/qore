@@ -124,6 +124,9 @@ class DebugWrapper {
         dcl.logger = logger;
         dcl.dpc.logger = logger;
         try {
+            if (fileName == "--") {
+                fileName = "/dev/stdin";
+            }
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.log(DUV_INFO, "run program");

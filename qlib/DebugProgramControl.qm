@@ -263,7 +263,13 @@ public namespace DebugProgramControl {
 
                 switch (shift cmd) {
                     case 'help':
-                        result = list('TODO: help text');
+                        result = (
+                            "version",
+                            "options/<name>/(get|set)",
+                            "session/(get|set)",
+                            "program/<pgmid>/(list|create|add|remove|stop|thread|global|define|options|file|label|statement|breakpoint)",
+                            "thread/(stack|<tid>/...)",
+                        );
                         break;
                     case 'version':
                         result = ('class': self.className());
@@ -655,7 +661,7 @@ public namespace DebugProgramControl {
                                     case 'disable':
                                         if (b.getEnabled()) {
                                             b.setEnabled(False);
-                                            broadcastBreakpoint(cx, b, "enabled");
+                                            broadcastBreakpoint(cx, b, "disabled");
                                         }
                                         result = 'ok';
                                         break;
@@ -1117,7 +1123,9 @@ public namespace DebugProgramControl {
                 rwlConnection.writeLock();
                 on_exit rwlConnection.writeUnlock();
                 # default values
-                ctxCT{refName} = refValue;
+                if (exists refName) {
+                    ctxCT{refName} = refValue;
+                }
                 ctxCT.frameId = 0;
                 ctxConnection{ctx.id}.thread{tid} = ctxCT;
             }

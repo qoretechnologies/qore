@@ -150,7 +150,7 @@ nothing DebugProgram::waitForTerminationAndClear() {
  *
  */
 int DebugProgram::getInterruptedCount() {
-   dpgm->getInterruptedCount();
+   return dpgm->getInterruptedCount();
 }
 
 //! Add program to debugging

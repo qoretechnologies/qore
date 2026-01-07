@@ -86,7 +86,7 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
         try {
             auto d = parse_yaml(msg);
             if (counter.getCount() > 0) {
-                if ((d.type == "response" && pendingUid == d.uid && !connecting) ||
+                if (((d.type == "response" || d.type == "error") && pendingUid == d.uid && !connecting) ||
                     (d.type == "event" && d.cmd == "welcome" && connecting) ) {
                     recData = d;
                     counter.dec();

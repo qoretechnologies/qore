@@ -186,6 +186,7 @@ class DebugTest inherits QUnit::Test {
         addTestCase("SingleThreadDebugTest", \singleThreadDebugTest());
         addTestCase("SingleThreadBreakpointTest", \singleThreadBreakpointTest());
         addTestCase("MultiThreadBreakTest", \multiThreadBreakTest());   # problem in valrind because of timing ?
+        addTestCase("InterruptedCountTest", \interruptedCountTest());
         #addTestCase("MultiThreadDebugTest", \multiThreadDebugTest());
 
         thisProgram = ProgramControl::getProgram();
@@ -577,6 +578,12 @@ class DebugTest inherits QUnit::Test {
     multiThreadDebugTest() {
     }
 
+    interruptedCountTest() {
+        auto cnt = debugProgram.getInterruptedCount();
+        testAssertionValue("InterruptedCount type", cnt.typeCode(), NT_INT);
+        testAssertionValue("InterruptedCount non-negative", cnt >= 0, True);
+    }
+
     breakpointTest() {
         string name = "Breakpoint::";
         Breakpoint b = new Breakpoint();
@@ -792,4 +799,3 @@ class DebugTest inherits QUnit::Test {
         testAssertionValue(name+'resolveProgramId', ProgramControl::resolveProgramId(thisProgram.getProgramId()).getProgramId(), thisProgram.getProgramId());
     }
 }
-
