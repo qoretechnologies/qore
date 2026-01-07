@@ -229,6 +229,83 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
    return str && !str->empty() ? str->c_str() : nullptr;
 }
 
+static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
+        bool& ignore_encoding) {
+    ignore_encoding = false;
+    if (!content_encoding) {
+        return nullptr;
+    }
+
+    const char* start = content_encoding;
+    while (*start == ' ' || *start == '\t') {
+        ++start;
+    }
+    const char* end = start;
+    while (*end && *end != ',' && *end != ';' && *end != ' ') {
+        ++end;
+    }
+    if (end <= start) {
+        return nullptr;
+    }
+
+    QoreString token;
+    token.concat(start, end - start);
+    const char* tok = token.c_str();
+
+    if (!strcasecmp(tok, "identity")) {
+        ignore_encoding = true;
+        return nullptr;
+    }
+
+    if (!strcasecmp(tok, "deflate") || !strcasecmp(tok, "x-deflate")) {
+        return qore_inflate_to_string;
+    }
+    if (!strcasecmp(tok, "gzip") || !strcasecmp(tok, "x-gzip")) {
+        return qore_gunzip_to_string;
+    }
+    if (!strcasecmp(tok, "bzip2") || !strcasecmp(tok, "x-bzip2")) {
+        return qore_bunzip2_to_string;
+    }
+    if (!strcasecmp(tok, "br")) {
+        return qore_unbrotli_to_string;
+    }
+    if (!strcasecmp(tok, "zstd")) {
+        return qore_unzstd_to_string;
+    }
+
+    return nullptr;
+}
+
+static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
+        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
+        ExceptionSink* xsink) {
+    if (!bin || !bin->size()) {
+        return QoreValue();
+    }
+
+    if (content_encoding) {
+        if (encoding_passthru) {
+            return bin->refSelf();
+        }
+        if (!dec) {
+            bool ignore_encoding = false;
+            dec = get_decoder_for_content_encoding(content_encoding, ignore_encoding);
+            if (ignore_encoding) {
+                return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+            }
+            if (!dec) {
+                xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding '%s'",
+                    content_encoding);
+                return QoreValue();
+            }
+        }
+        QoreStringNode* decoded = dec(bin, body_enc, xsink);
+        return decoded;
+    }
+
+    return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+}
+
 void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
     if (event_queue) {
         QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, QORE_SOURCE_HTTPCLIENT);
@@ -1415,6 +1492,46 @@ struct qore_httpclient_priv {
             ans.setKeyValue("content-type", l, xsink);
         }
         return 0;
+    }
+
+    DLLLOCAL const char* normalizeContentEncoding(ExceptionSink* xsink, QoreHashNode& ans, bool recv_callback,
+            qore_uncompress_to_string_t& dec) {
+        const char* content_encoding = get_string_header(xsink, ans, "content-encoding");
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (content_encoding) {
+            const char* start = content_encoding;
+            while (*start == ' ' || *start == '\t') {
+                ++start;
+            }
+            const char* end = start;
+            while (*end && *end != ',' && *end != ';' && *end != ' ') {
+                ++end;
+            }
+            QoreString token;
+            if (end > start) {
+                token.concat(start, end - start);
+            }
+
+            // check for misuse of this header by including a character encoding value
+            if (!token.empty() && (!strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4))) {
+                msock->socket->setEncoding(QEM.findCreate(token.c_str()));
+                content_encoding = nullptr;
+            } else if (!encoding_passthru && !token.empty()) {
+                bool ignore_encoding = false;
+                dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+                if (ignore_encoding) {
+                    content_encoding = nullptr;
+                } else if (!dec) {
+                    // issue #2953 ignore unknown content encodings or a crash will result
+                    content_encoding = nullptr;
+                }
+            }
+        }
+
+        return content_encoding;
     }
 
     DLLLOCAL QoreHashNode* send_internal(ExceptionSink* xsink, const char* mname, const char* meth, const char* mpath,
@@ -4294,73 +4411,18 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         if (h2_body.getType() == NT_BINARY) {
             const BinaryNode* bin = h2_body.get<const BinaryNode>();
             if (bin && bin->size()) {
-                // Get charset from content-type header
                 const QoreEncoding* body_enc = msock->socket->getEncoding();
-                const char* ct = get_string_header(xsink, **ans, "content-type", true);
-                if (!*xsink && ct) {
-                    // Look for charset parameter
-                    const char* charset = strstr(ct, "charset=");
-                    if (charset) {
-                        charset += 8;
-                        // Skip quotes if present
-                        if (*charset == '"' || *charset == '\'') {
-                            ++charset;
-                        }
-                        // Extract charset name
-                        QoreString charset_str;
-                        while (*charset && *charset != '"' && *charset != '\'' && *charset != ';' && *charset != ' ') {
-                            charset_str.concat(*charset++);
-                        }
-                        if (!charset_str.empty()) {
-                            body_enc = QEM.findCreate(charset_str.c_str());
-                        }
-                    }
-                }
                 if (!*xsink && !recv_callback) {
                     // Only process body encoding/conversion when no recv_callback
                     // Check content-encoding for compression
-                    content_encoding = get_string_header(xsink, **ans, "content-encoding");
-                    if (!*xsink && content_encoding && !encoding_passthru) {
-                        qore_uncompress_to_string_t dec = nullptr;
-                        if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
-                            dec = qore_inflate_to_string;
-                        else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
-                            dec = qore_gunzip_to_string;
-                        else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
-                            dec = qore_bunzip2_to_string;
-                        else if (!strcasecmp(content_encoding, "br"))
-                            dec = qore_unbrotli_to_string;
-                        else if (!strcasecmp(content_encoding, "zstd"))
-                            dec = qore_unzstd_to_string;
-                        if (dec) {
-                            QoreStringNode* decoded = dec(bin, body_enc, xsink);
-                            if (!*xsink && decoded) {
-                                ans->setKeyValue("body", decoded, xsink);
-                            }
+                    qore_uncompress_to_string_t h2_dec = nullptr;
+                    content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, h2_dec);
+                    if (!*xsink) {
+                        QoreValue body_val = process_binary_body(bin, body_enc, content_encoding, h2_dec,
+                            encoding_passthru, xsink);
+                        if (!*xsink && body_val) {
+                            ans->setKeyValue("body", body_val.getInternalNode(), xsink);
                         }
-                    } else if (!*xsink) {
-                        // Only convert binary to string for text content types
-                        // Keep binary data as-is (e.g., for application/octet-stream, images, etc.)
-                        bool is_text = false;
-                        if (ct) {
-                            // Check for text content types
-                            if (!strncasecmp(ct, "text/", 5)) {
-                                is_text = true;
-                            } else if (!strncasecmp(ct, "application/json", 16) ||
-                                       !strncasecmp(ct, "application/xml", 15) ||
-                                       !strncasecmp(ct, "application/yaml", 16) ||
-                                       !strncasecmp(ct, "application/x-yaml", 18) ||
-                                       !strncasecmp(ct, "application/javascript", 22) ||
-                                       !strncasecmp(ct, "application/x-www-form-urlencoded", 33)) {
-                                is_text = true;
-                            }
-                        }
-                        if (is_text) {
-                            // Convert binary to string with detected encoding
-                            QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
-                            ans->setKeyValue("body", str_body, xsink);
-                        }
-                        // else: keep body as binary
                     }
                 }
                 if (*xsink) {
@@ -4401,33 +4463,17 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
 
     if (bodyp && (code < 100 || code >= 200) && code != 204) {
         // see if we should do a binary or string read
-        content_encoding = get_string_header(xsink, **ans, "content-encoding");
-        if (*xsink) {
-            disconnect_unlocked();
-            return nullptr;
-        }
-
-        if (content_encoding && !os) {
-            // check for misuse of this header by including a character encoding value
-            if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
-                msock->socket->setEncoding(QEM.findCreate(content_encoding));
-                content_encoding = nullptr;
-            } else if (!recv_callback) {
-                // only decode message bodies automatically if there is no receive callback
-                if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
-                    dec = qore_inflate_to_string;
-                else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
-                    dec = qore_gunzip_to_string;
-                else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
-                    dec = qore_bunzip2_to_string;
-                else if (!strcasecmp(content_encoding, "br"))
-                    dec = qore_unbrotli_to_string;
-                else if (!strcasecmp(content_encoding, "zstd"))
-                    dec = qore_unzstd_to_string;
-                // issue #2953 ignore unknown content encodings or a crash will result
-                else {
-                    content_encoding = nullptr;
-                }
+        if (!os) {
+            content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, dec);
+            if (*xsink) {
+                disconnect_unlocked();
+                return nullptr;
+            }
+        } else {
+            content_encoding = get_string_header(xsink, **ans, "content-encoding");
+            if (*xsink) {
+                disconnect_unlocked();
+                return nullptr;
             }
         }
 
@@ -4571,19 +4617,14 @@ http2_body_done:
 
     // add body to result hash and process content encoding if necessary
     if (body) {
-        if (content_encoding && !encoding_passthru) {
-            if (!dec) {
-                if (!recv_callback) {
-                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
-                        "'%s'", content_encoding);
-                    ans = nullptr;
-                }
-            } else {
-                ValueHolder bobj(body.release(), xsink);
-                body = dec(bobj->get<BinaryNode>(), msock->socket->getEncoding(), xsink);
-                if (*xsink) {
-                    ans = nullptr;
-                }
+        if (body->getType() == NT_BINARY) {
+            const BinaryNode* bin = body->get<BinaryNode>();
+            QoreValue processed = process_binary_body(bin, msock->socket->getEncoding(), content_encoding, dec,
+                encoding_passthru, xsink);
+            if (*xsink) {
+                ans = nullptr;
+            } else if (processed) {
+                body = processed.getInternalNode();
             }
         }
 
