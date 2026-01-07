@@ -367,6 +367,17 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
       - connection support with \c mongodb:// URL scheme
+    - @ref LinearRestClient "LinearRestClient" module
+      - new module providing a REST client for Linear's GraphQL API
+      - supports API key and OAuth2 authentication
+      - provides LinearRestConnection for connection management with \c linear:// URL scheme
+    - @ref LinearDataProvider "LinearDataProvider" module
+      - new module providing a data provider API for Linear issue tracking services
+      - hierarchical data provider structure: issues, teams, projects, cycles, labels, comments
+      - full CRUD support for issues, projects, cycles, labels, and comments
+      - search capabilities with filtering for all entity types
+      - action catalog integration with sensible default actions
+      - connection support with \c linear:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support

@@ -62,6 +62,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/CdsRestClient.qm \
 	qlib/DiscordRestClient.qm \
 	qlib/DiscordWebSocketClient.qm \
+	qlib/LinearRestClient.qm \
 	qlib/GoogleRestClient.qm \
 	qlib/HueRestClient.qm \
 	qlib/MewsRestClient.qm \
@@ -111,6 +112,7 @@ DOX_SPLIT_MODULES = \
 	qlib/CsvUtil \
     qlib/CdsRestDataProvider \
     qlib/DiscordDataProvider \
+    qlib/LinearDataProvider \
     qlib/FileDataProvider \
 	qlib/FixedLengthUtil \
     qlib/FtpClientDataProvider \
@@ -141,6 +143,7 @@ CsvUtil_modverdir = $(modverdir)/CsvUtil
 DataProvider_modverdir = $(modverdir)/DataProvider
 DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
+LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
 FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
@@ -180,6 +183,7 @@ dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
 dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
 dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
+dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
 dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
@@ -1137,6 +1141,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
 	qlib/DiscordDataProvider/discord-logo.svg \
+	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/FileDataProvider/file-logo-white.svg \
