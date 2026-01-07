@@ -100,6 +100,48 @@ class StatusCodeHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns SOAP XML
+class SoapHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string xml = "<?xml version=\"1.0\"?><soap:Envelope><soap:Body>OK</soap:Body></soap:Envelope>";
+        return makeResponse(200, xml, {"Content-Type": "application/soap+xml; charset=utf-8"});
+    }
+}
+
+#! Handler that returns gzip-compressed text
+class GzipHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-ok";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, gz, {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip",
+        });
+    }
+}
+
+#! Handler that returns gzip-compressed text with multiple encodings
+class GzipMultiHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-multi";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, gz, {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip, br",
+        });
+    }
+}
+
+#! Handler that returns a body with an unknown content-encoding
+class UnknownEncodingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "unknown-encoding", {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "mystery",
+        });
+    }
+}
+
 class HttpServerAsyncHttp2Test inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -169,6 +211,11 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
+        addTestCase("HTTP/2 SOAP content-type body", \testSoapContentTypeHttp2());
+        addTestCase("HTTP/2 gzip decoded body", \testGzipContentTypeHttp2());
+        addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
+        addTestCase("HTTP/2 gzip multi-encoding body", \testGzipMultiEncodingHttp2());
+        addTestCase("HTTP/2 unknown encoding body", \testUnknownEncodingHttp2());
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
@@ -203,6 +250,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
+        mServer.setHandler("soap", "/soap", NOTHING, new SoapHandler());
+        mServer.setHandler("gzip", "/gzip-plain", NOTHING, new GzipHandler());
+        mServer.setHandler("gzip-multi", "/gzip-multi", NOTHING, new GzipMultiHandler());
+        mServer.setHandler("unknown-encoding", "/unknown-encoding", NOTHING, new UnknownEncodingHandler());
 
         # Add HTTPS listener for HTTP/2 (HTTP/2 requires HTTPS via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -244,6 +295,80 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         if (m_options.verbose > 1) {
             printf("Basic HTTP/2 response: OK (http_version: %y)\n", resp.http_version);
         }
+    }
+
+    testSoapContentTypeHttp2() {
+        string xml = "<?xml version=\"1.0\"?><soap:Envelope><soap:Body>OK</soap:Body></soap:Envelope>";
+
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/soap");
+        assertEq(200, resp.status_code, "SOAP HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "SOAP body should be a string");
+        assertEq(xml, resp.body, "SOAP body should match");
+    }
+
+    testGzipContentTypeHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-plain");
+        assertEq(200, resp.status_code, "gzip HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip decoded body should be a string");
+        assertEq("gzip-ok", resp.body, "gzip decoded body should match");
+    }
+
+    testGzipPassthruHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "encoding_passthru": True,
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-plain");
+        assertEq(200, resp.status_code, "gzip passthru HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_BINARY, "gzip passthru body should be binary");
+        string decoded = AbstractHttpRequestHandler::decodeBody("gzip", resp.body, "utf-8");
+        assertEq("gzip-ok", decoded, "gzip passthru body should decode to expected string");
+    }
+
+    testGzipMultiEncodingHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-multi");
+        assertEq(200, resp.status_code, "gzip multi-encoding HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip multi-encoding body should be a string");
+        assertEq("gzip-multi", resp.body, "gzip multi-encoding body should match");
+    }
+
+    testUnknownEncodingHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/unknown-encoding");
+        assertEq(200, resp.status_code, "unknown encoding HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "unknown encoding body should be a string");
+        assertEq("unknown-encoding", resp.body, "unknown encoding body should match");
     }
 
     #! Tests multiple sequential requests from SEPARATE connections
