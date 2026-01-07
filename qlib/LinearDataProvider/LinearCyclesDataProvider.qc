@@ -94,6 +94,7 @@ public class LinearCyclesDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (cycle ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "cycle ID cannot be empty");
         return new LinearCycleDataProvider(rest, name);
     }
 
@@ -114,6 +115,7 @@ public class LinearCyclesDataProvider inherits LinearDataProviderBase {
         if (filter) {
             vars.filter = filter;
         }
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: filter=%y", filter));
 
         int pageSize = search_options.limit ?? DefaultPageSize;
 
@@ -123,10 +125,15 @@ public class LinearCyclesDataProvider inherits LinearDataProviderBase {
 
     #! Creates a new cycle
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        @assert(rec.teamId.val(), "teamId is required to create a cycle");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: creating cycle for teamId=%y", rec.teamId));
         hash<auto> data = doGraphQL(CreateCycleMutation, {"input": rec});
+        @assert(data.cycleCreate, "cycleCreate response cannot be null");
         if (!data.cycleCreate.success) {
             throw "CREATE-ERROR", "Failed to create cycle";
         }
+        @assert(data.cycleCreate.cycle, "created cycle cannot be null on success");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created cycle id=%y", data.cycleCreate.cycle.id));
         return data.cycleCreate.cycle;
     }
 

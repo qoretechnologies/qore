@@ -48,6 +48,7 @@ public class LinearCycleDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object
     constructor(LinearRestClient::LinearRestClient rest, string cycleId) : LinearDataProviderBase(rest) {
+        @assert(cycleId.val(), "cycle ID cannot be empty");
         self.cycleId = cycleId;
     }
 
@@ -69,7 +70,9 @@ public class LinearCycleDataProvider inherits LinearDataProviderBase {
     #! Searches for the cycle record (returns single record iterator)
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching cycle id=%y", cycleId));
         hash<auto> data = doGraphQL(GetCycleQuery, {"id": cycleId});
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: cycle found=%y", exists data.cycle));
         return new DefaultRecordIterator(new ListHashIterator(data.cycle ? (data.cycle,) : ()),
             where_cond, search_options, recordType.getFields());
     }
@@ -77,16 +80,23 @@ public class LinearCycleDataProvider inherits LinearDataProviderBase {
     #! Updates the cycle
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond,
             *hash<auto> search_options) {
+        @assert(set, "update data cannot be empty");
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: updating cycle id=%y fields=%y", cycleId, keys set));
         hash<auto> data = doGraphQL(UpdateCycleMutation, {"id": cycleId, "input": set});
+        @assert(data.cycleUpdate, "cycleUpdate response cannot be null");
         if (!data.cycleUpdate.success) {
             throw "UPDATE-ERROR", "Failed to update cycle";
         }
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: cycle updated successfully"));
         return True;
     }
 
     #! Archives (soft-deletes) the cycle
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archiving cycle id=%y", cycleId));
         hash<auto> data = doGraphQL(ArchiveCycleMutation, {"id": cycleId});
+        @assert(data.cycleArchive, "cycleArchive response cannot be null");
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archive success=%y", data.cycleArchive.success));
         return data.cycleArchive.success ? 1 : 0;
     }
 

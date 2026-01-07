@@ -48,6 +48,7 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object
     constructor(LinearRestClient::LinearRestClient rest, string projectId) : LinearDataProviderBase(rest) {
+        @assert(projectId.val(), "project ID cannot be empty");
         self.projectId = projectId;
     }
 
@@ -69,7 +70,9 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
     #! Searches for the project record (returns single record iterator)
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching project id=%y", projectId));
         hash<auto> data = doGraphQL(GetProjectQuery, {"id": projectId});
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: project found=%y", exists data.project));
         return new DefaultRecordIterator(new ListHashIterator(data.project ? (data.project,) : ()),
             where_cond, search_options, recordType.getFields());
     }
@@ -77,16 +80,24 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
     #! Updates the project
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond,
             *hash<auto> search_options) {
+        @assert(set, "update data cannot be empty");
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: updating project id=%y fields=%y", projectId,
+            keys set));
         hash<auto> data = doGraphQL(UpdateProjectMutation, {"id": projectId, "input": set});
+        @assert(data.projectUpdate, "projectUpdate response cannot be null");
         if (!data.projectUpdate.success) {
             throw "UPDATE-ERROR", "Failed to update project";
         }
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: project updated successfully"));
         return True;
     }
 
     #! Archives (soft-deletes) the project
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archiving project id=%y", projectId));
         hash<auto> data = doGraphQL(ArchiveProjectMutation, {"id": projectId});
+        @assert(data.projectArchive, "projectArchive response cannot be null");
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archive success=%y", data.projectArchive.success));
         return data.projectArchive.success ? 1 : 0;
     }
 

@@ -94,6 +94,7 @@ public class LinearProjectsDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (project ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "project ID cannot be empty");
         return new LinearProjectDataProvider(rest, name);
     }
 
@@ -114,6 +115,7 @@ public class LinearProjectsDataProvider inherits LinearDataProviderBase {
         if (filter) {
             vars.filter = filter;
         }
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: filter=%y", filter));
 
         int pageSize = search_options.limit ?? DefaultPageSize;
 
@@ -123,10 +125,15 @@ public class LinearProjectsDataProvider inherits LinearDataProviderBase {
 
     #! Creates a new project
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        @assert(rec.name.val(), "project name is required");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: creating project name=%y", rec.name));
         hash<auto> data = doGraphQL(CreateProjectMutation, {"input": rec});
+        @assert(data.projectCreate, "projectCreate response cannot be null");
         if (!data.projectCreate.success) {
             throw "CREATE-ERROR", "Failed to create project";
         }
+        @assert(data.projectCreate.project, "created project cannot be null on success");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created project id=%y", data.projectCreate.project.id));
         return data.projectCreate.project;
     }
 

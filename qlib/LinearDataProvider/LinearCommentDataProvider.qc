@@ -48,6 +48,7 @@ public class LinearCommentDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object
     constructor(LinearRestClient::LinearRestClient rest, string commentId) : LinearDataProviderBase(rest) {
+        @assert(commentId.val(), "comment ID cannot be empty");
         self.commentId = commentId;
     }
 
@@ -69,7 +70,9 @@ public class LinearCommentDataProvider inherits LinearDataProviderBase {
     #! Searches for the comment record (returns single record iterator)
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching comment id=%y", commentId));
         hash<auto> data = doGraphQL(GetCommentQuery, {"id": commentId});
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: comment found=%y", exists data.comment));
         return new DefaultRecordIterator(new ListHashIterator(data.comment ? (data.comment,) : ()),
             where_cond, search_options, recordType.getFields());
     }
@@ -77,16 +80,24 @@ public class LinearCommentDataProvider inherits LinearDataProviderBase {
     #! Updates the comment
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond,
             *hash<auto> search_options) {
+        @assert(set, "update data cannot be empty");
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: updating comment id=%y fields=%y", commentId,
+            keys set));
         hash<auto> data = doGraphQL(UpdateCommentMutation, {"id": commentId, "input": set});
+        @assert(data.commentUpdate, "commentUpdate response cannot be null");
         if (!data.commentUpdate.success) {
             throw "UPDATE-ERROR", "Failed to update comment";
         }
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: comment updated successfully"));
         return True;
     }
 
     #! Deletes the comment (hard delete, not archive)
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: deleting comment id=%y", commentId));
         hash<auto> data = doGraphQL(DeleteCommentMutation, {"id": commentId});
+        @assert(data.commentDelete, "commentDelete response cannot be null");
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: delete success=%y", data.commentDelete.success));
         return data.commentDelete.success ? 1 : 0;
     }
 

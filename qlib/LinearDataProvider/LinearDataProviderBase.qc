@@ -79,13 +79,16 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Creates the object with a REST client
     constructor(LinearRestClient::LinearRestClient rest) {
+        @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(LinearRestClient::LinearRestConnection conn) {
+        @assert(conn, "connection cannot be null");
         self.conn = conn;
         rest = conn.get(True);
+        @assert(rest, "REST client from connection cannot be null");
     }
 
     #! Creates the object with options
@@ -131,11 +134,17 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
         @throw GRAPHQL-ERROR if the response contains errors
     */
     hash<auto> doGraphQL(string query, *hash<auto> variables) {
+        @assert(query.val(), "GraphQL query cannot be empty");
+        @assert(rest, "REST client must be initialized before making GraphQL calls");
+        @debug(log(LoggerLevel::DEBUG, "doGraphQL: executing query with variables: %y", variables));
         hash<auto> response = rest.graphql(query, variables);
+        @assert(response.body, "GraphQL response body cannot be null");
         if (response.body.errors) {
+            @debug(log(LoggerLevel::DEBUG, "doGraphQL: GraphQL error: %y", response.body.errors));
             string err_msg = response.body.errors[0].message ?? "Unknown GraphQL error";
             throw "GRAPHQL-ERROR", err_msg, response.body.errors;
         }
+        @debug(log(LoggerLevel::DEBUG, "doGraphQL: success, response keys: %y", keys response.body.data));
         return response.body.data;
     }
 

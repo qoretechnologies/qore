@@ -87,6 +87,7 @@ public class LinearTeamsDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (team ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "team ID cannot be empty");
         return new LinearTeamDataProvider(rest, name);
     }
 
@@ -98,6 +99,7 @@ public class LinearTeamsDataProvider inherits LinearDataProviderBase {
     #! Searches for teams
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching teams"));
         int pageSize = search_options.limit ?? DefaultPageSize;
         return new LinearRecordIterator(rest, ListTeamsQuery, "teams", NOTHING, pageSize,
             recordType.getFields());

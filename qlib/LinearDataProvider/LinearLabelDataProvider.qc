@@ -48,6 +48,7 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object
     constructor(LinearRestClient::LinearRestClient rest, string labelId) : LinearDataProviderBase(rest) {
+        @assert(labelId.val(), "label ID cannot be empty");
         self.labelId = labelId;
     }
 
@@ -69,7 +70,9 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
     #! Searches for the label record (returns single record iterator)
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching label id=%y", labelId));
         hash<auto> data = doGraphQL(GetLabelQuery, {"id": labelId});
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: label found=%y", exists data.issueLabel));
         return new DefaultRecordIterator(new ListHashIterator(data.issueLabel ? (data.issueLabel,) : ()),
             where_cond, search_options, recordType.getFields());
     }
@@ -77,16 +80,23 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
     #! Updates the label
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond,
             *hash<auto> search_options) {
+        @assert(set, "update data cannot be empty");
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: updating label id=%y fields=%y", labelId, keys set));
         hash<auto> data = doGraphQL(UpdateLabelMutation, {"id": labelId, "input": set});
+        @assert(data.issueLabelUpdate, "issueLabelUpdate response cannot be null");
         if (!data.issueLabelUpdate.success) {
             throw "UPDATE-ERROR", "Failed to update label";
         }
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: label updated successfully"));
         return True;
     }
 
     #! Deletes the label
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: deleting label id=%y", labelId));
         hash<auto> data = doGraphQL(DeleteLabelMutation, {"id": labelId});
+        @assert(data.issueLabelDelete, "issueLabelDelete response cannot be null");
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: delete success=%y", data.issueLabelDelete.success));
         return data.issueLabelDelete.success ? 1 : 0;
     }
 

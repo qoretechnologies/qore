@@ -63,6 +63,7 @@ public class LinearCommentsDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object with a REST client and issue ID
     constructor(LinearRestClient::LinearRestClient rest, string issueId) : LinearDataProviderBase(rest) {
+        @assert(issueId.val(), "issue ID cannot be empty");
         self.issueId = issueId;
     }
 
@@ -88,6 +89,7 @@ public class LinearCommentsDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (comment ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "comment ID cannot be empty");
         return new LinearCommentDataProvider(rest, name);
     }
 
@@ -99,6 +101,7 @@ public class LinearCommentsDataProvider inherits LinearDataProviderBase {
     #! Searches for comments on this issue
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching comments for issue id=%y", issueId));
         int pageSize = search_options.limit ?? DefaultPageSize;
 
         hash<auto> vars = {
@@ -111,12 +114,17 @@ public class LinearCommentsDataProvider inherits LinearDataProviderBase {
 
     #! Creates a new comment on this issue
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        @assert(rec.body.val(), "comment body is required");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: creating comment on issue id=%y", issueId));
         # Add the issue ID to the input
         hash<auto> input = rec + {"issueId": issueId};
         hash<auto> data = doGraphQL(CreateCommentMutation, {"input": input});
+        @assert(data.commentCreate, "commentCreate response cannot be null");
         if (!data.commentCreate.success) {
             throw "CREATE-ERROR", "Failed to create comment";
         }
+        @assert(data.commentCreate.comment, "created comment cannot be null on success");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created comment id=%y", data.commentCreate.comment.id));
         return data.commentCreate.comment;
     }
 

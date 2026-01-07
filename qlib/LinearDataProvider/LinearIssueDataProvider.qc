@@ -55,6 +55,7 @@ public class LinearIssueDataProvider inherits LinearDataProviderBase {
 
     #! Creates the object
     constructor(LinearRestClient::LinearRestClient rest, string issueId) : LinearDataProviderBase(rest) {
+        @assert(issueId.val(), "issue ID cannot be empty");
         self.issueId = issueId;
     }
 
@@ -89,7 +90,9 @@ public class LinearIssueDataProvider inherits LinearDataProviderBase {
     #! Searches for the issue record (returns single record iterator)
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching issue id=%y", issueId));
         hash<auto> data = doGraphQL(GetIssueQuery, {"id": issueId});
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: issue found=%y", exists data.issue));
         return new DefaultRecordIterator(new ListHashIterator(data.issue ? (data.issue,) : ()),
             where_cond, search_options, recordType.getFields());
     }
@@ -97,16 +100,23 @@ public class LinearIssueDataProvider inherits LinearDataProviderBase {
     #! Updates the issue
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond,
             *hash<auto> search_options) {
+        @assert(set, "update data cannot be empty");
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: updating issue id=%y fields=%y", issueId, keys set));
         hash<auto> data = doGraphQL(UpdateIssueMutation, {"id": issueId, "input": set});
+        @assert(data.issueUpdate, "issueUpdate response cannot be null");
         if (!data.issueUpdate.success) {
             throw "UPDATE-ERROR", "Failed to update issue";
         }
+        @debug(log(LoggerLevel::DEBUG, "updateSingleRecordImpl: issue updated successfully"));
         return True;
     }
 
     #! Archives (soft-deletes) the issue
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archiving issue id=%y", issueId));
         hash<auto> data = doGraphQL(ArchiveIssueMutation, {"id": issueId});
+        @assert(data.issueArchive, "issueArchive response cannot be null");
+        @debug(log(LoggerLevel::DEBUG, "deleteRecordsImpl: archive success=%y", data.issueArchive.success));
         return data.issueArchive.success ? 1 : 0;
     }
 

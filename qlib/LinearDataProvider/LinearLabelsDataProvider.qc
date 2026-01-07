@@ -94,6 +94,7 @@ public class LinearLabelsDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (label ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "label ID cannot be empty");
         return new LinearLabelDataProvider(rest, name);
     }
 
@@ -114,6 +115,7 @@ public class LinearLabelsDataProvider inherits LinearDataProviderBase {
         if (filter) {
             vars.filter = filter;
         }
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: filter=%y", filter));
 
         int pageSize = search_options.limit ?? DefaultPageSize;
 
@@ -123,10 +125,15 @@ public class LinearLabelsDataProvider inherits LinearDataProviderBase {
 
     #! Creates a new label
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        @assert(rec.name.val(), "label name is required");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: creating label name=%y", rec.name));
         hash<auto> data = doGraphQL(CreateLabelMutation, {"input": rec});
+        @assert(data.issueLabelCreate, "issueLabelCreate response cannot be null");
         if (!data.issueLabelCreate.success) {
             throw "CREATE-ERROR", "Failed to create label";
         }
+        @assert(data.issueLabelCreate.issueLabel, "created label cannot be null on success");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created label id=%y", data.issueLabelCreate.issueLabel.id));
         return data.issueLabelCreate.issueLabel;
     }
 

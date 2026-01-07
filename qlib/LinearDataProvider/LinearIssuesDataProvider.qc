@@ -133,6 +133,7 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name (issue ID)
     private *AbstractDataProvider getChildProviderImpl(string name) {
+        @assert(name.val(), "issue ID cannot be empty");
         return new LinearIssueDataProvider(rest, name);
     }
 
@@ -170,6 +171,7 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
         if (filter) {
             vars.filter = filter;
         }
+        @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: filter=%y", filter));
 
         int pageSize = search_options.limit ?? DefaultPageSize;
 
@@ -179,10 +181,17 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
 
     #! Creates a new issue
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        @assert(rec.teamId.val(), "teamId is required to create an issue");
+        @assert(rec.title.val(), "title is required to create an issue");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: creating issue with title=%y teamId=%y", rec.title,
+            rec.teamId));
         hash<auto> data = doGraphQL(CreateIssueMutation, {"input": rec});
+        @assert(data.issueCreate, "issueCreate response cannot be null");
         if (!data.issueCreate.success) {
             throw "CREATE-ERROR", "Failed to create issue";
         }
+        @assert(data.issueCreate.issue, "created issue cannot be null on success");
+        @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created issue id=%y", data.issueCreate.issue.id));
         return data.issueCreate.issue;
     }
 

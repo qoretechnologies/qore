@@ -73,6 +73,10 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
     constructor(LinearRestClient::LinearRestClient rest, string query, string dataPath,
             *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
+        @assert(rest, "REST client cannot be null");
+        @assert(query.val(), "GraphQL query cannot be empty");
+        @assert(dataPath.val(), "data path cannot be empty");
+        @assert(pageSize > 0, "page size must be positive");
         self.rest = rest;
         self.query = query;
         self.dataPath = dataPath;
@@ -93,6 +97,11 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
     constructor(LinearRestClient::LinearRestClient rest, string query, string dataPath,
             string nestedDataPath, *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
+        @assert(rest, "REST client cannot be null");
+        @assert(query.val(), "GraphQL query cannot be empty");
+        @assert(dataPath.val(), "data path cannot be empty");
+        @assert(nestedDataPath.val(), "nested data path cannot be empty");
+        @assert(pageSize > 0, "page size must be positive");
         self.rest = rest;
         self.query = query;
         self.dataPath = dataPath;
@@ -153,6 +162,8 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
     /** @return True if records were fetched, False if no more data
     */
     private bool fetchNextPage() {
+        @assert(rest, "REST client must be initialized");
+        @assert(pageSize > 0, "page size must be positive");
         hash<auto> vars = {
             "first": pageSize,
         } + (variables ?? {});
@@ -161,6 +172,7 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
         }
 
         hash<auto> response = rest.graphql(query, vars);
+        @assert(response.body, "GraphQL response body cannot be null");
 
         if (response.body.errors) {
             throw "GRAPHQL-ERROR", response.body.errors[0].message ?? "Unknown error",
