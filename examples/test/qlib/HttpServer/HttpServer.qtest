@@ -52,6 +52,20 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             return makeResponse(304, "test");
         } else if (rpath =~ /^test400close\//) {
             return makeResponse(400, new StringInputStream("test"), {"Connection": "close"});
+        } else if (rpath =~ /^gzip-plain\//) {
+            string msg = "gzip-ok";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, gz, {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
+        } else if (rpath =~ /^gzip-chunked\//) {
+            string msg = "gzip-chunked";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, new BinaryInputStream(gz), {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
         } else if (rpath =~ /^fileupload/) {
             string boundary = (hdr."_qore_orig_content_type" =~ x/boundary="?(.+)"?/i)[0];
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
@@ -219,6 +233,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("issue 3116", \issue3116());
+        addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
+        addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
         addTestCase("Test basics", \basicTest());
         addTestCase("Test routing", \routingTest());
@@ -491,6 +507,30 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
         mClient.sendWithRecvCallback(rc, NOTHING, "PUT", "/test400close/abc", NOTHING, NOTHING, NOTHING, \info);
         assertEq("test", http_msgs[1].data);
+    }
+
+    recvCallbackGzipDecode() {
+        list<auto> http_msgs;
+        code rc = sub (auto http_data) {
+            http_msgs += http_data;
+        };
+        mClient.sendWithRecvCallback(rc, NOTHING, "GET", "/gzip-plain/abc", NOTHING, NOTHING, NOTHING, NOTHING);
+        *string found;
+        foreach auto msg in (http_msgs) {
+            if (exists(msg.data) && msg.data.typeCode() == NT_STRING) {
+                found = msg.data;
+                break;
+            }
+        }
+        assertTrue(exists(found));
+        assertEq("gzip-ok", found);
+    }
+
+    chunkedGzipDecode() {
+        hash<auto> info;
+        hash<auto> resp = mClient.send(NOTHING, "GET", "/gzip-chunked/abc", NOTHING, NOTHING, \info);
+        assertEq("gzip-chunked", resp.body);
+        assertEq("chunked", info."response-headers"."transfer-encoding");
     }
 
     issue2805() {
@@ -1503,4 +1543,3 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
         return makeResponse({"x-thread-id": string(tid)}, 404, "not found");
     }
 }
-

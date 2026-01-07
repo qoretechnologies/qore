@@ -120,6 +120,18 @@ class GzipHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns gzip-compressed text via stream body
+class GzipStreamHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-stream";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, new BinaryInputStream(gz), {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip",
+        });
+    }
+}
+
 #! Handler that returns gzip-compressed text with multiple encodings
 class GzipMultiHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -216,6 +228,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
         addTestCase("HTTP/2 gzip multi-encoding body", \testGzipMultiEncodingHttp2());
         addTestCase("HTTP/2 unknown encoding body", \testUnknownEncodingHttp2());
+        addTestCase("HTTP/2 gzip stream body", \testGzipStreamHttp2());
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
@@ -252,6 +265,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
         mServer.setHandler("soap", "/soap", NOTHING, new SoapHandler());
         mServer.setHandler("gzip", "/gzip-plain", NOTHING, new GzipHandler());
+        mServer.setHandler("gzip-stream", "/gzip-stream", NOTHING, new GzipStreamHandler());
         mServer.setHandler("gzip-multi", "/gzip-multi", NOTHING, new GzipMultiHandler());
         mServer.setHandler("unknown-encoding", "/unknown-encoding", NOTHING, new UnknownEncodingHandler());
 
@@ -369,6 +383,20 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq(200, resp.status_code, "unknown encoding HTTP/2 GET should return 200");
         assertTrue(resp.body.typeCode() == NT_STRING, "unknown encoding body should be a string");
         assertEq("unknown-encoding", resp.body, "unknown encoding body should match");
+    }
+
+    testGzipStreamHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-stream");
+        assertEq(200, resp.status_code, "gzip stream HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip stream body should be a string");
+        assertEq("gzip-stream", resp.body, "gzip stream body should match");
     }
 
     #! Tests multiple sequential requests from SEPARATE connections

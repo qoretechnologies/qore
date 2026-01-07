@@ -229,6 +229,53 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
    return str && !str->empty() ? str->c_str() : nullptr;
 }
 
+static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
+        bool& ignore_encoding) {
+    ignore_encoding = false;
+    if (!content_encoding) {
+        return nullptr;
+    }
+
+    const char* start = content_encoding;
+    while (*start == ' ' || *start == '\t') {
+        ++start;
+    }
+    const char* end = start;
+    while (*end && *end != ',' && *end != ';' && *end != ' ') {
+        ++end;
+    }
+    if (end <= start) {
+        return nullptr;
+    }
+
+    QoreString token;
+    token.concat(start, end - start);
+    const char* tok = token.c_str();
+
+    if (!strcasecmp(tok, "identity")) {
+        ignore_encoding = true;
+        return nullptr;
+    }
+
+    if (!strcasecmp(tok, "deflate") || !strcasecmp(tok, "x-deflate")) {
+        return qore_inflate_to_string;
+    }
+    if (!strcasecmp(tok, "gzip") || !strcasecmp(tok, "x-gzip")) {
+        return qore_gunzip_to_string;
+    }
+    if (!strcasecmp(tok, "bzip2") || !strcasecmp(tok, "x-bzip2")) {
+        return qore_bunzip2_to_string;
+    }
+    if (!strcasecmp(tok, "br")) {
+        return qore_unbrotli_to_string;
+    }
+    if (!strcasecmp(tok, "zstd")) {
+        return qore_unzstd_to_string;
+    }
+
+    return nullptr;
+}
+
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
         const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
         ExceptionSink* xsink) {
@@ -241,9 +288,16 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
             return bin->refSelf();
         }
         if (!dec) {
-            xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding '%s'",
-                content_encoding);
-            return QoreValue();
+            bool ignore_encoding = false;
+            dec = get_decoder_for_content_encoding(content_encoding, ignore_encoding);
+            if (ignore_encoding) {
+                return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+            }
+            if (!dec) {
+                xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding '%s'",
+                    content_encoding);
+                return QoreValue();
+            }
         }
         QoreStringNode* decoded = dec(bin, body_enc, xsink);
         return decoded;
@@ -1465,20 +1519,15 @@ struct qore_httpclient_priv {
             if (!token.empty() && (!strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4))) {
                 msock->socket->setEncoding(QEM.findCreate(token.c_str()));
                 content_encoding = nullptr;
-            } else if (!recv_callback && !encoding_passthru && !token.empty()) {
-                if (!strcasecmp(token.c_str(), "deflate") || !strcasecmp(token.c_str(), "x-deflate"))
-                    dec = qore_inflate_to_string;
-                else if (!strcasecmp(token.c_str(), "gzip") || !strcasecmp(token.c_str(), "x-gzip"))
-                    dec = qore_gunzip_to_string;
-                else if (!strcasecmp(token.c_str(), "bzip2") || !strcasecmp(token.c_str(), "x-bzip2"))
-                    dec = qore_bunzip2_to_string;
-                else if (!strcasecmp(token.c_str(), "br"))
-                    dec = qore_unbrotli_to_string;
-                else if (!strcasecmp(token.c_str(), "zstd"))
-                    dec = qore_unzstd_to_string;
-                // issue #2953 ignore unknown content encodings or a crash will result
-                else
+            } else if (!encoding_passthru && !token.empty()) {
+                bool ignore_encoding = false;
+                dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+                if (ignore_encoding) {
                     content_encoding = nullptr;
+                } else if (!dec) {
+                    // issue #2953 ignore unknown content encodings or a crash will result
+                    content_encoding = nullptr;
+                }
             }
         }
 

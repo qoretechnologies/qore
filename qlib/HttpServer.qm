@@ -2343,6 +2343,34 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     # rv is "hash" to strip types
     # If async_response_out is provided, capture response info instead of sending
+    # Assumes stream yields homogeneous chunk types (string or binary) per read loop.
+    private:internal data readAllStream(InputStream is, *int chunk_size) {
+        int size = chunk_size ?? 8192;
+        *string sout;
+        *binary bout;
+        while (True) {
+            *data chunk = is.read(size);
+            if (!chunk || !chunk.size()) {
+                break;
+            }
+            if (chunk.typeCode() == NT_STRING) {
+                if (sout) {
+                    sout += chunk;
+                } else {
+                    sout = chunk;
+                }
+            } else {
+                binary b = binary(chunk);
+                if (bout) {
+                    bout += b;
+                } else {
+                    bout = b;
+                }
+            }
+        }
+        return sout ? sout : (bout ? bout : "");
+    }
+
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv,
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
@@ -2367,7 +2395,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (async_response_out) {
             # For async sending, we need to read streams into memory
             if (body instanceof InputStream) {
-                body = body.read(-1);
+                body = readAllStream(body);
             }
             listener.log("doResponse: capturing async response code=%d body_size=%d",
                 rv."code", body ? body.size() : 0);
@@ -2391,7 +2419,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # HTTP/2: read stream data into memory if needed
                 auto send_body = body;
                 if (chunked && body instanceof InputStream) {
-                    send_body = body.read(-1);
+                    send_body = readAllStream(body);
                 }
                 # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = rv.hdr ?? {};
