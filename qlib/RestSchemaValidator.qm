@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # make sure we have the required qore version
 %requires qore >= 2.0
@@ -296,7 +293,7 @@ public namespace RestSchemaValidator {
                 @note enums can be of any type, but we only support enums of simple types that can be
                 converted to a string for fast lookups in a hash
             */
-            hash<string, bool> enum;
+            hash<string, bool> enumValues;
 
             #! Multiple-of constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.1

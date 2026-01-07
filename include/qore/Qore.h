@@ -57,6 +57,7 @@ DLLEXPORT extern QoreCounter thread_counter;
 #include <qore/AbstractQoreNode.h>
 #include <qore/QoreListNode.h>
 #include <qore/TypedHashDecl.h>
+#include <qore/QoreEnumDecl.h>
 #include <qore/QoreHashNode.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreIteratorBase.h>
@@ -185,8 +186,9 @@ DLLEXPORT extern const QoreStringMaker mpfrInfo;
 #define QLO_DO_NOT_SEED_RNG            (1 << 4)  //!< disable seeding the random number generator when the Qore library is initialized
 #define QLO_DISABLE_TLS_13             (1 << 5)  //!< disable TLS v1.3 (may be set at runtime with qore_set_library_options())
 #define QLO_MINIMUM_TLS_13             (1 << 6)  //!< minimum TLS v1.3; overrides QLO_DISABLE_TLS_13 (may be set at runtime with qore_set_library_options())
+#define QLO_DISABLE_HTTP2              (1 << 7)  //!< disable HTTP/2 support globally (may be set at runtime with qore_set_library_options())
 
-#define QLO_RUNTIME_OPTS (QLO_DISABLE_TLS_13)
+#define QLO_RUNTIME_OPTS (QLO_DISABLE_TLS_13|QLO_DISABLE_HTTP2)
 
 //! do not perform any initialization or cleanup of the openssl library (= is performed outside of the qore library)
 #define QLO_DISABLE_OPENSSL_INIT_CLEANUP (QLO_DISABLE_OPENSSL_INIT|QLO_DISABLE_OPENSSL_CLEANUP)

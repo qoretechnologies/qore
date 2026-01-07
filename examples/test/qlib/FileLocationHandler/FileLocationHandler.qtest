@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/FsUtil.qm
@@ -76,6 +73,7 @@ class RealTestHttpServer inherits HttpServer {
         # bind on a random port
         listener_opts.service = 0;
         port = addListener(listener_opts).port;
+        waitForAsyncIo();
     }
 
     int getPort() {

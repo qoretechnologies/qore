@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProvider class definition
 
-/** AbstractDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** AbstractDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,17 +44,46 @@ public const UpsertResultUnchanged = "unchanged";
 public const UpsertResultDeleted = "deleted";
 #/@}
 
+#! Base option info with common fields shared by DataProviderOptionInfo, ActionOptionInfo, and ConnectionOptionInfo
+/** @since %DataProvider 3.1
+*/
+public hashdecl BaseOptionInfo inherits DisplayDescInfo {
+    #! Is the option value sensitive?
+    bool sensitive = False;
+
+    #! List of allowed values (enum)
+    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
+
+    #! Does the option accept values not defined in allowed_values too?
+    bool allowed_values_creatable = False;
+
+    #! List of allowed values for elements of list types (enum)
+    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
+
+    #! Does the option accept values for elements not defined in element_allowed_values too?
+    bool element_allowed_values_creatable = False;
+
+    #! Any default value
+    auto default_value;
+
+    #! Any optional example value for the option
+    auto example_value;
+
+    #! Free-form metadata on options
+    *hash<auto> metadata;
+
+    #! Messages related to the option
+    *list<hash<UiMessageInfo>> messages;
+
+    #! Any icon info for the option
+    *string icon;
+
+    #! Any image info for the option
+    *string image;
+}
+
 #! Data provider option info
-public hashdecl DataProviderOptionInfo {
-    #! Option display name
-    string display_name;
-
-    #! Option short description in plain text
-    *string short_desc;
-
-    #! The option description
-    string desc;
-
+public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! The option value type or types
     softlist<AbstractDataProviderType> type;
 
@@ -72,31 +101,6 @@ public hashdecl DataProviderOptionInfo {
 
     #! Is the option exclusive with other options?
     *softlist<string> exclusive_with;
-
-    #! Any default value
-    auto default_value;
-
-    #! Is the option value sensitive?
-    bool sensitive = False;
-
-    #! List of allowed values (enum)
-    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
-
-    #! Does the option accept values not defined in allowed_values too?
-    bool allowed_values_creatable;
-
-    #! List of allowed values for elements of list types (enum)
-    /* In case the option type is a list, then this will provide the discrete values that can appear in the list
-    */
-    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
-
-    #! Does the option accept values for elements not defined in element_allowed_values too?
-    bool element_allowed_values_creatable;
-
-    #! Any optional example value for the option
-    /** This value must be in the one of the types in the \c type list
-    */
-    auto example_value;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -120,34 +124,10 @@ public hashdecl DataProviderOptionInfo {
 
     #! Any information about how to react to changes
     *softlist<softstring> on_change;
-
-    #! Free-form metadata on options
-    *hash<auto> metadata;
-
-    #! Messages related to the option
-    *list<hash<UiMessageInfo>> messages;
-
-    #! Any icon info for the option
-    *string icon;
-
-    #! Any image info for the option
-    *string image;
 }
 
 #! Data provider summary info
-public hashdecl DataProviderSummaryInfo {
-    #! The name of the data provider
-    string name;
-
-    #! Data provider display name
-    string display_name;
-
-    #! Data provider short description in plain text
-    *string short_desc;
-
-    #! The description of the data provider; supports markdown
-    string desc;
-
+public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     #! The name of the provider type
     string type;
 
@@ -1138,6 +1118,21 @@ public const RegularExpressionArgInfo = (
     },
 );
 
+#! Returns all member names of a typed hash including inherited members
+/** @param th the TypedHash to get member names from
+    @return a list of all member names including inherited members
+
+    @since %DataProvider 3.1
+*/
+list<string> sub dp_get_all_typed_hash_member_names(TypedHash th) {
+    list<string> rv = map $1.getName(), th.getMembers();
+    *TypedHash parent = th.getParentTypedHash();
+    if (parent) {
+        rv += dp_get_all_typed_hash_member_names(parent);
+    }
+    return rv;
+}
+
 #! The AbstractDataProvider class
 public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
     public {
@@ -1544,9 +1539,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         */
         const GenericExpressions = map {$1.key: $1.value.exp}, GenericExpressionImplementations.pairIterator();
 
-        #! A list of members names of the DataProviderSummaryInfoKeys hashdecl
-        const DataProviderSummaryInfoKeys = map $1.getName(),
-            TypedHash::forName("DataProviderSummaryInfo").getMembers();
+        #! A list of member names of the DataProviderSummaryInfo hashdecl (including inherited members)
+        const DataProviderSummaryInfoKeys = dp_get_all_typed_hash_member_names(
+            TypedHash::forName("DataProviderSummaryInfo"));
 
         #! 'Requires Result' option info
         const RequiresResultOption = <DataProviderOptionInfo>{
@@ -1610,6 +1605,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         #! static callback for dynamic value resolution
         static code cb_resolve_value;
+    }
+
+    private:internal {
+        #! Optional debug info collector
+        /** @since DataProvider 3.5
+        */
+        *AbstractDebugInfoCollector debug_collector;
     }
 
     #! Creates the data provider
@@ -5982,5 +5984,61 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns data provider static info
     private abstract hash<DataProviderInfo> getStaticInfoImpl();
+
+    #! Sets the debug info collector for this data provider
+    /** @param collector the debug collector to use, or @ref nothing to disable debug collection
+
+        When a debug collector is set, the data provider will call the collector's @ref collect() method
+        with technical debug information about operations (HTTP requests, WebSocket messages, etc.).
+
+        @par Example:
+        @code{.py}
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Make requests - debug info is collected
+auto response = provider.doRequest(request);
+
+# Retrieve collected debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+        @endcode
+
+        @since DataProvider 3.5
+    */
+    setDebugCollector(*AbstractDebugInfoCollector collector) {
+        debug_collector = collector;
+    }
+
+    #! Returns the current debug info collector, if any
+    /** @return the current debug collector, or @ref nothing if none is set
+
+        @since DataProvider 3.5
+    */
+    *AbstractDebugInfoCollector getDebugCollector() {
+        return debug_collector;
+    }
+
+    #! Collects debug info if a collector is registered
+    /** @param info the debug information to collect
+
+        Subclasses should call this method to report debug information when performing operations.
+        If no collector is registered, this method does nothing.
+
+        @since DataProvider 3.5
+    */
+    private collectDebugInfo(hash<DataProviderDebugInfo> info) {
+        if (debug_collector) {
+            debug_collector.collect(info);
+        }
+    }
+
+    #! Returns @ref True if debug collection is enabled
+    /** @return @ref True if a debug collector is registered
+
+        @since DataProvider 3.5
+    */
+    bool debugCollectionEnabled() {
+        return debug_collector.val();
+    }
 }
 }

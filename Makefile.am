@@ -475,6 +475,8 @@ MODULE_EXTRA_SRC = modules/astparser/src/QC_AstParser.qpp \
 	modules/astparser/src/queries/FindNodeQuery.h \
 	modules/astparser/src/queries/FindReferencesQuery.cpp \
 	modules/astparser/src/queries/FindReferencesQuery.h \
+	modules/astparser/src/queries/FindScopeSymbolsQuery.cpp \
+	modules/astparser/src/queries/FindScopeSymbolsQuery.h \
 	modules/astparser/src/queries/FindSymbolInfoQuery.cpp \
 	modules/astparser/src/queries/FindSymbolInfoQuery.h \
 	modules/astparser/src/queries/FindSymbolsQuery.cpp \
@@ -699,7 +701,9 @@ include_HEADERS = \
 	include/qore/UnicodeCharacterIterator.h \
     include/qore/AbstractPollState.h \
     include/qore/AbstractPollableIoObjectBase.h \
-    include/qore/QoreRegexInterface.h
+    include/qore/QoreRegexInterface.h \
+    include/qore/QoreBigIntNode.h \
+    include/qore/QoreBigFloatNode.h
 
 noinst_HEADERS = \
 	include/qore/macros-none.h \
@@ -1217,8 +1221,12 @@ doxygen/lib/Doxyfile: doxygen/lib/Doxyfile.tmpl configure.ac
 lang-dox-src: dummy
 	cd lib; make dox-src
 
+# Generate TAGFILES for lang docs to reference module documentation
+LANG_DOC_TAGFILES = $(foreach m,$(USER_MODS) $(USER_SPLIT_MODS),"docs/modules/$(m)/$(m).tag=../modules/$(m)/html")
+
 doxygen/lang/Doxyfile: doxygen/lang/Doxyfile.tmpl configure.ac
-	doxygen/dpp "$(VERSION)" $< "$(top_srcdir)/doxygen" "$(top_srcdir)/getrev.sh" > $@
+	doxygen/dpp "$(VERSION)" $< "$(top_srcdir)/doxygen" "$(top_srcdir)/getrev.sh" | \
+		sed 's/^TAGFILES.*=.*/TAGFILES = $(LANG_DOC_TAGFILES)/' > $@
 
 $(LANG_TMP_DOXYFILES_SRC): doxygen/lang/%.dox: doxygen/lang/%.dox.tmpl lib $(QPP) lang-dox-src
 	$(QPP) -t $< -o $@
@@ -1512,7 +1520,7 @@ endif
 
 bin_PROGRAMS = qore
 # qr
-dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter
+dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen
 if COND_SINGLE_COMPILATION_UNIT
 qore_SOURCES = qore-single-compilation-unit.cpp
 #qr_SOURCES = qr-single-compilation-unit.cpp

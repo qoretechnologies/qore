@@ -61,9 +61,16 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder v(this, *xsink);
         assert(!**xsink);
-        parse_context.typeInfo = v->getTypeInfo();
-        val = v.takeReferencedValue();
-        return 0;
+        QoreValue result = v.takeReferencedValue();
+        // only use parse-time folding if we got a valid result
+        // (constants may not be fully resolved at parse time, resulting in NOTHING)
+        if (!result.isNothing()) {
+            parse_context.typeInfo = result.getTypeInfo();
+            val = result;
+            return 0;
+        }
+        // constants not resolved - skip parse-time folding, let runtime handle it
+        del.release();
     }
 
     parse_context.typeInfo = qore_get_complex_list_or_nothing_type(stringOrNothingTypeInfo);

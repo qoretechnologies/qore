@@ -1,0 +1,469 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires QUnit
+%requires reflection
+
+%exec-class EnumTest
+
+# Test enums in root namespace
+public enum ColorInt : int {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+
+public enum ColorString : string {
+    Red = "red",
+    Green = "green",
+    Blue = "blue",
+}
+
+public enum Priority : int {
+    Low = 0,
+    Medium = 5,
+    High = 10,
+    Critical = 100,
+}
+
+public enum Status : string {
+    Active = "active",
+    Inactive = "inactive",
+    Pending = "pending",
+    Deleted = "deleted",
+}
+
+public enum Multiplier : float {
+    Half = 0.5,
+    Normal = 1.0,
+    Double = 2.0,
+    Triple = 3.0,
+}
+
+public enum Precision : number {
+    Low = 1n,
+    Medium = 1000n,
+    High = 1000000n,
+    Extreme = 1000000000n,
+}
+
+# Namespace with enum
+namespace Test {
+    public enum Level : int {
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3,
+        Critical = 4,
+    }
+
+    public enum Result : string {
+        Success = "success",
+        Failure = "failure",
+        Pending = "pending",
+    }
+}
+
+# Nested namespace
+namespace Outer {
+    public enum Type : int {
+        TypeA = 1,
+        TypeB = 2,
+    }
+
+    namespace Inner {
+        public enum SubType : int {
+            SubA = 10,
+            SubB = 20,
+        }
+    }
+}
+
+class EnumTest inherits QUnit::Test {
+    constructor() : Test("EnumTest", "1.0") {
+        addTestCase("Test basic int enum access", \testBasicIntEnum());
+        addTestCase("Test basic string enum access", \testBasicStringEnum());
+        addTestCase("Test float enum access", \testFloatEnum());
+        addTestCase("Test number enum access", \testNumberEnum());
+        addTestCase("Test enum type checking", \testEnumTypeChecking());
+        addTestCase("Test enum value comparison", \testEnumComparison());
+        addTestCase("Test namespaced enums", \testNamespacedEnums());
+        addTestCase("Test nested namespace enums", \testNestedNamespaceEnums());
+        addTestCase("Test enum reflection - Enum class", \testEnumReflection());
+        addTestCase("Test enum reflection - EnumMember class", \testEnumMemberReflection());
+        addTestCase("Test enum reflection - Namespace enumeration", \testNamespaceEnumeration());
+        addTestCase("Test enum value validation", \testEnumValueValidation());
+        addTestCase("Test enum type info", \testEnumTypeInfo());
+        addTestCase("Test enum in function parameters", \testEnumInFunctionParams());
+        addTestCase("Test enum in hash declaration", \testEnumInHashDecl());
+        addTestCase("Test enum equality operators", \testEnumEqualityOperators());
+        addTestCase("Test cast<enum<X>> functionality", \testEnumCast());
+        addTestCase("Test enum type name resolution", \testEnumTypeNameResolution());
+        set_return_value(main());
+    }
+
+    testBasicIntEnum() {
+        # Basic access
+        assertEq(1, ColorInt::Red);
+        assertEq(2, ColorInt::Green);
+        assertEq(3, ColorInt::Blue);
+
+        # Assignment
+        int c = ColorInt::Red;
+        assertEq(1, c);
+
+        # All priority values
+        assertEq(0, Priority::Low);
+        assertEq(5, Priority::Medium);
+        assertEq(10, Priority::High);
+        assertEq(100, Priority::Critical);
+    }
+
+    testBasicStringEnum() {
+        # Basic access
+        assertEq("red", ColorString::Red);
+        assertEq("green", ColorString::Green);
+        assertEq("blue", ColorString::Blue);
+
+        # Assignment
+        string s = Status::Active;
+        assertEq("active", s);
+
+        # All status values
+        assertEq("active", Status::Active);
+        assertEq("inactive", Status::Inactive);
+        assertEq("pending", Status::Pending);
+        assertEq("deleted", Status::Deleted);
+    }
+
+    testFloatEnum() {
+        assertEq(0.5, Multiplier::Half);
+        assertEq(1.0, Multiplier::Normal);
+        assertEq(2.0, Multiplier::Double);
+        assertEq(3.0, Multiplier::Triple);
+
+        float m = Multiplier::Double;
+        assertEq(2.0, m);
+    }
+
+    testNumberEnum() {
+        assertEq(1n, Precision::Low);
+        assertEq(1000n, Precision::Medium);
+        assertEq(1000000n, Precision::High);
+        assertEq(1000000000n, Precision::Extreme);
+
+        number n = Precision::High;
+        assertEq(1000000n, n);
+    }
+
+    testEnumTypeChecking() {
+        # Type returns underlying type when assigned to auto
+        # This is expected behavior - the value is the underlying type value
+        auto v = ColorInt::Red;
+        assertEq("integer", v.type());
+
+        v = Status::Active;
+        assertEq("string", v.type());
+
+        v = Multiplier::Double;
+        assertEq("float", v.type());
+    }
+
+    testEnumComparison() {
+        # Comparison with same enum values
+        assertTrue(ColorInt::Red == ColorInt::Red);
+        assertFalse(ColorInt::Red == ColorInt::Green);
+
+        # Comparison with underlying type
+        assertTrue(ColorInt::Red == 1);
+        assertTrue(1 == ColorInt::Red);
+
+        # String enum comparisons
+        assertTrue(Status::Active == "active");
+        assertTrue("active" == Status::Active);
+
+        # Priority ordering
+        assertTrue(Priority::Low < Priority::Medium);
+        assertTrue(Priority::Medium < Priority::High);
+        assertTrue(Priority::High < Priority::Critical);
+    }
+
+    testNamespacedEnums() {
+        # Access enum in namespace
+        assertEq(0, Test::Level::Debug);
+        assertEq(1, Test::Level::Info);
+        assertEq(2, Test::Level::Warning);
+        assertEq(3, Test::Level::Error);
+        assertEq(4, Test::Level::Critical);
+
+        assertEq("success", Test::Result::Success);
+        assertEq("failure", Test::Result::Failure);
+        assertEq("pending", Test::Result::Pending);
+
+        # Type returns underlying type when assigned to auto
+        auto v = Test::Level::Debug;
+        assertEq("integer", v.type());
+    }
+
+    testNestedNamespaceEnums() {
+        # Access enum in nested namespace
+        assertEq(1, Outer::Type::TypeA);
+        assertEq(2, Outer::Type::TypeB);
+
+        assertEq(10, Outer::Inner::SubType::SubA);
+        assertEq(20, Outer::Inner::SubType::SubB);
+
+        # Type returns underlying type when assigned to auto
+        auto v = Outer::Inner::SubType::SubA;
+        assertEq("integer", v.type());
+    }
+
+    testEnumReflection() {
+        # Get enum by name
+        Enum colorEnum = Enum::forName("ColorInt");
+        assertEq("ColorInt", colorEnum.getName());
+        assertEq("::ColorInt", colorEnum.getPathName());
+        assertFalse(colorEnum.isBuiltin());
+        assertTrue(colorEnum.isUser());
+
+        # Check base type
+        Type baseType = colorEnum.getBaseType();
+        assertEq("int", baseType.getName());
+
+        # Check enum type
+        Type enumType = colorEnum.getType();
+        assertEq("enum<ColorInt>", enumType.getName());
+
+        # Namespaced enum
+        Enum levelEnum = Enum::forName("Test::Level");
+        assertEq("Level", levelEnum.getName());
+        assertEq("Test::Level", levelEnum.getPathName());
+        assertEq("int", levelEnum.getBaseType().getName());
+
+        # Get namespace (root namespace returns empty path)
+        Namespace ns = colorEnum.getNamespace();
+        assertEq("", ns.getPathName());
+
+        Namespace testNs = levelEnum.getNamespace();
+        assertEq("Test", testNs.getPathName());
+    }
+
+    testEnumMemberReflection() {
+        Enum colorEnum = Enum::forName("ColorInt");
+
+        # Get all members
+        list<EnumMember> members = colorEnum.getMembers();
+        assertEq(3, members.size());
+
+        # Check member names and values
+        hash<string, auto> memberMap;
+        foreach EnumMember m in (members) {
+            memberMap{m.getName()} = m.getValue();
+        }
+        assertEq(1, memberMap.Red);
+        assertEq(2, memberMap.Green);
+        assertEq(3, memberMap.Blue);
+
+        # Get specific member
+        EnumMember redMember = colorEnum.getMember("Red");
+        assertEq("Red", redMember.getName());
+        assertEq(1, redMember.getValue());
+        assertFalse(redMember.isBuiltin());
+        assertTrue(redMember.isUser());
+
+        # Get enum from member
+        Enum fromMember = redMember.getEnum();
+        assertEq("ColorInt", fromMember.getName());
+
+        # String enum members
+        Enum statusEnum = Enum::forName("Status");
+        list<EnumMember> statusMembers = statusEnum.getMembers();
+        assertEq(4, statusMembers.size());
+
+        EnumMember activeMember = statusEnum.getMember("Active");
+        assertEq("active", activeMember.getValue());
+    }
+
+    testNamespaceEnumeration() {
+        # Get enums from root namespace
+        Namespace rootNs = Namespace::forName("::");
+        list<Enum> rootEnums = rootNs.getEnums();
+
+        # Should find our test enums
+        hash<string, bool> foundEnums;
+        foreach Enum e in (rootEnums) {
+            foundEnums{e.getName()} = True;
+        }
+        assertTrue(foundEnums.ColorInt ?? False);
+        assertTrue(foundEnums.ColorString ?? False);
+        assertTrue(foundEnums.Priority ?? False);
+        assertTrue(foundEnums.Status ?? False);
+        assertTrue(foundEnums.Multiplier ?? False);
+        assertTrue(foundEnums.Precision ?? False);
+
+        # Get enums from Test namespace
+        Namespace testNs = Namespace::forName("::Test");
+        list<Enum> testEnums = testNs.getEnums();
+
+        hash<string, bool> foundTestEnums;
+        foreach Enum e in (testEnums) {
+            foundTestEnums{e.getName()} = True;
+        }
+        assertTrue(foundTestEnums.Level ?? False);
+        assertTrue(foundTestEnums.Result ?? False);
+
+        # Get specific enum from namespace
+        Enum levelEnum = testNs.getEnum("Level");
+        assertEq("Level", levelEnum.getName());
+    }
+
+    testEnumValueValidation() {
+        Enum colorEnum = Enum::forName("ColorInt");
+
+        # Valid values
+        assertTrue(colorEnum.isValidValue(1));
+        assertTrue(colorEnum.isValidValue(2));
+        assertTrue(colorEnum.isValidValue(3));
+
+        # Invalid values
+        assertFalse(colorEnum.isValidValue(0));
+        assertFalse(colorEnum.isValidValue(4));
+        assertFalse(colorEnum.isValidValue(-1));
+        assertFalse(colorEnum.isValidValue(100));
+
+        # String enum validation
+        Enum statusEnum = Enum::forName("Status");
+        assertTrue(statusEnum.isValidValue("active"));
+        assertTrue(statusEnum.isValidValue("inactive"));
+        assertFalse(statusEnum.isValidValue("unknown"));
+        assertFalse(statusEnum.isValidValue(""));
+    }
+
+    testEnumTypeInfo() {
+        Enum colorEnum = Enum::forName("ColorInt");
+
+        # Get type info
+        Type enumType = colorEnum.getType();
+        assertEq("enum<ColorInt>", enumType.getName());
+
+        # Get or-nothing type
+        Type orNothingType = colorEnum.getOrNothingType();
+        assertEq("*enum<ColorInt>", orNothingType.getName());
+    }
+
+    testEnumInFunctionParams() {
+        # Test functions that take enum parameters
+        assertEq("low", getPriorityName(Priority::Low));
+        assertEq("high", getPriorityName(Priority::High));
+
+        # Using enum value directly
+        assertEq("medium", getPriorityName(Priority::Medium));
+    }
+
+    string getPriorityName(int priority) {
+        switch (priority) {
+            case Priority::Low: return "low";
+            case Priority::Medium: return "medium";
+            case Priority::High: return "high";
+            case Priority::Critical: return "critical";
+            default: return "unknown";
+        }
+    }
+
+    testEnumInHashDecl() {
+        hash<auto> data = {
+            "color": ColorInt::Blue,
+            "status": Status::Active,
+            "priority": Priority::High,
+        };
+
+        assertEq(3, data.color);
+        assertEq("active", data.status);
+        assertEq(10, data.priority);
+    }
+
+    testEnumEqualityOperators() {
+        # Test === operator (strict equality)
+        assertTrue(ColorInt::Red === ColorInt::Red);
+        assertFalse(ColorInt::Red === ColorInt::Green);
+
+        # Test !== operator
+        assertTrue(ColorInt::Red !== ColorInt::Green);
+        assertFalse(ColorInt::Red !== ColorInt::Red);
+
+        # Cross-type comparison with ==
+        assertTrue(ColorInt::Red == 1);
+        assertTrue(Status::Active == "active");
+    }
+
+    testEnumCast() {
+        # Cast valid string value to string-based enum
+        string s = "active";
+        Status st = cast<enum<Status>>(s);
+        assertEq(Status::Active, st);
+
+        # Cast valid int value to int-based enum
+        int i = 2;
+        ColorInt ci = cast<enum<ColorInt>>(i);
+        assertEq(ColorInt::Green, ci);
+
+        # Cast valid float value to float-based enum
+        float f = 2.0;
+        Multiplier m = cast<enum<Multiplier>>(f);
+        assertEq(Multiplier::Double, m);
+
+        # Cast with or_nothing - NOTHING value
+        *string ns;
+        *Status st2 = cast<*enum<Status>>(ns);
+        assertFalse(exists st2);
+
+        # Cast with or_nothing - valid value
+        *string ns2 = "inactive";
+        *Status st3 = cast<*enum<Status>>(ns2);
+        assertEq(Status::Inactive, st3);
+
+        # Cast invalid value - runtime error
+        assertThrows("RUNTIME-CAST-ERROR", sub() {
+            string invalid = "invalid_status";
+            Status st4 = cast<enum<Status>>(invalid);
+            remove st4;
+        });
+
+        # Cast wrong base type - runtime error (using auto to bypass parse-time check)
+        assertThrows("RUNTIME-CAST-ERROR", sub() {
+            auto wrongType = 123;
+            Status st5 = cast<enum<Status>>(wrongType);
+            remove st5;
+        });
+
+        # Cast namespaced enum
+        int level = 2;
+        Test::Level lv = cast<enum<Test::Level>>(level);
+        assertEq(Test::Level::Warning, lv);
+    }
+
+    testEnumTypeNameResolution() {
+        # Test that enum names can be used directly as type names (without enum<> wrapper)
+        Status st = Status::Active;
+        assertEq("active", st);
+
+        # Test with namespaced enum
+        Test::Level lv = Test::Level::Info;
+        assertEq(1, lv);
+
+        # Test with or_nothing variant
+        *Status st2 = Status::Pending;
+        assertEq("pending", st2);
+
+        # Test function with enum parameter using direct type name
+        assertEq("active", getStatusString(Status::Active));
+        assertEq("inactive", getStatusString(Status::Inactive));
+    }
+
+    string getStatusString(Status s) {
+        return string(s);
+    }
+}

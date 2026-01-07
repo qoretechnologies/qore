@@ -53,12 +53,15 @@
 
 #include "ast/declarations/ASTClassDeclaration.h"
 #include "ast/declarations/ASTConstantDeclaration.h"
+#include "ast/declarations/ASTEnumDeclaration.h"
+#include "ast/declarations/ASTEnumMemberDeclaration.h"
 #include "ast/declarations/ASTFunctionDeclaration.h"
 #include "ast/declarations/ASTHashDeclaration.h"
 #include "ast/declarations/ASTHashMemberDeclaration.h"
 #include "ast/declarations/ASTMemberGroupDeclaration.h"
 #include "ast/declarations/ASTNamespaceDeclaration.h"
 #include "ast/declarations/ASTSuperclassDeclaration.h"
+#include "ast/declarations/ASTTypedefDeclaration.h"
 #include "ast/declarations/ASTVariableDeclaration.h"
 #include "ast/declarations/ASTVarListDeclaration.h"
 

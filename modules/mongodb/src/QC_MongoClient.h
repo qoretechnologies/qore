@@ -32,6 +32,8 @@
 
 #include <mongoc/mongoc.h>
 
+#include "QoreMongoStream.h"
+
 DLLEXPORT extern qore_classid_t CID_MONGOCLIENT;
 DLLLOCAL extern QoreClass* QC_MONGOCLIENT;
 
@@ -56,6 +58,8 @@ public:
             xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to create MongoDB client");
             return;
         }
+        // Set up interruptible streams for sandbox support
+        qore_mongo_setup_interruptible_streams(client);
         // Set application name
         mongoc_client_set_appname(client, "qore-mongodb");
     }

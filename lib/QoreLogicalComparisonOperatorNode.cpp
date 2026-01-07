@@ -65,9 +65,17 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
         SimpleRefHolder<QoreLogicalComparisonOperatorNode> del(this);
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder v(this, *xsink);
-        val = v.takeReferencedValue();
-        if (**xsink) {
-            err = -1;
+        QoreValue result = v.takeReferencedValue();
+        // only use parse-time folding if we got a valid result
+        // (constants may not be fully resolved at parse time, resulting in NOTHING)
+        if (!result.isNothing() || **xsink) {
+            val = result;
+            if (**xsink) {
+                err = -1;
+            }
+        } else {
+            // constants not resolved - skip parse-time folding, let runtime handle it
+            del.release();
         }
     }
 

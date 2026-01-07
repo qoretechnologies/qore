@@ -89,6 +89,7 @@ set(MONGODB_CPP_SRC
     src/MongoCollection.cpp
     src/MongoCursor.cpp
     src/ObjectId.cpp
+    src/QoreMongoStream.cpp
 )
 
 set(QORE_DOX_MONGODB_TMPL_SRC

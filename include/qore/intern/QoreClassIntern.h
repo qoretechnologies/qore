@@ -889,7 +889,7 @@ protected:
 
 public:
     // initialization expression
-    QoreValue exp;
+    QoreValue exp{};
 
     // store parse location in case of errors
     const QoreProgramLocation* loc;

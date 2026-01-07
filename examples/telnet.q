@@ -34,10 +34,7 @@
     Qore's signal handling thread; window resizing does not work on Darwin.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # execute the telnet class as the application object
 %exec-class telnet

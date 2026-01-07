@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %allow-injection
 
 %requires ../../../../qlib/Util.qm
@@ -35,6 +32,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("cache test", \cacheTest());
         addTestCase("ftp", \ftpConnectionTest());
         addTestCase("http", \httpConnectionTest());
+        addTestCase("http_version", \httpVersionTest());
         addTestCase("fs", \fsConnectionTest());
         addTestCase("invalid", \invalidConnectionTest());
         addTestCase("custom parseUrl", \customParseUrlTest());
@@ -158,6 +156,69 @@ public class ConnectionProviderTest inherits QUnit::Test {
         # verify that exceptions are raised in the server & client when connecting
         assertThrows("SOCKET-SSL-ERROR", \hc.get());
         assertEq("SOCKET-SSL-ERROR", server.waitException().err);
+    }
+
+    httpVersionTest() {
+        # Test http_version option in HttpConnection
+
+        # Test 1: Default http_version is "auto"
+        {
+            HttpConnection hc("test", "test http_version default", "http://localhost:8080");
+            hash<auto> conn_opts = hc.getConnectionOptions();
+            assertEq("auto", conn_opts.http_version, "default http_version should be 'auto'");
+        }
+
+        # Test 2: Explicit http_version values
+        {
+            # Test auto mode
+            HttpConnection hc_auto("test", "desc", "http://localhost:8080", {}, {"http_version": "auto"});
+            assertEq("auto", hc_auto.getConnectionOptions().http_version, "http_version auto");
+
+            # Test HTTP/1.0
+            HttpConnection hc_10("test", "desc", "http://localhost:8080", {}, {"http_version": "1.0"});
+            assertEq("1.0", hc_10.getConnectionOptions().http_version, "http_version 1.0");
+
+            # Test HTTP/1.1
+            HttpConnection hc_11("test", "desc", "http://localhost:8080", {}, {"http_version": "1.1"});
+            assertEq("1.1", hc_11.getConnectionOptions().http_version, "http_version 1.1");
+
+            # Test HTTP/2.0
+            HttpConnection hc_20("test", "desc", "http://localhost:8080", {}, {"http_version": "2.0"});
+            assertEq("2.0", hc_20.getConnectionOptions().http_version, "http_version 2.0");
+        }
+
+        # Test 3: Invalid http_version value should raise error
+        {
+            assertThrows("CONNECTION-OPTION-ERROR", sub () {
+                new HttpConnection("test", "desc", "http://localhost:8080", {}, {"http_version": "invalid"});
+            });
+            assertThrows("CONNECTION-OPTION-ERROR", sub () {
+                new HttpConnection("test", "desc", "http://localhost:8080", {}, {"http_version": "3.0"});
+            });
+        }
+
+        # Test 4: Verify http_version is in allowed_values of ConnectionScheme
+        {
+            HttpConnection hc("test", "test", "http://localhost:8080");
+            hash<ConnectionSchemeInfo> scheme = hc.getConnectionSchemeInfo();
+            assertTrue(exists scheme.options.http_version, "http_version option should exist");
+            assertEq("auto", scheme.options.http_version.default_value, "default should be 'auto'");
+            list<auto> allowed = scheme.options.http_version.allowed_values;
+            assertEq(4, allowed.size(), "should have 4 allowed values");
+            # Check all allowed values are present
+            list<string> values = map $1.value, allowed;
+            assertTrue(inlist("auto", values), "auto should be allowed");
+            assertTrue(inlist("1.0", values), "1.0 should be allowed");
+            assertTrue(inlist("1.1", values), "1.1 should be allowed");
+            assertTrue(inlist("2.0", values), "2.0 should be allowed");
+        }
+
+        # Test 5: Connection serialization preserves http_version
+        {
+            HttpConnection hc("test", "desc", "http://localhost:8080", {}, {"http_version": "1.1"});
+            HttpConnection hc2 = Serializable::deserialize(hc.serialize());
+            assertEq("1.1", hc2.getConnectionOptions().http_version, "serialization should preserve http_version");
+        }
     }
 
     fsConnectionTest() {

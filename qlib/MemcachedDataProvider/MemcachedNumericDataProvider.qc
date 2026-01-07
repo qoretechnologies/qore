@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 public namespace MemcachedDataProvider {
 #! Parent data provider for numeric operations (incr/decr)

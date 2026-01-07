@@ -44,7 +44,7 @@ protected:
 
 public:
     DLLLOCAL QoreQuestionMarkOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1, QoreValue e2)
-            : QoreNOperatorNodeBase<3>(loc, e0, QoreSimpleValue().assign(e1), QoreSimpleValue().assign(e2)) {
+            : QoreNOperatorNodeBase<3>(loc, e0, e1, e2) {
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {

@@ -86,18 +86,17 @@ development but is also useful as a general purpose language.
 %if 0%{?rhel}
 %global libname libqore
 %else
-%global libname libqore12
+%global libname libqore20
 %endif
 %endif
 
 %package -n %{libname}
 Summary: The libraries for the qore runtime and qore clients
 Group: System Environment/Libraries
-Provides: qore-module(abi)%{?_isa} = 1.4
-Provides: qore-module(abi)%{?_isa} = 1.3
+Provides: qore-module(abi)%{?_isa} = 1.5
 %if "%{libname}" == "libqore"
-Provides: libqore12 = %{version}
-Obsoletes: libqore12 < %{version}
+Provides: libqore20 = %{version}
+Obsoletes: libqore20 < %{version}
 %endif
 %if 0%{?sles_version}
 BuildArch: %{_target_cpu}
@@ -113,8 +112,8 @@ functionality.
 
 %files -n %{libname}
 %defattr(-,root,root,-)
-%{_libdir}/libqore.so.12.7.0
-%{_libdir}/libqore.so.12
+%{_libdir}/libqore.so.20.0.0
+%{_libdir}/libqore.so.20
 %doc COPYING.LGPL COPYING.GPL COPYING.MIT README.md README-LICENSE README-MODULES RELEASE-NOTES AUTHORS ABOUT
 
 %post -n %{libname}
@@ -284,9 +283,10 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %changelog
-* Fri Aug 1 2025 David Nichols <david@qore.org> 2.3.0
+* Wed Dec 31 2025 David Nichols <david@qore.org> 2.3.0
 - updated version to 2.3.0
-- updated libqore version to 12.7.0
+- updated libqore version to 20.0.0
+- added support for module-abi 1.5, dropped support for all previous versions (breaking ABI change)
 
 * Fri Jun 13 2025 David Nichols <david@qore.org> 2.2.0
 - updated version to 2.2.0

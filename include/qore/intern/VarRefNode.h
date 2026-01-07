@@ -427,7 +427,7 @@ protected:
         VRN_COMPLEXHASH = 3,
         VRN_COMPLEXLIST = 4,
     } vrn_type = VRN_NONE;
-    QoreValue new_args;
+    QoreValue new_args{};
     bool runtime_check = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

@@ -204,9 +204,16 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         SimpleRefHolder<QorePlusOperatorNode> del(this);
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder rv(this, *xsink);
-        val = rv.takeReferencedValue();
-        parse_context.typeInfo = val.getFullTypeInfo();
-        return **xsink ? -1 : 0;
+        QoreValue result = rv.takeReferencedValue();
+        // only use parse-time folding if we got a valid result
+        // (constants may not be fully resolved at parse time, resulting in NOTHING)
+        if (!result.isNothing() || **xsink) {
+            val = result;
+            parse_context.typeInfo = val.getFullTypeInfo();
+            return **xsink ? -1 : 0;
+        }
+        // constants not resolved - skip parse-time folding, let runtime handle it
+        del.release();
     }
 
     printd(5, "QorePlusOperatorNode::parseInitImpl() this: %p l: '%s' r: '%s'\n", this,

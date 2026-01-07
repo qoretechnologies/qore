@@ -77,6 +77,17 @@ void qore_thread_local_storage_destroy(void* qtls) {
     }
 }
 
+void qore_thread_local_storage_cleanup() {
+    if (!qore_storage_key) {
+        return;
+    }
+    storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
+    if (sm) {
+        delete sm;
+        pthread_setspecific(qore_storage_key, nullptr);
+    }
+}
+
 void qore_thread_local_storage_set(void* qtls, void* p) {
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (!sm) {

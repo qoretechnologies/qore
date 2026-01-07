@@ -307,6 +307,48 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
         return -1;
     }
 
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        // Use polling with interrupt checks
+        const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+
+        while (true) {
+            // Check for interrupt
+            if (sm->checkIOInterrupt(xsink, "file lock")) {
+                return -1;
+            }
+
+            // Try non-blocking lock
+            int rc = fcntl(priv->fd, F_SETLK, &fl);
+            if (rc == 0) {
+                return 0;  // Lock acquired
+            }
+
+            // If lock is held by another process, wait and retry
+            if (rc == -1 && (errno == EACCES || errno == EAGAIN)) {
+                // Sleep for poll interval before retrying
+                struct timespec ts;
+                ts.tv_sec = poll_ms / 1000;
+                ts.tv_nsec = (poll_ms % 1000) * 1000000;
+                nanosleep(&ts, nullptr);
+                continue;
+            }
+
+            // Handle EINTR
+            if (rc == -1 && errno == EINTR) {
+                continue;
+            }
+
+            // Other errors
+            if (rc == -1) {
+                xsink->raiseErrnoException("FILE-LOCK-ERROR", errno, "the call to fcntl(F_SETLK) failed");
+                return -1;
+            }
+        }
+    }
+
+    // No sandbox manager - use blocking call
     int rc;
     while (true) {
         rc = fcntl(priv->fd, F_SETLKW, &fl);

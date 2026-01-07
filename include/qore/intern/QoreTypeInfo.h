@@ -42,6 +42,7 @@
 
 // forward references
 class LValueHelper;
+class QoreEnumDecl;
 
 DLLLOCAL int64 parse_get_parse_options();
 
@@ -63,6 +64,7 @@ enum q_typespec_t : unsigned char {
     QTS_COMPLEXSOFTLIST = 8,
     QTS_EMPTYLIST = 9,
     QTS_EMPTYHASH = 10,
+    QTS_ENUM = 11,
 };
 
 class QoreTypeInfo;
@@ -93,6 +95,10 @@ public:
         u.hd = hd;
     }
 
+    DLLLOCAL QoreTypeSpec(const QoreEnumDecl* ed) : typespec(QTS_ENUM) {
+        u.ed = ed;
+    }
+
     DLLLOCAL qore_type_result_e checkMatchType(const QoreTypeSpec& t, bool& may_not_match,
             qore_type_result_e& max_result) const;
 
@@ -107,28 +113,8 @@ public:
     DLLLOCAL const char* getTypeName() const;
     DLLLOCAL const char* getSimpleTypeName() const;
 
-    DLLLOCAL qore_type_t getType() const {
-        switch (typespec) {
-            case QTS_TYPE:
-            case QTS_EMPTYLIST:
-            case QTS_EMPTYHASH:
-                return u.t;
-            case QTS_CLASS:
-                return NT_OBJECT;
-            case QTS_COMPLEXHASH:
-            case QTS_HASHDECL:
-                return NT_HASH;
-            case QTS_COMPLEXLIST:
-            case QTS_COMPLEXSOFTLIST:
-                return NT_LIST;
-            case QTS_HARDREF:
-            case QTS_COMPLEXHARDREF:
-            case QTS_COMPLEXREF:
-                return NT_REFERENCE;
-        }
-        assert(false);
-        return NT_NOTHING;
-    }
+    // returns the base qore_type_t for the type specification
+    DLLLOCAL qore_type_t getType() const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return typespec == QTS_CLASS ? u.qc : nullptr;
@@ -136,6 +122,10 @@ public:
 
     DLLLOCAL const TypedHashDecl* getHashDecl() const {
         return typespec == QTS_HASHDECL ? u.hd : nullptr;
+    }
+
+    DLLLOCAL const QoreEnumDecl* getEnum() const {
+        return typespec == QTS_ENUM ? u.ed : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexHash() const {
@@ -174,6 +164,7 @@ public:
                 || typespec == QTS_COMPLEXSOFTLIST
                 || typespec == QTS_COMPLEXHARDREF
                 || typespec == QTS_COMPLEXREF
+                || typespec == QTS_ENUM
             ;
     }
 
@@ -181,6 +172,9 @@ public:
         switch (typespec) {
             case QTS_HASHDECL:
                 return u.hd->getTypeInfo();
+
+            case QTS_ENUM:
+                return u.ed->getTypeInfo();
 
             case QTS_COMPLEXLIST:
             case QTS_COMPLEXSOFTLIST:
@@ -234,6 +228,8 @@ public:
                 return emptyListTypeInfo;
             case QTS_EMPTYHASH:
                 return emptyHashTypeInfo;
+            case QTS_ENUM:
+                return u.ed->getBaseTypeInfo();
         }
         assert(false);
         return nullptr;
@@ -306,6 +302,7 @@ private:
         qore_type_t t;
         const QoreClass* qc;
         const TypedHashDecl* hd;
+        const QoreEnumDecl* ed;
         const QoreTypeInfo* ti;
     } u;
     q_typespec_t typespec;
@@ -590,6 +587,14 @@ public:
     }
 
     // static version of method, checking for null pointer
+    DLLLOCAL static const QoreEnumDecl* getUniqueReturnEnum(const QoreTypeInfo* ti) {
+        if (!ti || ti->return_vec.size() > 1 || !hasType(ti)) {
+            return nullptr;
+        }
+        return ti->return_vec[0].spec.getEnum();
+    }
+
+    // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getUniqueReturnComplexHash(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.size() > 1 || !hasType(ti))
             return nullptr;
@@ -610,6 +615,12 @@ public:
         @return the QoreComplexCodeTypeInfo pointer if this is a typed callable, nullptr otherwise
     */
     DLLLOCAL static const class QoreComplexCodeTypeInfo* getComplexCodeType(const QoreTypeInfo* ti);
+
+    //! Returns the union type info if this is a union type
+    /** @param ti the type to check
+        @return the QoreUnionTypeInfo pointer if this is a union type, nullptr otherwise
+    */
+    DLLLOCAL static const class QoreUnionTypeInfo* getUnionType(const QoreTypeInfo* ti);
 
     //! Checks if two typed callable types have compatible signatures
     /** This is used for additional type checking when assigning closures/call references
@@ -1041,6 +1052,15 @@ public:
         return ti->return_vec[0].spec.getClass();
     }
 
+    //! returns the enum ptr, if applicable
+    DLLLOCAL static const QoreEnumDecl* getReturnEnum(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return nullptr;
+        }
+        assert(!ti->return_vec.empty());
+        return ti->return_vec[0].spec.getEnum();
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti) {
         if (!hasType(ti)) {
@@ -1115,8 +1135,31 @@ public:
         desc->sprintf("expects type '%s', but got ", tname.c_str());
         QoreTypeInfo::getNodeType(*desc, n);
         desc->concat(" instead");
+        // Add a hint about type narrowing for lvalue/key assignments when the expected type is a simple type
+        // that could have come from type narrowing of hash<auto>
+        if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
+            desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
+                "different types, use 'hash<auto!> h()' or 'hash h = cast<hash>({...})'");
+        }
         xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
         return -1;
+    }
+
+    //! Returns true if this type looks like it could have come from type narrowing
+    /** Simple scalar types like int, string, float, etc. that appear in hash value positions
+        are likely to have come from type narrowing of hash<auto>.
+
+        @note We only check hard types (not soft types) since type narrowing typically produces
+        hard types. We don't include nothing/null since those represent absence of value rather
+        than narrowed types.
+
+        @since %Qore 2.1
+    */
+    DLLLOCAL bool isSimpleTypeNarrowed() const {
+        // Check if this is a simple type that could be the result of hash<auto> narrowing
+        return this == bigIntTypeInfo || this == stringTypeInfo || this == floatTypeInfo
+            || this == boolTypeInfo || this == dateTypeInfo || this == binaryTypeInfo
+            || this == numberTypeInfo;
     }
 
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
@@ -1837,6 +1880,65 @@ public:
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         str.sprintf("hash<%s> or no value (NOTHING)", accept_vec[0].spec.getHashDecl()->getName());
+    }
+
+    // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return QoreValue();
+    }
+};
+
+class QoreEnumTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+
+    //! Constructor with explicit accept/return vectors for or-nothing variant
+    DLLLOCAL QoreEnumTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname,
+            const char* path)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), tname) {
+        assert(path && *path);
+        pname = path;
+    }
+
+protected:
+    std::string pname;
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        str.concat(&tname);
+    }
+
+    // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        // Enum values can be converted to scalar since they are based on scalar types
+        return true;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const;
+
+    DLLLOCAL const char* getPathImpl() const {
+        return pname.c_str();
+    }
+};
+
+class QoreEnumOrNothingTypeInfo : public QoreEnumTypeInfo {
+public:
+    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+
+protected:
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        str.sprintf("enum<%s> or no value (NOTHING)", accept_vec[0].spec.getEnum()->getName());
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -3978,6 +4080,19 @@ public:
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
         return orNothing;
+    }
+
+    //! Returns the member types of this union
+    DLLLOCAL type_vec_t getMemberTypes() const {
+        type_vec_t result;
+        for (const auto& rt : return_vec) {
+            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
+            // Skip NOTHING type for or-nothing unions
+            if (ti && ti != nothingTypeInfo) {
+                result.push_back(ti);
+            }
+        }
+        return result;
     }
 
 protected:

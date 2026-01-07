@@ -79,6 +79,8 @@ DLLLOCAL extern digest_map_t digest_map;
 #else
 const EVP_CIPHER* q_lookup_cipher(const char* cipher);
 DLLLOCAL QoreHashNode* q_get_cipher_hash(const EVP_CIPHER* c);
+// refs #4910: cleanup function to free cached cipher/digest references
+DLLLOCAL void crypto_cache_cleanup();
 #endif
 
 // init hash for giest encryption transformation constant

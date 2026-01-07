@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 
 %requires ../../../../qlib/Util.qm
@@ -33,7 +30,7 @@ class ExceptionLocationTest inherits QUnit::Test {
             line = ex.line;
         }
 
-        assertEq(30, line);
+        assertEq(27, line);
 
         {
             Program p(PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS);

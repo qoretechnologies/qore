@@ -28,10 +28,7 @@
 %requires qore >= 2.0
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %requires(reexport) ConnectionProvider >= 1.4
 
@@ -298,8 +295,8 @@ public class TelnetClient {
         *string user;
 
         # logging closures
-        *code log_info;
-        *code log_debug;
+        *code<nothing(string)> log_info;
+        *code<nothing(string)> log_debug;
 
         # hash of features the telnet server has asked for
         hash fh;

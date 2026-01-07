@@ -239,7 +239,7 @@ int qore_list_private::parseCheckTypedAssignment(const QoreProgramLocation* loc,
 }
 
 QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink) {
-    QoreValue val;
+    QoreValue val{};
 
     if (!args.isNothing()) {
         ValueEvalOptimizedRefHolder a(args, xsink);
@@ -1011,11 +1011,37 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
             str.concat('-');
             QoreValue v = li.getValue();
             qore_type_t vtype = v.getType();
-            if (vtype == NT_HASH || vtype == NT_LIST) {
-                // Complex value: newline then indented content
+            if (vtype == NT_LIST) {
+                // List value: newline then indented content
                 str.concat('\n');
                 if (v.getAsString(str, foff - 2, xsink))
                     return -1;
+            } else if (vtype == NT_HASH) {
+                // Check if this is a simple single-key hash with non-complex value
+                const QoreHashNode* h = v.get<const QoreHashNode>();
+                if (h->size() == 1) {
+                    ConstHashIterator hi(h);
+                    hi.next();
+                    QoreValue hv = hi.get();
+                    qore_type_t hvtype = hv.getType();
+                    if (hvtype != NT_HASH && hvtype != NT_LIST) {
+                        // Simple single-key hash: output inline "- key: value"
+                        str.concat(' ');
+                        str.sprintf("%s: ", hi.getKey());
+                        if (hv.getAsString(str, FMT_YAML_SHORT, xsink))
+                            return -1;
+                    } else {
+                        // Single-key hash with complex value: newline then indented
+                        str.concat('\n');
+                        if (v.getAsString(str, foff - 2, xsink))
+                            return -1;
+                    }
+                } else {
+                    // Multi-key hash: newline then indented content
+                    str.concat('\n');
+                    if (v.getAsString(str, foff - 2, xsink))
+                        return -1;
+                }
             } else {
                 // Simple value: space then value in YAML short format
                 str.concat(' ');

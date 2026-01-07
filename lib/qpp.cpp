@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1282,6 +1282,42 @@ static void get_string_list2(strlist_t& l, const std::string& str, char separato
     //   printf("DBG: list %u/%lu: %s\n", i, l.size(), l[i].c_str());
 }
 
+// Parse comma-separated subtypes while respecting nested angle brackets and parentheses
+static void parseSubtypes(const std::string& str, std::vector<std::string>& subtypes) {
+    int bracket_depth = 0;
+    int paren_depth = 0;
+    std::string current;
+
+    for (size_t i = 0; i < str.size(); ++i) {
+        char c = str[i];
+        if (c == '<') {
+            ++bracket_depth;
+            current += c;
+        } else if (c == '>') {
+            --bracket_depth;
+            current += c;
+        } else if (c == '(') {
+            ++paren_depth;
+            current += c;
+        } else if (c == ')') {
+            --paren_depth;
+            current += c;
+        } else if (c == ',' && bracket_depth == 0 && paren_depth == 0) {
+            trim(current);
+            if (!current.empty()) {
+                subtypes.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+    trim(current);
+    if (!current.empty()) {
+        subtypes.push_back(current);
+    }
+}
+
 static int get_qore_type(const std::string& qt, std::string& cppt) {
     if (qt.empty()) {
         cppt = "nothingTypeInfo";
@@ -1391,6 +1427,122 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             else
                 qc = "qore_get_complex_reference_type(" + subtype_qt + ")";
             log(LL_DEBUG, "registering complex reference return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 6, "union<")) {
+            // extract subtypes: union<type1, type2, ...>
+            std::string subtypes_str = qt.substr((on ? 7 : 6), qt.size() - (on ? 8 : 7));
+
+            std::vector<std::string> subtypes;
+            parseSubtypes(subtypes_str, subtypes);
+
+            if (subtypes.size() < 2) {
+                log(LL_CRITICAL, "union type requires at least 2 member types: '%s'\n", qt.c_str());
+                assert(false);
+            }
+
+            // Generate type_vec_t initialization
+            std::string type_vec = "type_vec_t{";
+            for (size_t j = 0; j < subtypes.size(); ++j) {
+                std::string subtype_qt;
+                get_qore_type(subtypes[j], subtype_qt);
+                if (j > 0) {
+                    type_vec += ", ";
+                }
+                type_vec += subtype_qt;
+            }
+            type_vec += "}";
+
+            if (on) {
+                qc = "qore_get_union_or_nothing_type(" + type_vec + ")";
+            } else {
+                qc = "qore_get_union_type(" + type_vec + ")";
+            }
+            log(LL_DEBUG, "registering union return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 5, "code<")) {
+            // extract signature: code<ReturnType(ParamTypes...)>
+            std::string sig = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
+
+            // Find opening paren for params (handle nested types in return type)
+            int bracket_depth = 0;
+            size_t paren_pos = std::string::npos;
+            for (size_t j = 0; j < sig.size(); ++j) {
+                if (sig[j] == '<') {
+                    ++bracket_depth;
+                } else if (sig[j] == '>') {
+                    --bracket_depth;
+                } else if (sig[j] == '(' && bracket_depth == 0) {
+                    paren_pos = j;
+                    break;
+                }
+            }
+
+            if (paren_pos == std::string::npos) {
+                log(LL_CRITICAL, "invalid code type '%s': missing '('\n", qt.c_str());
+                assert(false);
+            }
+
+            // Extract return type and param types
+            std::string ret_type = sig.substr(0, paren_pos);
+            trim(ret_type);
+            std::string params_str = sig.substr(paren_pos + 1, sig.size() - paren_pos - 2);
+            trim(params_str);
+
+            // Check for varargs
+            bool has_varargs = false;
+            if (params_str.size() >= 3 && params_str.substr(params_str.size() - 3) == "...") {
+                has_varargs = true;
+                params_str = params_str.substr(0, params_str.size() - 3);
+                trim(params_str);
+                if (!params_str.empty() && params_str.back() == ',') {
+                    params_str.pop_back();
+                    trim(params_str);
+                }
+            }
+
+            // Get return type
+            std::string ret_type_qt;
+            if (ret_type.empty() || ret_type == "nothing") {
+                ret_type_qt = "nothingTypeInfo";
+            } else {
+                get_qore_type(ret_type, ret_type_qt);
+            }
+
+            // Parse param types
+            std::string params_vec = "type_vec_t{";
+            if (!params_str.empty()) {
+                std::vector<std::string> param_types;
+                parseSubtypes(params_str, param_types);
+                for (size_t j = 0; j < param_types.size(); ++j) {
+                    std::string param_qt;
+                    get_qore_type(param_types[j], param_qt);
+                    if (j > 0) {
+                        params_vec += ", ";
+                    }
+                    params_vec += param_qt;
+                }
+            }
+            params_vec += "}";
+
+            if (on) {
+                qc = "qore_get_complex_code_or_nothing_type(" + ret_type_qt + ", " + params_vec +
+                     ", " + (has_varargs ? "true" : "false") + ")";
+            } else {
+                qc = "qore_get_complex_code_type(" + ret_type_qt + ", " + params_vec +
+                     ", " + (has_varargs ? "true" : "false") + ")";
+            }
+            log(LL_DEBUG, "registering code return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 5, "enum<")) {
+            // extract enum name: enum<EnumName> or enum<Ns::EnumName>
+            std::string enum_name = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
+
+            // Handle namespaced enums (Ns::EnumName -> EnumName for variable name)
+            std::string var_name = enum_name;
+            size_t j = var_name.rfind(':');
+            if (j != std::string::npos) {
+                var_name.erase(0, j + 1);
+            }
+
+            qc = "enum" + var_name + "->getTypeInfo(" + (on ? "true" : "false") + ")";
+            log(LL_DEBUG, "registering enum return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else {
             // assume a Qore object of the given class
             get_type_name(qc, qt);
@@ -1701,7 +1853,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             size_t len = qv.size();
             char lc = qv[len - 1];
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "DateTimeNode::makeRelative(0, 0, 0, 0, ";
             if (qv[len - 2] == 'm' && lc == 's') {
@@ -1734,7 +1886,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_INT: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
             v += "((int64)";
             v += qv;
@@ -1744,7 +1896,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_FLOAT: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
             v += "((double)";
             v += qv;
@@ -1754,7 +1906,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_STRING: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "new QoreStringNode(";
             v += qv;
@@ -1767,7 +1919,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_CSTRING: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += "new QoreStringNode(";
             v.append(qv, 4, qv.size() - 5);
@@ -1780,9 +1932,9 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_BOOL: {
             if (force_node) {
-                v = "QoreSimpleValue().assign";
+                v = "QoreSimpleValue";
             }
-            v = "((bool)";
+            v += "((bool)";
             v.append(qv, 5, qv.size() - 6);
             v += ")";
             return 0;
@@ -1790,7 +1942,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
 
         case T_QORE: {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
                 v.append(qv, 4, qv.size() - 4);
                 v += ")";
             }
@@ -1891,7 +2043,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
         strmap_t::iterator i = qppval.find(qv);
         if (i != qppval.end()) {
             if (force_node) {
-                v = "QoreSimpleValue().assign(";
+                v = "QoreSimpleValue(";
             }
             v += i->second;
             if (force_node) {
@@ -2493,6 +2645,52 @@ protected:
                 fprintf(fp, ", \"%s\"", params[i].name.c_str());
             }
         }
+        return 0;
+    }
+
+    // Generate vector-based arguments for abstract methods to avoid varargs ABI issues
+    int serializeBindingArgsVectors(FILE* fp) const {
+        size_t size = params.size();
+        if (size && params[size - 1].type == "...")
+            --size;
+
+        // Generate type_vec_t
+        fputs(", type_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            std::string str;
+            if (get_qore_type(params[i].type, str))
+                return -1;
+            fputs(str.c_str(), fp);
+        }
+        fputs("}", fp);
+
+        // Generate arg_vec_t
+        fputs(", arg_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            if (params[i].val.empty())
+                fputs("QoreValue()", fp);
+            else {
+                std::string vs;
+                if (get_qore_value(params[i].val, vs, nullptr, nullptr, true))
+                    return -1;
+                fputs(vs.c_str(), fp);
+            }
+        }
+        fputs("}", fp);
+
+        // Generate name_vec_t
+        fputs(", name_vec_t{", fp);
+        for (unsigned i = 0; i < size; ++i) {
+            if (i > 0)
+                fputs(", ", fp);
+            fprintf(fp, "\"%s\"", params[i].name.c_str());
+        }
+        fputs("}", fp);
+
         return 0;
     }
 
@@ -3478,6 +3676,22 @@ public:
         while (whitespace(*p1))
             ++p1;
 
+        // Check for inheritance: hashdecl Child : Parent { ... }
+        if (*p1 == ':') {
+            ++p1;
+            while (whitespace(*p1))
+                ++p1;
+
+            const char* parent_start = p1;
+            while (*p1 && (idnschar(*p1) || *p1 == ':'))
+                ++p1;
+
+            parent_name.assign(parent_start, p1 - parent_start);
+
+            while (whitespace(*p1))
+                ++p1;
+        }
+
         if (*p1 != '{') {
             error("%s:%d: missing open bracket '{' after the hashdecl name\n", fileName, lineNumber);
             valid = false;
@@ -3588,6 +3802,16 @@ public:
         fprintf(fp, "TypedHashDecl* init_hashdecl_%s(QoreNamespace& ns) {\n", name.c_str());
         fprintf(fp, "    TypedHashDecl* hd = new TypedHashDecl(\"%s\", \"%s\");\n", name.c_str(), ns_path.c_str());
 
+        // Set parent hashdecl if there is inheritance
+        if (!parent_name.empty()) {
+            std::string parent_var = parent_name;
+            size_t i = parent_var.rfind(':');
+            if (i != std::string::npos) {
+                parent_var.erase(0, i + 1);
+            }
+            fprintf(fp, "    hd->setParent(hashdecl%s);\n", parent_var.c_str());
+        }
+
         // get type name to substitute references to self if necessary
         std::string tname = "hashdecl" + name;
         for (auto& i : hdmap) {
@@ -3609,7 +3833,11 @@ public:
         // serialize hashdecl doc
         process_comment(comment);
         fprintf(fp, "%s", comment.c_str());
-        fprintf(fp, "struct %s {\n", name.c_str());
+        if (!parent_name.empty()) {
+            fprintf(fp, "struct %s : %s {\n", name.c_str(), parent_name.c_str());
+        } else {
+            fprintf(fp, "struct %s {\n", name.c_str());
+        }
         for (auto& i : hdmap)
             if (i.second.serializeDox(fp, i.first.c_str()))
                 return -1;
@@ -3637,6 +3865,7 @@ public:
 protected:
     std::string comment;
     std::string name;
+    std::string parent_name;  // parent hashdecl name for inheritance
     typedef std::map<std::string, HashDeclInfo> hdmap_t;
     hdmap_t hdmap;
     bool valid = true;
@@ -3717,6 +3946,297 @@ protected:
 
             exp = line;
         }
+        return 0;
+    }
+};
+
+struct EnumMemberInfo {
+    std::string comment;
+    std::string value;           // explicit value (may be empty for auto-increment)
+    std::string computed_value;  // computed value (set during parsing for auto-increment)
+
+    EnumMemberInfo(std::string&& c, std::string&& v, std::string&& cv)
+        : comment(std::move(c)), value(std::move(v)), computed_value(std::move(cv)) {}
+
+    int serializeCpp(FILE* fp, const char* n) const {
+        // Use computed_value which handles auto-increment
+        fprintf(fp, "    ed->addMember(\"%s\", %s);\n", n, computed_value.c_str());
+        return 0;
+    }
+
+    int serializeDox(FILE* fp, const char* n) const {
+        if (!comment.empty()) {
+            std::string c = comment;
+            process_comment(c);
+            fprintf(fp, "%s", c.c_str());
+        }
+        fprintf(fp, "    %s", n);
+        // Show explicit value in docs if provided
+        if (!value.empty()) {
+            fprintf(fp, " = %s", value.c_str());
+        }
+        fprintf(fp, ",\n");
+        return 0;
+    }
+};
+
+class Enum : public AbstractElement, protected NamespaceElement {
+public:
+    Enum(std::string&& c, std::string& str, FILE* fp, const char* fileName, unsigned& lineNumber)
+        : comment(std::move(c)), baseType("int") {
+        const char* p = str.c_str();
+        while (*p && *p == ' ') {
+            ++p;
+        }
+
+        // Extract enum name
+        const char* p1 = p;
+        while (*p1 && idnschar(*p1)) {
+            ++p1;
+        }
+
+        if (p1 == p) {
+            error("%s:%d: missing enum name\n", fileName, lineNumber);
+            valid = false;
+            return;
+        }
+
+        name.assign(p, p1 - p);
+
+        // Handle namespace prefix
+        {
+            size_t i = name.rfind(':');
+            if (i != std::string::npos) {
+                ns = name.substr(0, i - 1);
+                name.erase(0, i + 1);
+            }
+        }
+
+        while (whitespace(*p1)) {
+            ++p1;
+        }
+
+        // Check for optional base type
+        if (*p1 == ':') {
+            ++p1;
+            while (whitespace(*p1)) {
+                ++p1;
+            }
+
+            const char* type_start = p1;
+            while (*p1 && idchar(*p1)) {
+                ++p1;
+            }
+
+            baseType.assign(type_start, p1 - type_start);
+
+            // Validate base type
+            if (baseType != "int" && baseType != "string" && baseType != "float" && baseType != "number") {
+                error("%s:%d: invalid enum base type '%s'; must be int, string, float, or number\n",
+                      fileName, lineNumber, baseType.c_str());
+                valid = false;
+                return;
+            }
+
+            while (whitespace(*p1)) {
+                ++p1;
+            }
+        }
+
+        if (*p1 != '{') {
+            error("%s:%d: missing '{' after enum declaration\n", fileName, lineNumber);
+            valid = false;
+            return;
+        }
+
+        if (parseMembers(fp, fileName, lineNumber)) {
+            valid = false;
+        }
+    }
+
+    virtual int serializeCpp(FILE* fp) override {
+        std::string ns_path;
+        if (ns.empty()) {
+            ns_path = "::Qore::" + name;
+        } else {
+            ns_path = (ns[0] == ':') ? ns : ("::" + ns);
+            ns_path += "::" + name;
+        }
+
+        // Map base type to C++ type info
+        std::string base_type_info;
+        if (baseType == "int") {
+            base_type_info = "bigIntTypeInfo";
+        } else if (baseType == "string") {
+            base_type_info = "stringTypeInfo";
+        } else if (baseType == "float") {
+            base_type_info = "floatTypeInfo";
+        } else if (baseType == "number") {
+            base_type_info = "numberTypeInfo";
+        }
+
+        fprintf(fp, "QoreEnumDecl* init_enum_%s(QoreNamespace& ns) {\n", name.c_str());
+        fprintf(fp, "    QoreEnumDecl* ed = new QoreEnumDecl(\"%s\", \"%s\", %s);\n",
+                name.c_str(), ns_path.c_str(), base_type_info.c_str());
+
+        for (auto& m : members) {
+            m.second.serializeCpp(fp, m.first.c_str());
+        }
+
+        fprintf(fp, "    ns.addSystemEnum(ed);\n    return ed;\n}\n\n");
+        return 0;
+    }
+
+    virtual int serializeDox(FILE* fp) override {
+        if (ns.empty()) {
+            fputs("\n//! main Qore-language namespace\nnamespace Qore {\n", fp);
+        } else {
+            outputNamespaceStart(fp);
+        }
+
+        // serialize enum doc
+        process_comment(comment);
+        fprintf(fp, "%s", comment.c_str());
+
+        if (baseType == "int") {
+            fprintf(fp, "enum %s {\n", name.c_str());
+        } else {
+            fprintf(fp, "enum %s : %s {\n", name.c_str(), baseType.c_str());
+        }
+
+        for (auto& m : members) {
+            m.second.serializeDox(fp, m.first.c_str());
+        }
+
+        fputs("};\n", fp);
+        outputNamespaceEnd(fp);
+        return 0;
+    }
+
+    virtual int serializeUnitTest(FILE* fp) override {
+        return 0;
+    }
+
+    virtual int serializeJavadoc() override {
+        return 0;
+    }
+
+    virtual strlist_t precalculateUnitTest() override {
+        return strlist_t();
+    }
+
+    operator bool() const {
+        return valid;
+    }
+
+protected:
+    std::string comment;
+    std::string name;
+    std::string baseType;  // "int" (default), "string", "float", "number"
+    std::vector<std::pair<std::string, EnumMemberInfo>> members;
+    bool valid = true;
+
+    int parseMembers(FILE* fp, const char* fileName, unsigned& lineNumber) {
+        int64_t next_int_value = 0;  // for auto-increment
+
+        while (true) {
+            std::string line;
+            if (read_line(lineNumber, line, fp)) {
+                error("%s:%d: premature EOF reading enum\n", fileName, lineNumber);
+                return -1;
+            }
+
+            trim(line);
+
+            // Skip empty lines
+            if (line.empty()) {
+                continue;
+            }
+
+            // End of enum
+            if (line == "}" || line == "};") {
+                break;
+            }
+
+            // Handle documentation comment
+            std::string cdoc;
+            if (!line.compare(0, 3, "//!")) {
+                cdoc = line;
+                line.clear();
+                if (read_line(lineNumber, line, fp)) {
+                    error("%s:%d: premature EOF reading enum\n", fileName, lineNumber);
+                    return -1;
+                }
+                trim(line);
+            }
+
+            // Parse: IDENTIFIER [= expression] [,]
+            const char* p = line.c_str();
+
+            // Get member name
+            const char* p1 = p;
+            while (*p1 && idchar(*p1)) {
+                ++p1;
+            }
+
+            if (p1 == p) {
+                error("%s:%d: expected enum member name\n", fileName, lineNumber);
+                return -1;
+            }
+
+            std::string member_name(p, p1 - p);
+            p = p1;
+
+            while (whitespace(*p)) {
+                ++p;
+            }
+
+            // Check for explicit value
+            std::string explicit_value;
+            std::string computed_value;
+
+            if (*p == '=') {
+                ++p;
+                while (whitespace(*p)) {
+                    ++p;
+                }
+
+                // Read value until comma or end
+                const char* val_start = p;
+                while (*p && *p != ',' && *p != '\n') {
+                    ++p;
+                }
+                explicit_value.assign(val_start, p);
+                trim(explicit_value);
+
+                // For int base type, try to parse for next auto-increment
+                if (baseType == "int") {
+                    try {
+                        next_int_value = std::stoll(explicit_value) + 1;
+                    } catch (...) {
+                        // Non-integer expression, just use as-is
+                    }
+                }
+                computed_value = explicit_value;
+            } else {
+                // Auto-increment (only for numeric types)
+                if (baseType == "string") {
+                    error("%s:%d: string enum members require explicit values\n", fileName, lineNumber);
+                    return -1;
+                }
+                computed_value = std::to_string(next_int_value);
+                next_int_value++;
+            }
+
+            members.push_back({member_name, EnumMemberInfo(std::move(cdoc),
+                              std::move(explicit_value), std::move(computed_value))});
+
+            // Skip trailing comma
+            while (*p == ',' || whitespace(*p)) {
+                ++p;
+            }
+        }
+
         return 0;
     }
 };
@@ -4074,8 +4594,15 @@ public:
         }
         fprintf(fp, "%s", cppt.c_str());
 
-        if (serializeBindingArgs(fp))
-            return -1;
+        // Use vector-based arguments for abstract methods to avoid varargs ABI issues
+        // with NaN-boxed QoreValue across shared library boundaries
+        if (attr & QCA_ABSTRACT) {
+            if (serializeBindingArgsVectors(fp))
+                return -1;
+        } else {
+            if (serializeBindingArgs(fp))
+                return -1;
+        }
 
         fputs(");\n", fp);
 
@@ -4866,6 +5393,13 @@ protected:
                     continue;
                 }
 
+                if (!sc.compare(0, 5, "enum ")) {
+                    sc.erase(0, 5);
+                    checkBuf(buf);
+                    source.push_back(new Enum(std::move(str), sc, fp, fileName, lineNumber));
+                    continue;
+                }
+
                 if (!strncmp(sc.c_str(), "qclass ", 7)) {
                     const char* p = sc.c_str() + 7;
                     while (*p && *p == ' ')
@@ -5443,11 +5977,13 @@ void init() {
     valmap["False"] = "false";
 
     // initialize qore value to QoreSimpleValue map
-    simple_valmap["0"] = "QoreSimpleValue().assign((int64)0)";
-    simple_valmap["0.0"] = "QoreSimpleValue().assign((double)0.0)";
-    simple_valmap["binary()"] = "QoreSimpleValue().assign(new BinaryNode)";
-    simple_valmap["True"] = "QoreSimpleValue().assign(true)";
-    simple_valmap["False"] = "QoreSimpleValue().assign(false)";
+    // Use constructors instead of .assign() because QoreValue::assign() returns AbstractQoreNode*
+    // not a reference, so the expression value would be the wrong type for va_arg
+    simple_valmap["0"] = "QoreSimpleValue((int64)0)";
+    simple_valmap["0.0"] = "QoreSimpleValue((double)0.0)";
+    simple_valmap["binary()"] = "QoreSimpleValue(new BinaryNode)";
+    simple_valmap["True"] = "QoreSimpleValue(true)";
+    simple_valmap["False"] = "QoreSimpleValue(false)";
 
     // initialize domain maps
     dmap["DEFAULT"] = "PO_DEFAULT";

@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %allow-injection
 
 %requires ../../../../qlib/Util.qm
@@ -32,6 +29,13 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
         const OptionColumn = 22;
     }
 
+    # checkModule helper
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
     constructor() : Test("ElasticSearchDataProvider Test", "1.0") {
         addTestCase("mainTest", \mainTest());
         addTestCase("bulkApiTest", \bulkApiTest());
@@ -47,6 +51,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     }
 
     private mainTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -180,6 +185,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk API operations
     private bulkApiTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -254,6 +260,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test scroll API operations
     private scrollApiTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -324,6 +331,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test aggregation API
     private aggregationTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -414,6 +422,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Test bulk operation class (record-based bulk insert)
     private bulkOperationTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -462,6 +471,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
 
     #! Negative tests - test error handling
     private negativeTests() {
+        checkModule(self);
         # Test bulk API with invalid action type
         if (rest) {
             ElasticSearchBulkDataProvider bulk(rest);

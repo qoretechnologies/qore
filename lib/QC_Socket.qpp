@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -3425,6 +3425,55 @@ bool Socket::isSecure() [flags=CONSTANT] {
     return s->isSecure();
 }
 
+//! Sets the ALPN (Application-Layer Protocol Negotiation) protocols to offer during TLS negotiation
+/** @par Example:
+    @code{.py}
+sock.setAlpnProtocols(("h2", "http/1.1"));
+    @endcode
+
+    @param protocols A list of protocol names in order of preference (e.g., ("h2", "http/1.1"))
+
+    @note This method must be called before connecting or upgrading to SSL/TLS
+
+    @since %Qore 2.2
+*/
+nothing Socket::setAlpnProtocols(list<string> protocols) {
+    s->setAlpnProtocols(protocols, xsink);
+}
+
+//! Returns the negotiated ALPN protocol after a TLS connection is established
+/** @par Example:
+    @code{.py}
+*string proto = sock.getAlpnProtocol();
+if (proto == "h2") {
+    # HTTP/2 connection
+}
+    @endcode
+
+    @return The negotiated protocol string, or @ref nothing if no ALPN protocol was negotiated or the connection is not encrypted
+
+    @since %Qore 2.2
+*/
+*string Socket::getAlpnProtocol() [flags=CONSTANT] {
+    return s->getAlpnProtocol();
+}
+
+//! Returns @ref True if the connection is using HTTP/2 (negotiated via ALPN)
+/** @par Example:
+    @code{.py}
+if (sock.isHttp2()) {
+    # use HTTP/2 framing
+}
+    @endcode
+
+    @return @ref True if the connection is using HTTP/2, @ref False otherwise
+
+    @since %Qore 2.2
+*/
+bool Socket::isHttp2() [flags=CONSTANT] {
+    return s->isHttp2();
+}
+
 //! Returns a string code giving the result of verifying the remote certificate or @ref nothing if an encrypted connection is not currently established
 /** @par Example:
     @code{.py}
@@ -3985,4 +4034,257 @@ l = Socket::poll(l, 2s);
 */
 static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items, timeout timeout_ms) {
     return qore_socket_private::poll(items, timeout_ms, xsink);
+}
+
+//! Returns a poll operation for reading an HTTP/2 request on a server connection
+/** This poll operation is used for server-side HTTP/2 connections that have been
+    negotiated via ALPN during the TLS handshake.
+
+    @par Example:
+    @code{.py}
+    # After accepting an HTTPS connection with HTTP/2 negotiated
+    AbstractPollOperation op = sock.startPollReadHttp2Request();
+    while (True) {
+        *hash<SocketPollInfo> info = op.continuePoll();
+        if (!info) {
+            break;
+        }
+        Socket::poll((info,), 10s);
+    }
+    # Get the request data
+    hash<auto> request = op.getOutput();
+    printf("Method: %s, Path: %s\n", request.method, request.path);
+    @endcode
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for reading an HTTP/2 request
+
+    The returned operation produces output with the following keys:
+    - \c method: the HTTP method (GET, POST, etc.)
+    - \c path: the request path
+    - \c stream_id: the HTTP/2 stream ID (needed for sending the response)
+    - \c headers: hash of request headers
+    - \c body: binary request body (if present)
+    - \c authority: the :authority pseudo-header value (if present)
+    - \c scheme: the :scheme pseudo-header value (if present)
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 session initialization failed
+
+    @note The socket must be a TLS connection that has negotiated HTTP/2 via ALPN
+
+    @see isHttp2()
+
+    @since %Qore 2.1
+*/
+AbstractPollOperation Socket::startPollReadHttp2Request() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ServerPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-request"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns a poll operation for sending an HTTP/2 response
+/** This poll operation sends an HTTP/2 response on a stream that received a request.
+
+    @par Example:
+    @code{.py}
+    # After reading request with startPollReadHttp2Request()
+    AbstractPollOperation op = sock.startPollSendHttp2Response(
+        request.stream_id,
+        200,
+        {"Content-Type": "text/plain"},
+        "Hello, HTTP/2!"
+    );
+    while (True) {
+        *hash<SocketPollInfo> info = op.continuePoll();
+        if (!info) {
+            break;
+        }
+        Socket::poll((info,), 10s);
+    }
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID from the request
+    @param status_code the HTTP status code to send
+    @param headers hash of response headers
+    @param body the response body (optional)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for sending the response
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 response submission failed
+
+    @since %Qore 2.1
+*/
+AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+        *data body) {
+    s->ref();
+
+    // Get body data
+    const BinaryNode* body_bin = nullptr;
+    SimpleRefHolder<BinaryNode> body_holder;
+    if (body) {
+        qore_type_t body_type = body->getType();
+        if (body_type == NT_BINARY) {
+            body_bin = reinterpret_cast<const BinaryNode*>(body);
+        } else if (body_type == NT_STRING) {
+            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            // Create a binary node from the string's raw bytes
+            size_t size = str->size();
+            void* copy = malloc(size);
+            memcpy(copy, str->c_str(), size);
+            body_holder = new BinaryNode(copy, size);
+            body_bin = *body_holder;
+        }
+    }
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, status_code,
+            headers, body_bin),
+        xsink
+    );
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-response"), xsink);
+    }
+    return rv.release();
+}
+
+//! Submits an HTTP/2 PUSH_PROMISE frame for server push
+/** HTTP/2 Server Push allows a server to preemptively send resources to the client
+    before the client requests them. This is useful for pushing CSS, JavaScript, or
+    images that the server knows the client will need.
+
+    @par Example:
+    @code{.py}
+    # After receiving a request for index.html, push the CSS file
+    int promised_id = sock.submitHttp2PushPromise(
+        request.stream_id,
+        "/style.css",
+        {"content-type": "text/css"}
+    );
+    if (promised_id > 0) {
+        # Now send the pushed response on the promised stream
+        sock.startPollSendHttp2Response(promised_id, 200, {"content-type": "text/css"}, css_content);
+    }
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID of the associated request
+    @param path the path of the resource being pushed
+    @param headers hash of headers for the pushed resource
+
+    @return the promised stream ID on success (positive integer), or -1 on error
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode
+
+    @note Server Push can be disabled by clients; check if the push was successful by verifying
+    the return value is positive.
+
+    @since %Qore 2.2
+*/
+int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+    return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
+}
+
+//! Returns a poll operation for sending an HTTP/2 CONNECT response (RFC 8441)
+/** This poll operation sends an HTTP/2 response for an extended CONNECT request
+    (RFC 8441), used for WebSocket over HTTP/2. Unlike a regular HTTP/2 response,
+    a CONNECT response does NOT set the END_STREAM flag, keeping the stream open
+    for bidirectional data transfer.
+
+    @par Example:
+    @code{.py}
+    # After reading a WebSocket CONNECT request with startPollReadHttp2Request()
+    if (request.is_websocket_connect) {
+        AbstractPollOperation op = sock.startPollSendHttp2ConnectResponse(
+            request.stream_id,
+            200,
+            {"sec-websocket-protocol": "graphql-ws"}
+        );
+        while (True) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 10s);
+        }
+        # Stream is now open for WebSocket data frames
+    }
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID from the CONNECT request
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param headers hash of response headers
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for sending the response
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 CONNECT response submission failed or stream is not a CONNECT request
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
+        *hash<auto> headers) {
+    s->ref();
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, status_code,
+            headers, nullptr, true),  // is_connect=true
+        xsink
+    );
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-connect-response"), xsink);
+    }
+    return rv.release();
+}
+
+//! Sets the active HTTP/2 stream ID for transparent send/recv operations
+/** When set, Socket::send() and Socket::recv() will automatically use HTTP/2
+    DATA frames on the specified stream instead of raw socket I/O. This enables
+    WebSocket and other bidirectional protocols to work transparently over HTTP/2.
+
+    @par Example:
+    @code{.py}
+    # After HTTP/2 WebSocket CONNECT handshake, set the active stream
+    sock.setHttp2ActiveStream(stream_id);
+    # Now send/recv will use HTTP/2 DATA frames automatically
+    sock.send(websocket_frame);
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID to use for send/recv (use -1 to disable)
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR HTTP/2 is not active on this socket
+
+    @since %Qore 2.3
+*/
+nothing Socket::setHttp2ActiveStream(int stream_id) {
+    s->setHttp2ActiveStream((int32_t)stream_id, xsink);
+    return QoreValue();
+}
+
+//! Gets the active HTTP/2 stream ID
+/** @return the active HTTP/2 stream ID, or -1 if no stream is active
+
+    @since %Qore 2.3
+*/
+int Socket::getHttp2ActiveStream() {
+    return s->getHttp2ActiveStream();
 }

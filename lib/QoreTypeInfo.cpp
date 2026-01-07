@@ -1137,6 +1137,14 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
 }
 
+const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    // Check if the type is a QoreUnionTypeInfo by attempting a dynamic_cast
+    return dynamic_cast<const QoreUnionTypeInfo*>(ti);
+}
+
 bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source) {
     // Get complex code types
     const QoreComplexCodeTypeInfo* target_code = getComplexCodeType(target);
@@ -1360,11 +1368,23 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     a specific value type
                 */
                 case QTS_HASHDECL: {
-                    qore_type_result_e rv =
-                        typed_hash_decl_private::get(*t.u.hd)->parseEqual(*typed_hash_decl_private::get(*u.hd))
-                            ? QTI_IDENT
-                            : QTI_NOT_EQUAL;
-                    max_result = rv;
+                    const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                    const typed_hash_decl_private* source = typed_hash_decl_private::get(*t.u.hd);
+                    qore_type_result_e rv;
+                    if (source->parseEqual(*target)) {
+                        // Exact match
+                        rv = QTI_IDENT;
+                    } else if (source->isDescendantOf(*target)) {
+                        // Source is a derived hashdecl of target - compatible
+                        rv = QTI_AMBIGUOUS;
+                    } else if (target->isDescendantOf(*source)) {
+                        // Target is a derived hashdecl of source - may not match at runtime
+                        may_not_match = true;
+                        rv = QTI_AMBIGUOUS;
+                    } else {
+                        rv = QTI_NOT_EQUAL;
+                    }
+                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
                     return rv;
                 }
                 case QTS_TYPE:
@@ -1573,6 +1593,41 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
             }
             return QTI_NOT_EQUAL;
         }
+        case QTS_ENUM: {
+            // Enum types match only if they are the same enum
+            switch (t.typespec) {
+                case QTS_ENUM: {
+                    // Same enum declaration = exact match
+                    if (u.ed == t.u.ed) {
+                        max_result = QTI_IDENT;
+                        return QTI_IDENT;
+                    }
+                    // Different enums = no match
+                    return QTI_NOT_EQUAL;
+                }
+                case QTS_TYPE: {
+                    // Check if the base type matches (for compatibility with underlying type)
+                    qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+                    if (t.u.t == bt) {
+                        // Base type matches - this is ambiguous at best, but we want strict matching
+                        // so return NOT_EQUAL to force cast
+                        return QTI_NOT_EQUAL;
+                    }
+                    if (t.u.t == NT_ALL) {
+                        // if the type may not match at runtime, then return no match with %strict-types
+                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
+                            return QTI_NOT_EQUAL;
+                        }
+                        may_not_match = true;
+                        max_result = QTI_IDENT;
+                        return QTI_AMBIGUOUS;
+                    }
+                    return QTI_NOT_EQUAL;
+                }
+                default:
+                    return QTI_NOT_EQUAL;
+            }
+        }
         case QTS_TYPE:
             if (u.t == NT_REFERENCE) {
                 if (known_initial_assignment) {
@@ -1720,6 +1775,10 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
             return QoreTypeInfo::parseAcceptsReturns(u.ti, t) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
         }
         return QTI_WILDCARD;
+    } else if (typespec == QTS_ENUM) {
+        // Enum types match their underlying base type at runtime
+        qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+        return t == bt ? QTI_IDENT : QTI_NOT_EQUAL;
     }
     if (u.t == NT_ALL || u.t == NT_REFERENCE) {
         return QTI_WILDCARD;
@@ -1852,17 +1911,18 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             break;
         }
         case QTS_HASHDECL: {
+            const TypedHashDecl* hd = nullptr;
             if (t == NT_HASH) {
-                const TypedHashDecl* hd = n.get<const QoreHashNode>()->getHashDecl();
-                if (hd && typed_hash_decl_private::get(*hd)->equal(*typed_hash_decl_private::get(*u.hd))) {
-                    ok = true;
-                    break;
-                }
+                hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (t == NT_WEAKREF_HASH) {
-                const TypedHashDecl* hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
-                if (hd && typed_hash_decl_private::get(*hd)->equal(*typed_hash_decl_private::get(*u.hd))) {
+                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+            }
+            if (hd) {
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                // Accept if same hashdecl or source is a descendant of target
+                if (source->equal(*target) || source->isDescendantOf(*target)) {
                     ok = true;
-                    break;
                 }
             }
             break;
@@ -1970,6 +2030,16 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 ok = true;
             }
             break;
+
+        case QTS_ENUM: {
+            // Enum values at runtime have the base type, so check if the value type matches
+            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+            if (n.getType() == bt) {
+                // Value has the right base type - accept it
+                ok = true;
+            }
+            break;
+        }
     }
 
     if (ok) {
@@ -2011,6 +2081,8 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
             return QoreTypeInfo::equal(u.ti, other.u.ti);
         case QTS_HARDREF:
              return true;
+        case QTS_ENUM:
+            return u.ed == other.u.ed;
     }
     return false;
 }
@@ -2051,27 +2123,44 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             } else if (ot == NT_WEAKREF_HASH) {
                 hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
             }
-            if (hd && typed_hash_decl_private::get(*u.hd)->equal(*typed_hash_decl_private::get(*hd))) {
-                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            if (hd) {
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                if (source->equal(*target)) {
+                    return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                // Accept if source is a descendant of target (derived → base)
+                if (source->isDescendantOf(*target)) {
+                    return QTI_AMBIGUOUS;
+                }
             }
             return QTI_NOT_EQUAL;
         }
 
         case QTS_COMPLEXHASH: {
             const QoreTypeInfo* ti = nullptr;
-            bool ok = false;
+            const QoreHashNode* h = nullptr;
             if (ot == NT_HASH) {
-                ok = true;
-                ti = n.get<const QoreHashNode>()->getValueTypeInfo();
+                h = n.get<const QoreHashNode>();
+                ti = h->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_HASH) {
-                ok = true;
-                ti = n.get<const WeakHashReferenceNode>()->get()->getValueTypeInfo();
+                h = n.get<const WeakHashReferenceNode>()->get();
+                ti = h->getValueTypeInfo();
             }
-            if (ok && u.ti == autoTypeInfo) {
+            if (!h) {
+                return QTI_NOT_EQUAL;
+            }
+            if (u.ti == autoTypeInfo) {
                 return QTI_NEAR;
             }
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
+            // it will get folded at runtime into the desired type in any case
+            // NOTE: if the hash has a specific type (ti with hasType), it must be compatible - checked above
+            if (h->empty() && !h->getHashDecl() && (!ti || !QoreTypeInfo::hasType(ti))) {
+                return QTI_NEAR;
             }
             return QTI_NOT_EQUAL;
         }
@@ -2079,19 +2168,27 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
         case QTS_COMPLEXLIST:
         case QTS_COMPLEXSOFTLIST: {
             const QoreTypeInfo* ti = nullptr;
-            bool ok = false;
+            const QoreListNode* l = nullptr;
             if (ot == NT_LIST) {
-                ok = true;
-                ti = n.get<const QoreListNode>()->getValueTypeInfo();
+                l = n.get<const QoreListNode>();
+                ti = l->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_LIST) {
-                ok = true;
-                ti = n.get<const WeakListReferenceNode>()->get()->getValueTypeInfo();
+                l = n.get<const WeakListReferenceNode>()->get();
+                ti = l->getValueTypeInfo();
             }
-            if (ok && u.ti == autoTypeInfo) {
-                return QTI_NEAR;
-            }
-            if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
-                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            if (l) {
+                if (u.ti == autoTypeInfo) {
+                    return QTI_NEAR;
+                }
+                if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
+                    return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                // issue #2647: allow an empty list with no specific type to be passed to any complex list type
+                // it will get folded at runtime into the desired type in any case
+                // NOTE: if the list has a specific type (ti with hasType), it must be compatible - checked above
+                if (l->empty() && (!ti || !QoreTypeInfo::hasType(ti))) {
+                    return QTI_NEAR;
+                }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
                 qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
@@ -2156,6 +2253,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             break;
+
+        case QTS_ENUM: {
+            // Enum values at runtime have the base type, so check if the value type matches
+            qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+            if (ot == bt) {
+                // Value has the right base type - at runtime we trust it's a valid enum value
+                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
+        }
 
         default:
             assert(false);
@@ -2409,6 +2516,19 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         // resolve class
         return resolveRuntimeClass(*subtypes[0]->cscope, or_nothing);
     }
+    if (!strcmp(cscope->ostr, "enum")) {
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        // resolve enum
+        const qore_ns_private* ns;
+        const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->runtimeFindEnumIntern(*subtypes[0]->cscope, ns);
+        if (!ed) {
+            return nullptr;
+        }
+        return ed->getTypeInfo(or_nothing);
+    }
     if (!strcmp(cscope->ostr, "union")) {
         if (subtypes.empty() || subtypes.size() > QORE_MAX_UNION_MEMBERS) {
             return nullptr;
@@ -2431,6 +2551,121 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         }
 
         return qore_get_union_type(member_types, or_nothing);
+    }
+    if (!strcmp(cscope->ostr, "code")) {
+        // Parse typed callable: code<ReturnType(ParamType1, ParamType2, ...)>
+        // Expected format: subtypes[0] contains "ReturnType(ParamType1, ParamType2, ...)"
+        // NOTE: Similar parsing logic exists in resolveSubtype() for parse-time resolution with error messages
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        const char* sig_str = subtypes[0]->cscope->ostr;
+
+        // Find the opening parenthesis to split return type from params
+        // Handle complex return types like hash<string, int> by tracking angle bracket depth
+        const char* paren_open = nullptr;
+        int angle_depth = 0;
+        for (const char* p = sig_str; *p; ++p) {
+            if (*p == '<') {
+                ++angle_depth;
+            } else if (*p == '>') {
+                --angle_depth;
+            } else if (*p == '(' && angle_depth == 0) {
+                paren_open = p;
+                break;
+            }
+        }
+        if (!paren_open) {
+            return nullptr;
+        }
+
+        // Find closing parenthesis
+        const char* paren_close = strrchr(sig_str, ')');
+        if (!paren_close || paren_close < paren_open) {
+            return nullptr;
+        }
+
+        // Extract return type string
+        std::string return_type_str(sig_str, paren_open - sig_str);
+        // Trim whitespace
+        while (!return_type_str.empty() && isspace(return_type_str.back())) {
+            return_type_str.pop_back();
+        }
+        while (!return_type_str.empty() && isspace(return_type_str.front())) {
+            return_type_str.erase(0, 1);
+        }
+
+        // Resolve return type
+        const QoreTypeInfo* returnType = nullptr;
+        if (!return_type_str.empty() && return_type_str != "nothing") {
+            returnType = qore_get_type_from_string_intern(return_type_str.c_str());
+            if (!returnType) {
+                return nullptr;
+            }
+        }
+        // If empty or "nothing", returnType stays nullptr (means nothing return)
+
+        // Extract parameter types string
+        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
+
+        // Check for varargs
+        bool has_varargs = false;
+        size_t dotdotdot_pos = params_str.rfind("...");
+        if (dotdotdot_pos != std::string::npos) {
+            has_varargs = true;
+            // Remove "..." from params_str
+            params_str = params_str.substr(0, dotdotdot_pos);
+            // Trim trailing comma and whitespace
+            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
+                params_str.pop_back();
+            }
+        }
+
+        // Parse parameter types
+        type_vec_t param_types;
+        if (!params_str.empty()) {
+            // Split on commas, handling nested angle brackets and parentheses
+            std::string current_param;
+            int param_angle_depth = 0;
+            int param_paren_depth = 0;
+            for (size_t i = 0; i <= params_str.size(); ++i) {
+                char c = i < params_str.size() ? params_str[i] : '\0';
+                if (c == '<') {
+                    ++param_angle_depth;
+                    current_param += c;
+                } else if (c == '>') {
+                    --param_angle_depth;
+                    current_param += c;
+                } else if (c == '(') {
+                    ++param_paren_depth;
+                    current_param += c;
+                } else if (c == ')') {
+                    --param_paren_depth;
+                    current_param += c;
+                } else if ((c == ',' || c == '\0') && param_angle_depth == 0 && param_paren_depth == 0) {
+                    // Trim whitespace from current_param
+                    while (!current_param.empty() && isspace(current_param.back())) {
+                        current_param.pop_back();
+                    }
+                    while (!current_param.empty() && isspace(current_param.front())) {
+                        current_param.erase(0, 1);
+                    }
+                    if (!current_param.empty()) {
+                        const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
+                        if (!param_type) {
+                            return nullptr;
+                        }
+                        param_types.push_back(param_type);
+                    }
+                    current_param.clear();
+                } else {
+                    current_param += c;
+                }
+            }
+        }
+
+        return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
     }
     return nullptr;
 }
@@ -2564,6 +2799,21 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         // resolve class
         return resolveClass(loc, *subtypes[0]->cscope, or_nothing, err);
     }
+    if (!strcmp(cscope->ostr, "enum")) {
+        if (subtypes.size() != 1) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'enum' takes a single enum " \
+                "name as a subtype argument", getName());
+            err = -1;
+            return or_nothing ? bigIntOrNothingTypeInfo : bigIntTypeInfo;
+        }
+
+        // resolve enum
+        const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->parseFindEnum(loc, *subtypes[0]->cscope);
+        if (!ed) {
+            return or_nothing ? bigIntOrNothingTypeInfo : bigIntTypeInfo;
+        }
+        return ed->getTypeInfo(or_nothing);
+    }
     if (!strcmp(cscope->ostr, "union")) {
         // Validate union constraints
         if (subtypes.empty()) {
@@ -2639,6 +2889,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
     if (!strcmp(cscope->ostr, "code")) {
         // Parse typed callable: code<ReturnType(ParamType1, ParamType2, ...)>
         // Expected format: subtypes[0] contains "ReturnType(ParamType1, ParamType2, ...)"
+        // NOTE: Similar parsing logic exists in resolveRuntimeSubtype() for runtime resolution without error messages
         if (subtypes.size() != 1) {
             parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; 'code' type takes a single callable " \
                 "signature specification in the form 'ReturnType(ParamTypes...)'", getName());
@@ -2818,8 +3069,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         }
     }
 
-    // resolve class
-    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, cscope);
+    // resolve class (don't raise error - we'll check for enum as fallback)
+    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, cscope, false);
 
     if (qc && or_nothing) {
         const QoreTypeInfo* rv = qc->getOrNothingTypeInfo();
@@ -2832,8 +3083,20 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         return rv;
     }
 
-    // qc maybe NULL when the class is not found
-    return qc ? qc->getTypeInfo() : objectTypeInfo;
+    if (qc) {
+        return qc->getTypeInfo();
+    }
+
+    // if not a class, check for enum (use internal lookup to avoid parse error)
+    const QoreEnumDecl* ed = qore_root_ns_private::get(*getRootNS())->parseTryFindEnum(cscope);
+    if (ed) {
+        return ed->getTypeInfo(or_nothing);
+    }
+
+    // type not found - raise error
+    parse_error(*loc, "reference to undefined type '%s'", cscope.ostr);
+    err = -1;
+    return objectTypeInfo;
 }
 
 QoreValue QoreHashDeclTypeInfo::getDefaultQoreValueImpl() const {
@@ -2846,7 +3109,7 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
                 QoreComplexSoftListTypeSpec(vti),
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
                     if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
-                        QoreValue val;
+                        QoreValue val{};
                         n.swap(val);
                         n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
                             xsink));
@@ -2857,7 +3120,7 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
             {
                 NT_LIST,
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
-                    QoreValue val;
+                    QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }
@@ -2885,7 +3148,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                         case NT_NOTHING:
                             break;
                         case NT_NULL: {
-                            QoreValue val;
+                            QoreValue val{};
                             n.swap(val);
                             n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
                                 xsink));
@@ -2893,7 +3156,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                         }
                         default:
                            if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
-                                QoreValue val;
+                                QoreValue val{};
                                 n.swap(val);
                                 n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti),
                                     val, xsink));
@@ -2906,7 +3169,7 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
             {
                 NT_LIST,
                 [vti] (QoreValue& n, ExceptionSink* xsink) {
-                    QoreValue val;
+                    QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }

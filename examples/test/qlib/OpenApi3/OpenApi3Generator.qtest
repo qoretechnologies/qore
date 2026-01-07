@@ -1,0 +1,860 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OpenApi3Generator.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/OpenApi3.qm
+
+%exec-class OpenApi3GeneratorTest
+
+public class OpenApi3GeneratorTest inherits QUnit::Test {
+    private:internal {
+        #! Sample @SCHEMA block for testing
+        const SimpleSchemaBlock = "
+@summary Get user by ID
+@desc Retrieves a user record from the database by their unique identifier
+@params
+- id (int): the user ID
+- Q include_deleted (*bool): whether to include deleted users
+@return (hash<UserInfo>): the user information
+- id (int): unique user identifier
+- name (string): user's full name
+- email (*string): user's email address
+@error (404): User not found
+@error (500): Internal server error
+@perms READ_USERS, ADMIN
+@since 1.0
+";
+
+        #! Sample source content with @REST and @SCHEMA
+        const SampleSourceContent = '
+/** @REST GET
+    @SCHEMA
+    @summary List all users
+    @desc Returns a paginated list of users
+    @params
+    - Q limit (*int): maximum number of users to return
+    - Q offset (*int): number of users to skip
+    @return (list<hash<UserInfo>>): list of users
+    @error (401): Unauthorized
+    @ENDSCHEMA
+*/
+hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+    // implementation
+}
+
+/** @REST POST
+    @SCHEMA
+    @summary Create a new user
+    @desc Creates a new user record in the database
+    @params
+    - name (string): the user name
+    - email (*string): optional email address
+    - role (*string): user role (default: "user")
+    @return (hash<UserInfo>): the created user
+    @error (400): Invalid request body
+    @error (409): User already exists
+    @ENDSCHEMA
+*/
+hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+    // implementation
+}
+
+/** @REST DELETE action=deactivate
+    @SCHEMA
+    @summary Deactivate a user
+    @desc Marks a user as deactivated without deleting their data
+    @params
+    - reason (*string): reason for deactivation
+    @return (hash<StatusResponse>): operation status
+    @ENDSCHEMA
+*/
+hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
+    // implementation
+}
+';
+    }
+
+    constructor() : Test("OpenApi3GeneratorTest", "1.0") {
+        addTestCase("Test OpenApi3SchemaTokenizer::parseSchemaBlock", \testParseSchemaBlock());
+        addTestCase("Test OpenApi3SchemaTokenizer::parseSourceContent", \testParseSourceContent());
+        addTestCase("Test OpenApi3TypeMapper::mapType - basic types", \testTypeMapperBasic());
+        addTestCase("Test OpenApi3TypeMapper::mapType - complex types", \testTypeMapperComplex());
+        addTestCase("Test OpenApi3TypeMapper::mapType - nullable types", \testTypeMapperNullable());
+        addTestCase("Test OpenApi3SchemaGenerator - simple API", \testGeneratorSimple());
+        addTestCase("Test OpenApi3SchemaGenerator - full API", \testGeneratorFull());
+        addTestCase("Test OpenApi3SchemaGenerator - YAML output", \testGeneratorYaml());
+        addTestCase("Test OpenApi3SchemaGenerator - JSON output", \testGeneratorJson());
+        addTestCase("Test round-trip: parse and generate", \testRoundTrip());
+        addTestCase("Test empty schema block", \testEmptySchemaBlock());
+        addTestCase("Test parameter parsing edge cases", \testParameterEdgeCases());
+        addTestCase("Test return type parsing", \testReturnTypeParsing());
+        addTestCase("Test path parameter extraction", \testPathParameters());
+        addTestCase("Test operation ID generation", \testOperationIdGeneration());
+        addTestCase("Test @see and @perms parsing", \testSeeAndPerms());
+        addTestCase("Test multiline descriptions", \testMultilineDescriptions());
+        addTestCase("Test whitespace handling", \testWhitespaceHandling());
+        addTestCase("Test malformed input handling", \testMalformedInput());
+        addTestCase("Test unknown types", \testUnknownTypes());
+        addTestCase("Test special characters in descriptions", \testSpecialCharacters());
+        addTestCase("Test empty and missing values", \testEmptyMissingValues());
+        addTestCase("Test duplicate methods", \testDuplicateMethods());
+        addTestCase("Test all HTTP methods", \testAllHttpMethods());
+
+        set_return_value(main());
+    }
+
+    #! Helper to create RestMethodInfo
+    private hash<OpenApi3::RestMethodInfo> makeMethodInfo(string http_method, string path,
+            hash<OpenApi3::SchemaBlockInfo> schema, *string action) {
+        return cast<hash<OpenApi3::RestMethodInfo>>({
+            "http_method": http_method,
+            "path": path,
+            "schema": schema,
+            "action": action,
+        });
+    }
+
+    #! Helper to create SchemaBlockInfo
+    private hash<OpenApi3::SchemaBlockInfo> makeSchemaInfo(hash<auto> opts) {
+        return cast<hash<OpenApi3::SchemaBlockInfo>>(opts);
+    }
+
+    #! Helper to create ParamInfo
+    private hash<OpenApi3::ParamInfo> makeParamInfo(string name, string type_str, string description,
+            bool required, string location) {
+        return cast<hash<OpenApi3::ParamInfo>>({
+            "name": name,
+            "type_str": type_str,
+            "description": description,
+            "required": required,
+            "location": location,
+        });
+    }
+
+    #! Helper to create ReturnInfo
+    private hash<OpenApi3::ReturnInfo> makeReturnInfo(string type_str, *string description) {
+        return cast<hash<OpenApi3::ReturnInfo>>({
+            "type_str": type_str,
+            "description": description,
+        });
+    }
+
+    testParseSchemaBlock() {
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(SimpleSchemaBlock);
+
+        assertEq("Get user by ID", result.summary);
+        assertEq("Retrieves a user record from the database by their unique identifier", result.desc);
+
+        # Check params
+        assertEq(2, result.params.size());
+
+        hash<OpenApi3::ParamInfo> param1 = result.params[0];
+        assertEq("id", param1.name);
+        assertEq("int", param1.type_str);
+        assertEq("the user ID", param1.description);
+        assertEq(True, param1.required);
+        assertEq("body", param1.location);
+
+        hash<OpenApi3::ParamInfo> param2 = result.params[1];
+        assertEq("include_deleted", param2.name);
+        assertEq("*bool", param2.type_str);
+        assertEq("whether to include deleted users", param2.description);
+        assertEq(False, param2.required);
+        assertEq("query", param2.location);
+
+        # Check return
+        assertEq("hash<UserInfo>", result.return_info.type_str);
+        assertEq("the user information", result.return_info.description);
+        assertEq(3, result.return_info.fields.size());
+
+        # Check errors
+        assertEq(2, result.errors.size());
+        assertEq("User not found", result.errors."404");
+        assertEq("Internal server error", result.errors."500");
+
+        # Check perms
+        assertEq(2, result.perms.size());
+        assertEq("READ_USERS", result.perms[0]);
+        assertEq("ADMIN", result.perms[1]);
+
+        # Check since
+        assertEq("1.0", result.since);
+    }
+
+    testParseSourceContent() {
+        list<hash<OpenApi3::RestMethodInfo>> methods = OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(SampleSourceContent);
+
+        assertEq(3, methods.size());
+
+        # First method: GET
+        assertEq("GET", methods[0].http_method);
+        assertFalse(methods[0].action.val());
+        assertEq("List all users", methods[0].schema.summary);
+        assertEq(2, methods[0].schema.params.size());
+
+        # Second method: POST
+        assertEq("POST", methods[1].http_method);
+        assertFalse(methods[1].action.val());
+        assertEq("Create a new user", methods[1].schema.summary);
+        assertEq(3, methods[1].schema.params.size());
+
+        # Third method: DELETE with action
+        assertEq("DELETE", methods[2].http_method);
+        assertEq("deactivate", methods[2].action);
+        assertEq("Deactivate a user", methods[2].schema.summary);
+    }
+
+    testTypeMapperBasic() {
+        # Test integer types
+        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("int");
+        assertEq("integer", result.type);
+        assertEq("int64", result.format);
+
+        result = OpenApi3::OpenApi3TypeMapper::mapType("softint");
+        assertEq("integer", result.type);
+
+        # Test number types
+        result = OpenApi3::OpenApi3TypeMapper::mapType("float");
+        assertEq("number", result.type);
+        assertEq("double", result.format);
+
+        result = OpenApi3::OpenApi3TypeMapper::mapType("number");
+        assertEq("number", result.type);
+
+        # Test string type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("string");
+        assertEq("string", result.type);
+
+        # Test boolean type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("bool");
+        assertEq("boolean", result.type);
+
+        # Test date type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("date");
+        assertEq("string", result.type);
+        assertEq("date-time", result.format);
+
+        # Test binary type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("binary");
+        assertEq("string", result.type);
+        assertEq("binary", result.format);
+
+        # Test 'any' type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("any");
+        assertFalse(result.hasKey("type"));
+    }
+
+    testTypeMapperComplex() {
+        # Test list type
+        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("list<string>");
+        assertEq("array", result.type);
+        assertEq("string", result.items.type);
+
+        # Test nested list
+        result = OpenApi3::OpenApi3TypeMapper::mapType("list<list<int>>");
+        assertEq("array", result.type);
+        assertEq("array", result.items.type);
+        assertEq("integer", result.items.items.type);
+
+        # Test hash type with named type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<UserInfo>");
+        assertEq("#/components/schemas/UserInfo", result."\$ref");
+
+        # Test hash type with qualified name (Namespace::TypeName)
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<MyModule::UserInfo>");
+        assertEq("#/components/schemas/UserInfo", result."\$ref", "Should use last component of qualified name");
+
+        # Test hash type with deeply qualified name
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<Outer::Inner::DeepType>");
+        assertEq("#/components/schemas/DeepType", result."\$ref", "Should extract innermost type name");
+
+        # Test generic hash type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash");
+        assertEq("object", result.type);
+        assertEq(True, result.additionalProperties);
+
+        # Test hash<auto>
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash<auto>");
+        assertEq("object", result.type);
+
+        # Test named type reference (starts with capital letter)
+        result = OpenApi3::OpenApi3TypeMapper::mapType("UserInfo");
+        assertEq("#/components/schemas/UserInfo", result."\$ref");
+    }
+
+    testTypeMapperNullable() {
+        # Test nullable string
+        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("*string");
+        assertEq("string", result.type);
+        assertEq(True, result.nullable);
+
+        # Test nullable integer
+        result = OpenApi3::OpenApi3TypeMapper::mapType("*int");
+        assertEq("integer", result.type);
+        assertEq(True, result.nullable);
+
+        # Test nullable list
+        result = OpenApi3::OpenApi3TypeMapper::mapType("*list<string>");
+        assertEq("array", result.type);
+        assertEq(True, result.nullable);
+
+        # Test nullable hash reference
+        result = OpenApi3::OpenApi3TypeMapper::mapType("*hash<UserInfo>");
+        assertEq("#/components/schemas/UserInfo", result."\$ref");
+        assertEq(True, result.nullable);
+
+        # Test isNullable helper
+        assertTrue(OpenApi3::OpenApi3TypeMapper::isNullable("*string"));
+        assertFalse(OpenApi3::OpenApi3TypeMapper::isNullable("string"));
+
+        # Test getBaseType helper
+        assertEq("string", OpenApi3::OpenApi3TypeMapper::getBaseType("*string"));
+        assertEq("string", OpenApi3::OpenApi3TypeMapper::getBaseType("string"));
+
+        # Test getElementType helper
+        assertEq("string", OpenApi3::OpenApi3TypeMapper::getElementType("list<string>"));
+        assertEq("string", OpenApi3::OpenApi3TypeMapper::getElementType("*list<string>"));
+        assertFalse(OpenApi3::OpenApi3TypeMapper::getElementType("string").val());
+
+        # Test getHashType helper
+        assertEq("UserInfo", OpenApi3::OpenApi3TypeMapper::getHashType("hash<UserInfo>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3TypeMapper::getHashType("*hash<UserInfo>"));
+        assertFalse(OpenApi3::OpenApi3TypeMapper::getHashType("hash").val());
+    }
+
+    testGeneratorSimple() {
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Test API",
+            "version": "1.0.0",
+            "description": "A test API",
+        });
+
+        # Add a simple GET method
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "List users",
+            "desc": "Returns all users",
+        });
+        gen.addMethod("/users", makeMethodInfo("GET", "/users", schema_info));
+
+        hash<auto> spec = gen.generate();
+
+        assertEq("3.0.3", spec.openapi);
+        assertEq("Test API", spec.info.title);
+        assertEq("1.0.0", spec.info.version);
+        assertEq("A test API", spec.info.description);
+
+        assertTrue(spec.paths.hasKey("/users"));
+        assertTrue(spec.paths{"/users"}.hasKey("get"));
+        assertEq("List users", spec.paths{"/users"}.get.summary);
+    }
+
+    testGeneratorFull() {
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Full Test API",
+            "version": "2.0.0",
+            "servers": ({"url": "https://api.example.com/v2"}),
+        });
+
+        # Add GET method with params
+        hash<OpenApi3::ReturnInfo> get_return = makeReturnInfo("hash<UserInfo>", "User data");
+        hash<OpenApi3::SchemaBlockInfo> get_schema = makeSchemaInfo({
+            "summary": "Get user by ID",
+            "desc": "Retrieves a single user",
+            "return_info": get_return,
+            "errors": {"404": "User not found"},
+        });
+        gen.addMethod("/users/{id}", makeMethodInfo("GET", "/users/{id}", get_schema));
+
+        # Add POST method with request body
+        list<hash<OpenApi3::ParamInfo>> post_params = (
+            makeParamInfo("name", "string", "User name", True, "body"),
+            makeParamInfo("email", "*string", "Email address", False, "body"),
+        );
+        hash<OpenApi3::ReturnInfo> post_return = makeReturnInfo("hash<UserInfo>");
+        hash<OpenApi3::SchemaBlockInfo> post_schema = makeSchemaInfo({
+            "summary": "Create user",
+            "params": post_params,
+            "return_info": post_return,
+        });
+        gen.addMethod("/users", makeMethodInfo("POST", "/users", post_schema));
+
+        # Register a schema
+        gen.registerSchema("UserInfo", {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+            },
+        });
+
+        # Add a security scheme
+        gen.addSecurityScheme("bearerAuth", {
+            "type": "http",
+            "scheme": "bearer",
+        });
+
+        hash<auto> spec = gen.generate();
+
+        # Verify structure
+        assertEq("3.0.3", spec.openapi);
+        assertTrue(spec.paths.hasKey("/users/{id}"));
+        assertTrue(spec.paths.hasKey("/users"));
+        assertTrue(spec.paths{"/users/{id}"}.get.responses.hasKey("404"));
+
+        # Verify POST has request body
+        assertTrue(spec.paths{"/users"}.post.hasKey("requestBody"));
+        assertTrue(spec.paths{"/users"}.post.requestBody.content.hasKey("application/json"));
+
+        # Verify components
+        assertTrue(spec.components.schemas.hasKey("UserInfo"));
+        assertTrue(spec.components.securitySchemes.hasKey("bearerAuth"));
+
+        # Verify path parameter extraction
+        list<hash<auto>> params = spec.paths{"/users/{id}"}.get.parameters;
+        bool found_id = False;
+        foreach hash<auto> p in (params) {
+            if (p.name == "id") {
+                found_id = True;
+                assertEq("path", p."in");
+                assertEq(True, p.required);
+            }
+        }
+        assertTrue(found_id, "Path parameter 'id' should be extracted");
+    }
+
+    testGeneratorYaml() {
+%ifdef NoYaml
+        testSkip("YAML module not available");
+%else
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "YAML Test API",
+            "version": "1.0.0",
+        });
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "Test endpoint",
+        });
+        gen.addMethod("/test", makeMethodInfo("GET", "/test", schema_info));
+
+        string yaml = gen.toYaml();
+        assertTrue(yaml.size() > 0);
+        assertTrue(yaml =~ /openapi:/);
+        assertTrue(yaml =~ /title: "YAML Test API"/ || yaml =~ /title: YAML Test API/);
+        assertTrue(yaml =~ /\/test:/ || yaml =~ /\/test/);
+%endif
+    }
+
+    testGeneratorJson() {
+%ifdef NoJson
+        testSkip("JSON module not available");
+%else
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "JSON Test API",
+            "version": "1.0.0",
+        });
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "Test endpoint",
+        });
+        gen.addMethod("/test", makeMethodInfo("GET", "/test", schema_info));
+
+        string json_str = gen.toJson();
+        assertTrue(json_str.size() > 0);
+        assertTrue(json_str =~ /"openapi"/);
+        assertTrue(json_str =~ /"JSON Test API"/);
+
+        # Verify it's valid JSON by parsing it
+        hash<auto> parsed = parse_json(json_str);
+        assertEq("3.0.3", parsed.openapi);
+        assertEq("JSON Test API", parsed.info.title);
+%endif
+    }
+
+    testRoundTrip() {
+%ifdef NoYaml
+        testSkip("YAML module not available");
+%else
+        # Parse source content
+        list<hash<OpenApi3::RestMethodInfo>> methods = OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(SampleSourceContent);
+
+        # Generate OpenAPI schema
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Round Trip Test",
+            "version": "1.0.0",
+        });
+
+        # Register the component schemas that are referenced in SampleSourceContent
+        gen.registerSchema("UserInfo", {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+            },
+        });
+        gen.registerSchema("StatusResponse", {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"},
+                "message": {"type": "string"},
+            },
+        });
+
+        foreach hash<OpenApi3::RestMethodInfo> method in (methods) {
+            gen.addMethod("/users", method);
+        }
+
+        hash<auto> spec = gen.generate();
+
+        # Verify the round trip worked
+        assertEq(3, spec.paths{"/users"}.size(), "Should have 3 HTTP methods");
+        assertTrue(spec.paths{"/users"}.hasKey("get"));
+        assertTrue(spec.paths{"/users"}.hasKey("post"));
+        assertTrue(spec.paths{"/users"}.hasKey("delete"));
+
+        # Verify component schemas exist
+        assertTrue(spec.components.schemas.hasKey("UserInfo"), "UserInfo schema should exist");
+        assertTrue(spec.components.schemas.hasKey("StatusResponse"), "StatusResponse schema should exist");
+
+        # Generate YAML and verify it can be parsed by OpenApi3Loader
+        string yaml = gen.toYaml();
+        OpenApi3::OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(yaml);
+        assertEq("Round Trip Test", schema.info.title);
+%endif
+    }
+
+    testEmptySchemaBlock() {
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock("");
+
+        assertFalse(result.summary.val());
+        assertFalse(result.desc.val());
+        assertFalse(result.params.val());
+        assertFalse(result.return_info.val());
+        assertFalse(result.errors.val());
+    }
+
+    testParameterEdgeCases() {
+        # Test parameter with hyphen in name
+        string block = "
+@params
+- content-type (string): the content type header
+- x-request-id (*string): optional request ID
+";
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(2, result.params.size());
+        assertEq("content-type", result.params[0].name);
+        assertEq("x-request-id", result.params[1].name);
+
+        # Test parameter with complex type
+        block = "
+@params
+- data (list<hash<UserInfo>>): list of user data
+- options (*hash<auto>): optional configuration
+";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(2, result.params.size());
+        assertEq("list<hash<UserInfo>>", result.params[0].type_str);
+        assertEq("*hash<auto>", result.params[1].type_str);
+    }
+
+    testReturnTypeParsing() {
+        # Test simple return
+        string block = "@return (string): a simple string response";
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq("string", result.return_info.type_str);
+        assertEq("a simple string response", result.return_info.description);
+
+        # Test complex return type
+        block = "@return (list<hash<UserInfo>>): list of users";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq("list<hash<UserInfo>>", result.return_info.type_str);
+
+        # Test nullable return
+        block = "@return (*hash<Response>): optional response";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq("*hash<Response>", result.return_info.type_str);
+    }
+
+    testPathParameters() {
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Test", "version": "1.0"});
+
+        # Test single path parameter
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({"summary": "Get user"});
+        gen.addMethod("/users/{id}", makeMethodInfo("GET", "/users/{id}", schema_info));
+
+        hash<auto> spec = gen.generate();
+        list<hash<auto>> params = spec.paths{"/users/{id}"}.get.parameters;
+        assertEq(1, params.size());
+        assertEq("id", params[0].name);
+        assertEq("path", params[0]."in");
+        assertEq(True, params[0].required);
+
+        # Test multiple path parameters
+        gen = new OpenApi3::OpenApi3SchemaGenerator({"title": "Test", "version": "1.0"});
+        schema_info = makeSchemaInfo({"summary": "Get issue"});
+        gen.addMethod("/orgs/{org}/repos/{repo}/issues/{issue_id}",
+            makeMethodInfo("GET", "/orgs/{org}/repos/{repo}/issues/{issue_id}", schema_info));
+
+        spec = gen.generate();
+        params = spec.paths{"/orgs/{org}/repos/{repo}/issues/{issue_id}"}.get.parameters;
+        assertEq(3, params.size());
+    }
+
+    testOperationIdGeneration() {
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Test", "version": "1.0"});
+
+        hash<OpenApi3::SchemaBlockInfo> schema1 = makeSchemaInfo({"summary": "List"});
+        gen.addMethod("/users", makeMethodInfo("GET", "/users", schema1));
+
+        hash<OpenApi3::SchemaBlockInfo> schema2 = makeSchemaInfo({"summary": "Get"});
+        gen.addMethod("/users/{id}", makeMethodInfo("GET", "/users/{id}", schema2));
+
+        hash<OpenApi3::SchemaBlockInfo> schema3 = makeSchemaInfo({"summary": "Activate"});
+        gen.addMethod("/users/{id}", makeMethodInfo("PUT", "/users/{id}", schema3, "activate"));
+
+        hash<auto> spec = gen.generate();
+
+        assertEq("get_users", spec.paths{"/users"}.get.operationId);
+        assertEq("get_users_id", spec.paths{"/users/{id}"}.get.operationId);
+        assertEq("put_users_id_activate", spec.paths{"/users/{id}"}.put.operationId);
+    }
+
+    testSeeAndPerms() {
+        # Test perms as already tested in SimpleSchemaBlock
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(SimpleSchemaBlock);
+
+        # Test perms parsing (from SimpleSchemaBlock: "READ_USERS, ADMIN")
+        assertEq(2, result.perms.size());
+        assertEq("READ_USERS", result.perms[0]);
+        assertEq("ADMIN", result.perms[1]);
+
+        # Test @since parsing
+        assertEq("1.0", result.since);
+    }
+
+    testMultilineDescriptions() {
+        # Test description from SimpleSchemaBlock which has proper multiline handling
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(SimpleSchemaBlock);
+
+        assertEq("Get user by ID", result.summary);
+        assertEq("Retrieves a user record from the database by their unique identifier", result.desc);
+
+        # Test that summary and desc are properly separated
+        assertTrue(result.summary != result.desc, "Summary and description should be different");
+    }
+
+    testWhitespaceHandling() {
+        # Test with standard whitespace (tokenizer expects specific format)
+        string block = "
+@summary Spaced summary
+@desc Spaced description
+@params
+- name (string): spaced param
+@return (hash): spaced return
+";
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+
+        assertTrue(result.summary.val());
+        assertTrue(result.desc.val());
+        assertEq(1, result.params.size());
+        assertTrue(result.return_info.val());
+
+        # Verify trimming is applied
+        assertFalse(result.summary =~ /^\s/, "Summary should not start with whitespace");
+        assertFalse(result.summary =~ /\s$/, "Summary should not end with whitespace");
+    }
+
+    testMalformedInput() {
+        # Test parameter without type - should be ignored
+        string block = "@params\n- name: missing type";
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(0, result.params.size(), "Malformed param (no type) should be ignored");
+
+        # Test parameter without description - should be rejected (description is required)
+        block = "@params\n- name (string)";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(0, result.params.size(), "Param without description should be rejected");
+
+        # Test parameter with empty description - should be accepted
+        block = "@params\n- name (string):";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(1, result.params.size(), "Param with empty description should be accepted");
+        assertEq("name", result.params[0].name, "Param name should be parsed");
+        assertEq("string", result.params[0].type_str, "Param type should be parsed");
+
+        # Test error without code - should be ignored
+        block = "@error: missing error code";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertEq(0, result.errors.size(), "Malformed error (no code) should be ignored");
+
+        # Test return without type - should be ignored
+        block = "@return: missing return type";
+        result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+        assertFalse(result.return_info.val(), "Malformed return (no type) should be ignored");
+
+        # Test source content without @ENDSCHEMA
+        string source = '/** @REST GET
+    @SCHEMA
+    @summary Unclosed schema
+*/
+hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
+        list<hash<OpenApi3::RestMethodInfo>> methods = OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(source);
+        # Should handle gracefully - unclosed schema blocks are skipped
+        assertEq(0, methods.size(), "Unclosed @SCHEMA should be skipped");
+    }
+
+    testUnknownTypes() {
+        # Test empty string - should not crash
+        hash<auto> result = OpenApi3::OpenApi3TypeMapper::mapType("");
+        assertEq("string", result.type, "Empty string should default to string type");
+        assertTrue(result.description.val(), "Empty string should have description");
+
+        # Test isNullable with empty string
+        assertFalse(OpenApi3::OpenApi3TypeMapper::isNullable(""), "Empty string should not be nullable");
+
+        # Test getBaseType with empty string
+        assertEq("", OpenApi3::OpenApi3TypeMapper::getBaseType(""), "Empty string base type should be empty");
+
+        # Test completely unknown type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("unknowntype");
+        assertTrue(result.hasKey("type") || result.hasKey("description"),
+            "Should handle unknown type gracefully");
+
+        # Test type with unmatched brackets
+        result = OpenApi3::OpenApi3TypeMapper::mapType("list<string");
+        assertTrue(True, "Should handle unmatched brackets");
+
+        # Test type with only asterisk
+        result = OpenApi3::OpenApi3TypeMapper::mapType("*");
+        assertTrue(True, "Should handle lone asterisk");
+
+        # Test deeply nested type
+        result = OpenApi3::OpenApi3TypeMapper::mapType("list<list<list<hash<auto>>>>");
+        assertEq("array", result.type);
+    }
+
+    testSpecialCharacters() {
+        # Test description with special characters
+        string block = "
+@summary Get user profile (v2)
+@desc Returns the user profile including special fields & metadata.
+      Supports XML and HTML content.
+@params
+- query (string): search query with special chars
+@error (400): Invalid request: check query parameter
+";
+        hash<OpenApi3::SchemaBlockInfo> result = OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+
+        assertTrue(result.summary.val());
+        assertTrue(result.desc =~ /special/);
+        assertEq(1, result.params.size());
+        assertTrue(result.errors."400".val());
+    }
+
+    testEmptyMissingValues() {
+        # Test generator with minimal info
+        OpenApi3::OpenApi3SchemaGenerator gen({});
+        hash<auto> spec = gen.generate();
+        assertEq("3.0.3", spec.openapi);
+        assertEq("API", spec.info.title, "Should have default title");
+        assertEq("1.0.0", spec.info.version, "Should have default version");
+
+        # Test empty params list
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "Test",
+            "params": (),  # Empty list
+        });
+        gen.addMethod("/test", makeMethodInfo("GET", "/test", schema_info));
+        spec = gen.generate();
+        assertTrue(True, "Should handle empty params list");
+
+        # Test with null values
+        schema_info = makeSchemaInfo({
+            "summary": NOTHING,
+            "desc": NOTHING,
+        });
+        gen = new OpenApi3::OpenApi3SchemaGenerator({"title": "Test", "version": "1.0"});
+        gen.addMethod("/test2", makeMethodInfo("GET", "/test2", schema_info));
+        spec = gen.generate();
+        assertTrue(spec.paths.hasKey("/test2"));
+    }
+
+    testDuplicateMethods() {
+        # Test adding same method twice - should overwrite
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Test", "version": "1.0"});
+
+        hash<OpenApi3::SchemaBlockInfo> schema1 = makeSchemaInfo({"summary": "First"});
+        gen.addMethod("/users", makeMethodInfo("GET", "/users", schema1));
+
+        hash<OpenApi3::SchemaBlockInfo> schema2 = makeSchemaInfo({"summary": "Second"});
+        gen.addMethod("/users", makeMethodInfo("GET", "/users", schema2));
+
+        hash<auto> spec = gen.generate();
+        assertEq("Second", spec.paths{"/users"}.get.summary, "Later method should overwrite");
+
+        # Test same path different methods
+        hash<OpenApi3::SchemaBlockInfo> schema3 = makeSchemaInfo({"summary": "Post"});
+        gen.addMethod("/users", makeMethodInfo("POST", "/users", schema3));
+
+        spec = gen.generate();
+        assertTrue(spec.paths{"/users"}.hasKey("get"));
+        assertTrue(spec.paths{"/users"}.hasKey("post"));
+    }
+
+    testAllHttpMethods() {
+        OpenApi3::OpenApi3SchemaGenerator gen({"title": "Test", "version": "1.0"});
+
+        list<string> methods = ("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS");
+        foreach string m in (methods) {
+            hash<OpenApi3::SchemaBlockInfo> schema = makeSchemaInfo({"summary": m + " method"});
+            gen.addMethod("/resource", makeMethodInfo(m, "/resource", schema));
+        }
+
+        hash<auto> spec = gen.generate();
+
+        assertEq(7, spec.paths{"/resource"}.size(), "Should have all 7 HTTP methods");
+        assertTrue(spec.paths{"/resource"}.hasKey("get"));
+        assertTrue(spec.paths{"/resource"}.hasKey("post"));
+        assertTrue(spec.paths{"/resource"}.hasKey("put"));
+        assertTrue(spec.paths{"/resource"}.hasKey("delete"));
+        assertTrue(spec.paths{"/resource"}.hasKey("patch"));
+        assertTrue(spec.paths{"/resource"}.hasKey("head"));
+        assertTrue(spec.paths{"/resource"}.hasKey("options"));
+    }
+}

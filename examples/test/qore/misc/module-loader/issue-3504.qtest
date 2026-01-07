@@ -1,13 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %allow-injection
 
-%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/Qorize.qm
 %requires ../../../../../qlib/QUnit.qm
 
 %requires ./Issue3504.qm
@@ -24,9 +21,9 @@ class Issue3504Test inherits QUnit::Test {
     test() {
         Program p0(PO_NO_USER_API);
         p0.importFunction("t");
-        p0.loadApplyToUserModule("Util", True);
+        p0.loadApplyToUserModule("Qorize", True);
         Program p1();
-        p1.loadModule("Util");
-        assertEq(Type::String, p1.callFunction("get_random_string").type());
+        p1.loadModule("Qorize");
+        assertEq(Type::String, p1.callFunction("qorize", 1, "x").type());
     }
 }

@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
@@ -60,6 +57,14 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
             #printf("h: %N\n", h);
             return makeResponse(200, new BinaryInputStream(h.part[1].body), {"Content-Type": h.part[1].hdr."content-type"});
+        } else if (*list<*string> m = (rpath =~ x/largeresponse\/(\d+)/)) {
+            # Return a response of specified size for testing large HTTP/2 transfers
+            int size = int(m[0]);
+            string data = strmul("X", size);
+            return makeResponse(200, data, {"Content-Type": "text/plain"});
+        } else if (rpath =~ /^echo-body/) {
+            # Echo back the request body for testing large POST bodies
+            return makeResponse(200, body, {"Content-Type": "application/octet-stream"});
         }
 
         if (hdr.method == "POST") {
@@ -83,6 +88,38 @@ class TestWsConnection inherits WebSocketConnection {
 # WebSocket handler for async mode tests
 class TestWsHandler inherits WebSocketHandler {
     constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestWsConnection(self);
+    }
+}
+
+# WebSocket handler with token authentication for testing 401 rejection
+class AuthenticatingWsHandler inherits WebSocketHandler {
+    public {
+        const ValidToken = "valid-test-token";
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    # Authenticate request - check for valid token in Authorization header
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        # Check for token in Authorization header (Bearer token)
+        *string auth = hdr.authorization;
+        *string token;
+        if (auth && auth.lwr().startsWith("bearer ")) {
+            token = auth.substr(7);
+        }
+        if (!token || token != ValidToken) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "body": "Unauthorized: Invalid or missing token",
+            };
+        }
+        return NOTHING;  # Authentication successful
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
@@ -196,6 +233,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
+        addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
+        addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
         addTestCase("async mode persistent connection close", \asyncModePersistentConnectionCloseTest());
@@ -203,6 +243,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode persistent concurrent", \asyncModePersistentConcurrentTest());
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
+        addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -258,8 +299,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mWsHandler = new TestWsHandler({"logger": asyncLogger});
         mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
 
-        # Wait for the async I/O thread to start polling
-        sleep(250ms);
+        # Wait for the async I/O to be ready
+        mAsyncServer.waitForAsyncIo();
     }
 
     globalTearDown() {
@@ -610,6 +651,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeHttpsTest() {
+        # Verify the async I/O controller is running
+        assertTrue(mAsyncServer.getGlobalAsyncCtrl().running(), "globalAsyncCtrl should be running");
+
+        # Debug: check listener SSL detection
+        hash<auto> info = mAsyncServer.getGlobalAsyncCtrl().getInfo();
+        if (m_options.verbose > 2) {
+            printf("DEBUG: globalAsyncCtrl info: %N\n", info);
+        }
+
         # Test HTTPS connections with async mode
         HTTPClient client({
             "url": asyncSslUrl,
@@ -738,6 +788,175 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world", receivedMsg);
+    }
+
+    asyncModeWebSocketSslTest() {
+        # Test WebSocket protocol upgrade with async mode over SSL (wss://)
+        # This test uses HTTP/2 by default (via ALPN)
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://)
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're using HTTP/2 (default behavior)
+        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketSslHttp1Test() {
+        # Test WebSocket protocol upgrade with async mode over SSL using HTTP/1.1
+        # This explicitly disables HTTP/2 to test the HTTP/1.1 upgrade path
+        Counter msgReceived(1);
+        string receivedMsg;
+
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        # Connect WebSocket client to async SSL server (wss://) with HTTP/2 disabled
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "1.1",  # Force HTTP/1.1 - disables HTTP/2 ALPN negotiation
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # Verify we're NOT using HTTP/2
+        assertFalse(wsc.isHttp2(), "WebSocket should use HTTP/1.1 when HTTP/2 is disabled");
+
+        # Send a message and wait for echo
+        wsc.send("hello-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-ssl-http1", receivedMsg);
+
+        # Send another message
+        msgReceived.inc();
+        wsc.send("world-ssl-http1");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:world-ssl-http1", receivedMsg);
+    }
+
+    asyncModeWebSocket401ThenSuccessTest() {
+        # Test WebSocket connection rejection with 401 followed by successful connection
+        # This tests the scenario where a wss:// connection is rejected, then another succeeds
+        # Uses HTTP/2 via ALPN (default for wss://)
+
+        # Create a separate async server with authenticating WebSocket handler
+        Logger authLogger("auth-ws-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            authLogger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> auth_opts = <HttpServerOptionInfo>{
+            "logger": authLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer authServer(auth_opts);
+        on_exit authServer.stop();
+
+        # Add authenticating WebSocket handler
+        AuthenticatingWsHandler authWsHandler({"logger": authLogger});
+        authServer.setHandler("auth-ws", "/ws", NOTHING, authWsHandler);
+
+        # Add HTTPS listener
+        int authSslPort = authServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+
+        # Wait for async I/O to be ready
+        authServer.waitForAsyncIo();
+
+        # First attempt: Connect WITHOUT valid token - should get 401
+        string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
+        bool gotRejection = False;
+        try {
+            WebSocketClient wscBad(sub (*data msg) {}, {
+                "url": wssUrlNoToken,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+            });
+            wscBad.connect();
+            # If we get here, connection succeeded when it shouldn't have
+            wscBad.disconnect();
+            assertFalse(True, "Connection without token should have been rejected with 401");
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - should get an error due to 401 rejection
+            # HTTP/2 WebSocket uses CONNECT method which gives HTTP2-CONNECT-ERROR on rejection
+            gotRejection = True;
+            if (m_options.verbose > 2) {
+                printf("Got expected error on 401 rejection: %s: %s\n", ex.err, ex.desc);
+            }
+            # Verify the error mentions 401 or is a WebSocket/HTTP2 error
+            assertTrue(ex.desc.regex("401") || ex.desc.regex("[Uu]nauthorized") ||
+                ex.err == "WEBSOCKET-ERROR" || ex.err == "HTTP-CLIENT-RECEIVE-ERROR" ||
+                ex.err == "HTTP2-CONNECT-ERROR",
+                sprintf("Error should be related to 401 rejection, got: %s: %s", ex.err, ex.desc));
+        }
+        assertTrue(gotRejection, "First connection without token should be rejected");
+
+        # Second attempt: Connect WITH valid token - should succeed
+        Counter msgReceived(1);
+        string receivedMsg;
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+
+        string wssUrl = "wss://localhost:" + authSslPort + "/ws";
+        WebSocketClient wscGood(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+        });
+        wscGood.connect({
+            "hdr": {
+                "Authorization": "Bearer " + AuthenticatingWsHandler::ValidToken,
+            },
+        });
+        on_exit wscGood.disconnect();
+
+        # Verify connection is using HTTP/2
+        assertTrue(wscGood.isHttp2(), "WebSocket with valid token should use HTTP/2 over SSL");
+
+        # Send a message and verify echo
+        wscGood.send("authenticated-message");
+        assertEq(0, msgReceived.waitForZero(5s), "Should receive echo message");
+        assertEq("ECHO:authenticated-message", receivedMsg);
     }
 
     asyncModePersistentHandlerTest() {
@@ -1054,6 +1273,203 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp3 = client.send("end", "POST", "/persistent/end");
         assertEq(200, resp3.status_code);
     }
+
+    asyncModeHttp2Test() {
+        # Test HTTP/2 support in async mode
+        # This test requires:
+        # 1. HTTPClient with HTTP/2 enabled
+        # 2. HTTPS connection (HTTP/2 requires TLS for ALPN)
+
+        # Create HTTPClient with HTTP/2 auto mode
+        HTTPClient h2client({
+            "url": asyncSslUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "auto",    # Enable HTTP/2 if available
+        });
+
+        # Check if HTTP/2 mode is supported
+        if (!h2client.isHttp2Enabled()) {
+            testSkip("HTTP/2 not compiled in");
+            return;
+        }
+
+        # Verify HTTP/2 mode settings
+        assertEq("auto", h2client.getHttp2Mode());
+        assertTrue(h2client.isHttp2Enabled());
+
+        # Connect and make request
+        h2client.connect();
+        on_exit h2client.disconnect();
+
+        # Make a request - protocol negotiation happens during TLS handshake
+        string resp = h2client.get("/http2-test");
+
+        # Check what HTTP version was negotiated
+        string version = h2client.getHttpVersion();
+
+        # The response should be successful regardless of protocol
+        assertEq("GET, http2-test, /http2-test", resp);
+
+        # Log which protocol was used
+        if (m_options.verbose > 0) {
+            printf("HTTP/2 test: negotiated version = %s, isHttp2Active = %y\n",
+                version, h2client.isHttp2Active());
+        }
+
+        # Test that response-uri is set correctly for HTTP/2 responses
+        # This is needed for tools like 'rest -l' that display the response status line
+        {
+            hash<auto> info;
+            h2client.send(NOTHING, "GET", "/http2-test", NOTHING, False, \info);
+            # Verify response-uri is set in the format "HTTP/2 <code> <message>"
+            assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
+            assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 response-uri: %y\n", info."response-uri");
+            }
+        }
+
+        # Test keep-alive with multiple requests (verifies HTTP/2 connection state preservation)
+        # This is critical for browser compatibility - browsers reuse HTTP/2 connections
+        for (int i = 1; i <= 5; i++) {
+            string path = sprintf("/test%d", i);
+            string expected = sprintf("GET, test%d, %s", i, path);
+            assertEq(expected, h2client.get(path));
+        }
+
+        # Verify HTTP/2 is still active after multiple requests
+        assertTrue(h2client.isHttp2Active());
+
+        # Test larger payloads - this exercises the HTTP/2 DATA frame handling with substantial data
+        # These sizes are chosen to test different scenarios:
+        # - 50KB: moderate size
+        # - 100KB: larger response
+        # - 500KB: tests flow control and multiple DATA frames
+        list<int> sizes = (50000, 100000, 500000);
+        for (int i = 0; i < sizes.size(); i++) {
+            int size = sizes[i];
+            hash<auto> large_resp = h2client.send(NOTHING, "GET", "/largeresponse/" + size, NOTHING, True);
+            assertEq(200, large_resp.status_code);
+            assertEq(size, large_resp.body.size());
+            # Verify HTTP/2 connection is still active after large transfer
+            assertTrue(h2client.isHttp2Active());
+        }
+
+        # Test HTTP/2 compression - this was a bug where Accept-Encoding wasn't being parsed for HTTP/2
+        # The server should compress responses > 1KB when Accept-Encoding is provided
+        {
+            # Create a new HTTP/2 client that doesn't auto-decompress
+            HTTPClient h2compress({
+                "url": asyncSslUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",
+            });
+            h2compress.connect();
+            on_exit h2compress.disconnect();
+
+            # Request a 5KB response (well above the 1KB compression threshold)
+            # Send explicit Accept-Encoding header
+            hash<auto> hdr = {
+                "Accept-Encoding": "gzip, deflate, br",
+            };
+            hash<auto> info;
+            h2compress.send(NOTHING, "GET", "/largeresponse/5000", hdr, False, \info);
+            # Verify the response was compressed (Content-Encoding should be set)
+            # Note: HTTPClient auto-decompresses, so we check the original response headers
+            *string content_encoding = info."response-headers"."content-encoding"
+                ?? info."response-headers"."Content-Encoding";
+            if (m_options.verbose > 0) {
+                printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
+            }
+            assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
+        }
+
+        # Test POST request
+        hash<auto> postResp = h2client.send("http2-data", "POST", "/http2-post");
+        assertEq(200, postResp.status_code);
+        assertEq("POST, http2-data, http2-post, /http2-post", postResp.body);
+
+        # Test HTTP/2 POST with large request bodies
+        # This exercises HTTP/2 DATA frame handling for request bodies
+        # These sizes test different scenarios:
+        # - 50KB: moderate size, multiple DATA frames
+        # - 100KB: larger request body
+        # - 500KB: tests flow control with large uploads
+        list<int> post_sizes = (50000, 100000, 500000);
+        for (int j = 0; j < post_sizes.size(); j++) {
+            int post_size = post_sizes[j];
+            string large_body = strmul("X", post_size);
+            hash<auto> post_resp = h2client.send(large_body, "POST", "/echo-body");
+            assertEq(200, post_resp.status_code, sprintf("HTTP/2 POST %d bytes should succeed", post_size));
+            assertEq(post_size, post_resp.body.size(), sprintf("HTTP/2 POST %d bytes - response body size", post_size));
+            assertEq(large_body, post_resp.body, sprintf("HTTP/2 POST %d bytes - body content", post_size));
+            # Verify HTTP/2 connection is still active after large upload
+            assertTrue(h2client.isHttp2Active(), sprintf("HTTP/2 active after %d byte POST", post_size));
+        }
+
+        # Test HTTP/2 disabled mode
+        HTTPClient h1client({
+            "url": asyncSslUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "1.1",    # Force HTTP/1.1
+        });
+
+        if (h1client.isHttp2Enabled()) {
+            # If HTTP/2 is compiled in, "1.1" mode should disable it
+            assertEq("disabled", h1client.getHttp2Mode());
+            assertFalse(h1client.isHttp2Enabled());
+        }
+
+        h1client.connect();
+        on_exit h1client.disconnect();
+
+        # This should work with HTTP/1.1
+        assertEq("GET, h1test, /h1test", h1client.get("/h1test"));
+        assertFalse(h1client.isHttp2Active());
+
+        # Test set_global_http2_mode("disabled") - server should not offer HTTP/2
+        {
+            # Save original mode
+            string orig_mode = get_global_http2_mode();
+            on_exit set_global_http2_mode(orig_mode);
+
+            # Disable HTTP/2 globally
+            set_global_http2_mode("disabled");
+            assertEq("disabled", get_global_http2_mode());
+
+            # Create a new HTTPS listener that will be affected by the global mode
+            # The async server's listeners are cached, so we need a new one to test
+            hash<auto> linfo = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            on_exit mAsyncServer.stopListenerID(linfo.id);
+
+            string disabledUrl = "https://localhost:" + linfo.port;
+
+            # Create an HTTP/2 client and try to connect - it should fall back to HTTP/1.1
+            # because the server won't offer HTTP/2 via ALPN
+            HTTPClient h2disabled({
+                "url": disabledUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2",    # Client wants HTTP/2
+            });
+            h2disabled.connect();
+            on_exit h2disabled.disconnect();
+
+            # The client should fall back to HTTP/1.1 because server doesn't offer HTTP/2
+            assertFalse(h2disabled.isHttp2Active(), "HTTP/2 should not be active when globally disabled");
+
+            # Request should still work via HTTP/1.1
+            assertEq("GET, h2disabled, /h2disabled", h2disabled.get("/h2disabled"));
+        }
+    }
+
 }
 
 #! Test handler that supports persistent connections

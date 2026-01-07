@@ -402,45 +402,36 @@ const QoreString* QoreNodeAsStringHelper::operator*() {
 }
 
 void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
-    switch (n.type) {
-        case QV_Bool:
-        case QV_Int:
-            str = new QoreStringMaker(QLLD, n.getAsBigInt());
+    qore_type_t t = n.getType();
+    if (t == NT_BOOLEAN || t == NT_INT) {
+        str = new QoreStringMaker(QLLD, n.getAsBigInt());
+        del = true;
+    } else if (t == NT_FLOAT) {
+        str = q_fix_decimal(new QoreStringMaker("%.9g", n.getAsFloat()), 0);
+        del = true;
+    } else if (n.hasNode()) {
+        const AbstractQoreNode* node = n.getInternalNode();
+        //optimization to remove the need for a virtual function call in the most common case
+        if (node->getType() == NT_STRING) {
+            del = false;
+            str = const_cast<QoreStringNode*>(n.get<const QoreStringNode>());
+        } else {
+            str = n.get<const AbstractQoreNode>()->getStringRepresentation(del);
+        }
+        if (xsink && enc && str->getEncoding() != enc) {
+            QoreString* t = str->convertEncoding(enc, xsink);
+            if (!t)
+                return;
+            if (del)
+                delete str;
+            str = t;
             del = true;
-            break;
-
-        case QV_Float:
-            str = q_fix_decimal(new QoreStringMaker("%.9g", n.getAsFloat()), 0);
-            del = true;
-            break;
-
-        case QV_Node:
-            if (n.v.n) {
-                //optimization to remove the need for a virtual function call in the most common case
-                if (n.v.n->getType() == NT_STRING) {
-                    del = false;
-                    str = const_cast<QoreStringNode*>(n.get<QoreStringNode>());
-                } else {
-                    str = n.get<AbstractQoreNode>()->getStringRepresentation(del);
-                }
-                if (xsink && enc && str->getEncoding() != enc) {
-                    QoreString* t = str->convertEncoding(enc, xsink);
-                    if (!t)
-                        break;
-                    if (del)
-                        delete str;
-                    str = t;
-                    del = true;
-                }
-            } else {
-                str = NullString;
-                del = false;
-            }
-            break;
-
-        default:
-            assert(false);
-            // no break
+        }
+    } else if (t == NT_NOTHING || t == NT_NULL) {
+        str = NullString;
+        del = false;
+    } else {
+        assert(false);
     }
 }
 
@@ -499,47 +490,38 @@ bool QoreStringValueHelper::is_temp() const {
 }
 
 void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
-    switch (n.type) {
-        case QV_Bool:
-        case QV_Int:
-            str = new QoreStringNodeMaker(QLLD, n.getAsBigInt());
+    qore_type_t t = n.getType();
+    if (t == NT_BOOLEAN || t == NT_INT) {
+        str = new QoreStringNodeMaker(QLLD, n.getAsBigInt());
+        del = true;
+    } else if (t == NT_FLOAT) {
+        str = q_fix_decimal(new QoreStringNodeMaker("%.9g", n.getAsFloat()), 0);
+        del = true;
+    } else if (n.hasNode()) {
+        const AbstractQoreNode* node = n.getInternalNode();
+        //optimization to remove the need for a virtual function call in the most common case
+        if (node->getType() == NT_STRING) {
+            del = false;
+            str = const_cast<QoreStringNode*>(n.get<const QoreStringNode>());
+        } else {
             del = true;
-            break;
-
-        case QV_Float:
-            str = q_fix_decimal(new QoreStringNodeMaker("%.9g", n.getAsFloat()), 0);
+            str = new QoreStringNode;
+            n.get<const AbstractQoreNode>()->getStringRepresentation(*str);
+        }
+        if (xsink && enc && str->getEncoding() != enc) {
+            QoreStringNode* t = str->convertEncoding(enc, xsink);
+            if (!t)
+                return;
+            if (del)
+                str->deref();
+            str = t;
             del = true;
-            break;
-
-        case QV_Node:
-            if (n.v.n) {
-                //optimization to remove the need for a virtual function call in the most common case
-                if (n.v.n->getType() == NT_STRING) {
-                    del = false;
-                    str = const_cast<QoreStringNode*>(n.get<QoreStringNode>());
-                } else {
-                    del = true;
-                    str = new QoreStringNode;
-                    n.get<AbstractQoreNode>()->getStringRepresentation(*str);
-                }
-                if (xsink && enc && str->getEncoding() != enc) {
-                    QoreStringNode* t = str->convertEncoding(enc, xsink);
-                    if (!t)
-                        break;
-                    if (del)
-                        str->deref();
-                    str = t;
-                    del = true;
-                }
-            } else {
-                str = NullString;
-                del = false;
-            }
-            break;
-
-        default:
-            assert(false);
-            // no break
+        }
+    } else if (t == NT_NOTHING || t == NT_NULL) {
+        str = NullString;
+        del = false;
+    } else {
+        assert(false);
     }
 }
 

@@ -49,6 +49,13 @@
 #include <string>
 
 typedef std::map<std::string, std::string> strmap_t;
+
+// thread-safe cache for fetched ciphers to avoid memory leaks
+// refs #4910: EVP_CIPHER_fetch() returns references that must be freed
+typedef std::map<std::string, EVP_CIPHER*, ltstrcase> cipher_cache_t;
+static cipher_cache_t cipher_cache;
+static QoreThreadLock cipher_cache_lock;
+
 // map old cipher names -> new cipher names for backwards compatibility
 static strmap_t cipher_compat_aliases = {
     {"blowfish-cfb", "bf-cfb"},
@@ -453,7 +460,20 @@ const EVP_CIPHER* q_lookup_cipher(const char* cipher) {
     if (i != cipher_compat_aliases.end()) {
         cipher = i->second.c_str();
     }
-    return EVP_CIPHER_fetch(nullptr, cipher, nullptr);
+
+    // refs #4910: use cache to avoid memory leaks from EVP_CIPHER_fetch()
+    AutoLocker al(cipher_cache_lock);
+    cipher_cache_t::iterator ci = cipher_cache.find(cipher);
+    if (ci != cipher_cache.end()) {
+        return ci->second;
+    }
+
+    // fetch and cache
+    EVP_CIPHER* c = EVP_CIPHER_fetch(nullptr, cipher, nullptr);
+    if (c) {
+        cipher_cache[cipher] = c;
+    }
+    return c;
 }
 
 QoreHashNode* q_get_cipher_hash(const EVP_CIPHER* c) {
@@ -587,3 +607,17 @@ QoreHashNode* init_cipher_map_hash() {
     return rv.release();
 }
 
+#ifdef OPENSSL_3_PLUS
+void crypto_cache_cleanup() {
+    // refs #4910: free all cached cipher references
+    {
+        AutoLocker al(cipher_cache_lock);
+        for (auto& i : cipher_cache) {
+            EVP_CIPHER_free(i.second);
+        }
+        cipher_cache.clear();
+    }
+    // also clean up digest cache
+    digest_cache_cleanup();
+}
+#endif

@@ -33,5 +33,7 @@
 #include "QC_GlobalVar.cpp"
 #include "QC_TypedHash.cpp"
 #include "QC_TypedHashMember.cpp"
+#include "QC_Enum.cpp"
+#include "QC_EnumMember.cpp"
 #include "AbstractReflectionObject.cpp"
 #include "reflection-module.cpp"

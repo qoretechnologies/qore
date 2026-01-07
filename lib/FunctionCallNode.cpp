@@ -471,7 +471,7 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
     if (parse_context.oflag) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo());
 
-        QoreValue n;
+        QoreValue n{};  // value-initialized to NOTHING (bits=0)
         if (abr && !qore_class_private::parseResolveInternalMemberAccess(qc, c_str, parse_context.typeInfo)) {
             n = new SelfVarrefNode(loc, takeName());
         } else {
@@ -552,7 +552,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
 
     bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
-    QoreValue n;
+    QoreValue n{};  // value-initialized to NOTHING (bits=0)
 
     // try to resolve a global var
     if (abr) {

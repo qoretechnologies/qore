@@ -210,7 +210,7 @@ int qore_hash_private::parseInitComplexHashInitialization(const QoreProgramLocat
         QoreParseContext& parse_context, QoreParseListNode* args) {
     //int lvids = 0;
     //const QoreTypeInfo* argTypeInfo = nullptr;
-    QoreValue arg;
+    QoreValue arg{};
     const QoreTypeInfo* ti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
     int err = 0;

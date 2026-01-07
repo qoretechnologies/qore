@@ -33,6 +33,7 @@
 #define _QLS_AST_ASTDECLARATION_H
 
 #include <memory>
+#include <string>
 
 #include "ASTNode.h"
 #include "ASTDeclarationKind.h"
@@ -42,9 +43,35 @@ public:
     //! Pointer type.
     using Ptr = std::unique_ptr<ASTDeclaration>;
 
+    //! Documentation comment attached to this declaration (if any).
+    /** This holds the text of #! line comments or /** block comments
+        that immediately precede the declaration.
+    */
+    std::string* docComment = nullptr;
+
 public:
     ASTDeclaration() : ASTNode() {}
     ASTDeclaration(const ASTParseLocation& l) : ASTNode(l) {}
+
+    virtual ~ASTDeclaration() {
+        delete docComment;
+    }
+
+    //! Sets the documentation comment for this declaration.
+    void setDocComment(std::string* comment) {
+        delete docComment;
+        docComment = comment;
+    }
+
+    //! Returns the documentation comment (may be nullptr).
+    std::string* getDocComment() const {
+        return docComment;
+    }
+
+    //! Returns true if this declaration has a doc comment.
+    bool hasDocComment() const {
+        return docComment != nullptr;
+    }
 
     virtual ASTDeclarationKind getKind() const = 0;
 

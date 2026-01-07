@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/QUnit.qm
@@ -24,6 +21,7 @@ public class WebSocketUtilTest inherits QUnit::Test {
         addTestCase("Extension registry", \extensionRegistryTests());
         addTestCase("PerMessageDeflate extension", \perMessageDeflateTests());
         addTestCase("Extension corner cases and negative tests", \extensionNegativeTests());
+        addTestCase("ws_get_frame_size tests", \wsGetFrameSizeTests());
         set_return_value(main());
     }
 
@@ -580,6 +578,65 @@ public class WebSocketUtilTest inherits QUnit::Test {
             assertEq(100, cloned.getCompressionThreshold());
             # The cloned extension should have the same offer string
             assertEq(ext.getOfferString(), cloned.getOfferString());
+        }
+    }
+
+    wsGetFrameSizeTests() {
+        # Test with empty buffer
+        assertNothing(ws_get_frame_size(binary()), "empty buffer returns NOTHING");
+
+        # Test with 1 byte (not enough for header)
+        assertNothing(ws_get_frame_size(<81>), "1 byte returns NOTHING");
+
+        # Test small unmasked message (payload < 126)
+        # Frame: 0x81 0x04 "test" -> opcode text, fin=1, len=4, payload="test"
+        binary small_frame = <8104> + binary("test");
+        assertEq(6, ws_get_frame_size(small_frame), "small unmasked frame size");
+        assertEq(6, ws_get_frame_size(<8104>), "small frame size from header only");
+
+        # Test small masked message
+        # Frame: 0x81 0x84 <mask> "test" -> opcode text, fin=1, masked, len=4
+        assertEq(10, ws_get_frame_size(<8184>), "small masked frame size");
+
+        # Test medium message (126 <= payload < 65536)
+        # Frame: 0x81 0x7e <2-byte-len> payload
+        # 0x7e = 126, then 2-byte length follows
+        binary medium_header = <817e0100>;  # len = 256
+        assertEq(4 + 256, ws_get_frame_size(medium_header), "medium frame size");
+
+        # Test medium masked message
+        binary medium_masked_header = <81fe0100>;  # masked, len = 256
+        assertEq(8 + 256, ws_get_frame_size(medium_masked_header), "medium masked frame size");
+
+        # Test large message (payload >= 65536)
+        # Frame: 0x81 0x7f <8-byte-len> payload
+        # 0x7f = 127, then 8-byte length follows
+        binary large_header = <817f0000000000010000>;  # len = 65536
+        assertEq(10 + 65536, ws_get_frame_size(large_header), "large frame size");
+
+        # Test that incomplete headers return NOTHING
+        assertNothing(ws_get_frame_size(<817e01>), "incomplete medium header returns NOTHING");
+        assertNothing(ws_get_frame_size(<817f000000>), "incomplete large header returns NOTHING");
+
+        # Test ws_get_frame_size with ws_encode_message output
+        # This tests the round-trip: encode a message, get its size, verify it matches
+        {
+            string payload = "Hello, World!";
+            binary encoded = ws_encode_message(payload, WSOP_Text);
+            int expected_size = encoded.size();
+            assertEq(expected_size, ws_get_frame_size(encoded), "frame size matches encoded message");
+        }
+
+        # Test with large payload (simulating HTTP/2 fragmentation scenario)
+        {
+            # Create a 32KB payload that would be split across HTTP/2 frames
+            string large_payload = strmul("X", 32768);
+            binary encoded = ws_encode_message(large_payload, WSOP_Text);
+            int expected_size = encoded.size();
+            # Verify we can determine size from just the header
+            binary header_only = encoded.substr(0, 10);  # 10 bytes covers 8-byte extended length
+            assertEq(expected_size, ws_get_frame_size(header_only),
+                "large frame size from header (HTTP/2 fragmentation scenario)");
         }
     }
 }

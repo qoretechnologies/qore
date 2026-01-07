@@ -32,16 +32,13 @@
 %requires Util >= 1.1
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # strict args
-%strict-args
 
 module Schema {
     version = "1.4.2";

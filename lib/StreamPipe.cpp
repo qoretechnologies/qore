@@ -29,6 +29,7 @@
     information.
 */
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/StreamPipe.h"
 
 StreamPipe::StreamPipe(bool syncClose, int64 timeout, int64 bufferSize, ExceptionSink *xsink)
@@ -73,8 +74,18 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
     printd(1, "PipeInputStream::read()\n");
     AutoLocker lock(pipe->mutex);
 
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+
     printd(1, "read - lock acquired, limit: " QLLD "\n", limit);
+    int64 remaining_timeout = pipe->timeout;
     while (true) {
+        // Check for interrupt
+        if (sm && sm->checkIOInterrupt(xsink, "pipe read")) {
+            return 0;
+        }
+
         if (pipe->exception) {
             pipe->rethrow(xsink);
             return 0;
@@ -95,12 +106,37 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
         }
 
         printd(1, "read - buffer empty, before wait\n");
-        int rc = pipe->timeout < 0 ? pipe->readCondVar.wait(pipe->mutex) : pipe->readCondVar.wait2(pipe->mutex,
-            pipe->timeout);
+        // Use smaller timeout for interrupt checking when sandbox manager exists
+        int effective_timeout;
+        if (sm) {
+            if (pipe->timeout < 0) {
+                effective_timeout = poll_interval;
+            } else {
+                effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
+            }
+        } else {
+            effective_timeout = pipe->timeout;
+        }
+
+        int rc = effective_timeout < 0 ? pipe->readCondVar.wait(pipe->mutex)
+                                        : pipe->readCondVar.wait2(pipe->mutex, effective_timeout);
         printd(1, "read - buffer empty, after wait, rc: %d\n", rc);
+
         if (rc != 0) {
-            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-            return 0;
+            // Timeout occurred
+            if (sm && pipe->timeout >= 0) {
+                remaining_timeout -= effective_timeout;
+                if (remaining_timeout <= 0) {
+                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                    return 0;
+                }
+            } else if (sm) {
+                // Infinite timeout with sandbox manager - continue polling
+                continue;
+            } else {
+                xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                return 0;
+            }
         }
     }
 
@@ -127,8 +163,18 @@ int64 PipeInputStream::peek(ExceptionSink *xsink) {
     printd(1, "PipeInputStream::peek()\n");
     AutoLocker lock(pipe->mutex);
 
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+
     printd(1, "peek - lock acquired\n");
+    int64 remaining_timeout = pipe->timeout;
     while (true) {
+        // Check for interrupt
+        if (sm && sm->checkIOInterrupt(xsink, "pipe peek")) {
+            return -2;
+        }
+
         if (pipe->exception) {
             pipe->rethrow(xsink);
             return -2;
@@ -148,12 +194,36 @@ int64 PipeInputStream::peek(ExceptionSink *xsink) {
         }
 
         printd(1, "peek - buffer empty, before wait\n");
-        int rc = pipe->timeout < 0 ? pipe->readCondVar.wait(pipe->mutex) : pipe->readCondVar.wait2(pipe->mutex,
-            pipe->timeout);
+        // Use smaller timeout for interrupt checking when sandbox manager exists
+        int effective_timeout;
+        if (sm) {
+            if (pipe->timeout < 0) {
+                effective_timeout = poll_interval;
+            } else {
+                effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
+            }
+        } else {
+            effective_timeout = pipe->timeout;
+        }
+
+        int rc = effective_timeout < 0 ? pipe->readCondVar.wait(pipe->mutex)
+                                        : pipe->readCondVar.wait2(pipe->mutex, effective_timeout);
         printd(1, "peek - buffer empty, after wait, rc: %d\n", rc);
         if (rc != 0) {
-            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-            return -2;
+            // Timeout occurred
+            if (sm && pipe->timeout >= 0) {
+                remaining_timeout -= effective_timeout;
+                if (remaining_timeout <= 0) {
+                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                    return -2;
+                }
+            } else if (sm) {
+                // Infinite timeout with sandbox manager - continue polling
+                continue;
+            } else {
+                xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                return -2;
+            }
         }
     }
 
@@ -172,6 +242,11 @@ PipeOutputStream::~PipeOutputStream() {
 void PipeOutputStream::close(ExceptionSink* xsink) {
     printd(1, "PipeOutputStream::close()\n");
     AutoLocker lock(pipe->mutex);
+
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+
     if (pipe->outputClosed) {
         xsink->raiseException("OUTPUT-STREAM-CLOSED-ERROR", "this PipeOutputStream object has been already closed");
         return;
@@ -180,15 +255,47 @@ void PipeOutputStream::close(ExceptionSink* xsink) {
     pipe->readCondVar.broadcast();
     pipe->writeCondVar.broadcast();
 
+    int64 remaining_timeout = pipe->timeout;
     while (!pipe->closeFinished) {
+        // Check for interrupt
+        if (sm && sm->checkIOInterrupt(xsink, "pipe close")) {
+            return;
+        }
+
         if (pipe->exception) {
             pipe->rethrow(xsink);
             return;
         }
-        int rc = pipe->timeout < 0 ? pipe->writeCondVar.wait(pipe->mutex) : pipe->writeCondVar.wait2(pipe->mutex, pipe->timeout);
+
+        // Use smaller timeout for interrupt checking when sandbox manager exists
+        int effective_timeout;
+        if (sm) {
+            if (pipe->timeout < 0) {
+                effective_timeout = poll_interval;
+            } else {
+                effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
+            }
+        } else {
+            effective_timeout = pipe->timeout;
+        }
+
+        int rc = effective_timeout < 0 ? pipe->writeCondVar.wait(pipe->mutex)
+                                        : pipe->writeCondVar.wait2(pipe->mutex, effective_timeout);
         if (rc != 0) {
-            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-            return;
+            // Timeout occurred
+            if (sm && pipe->timeout >= 0) {
+                remaining_timeout -= effective_timeout;
+                if (remaining_timeout <= 0) {
+                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                    return;
+                }
+            } else if (sm) {
+                // Infinite timeout with sandbox manager - continue polling
+                continue;
+            } else {
+                xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                return;
+            }
         }
     }
 }
@@ -198,9 +305,19 @@ void PipeOutputStream::write(const void *ptr, int64 toWrite, ExceptionSink *xsin
     printd(1, "PipeOutputStream::write()\n");
     AutoLocker lock(pipe->mutex);
 
+    // Check for sandbox interrupt support
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+
     printd(1, "write - lock acquired, toWrite: " QLLD "\n", toWrite);
     const uint8_t *src = static_cast<const uint8_t *>(ptr);
+    int64 remaining_timeout = pipe->timeout;
     while (toWrite > 0) {
+        // Check for interrupt
+        if (sm && sm->checkIOInterrupt(xsink, "pipe write")) {
+            return;
+        }
+
         if (pipe->exception) {
             pipe->rethrow(xsink);
             return;
@@ -230,12 +347,36 @@ void PipeOutputStream::write(const void *ptr, int64 toWrite, ExceptionSink *xsin
             pipe->readCondVar.broadcast();
         } else {
             printd(1, "write - buffer full, before wait\n");
-            int rc = pipe->timeout < 0 ? pipe->writeCondVar.wait(pipe->mutex) : pipe->writeCondVar.wait2(pipe->mutex,
-                pipe->timeout);
+            // Use smaller timeout for interrupt checking when sandbox manager exists
+            int effective_timeout;
+            if (sm) {
+                if (pipe->timeout < 0) {
+                    effective_timeout = poll_interval;
+                } else {
+                    effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
+                }
+            } else {
+                effective_timeout = pipe->timeout;
+            }
+
+            int rc = effective_timeout < 0 ? pipe->writeCondVar.wait(pipe->mutex)
+                                            : pipe->writeCondVar.wait2(pipe->mutex, effective_timeout);
             printd(1, "write - buffer full, after wait, rc: %d\n", rc);
             if (rc != 0) {
-                xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-                return;
+                // Timeout occurred
+                if (sm && pipe->timeout >= 0) {
+                    remaining_timeout -= effective_timeout;
+                    if (remaining_timeout <= 0) {
+                        xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                        return;
+                    }
+                } else if (sm) {
+                    // Infinite timeout with sandbox manager - continue polling
+                    continue;
+                } else {
+                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                    return;
+                }
             }
         }
     }

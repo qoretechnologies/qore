@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_lib.h"
 #include "qore/intern/ExecArgList.h"
@@ -123,9 +124,17 @@ const QLO_DISABLE_TLS_13 = QLO_DISABLE_TLS_13;
 */
 const QLO_MINIMUM_TLS_13 = QLO_MINIMUM_TLS_13;
 
+//! disable HTTP/2 support globally (may be set at runtime with qore_set_library_options())
+/** When set, HTTPClient objects will not use HTTP/2 even if enabled in the object
+
+    @since %Qore 2.3
+*/
+const QLO_DISABLE_HTTP2 = QLO_DISABLE_HTTP2;
+
 //! bitmask for library options that can be set at runtime
 /** the following options can be set at runtime:
     - @ref Qore::QLO_DISABLE_TLS_13
+    - @ref Qore::QLO_DISABLE_HTTP2
 */
 const QLO_RUNTIME_OPTS = QLO_RUNTIME_OPTS;
 ///@}
@@ -290,15 +299,34 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
         return -1;
     }
 
-    // wait for child to exit
+    // wait for child to exit with interrupt checking
     int status;
     while (true) {
-        int rc = waitpid(pid, &status, 0);
+        // check for sandbox interrupt
+        if (qore_check_io_interrupt(xsink, "process wait")) {
+            // kill the child process on interrupt
+            kill(pid, SIGKILL);
+            waitpid(pid, &status, 0);
+            return -1;
+        }
+
+        // use WNOHANG for non-blocking check
+        int rc = waitpid(pid, &status, WNOHANG);
+        if (rc == pid) {
+            // child has exited
+            break;
+        }
+        if (rc == 0) {
+            // child still running, sleep briefly and retry
+            usleep(QORE_IO_POLL_INTERVAL_MS * 1000);
+            continue;
+        }
 #ifdef EINTR
         if (rc == -1 && errno == EINTR) {
             continue;
         }
 #endif
+        // error
         break;
     }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
@@ -1287,6 +1315,89 @@ int qore_set_library_options(int opts) [dom=PROCESS] {
 */
 int qore_get_library_options() [dom=PROCESS] {
     return qore_library_options;
+}
+
+//! Sets the global HTTP/2 mode that affects all new HTTP connections
+/** @param mode the HTTP/2 mode string: \c "auto" (default), \c "disabled", or \c "required"
+
+    Valid mode values:
+    - \c "auto": Use HTTP/2 if available via ALPN negotiation, fallback to HTTP/1.1 (default)
+    - \c "disabled": Never use HTTP/2, always use HTTP/1.x
+    - \c "required": Always require HTTP/2, fail if the server does not support it
+
+    This setting affects:
+    - All new @ref Qore::HTTPClient "HTTPClient" connections
+    - All new @ref HttpServer "HttpServer" connections
+    - All HTTP-based connections including those via @ref ConnectionProvider "ConnectionProvider"
+
+    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
+
+    @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode string
+
+    @see set_global_http2_mode(int)
+    @see get_global_http2_mode()
+
+    @since %Qore 2.3
+*/
+nothing set_global_http2_mode(string mode) [dom=PROCESS] {
+    const char* mode_str = mode->c_str();
+    int mode_val;
+    if (!strcasecmp(mode_str, "auto")) {
+        mode_val = HTTP2_MODE_AUTO;
+    } else if (!strcasecmp(mode_str, "disabled")) {
+        mode_val = HTTP2_MODE_DISABLED;
+    } else if (!strcasecmp(mode_str, "required")) {
+        mode_val = HTTP2_MODE_REQUIRED;
+    } else {
+        xsink->raiseException("SET-GLOBAL-HTTP2-MODE-ERROR",
+            "invalid HTTP/2 mode '%s'; valid modes are: 'auto', 'disabled', 'required'", mode_str);
+        return QoreValue();
+    }
+    qore_global_http2_mode.store(mode_val, std::memory_order_relaxed);
+}
+
+//! Sets the global HTTP/2 mode that affects all new HTTP connections
+/** @param mode the HTTP/2 mode: @ref Qore::HTTP2_MODE_AUTO "HTTP2_MODE_AUTO" (default),
+    @ref Qore::HTTP2_MODE_DISABLED "HTTP2_MODE_DISABLED", or @ref Qore::HTTP2_MODE_REQUIRED "HTTP2_MODE_REQUIRED"
+
+    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
+
+    @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode value
+
+    @see set_global_http2_mode(string)
+    @see get_global_http2_mode()
+
+    @since %Qore 2.3
+*/
+nothing set_global_http2_mode(int mode) [dom=PROCESS] {
+    if (mode < HTTP2_MODE_DISABLED || mode > HTTP2_MODE_REQUIRED) {
+        xsink->raiseException("SET-GLOBAL-HTTP2-MODE-ERROR",
+            "invalid HTTP/2 mode %d; valid modes are: HTTP2_MODE_DISABLED (0), HTTP2_MODE_AUTO (1), "
+            "HTTP2_MODE_REQUIRED (2)", (int)mode);
+        return QoreValue();
+    }
+    qore_global_http2_mode.store((int)mode, std::memory_order_relaxed);
+}
+
+//! Returns the current global HTTP/2 mode
+/** @return the current global HTTP/2 mode as a string: \c "auto", \c "disabled", or \c "required"
+
+    @see set_global_http2_mode()
+
+    @since %Qore 2.3
+*/
+string get_global_http2_mode() [dom=PROCESS] {
+    int mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+    switch (mode) {
+        case HTTP2_MODE_DISABLED:
+            return new QoreStringNode("disabled");
+        case HTTP2_MODE_REQUIRED:
+            return new QoreStringNode("required");
+        default:
+            return new QoreStringNode("auto");
+    }
 }
 
 //! Adds the given module to the blacklist

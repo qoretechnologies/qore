@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -379,6 +379,61 @@ list<TypedHashMember> TypedHash::getMembers() [flags=RET_VALUE_ONLY] {
 */
 hash<auto> TypedHash::doCast(hash<auto> h) {
     return thd->th->doRuntimeCast(h, xsink);
+}
+
+//! Returns the parent typed hash if this typed hash inherits from another, or @ref nothing if none
+/** @par Example:
+    @code{.py}
+*TypedHash parent = th.getParentTypedHash();
+    @endcode
+
+    @return the parent typed hash or @ref nothing if this typed hash has no parent
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.1
+*/
+*TypedHash TypedHash::getParentTypedHash() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the typed hash ptr must be valid
+    const TypedHashDecl* parent = thd->th->getParentHashDecl();
+    if (!parent) {
+        return QoreValue();
+    }
+
+    return new QoreObject(QC_TYPEDHASH, thd->pgm, new QoreReflectionTypedHash(thd->pgm, parent));
+}
+
+//! Returns @ref True if this typed hash inherits from the given typed hash
+/** @par Example:
+    @code{.py}
+bool b = derived.inheritsFrom(base);
+    @endcode
+
+    @param parent the typed hash to check for inheritance
+
+    @return @ref True if this typed hash is a descendant of the given typed hash, @ref False otherwise
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.1
+*/
+bool TypedHash::inheritsFrom(TypedHash[QoreReflectionTypedHash] parent) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreReflectionTypedHash> holder(parent, xsink);
+
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the typed hash ptr must be valid
+    return thd->th->inheritsFrom(parent->th);
 }
 
 //! Returns a @ref hashdecl "typed hash (hashdecl)" object corresponding to the name or namespace-justified path provided as an argument

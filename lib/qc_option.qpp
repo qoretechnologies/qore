@@ -109,23 +109,10 @@
 #define QORE_CONST_HAVE_SETSID 0
 #endif
 
-#ifdef HAVE_BROTLI
+// Brotli, Zstd, and LZ4 compression are always available (required since Qore 2.3)
 #define QORE_CONST_HAVE_BROTLI 1
-#else
-#define QORE_CONST_HAVE_BROTLI 0
-#endif
-
-#ifdef HAVE_ZSTD
 #define QORE_CONST_HAVE_ZSTD 1
-#else
-#define QORE_CONST_HAVE_ZSTD 0
-#endif
-
-#ifdef HAVE_LZ4
 #define QORE_CONST_HAVE_LZ4 1
-#else
-#define QORE_CONST_HAVE_LZ4 0
-#endif
 
 #ifdef HAVE_PWD_H
 #define QORE_CONST_HAVE_PWD_H 1
@@ -403,4 +390,11 @@ const HAVE_GET_STACK_SIZE = bool(QORE_CONST_HAVE_GET_STACK_SIZE);
 /** @since %Qore 0.9.0
 */
 const HAVE_THREAD_NAME = bool(QORE_CONST_HAVE_THREAD_NAME);
+
+//! Indicates if HTTP/2 support is available
+/** HTTP/2 support is built into the %Qore library and is always available.
+
+    @since %Qore 2.3
+*/
+const HAVE_HTTP2 = bool(true);
 ///@}

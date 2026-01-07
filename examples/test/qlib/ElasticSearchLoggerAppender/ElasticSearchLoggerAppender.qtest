@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %allow-injection
 
 %requires ../../../../qlib/Util.qm
@@ -12,6 +9,10 @@
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/ElasticSearchLoggerAppender.qm
+
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class ElasticSearchLoggerAppenderTest
 
@@ -25,6 +26,12 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+    }
+
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
     }
 
     constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {
@@ -41,6 +48,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test constructor validation
     private constructorTest() {
+        checkModule(self);
         # Test missing url
         try {
             new ElasticSearchLoggerAppender::ElasticSearchLoggerAppender(
@@ -85,6 +93,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test document creation from log events
     private documentCreationTest() {
+        checkModule(self);
         # Create appender with mock-like settings (won't actually connect)
         ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
             "test",
@@ -125,6 +134,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Test batching behavior
     private batchingTest() {
+        checkModule(self);
         if (!rest) {
             testSkip("no connection to server");
         }
@@ -188,6 +198,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Negative tests
     private negativeTests() {
+        checkModule(self);
         # Test with REST client constructor - missing index
         if (rest) {
             try {

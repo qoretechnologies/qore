@@ -96,6 +96,7 @@ void ParseOptionMap::static_init() {
     DO_MAP("no-reflection",            PO_NO_REFLECTION);
     DO_MAP("no-transient",             PO_NO_TRANSIENT);
     DO_MAP("no-typedef",               PO_NO_TYPEDEF);
+    DO_MAP("no-enum",                  PO_NO_ENUM);
     DO_MAP("broken-sprintf",           PO_BROKEN_SPRINTF);
     DO_MAP("broken-cast",              PO_BROKEN_CAST);
     DO_MAP("allow-returns",            PO_ALLOW_RETURNS);
@@ -104,6 +105,8 @@ void ParseOptionMap::static_init() {
     DO_MAP("broken-varargs",           PO_BROKEN_VARARGS);
     DO_MAP("broken-list-range",        PO_BROKEN_LIST_RANGE);
     DO_MAP("enable-debug",             PO_ENABLE_DEBUG);
+    DO_MAP("new-style",                PO_NEW_STYLE);
+    DO_MAP("modern",                   PO_MODERN);
 
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);

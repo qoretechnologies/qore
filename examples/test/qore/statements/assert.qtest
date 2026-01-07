@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 %enable-debug
 
@@ -22,6 +19,7 @@ class AssertDebugTest inherits QUnit::Test {
         addTestCase("parse error tests", \parseErrorTests());
         addTestCase("sprintf corner case tests", \sprintfCornerCaseTests());
         addTestCase("command-line enable-debug tests", \commandLineEnableDebugTests());
+        addTestCase("module enable-debug propagation tests", \moduleEnableDebugTests());
         set_return_value(main());
     }
 
@@ -308,5 +306,156 @@ class AssertDebugTest inherits QUnit::Test {
         # Test with -p enable-debug (equivalent to --enable-debug)
         output = backquote(sprintf("%s -penable-debug '%s' 2>&1", qore_bin, tmpfile));
         assertEq("1\n", output, "with -penable-debug, @debug should execute");
+    }
+
+    moduleEnableDebugTests() {
+        # Test that PO_ENABLE_DEBUG is propagated to modules loaded via %requires
+        # Create a temp module with @debug code
+        string tmpdir = tmp_location() + "/test_module_debug_" + getpid();
+        mkdir(tmpdir);
+        on_exit {
+            unlink(tmpdir + "/TestDebugModule.qm");
+            rmdir(tmpdir);
+        }
+
+        string modulefile = tmpdir + "/TestDebugModule.qm";
+        {
+            File f();
+            f.open2(modulefile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style
+
+module TestDebugModule {
+    version = \"1.0\";
+    desc = \"test module for debug propagation\";
+    author = \"test\";
+}
+
+public namespace TestDebugModule {
+    public class DebugTracker {
+        public {
+            static int debug_executed = 0;
+        }
+
+        static int testDebug() {
+            @debug(++debug_executed);
+            return debug_executed;
+        }
+    }
+}
+");
+        }
+
+        # Find qore executable
+        string qore_bin = ENV._;
+        if (qore_bin !~ /qore/) {
+            testSkip("skipping module debug test: running under wrapper (valgrind, etc.)");
+            return;
+        }
+
+        # Test 1: Without --enable-debug, @debug in module should NOT execute
+        string script1 = tmpdir + "/test_without_debug.q";
+        {
+            File f();
+            f.open2(script1, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style
+%%requires %s
+printf(\"%%d\\n\", TestDebugModule::DebugTracker::testDebug());
+", modulefile));
+        }
+        on_exit unlink(script1);
+
+        string output = backquote(sprintf("%s '%s' 2>&1", qore_bin, script1));
+        assertEq("0\n", output, "without --enable-debug, @debug in module should not execute");
+
+        # Test 2: With --enable-debug, @debug in module SHOULD execute
+        # Need a fresh module load, so use a different module name
+        string modulefile2 = tmpdir + "/TestDebugModule2.qm";
+        {
+            File f();
+            f.open2(modulefile2, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style
+
+module TestDebugModule2 {
+    version = \"1.0\";
+    desc = \"test module for debug propagation\";
+    author = \"test\";
+}
+
+public namespace TestDebugModule2 {
+    public class DebugTracker {
+        public {
+            static int debug_executed = 0;
+        }
+
+        static int testDebug() {
+            @debug(++debug_executed);
+            return debug_executed;
+        }
+    }
+}
+");
+        }
+        on_exit unlink(modulefile2);
+
+        string script2 = tmpdir + "/test_with_debug.q";
+        {
+            File f();
+            f.open2(script2, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style
+%%requires %s
+printf(\"%%d\\n\", TestDebugModule2::DebugTracker::testDebug());
+", modulefile2));
+        }
+        on_exit unlink(script2);
+
+        output = backquote(sprintf("%s --enable-debug '%s' 2>&1", qore_bin, script2));
+        assertEq("1\n", output, "with --enable-debug, @debug in module should execute");
+
+        # Test 3: With PO_NO_PROCESS_CONTROL, PO_ENABLE_DEBUG should NOT be propagated
+        # Need another fresh module
+        string modulefile3 = tmpdir + "/TestDebugModule3.qm";
+        {
+            File f();
+            f.open2(modulefile3, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style
+
+module TestDebugModule3 {
+    version = \"1.0\";
+    desc = \"test module for debug propagation with no-process-control\";
+    author = \"test\";
+}
+
+public namespace TestDebugModule3 {
+    public class DebugTracker {
+        public {
+            static int debug_executed = 0;
+        }
+
+        static int testDebug() {
+            @debug(++debug_executed);
+            return debug_executed;
+        }
+    }
+}
+");
+        }
+        on_exit unlink(modulefile3);
+
+        string script3 = tmpdir + "/test_no_process_control.q";
+        {
+            File f();
+            f.open2(script3, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style
+%%no-process-control
+%%requires %s
+printf(\"%%d\\n\", TestDebugModule3::DebugTracker::testDebug());
+", modulefile3));
+        }
+        on_exit unlink(script3);
+
+        # Even with --enable-debug, module should NOT get PO_ENABLE_DEBUG because
+        # the parent program has PO_NO_PROCESS_CONTROL
+        output = backquote(sprintf("%s --enable-debug '%s' 2>&1", qore_bin, script3));
+        assertEq("0\n", output, "with --enable-debug but %no-process-control, @debug in module should not execute");
     }
 }

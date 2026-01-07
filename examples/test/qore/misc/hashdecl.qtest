@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../../qlib/QUnit.qm
 
@@ -43,6 +40,45 @@ hashdecl Issue3654 {
 
 const B = <Issue3654>{};
 
+# Hashdecl inheritance test declarations
+public hashdecl BaseInfo {
+    string name;
+    int id;
+}
+
+public hashdecl ExtendedInfo inherits BaseInfo {
+    date created;
+    *string description;
+}
+
+public hashdecl DeeplyNested inherits ExtendedInfo {
+    float value;
+}
+
+# Namespaced inheritance test
+public namespace InheritTest {
+    public hashdecl ParentDecl {
+        int parent_id = 100;
+        string parent_name = "parent";
+    }
+
+    public hashdecl ChildDecl inherits ParentDecl {
+        int child_id = 200;
+        string child_name = "child";
+    }
+}
+
+# Hashdecl with default values in inheritance chain
+public hashdecl DefaultBase {
+    int base_val = 10;
+    string base_str = "base_default";
+}
+
+public hashdecl DefaultChild inherits DefaultBase {
+    int child_val = 20;
+    string child_str = "child_default";
+}
+
 *string sub str_test() {}
 
 class HashDeclTest inherits QUnit::Test {
@@ -51,6 +87,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("serialize imported", \serializeImportedTest());
         addTestCase("issue 3167", \issue3167());
         addTestCase("Test HashDecl", \testHashDecl());
+        addTestCase("hashdecl inheritance", \testHashDeclInheritance());
         set_return_value(main());
     }
 
@@ -278,6 +315,344 @@ class HashDeclTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE|PO_NO_INHERIT_SYSTEM_HASHDECLS);
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {hash<ExceptionInfo> c; delete c;}", ""));
+        }
+    }
+
+    testHashDeclInheritance() {
+        # Test 1: Basic inheritance - direct member access
+        {
+            hash<ExtendedInfo> ext = <ExtendedInfo>{
+                "name": "test",
+                "id": 123,
+                "created": now(),
+                "description": "A test",
+            };
+            assertEq("test", ext.name);
+            assertEq(123, ext.id);
+            assertEq(Type::Date, ext.created.type());
+            assertEq("A test", ext.description);
+            assertEq("hash<ExtendedInfo>", ext.fullType());
+        }
+
+        # Test 2: Basic inheritance - member access via hash<> constructor
+        {
+            hash<ExtendedInfo> ext({"name": "test2", "id": 456, "created": 2024-01-01});
+            assertEq("test2", ext.name);
+            assertEq(456, ext.id);
+            assertEq(2024-01-01, ext.created);
+        }
+
+        # Test 3: Basic inheritance - member access via new hash<>()
+        {
+            hash<ExtendedInfo> ext = new hash<ExtendedInfo>({"name": "test3", "id": 789, "created": now()});
+            assertEq("test3", ext.name);
+            assertEq(789, ext.id);
+        }
+
+        # Test 4: Deeply nested inheritance (3 levels)
+        {
+            hash<DeeplyNested> deep = <DeeplyNested>{
+                "name": "deep",
+                "id": 1,
+                "created": now(),
+                "value": 3.14,
+            };
+            assertEq("deep", deep.name);  # from BaseInfo
+            assertEq(1, deep.id);          # from BaseInfo
+            assertEq(Type::Date, deep.created.type());  # from ExtendedInfo
+            assertEq(3.14, deep.value);    # from DeeplyNested
+            assertEq("hash<DeeplyNested>", deep.fullType());
+        }
+
+        # Test 5: Namespaced inheritance
+        {
+            hash<InheritTest::ChildDecl> child();
+            assertEq(100, child.parent_id);
+            assertEq("parent", child.parent_name);
+            assertEq(200, child.child_id);
+            assertEq("child", child.child_name);
+        }
+
+        # Test 6: Default values are inherited
+        {
+            hash<DefaultChild> dc();
+            assertEq(10, dc.base_val);
+            assertEq("base_default", dc.base_str);
+            assertEq(20, dc.child_val);
+            assertEq("child_default", dc.child_str);
+        }
+
+        # Test 7: Override parent defaults with explicit values
+        {
+            hash<DefaultChild> dc({"base_val": 99, "child_val": 999});
+            assertEq(99, dc.base_val);
+            assertEq("base_default", dc.base_str);
+            assertEq(999, dc.child_val);
+            assertEq("child_default", dc.child_str);
+        }
+
+        # Test 8: Error - unknown parent hashdecl
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "undefined hashdecl",
+                \p.parse(), ("hashdecl Child inherits NonExistentParent { int x; }", ""));
+        }
+
+        # Test 9: Error - circular inheritance (self-reference)
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "circular hashdecl inheritance",
+                \p.parse(), ("hashdecl SelfRef inherits SelfRef { int x; }", ""));
+        }
+
+        # Test 10: Error - circular inheritance (indirect)
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "circular hashdecl inheritance",
+                \p.parse(), ("hashdecl A inherits B { int a; } hashdecl B inherits A { int b; }", ""));
+        }
+
+        # Test 11: Error - member shadowing
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "shadows member in parent",
+                \p.parse(), ("hashdecl Parent { int x; } hashdecl Child inherits Parent { int x; }", ""));
+        }
+
+        # Test 12: Error - member shadowing in deeply nested inheritance
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "shadows member in parent",
+                \p.parse(), ("hashdecl A { int x; } hashdecl B inherits A { int y; } hashdecl C inherits B { int x; }", ""));
+        }
+
+        # Test 13: Error - unknown key assignment (parent member)
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(),
+                ("hashdecl P { int x; } hashdecl C inherits P { int y; } sub t() { hash<C> c(); c.z = 1; }", ""));
+        }
+
+        # Test 14: Parse success - inherited type declarations work correctly
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                hashdecl Base { int id; string name; }
+                hashdecl Derived inherits Base { date created; }
+                hash<Derived> sub get_derived() { return <Derived>{'id': 1, 'name': 'test', 'created': now()}; }
+            ", "");
+            hash h = p.callFunction("get_derived");
+            assertEq(1, h.id);
+            assertEq("test", h.name);
+            assertEq(Type::Date, h.created.type());
+        }
+
+        # Test 15: Inheritance with optional types
+        {
+            hash<ExtendedInfo> ext = <ExtendedInfo>{
+                "name": "optional_test",
+                "id": 1,
+                "created": now(),
+            };
+            # description is *string, so should be NOTHING by default
+            assertEq(NOTHING, ext.description);
+        }
+
+        # Test 16: instanceof works correctly for inherited hashdecl
+        {
+            hash<ExtendedInfo> ext = <ExtendedInfo>{
+                "name": "instanceof_test",
+                "id": 1,
+                "created": now(),
+            };
+            assertTrue(ext instanceof hash<ExtendedInfo>);
+        }
+
+        # Test 17: Hash keys include inherited members (keys() only returns non-NOTHING values)
+        {
+            hash<ExtendedInfo> ext = <ExtendedInfo>{
+                "name": "keys_test",
+                "id": 1,
+                "created": now(),
+                "description": "with_desc",
+            };
+            list<string> k = ext.keys();
+            assertTrue(inlist("name", k));
+            assertTrue(inlist("id", k));
+            assertTrue(inlist("created", k));
+            assertTrue(inlist("description", k));
+        }
+
+        # Test 18: Cast from untyped hash to derived hashdecl works
+        {
+            hash h = {"name": "cast_test", "id": 42, "created": now(), "description": "desc"};
+            hash<ExtendedInfo> ext = cast<hash<ExtendedInfo>>(h);
+            assertEq("cast_test", ext.name);
+            assertEq(42, ext.id);
+            assertEq("desc", ext.description);
+        }
+
+        # Test 19: Multiple independent inheritance chains
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                hashdecl ChainA_Base { int a; }
+                hashdecl ChainA_Derived inherits ChainA_Base { int b; }
+                hashdecl ChainB_Base { string x; }
+                hashdecl ChainB_Derived inherits ChainB_Base { string y; }
+                list sub test() {
+                    hash<ChainA_Derived> a = <ChainA_Derived>{'a': 1, 'b': 2};
+                    hash<ChainB_Derived> b = <ChainB_Derived>{'x': 'hello', 'y': 'world'};
+                    return (a, b);
+                }
+            ", "");
+            list result = p.callFunction("test");
+            assertEq(1, result[0].a);
+            assertEq(2, result[0].b);
+            assertEq("hello", result[1].x);
+            assertEq("world", result[1].y);
+        }
+
+        # Test 20: Inheritance in imported hashdecl
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+            p.parse("
+                hash<ExtendedInfo> sub get_ext() {
+                    return <ExtendedInfo>{'name': 'imported', 'id': 999, 'created': now()};
+                }
+            ", "");
+            hash h = p.callFunction("get_ext");
+            assertEq("imported", h.name);
+            assertEq(999, h.id);
+        }
+
+        # Test 21: Type compatibility - derived hashdecl assignable to base hashdecl variable
+        {
+            hash<ExtendedInfo> ext = <ExtendedInfo>{
+                "name": "type_compat",
+                "id": 42,
+                "created": now(),
+            };
+            hash<BaseInfo> base = ext;  # derived -> base assignment
+            assertEq("type_compat", base.name);
+            assertEq(42, base.id);
+        }
+
+        # Test 22: Type compatibility - derived assignable to base in function parameter
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                hashdecl Parent { int x; }
+                hashdecl Child inherits Parent { int y; }
+                int sub get_x(hash<Parent> p) { return p.x; }
+                int sub test() {
+                    hash<Child> c = <Child>{'x': 100, 'y': 200};
+                    return get_x(c);
+                }
+            ", "");
+            int result = p.callFunction("test");
+            assertEq(100, result);
+        }
+
+        # Test 23: Type compatibility - deeply nested inheritance to base
+        {
+            hash<DeeplyNested> deep = <DeeplyNested>{
+                "name": "deep_compat",
+                "id": 99,
+                "created": now(),
+                "value": 1.5,
+            };
+            hash<BaseInfo> base = deep;  # 3-level derived -> base assignment
+            assertEq("deep_compat", base.name);
+            assertEq(99, base.id);
+        }
+
+        # Test 24: Type compatibility - return type covariance
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                hashdecl Base { string name; }
+                hashdecl Derived inherits Base { int id; }
+                hash<Base> sub get_base() {
+                    return <Derived>{'name': 'covariant', 'id': 123};
+                }
+            ", "");
+            hash h = p.callFunction("get_base");
+            assertEq("covariant", h.name);
+        }
+
+        # Test 25: Type compatibility in list of base type
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                hashdecl Parent { int id; }
+                hashdecl Child inherits Parent { string extra; }
+                list<hash<Parent>> sub get_list() {
+                    hash<Child> c = <Child>{'id': 1, 'extra': 'test'};
+                    return (c,);
+                }
+            ", "");
+            list l = p.callFunction("get_list");
+            assertEq(1, l[0].id);
+        }
+
+        # Test 26: Reflection - getParentTypedHash() returns parent
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("reflection");
+            p.parse("
+                hashdecl Base { int x; }
+                hashdecl Derived inherits Base { int y; }
+                *string sub test() {
+                    TypedHash th = TypedHash::forName('Derived');
+                    *TypedHash parent = th.getParentTypedHash();
+                    return parent ? parent.getName() : NOTHING;
+                }
+            ", "");
+            assertEq("Base", p.callFunction("test"));
+        }
+
+        # Test 27: Reflection - getParentTypedHash() returns NOTHING for no parent
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("reflection");
+            p.parse("
+                hashdecl NoParent { int x; }
+                bool sub test() {
+                    TypedHash th = TypedHash::forName('NoParent');
+                    return !exists th.getParentTypedHash();
+                }
+            ", "");
+            assertTrue(p.callFunction("test"));
+        }
+
+        # Test 28: Reflection - inheritsFrom() returns true for descendant
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("reflection");
+            p.parse("
+                hashdecl A { int a; }
+                hashdecl B inherits A { int b; }
+                hashdecl C inherits B { int c; }
+                list sub test() {
+                    TypedHash tha = TypedHash::forName('A');
+                    TypedHash thb = TypedHash::forName('B');
+                    TypedHash thc = TypedHash::forName('C');
+                    return (
+                        thb.inheritsFrom(tha),  # direct parent
+                        thc.inheritsFrom(tha),  # grandparent
+                        thc.inheritsFrom(thb),  # parent
+                        tha.inheritsFrom(thb),  # reverse - should be false
+                    );
+                }
+            ", "");
+            list result = p.callFunction("test");
+            assertTrue(result[0]);   # B inherits from A
+            assertTrue(result[1]);   # C inherits from A (grandparent)
+            assertTrue(result[2]);   # C inherits from B
+            assertFalse(result[3]);  # A does NOT inherit from B
         }
     }
 }

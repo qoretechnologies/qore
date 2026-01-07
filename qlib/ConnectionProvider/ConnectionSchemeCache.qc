@@ -27,39 +27,12 @@
 #! Contains all public definitions in the ConnectionProvider module
 public namespace ConnectionProvider {
 #! Connection option information
-public hashdecl ConnectionOptionInfo {
-    #! Option display name
-    string display_name;
-
-    #! Option short description in plain text
-    string short_desc;
-
-    #! Description with markdown formatting
-    string desc;
-
+public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
     #! Option value type
     string type;
 
-    #! Is the value sensitive? (password or other authentication info)
-    bool sensitive = False;
-
     #! Should the option be preselected in UIs?
     bool preselected = False;
-
-    #! List of allowed values (enum)
-    *softlist<hash<Util::AllowedValueInfo>> allowed_values;
-
-    #! Does the option accept values not defined in allowed_values too?
-    *bool allowed_values_creatable;
-
-    #! List of allowed values for elements of list types (enum)
-    *softlist<hash<Util::AllowedValueInfo>> element_allowed_values;
-
-    #! Does the option accept element values not defined in element_allowed_values too?
-    *bool element_allowed_values_creatable;
-
-    #! Any default value
-    auto default_value;
 
     #! Do environment variable substitution on the value?
     bool subst_env_vars = False;
@@ -67,36 +40,12 @@ public hashdecl ConnectionOptionInfo {
     #! Modifier for the "file-as-string" type; can a freeform location option be returned?
     bool freeform = False;
 
-    #! Optional example option value
-    auto example_value;
-
     #! Ignore types for backwards compatibility when an option changes type
     *hash<string, bool> ignore_types;
-
-    #! Free-form metadata for the option
-    *hash<auto> metadata;
-
-    #! Messages related to the option
-    *list<hash<UiMessageInfo>> messages;
-
-    #! Any icon info for the option
-    *string icon;
-
-    #! Any image info for the option
-    *string image;
 }
 
 #! Connection provider information
-public hashdecl ConnectionSchemeInfo {
-    #! Connection type / scheme display name
-    string display_name;
-
-    #! Connection type / scheme short description in plain text
-    string short_desc;
-
-    #! Connection type / scheme description with markdown formatting
-    string desc;
-
+public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
     #! Connection scheme set; scheme -> True
     /** The first scheme is the "default" scheme for display
     */
@@ -152,6 +101,7 @@ public class ConnectionSchemeCache {
             "bltcp": "BusyLightDataProvider",
             "blssl": "BusyLightDataProvider",
 
+            "bcrests": "CdsRestClient",
             "cdsrests": "CdsRestClient",
             "dynamics": "CdsRestClient",
 
@@ -176,11 +126,17 @@ public class ConnectionSchemeCache {
             # provided by the json module
             "jsonrpc": "JsonRpcClient",
             "jsonrpcs": "JsonRpcClient",
+            "mcp": "McpClient",
+            "mcps": "McpClient",
+
+            # provided by the jni module
+            "kafka": "KafkaDataProvider",
 
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",
             "memcacheds": "MemcachedDataProvider",
+            "mongodb": "MongoDbDataProvider",
 
             # provided by the jni module
             "mqtttcp": "MqttDataProvider",

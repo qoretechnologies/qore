@@ -212,7 +212,7 @@ QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, Excepti
     }
 
     bool dec_obj = false;
-    QoreValue rv;
+    QoreValue rv{};
 
     {
         QoreAutoRWWriteLocker al(rwl);

@@ -131,7 +131,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
                     strindent(s, indent);
                     QoreStringNode *entry = l->retrieveEntry(i).get<QoreStringNode>();
                     s->sprintf("key %d/%d \"%s\" = ", i, l->size(), entry->c_str());
-                    QoreValue nn;
+                    QoreValue nn{};
                     dni(xsink, s, nset, nn = o->getReferencedMemberNoMethod(entry->c_str(), xsink), indent + 3,
                         false);
                     nn.discard(xsink);

@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 # make sure we have the required qore version
 %requires qore >= 1.0

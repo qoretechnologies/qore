@@ -47,7 +47,7 @@ private:
     bool m_increasing;
     bool m_valid;
 
-    QoreValue val;
+    QoreValue val{};
 
 public:
     DLLLOCAL RangeIterator(int64 start, int64 stop, int64 step, const QoreValue v, ExceptionSink* xsink)

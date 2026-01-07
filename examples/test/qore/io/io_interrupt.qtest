@@ -1,0 +1,566 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%disable-warning unreferenced-variable
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class IOInterruptTest
+
+public class IOInterruptTest inherits QUnit::Test {
+    constructor() : Test("IOInterruptTest", "1.0") {
+        # Basic interrupt mechanism tests
+        addTestCase("SandboxManager interrupt mechanism", \testSandboxManagerInterrupt());
+        addTestCase("SandboxManager configuration", \testSandboxManagerConfiguration());
+
+        # File I/O tests - normal operations
+        addTestCase("File read without interrupt", \testFileReadNoInterrupt());
+        addTestCase("File write without interrupt", \testFileWriteNoInterrupt());
+        addTestCase("File lock without interrupt", \testFileLockNoInterrupt());
+
+        # Stream I/O tests - normal operations
+        addTestCase("Pipe stream without interrupt", \testPipeStreamNoInterrupt());
+        addTestCase("Pipe stream with timeout", \testPipeStreamTimeout());
+
+        # Interrupt tests using embedded Program
+        addTestCase("Interrupt pipe read in Program", \testInterruptPipeReadInProgram());
+        addTestCase("Interrupt pipe write in Program", \testInterruptPipeWriteInProgram());
+
+        # Thread primitive interrupt tests
+        addTestCase("Queue shift interrupt", \testQueueShiftInterrupt());
+        addTestCase("Queue push interrupt (full queue)", \testQueuePushInterrupt());
+        addTestCase("Queue normal operations", \testQueueNormalOperations());
+        addTestCase("Counter waitForZero interrupt", \testCounterWaitInterrupt());
+
+        # Corner cases
+        addTestCase("Multiple interrupt requests", \testMultipleInterrupts());
+
+        # Negative tests
+        addTestCase("Operations without SandboxManager", \testNoSandboxManager());
+        addTestCase("Invalid file operations", \testInvalidFileOperations());
+
+        set_return_value(main());
+    }
+
+    #------------------------------------------------------------------
+    # Basic interrupt mechanism tests
+    #------------------------------------------------------------------
+
+    testSandboxManagerInterrupt() {
+        SandboxManager sm();
+
+        # Test initial state
+        assertFalse(sm.isInterruptRequested(), "interrupt should not be requested initially");
+
+        # Test requesting interrupt
+        sm.requestInterrupt();
+        assertTrue(sm.isInterruptRequested(), "interrupt should be requested after requestInterrupt()");
+
+        # Test clearing interrupt
+        sm.clearInterrupt();
+        assertFalse(sm.isInterruptRequested(), "interrupt should not be requested after clearInterrupt()");
+
+        # Test multiple request/clear cycles
+        for (int i = 0; i < 5; i++) {
+            sm.requestInterrupt();
+            assertTrue(sm.isInterruptRequested(), sprintf("interrupt cycle %d: should be requested", i));
+            sm.clearInterrupt();
+            assertFalse(sm.isInterruptRequested(), sprintf("interrupt cycle %d: should be cleared", i));
+        }
+    }
+
+    testSandboxManagerConfiguration() {
+        SandboxManager sm();
+
+        # Verify configuration contains expected keys
+        hash<auto> config = sm.getConfiguration();
+        assertTrue(exists config.interrupt_requested, "configuration should have interrupt_requested");
+        assertTrue(exists config.memory_limit, "configuration should have memory_limit");
+        assertTrue(exists config.cpu_time_limit, "configuration should have cpu_time_limit");
+        assertTrue(exists config.wall_time_limit, "configuration should have wall_time_limit");
+        assertTrue(exists config.max_threads, "configuration should have max_threads");
+        assertTrue(exists config.max_recursion, "configuration should have max_recursion");
+
+        # Verify interrupt_requested reflects actual state
+        assertFalse(config.interrupt_requested, "interrupt_requested should be false initially");
+
+        sm.requestInterrupt();
+        config = sm.getConfiguration();
+        assertTrue(config.interrupt_requested, "interrupt_requested should be true after request");
+
+        sm.clearInterrupt();
+        config = sm.getConfiguration();
+        assertFalse(config.interrupt_requested, "interrupt_requested should be false after clear");
+    }
+
+    #------------------------------------------------------------------
+    # File I/O tests - normal operations
+    #------------------------------------------------------------------
+
+    testFileReadNoInterrupt() {
+        string tmpfile = tmp_location() + "/test_read_interrupt.txt";
+        string test_data = "test data for interrupt testing\n" + strmul("x", 1000);
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(test_data);
+        }
+        on_exit unlink(tmpfile);
+
+        # Test that file read works normally
+        {
+            File f();
+            f.open2(tmpfile);
+            string data = f.read(-1);
+            assertEq(test_data.size(), data.size(), "file read should return all data");
+            assertEq(test_data, data, "file read data should match");
+        }
+
+        assertTrue(True, "file read test completed");
+    }
+
+    testFileWriteNoInterrupt() {
+        string tmpfile = tmp_location() + "/test_write_interrupt.txt";
+        on_exit {
+            if (is_file(tmpfile))
+                unlink(tmpfile);
+        }
+
+        string test_data = strmul("test data ", 100);
+
+        # Test that file write works normally
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            int written = f.write(test_data);
+            assertEq(test_data.size(), written, "file write should write all data");
+        }
+
+        # Verify data was written correctly
+        {
+            File f();
+            f.open2(tmpfile);
+            string data = f.read(-1);
+            assertEq(test_data, data, "written data should match");
+        }
+
+        assertTrue(True, "file write test completed");
+    }
+
+    testFileLockNoInterrupt() {
+        string tmpfile = tmp_location() + "/test_lock_interrupt.txt";
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("test");
+        }
+        on_exit unlink(tmpfile);
+
+        # Test that file locking works normally
+        {
+            File f();
+            f.open2(tmpfile, O_RDWR);
+            f.lock(F_WRLCK);
+            assertTrue(True, "write lock acquired");
+        }
+
+        # Test that we can lock again after previous file closed
+        {
+            File f();
+            f.open2(tmpfile, O_RDWR);
+            f.lock(F_WRLCK);
+            assertTrue(True, "second write lock acquired after first released");
+        }
+
+        assertTrue(True, "file lock test completed");
+    }
+
+    #------------------------------------------------------------------
+    # Stream I/O tests - normal operations
+    #------------------------------------------------------------------
+
+    testPipeStreamNoInterrupt() {
+        StreamPipe pipe(True, 5000, 1024);
+        PipeOutputStream pos = pipe.getOutputStream();
+        PipeInputStream pis = pipe.getInputStream();
+
+        binary test_data = <01020304050607080910>;
+
+        # Write data in background
+        Counter c(1);
+        background sub() {
+            c.dec();
+            pos.write(test_data);
+            pos.close();
+        }();
+
+        c.waitForZero();
+        usleep(50ms);
+
+        *binary data = pis.read(100);
+        assertEq(test_data.size(), data.size(), "pipe read should return all data");
+        assertEq(test_data, data, "pipe data should match");
+        pis.finishClose();
+
+        assertTrue(True, "pipe stream test completed");
+    }
+
+    testPipeStreamTimeout() {
+        # Test that pipe read times out correctly (raises TIMEOUT-ERROR)
+        # Use non-syncClose to avoid close timeout issues
+        StreamPipe pipe(False, 100, 1024);  # 100ms timeout, no syncClose
+        PipeInputStream pis = pipe.getInputStream();
+        PipeOutputStream pos = pipe.getOutputStream();
+
+        # Don't write anything - read should timeout
+        bool got_timeout = False;
+        date start = now_us();
+        try {
+            *binary data = pis.read(100);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TIMEOUT-ERROR") {
+                got_timeout = True;
+            }
+        }
+        date elapsed = now_us() - start;
+
+        # Read should timeout
+        assertTrue(got_timeout, "read should raise TIMEOUT-ERROR");
+        # Elapsed time should be around 100ms (allow some slack)
+        assertTrue(elapsed >= 50ms, "elapsed time should be at least 50ms");
+
+        # Cleanup - no syncClose so close is immediate
+        pos.close();
+    }
+
+    #------------------------------------------------------------------
+    # Interrupt tests using embedded Program
+    #------------------------------------------------------------------
+
+    testInterruptPipeReadInProgram() {
+        # Test interrupt with pipe - using pre-requested interrupt
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+*binary sub read_pipe() {
+    StreamPipe pipe(True, 30000, 1024);
+    PipeInputStream pis = pipe.getInputStream();
+    # This should be interrupted before blocking
+    return pis.read(100);
+}
+", "interrupt_pipe_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("read_pipe");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "pipe read should be interrupted when interrupt is pre-requested");
+        sm.clearInterrupt();
+    }
+
+    testInterruptPipeWriteInProgram() {
+        # Test interrupt with pipe write - using pre-requested interrupt
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+sub write_pipe() {
+    StreamPipe pipe(True, 30000, 16);  # Small buffer
+    PipeOutputStream pos = pipe.getOutputStream();
+    # Try to write lots of data - should be interrupted
+    binary large_data = binary();
+    for (int i = 0; i < 100; i++) {
+        large_data += <0102030405060708>;
+    }
+    pos.write(large_data);
+}
+", "interrupt_pipe_write_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("write_pipe");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "pipe write should be interrupted when interrupt is pre-requested");
+        sm.clearInterrupt();
+    }
+
+    #------------------------------------------------------------------
+    # Thread primitive interrupt tests
+    #------------------------------------------------------------------
+
+    testQueueShiftInterrupt() {
+        # Test interrupt of Queue::shift() on empty queue
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+auto sub shift_queue() {
+    Queue q();
+    # This should be interrupted - queue is empty, would block forever
+    return q.get(30000);  # 30 second timeout
+}
+", "queue_shift_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("shift_queue");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "Queue::get() should be interrupted when interrupt is pre-requested");
+        sm.clearInterrupt();
+    }
+
+    testQueuePushInterrupt() {
+        # Test interrupt of Queue::push() on full queue
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+sub push_queue() {
+    Queue q(1);  # Max size 1
+    q.push(1);   # Fill the queue
+    # This should be interrupted - queue is full, would block
+    q.push(2, 30000);  # 30 second timeout
+}
+", "queue_push_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("push_queue");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "Queue::push() on full queue should be interrupted");
+        sm.clearInterrupt();
+    }
+
+    testQueueNormalOperations() {
+        # Test that Queue operations work normally without interrupt
+        Queue q(10);
+
+        # Push and shift
+        q.push("test1");
+        q.push("test2");
+        q.push(123);
+
+        assertEq(3, q.size(), "queue should have 3 elements");
+
+        auto v1 = q.get();
+        assertEq("test1", v1, "first element should be test1");
+
+        auto v2 = q.get();
+        assertEq("test2", v2, "second element should be test2");
+
+        auto v3 = q.get();
+        assertEq(123, v3, "third element should be 123");
+
+        assertEq(0, q.size(), "queue should be empty");
+
+        # Test with negative timeout - should timeout immediately on empty queue
+        # (Queue semantics: negative = immediate timeout, 0 = infinite wait)
+        bool got_timeout = False;
+        try {
+            auto v = q.get(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                got_timeout = True;
+            }
+        }
+        assertTrue(got_timeout, "get with negative timeout on empty queue should timeout immediately");
+
+        assertTrue(True, "queue normal operations test completed");
+    }
+
+    testCounterWaitInterrupt() {
+        # Test interrupt of Counter::waitForZero()
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+int sub wait_counter() {
+    Counter c(1);  # Counter at 1, will never reach 0
+    # This should be interrupted - counter won't reach 0
+    return c.waitForZero(30000);  # 30 second timeout
+}
+", "counter_wait_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("wait_counter");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "Counter::waitForZero() should be interrupted");
+        sm.clearInterrupt();
+    }
+
+    #------------------------------------------------------------------
+    # Corner cases
+    #------------------------------------------------------------------
+
+    testMultipleInterrupts() {
+        SandboxManager sm();
+
+        # Test rapid interrupt/clear cycles
+        for (int i = 0; i < 100; i++) {
+            sm.requestInterrupt();
+            assertTrue(sm.isInterruptRequested(), sprintf("rapid cycle %d: interrupt requested", i));
+            sm.clearInterrupt();
+            assertFalse(sm.isInterruptRequested(), sprintf("rapid cycle %d: interrupt cleared", i));
+        }
+
+        # Test multiple requests without clear (should be idempotent)
+        sm.requestInterrupt();
+        sm.requestInterrupt();
+        sm.requestInterrupt();
+        assertTrue(sm.isInterruptRequested(), "multiple requests should keep interrupt set");
+
+        # Single clear should clear it
+        sm.clearInterrupt();
+        assertFalse(sm.isInterruptRequested(), "single clear should clear interrupt");
+
+        # Test multiple clears (should be idempotent)
+        sm.clearInterrupt();
+        sm.clearInterrupt();
+        sm.clearInterrupt();
+        assertFalse(sm.isInterruptRequested(), "multiple clears should keep interrupt cleared");
+    }
+
+    #------------------------------------------------------------------
+    # Negative tests
+    #------------------------------------------------------------------
+
+    testNoSandboxManager() {
+        # Test that operations work without SandboxManager
+        string tmpfile = tmp_location() + "/test_no_sm.txt";
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("test data for no sandbox manager test");
+        }
+        on_exit unlink(tmpfile);
+
+        # Operation should work normally without sandbox manager
+        {
+            File f();
+            f.open2(tmpfile);
+            string result = f.read(-1);
+            assertTrue(result.size() > 0, "read without SandboxManager should work");
+        }
+
+        # Pipe operations should also work
+        StreamPipe pipe(True, 1000, 1024);
+        PipeInputStream pis = pipe.getInputStream();
+        PipeOutputStream pos = pipe.getOutputStream();
+
+        Counter c(1);
+        background sub() {
+            c.dec();
+            pos.write(<01020304>);
+            pos.close();
+        }();
+
+        c.waitForZero();
+        usleep(50ms);
+
+        *binary data = pis.read(100);
+        assertTrue(data.size() > 0, "pipe read without SandboxManager should work");
+        pis.finishClose();
+    }
+
+    testInvalidFileOperations() {
+        # Test error handling for invalid file operations
+        string nonexistent = tmp_location() + "/nonexistent_file_12345.txt";
+
+        # Try to read non-existent file
+        bool got_error = False;
+        try {
+            File f();
+            f.open2(nonexistent);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+        }
+        assertTrue(got_error, "opening non-existent file should raise error");
+
+        # Try to lock file that isn't open
+        got_error = False;
+        try {
+            File f();
+            f.lock(F_WRLCK);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            assertEq("FILE-LOCK-ERROR", ex.err, "locking unopened file should raise FILE-LOCK-ERROR");
+        }
+        assertTrue(got_error, "locking unopened file should raise error");
+
+        # Test pipe with no syncClose (simpler cleanup)
+        {
+            StreamPipe pipe(False, 100, 1024);  # No syncClose, short timeout
+            PipeInputStream pis = pipe.getInputStream();
+            PipeOutputStream pos = pipe.getOutputStream();
+
+            # Close output without writing
+            pos.close();
+
+            # Read should return empty/nothing or timeout
+            bool read_ok = False;
+            try {
+                *binary data = pis.read(100);
+                read_ok = True;  # Empty read is fine
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "TIMEOUT-ERROR") {
+                    read_ok = True;  # Timeout is also acceptable
+                }
+            }
+            assertTrue(read_ok, "read from closed pipe should return empty or timeout");
+        }
+    }
+}

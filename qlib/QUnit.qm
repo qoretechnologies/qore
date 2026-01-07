@@ -24,7 +24,7 @@
 
 
 %requires qore >= 0.9
-%new-style
+%modern
 
 %try-module xml >= 1.3
 %define NO_XML
@@ -61,10 +61,7 @@ module QUnit {
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../qlib/QUnit.qm
 
@@ -99,10 +96,7 @@ public class QUnitTest inherits QUnit::Test {
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../qlib/QUnit.qm
 
@@ -669,6 +663,15 @@ public class QUnit::TestReporter {
 
         #! new ARGV for languages that don't support lvalue references
         *list<auto> new_argv;
+
+        #! flag indicating list-only mode
+        bool m_list_only = False;
+
+        #! whitelist patterns - if non-empty, only matching tests run
+        list<string> m_include_patterns = ();
+
+        #! blacklist patterns - matching tests are skipped
+        list<string> m_exclude_patterns = ();
     }
 
     public {
@@ -678,7 +681,16 @@ public class QUnit::TestReporter {
             "verbose" : "v,verbose:i+",
             "quiet"   : "q,quiet",
             "format"  : "format=s",
+            "list"    : "l,list",
+            "include" : "include=s@",
+            "exclude" : "exclude=s@",
         };
+
+        #! Environment variable for whitelist patterns (comma-separated)
+        const ENV_INCLUDE = "QUNIT_INCLUDE";
+
+        #! Environment variable for blacklist patterns (comma-separated)
+        const ENV_EXCLUDE = "QUNIT_EXCLUDE";
 
         const TEST_SUCCESS = 0;
         const TEST_FAILURE = 1;
@@ -704,6 +716,13 @@ public class QUnit::TestReporter {
            junit       print a junit xml output\n");
         printOption("-v,--verbose", "shorthand for --format=plain", offset);
         printOption("-q,--quiet", "shorthand for --format=plainquiet", offset);
+        printOption("-l,--list", "list all test cases and exit", offset);
+        printOption("   --include=PAT", "only run tests matching PAT (can repeat)", offset);
+        printOption("   --exclude=PAT", "skip tests matching PAT (can repeat)", offset);
+        print("\n    Environment variables:\n");
+        printOption("QUNIT_INCLUDE", "comma-separated whitelist patterns", offset);
+        printOption("QUNIT_EXCLUDE", "comma-separated blacklist patterns", offset);
+        print("\n    Patterns support glob-style wildcards: * (any chars), ? (single char)\n");
     }
 
     private usage() {
@@ -735,6 +754,21 @@ public class QUnit::TestReporter {
         } else {
             # Default
             m_output = PLAINQUIET;
+        }
+
+        # Handle list mode
+        m_list_only = m_options.list ?? False;
+
+        # Handle include patterns (command-line + env var)
+        m_include_patterns = m_options.include ?? ();
+        if (*string env_include = ENV{ENV_INCLUDE}) {
+            m_include_patterns += map trim($1), env_include.split(",");
+        }
+
+        # Handle exclude patterns (command-line + env var)
+        m_exclude_patterns = m_options.exclude ?? ();
+        if (*string env_exclude = ENV{ENV_EXCLUDE}) {
+            m_exclude_patterns += map trim($1), env_exclude.split(",");
         }
     }
 
@@ -1017,6 +1051,83 @@ addTestCase(obj);
     */
     addTestCase(QUnit::TestCase tc) {
         testCases += tc;
+    }
+
+    #! Returns True if the test case should be run based on include/exclude patterns
+    /** @param name the test case name to check
+        @return True if the test should run, False if it should be skipped
+    */
+    private bool shouldRunTest(string name) {
+        # If whitelist is specified, test must match at least one pattern
+        if (m_include_patterns) {
+            bool matched = False;
+            foreach string pattern in (m_include_patterns) {
+                if (matchesPattern(name, pattern)) {
+                    matched = True;
+                    break;
+                }
+            }
+            if (!matched) {
+                return False;
+            }
+        }
+
+        # If test matches any blacklist pattern, skip it
+        foreach string pattern in (m_exclude_patterns) {
+            if (matchesPattern(name, pattern)) {
+                return False;
+            }
+        }
+
+        return True;
+    }
+
+    #! Matches a test name against a glob-style pattern
+    /** Supports * (match any chars) and ? (match single char)
+        @param name the test case name
+        @param pattern the glob pattern to match
+        @return True if name matches pattern
+    */
+    private static bool matchesPattern(string name, string pattern) {
+        # Convert glob pattern to regex using placeholder approach:
+        # 1. Replace glob wildcards with placeholders first
+        # 2. Escape regex special chars
+        # 3. Convert placeholders to regex equivalents
+        string rx = pattern;
+        # Replace glob wildcards with unique placeholders
+        rx = replace(rx, "*", "\x00STAR\x00");
+        rx = replace(rx, "?", "\x00QMARK\x00");
+        # Escape regex special chars
+        rx = regex_subst(rx, "([.+^${}()|\\[\\]\\\\])", "\\\\$1", RE_Global);
+        # Convert placeholders to regex wildcards
+        rx = replace(rx, "\x00STAR\x00", ".*");
+        rx = replace(rx, "\x00QMARK\x00", ".");
+        # Anchor the pattern
+        rx = "^" + rx + "$";
+        return regex(name, rx, RE_Caseless);
+    }
+
+    #! Lists all registered test cases to stdout
+    private listTestCases() {
+        printf("Registered test cases in %y:\n", m_name);
+        int count = 0;
+        foreach TestCase tc in (testCases) {
+            string name = tc.getName();
+            bool would_run = shouldRunTest(name);
+            string status = "";
+            if (!would_run) {
+                status = " [EXCLUDED]";
+            }
+            printf("  %d. %s%s\n", ++count, name, status);
+        }
+        printf("\nTotal: %d test case%s\n", count, count == 1 ? "" : "s");
+
+        if (m_include_patterns) {
+            printf("Include patterns: %y\n", m_include_patterns);
+        }
+        if (m_exclude_patterns) {
+            printf("Exclude patterns: %y\n", m_exclude_patterns);
+        }
     }
 
     private string escapeSpecialChars(string str) {
@@ -2113,6 +2224,12 @@ fail("Unexpected code executed");
             throw "TESTING-EXCEPTION", sprintf("Please define some tests first by calling %s::addTestCase()", self.className());
         }
 
+        # Handle list mode
+        if (m_list_only) {
+            listTestCases();
+            return 0;
+        }
+
         printHeader();
 
         # create initialization / shutdown test case
@@ -2127,6 +2244,13 @@ fail("Unexpected code executed");
         }
 
         foreach TestCase tc in (testCases) {
+            # Check if test should be skipped based on filters
+            if (!shouldRunTest(tc.getName())) {
+                # Add skipped result for filtered tests
+                addTestResult(tc, TEST_SKIPPED, NOTHING, NOTHING, "Excluded by filter");
+                continue;
+            }
+
             code tinit = sub () {tc.setupThread();};
             set_thread_init(tinit);
 

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RestClientDataProvider module definition
 
-/*  RestClientDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  RestClientDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,20 +25,17 @@
 # minimum required Qore version
 %requires qore >= 2.0
 # assume local scope for variables, do not use "$" signs
-%new-style
+%modern
 # require type definitions everywhere
-%require-types
 # strict argument handling
-%strict-args
 # enable all warnings
-%enable-all-warnings
 
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
 %requires FileLocationHandler
 
 module RestClientDataProvider {
-    version = "2.0.1";
+    version = "2.2.0";
     desc = "user module providing a data provider API for REST servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -112,7 +109,46 @@ module RestClientDataProvider {
     - @ref RestClientDataProvider::RestClientPostDataProvider "RestClientPostDataProvider"
     - @ref RestClientDataProvider::RestClientPutDataProvider "RestClientPutDataProvider"
 
+    @section restclientdataprovider_debug Debug Info Collection
+
+    REST data providers support debug info collection for capturing technical details about HTTP requests and
+    responses. This is useful for debugging API interactions.
+
+    @par Example: Capturing REST Debug Info
+    @code{.py}
+%requires RestClientDataProvider
+
+# Create a REST data provider
+RestClientDataProvider provider("https://api.example.com");
+
+# Enable debug collection
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Make REST calls
+auto result = provider.getChildProvider("users").doRequest({"method": "GET"});
+
+# Analyze debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+foreach hash<DataProviderDebugInfo> debug in (info) {
+    printf("%s %s\n", debug.method, debug.url);
+    printf("  Status: %d %s\n", debug.status_code, debug.status_message);
+    printf("  Duration: %dms\n", debug.duration_ms);
+    printf("  Protocol: %s\n", debug.protocol);
+    if (debug.request_headers) {
+        printf("  Request Headers: %y\n", debug.request_headers);
+    }
+}
+    @endcode
+
+    See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
+
     @section restclientdataprovider_relnotes Release Notes
+
+    @subsection restclientdataprovider_v2_2 RestClientDataProvider v2.2
+    - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
+      "AbstractDataProvider::setDebugCollector()"
+    - debug info includes HTTP method, URL, headers, request/response bodies, status codes, timing, and protocol info
 
     @subsection restclientdataprovider_v2_0_1 RestClientDataProvider v2.0.1
     - fixed REST action \c body types

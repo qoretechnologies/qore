@@ -109,6 +109,7 @@ class QoreExternalFunction;
 class QoreExternalGlobalVar;
 class QoreExternalConstant;
 class QoreSandboxManager;
+class QoreEnumDecl;
 
 typedef std::list<QoreBreakpoint*> bkp_list_t;
 
@@ -725,6 +726,11 @@ public:
     /** @since %Qore 0.9
     */
     DLLEXPORT const TypedHashDecl* findHashDecl(const char* path, const QoreNamespace*& pns) const;
+
+    //! search for the given enum in the program; can be a simple enum name or a namespace-prefixed path (ex: "NamespaceName::EnumName")
+    /** @since %Qore 2.1
+    */
+    DLLEXPORT const QoreEnumDecl* findEnum(const char* path, const QoreNamespace*& pns) const;
 
     //! search for the given namespace in the program; can be a simple namespace name or a namespace-prefixed path (ex: "NamespaceName::Namespace")
     /** @note this function is safe to call during module initialization for the current Program (as returned by

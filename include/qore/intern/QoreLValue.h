@@ -405,7 +405,28 @@ public:
     }
 
     DLLLOCAL QoreValue getReferencedValue() const {
-        return getValue().refSelf();
+        if (!assigned) {
+            return QoreValue();
+        }
+
+        // For QV_Node, ref the existing node before returning
+        if (type == QV_Node) {
+            if (v.n) {
+                v.n->ref();
+            }
+            return QoreValue(v.n);
+        }
+
+        // For scalar types, QoreValue constructor may allocate a new QoreBigIntNode/QoreBigFloatNode
+        // for large values. These are already created with ref count 1, so no additional ref needed.
+        switch (type) {
+            case QV_Bool: return QoreValue(v.b);
+            case QV_Int: return QoreValue(v.i);
+            case QV_Float: return QoreValue(v.f);
+            default: assert(false);
+                // no break
+        }
+        return QoreValue();
     }
 
     DLLLOCAL const ReferenceNode* getReference() const {
@@ -434,15 +455,28 @@ public:
             return QoreValue(v.n);
         }
 
-        needs_deref = false;
-
         switch (type) {
-            case QV_Bool: return QoreValue(v.b);
-            case QV_Int: return QoreValue(v.i);
-            case QV_Float: return QoreValue(v.f);
+            case QV_Bool:
+                needs_deref = false;
+                return QoreValue(v.b);
+            case QV_Int: {
+                // QoreValue(v.i) may allocate a QoreBigIntNode for large integers
+                QoreValue result(v.i);
+                // If a large integer was created (stored as pointer), set needs_deref = true
+                needs_deref = result.isPointer();
+                return result;
+            }
+            case QV_Float: {
+                // QoreValue(v.f) may allocate a QoreBigFloatNode for problematic doubles
+                QoreValue result(v.f);
+                // If a node was created, set needs_deref = true
+                needs_deref = result.isPointer();
+                return result;
+            }
             default: assert(false);
             // no break
         }
+        needs_deref = false;
         return QoreValue();
     }
 
@@ -612,19 +646,19 @@ public:
             case QV_Bool:
                 v.b = n.v.b;
                 assert(val.getType() == NT_BOOLEAN);
-                n.v.b = val.v.b;
+                n.v.b = val.getAsBool();
                 break;
 
             case QV_Int:
                 v.i = n.v.i;
                 assert(val.getType() == NT_INT);
-                n.v.i = val.v.i;
+                n.v.i = val.getAsBigInt();
                 break;
 
             case QV_Float:
                 v.f = n.v.f;
                 assert(val.getType() == NT_FLOAT);
-                n.v.f = val.v.f;
+                n.v.f = val.getAsFloat();
                 break;
 
             case QV_Node:
@@ -784,21 +818,45 @@ public:
             rv = nullptr;
         }
 
-        switch (val.type) {
-            case QV_Bool: v.b = val.v.b; if (type != QV_Bool) type = QV_Bool; break;
-            case QV_Int: v.i = val.v.i; if (type != QV_Int) type = QV_Int; break;
-            case QV_Float: v.f = val.v.f; if (type != QV_Float) type = QV_Float; break;
-            case QV_Node:
-                v.n = val.takeNode();
-                if (type != QV_Node) {
-                    type = QV_Node;
-                }
-                if (!is_closure) {
-                    check_lvalue_object_in_out(v.n, nullptr);
-                }
-                break;
-            default: assert(false);
-                // no break
+        // Use QoreValue's type info via getType()
+        qore_type_t vt = val.getType();
+        if (vt == NT_BOOLEAN) {
+            v.b = val.getAsBool();
+            if (type != QV_Bool) type = QV_Bool;
+        } else if (vt == NT_INT) {
+            v.i = val.getAsBigInt();
+            if (type != QV_Int) type = QV_Int;
+        } else if (vt == NT_FLOAT) {
+            v.f = val.getAsFloat();
+            if (type != QV_Float) type = QV_Float;
+        } else if (val.hasNode()) {
+            v.n = val.takeNode();
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
+            if (!is_closure) {
+                check_lvalue_object_in_out(v.n, nullptr);
+            }
+        } else {
+            // nothing or null
+            v.n = nullptr;
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
+        }
+
+        // Handle any unconsumed node from val (e.g., BigInt/Float node when storing inline)
+        // This can happen when val contains a QoreBigIntNode or QoreFloatNode that was
+        // converted to an inline scalar value above
+        AbstractQoreNode* val_node = val.takeIfNode();
+        if (val_node) {
+            if (rv) {
+                // We have both an old node and an unconsumed node - deref the val node inline
+                val_node->deref(nullptr);
+            } else {
+                // No old node, so return the val node for cleanup by caller
+                rv = val_node;
+            }
         }
 
         return rv;
@@ -871,6 +929,23 @@ public:
             type = QV_Node;
 
         return rv;
+    }
+
+    // Assign from QoreValue - delegates to the appropriate typed assign method
+    DLLLOCAL AbstractQoreNode* assign(QoreValue val) {
+        qore_type_t vt = val.getType();
+        if (vt == NT_BOOLEAN) {
+            return assign(val.getAsBool());
+        } else if (vt == NT_INT) {
+            return assign(val.getAsBigInt());
+        } else if (vt == NT_FLOAT) {
+            return assign(val.getAsFloat());
+        } else if (val.hasNode()) {
+            return assign(val.takeNode());
+        } else {
+            // nothing or null
+            return assign(static_cast<AbstractQoreNode*>(nullptr));
+        }
     }
 
     DLLLOCAL bool exists() const {

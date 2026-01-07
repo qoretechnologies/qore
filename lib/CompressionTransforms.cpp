@@ -33,18 +33,11 @@
 #include <cerrno>
 #include <zlib.h>
 
-#ifdef HAVE_BROTLI
+// Brotli, Zstd, and LZ4 are required since Qore 2.3
 #include <brotli/encode.h>
 #include <brotli/decode.h>
-#endif
-
-#ifdef HAVE_ZSTD
 #include <zstd.h>
-#endif
-
-#ifdef HAVE_LZ4
 #include <lz4.h>
-#endif
 
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
@@ -367,7 +360,6 @@ private:
     State state;
 };
 
-#ifdef HAVE_BROTLI
 class BrotliCompressTransform : public Transform {
 
 public:
@@ -483,9 +475,7 @@ private:
     BrotliDecoderState* state;
     bool finished;
 };
-#endif // HAVE_BROTLI
 
-#ifdef HAVE_ZSTD
 class ZstdCompressTransform : public Transform {
 
 public:
@@ -620,9 +610,7 @@ private:
     ZSTD_DStream* dstream;
     bool finished;
 };
-#endif // HAVE_ZSTD
 
-#ifdef HAVE_LZ4
 class Lz4CompressTransform : public Transform {
 
 public:
@@ -720,7 +708,6 @@ private:
     bool finished;
     bool initialized;
 };
-#endif // HAVE_LZ4
 
 Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink) {
     if (*alg == ALG_ZLIB) {
@@ -729,22 +716,13 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
         return new ZlibDeflateTransform(level, xsink, true);
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2CompressTransform(level, xsink);
-    }
-#ifdef HAVE_BROTLI
-    else if (*alg == ALG_BROTLI) {
+    } else if (*alg == ALG_BROTLI) {
         return new BrotliCompressTransform(level, xsink);
-    }
-#endif
-#ifdef HAVE_ZSTD
-    else if (*alg == ALG_ZSTD) {
+    } else if (*alg == ALG_ZSTD) {
         return new ZstdCompressTransform(level, xsink);
-    }
-#endif
-#ifdef HAVE_LZ4
-    else if (*alg == ALG_LZ4) {
+    } else if (*alg == ALG_LZ4) {
         return new Lz4CompressTransform(level, xsink);
     }
-#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }
@@ -756,22 +734,13 @@ Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, Exc
         return new ZlibInflateTransform(xsink, true);
     } else if (*alg == ALG_BZIP2) {
         return new Bzip2DecompressTransform(xsink);
-    }
-#ifdef HAVE_BROTLI
-    else if (*alg == ALG_BROTLI) {
+    } else if (*alg == ALG_BROTLI) {
         return new BrotliDecompressTransform(xsink);
-    }
-#endif
-#ifdef HAVE_ZSTD
-    else if (*alg == ALG_ZSTD) {
+    } else if (*alg == ALG_ZSTD) {
         return new ZstdDecompressTransform(xsink);
-    }
-#endif
-#ifdef HAVE_LZ4
-    else if (*alg == ALG_LZ4) {
+    } else if (*alg == ALG_LZ4) {
         return new Lz4DecompressTransform(xsink);
     }
-#endif
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
 }

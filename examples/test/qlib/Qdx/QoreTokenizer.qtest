@@ -1,0 +1,987 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreTokenizer.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%exec-class QoreTokenizerTests
+
+%requires Qdx
+%requires QUnit
+
+public class QoreTokenizerTests inherits QUnit::Test {
+    constructor() : Test("QoreTokenizerTests", "1.0") {
+        addTestCase("Basic string tokenization", \testBasicStrings());
+        addTestCase("Single-quoted strings with escapes", \testSingleQuotedEscapes());
+        addTestCase("Double-quoted strings with escapes", \testDoubleQuotedEscapes());
+        addTestCase("Line comments", \testLineComments());
+        addTestCase("Block comments", \testBlockComments());
+        addTestCase("Braces and brackets", \testBracesAndBrackets());
+        addTestCase("Dollar hash special case", \testDollarHash());
+        addTestCase("Regex match operators", \testRegexMatchOperators());
+        addTestCase("Regex patterns", \testRegexPatterns());
+        addTestCase("Substitution patterns", \testSubstitutionPatterns());
+        addTestCase("Transliteration patterns", \testTransliterationPatterns());
+        addTestCase("Heredoc strings", \testHeredocStrings());
+        addTestCase("Whitespace and newlines", \testWhitespaceAndNewlines());
+        addTestCase("skipToCloseBrace basic", \testSkipToCloseBraceBasic());
+        addTestCase("skipToCloseBrace nested", \testSkipToCloseBraceNested());
+        addTestCase("skipToCloseBrace with strings", \testSkipToCloseBraceWithStrings());
+        addTestCase("skipToCloseBrace with comments", \testSkipToCloseBraceWithComments());
+        addTestCase("skipToCloseBrace with regex", \testSkipToCloseBraceWithRegex());
+        addTestCase("UTF-8 strings", \testUtf8Strings());
+        addTestCase("Line and column tracking", \testLineColumnTracking());
+        addTestCase("Original $# bug case", \testOriginalDollarHashBug());
+        addTestCase("Mixed code tokenization", \testMixedCode());
+        addTestCase("Edge cases", \testEdgeCases());
+        addTestCase("count_braces() helper function", \testCountBraces());
+        addTestCase("count_all_brackets() helper function", \testCountAllBrackets());
+        addTestCase("qdx integration - $# in loops", \testQdxDollarHashIntegration());
+        set_return_value(main());
+    }
+
+    testBasicStrings() {
+        # Simple single-quoted string
+        {
+            QoreTokenizer tok("'hello'");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type, "single-quoted string type");
+            assertEq("'hello'", t.value, "single-quoted string value");
+            assertTrue(tok.atEnd(), "at end after single token");
+        }
+
+        # Simple double-quoted string
+        {
+            QoreTokenizer tok('"world"');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type, "double-quoted string type");
+            assertEq('"world"', t.value, "double-quoted string value");
+            assertTrue(tok.atEnd(), "at end after single token");
+        }
+
+        # Empty strings
+        {
+            QoreTokenizer tok("''");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type, "empty single-quoted string type");
+            assertEq("''", t.value, "empty single-quoted string value");
+        }
+        {
+            QoreTokenizer tok('""');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type, "empty double-quoted string type");
+            assertEq('""', t.value, "empty double-quoted string value");
+        }
+    }
+
+    testSingleQuotedEscapes() {
+        # Escaped quote
+        {
+            QoreTokenizer tok("'it\\'s'");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type, "escaped quote in single string");
+            assertEq("'it\\'s'", t.value, "escaped quote value preserved");
+        }
+
+        # Escaped backslash
+        {
+            QoreTokenizer tok("'path\\\\dir'");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type);
+            assertEq("'path\\\\dir'", t.value);
+        }
+
+        # Other characters after backslash (not special in single quotes)
+        {
+            QoreTokenizer tok("'hello\\nworld'");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type);
+            assertEq("'hello\\nworld'", t.value, "backslash-n preserved literally");
+        }
+    }
+
+    testDoubleQuotedEscapes() {
+        # Escaped quote - use explicit string building to avoid escape confusion
+        # Input: "say \"hello\""  (with backslash-quote sequences)
+        {
+            string input = "\"say \\\"hello\\\"\"";  # double-quoted string with escapes
+            QoreTokenizer tok(input);
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type, "escaped quote in double string");
+            assertEq(input, t.value, "escaped quote value preserved");
+        }
+
+        # Various escapes - \n in source becomes literal backslash-n in token
+        {
+            string input = "\"line1\\nline2\"";
+            QoreTokenizer tok(input);
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type);
+            assertEq(input, t.value, "escape sequences preserved");
+        }
+
+        # Escaped backslash
+        {
+            string input = "\"path\\\\file\"";
+            QoreTokenizer tok(input);
+            hash<TokenInfo> t = tok.next();
+            assertEq(input, t.value);
+        }
+    }
+
+    testLineComments() {
+        # Basic line comment
+        {
+            QoreTokenizer tok("# this is a comment");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_LINE_COMMENT, t.type, "line comment type");
+            assertEq("# this is a comment", t.value, "line comment value");
+        }
+
+        # Line comment with code before
+        {
+            QoreTokenizer tok("x = 1; # comment");
+            list<hash<TokenInfo>> tokens = ();
+            while (!tok.atEnd()) {
+                tokens += tok.next();
+            }
+            hash<TokenInfo> comment_tok;
+            foreach hash<TokenInfo> t in (tokens) {
+                if (t.type == TOK_LINE_COMMENT) {
+                    comment_tok = t;
+                    break;
+                }
+            }
+            assertEq("# comment", comment_tok.value, "line comment after code");
+        }
+
+        # Comment followed by newline
+        {
+            QoreTokenizer tok("# comment\ncode");
+            hash<TokenInfo> t1 = tok.next();
+            assertEq(TOK_LINE_COMMENT, t1.type);
+            assertEq("# comment", t1.value);
+            hash<TokenInfo> t2 = tok.next();
+            assertEq(TOK_NEWLINE, t2.type, "newline after comment");
+        }
+    }
+
+    testBlockComments() {
+        # Basic block comment
+        {
+            QoreTokenizer tok("/* comment */");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_BLOCK_COMMENT, t.type, "block comment type");
+            assertEq("/* comment */", t.value, "block comment value");
+        }
+
+        # Multi-line block comment
+        {
+            QoreTokenizer tok("/* line1\nline2 */");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_BLOCK_COMMENT, t.type);
+            assertEq("/* line1\nline2 */", t.value, "multi-line block comment");
+        }
+
+        # Nested asterisks (not real nesting)
+        {
+            QoreTokenizer tok("/* * * * */");
+            hash<TokenInfo> t = tok.next();
+            assertEq("/* * * * */", t.value);
+        }
+
+        # Block comment with braces inside
+        {
+            QoreTokenizer tok("/* { } */");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_BLOCK_COMMENT, t.type);
+            assertEq("/* { } */", t.value);
+        }
+    }
+
+    testBracesAndBrackets() {
+        # All brace types
+        {
+            QoreTokenizer tok("{}()[]");
+            assertEq(TOK_LBRACE, tok.next().type);
+            assertEq(TOK_RBRACE, tok.next().type);
+            assertEq(TOK_LPAREN, tok.next().type);
+            assertEq(TOK_RPAREN, tok.next().type);
+            assertEq(TOK_LBRACKET, tok.next().type);
+            assertEq(TOK_RBRACKET, tok.next().type);
+            assertTrue(tok.atEnd());
+        }
+
+        # Braces with content
+        {
+            QoreTokenizer tok("{x}");
+            hash<TokenInfo> t1 = tok.next();
+            assertEq(TOK_LBRACE, t1.type);
+            assertEq("{", t1.value);
+        }
+    }
+
+    testDollarHash() {
+        # $# alone
+        {
+            QoreTokenizer tok('$#');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_DOLLAR_HASH, t.type, "$# type");
+            assertEq('$#', t.value, "$# value");
+        }
+
+        # $# in code context
+        {
+            QoreTokenizer tok('for (int i = 0; i < $#; ++i)');
+            list<hash<TokenInfo>> tokens = ();
+            while (!tok.atEnd()) {
+                tokens += tok.next();
+            }
+            bool found_dollar_hash = False;
+            foreach hash<TokenInfo> t in (tokens) {
+                if (t.type == TOK_DOLLAR_HASH) {
+                    found_dollar_hash = True;
+                    assertEq('$#', t.value);
+                    break;
+                }
+            }
+            assertTrue(found_dollar_hash, "$# found in code context");
+        }
+
+        # $ not followed by # (just regular $)
+        {
+            QoreTokenizer tok('$x');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_OTHER, t.type, "$ alone is TOK_OTHER");
+            assertEq('$', t.value);
+        }
+    }
+
+    testRegexMatchOperators() {
+        # =~ operator
+        {
+            QoreTokenizer tok('=~');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX_MATCH, t.type, "=~ type");
+        }
+
+        # !~ operator
+        {
+            QoreTokenizer tok('!~');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX_NOT_MATCH, t.type, "!~ type");
+        }
+
+        # =~ followed by regex
+        {
+            QoreTokenizer tok('=~ /pattern/');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX, t.type, "=~ followed by regex");
+            assertEq("/pattern/", t.value);
+        }
+    }
+
+    testRegexPatterns() {
+        # Basic regex
+        {
+            QoreTokenizer tok('=~ /hello/');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX, t.type);
+            assertEq("/hello/", t.value);
+        }
+
+        # Regex with flags
+        {
+            QoreTokenizer tok('=~ /pattern/gi');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX, t.type);
+            assertEq("/pattern/gi", t.value, "regex with flags");
+        }
+
+        # Regex with escape
+        {
+            string input = "=~ /path\\/file/";
+            QoreTokenizer tok(input);
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_REGEX, t.type);
+            assertEq("/path\\/file/", t.value, "regex with escaped slash");
+        }
+
+        # Regex with special chars
+        {
+            QoreTokenizer tok('=~ /[a-z]+/');
+            hash<TokenInfo> t = tok.next();
+            assertEq('/[a-z]+/', t.value);
+        }
+    }
+
+    testSubstitutionPatterns() {
+        # Basic substitution
+        {
+            QoreTokenizer tok('=~ s/old/new/');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_SUBSTITUTION, t.type, "substitution type");
+            assertEq("s/old/new/", t.value, "substitution value");
+        }
+
+        # Substitution with flags
+        {
+            QoreTokenizer tok('=~ s/old/new/g');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_SUBSTITUTION, t.type);
+            assertEq("s/old/new/g", t.value, "substitution with flags");
+        }
+
+        # Substitution with escaped delimiter
+        {
+            string input = "=~ s/a\\/b/c/";
+            QoreTokenizer tok(input);
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_SUBSTITUTION, t.type);
+            assertEq("s/a\\/b/c/", t.value, "substitution with escaped delimiter");
+        }
+    }
+
+    testTransliterationPatterns() {
+        # tr form
+        {
+            QoreTokenizer tok('=~ tr/abc/xyz/');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_TRANSLITERATION, t.type, "tr type");
+            assertEq("tr/abc/xyz/", t.value, "tr value");
+        }
+
+        # y form
+        {
+            QoreTokenizer tok('=~ y/abc/xyz/');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_TRANSLITERATION, t.type, "y type");
+            assertEq("y/abc/xyz/", t.value, "y value");
+        }
+    }
+
+    testHeredocStrings() {
+        # Basic heredoc
+        {
+            QoreTokenizer tok("<<END\nhello\nEND");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_HEREDOC, t.type, "heredoc type");
+            assertEq("<<END\nhello\nEND", t.value, "heredoc value");
+        }
+
+        # Heredoc with multiple lines
+        {
+            QoreTokenizer tok("<<MARKER\nline1\nline2\nline3\nMARKER");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_HEREDOC, t.type);
+            assertEq("<<MARKER\nline1\nline2\nline3\nMARKER", t.value);
+        }
+
+        # << not followed by identifier (shift operator)
+        {
+            QoreTokenizer tok("<<");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_OTHER, t.type, "<< alone is TOK_OTHER");
+            assertEq("<<", t.value);
+        }
+    }
+
+    testWhitespaceAndNewlines() {
+        # Whitespace token
+        {
+            QoreTokenizer tok("   \t  ");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_WHITESPACE, t.type, "whitespace type");
+            assertEq("   \t  ", t.value, "whitespace value preserved");
+        }
+
+        # Newline token
+        {
+            QoreTokenizer tok("\n");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_NEWLINE, t.type, "newline type");
+            assertEq("\n", t.value, "newline value");
+        }
+
+        # Mixed whitespace and newlines
+        {
+            QoreTokenizer tok("  \n  ");
+            hash<TokenInfo> t1 = tok.next();
+            assertEq(TOK_WHITESPACE, t1.type);
+            hash<TokenInfo> t2 = tok.next();
+            assertEq(TOK_NEWLINE, t2.type);
+            hash<TokenInfo> t3 = tok.next();
+            assertEq(TOK_WHITESPACE, t3.type);
+        }
+    }
+
+    testSkipToCloseBraceBasic() {
+        # Simple brace pair
+        {
+            QoreTokenizer tok("{ x = 1; }");
+            tok.next();  # consume {
+            int lines = tok.skipToCloseBrace();
+            assertEq(0, lines, "same line = 0 lines consumed");
+            assertTrue(tok.atEnd(), "at end after skip");
+        }
+
+        # Brace pair with newlines
+        {
+            QoreTokenizer tok("{\n  x = 1;\n}");
+            tok.next();  # consume {
+            int lines = tok.skipToCloseBrace();
+            assertEq(2, lines, "2 lines consumed");
+        }
+    }
+
+    testSkipToCloseBraceNested() {
+        # Nested braces
+        {
+            QoreTokenizer tok("{ if (x) { y; } }");
+            tok.next();  # consume first {
+            int lines = tok.skipToCloseBrace();
+            assertEq(0, lines);
+            assertTrue(tok.atEnd(), "skipped nested braces correctly");
+        }
+
+        # Deeply nested
+        {
+            QoreTokenizer tok("{ { { } } }");
+            tok.next();
+            int lines = tok.skipToCloseBrace();
+            assertEq(0, lines);
+            assertTrue(tok.atEnd());
+        }
+
+        # Multiple nested blocks
+        {
+            QoreTokenizer tok("{ if (a) { x; } else { y; } }");
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd());
+        }
+    }
+
+    testSkipToCloseBraceWithStrings() {
+        # Brace inside single-quoted string
+        {
+            QoreTokenizer tok("{ '{' }");
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in single-quoted string ignored");
+        }
+
+        # Brace inside double-quoted string
+        {
+            QoreTokenizer tok('{ "}" }');
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in double-quoted string ignored");
+        }
+
+        # Multiple strings with braces
+        {
+            QoreTokenizer tok('{ x = "{"; y = "}"; }');
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd());
+        }
+    }
+
+    testSkipToCloseBraceWithComments() {
+        # Brace inside line comment
+        {
+            QoreTokenizer tok("{ # }\nx; }");
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in line comment ignored");
+        }
+
+        # Brace inside block comment
+        {
+            QoreTokenizer tok("{ /* } */ }");
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in block comment ignored");
+        }
+
+        # The original $# bug: # should start comment, not be confused with $#
+        {
+            # This is the crux of the bug: "some_call({$#})" should work
+            # Inside the braces, there's $# followed by }
+            QoreTokenizer tok("{$#}");
+            tok.next();  # consume {
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "$# followed by } works correctly");
+        }
+    }
+
+    testSkipToCloseBraceWithRegex() {
+        # Brace inside regex
+        {
+            QoreTokenizer tok('{ x =~ /[{}]/; }');
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in regex ignored");
+        }
+
+        # Brace in substitution
+        {
+            QoreTokenizer tok('{ x =~ s/{/(/; }');
+            tok.next();
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "brace in substitution ignored");
+        }
+    }
+
+    testUtf8Strings() {
+        # UTF-8 in single-quoted string
+        {
+            QoreTokenizer tok("'日本語'");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type);
+            assertEq("'日本語'", t.value, "UTF-8 single-quoted string");
+        }
+
+        # UTF-8 in double-quoted string
+        {
+            QoreTokenizer tok('"中文"');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type);
+            assertEq('"中文"', t.value, "UTF-8 double-quoted string");
+        }
+
+        # UTF-8 in comment
+        {
+            QoreTokenizer tok("# комментарий");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_LINE_COMMENT, t.type);
+            assertEq("# комментарий", t.value, "UTF-8 comment");
+        }
+
+        # Mixed UTF-8 and ASCII
+        {
+            QoreTokenizer tok("'hello 世界'");
+            hash<TokenInfo> t = tok.next();
+            assertEq("'hello 世界'", t.value);
+        }
+    }
+
+    testLineColumnTracking() {
+        # First token at line 1, column 1
+        {
+            QoreTokenizer tok("hello");
+            hash<TokenInfo> t = tok.next();
+            assertEq(1, t.line, "first token line");
+            assertEq(1, t.column, "first token column");
+        }
+
+        # Token after whitespace
+        {
+            QoreTokenizer tok("   x");
+            hash<TokenInfo> ws = tok.next();  # whitespace
+            assertEq(TOK_WHITESPACE, ws.type);
+            hash<TokenInfo> t = tok.next();  # 'x'
+            assertEq(1, t.line, "token after whitespace line");
+            assertEq(4, t.column, "token after whitespace column");
+        }
+
+        # Token on second line - consume until we get past the newline
+        {
+            QoreTokenizer tok("x\ny");
+            tok.next();  # 'x'
+            hash<TokenInfo> nl = tok.next();  # newline
+            assertEq(TOK_NEWLINE, nl.type);
+            hash<TokenInfo> t = tok.next();  # 'y'
+            assertEq(2, t.line, "second line");
+            assertEq(1, t.column, "start of second line");
+        }
+
+        # Multi-line string tracking
+        {
+            QoreTokenizer tok("\"line1\nline2\"\nx");
+            hash<TokenInfo> t1 = tok.next();  # string (consumes everything including the closing quote)
+            assertEq(TOK_STRING_DOUBLE, t1.type);
+            assertEq(1, t1.line, "multi-line string starts at line 1");
+            hash<TokenInfo> nl = tok.next();  # newline
+            assertEq(TOK_NEWLINE, nl.type);
+            hash<TokenInfo> t2 = tok.next();  # 'x'
+            assertEq(3, t2.line, "code after multi-line string on line 3");
+        }
+    }
+
+    testOriginalDollarHashBug() {
+        # The original bug: qdx parsing @code blocks incorrectly when $# is followed by }
+        # The issue was that # was being treated as start of comment, causing } to be missed
+        {
+            string code = '
+foreach string key in (keys hash) {
+    if (key == list[$#]) {
+        break;
+    }
+}';
+            QoreTokenizer tok(code);
+
+            # Skip to first {
+            while (!tok.atEnd()) {
+                hash<TokenInfo> t = tok.next();
+                if (t.type == TOK_LBRACE) {
+                    break;
+                }
+            }
+
+            # Now skip to close brace
+            tok.skipToCloseBrace();
+
+            # After skipToCloseBrace, we should be at the end (all braces matched)
+            # Let's see what's left
+            list<hash<TokenInfo>> remaining = ();
+            while (!tok.atEnd()) {
+                remaining += tok.next();
+            }
+
+            # Should only have whitespace/newlines left
+            foreach hash<TokenInfo> t in (remaining) {
+                assertTrue(t.type == TOK_WHITESPACE || t.type == TOK_NEWLINE || t.type == TOK_EOF,
+                    sprintf("remaining token should be whitespace/newline, got type %d: %y", t.type, t.value));
+            }
+        }
+
+        # Direct test: {$#} should match braces
+        {
+            QoreTokenizer tok("{$#}");
+            tok.next();  # consume {
+            tok.skipToCloseBrace();
+            assertTrue(tok.atEnd(), "{$#} braces matched correctly");
+        }
+
+        # Test: list[$#] should have matching brackets
+        {
+            QoreTokenizer tok("list[$#]");
+            list<hash<TokenInfo>> tokens = ();
+            while (!tok.atEnd()) {
+                tokens += tok.next();
+            }
+
+            # Should have: 'list', '[', '$#', ']'
+            int lbracket_count = 0;
+            int rbracket_count = 0;
+            int dollar_hash_count = 0;
+
+            foreach hash<TokenInfo> t in (tokens) {
+                if (t.type == TOK_LBRACKET) {
+                    ++lbracket_count;
+                } else if (t.type == TOK_RBRACKET) {
+                    ++rbracket_count;
+                } else if (t.type == TOK_DOLLAR_HASH) {
+                    ++dollar_hash_count;
+                }
+            }
+
+            assertEq(1, lbracket_count, "one left bracket");
+            assertEq(1, rbracket_count, "one right bracket");
+            assertEq(1, dollar_hash_count, "one $#");
+        }
+    }
+
+    testMixedCode() {
+        # Real-world code snippet - uses curly braces for both blocks and hash access
+        # Block braces: sub {...}, foreach {...}, if {...}
+        # Hash access braces: data{key}, result{key}, data{key}
+        # Total: 6 left braces, 6 right braces
+        {
+            string code = 'sub process(hash data) {
+    # Process each item
+    foreach string key in (keys data) {
+        if (data{key} =~ /pattern/) {
+            result{key} = data{key};
+        }
+    }
+}';
+            QoreTokenizer tok(code);
+
+            int lbrace = 0;
+            int rbrace = 0;
+            int comments = 0;
+            int regexes = 0;
+
+            while (!tok.atEnd()) {
+                hash<TokenInfo> t = tok.next();
+                switch (t.type) {
+                    case TOK_LBRACE:
+                        ++lbrace;
+                        break;
+                    case TOK_RBRACE:
+                        ++rbrace;
+                        break;
+                    case TOK_LINE_COMMENT:
+                        ++comments;
+                        break;
+                    case TOK_REGEX:
+                        ++regexes;
+                        break;
+                }
+            }
+
+            # 6 braces: 3 block + 3 hash access
+            assertEq(6, lbrace, "6 left braces (3 block + 3 hash access)");
+            assertEq(6, rbrace, "6 right braces (3 block + 3 hash access)");
+            assertEq(1, comments, "1 comment");
+            assertEq(1, regexes, "1 regex");
+        }
+    }
+
+    testEdgeCases() {
+        # Empty input
+        {
+            QoreTokenizer tok("");
+            assertTrue(tok.atEnd(), "empty input is at end");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_EOF, t.type, "empty input returns EOF");
+        }
+
+        # peek() without next()
+        {
+            QoreTokenizer tok("hello");
+            hash<TokenInfo> t1 = tok.peek();
+            hash<TokenInfo> t2 = tok.peek();
+            assertEq(t1.type, t2.type, "multiple peeks return same token");
+            assertEq(t1.value, t2.value);
+            hash<TokenInfo> t3 = tok.next();
+            assertEq(t1.value, t3.value, "next after peek returns peeked token");
+        }
+
+        # Unterminated single-quoted string
+        {
+            QoreTokenizer tok("'unterminated");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_SINGLE, t.type, "unterminated single string still tokenized");
+            assertEq("'unterminated", t.value);
+        }
+
+        # Unterminated double-quoted string
+        {
+            QoreTokenizer tok('"unterminated');
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_STRING_DOUBLE, t.type);
+            assertEq('"unterminated', t.value);
+        }
+
+        # Unterminated block comment
+        {
+            QoreTokenizer tok("/* unterminated");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_BLOCK_COMMENT, t.type);
+            assertEq("/* unterminated", t.value);
+        }
+
+        # Single / (not a regex or comment start)
+        {
+            QoreTokenizer tok("/");
+            hash<TokenInfo> t = tok.next();
+            assertEq(TOK_OTHER, t.type, "single / is OTHER");
+            assertEq("/", t.value);
+        }
+
+        # Division vs regex ambiguity (no context, so / is just OTHER)
+        {
+            QoreTokenizer tok("a / b");
+            list<hash<TokenInfo>> tokens = ();
+            while (!tok.atEnd()) {
+                tokens += tok.next();
+            }
+            # Should have tokens for 'a', ' ', '/', ' ', 'b'
+            bool found_slash = False;
+            foreach hash<TokenInfo> t in (tokens) {
+                if (t.value == "/") {
+                    assertEq(TOK_OTHER, t.type, "/ without =~ or !~ is OTHER");
+                    found_slash = True;
+                    break;
+                }
+            }
+            assertTrue(found_slash);
+        }
+
+        # getLine() and getColumn() methods
+        {
+            QoreTokenizer tok("x\ny");
+            assertEq(1, tok.getLine(), "initial line is 1");
+            assertEq(1, tok.getColumn(), "initial column is 1");
+            tok.next();  # 'x'
+            tok.next();  # newline - this advances us to line 2
+            assertEq(2, tok.getLine(), "after newline, line is 2");
+        }
+    }
+
+    testCountBraces() {
+        # Simple braces
+        {
+            hash<auto> bc = count_braces("{ }");
+            assertEq(1, bc.open, "one open brace");
+            assertEq(1, bc.close, "one close brace");
+        }
+
+        # Nested braces
+        {
+            hash<auto> bc = count_braces("{ { } }");
+            assertEq(2, bc.open, "two open braces");
+            assertEq(2, bc.close, "two close braces");
+        }
+
+        # Braces in strings are ignored
+        {
+            hash<auto> bc = count_braces("'{' + \"}\"");
+            assertEq(0, bc.open, "no open braces - all in strings");
+            assertEq(0, bc.close, "no close braces - all in strings");
+        }
+
+        # Braces in comments are ignored
+        {
+            hash<auto> bc = count_braces("x # { }");
+            assertEq(0, bc.open, "no open braces - all in comment");
+            assertEq(0, bc.close, "no close braces - all in comment");
+        }
+
+        # $# does not start a comment - THIS IS THE KEY BUG FIX
+        {
+            hash<auto> bc = count_braces("for (int i = 0; i < $#; ++i) { }");
+            assertEq(1, bc.open, "$# does not start comment - open brace counted");
+            assertEq(1, bc.close, "$# does not start comment - close brace counted");
+        }
+
+        # More complex $# case
+        {
+            hash<auto> bc = count_braces("if ($# > 0) { data{key} = $#; }");
+            assertEq(2, bc.open, "complex $# case - 2 open braces");
+            assertEq(2, bc.close, "complex $# case - 2 close braces");
+        }
+
+        # Braces in regex are ignored
+        {
+            hash<auto> bc = count_braces("if (x =~ /{/) { }");
+            assertEq(1, bc.open, "regex brace ignored - 1 open");
+            assertEq(1, bc.close, "regex brace ignored - 1 close");
+        }
+    }
+
+    testCountAllBrackets() {
+        # All bracket types
+        {
+            hash<auto> bc = count_all_brackets("{ ( [ ] ) }");
+            assertEq(1, bc.open_braces, "one open brace");
+            assertEq(1, bc.close_braces, "one close brace");
+            assertEq(1, bc.open_parens, "one open paren");
+            assertEq(1, bc.close_parens, "one close paren");
+            assertEq(1, bc.open_brackets, "one open bracket");
+            assertEq(1, bc.close_brackets, "one close bracket");
+        }
+
+        # Brackets in strings ignored
+        {
+            hash<auto> bc = count_all_brackets("'{ ( [' + \"] ) }\"");
+            assertEq(0, bc.open_braces, "no open braces in strings");
+            assertEq(0, bc.close_braces, "no close braces in strings");
+            assertEq(0, bc.open_parens, "no open parens in strings");
+            assertEq(0, bc.close_parens, "no close parens in strings");
+            assertEq(0, bc.open_brackets, "no open brackets in strings");
+            assertEq(0, bc.close_brackets, "no close brackets in strings");
+        }
+
+        # $# with all brackets
+        {
+            hash<auto> bc = count_all_brackets("for (int i = 0; i < $#; ++i) { list[i] = $#; }");
+            assertEq(1, bc.open_braces, "$# with brackets - 1 open brace");
+            assertEq(1, bc.close_braces, "$# with brackets - 1 close brace");
+            assertEq(1, bc.open_parens, "$# with brackets - 1 open paren");
+            assertEq(1, bc.close_parens, "$# with brackets - 1 close paren");
+            assertEq(1, bc.open_brackets, "$# with brackets - 1 open bracket");
+            assertEq(1, bc.close_brackets, "$# with brackets - 1 close bracket");
+        }
+
+        # Complex function declaration (qdx use case)
+        {
+            string code = "static string getDoxMod(string xs) {";
+            hash<auto> bc = count_all_brackets(code);
+            assertEq(1, bc.open_braces, "function decl - 1 open brace");
+            assertEq(0, bc.close_braces, "function decl - 0 close braces");
+            assertEq(1, bc.open_parens, "function decl - 1 open paren");
+            assertEq(1, bc.close_parens, "function decl - 1 close paren");
+        }
+    }
+
+    testQdxDollarHashIntegration() {
+        # This tests the exact bug that was reported - $# being treated as comment start
+        # causing brace counting to fail in qdx
+
+        # Simple loop with $#
+        {
+            string code = "for (int i = 0; i < $#; ++i) {\n    result += list[i];\n}";
+            hash<auto> bc = count_braces(code);
+            assertEq(1, bc.open, "loop with $# - 1 open brace");
+            assertEq(1, bc.close, "loop with $# - 1 close brace");
+        }
+
+        # Multiple $# on same line
+        {
+            string code = "if ($# > 0 && $# < 10) { }";
+            hash<auto> bc = count_braces(code);
+            assertEq(1, bc.open, "multiple $# - 1 open brace");
+            assertEq(1, bc.close, "multiple $# - 1 close brace");
+        }
+
+        # $# followed by actual comment
+        {
+            string code = "for (int i = 0; i < $#; ++i) { } # this is a comment with { }";
+            hash<auto> bc = count_braces(code);
+            assertEq(1, bc.open, "$# then comment - 1 open brace");
+            assertEq(1, bc.close, "$# then comment - 1 close brace");
+        }
+
+        # $# in hash access context
+        {
+            string code = "data{$#} = value;";
+            hash<auto> bc = count_braces(code);
+            assertEq(1, bc.open, "$# in hash access - 1 open brace");
+            assertEq(1, bc.close, "$# in hash access - 1 close brace");
+        }
+
+        # Nested blocks with $#
+        {
+            string code = "if (cond) {\n    for (int i = 0; i < $#; ++i) {\n        x = i;\n    }\n}";
+            hash<auto> bc = count_braces(code);
+            assertEq(2, bc.open, "nested blocks with $# - 2 open braces");
+            assertEq(2, bc.close, "nested blocks with $# - 2 close braces");
+        }
+
+        # Real-world example from Qore codebase
+        {
+            string code = "for (int i = 0, int e = $#; i < e; ++i) {\n"
+                "    if (val{argv[i]} > 0) {\n"
+                "        result += argv[i];\n"
+                "    }\n"
+                "}";
+            hash<auto> bc = count_braces(code);
+            assertEq(3, bc.open, "real-world $# example - 3 open braces");
+            assertEq(3, bc.close, "real-world $# example - 3 close braces");
+        }
+    }
+}

@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/MapperUtil.qm
@@ -34,6 +31,11 @@
 %try-module yaml
 %define NoYaml
 %endtry
+
+%ifdef NoYaml
+# Stub function when yaml module is not available
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%endif
 
 %exec-class RestHandlerTest
 
@@ -165,6 +167,7 @@ class MyRestHandler inherits RestHandler {
     }
 }
 
+%ifndef NoJson
 class SwaggerRestHandler inherits RestHandler {
     constructor(AbstractRestSchemaValidator validator) : RestHandler(NOTHING, validator) {
         addClass(new TestRestClass());
@@ -172,6 +175,7 @@ class SwaggerRestHandler inherits RestHandler {
         addClass(new B2543RestClass());
     }
 }
+%endif
 
 class DummyListenerInterface inherits HttpListenerInterface {
     addUserThreadContext(hash<auto> uctx) {}
@@ -187,8 +191,6 @@ public class RestHandlerTest inherits QUnit::Test {
         MyRestHandler mHandler();
 %ifndef NoJson
         SwaggerRestHandler swaggerHandler(RestHandlerTest::getSwagger());
-%else
-        SwaggerRestHandler swaggerHandler;
 %endif
         int port;
 
@@ -439,6 +441,7 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     badRequestTest() {
+%ifndef NoYaml
         {
             HTTPClient client({"url": mClient.getURL()});
 
@@ -462,6 +465,7 @@ public class RestHandlerTest inherits QUnit::Test {
             assertEq(400, info."response-headers".status_code);
             assertEq("True", info."response-headers".error);
         }
+%endif
         {
             RestClient client({"url": mClient.getURL()});
 
@@ -612,8 +616,7 @@ public class RestHandlerTest inherits QUnit::Test {
 %ifdef NoJson
         # cannot test serialization with no binary modules present
         testSkip("no json module present");
-%endif
-
+%else
         # test direct interface (no Swagger validation performed); base path must be removed
         auto val = swaggerHandler.handleExternalRequest("GET", "/test?action=echo", LargerHashValue);
         assertEq(LargerHashValue, val);
@@ -671,6 +674,7 @@ public class RestHandlerTest inherits QUnit::Test {
             m.mapData({"action": "test", "a": "1"});
             assertEq(++cnt, TestRestClass::test_cnt);
         }
+%endif
     }
 
     urlTest() {
@@ -710,8 +714,7 @@ public class RestHandlerTest inherits QUnit::Test {
     issue2543() {
 %ifdef NoJson
         testSkip("no json module present");
-%endif
-
+%else
         SwaggerSchema schema = swaggerHandler.getRestSchemaValidator();
 
         # dummy HttpListenerInterface object
@@ -746,6 +749,7 @@ public class RestHandlerTest inherits QUnit::Test {
         # this would throw exception before fix
         auto result = swaggerHandler.handleRequest(listener, s, cx, hdr, body_str);
         assertEq(200, result."code");
+%endif
     }
 
     issue2893() {

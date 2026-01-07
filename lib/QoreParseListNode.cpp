@@ -115,7 +115,15 @@ int QoreParseListNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     // evaluate immediately
     SimpleRefHolder<QoreParseListNode> holder(this);
     ValueEvalOptimizedRefHolder rv(this, nullptr);
-    val = rv.takeReferencedValue();
+    QoreValue result = rv.takeReferencedValue();
+    // only use parse-time folding if we got a valid result
+    // (constants may not be fully resolved at parse time, resulting in NOTHING)
+    if (!result.isNothing()) {
+        val = result;
+        return 0;
+    }
+    // constants not resolved - skip parse-time folding, let runtime handle it
+    holder.release();
     return 0;
 }
 

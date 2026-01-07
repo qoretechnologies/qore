@@ -657,6 +657,7 @@ DLLLOCAL extern std::atomic<bool> qore_shutdown;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
 
 DLLLOCAL extern int qore_library_options;
+DLLLOCAL extern std::atomic<int> qore_global_http2_mode;
 
 #ifndef HAVE_GETHOSTBYADDR_R
 DLLLOCAL extern QoreThreadLock lck_gethostbyaddr;
@@ -1093,7 +1094,7 @@ DLLLOCAL AbstractQoreNode* missing_method_error(const char* meth, const char* op
 // checks for illegal "self" assignments in an object context
 DLLLOCAL int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar* selfid);
 
-DLLLOCAL void ignore_return_value(QoreSimpleValue& n);
+DLLLOCAL void ignore_return_value(const QoreSimpleValue& n);
 
 DLLLOCAL void qore_string_init();
 

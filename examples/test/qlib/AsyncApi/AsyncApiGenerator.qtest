@@ -1,0 +1,906 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AsyncApi.qm
+
+%exec-class AsyncApiGeneratorTest
+
+class AsyncApiGeneratorTest inherits Test {
+    constructor() : Test("AsyncApiGeneratorTest", "1.0") {
+        addTestCase("parseEventBlock basic test", \testParseEventBlockBasic());
+        addTestCase("parseEventBlock with info fields", \testParseEventBlockWithInfo());
+        addTestCase("parseEventBlocks multiple events", \testParseEventBlocksMultiple());
+        addTestCase("parseChannelBlock basic test", \testParseChannelBlockBasic());
+        addTestCase("parseChannelBlocks multiple channels", \testParseChannelBlocksMultiple());
+        addTestCase("type mapper basic types", \testTypeMapperBasicTypes());
+        addTestCase("type mapper complex types", \testTypeMapperComplexTypes());
+        addTestCase("type mapper nullable types", \testTypeMapperNullableTypes());
+        addTestCase("generator basic test", \testGeneratorBasic());
+        addTestCase("generator with events", \testGeneratorWithEvents());
+        addTestCase("generator with channels", \testGeneratorWithChannels());
+        addTestCase("generator output formats", \testGeneratorOutputFormats());
+        addTestCase("malformed event block", \testMalformedEventBlock());
+        addTestCase("malformed channel block", \testMalformedChannelBlock());
+        addTestCase("empty content", \testEmptyContent());
+        addTestCase("non-doc comment ignored", \testNonDocCommentIgnored());
+        addTestCase("whitespace handling", \testWhitespaceHandling());
+        addTestCase("special characters", \testSpecialCharacters());
+        addTestCase("complex info schema", \testComplexInfoSchema());
+        addTestCase("nested array fields", \testNestedArrayFields());
+        addTestCase("nested object fields", \testNestedObjectFields());
+        addTestCase("multi-level nesting", \testMultiLevelNesting());
+        addTestCase("severity levels", \testSeverityLevels());
+        addTestCase("event class extraction", \testEventClassExtraction());
+        addTestCase("round-trip test", \testRoundTrip());
+        addTestCase("unknown types fallback", \testUnknownTypesFallback());
+        addTestCase("nested hash types", \testNestedHashTypes());
+        addTestCase("list types", \testListTypes());
+        addTestCase("nullable list type", \testNullableListType());
+        addTestCase("multiple message blocks", \testMultipleMessageBlocks());
+        addTestCase("message block field parsing", \testMessageBlockFieldParsing());
+        set_return_value(main());
+    }
+
+    testParseEventBlockBasic() {
+        string block = "@EVENT TEST_EVENT
+@EVENTSCHEMA
+@summary A test event
+@desc This is a test event description
+@class TEST
+@severity INFO
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertEq("TEST_EVENT", event.name, "Event name should be extracted");
+        assertEq("A test event", event.summary, "Summary should be extracted");
+        assertEq("This is a test event description", event.desc, "Description should be extracted");
+        assertEq("TEST", event.event_class, "Event class should be extracted");
+        assertEq("INFO", event.severity, "Severity should be extracted");
+    }
+
+    testParseEventBlockWithInfo() {
+        string block = "@EVENT STATUS_CHANGED
+@EVENTSCHEMA
+@summary Status changed event
+@class WORKFLOW
+@severity WARNING
+@info
+- workflow_id (int): The workflow ID
+- status (string): The new status
+- timestamp (date): When the change occurred
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertEq("STATUS_CHANGED", event.name, "Event name should be extracted");
+        assertEq("WORKFLOW", event.event_class, "Event class should be extracted");
+        assertEq("WARNING", event.severity, "Severity should be extracted");
+        assertTrue(event.info_schema.hasKey("type"), "Info schema should have type");
+        assertTrue(event.info_schema.hasKey("properties"), "Info schema should have properties");
+        assertTrue(event.info_schema.properties.hasKey("workflow_id"), "Should have workflow_id property");
+        assertTrue(event.info_schema.properties.hasKey("status"), "Should have status property");
+        assertTrue(event.info_schema.properties.hasKey("timestamp"), "Should have timestamp property");
+    }
+
+    testParseEventBlocksMultiple() {
+        string content = "Some code here
+/** @EVENT FIRST_EVENT
+    @EVENTSCHEMA
+    @summary First event
+    @class TEST
+    @severity INFO
+    @ENDEVENTSCHEMA
+*/
+
+more code
+
+/** @EVENT SECOND_EVENT
+    @EVENTSCHEMA
+    @summary Second event
+    @class TEST
+    @severity WARNING
+    @ENDEVENTSCHEMA
+*/
+trailing code";
+
+        list<hash<AsyncApi::EventSchemaInfo>> events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+
+        assertEq(2, events.size(), "Should find 2 events");
+        assertEq("FIRST_EVENT", events[0].name, "First event name");
+        assertEq("SECOND_EVENT", events[1].name, "Second event name");
+        assertEq("INFO", events[0].severity, "First event severity");
+        assertEq("WARNING", events[1].severity, "Second event severity");
+    }
+
+    testParseChannelBlockBasic() {
+        string block = "@WEBSOCKET /events
+@ASYNCAPI
+@summary Event streaming endpoint
+@desc WebSocket endpoint for real-time events
+@ENDASYNCAPI";
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlock(block);
+
+        assertEq("/events", channel.path, "Channel path should be extracted");
+        assertEq("Event streaming endpoint", channel.summary, "Summary should be extracted");
+        assertEq("WebSocket endpoint for real-time events", channel.desc, "Description should be extracted");
+    }
+
+    testParseChannelBlocksMultiple() {
+        string content = "/** @WEBSOCKET /creator
+    @ASYNCAPI
+    @summary Creator events
+    @ENDASYNCAPI
+*/
+
+/** @WEBSOCKET /admin
+    @ASYNCAPI
+    @summary Admin events
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+
+        assertEq(2, channels.size(), "Should find 2 channels");
+        assertEq("/creator", channels[0].path, "First channel path");
+        assertEq("/admin", channels[1].path, "Second channel path");
+    }
+
+    testTypeMapperBasicTypes() {
+        # String type
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("string");
+        assertEq("string", result.type, "String maps to string");
+
+        # Integer type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("int");
+        assertEq("integer", result.type, "Int maps to integer");
+
+        # Float type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("float");
+        assertEq("number", result.type, "Float maps to number");
+
+        # Boolean type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("bool");
+        assertEq("boolean", result.type, "Bool maps to boolean");
+
+        # Date type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("date");
+        assertEq("string", result.type, "Date maps to string");
+        assertEq("date-time", result.format, "Date has date-time format");
+
+        # Binary type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("binary");
+        assertEq("string", result.type, "Binary maps to string");
+        assertEq("binary", result.format, "Binary has binary format");
+    }
+
+    testTypeMapperComplexTypes() {
+        # Hash type
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("hash");
+        assertEq("object", result.type, "Hash maps to object");
+        assertTrue(result.additionalProperties, "Hash allows additional properties");
+
+        # Hash with auto
+        result = AsyncApi::AsyncApiTypeMapper::mapType("hash<auto>");
+        assertEq("object", result.type, "Hash<auto> maps to object");
+
+        # Hash with type name
+        result = AsyncApi::AsyncApiTypeMapper::mapType("hash<UserInfo>");
+        assertTrue(result.hasKey("$ref"), "Hash<UserInfo> has $ref");
+        assertEq("#/components/schemas/UserInfo", result{"$ref"}, "$ref points to component");
+    }
+
+    testTypeMapperNullableTypes() {
+        # Nullable string
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("*string");
+        assertEq("string", result.type, "*string maps to string");
+        assertTrue(result.nullable, "*string is nullable");
+
+        # Nullable int
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*int");
+        assertEq("integer", result.type, "*int maps to integer");
+        assertTrue(result.nullable, "*int is nullable");
+
+        # Test isNullable helper
+        assertTrue(AsyncApi::AsyncApiTypeMapper::isNullable("*string"), "*string is nullable");
+        assertFalse(AsyncApi::AsyncApiTypeMapper::isNullable("string"), "string is not nullable");
+
+        # Test getBaseType helper
+        assertEq("string", AsyncApi::AsyncApiTypeMapper::getBaseType("*string"), "getBaseType removes *");
+        assertEq("int", AsyncApi::AsyncApiTypeMapper::getBaseType("int"), "getBaseType preserves non-nullable");
+    }
+
+    testGeneratorBasic() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Test API",
+            "version": "1.0.0",
+            "description": "A test API",
+        });
+
+        hash<auto> schema = gen.generate();
+
+        assertEq("3.0.0", schema.asyncapi, "AsyncAPI version should be 3.0.0");
+        assertEq("Test API", schema.info.title, "Title should match");
+        assertEq("1.0.0", schema.info.version, "Version should match");
+        assertEq("A test API", schema.info.description, "Description should match");
+    }
+
+    testGeneratorWithEvents() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Event API",
+            "version": "1.0.0",
+        });
+
+        gen.addEvent(cast<hash<AsyncApi::EventSchemaInfo>>({
+            "name": "USER_CREATED",
+            "summary": "User was created",
+            "desc": "Fired when a new user is created",
+            "event_class": "USER",
+            "severity": "INFO",
+            "info_schema": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "integer"},
+                    "username": {"type": "string"},
+                },
+            },
+        }));
+
+        hash<auto> schema = gen.generate();
+
+        assertTrue(schema.hasKey("components"), "Should have components");
+        assertTrue(schema.components.hasKey("schemas"), "Should have schemas");
+        assertTrue(schema.components.schemas.hasKey("USER_CREATEDInfo"), "Should have event info schema");
+    }
+
+    testGeneratorWithChannels() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Channel API",
+            "version": "1.0.0",
+        });
+
+        gen.addChannel(cast<hash<AsyncApi::ChannelSchemaInfo>>({
+            "path": "/stream",
+            "summary": "Main event stream",
+            "desc": "Primary event streaming endpoint",
+        }));
+
+        hash<auto> schema = gen.generate();
+
+        assertTrue(schema.hasKey("channels"), "Should have channels");
+        # Channel key is path without leading /
+        assertTrue(schema.channels.hasKey("stream"), "Should have stream channel");
+        assertEq("/stream", schema.channels{"stream"}.address, "Channel address");
+    }
+
+    testGeneratorOutputFormats() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Format Test API",
+            "version": "1.0.0",
+        });
+
+        gen.addEvent(cast<hash<AsyncApi::EventSchemaInfo>>({
+            "name": "TEST_EVENT",
+            "summary": "Test",
+            "severity": "INFO",
+        }));
+
+        # Test YAML output
+        string yaml = gen.toYaml();
+        assertTrue(yaml.size() > 0, "YAML output should not be empty");
+        assertTrue(yaml.find("asyncapi") >= 0, "YAML should contain asyncapi key");
+        assertTrue(yaml.find("3.0.0") >= 0, "YAML should contain version");
+
+        # Test JSON output
+        string json = gen.toJson();
+        assertTrue(json.size() > 0, "JSON output should not be empty");
+        assertTrue(json.find("asyncapi") >= 0, "JSON should contain asyncapi key");
+    }
+
+    testMalformedEventBlock() {
+        # Missing event name
+        string block = "@EVENT
+@EVENTSCHEMA
+@summary No name
+@ENDEVENTSCHEMA";
+
+        bool threw = False;
+        try {
+            AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.err =~ /PARSE-ERROR/, "Should throw PARSE-ERROR");
+        }
+        assertTrue(threw, "Should throw exception for missing event name");
+    }
+
+    testMalformedChannelBlock() {
+        # Missing path
+        string block = "@WEBSOCKET
+@ASYNCAPI
+@summary No path
+@ENDASYNCAPI";
+
+        bool threw = False;
+        try {
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlock(block);
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.err =~ /PARSE-ERROR/, "Should throw PARSE-ERROR");
+        }
+        assertTrue(threw, "Should throw exception for missing channel path");
+    }
+
+    testEmptyContent() {
+        # Empty string
+        list<hash<AsyncApi::EventSchemaInfo>> events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks("");
+        assertEq(0, events.size(), "Empty content should return empty list");
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks("");
+        assertEq(0, channels.size(), "Empty content should return empty list for channels");
+
+        # Content with no schema blocks
+        events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks("just some random code here");
+        assertEq(0, events.size(), "Content with no blocks should return empty list");
+    }
+
+    testNonDocCommentIgnored() {
+        # @EVENT in string literal should be ignored (not in doc comment)
+        string content = 'string s = "@EVENT FAKE_EVENT @EVENTSCHEMA @summary Fake @ENDEVENTSCHEMA";';
+        list<hash<AsyncApi::EventSchemaInfo>> events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(0, events.size(), "@EVENT in string literal should be ignored");
+
+        # @EVENT in regular comment should be ignored (not in doc comment)
+        content = "// @EVENT FAKE_EVENT @EVENTSCHEMA @summary Fake @ENDEVENTSCHEMA";
+        events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(0, events.size(), "@EVENT in line comment should be ignored");
+
+        # @WEBSOCKET in regular comment should be ignored
+        content = "/* @WEBSOCKET /fake @ASYNCAPI @summary Fake @ENDASYNCAPI */";
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(0, channels.size(), "@WEBSOCKET in regular /* */ comment should be ignored");
+
+        # Only doc comments (/** */) should be parsed
+        content = "/** @EVENT REAL_EVENT
+@EVENTSCHEMA
+@summary Real event
+@ENDEVENTSCHEMA
+*/";
+        events = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlocks(content);
+        assertEq(1, events.size(), "@EVENT in doc comment should be parsed");
+        assertEq("REAL_EVENT", events[0].name, "Event name should be extracted");
+    }
+
+    testWhitespaceHandling() {
+        # Block with extra whitespace
+        string block = "  @EVENT   WHITESPACE_TEST
+@EVENTSCHEMA
+  @summary   Lots of whitespace
+  @desc   Description with spaces
+@class   TEST
+@severity   INFO
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertEq("WHITESPACE_TEST", event.name, "Name should be trimmed");
+        assertEq("Lots of whitespace", event.summary, "Summary should be trimmed");
+    }
+
+    testSpecialCharacters() {
+        string block = "@EVENT SPECIAL_CHARS
+@EVENTSCHEMA
+@summary Event with 'quotes' and \"double quotes\"
+@desc Description with special chars: <>&
+@class TEST
+@severity INFO
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertEq("SPECIAL_CHARS", event.name, "Name should be extracted");
+        assertTrue(event.summary.size() > 0, "Summary with special chars should be parsed");
+    }
+
+    testComplexInfoSchema() {
+        string block = "@EVENT COMPLEX_INFO
+@EVENTSCHEMA
+@summary Complex info
+@class TEST
+@severity INFO
+@info
+- id (int): Primary ID
+- name (string): Entity name
+- metadata (*hash<auto>): Optional metadata
+- tags (list<string>): List of tags
+- created_at (date): Creation timestamp
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertTrue(event.info_schema.hasKey("properties"), "Should have properties");
+        hash<auto> props = event.info_schema.properties;
+
+        assertTrue(props.hasKey("id"), "Should have id");
+        assertTrue(props.hasKey("name"), "Should have name");
+        assertTrue(props.hasKey("metadata"), "Should have metadata");
+        assertTrue(props.hasKey("tags"), "Should have tags");
+        assertTrue(props.hasKey("created_at"), "Should have created_at");
+    }
+
+    testNestedArrayFields() {
+        # Test nested fields inside array types (like Qorus SYSTEM_SHUTDOWN.messages)
+        string block = "@EVENT NESTED_ARRAY
+@EVENTSCHEMA
+@summary Nested array test
+@class TEST
+@severity INFO
+@info
+- messages (list): list of messages
+  - title (string): message title
+  - intent (string): UI intent
+  - content (string): message content
+  - duration (*int): display duration in ms
+- count (int): total count
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertTrue(event.info_schema.hasKey("properties"), "Should have properties");
+        hash<auto> props = event.info_schema.properties;
+
+        # Check top-level fields
+        assertTrue(props.hasKey("messages"), "Should have messages field");
+        assertTrue(props.hasKey("count"), "Should have count field");
+        assertEq("array", props.messages.type, "messages should be array");
+        assertEq("integer", props.count.type, "count should be integer");
+
+        # Check nested fields inside array items
+        assertTrue(props.messages.hasKey("items"), "messages should have items schema");
+        assertTrue(props.messages.items.hasKey("properties"), "items should have properties");
+
+        hash<auto> item_props = props.messages.items.properties;
+        assertTrue(item_props.hasKey("title"), "items should have title");
+        assertTrue(item_props.hasKey("intent"), "items should have intent");
+        assertTrue(item_props.hasKey("content"), "items should have content");
+        assertTrue(item_props.hasKey("duration"), "items should have duration");
+
+        assertEq("string", item_props.title.type, "title should be string");
+        assertEq("string", item_props.intent.type, "intent should be string");
+        assertEq("string", item_props.content.type, "content should be string");
+        assertEq("integer", item_props.duration.type, "duration should be integer");
+        assertTrue(item_props.duration.nullable, "duration should be nullable");
+    }
+
+    testNestedObjectFields() {
+        # Test nested fields inside object types (like Qorus WORKFLOW_STATUS_CHANGED.info)
+        string block = "@EVENT NESTED_OBJECT
+@EVENTSCHEMA
+@summary Nested object test
+@class TEST
+@severity INFO
+@info
+- name (string): workflow name
+- info (hash): status change details
+  - old (string): the previous status
+  - new (string): the new status
+  - timestamp (date): when the change occurred
+- workflowid (int): workflow ID
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertTrue(event.info_schema.hasKey("properties"), "Should have properties");
+        hash<auto> props = event.info_schema.properties;
+
+        # Check top-level fields
+        assertTrue(props.hasKey("name"), "Should have name field");
+        assertTrue(props.hasKey("info"), "Should have info field");
+        assertTrue(props.hasKey("workflowid"), "Should have workflowid field");
+        assertEq("string", props.name.type, "name should be string");
+        assertEq("object", props.info.type, "info should be object");
+        assertEq("integer", props.workflowid.type, "workflowid should be integer");
+
+        # Check nested fields inside object properties
+        assertTrue(props.info.hasKey("properties"), "info should have properties");
+
+        hash<auto> info_props = props.info.properties;
+        assertTrue(info_props.hasKey("old"), "info should have old");
+        assertTrue(info_props.hasKey("new"), "info should have new");
+        assertTrue(info_props.hasKey("timestamp"), "info should have timestamp");
+
+        assertEq("string", info_props.old.type, "old should be string");
+        assertEq("string", info_props.new.type, "new should be string");
+        assertEq("string", info_props.timestamp.type, "timestamp should be string");
+        assertEq("date-time", info_props.timestamp.format, "timestamp should have date-time format");
+    }
+
+    testMultiLevelNesting() {
+        # Test multi-level nesting: array → object → array
+        string block = "@EVENT MULTI_LEVEL
+@EVENTSCHEMA
+@summary Multi-level nesting test
+@class TEST
+@severity INFO
+@info
+- workflows (list): list of workflow executions
+  - name (string): workflow name
+  - orders (list): list of orders in this workflow
+    - order_id (int): order ID
+    - status (string): order status
+    - errors (*list): optional list of errors
+  - metadata (hash): workflow metadata
+    - created_by (string): creator username
+    - tags (list): list of tags
+      - name (string): tag name
+      - value (string): tag value
+- total_count (int): total workflows
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        assertTrue(event.info_schema.hasKey("properties"), "Should have properties");
+        hash<auto> props = event.info_schema.properties;
+
+        # Check top-level fields
+        assertTrue(props.hasKey("workflows"), "Should have workflows field");
+        assertTrue(props.hasKey("total_count"), "Should have total_count field");
+        assertEq("array", props.workflows.type, "workflows should be array");
+        assertEq("integer", props.total_count.type, "total_count should be integer");
+
+        # Level 1: workflows array items
+        assertTrue(props.workflows.hasKey("items"), "workflows should have items");
+        assertTrue(props.workflows.items.hasKey("properties"), "workflows.items should have properties");
+        hash<auto> wf_props = props.workflows.items.properties;
+
+        assertTrue(wf_props.hasKey("name"), "workflow should have name");
+        assertTrue(wf_props.hasKey("orders"), "workflow should have orders");
+        assertTrue(wf_props.hasKey("metadata"), "workflow should have metadata");
+        assertEq("string", wf_props.name.type, "workflow.name should be string");
+        assertEq("array", wf_props.orders.type, "workflow.orders should be array");
+        assertEq("object", wf_props.metadata.type, "workflow.metadata should be object");
+
+        # Level 2: orders array items (nested inside workflows)
+        assertTrue(wf_props.orders.hasKey("items"), "orders should have items");
+        assertTrue(wf_props.orders.items.hasKey("properties"), "orders.items should have properties");
+        hash<auto> order_props = wf_props.orders.items.properties;
+
+        assertTrue(order_props.hasKey("order_id"), "order should have order_id");
+        assertTrue(order_props.hasKey("status"), "order should have status");
+        assertTrue(order_props.hasKey("errors"), "order should have errors");
+        assertEq("integer", order_props.order_id.type, "order.order_id should be integer");
+        assertEq("string", order_props.status.type, "order.status should be string");
+        assertEq("array", order_props.errors.type, "order.errors should be array");
+        assertTrue(order_props.errors.nullable, "order.errors should be nullable");
+
+        # Level 2: metadata object properties (nested inside workflows)
+        assertTrue(wf_props.metadata.hasKey("properties"), "metadata should have properties");
+        hash<auto> meta_props = wf_props.metadata.properties;
+
+        assertTrue(meta_props.hasKey("created_by"), "metadata should have created_by");
+        assertTrue(meta_props.hasKey("tags"), "metadata should have tags");
+        assertEq("string", meta_props.created_by.type, "metadata.created_by should be string");
+        assertEq("array", meta_props.tags.type, "metadata.tags should be array");
+
+        # Level 3: tags array items (nested inside metadata inside workflows)
+        assertTrue(meta_props.tags.hasKey("items"), "tags should have items");
+        assertTrue(meta_props.tags.items.hasKey("properties"), "tags.items should have properties");
+        hash<auto> tag_props = meta_props.tags.items.properties;
+
+        assertTrue(tag_props.hasKey("name"), "tag should have name");
+        assertTrue(tag_props.hasKey("value"), "tag should have value");
+        assertEq("string", tag_props.name.type, "tag.name should be string");
+        assertEq("string", tag_props.value.type, "tag.value should be string");
+    }
+
+    testSeverityLevels() {
+        list<string> severities = ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL");
+
+        foreach string sev in (severities) {
+            string block = "@EVENT TEST_" + sev + "
+@EVENTSCHEMA
+@summary Test
+@class TEST
+@severity " + sev + "
+@ENDEVENTSCHEMA";
+
+            hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+            assertEq(sev, event.severity, "Severity " + sev + " should be parsed");
+        }
+    }
+
+    testEventClassExtraction() {
+        list<string> classes = ("WORKFLOW", "SERVICE", "JOB", "SYSTEM", "USER", "CUSTOM_CLASS");
+
+        foreach string cls in (classes) {
+            string block = "@EVENT TEST_" + cls + "
+@EVENTSCHEMA
+@summary Test
+@class " + cls + "
+@severity INFO
+@ENDEVENTSCHEMA";
+
+            hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+            assertEq(cls, event.event_class, "Class " + cls + " should be parsed");
+        }
+    }
+
+    testRoundTrip() {
+        # Create a generator with complete data
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Round Trip API",
+            "version": "2.0.0",
+            "description": "Testing round trip",
+        });
+
+        gen.addEvent(cast<hash<AsyncApi::EventSchemaInfo>>({
+            "name": "RT_EVENT",
+            "summary": "Round trip event",
+            "desc": "Event for round trip testing",
+            "event_class": "TEST",
+            "severity": "INFO",
+            "info_schema": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                },
+            },
+        }));
+
+        gen.addChannel(cast<hash<AsyncApi::ChannelSchemaInfo>>({
+            "path": "/roundtrip",
+            "summary": "RT channel",
+        }));
+
+        gen.addServer("production", {
+            "url": "wss://api.example.com",
+            "protocol": "wss",
+        });
+
+        # Generate and validate structure
+        hash<auto> schema = gen.generate();
+
+        assertEq("3.0.0", schema.asyncapi, "Version preserved");
+        assertEq("Round Trip API", schema.info.title, "Title preserved");
+        assertEq("2.0.0", schema.info.version, "API version preserved");
+        assertTrue(schema.channels.hasKey("roundtrip"), "Channel preserved");
+        assertTrue(schema.servers.hasKey("production"), "Server preserved");
+        assertTrue(schema.components.schemas.hasKey("RT_EVENTInfo"), "Event schema preserved");
+    }
+
+    testUnknownTypesFallback() {
+        # Test unknown type handling
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("unknowntype");
+        assertEq("object", result.type, "Unknown type maps to object");
+        assertTrue(result.additionalProperties, "Unknown type allows additional properties");
+
+        # Empty type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("");
+        assertEq("object", result.type, "Empty type maps to object");
+
+        # Softint
+        result = AsyncApi::AsyncApiTypeMapper::mapType("softint");
+        assertEq("integer", result.type, "Softint maps to integer");
+
+        # Softbool
+        result = AsyncApi::AsyncApiTypeMapper::mapType("softbool");
+        assertEq("boolean", result.type, "Softbool maps to boolean");
+    }
+
+    testNestedHashTypes() {
+        # Hash with type parameter
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("hash<EventInfo>");
+        assertTrue(result.hasKey("$ref"), "Hash<EventInfo> should have $ref");
+        assertEq("#/components/schemas/EventInfo", result{"$ref"}, "$ref correct");
+
+        # Nullable hash with type
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*hash<UserData>");
+        assertTrue(result.nullable, "Nullable hash should be nullable");
+        assertTrue(result.hasKey("$ref"), "Nullable hash should have $ref");
+    }
+
+    testListTypes() {
+        # Simple list
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("list<string>");
+        assertEq("array", result.type, "List maps to array");
+        assertTrue(result.hasKey("items"), "List should have items");
+        assertEq("string", result.items.type, "List item type");
+
+        # List of integers
+        result = AsyncApi::AsyncApiTypeMapper::mapType("list<int>");
+        assertEq("array", result.type, "List<int> maps to array");
+        assertEq("integer", result.items.type, "List<int> item type");
+
+        # Nullable list
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<hash<auto>>");
+        assertEq("array", result.type, "*list maps to array");
+        assertTrue(result.nullable, "Nullable list is nullable");
+
+        # Plain list without type parameter
+        result = AsyncApi::AsyncApiTypeMapper::mapType("list");
+        assertEq("array", result.type, "Plain list maps to array");
+    }
+
+    testNullableListType() {
+        # Test *list (nullable list without type parameter) - was causing type narrowing issues
+        hash<auto> result = AsyncApi::AsyncApiTypeMapper::mapType("*list");
+        assertEq("array", result.type, "*list maps to array");
+        assertTrue(result.nullable, "*list is nullable");
+
+        # Test *list<string>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<string>");
+        assertEq("array", result.type, "*list<string> maps to array");
+        assertTrue(result.nullable, "*list<string> is nullable");
+        assertTrue(result.hasKey("items"), "*list<string> should have items");
+        assertEq("string", result.items.type, "*list<string> item type");
+
+        # Test *list<int>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<int>");
+        assertEq("array", result.type, "*list<int> maps to array");
+        assertTrue(result.nullable, "*list<int> is nullable");
+        assertEq("integer", result.items.type, "*list<int> item type");
+
+        # Test *list<hash<auto>>
+        result = AsyncApi::AsyncApiTypeMapper::mapType("*list<hash<auto>>");
+        assertEq("array", result.type, "*list<hash<auto>> maps to array");
+        assertTrue(result.nullable, "*list<hash<auto>> is nullable");
+    }
+
+    testMultipleMessageBlocks() {
+        # Test parsing a channel with multiple @subscribe and @publish blocks
+        string content = "/** @WEBSOCKET /multi-msg
+    @ASYNCAPI
+    @summary Multi-message channel test
+    @desc Channel with multiple subscribe and publish message types
+
+    @subscribe FirstMessage
+    - action (string): first action
+    - data (hash): first data
+
+    @subscribe SecondMessage
+    - action (string): second action
+    - items (list<string>): list of items
+
+    @subscribe ThirdMessage
+    - action (string): third action
+    - count (int): count value
+
+    @publish ResponseOne
+    - ok (bool): success status
+    - message (string): response message
+
+    @publish ResponseTwo
+    - ok (bool): success status
+    - data (hash<auto>): response data
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+
+        assertEq(1, channels.size(), "Should find 1 channel");
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+
+        assertEq("/multi-msg", channel.path, "Channel path should match");
+        assertEq("Multi-message channel test", channel.summary, "Summary should match");
+
+        # Check subscribe schemas
+        assertTrue(exists channel.subscribe_schemas, "Should have subscribe_schemas list");
+        assertEq(3, channel.subscribe_schemas.size(), "Should have 3 subscribe messages");
+
+        assertEq("FirstMessage", channel.subscribe_schemas[0].name, "First subscribe message name");
+        assertEq("SecondMessage", channel.subscribe_schemas[1].name, "Second subscribe message name");
+        assertEq("ThirdMessage", channel.subscribe_schemas[2].name, "Third subscribe message name");
+
+        # Check that first one is also in singular field for backwards compatibility
+        assertTrue(exists channel.subscribe_schema, "Should have subscribe_schema for backwards compat");
+        assertEq("FirstMessage", channel.subscribe_schema.name, "Backwards compat subscribe name");
+
+        # Check publish schemas
+        assertTrue(exists channel.publish_schemas, "Should have publish_schemas list");
+        assertEq(2, channel.publish_schemas.size(), "Should have 2 publish messages");
+
+        assertEq("ResponseOne", channel.publish_schemas[0].name, "First publish message name");
+        assertEq("ResponseTwo", channel.publish_schemas[1].name, "Second publish message name");
+
+        # Check backwards compat
+        assertTrue(exists channel.publish_schema, "Should have publish_schema for backwards compat");
+        assertEq("ResponseOne", channel.publish_schema.name, "Backwards compat publish name");
+    }
+
+    testMessageBlockFieldParsing() {
+        # Test that field types in message blocks are correctly parsed
+        string content = "/** @WEBSOCKET /field-test
+    @ASYNCAPI
+    @summary Field parsing test
+
+    @subscribe TestMessage
+    - str_field (string): a string field
+    - int_field (int): an integer field
+    - opt_str (*string): an optional string
+    - opt_int (*int): an optional int
+    - opt_list (*list): an optional list
+    - hash_field (hash): a hash field
+    - hash_auto (hash<auto>): a hash<auto> field
+    - list_str (list<string>): a list of strings
+    - typed_hash (hash<EventInfo>): a typed hash reference
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 channel");
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+        assertTrue(exists channel.subscribe_schemas, "Should have subscribe_schemas");
+        assertEq(1, channel.subscribe_schemas.size(), "Should have 1 subscribe message");
+
+        hash<auto> msg = channel.subscribe_schemas[0];
+        assertEq("TestMessage", msg.name, "Message name should match");
+
+        hash<auto> props = msg.schema.properties;
+
+        # Check string field
+        assertTrue(props.hasKey("str_field"), "Should have str_field");
+        assertEq("string", props.str_field.type, "str_field type");
+
+        # Check integer field
+        assertTrue(props.hasKey("int_field"), "Should have int_field");
+        assertEq("integer", props.int_field.type, "int_field type");
+
+        # Check optional string
+        assertTrue(props.hasKey("opt_str"), "Should have opt_str");
+        assertEq("string", props.opt_str.type, "opt_str type");
+        assertTrue(props.opt_str.nullable, "opt_str should be nullable");
+
+        # Check optional int
+        assertTrue(props.hasKey("opt_int"), "Should have opt_int");
+        assertEq("integer", props.opt_int.type, "opt_int type");
+        assertTrue(props.opt_int.nullable, "opt_int should be nullable");
+
+        # Check optional list - this was causing type narrowing issues
+        assertTrue(props.hasKey("opt_list"), "Should have opt_list");
+        assertEq("array", props.opt_list.type, "opt_list type");
+        assertTrue(props.opt_list.nullable, "opt_list should be nullable");
+
+        # Check hash field
+        assertTrue(props.hasKey("hash_field"), "Should have hash_field");
+        assertEq("object", props.hash_field.type, "hash_field type");
+
+        # Check list of strings
+        assertTrue(props.hasKey("list_str"), "Should have list_str");
+        assertEq("array", props.list_str.type, "list_str type");
+        assertEq("string", props.list_str.items.type, "list_str items type");
+
+        # Check typed hash reference
+        assertTrue(props.hasKey("typed_hash"), "Should have typed_hash");
+        assertTrue(props.typed_hash.hasKey("$ref"), "typed_hash should have $ref");
+        assertEq("#/components/schemas/EventInfo", props.typed_hash{"$ref"}, "typed_hash $ref");
+    }
+}

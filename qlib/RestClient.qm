@@ -670,8 +670,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           caller like any other response
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in
           request method calls
-        - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing
-          message headers
+        - \c http_version: HTTP version to use: \c "auto" (HTTP/2 if available, default), \c "1.0", \c "1.1",
+          or \c "2.0" (require HTTP/2, fail if unavailable)
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c oauth2_alt_url_subst: URL substitution info for \c oauth2_alt_token_url
@@ -2571,7 +2571,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
       request method calls; also a string giving headers can be given in the format:
       <tt>header1=value, header2=value</tt>; the value will be parsed with
       @ref Util::parse_to_qore_value() "parse_to_qore_value()"
-    - \c "http_version": HTTP version to use (\c "1.0" or \c "1.1", defaults to \c "1.1")
+    - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", or \c "2.0")
     - \c "max_redirects": maximum redirects to support
     - \c "oauth2_app": An OAuth2 app name for external programs handling OAuth2 calls for this client
     - \c "oauth2_auth_url": The OAuth2 authorization URL for the \c authorization_code grant type; ignored if the

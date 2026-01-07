@@ -45,7 +45,7 @@
 #define PO_ALLOW_REPARSE                    (1 <<  5)    //!< allow multiple parse/commit cycles (for REPL support); requires no other threads active in Program
 #define PO_BROKEN_NARROWED_TYPES            (1 <<  6)    //!< disables parse-time type narrowing (narrowed type information is not used)
 #define PO_NO_TYPEDEF                       (1 <<  7)    //!< disables the typedef keyword (for backwards compatibility)
-// bit 8 is available for future use
+#define PO_NO_ENUM                          (1 <<  8)    //!< disables the enum keyword (for backwards compatibility)
 #define PO_NO_INHERIT_SYSTEM_CLASSES        (1 <<  9)    //!< do not inherit system classes into this program space
 #define PO_NO_INHERIT_USER_CLASSES          (1 << 10)    //!< do not inherit public user classes into this program space
 #define PO_NO_CHILD_PO_RESTRICTIONS         (1 << 11)    //!< turn off parse option inheritance restrictions
@@ -138,6 +138,12 @@
 
 //! new Qore style: no more '$' and with assumed variable scope
 #define PO_NEW_STYLE                  (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL)
+
+//! modern Qore style: new style + require types + strict args
+/** @note all warnings are also enabled with %modern; use the @ref modern "%modern" parse directive
+    @since %Qore 2.3
+*/
+#define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS)
 
 //! mask of all options allowing for more freedom (instead of less)
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \

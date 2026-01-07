@@ -211,18 +211,9 @@ public const ActionsWithSearch = {
 };
 
 #! Data provider action option definition
-public hashdecl ActionOptionInfo {
+public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! Data type of the option
     AbstractDataProviderType type;
-
-    #! Display name of the option
-    string display_name;
-
-    #! Short description of the option in plain text
-    string short_desc;
-
-    #! Description of the option with markdown rendering
-    string desc;
 
     #! The group names for the option, if any
     *softlist<string> groups;
@@ -237,27 +228,6 @@ public hashdecl ActionOptionInfo {
 
     #! Is the option exclusive with other options?
     *softlist<string> exclusive_with;
-
-    #! Any default value for the option
-    auto default_value;
-
-    #! Is the option value sensitive?
-    bool sensitive;
-
-    #! List of allowed values (enum)
-    *softlist<hash<AllowedValueInfo>> allowed_values;
-
-    #! Does the option accept values not defined in allowed_values too?
-    bool allowed_values_creatable;
-
-    #! List of allowed values for elements of list types (enum)
-    *softlist<hash<AllowedValueInfo>> element_allowed_values;
-
-    #! Does the option accept values not defined in element_allowed_values too?
-    bool element_allowed_values_creatable;
-
-    #! An optional example value for the option
-    auto example_value;
 
     #! An optional regex pattern for validating string values
     *string validation_regex;
@@ -328,31 +298,10 @@ public hashdecl ActionOptionInfo {
 
     #! Any information about how to react to changes
     *softlist<softstring> on_change;
-
-    #! Free-form metadata for the option
-    *hash<auto> metadata;
-
-    #! Messages related to the option
-    *list<hash<UiMessageInfo>> messages;
-
-    #! Any icon info for the option
-    *string icon;
-
-    #! Any image info for the option
-    *string image;
 }
 
 #! DataProvider path var info
-public hashdecl DataProviderPathVarInfo {
-    #! The display name for the action
-    string display_name;
-
-    #! Action short description, plain text formatting
-    string short_desc;
-
-    #! Action long description, markdown formatting
-    string desc;
-
+public hashdecl DataProviderPathVarInfo inherits DisplayDescInfo {
     #! An optional example value for the option
     *string example_value;
 }

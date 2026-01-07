@@ -70,14 +70,14 @@ protected:
         QoreValue rv = QoreLogicalEqualsOperatorNode::evalImpl(needs_deref, xsink);
         if (*xsink)
             return QoreValue();
-        return !rv.v.b;
+        return !rv.getAsBool();
     }
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         int err = QoreLogicalEqualsOperatorNode::parseInitImpl(val, parse_context);
         // make sure to reverse sense of comparison if this expression was resolved to a constant boolean value
-        if (val.type == QV_Bool) {
-            val.v.b = !val.v.b;
+        if (val.isBool()) {
+            val = !val.getAsBool();
         }
         return err;
     }

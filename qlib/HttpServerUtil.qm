@@ -28,10 +28,7 @@
 %requires Logger
 %requires FileLocationHandler
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 module HttpServerUtil {
     version = "1.3.1";
@@ -386,6 +383,18 @@ public hashdecl HttpResponseInfo {
 
     #! additional info to be added to the context (cx) variable's \a user_state key if the connection is not closed
     *hash<auto> user_state;
+
+    #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
+    /** When this is set, the connection will be handled as a dedicated socket.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    softbool streaming = False;
+
+    #! the type of streaming connection: "sse" or "websocket"
+    /** Only used when \c streaming is @ref True.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    *string stream_type;
 }
 
 #! the return value of HTTP handler methods with potentially unserialized message bodies
@@ -419,6 +428,18 @@ public hashdecl HttpHandlerResponseInfo {
 
     #! additional info to be added to the context (cx) variable's \a user_state key if the connection is not closed
     *hash<auto> user_state;
+
+    #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
+    /** When this is set, the connection will be handled as a dedicated socket.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    softbool streaming = False;
+
+    #! the type of streaming connection: "sse" or "websocket"
+    /** Only used when \c streaming is @ref True.
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    *string stream_type;
 }
 
 # hashdecl for SSL info
@@ -503,6 +524,23 @@ public hashdecl HttpListenerOptionInfo {
     /** client certificates are requested if \a ssl_verify_flags contains @ref Qore::SSL_VERIFY_PEER "SSL_VERIFY_PEER"
     */
     bool ssl_accept_all_certs = True;
+
+    #! HTTP version mode for this listener
+    /** Controls HTTP/2 support for incoming connections:
+        - \c "auto": Use HTTP/2 if client negotiates via ALPN, fall back to HTTP/1.1 (default)
+        - \c "1.0": HTTP/1.0 only
+        - \c "1.1": HTTP/1.1 only
+        - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
+
+        @note HTTP/2 requires:
+        - TLS (non-TLS connections always use HTTP/1.x)
+        - Async I/O mode enabled on the HttpServer (\c async_mode: \c True, which is the default)
+
+        When async mode is disabled, the server only supports HTTP/1.x regardless of this setting.
+
+        @since HttpServer 1.6
+    */
+    string http_version = "auto";
 
     #! Additional info added to the notification callback when listeners are started
     hash<auto> ext_info;
@@ -1371,7 +1409,28 @@ public class AbstractStreamRequest {
             return rv;
         }
 
-        # send chunked response
+        # For HTTP/2 connections, buffer the response data
+        # HTTP/2 doesn't support raw chunked transfer encoding - data must go in DATA frames
+        if (cx."header-info".http2) {
+            # Buffer all the data from the callback (can be string or binary)
+            binary data;
+            auto chunk;
+            while (chunk = send()) {
+                if (chunk.typeCode() == NT_STRING) {
+                    data += binary(chunk);
+                } else if (chunk.typeCode() == NT_BINARY) {
+                    data += chunk;
+                }
+            }
+            # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
+            remove rv.hdr."Transfer-Encoding";
+            # Don't set Content-Length here - the body may be compressed later in HttpServer::sendReply()
+            # which would change the size. Content-Length will be set correctly by doResponse/startPollSendHttp2Response
+            rv.body = data;
+            return rv;
+        }
+
+        # HTTP/1.x: send chunked response
         s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
             timeout_ms);
         rv.reply_sent = True;
@@ -1745,18 +1804,14 @@ public class AbstractHttpRequestHandler {
     #! decodes a message body with content-encoding
     static data decodeBody(string content_encoding, binary body, *string string_encoding) {
         switch (content_encoding) {
-%ifdef HAVE_BROTLI
             case "br":
                 return string_encoding
                     ? unbrotli_to_string(binary(body), string_encoding)
                     : unbrotli_to_binary(body);
-%endif
-%ifdef HAVE_ZSTD
             case "zstd":
                 return string_encoding
                     ? unzstd_to_string(binary(body), string_encoding)
                     : unzstd_to_binary(body);
-%endif
             case "deflate":
             case "x-deflate":
                 return string_encoding
@@ -1778,14 +1833,10 @@ public class AbstractHttpRequestHandler {
     #! encodes a message body with content-encoding
     static binary encodeBody(string content_encoding, data body) {
         switch (content_encoding) {
-%ifdef HAVE_BROTLI
             case "br":
                 return brotli(body);
-%endif
-%ifdef HAVE_ZSTD
             case "zstd":
                 return zstd(body);
-%endif
             case "deflate":
                 return compress(body);
             case "gzip":

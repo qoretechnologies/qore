@@ -22,18 +22,30 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %requires QUnit
-%requires QoreRepl
-%requires HttpServerUtil
+
+%try-module QoreRepl
+%define NoQoreRepl
+%endtry
+
+%try-module HttpServerUtil
+%define NoHttpServerUtil
+%endtry
 
 %exec-class QoreReplTest
 
 public class QoreReplTest inherits QUnit::Test {
+    private checkModule() {
+%ifdef NoQoreRepl
+        testSkip("no QoreRepl module");
+%endif
+%ifdef NoHttpServerUtil
+        testSkip("no HttpServerUtil module");
+%endif
+    }
+
     constructor() : QUnit::Test("QoreRepl", "1.0") {
         # PO_ALLOW_REPARSE tests
         addTestCase("PO_ALLOW_REPARSE basic tests", \testAllowReparseBasic());
@@ -224,6 +236,8 @@ public class QoreReplTest inherits QUnit::Test {
 
     #! Test basic QoreRepl functionality
     testQoreReplBasic() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         *hash<auto> result = repl.eval("1 + 1");
@@ -245,10 +259,13 @@ public class QoreReplTest inherits QUnit::Test {
 
         assertEq("qore> ", repl.getPrompt(), "Default prompt");
         assertFalse(repl.needsMoreInput(), "Should not need more input");
+%endif
     }
 
     #! Test /help command
     testCommandHelp() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         *hash<auto> result = repl.eval("/help");
@@ -275,10 +292,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Test /? alias
         result = repl.eval("/?");
         assertTrue(exists result.value, "/?  should also return help");
+%endif
     }
 
     #! Test /vars command
     testCommandVars() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initially - may have inherited system variables (ARGV, ENV, etc.)
@@ -298,10 +318,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/vars");
         assertRegex("x", result.value, "Should still show x");
         assertRegex("name", result.value, "Should show name variable");
+%endif
     }
 
     #! Test /reset command
     testCommandReset() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Set up some state
@@ -320,10 +343,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertFalse(exists vars.error, "/vars should not error after reset");
         # x should no longer be in the output
         assertFalse(vars.value =~ /\bx\b/, "Variable x should be cleared after reset");
+%endif
     }
 
     #! Test /clear command
     testCommandClear() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Start a multi-line input
@@ -338,10 +364,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertFalse(exists result.error, "Should not have error");
         assertFalse(repl.needsMoreInput(), "Should no longer need more input");
         assertEq("qore> ", repl.getPrompt(), "Should show normal prompt");
+%endif
     }
 
     #! Test /quit, /exit, /q commands
     testCommandQuit() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Test /quit
@@ -358,10 +387,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.reset();
         result = repl.eval("/q");
         assertTrue(result.exit, "/q should set exit flag");
+%endif
     }
 
     #! Test unknown command
     testCommandUnknown() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         *hash<auto> result = repl.eval("/unknown");
@@ -369,10 +401,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result.error, "Should have error");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
         assertRegex("Unknown command", result.error.desc, "Should mention unknown command");
+%endif
     }
 
     #! Test /functions command
     testCommandFunctions() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initially no user functions
@@ -395,10 +430,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/functions");
         assertRegex("myFunc", result.value, "Should still show myFunc");
         assertRegex("addTwo", result.value, "Should show addTwo");
+%endif
     }
 
     #! Test /classes command
     testCommandClasses() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initially no user classes
@@ -419,10 +457,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertFalse(exists result.error, "/classes should not error");
         assertRegex("MyClass", result.value, "Should still show MyClass");
         assertRegex("AnotherClass", result.value, "Should show AnotherClass");
+%endif
     }
 
     #! Test /constants command
     testCommandConstants() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initially no user constants
@@ -445,10 +486,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/constants");
         assertRegex("MY_CONST", result.value, "Should still show MY_CONST");
         assertRegex("ANOTHER_CONST", result.value, "Should show ANOTHER_CONST");
+%endif
     }
 
     #! Test /namespaces command
     testCommandNamespaces() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Should at least show Qore namespace
@@ -460,10 +504,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Test /ns alias
         result = repl.eval("/ns");
         assertRegex("Qore", result.value, "/ns should also work");
+%endif
     }
 
     #! Test /modules command
     testCommandModules() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Should show some modules (at least DGC which is always loaded)
@@ -473,10 +520,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result.value, "Should have value");
         # DGC (deterministic garbage collector) is typically always present
         assertRegex("Loaded modules:", result.value, "Should show loaded modules header");
+%endif
     }
 
     #! Test /type command
     testCommandType() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Test with integer
@@ -515,10 +565,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/type");
         assertTrue(exists result.error, "Should have error without argument");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+%endif
     }
 
     #! Test /describe command
     testCommandDescribe() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define a class to describe
@@ -555,10 +608,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/describe");
         assertTrue(exists result.error, "Should have error without argument");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+%endif
     }
 
     #! Test /history command
     testCommandHistory() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initially empty history
@@ -577,10 +633,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertRegex("1 \\+ 1", result.value, "Should show first command in history");
         assertRegex("x = 42", result.value, "Should show variable definition in history");
         assertRegex("/vars", result.value, "Should show /vars command in history");
+%endif
     }
 
     #! Test /timing command
     testCommandTiming() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Enable timing
@@ -602,10 +661,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Execute again and verify no timing
         result = repl.eval("2 + 2");
         assertFalse(exists result.timing, "Should not have timing field when disabled");
+%endif
     }
 
     #! Test /pwd and /cd commands
     testCommandPwdCd() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Get current directory
@@ -644,10 +706,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/cd");
         assertTrue(exists result.error, "Should have error without argument");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+%endif
     }
 
     #! Test /save command
     testCommandSave() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Create some history
@@ -677,10 +742,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/save");
         assertTrue(exists result.error, "Should have error without argument");
         assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+%endif
     }
 
     #! Test sandboxed REPL with filesystem restrictions
     testSandboxFilesystem() {
+        checkModule();
+%if !defined(NoQoreRepl)
         # Create a sandboxed REPL with no filesystem access
         QoreRepl repl({"parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM});
 
@@ -716,10 +784,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/vars");
         assertFalse(exists result.error, "/vars should work in sandboxed mode");
         assertRegex("x", result.value, "Should show x variable");
+%endif
     }
 
     #! Test sandboxed REPL with network restrictions
     testSandboxNetwork() {
+        checkModule();
+%if !defined(NoQoreRepl)
         # Create a sandboxed REPL with no network access
         QoreRepl repl({"parse_options": PO_NEW_STYLE | PO_NO_NETWORK});
 
@@ -737,10 +808,13 @@ public class QoreReplTest inherits QUnit::Test {
         # This may or may not error at parse time depending on how PO_NO_NETWORK works
         # The key is that the REPL itself handles it gracefully
         assertTrue(True, "REPL handles network restrictions gracefully");
+%endif
     }
 
     #! Test sandboxed REPL with custom parse options
     testSandboxCustomOptions() {
+        checkModule();
+%if !defined(NoQoreRepl)
         # Create a fully sandboxed REPL
         QoreRepl repl({
             "parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_NETWORK
@@ -779,10 +853,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("/timing");
         assertFalse(exists result.error, "/timing should work");
         assertRegex("enabled", result.value, "Should enable timing");
+%endif
     }
 
     #! Test multi-line block statement
     testMultiLineBlock() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Start if block
@@ -799,10 +876,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result, "Should complete after closing brace");
         assertFalse(exists result.error, "Should not have error");
         assertEq(1, repl.getProgram().getGlobalVariable("x"), "Block should have executed");
+%endif
     }
 
     #! Test multi-line function definition
     testMultiLineFunction() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Start function
@@ -822,10 +902,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("our int sum = add(3, 4)");
         assertFalse(exists result.error, "Function call should succeed");
         assertEq(7, repl.getProgram().getGlobalVariable("sum"), "add(3, 4) = 7");
+%endif
     }
 
     #! Test multi-line class definition
     testMultiLineClass() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Start class
@@ -849,10 +932,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("our int n = c.inc()");
         assertFalse(exists result.error, "Should call method");
         assertEq(1, repl.getProgram().getGlobalVariable("n"), "c.inc() should return 1");
+%endif
     }
 
     #! Test deeply nested blocks
     testNestedBlocks() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Nested if blocks
@@ -872,10 +958,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result, "Should complete after all braces closed");
         assertFalse(exists result.error, "Should not have error");
         assertEq(42, repl.getProgram().getGlobalVariable("deep"), "Nested block should execute");
+%endif
     }
 
     #! Test trailing operators indicate continuation
     testTrailingOperators() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Trailing comma
@@ -894,10 +983,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result, "Should complete");
         assertFalse(exists result.error, "Should not have error");
         assertEq(3, repl.getProgram().getGlobalVariable("x"), "1 + 2 = 3");
+%endif
     }
 
     #! Test parse error handling
     testParseError() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Syntax error - use a clearly invalid expression
@@ -906,10 +998,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result.error, "Should have error");
         # Could be PARSE-EXCEPTION or PARSE-ERROR depending on the error
         assertTrue(result.error.err =~ /PARSE/, "Should be a parse error");
+%endif
     }
 
     #! Test runtime exception handling
     testRuntimeError() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Runtime exception
@@ -918,10 +1013,13 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result.error, "Should have error");
         assertEq("TEST-ERROR", result.error.err, "Should be TEST-ERROR");
         assertRegex("test exception", result.error.desc, "Should contain exception message");
+%endif
     }
 
     #! Test result formatting for different types
     testResultFormatting() {
+        checkModule();
+%if !defined(NoQoreRepl)
         # Integer
         assertEq("42", QoreRepl::formatValue(42), "Integer formatting");
 
@@ -947,10 +1045,13 @@ public class QoreReplTest inherits QUnit::Test {
         string hashFmt = QoreRepl::formatValue({"a": 1, "b": 2});
         assertRegex("a", hashFmt, "Hash should contain key a");
         assertRegex("b", hashFmt, "Hash should contain key b");
+%endif
     }
 
     #! Test state persistence across multiple evals
     testStatePersistence() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define variable
@@ -970,6 +1071,7 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("sub incCounter() { counter++; }");
         repl.eval("incCounter()");
         assertEq(6, repl.getProgram().getGlobalVariable("counter"), "Counter after incCounter");
+%endif
     }
 
     #! Test that state persists across exceptions and program can continue after conditional throws
@@ -998,6 +1100,8 @@ public class QoreReplTest inherits QUnit::Test {
 
     #! Test /load command with active threads
     testLoadWithActiveThreads() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Start a background thread
@@ -1020,10 +1124,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Stop the thread
         repl.getProgram().setGlobalVarValue("stop", True);
         while (pgm.getThreadCount() > 0) usleep(10ms);
+%endif
     }
 
     #! Test negative max_connections validation
     testMaxConnectionsValidation() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreReplWebSocketHandler handler();
 
         # Valid values should work
@@ -1043,12 +1150,15 @@ public class QoreReplTest inherits QUnit::Test {
             assertRegex("non-negative", ex.desc, "Should mention non-negative");
         }
         assertTrue(caught, "Negative max_connections should throw");
+%endif
     }
 
     #! Test behavior after parse failure
     /** Note: Parse failures in PO_ALLOW_REPARSE mode can roll back previously
         committed state. This test documents the current behavior. */
     testParseFailureBehavior() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Set up some state
@@ -1069,10 +1179,13 @@ public class QoreReplTest inherits QUnit::Test {
         result = repl.eval("our int z = x + 1;");
         assertFalse(exists result.error, "Should be able to continue after parse error");
         assertEq(43, repl.getProgram().getGlobalVariable("z"), "z should be 43");
+%endif
     }
 
     #! Test that rollback preserves all types: variables, functions, classes, constants
     testRollbackPreservesAllTypes() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define a global variable
@@ -1117,10 +1230,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Can define new items after rollback
         repl.eval("our string newVar = 'created after rollback';");
         assertEq("created after rollback", repl.getProgram().getGlobalVariable("newVar"), "Should be able to create new vars after rollback");
+%endif
     }
 
     #! Test rollback with hashdecl definitions
     testRollbackPreservesHashdecl() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define a hashdecl
@@ -1142,10 +1258,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("hashdecl MyRecord2 { int x; int y; }");
         repl.eval("our hash<MyRecord2> point = <MyRecord2>{\"x\": 10, \"y\": 20};");
         assertEq(10, repl.getProgram().getGlobalVariable("point").x, "point.x should be 10");
+%endif
     }
 
     #! Test multiple consecutive rollbacks
     testMultipleConsecutiveRollbacks() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Initial setup
@@ -1186,10 +1305,13 @@ public class QoreReplTest inherits QUnit::Test {
         # Can still add more state
         repl.eval("our int e = a + b + c + d;");
         assertEq(10, repl.getProgram().getGlobalVariable("e"), "e should be 10");
+%endif
     }
 
     #! Test repeated rollback cycles for memory stability
     testRepeatedRollbackCycles() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Setup initial state
@@ -1215,10 +1337,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("increment();");
         assertEq(cycles + 1, repl.getProgram().getGlobalVariable("counter"),
             "counter should be incremented after cycles");
+%endif
     }
 
     #! Test rollback when error occurs mid-parse with multiple declarations
     testPartialParseRollback() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Setup
@@ -1240,12 +1365,15 @@ public class QoreReplTest inherits QUnit::Test {
         # Can continue normally
         repl.eval("our int afterError = existing + 50;");
         assertEq(150, repl.getProgram().getGlobalVariable("afterError"), "afterError should be 150");
+%endif
     }
 
     #! Test rollback preserves functions
     /** Note: Function overloading across separate parse cycles is not supported in REPL mode.
         This test verifies that existing functions survive rollback. */
     testRollbackPreservesFunctionVariants() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define several different functions (use 'sub' keyword)
@@ -1279,10 +1407,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("float sub multiply(float a, float b) { return a * b; }");
         repl.eval("our float r7 = multiply(3.0, 4.0);");
         assertEq(12.0, repl.getProgram().getGlobalVariable("r7"), "New function should work after rollback");
+%endif
     }
 
     #! Test rollback with class inheritance
     testRollbackPreservesClassHierarchy() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Define base class
@@ -1323,10 +1454,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("our Bird b();");
         repl.eval("our string s6 = b.speak();");
         assertEq("chirp", repl.getProgram().getGlobalVariable("s6"), "Bird should chirp");
+%endif
     }
 
     #! Test rollback with closures and references
     testRollbackPreservesClosures() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Create a closure factory (use 'sub' keyword)
@@ -1351,10 +1485,13 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("our code counter2 = makeCounter(100);");
         repl.eval("our int v4 = counter2();");
         assertEq(100, repl.getProgram().getGlobalVariable("v4"), "New counter should work");
+%endif
     }
 
     #! Stress test with many types and operations
     testRollbackStressTest() {
+        checkModule();
+%if !defined(NoQoreRepl)
         QoreRepl repl();
 
         # Create many variables
@@ -1403,6 +1540,7 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("our Class0 finalObj();");
         repl.eval("our int finalClass = finalObj.getVal();");
         assertEq(0, repl.getProgram().getGlobalVariable("finalClass"), "Class0 should still work");
+%endif
     }
 }
 

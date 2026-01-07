@@ -3,7 +3,7 @@
 
 # @file qdp command-line interface for the DataProvider module
 
-/*  Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/*  Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,10 +24,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires qore >= 1.0
 
@@ -42,14 +39,25 @@
 # to create the data provider index
 %requires ProviderIndex
 
+%try-module yaml
+%define NoYaml
+%endtry
+
 %try-module linenoise
 %define NoLinenoise
+%endtry
+
+%try-module json
+%define NoJson
 %endtry
 
 %exec-class QdpCmd
 
 class QdpCmd {
     public {
+        #! Version string
+        const Version = "1.2.0";
+
         static HttpServer http;
 
         static string cmd;
@@ -70,22 +78,36 @@ class QdpCmd {
         # console logger
         LoggerInterface logger;
 
+        #! Color output helper
+        static Util::TerminalColor color;
+
+        #! Signal handler flag for graceful shutdown
+        static bool shutdown_requested = False;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
             "createindex": "I,create-index",
+            "dryrun": "d,dry-run",
             "host": "H,host=s",
+            "json": "J,json",
+            "limit": "l,limit=i",
             "listapps": "a,list-apps",
             "listconnections": "c,list-connections",
             "listfactories": "f,list-factories",
             "listtypes": "t,list-types",
             "modules": "m,module=s@",
+            "nocolor": "C,no-color",
+            "offset": "O,offset=i",
             "options": "o,options=s",
             "required": "R,show-required",
             "servers": "S,servers",
             "subtype": "s,subtype=s",
+            "timeout": "T,timeout=i",
             "verbose": "v,verbose:i+",
+            "version": "V,version",
             "exp": "x,expressions",
+            "yaml": "Y,yaml",
             "help": "h,help",
         };
 
@@ -188,9 +210,20 @@ class QdpCmd {
 
         GetOpt g(Opts);
         our hash<auto> opts = g.parse3(\ARGV);
+
+        # Initialize color output early (enabled by default if terminal supports it)
+        color = new Util::TerminalColor(!opts.nocolor);
+
         if (opts.help) {
             usage();
         }
+        if (opts.version) {
+            showVersion();
+        }
+
+        # Set up signal handlers for graceful shutdown
+        set_signal_handler(SIGINT, \QdpCmd::signalHandler());
+        set_signal_handler(SIGTERM, \QdpCmd::signalHandler());
 
         # load any modules
         map load_module($1), opts.modules;
@@ -249,9 +282,9 @@ class QdpCmd {
             # first extract any data provider options
             string name = shift ARGV;
             # get expression in curly brackets, if any, respecting balanced brackets
-            *string opts = (name =~ x/({(?:(?>[^{}]*)|(?0))*})/)[0];
-            if (opts) {
-                name = replace(name, opts, "");
+            *string dp_opts = (name =~ x/({(?:(?>[^{}]*)|(?0))*})/)[0];
+            if (dp_opts) {
+                name = replace(name, dp_opts, "");
             } else {
                 # remove empty options; the above regex does not catch them :(
                 name =~ s/{}//;
@@ -266,13 +299,17 @@ class QdpCmd {
                 }
                 app = path[0];
                 action = path[1];
-                provider = getDataProviderForAppAction(app, action, opts);
+                provider = getDataProviderForAppAction(app, action, dp_opts);
             } else {
                 list<string> path = name.split("/");
-                provider = getDataProvider((shift path) + opts);
+                provider = getDataProvider((shift path) + dp_opts);
                 map provider = provider.getChildProviderEx($1), path;
             }
             provider.setLogger(logger);
+            # Set debug collector if verbose mode is enabled
+            if (opts.verbose) {
+                provider.setDebugCollector(new ConsoleDebugInfoCollector(opts.verbose, color));
+            }
             pctx = new DataProviderContextHelper(provider);
         } catch (hash<ExceptionInfo> ex) {
             if (!NoProviderCmds{ARGV[0]}) {
@@ -421,15 +458,15 @@ class QdpCmd {
     }
 
     static exampleRequest(AbstractDataProvider provider) {
-        printf("%N\n", provider.getExampleRequestData());
+        output(provider.getExampleRequestData());
     }
 
     static exampleResponse(AbstractDataProvider provider) {
-        printf("%N\n", provider.getExampleResponseData());
+        output(provider.getExampleResponseData());
     }
 
     static exampleRecord(AbstractDataProvider provider) {
-        printf("%N\n", provider.getExampleRecordData());
+        output(provider.getExampleRecordData());
     }
 
     static listEvents(AbstractDataProvider provider) {
@@ -475,7 +512,7 @@ class QdpCmd {
                 QdpCmd::error("Missing required event argument; valid events: %y", l);
             }
         }
-        printf("%N\n", provider.getExampleEventData(event));
+        output(provider.getExampleEventData(event));
     }
 
     static errors(AbstractDataProvider provider) {
@@ -499,7 +536,7 @@ class QdpCmd {
 
     static exampleError(AbstractDataProvider provider) {
         string error = QdpCmd::getString("error", True);
-        printf("%N\n", provider.getExampleErrorResponseData(error));
+        output(provider.getExampleErrorResponseData(error));
     }
 
     static AbstractDataField getField(string name, auto f) {
@@ -564,17 +601,125 @@ class QdpCmd {
     static fieldDelete(AbstractDataProvider provider) {
         string name = QdpCmd::getString("field-delete 'name'", True);
         provider.deleteField(name);
-        printf("deleted field %y from provider %s/%s\n", name, provider.getName());
+        printf("deleted field %y from provider %y\n", name, provider.getName());
     }
 
     static getInfo(AbstractDataProvider provider) {
-        printf("%N\n", provider.getInfo());
+        hash<DataProviderInfo> info = provider.getInfo();
+
+        # For JSON/YAML output, just dump the raw info
+        if (opts.json || opts.yaml) {
+            output(info);
+            return;
+        }
+
+        # User-friendly formatted output
+        printf("\n%s\n", color.bold("═══ Data Provider Info ═══"));
+
+        # Basic info section
+        printf("\n%s\n", color.bold("Provider"));
+        printf("  %s: %s\n", color.key("Name"), info.name);
+        if (info.display_name && info.display_name != info.name) {
+            printf("  %s: %s\n", color.key("Display Name"), info.display_name);
+        }
+        printf("  %s: %s\n", color.key("Type"), color.type(info.type));
+        if (info.short_desc) {
+            printf("  %s: %s\n", color.key("Description"), info.short_desc);
+        }
+
+        # Capabilities section
+        printf("\n%s\n", color.bold("Capabilities"));
+        list<string> caps = ();
+        if (info.supports_read) push caps, "read";
+        if (info.supports_create) push caps, "create";
+        if (info.supports_update) push caps, "update";
+        if (info.supports_upsert) push caps, "upsert";
+        if (info.supports_delete) push caps, "delete";
+        if (info.supports_native_search) push caps, "search";
+        if (info.supports_bulk_read) push caps, "bulk-read";
+        if (info.supports_bulk_create) push caps, "bulk-create";
+        if (info.supports_bulk_upsert) push caps, "bulk-upsert";
+        if (info.supports_request) push caps, "request/response";
+        if (info.supports_observable) push caps, "events";
+        if (info.supports_messages.val() && info.supports_messages != "NONE") push caps, "messages";
+
+        if (caps) {
+            printf("  %s\n", caps.join(", "));
+        } else {
+            printf("  %s\n", color.dim("(none)"));
+        }
+
+        # Record operations
+        if (info.has_record) {
+            printf("\n%s\n", color.bold("Record Operations"));
+            printf("  %s: %s\n", color.key("Has Record Type"), color.success("Yes"));
+            if (info.record_requires_search_options) {
+                printf("  %s: %s\n", color.key("Requires Search Options"), "Yes");
+            }
+            if (info.supports_search_expressions) {
+                printf("  %s: %s\n", color.key("Supports Search Expressions"), "Yes");
+            }
+        }
+
+        # Request/Response API
+        if (info.supports_request) {
+            printf("\n%s\n", color.bold("Request/Response API"));
+            printf("  %s: %s\n", color.key("Supported"), color.success("Yes"));
+            *AbstractDataProviderType req_type = provider.getRequestType();
+            *AbstractDataProviderType resp_type = provider.getResponseType();
+            if (req_type) {
+                printf("  %s: %s\n", color.key("Request Type"), req_type.getName());
+            }
+            if (resp_type) {
+                printf("  %s: %s\n", color.key("Response Type"), resp_type.getName());
+            }
+        }
+
+        # Messages
+        *hash<string, hash<DataProviderMessageInfo>> messages = provider.getMessageTypes();
+        if (messages) {
+            printf("\n%s\n", color.bold("Messages"));
+            foreach hash<auto> msg in (messages.pairIterator()) {
+                string type_info = msg.value.type ? msg.value.type.getName() : "auto";
+                printf("  %s %s: %s\n", color.dim("→"), color.key(msg.key), color.type(type_info));
+            }
+        }
+
+        # Events
+        *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+        if (events) {
+            printf("\n%s\n", color.bold("Events"));
+            foreach hash<auto> evt in (events.pairIterator()) {
+                string type_info = evt.value.type ? evt.value.type.getName() : "auto";
+                printf("  %s %s: %s\n", color.dim("←"), color.key(evt.key), color.type(type_info));
+            }
+        }
+
+        # Children
+        *list<string> child_names = info.children ?? provider.getChildProviderNames();
+        if (child_names) {
+            printf("\n%s\n", color.bold("Children"));
+            if (child_names.size() <= 10) {
+                map printf("  • %s\n", color.key($1)), child_names;
+            } else {
+                map printf("  • %s\n", color.key($1)), child_names[0..9];
+                printf("  %s\n", color.dim(sprintf("... and %d more", child_names.size() - 10)));
+            }
+        }
+
+        # Provider-specific info (only if verbose)
+        if (opts.verbose && info.info) {
+            printf("\n%s\n", color.bold("Additional Info"));
+            outputRecord(info.info);
+        }
+
+        printf("\n");
     }
 
     static listChildren(AbstractDataProvider provider) {
         *list<string> children = provider.getChildProviderNames();
         if (children) {
-            printf("%y\n", children);
+            output(children);
         } else {
             printf(provider.getName() + " has no children\n");
         }
@@ -583,6 +728,11 @@ class QdpCmd {
     static listChildDetails(AbstractDataProvider provider) {
         *list<hash<DataProviderSummaryInfo>> children = provider.getChildProviderSummaryInfo();
         if (children) {
+            if (opts.json || opts.yaml) {
+                output(children);
+                return;
+            }
+
             code get_code = string sub (hash<auto> h) {
                 if (h.has_record) {
                     return "REC";
@@ -610,7 +760,8 @@ class QdpCmd {
                 }
                 return "---";
             };
-            map printf("- %s: (%s) %s\n", $1.name, get_code($1), QdpCmd::getDesc(10, $1, "name")), children;
+            map printf("- %s: (%s) %s\n", color.key($1.name), color.type(get_code($1)),
+                QdpCmd::getDesc(10, $1, "name")), children;
         } else {
             printf(provider.getName() + " has no children\n");
         }
@@ -649,8 +800,12 @@ class QdpCmd {
         ix = True;
 
         # print a message
-        stdout.printf("listening to events from %y; enter <message id>: <message body> to send a message, 'help' for "
-            "help\n", provider.getName());
+        stdout.printf("%s %s; enter %s to send a message, %s for help, %s to exit\n",
+            color.green("listening to events from"),
+            color.cyan(provider.getName()),
+            color.yellow("<message id>: <message body>"),
+            color.bold("'help'"),
+            color.dim("Ctrl+C"));
         observable.registerObserver(observer);
 
         if (observable instanceof DataProvider::DelayedObservable) {
@@ -658,8 +813,11 @@ class QdpCmd {
         }
 
         InputHelper input_helper(provider);
-        while (True) {
+        while (!shutdown_requested) {
             string input = input_helper.get();
+            if (shutdown_requested) {
+                break;
+            }
             #printf("input: %y\n", input);
             bool quit;
             switch (input) {
@@ -674,8 +832,11 @@ class QdpCmd {
             # check for msg ID
             (*string msgid, *string msg) = (input =~ x/([^:]+):(.*)/);
             if (!msgid) {
-                stdout.printf("cannot parse input %y; enter <message id>: <message body> to send a message, "
-                    "'help' for help\n", input);
+                stdout.printf("%s %y; enter %s to send a message, %s for help\n",
+                    color.red("cannot parse input"),
+                    input,
+                    color.yellow("<message id>: <message body>"),
+                    color.bold("'help'"));
                 continue;
             }
 
@@ -686,11 +847,11 @@ class QdpCmd {
                 stderr.printf("%s: %s; client-side error; the message was not sent\n", ex.err, ex.desc);
                 continue;
             }
-            printf("> sending %y -> %y\n", msgid, v);
+            printf("> %s %y -> %y\n", color.info("sending"), msgid, v);
             try {
                 provider.sendMessage(msgid, v);
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("%s: %s\n", ex.err, ex.desc);
+                stderr.printf("%s %s: %s\n", color.error("ERROR:"), ex.err, ex.desc);
             }
         }
         ix = False;
@@ -717,7 +878,12 @@ class QdpCmd {
         Observable observable = cast<Observable>(provider);
 
         # print a message
-        stdout.printf("listening to events from %y; press any key to stop listening...\n", provider.getName());
+        string timeout_msg = opts.timeout ? sprintf(" %s", color.dim(sprintf("(timeout: %ds)", opts.timeout))) : "";
+        stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
+            color.green("listening to events from"),
+            color.cyan(provider.getName()),
+            timeout_msg,
+            color.dim("Ctrl+C"));
         {
             Term t();
 
@@ -727,7 +893,13 @@ class QdpCmd {
                 cast<DataProvider::DelayedObservable>(observable).observersReady();
             }
 
-            while (observable.isActive()) {
+            date start = now_us();
+            while (observable.isActive() && !shutdown_requested) {
+                # Check timeout
+                if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
+                    printf("\n%s listen timed out after %d seconds\n", color.warning("TIMEOUT:"), opts.timeout);
+                    break;
+                }
                 if (stdin.isDataAvailable(250ms)) {
                     stdin.readBinary(1);
                     break;
@@ -736,7 +908,9 @@ class QdpCmd {
         }
         bool active = observable.isActive();
         delete provider;
-        if (active) {
+        if (shutdown_requested) {
+            printf("listening stopped due to signal\n");
+        } else if (active) {
             printf("listening stopped on user request\n");
         } else {
             printf("listening stopped due to an error\n");
@@ -747,7 +921,7 @@ class QdpCmd {
         *hash<auto> search_options = QdpCmd::getHash("search options");
         *hash<string, AbstractDataField> rec = provider.getRecordType(search_options);
         if (opts.verbose > 1) {
-            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+            printf("%Y\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
         } else {
             QdpCmd::showRecord(provider, rec);
         }
@@ -757,7 +931,7 @@ class QdpCmd {
         *hash<auto> create_options = QdpCmd::getHash("create options");
         *hash<string, AbstractDataField> rec = provider.getCreateRecordType(create_options);
         if (opts.verbose > 1) {
-            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+            printf("%Y\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
         } else {
             QdpCmd::showRecord(provider, rec);
         }
@@ -767,7 +941,7 @@ class QdpCmd {
         *hash<auto> search_options = QdpCmd::getHash("search options");
         *hash<string, AbstractDataField> rec = provider.getUpdateRecordType(search_options);
         if (opts.verbose > 1) {
-            printf("%N\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
+            printf("%Y\n", (map {$1.key: $1.value.getInfo()}, rec.pairIterator()));
         } else {
             QdpCmd::showRecord(provider, rec);
         }
@@ -901,13 +1075,56 @@ class QdpCmd {
     static search(AbstractDataProvider provider) {
         *hash<auto> where_cond = QdpCmd::getSearchExpression("search");
         *hash<auto> search_options = QdpCmd::getHash("search options");
+
+        # Add limit/offset to search options if specified
+        if (opts.limit) {
+            search_options.limit = opts.limit;
+        }
+        if (opts.offset) {
+            search_options.offset = opts.offset;
+        }
+
         AbstractDataProviderRecordIterator i;
         if (opts.bulk) {
             i = provider.searchRecordsBulk(NOTHING, where_cond, search_options).getRecordIterator();
         } else {
             i = provider.searchRecords(where_cond, search_options);
         }
-        map printf("%y\n", $1), i;
+
+        # Collect results for JSON/YAML output or output directly
+        if (opts.json || opts.yaml) {
+            list<auto> results = ();
+            int count = 0;
+            date start = now_us();
+            while (i.next()) {
+                if (shutdown_requested) {
+                    stderr.printf("Search interrupted after %d records\n", count);
+                    break;
+                }
+                if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
+                    stderr.printf("Search timed out after %d seconds (%d records)\n", opts.timeout, count);
+                    break;
+                }
+                push results, i.getValue();
+                ++count;
+            }
+            output(results);
+        } else {
+            int count = 0;
+            date start = now_us();
+            while (i.next()) {
+                if (shutdown_requested) {
+                    stderr.printf("\nSearch interrupted after %d records\n", count);
+                    break;
+                }
+                if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
+                    stderr.printf("\nSearch timed out after %d seconds (%d records)\n", opts.timeout, count);
+                    break;
+                }
+                outputRecord(i.getValue());
+                ++count;
+            }
+        }
     }
 
     static sendMessage(AbstractDataProvider provider) {
@@ -1031,8 +1248,18 @@ class QdpCmd {
     static update(AbstractDataProvider provider) {
         hash<auto> set = QdpCmd::getHash("update 'set'", True);
         *hash<auto> where_cond = QdpCmd::getSearchExpression("update 'where'", True);
+
+        if (opts.dryrun) {
+            printf("%s Would update records matching:\n", color.warning("[DRY-RUN]"));
+            printf("  %s: ", color.key("where"));
+            outputRecord(where_cond);
+            printf("  %s: ", color.key("set"));
+            outputRecord(set);
+            return;
+        }
+
         int rec_count = provider.updateRecords(set, where_cond);
-        printf("%d record%s updated\n", rec_count, rec_count == 1 ? "" : "s");
+        printf("%s %d record%s updated\n", color.success("SUCCESS:"), rec_count, rec_count == 1 ? "" : "s");
     }
 
     static create(AbstractDataProvider provider) {
@@ -1040,35 +1267,73 @@ class QdpCmd {
         if (!exists rec) {
             QdpCmd::error("missing argument to 'create' action; a hash is required");
         }
+
+        if (opts.dryrun) {
+            printf("%s Would create record(s):\n", color.warning("[DRY-RUN]"));
+            outputRecord(rec);
+            return;
+        }
+
         *hash<auto> rv = provider.createRecordsBulk(rec);
         if (opts.verbose) {
-            printf("new record(s): %y\n", (map $1, rv.contextIterator()));
+            printf("new record(s): ");
+            output((map $1, rv.contextIterator()));
         }
         int size = rv.firstValue().lsize();
-        printf("%d record%s successfully created\n", size, size == 1 ? "" : "s");
+        printf("%s %d record%s successfully created\n", color.success("SUCCESS:"), size, size == 1 ? "" : "s");
     }
 
     static upsert(AbstractDataProvider provider) {
         *hash<auto> rec = QdpCmd::getHash("upsert");
         *hash<auto> upsert_options = QdpCmd::getHash("upsert options");
+
+        if (opts.dryrun) {
+            printf("%s Would upsert record(s):\n", color.warning("[DRY-RUN]"));
+            outputRecord(rec);
+            if (upsert_options) {
+                printf("  %s: ", color.key("options"));
+                outputRecord(upsert_options);
+            }
+            return;
+        }
+
         *list<string> result = provider.upsertRecordsBulk(rec, upsert_options);
-        printf("upsert result: %y\n", result);
+        printf("%s upsert result: ", color.success("SUCCESS:"));
+        output(result);
     }
 
     static del(AbstractDataProvider provider) {
         *hash<auto> where_cond = QdpCmd::getSearchExpression("delete");
+
+        if (opts.dryrun) {
+            printf("%s Would delete records matching:\n", color.warning("[DRY-RUN]"));
+            outputRecord(where_cond);
+            return;
+        }
+
         int rec_count = provider.deleteRecords(where_cond);
-        printf("%d record%s deleted\n", rec_count, rec_count == 1 ? "" : "s");
+        printf("%s %d record%s deleted\n", color.success("SUCCESS:"), rec_count, rec_count == 1 ? "" : "s");
     }
 
     static doRequest(AbstractDataProvider provider) {
         *hash<auto> req = QdpCmd::getHash("request");
         *hash<auto> options = QdpCmd::getHash("request-options");
+
+        # Add timeout to options if specified
+        if (opts.timeout && !options.timeout) {
+            options.timeout = opts.timeout * 1000;  # convert seconds to milliseconds
+        }
+
         auto resp = provider.doRequest(req, options);
         if (!opts.verbose && resp.info."response-uri" && exists resp.body) {
-            printf("%s: %N\n", resp.info."response-uri", resp.body);
+            if (opts.json || opts.yaml) {
+                output(resp.body);
+            } else {
+                printf("%s: ", color.info(resp.info."response-uri"));
+                outputRecord(resp.body);
+            }
         } else {
-            printf("%N\n", resp);
+            output(resp);
         }
     }
 
@@ -1076,8 +1341,55 @@ class QdpCmd {
         hash<auto> req = QdpCmd::getHash("request", True);
         hash<auto> where_cond = QdpCmd::getSearchExpression("request-search", True);
         *hash<auto> options = QdpCmd::getHash("request-options");
+
+        # Add limit/offset to options if specified
+        if (opts.limit) {
+            options.limit = opts.limit;
+        }
+        if (opts.offset) {
+            options.offset = opts.offset;
+        }
+        # Add timeout if specified
+        if (opts.timeout && !options.timeout) {
+            options.timeout = opts.timeout * 1000;
+        }
+
         AbstractDataProviderRecordIterator i = provider.requestSearchRecords(req, where_cond, options);
-        map printf("%y\n", $1), i;
+
+        # Collect results for JSON/YAML output or output directly
+        if (opts.json || opts.yaml) {
+            list<auto> results = ();
+            int count = 0;
+            date start = now_us();
+            while (i.next()) {
+                if (shutdown_requested) {
+                    stderr.printf("Search interrupted after %d records\n", count);
+                    break;
+                }
+                if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
+                    stderr.printf("Search timed out after %d seconds (%d records)\n", opts.timeout, count);
+                    break;
+                }
+                push results, i.getValue();
+                ++count;
+            }
+            output(results);
+        } else {
+            int count = 0;
+            date start = now_us();
+            while (i.next()) {
+                if (shutdown_requested) {
+                    stderr.printf("\nSearch interrupted after %d records\n", count);
+                    break;
+                }
+                if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
+                    stderr.printf("\nSearch timed out after %d seconds (%d records)\n", opts.timeout, count);
+                    break;
+                }
+                outputRecord(i.getValue());
+                ++count;
+            }
+        }
     }
 
     static request(AbstractDataProvider provider) {
@@ -1127,7 +1439,45 @@ class QdpCmd {
     static showType(*AbstractDataProvider prov, string msg, hash<DataProviderMessageInfo> info) {
         printf("%y: %s\n", msg, QdpCmd::getDesc(0, info));
         hash<string, bool> rmap;
-        QdpCmd::showType(prov, \rmap, info.type);
+        # For simple types without fields, show explanation
+        if (info.type && !info.type.getFields()) {
+            string type_name = info.type.getName();
+            string explanation = QdpCmd::getSimpleTypeExplanation(type_name);
+            printf("%s%s\n", type_name, explanation ? " (" + explanation + ")" : "");
+        } else if (info.type) {
+            QdpCmd::showType(prov, \rmap, info.type);
+        }
+    }
+
+    #! Returns a human-readable explanation for simple type names
+    static string getSimpleTypeExplanation(string type_name) {
+        # Handle optional types (starting with *)
+        bool optional = type_name[0] == "*";
+        string base_type = optional ? type_name.substr(1) : type_name;
+        string opt_prefix = optional ? "optional " : "";
+
+        switch (base_type) {
+            case "auto": return opt_prefix + "any value of any type";
+            case "data": return opt_prefix + "string or binary data";
+            case "string": return opt_prefix + "text string";
+            case "binary": return opt_prefix + "binary data";
+            case "int": return opt_prefix + "integer number";
+            case "float": return opt_prefix + "floating-point number";
+            case "number": return opt_prefix + "arbitrary-precision number";
+            case "bool": return opt_prefix + "true or false";
+            case "date": return opt_prefix + "date/time value";
+            case "hash": return opt_prefix + "key-value mapping";
+            case "list": return opt_prefix + "list of values";
+            case "nothing": return "no value (null)";
+            case "softstring": return opt_prefix + "value converted to string";
+            case "softint": return opt_prefix + "value converted to integer";
+            case "softbool": return opt_prefix + "value converted to boolean";
+            case "softdate": return opt_prefix + "value converted to date";
+            case "softfloat": return opt_prefix + "value converted to float";
+            case "softnumber": return opt_prefix + "value converted to number";
+            case "softlist": return opt_prefix + "value converted to list";
+            default: return "";
+        }
     }
 
     static showType(*AbstractDataProvider prov, AbstractDataProviderType type, *string offset) {
@@ -1148,7 +1498,7 @@ class QdpCmd {
                 printf("%s%s elements ->\n", type.getName(), offset);
                 QdpCmd::showRecord(prov, \rmap, element_rec, offset + "  ", dctxt[0]);
             } else {
-                printf("%s%s%s (%s)\n", offset, type.getName());
+                printf("%s%s\n", offset, type.getName());
             }
         }
 
@@ -1387,14 +1737,25 @@ class QdpCmd {
     static listApps() {
         DataProvider::registerKnownFactories();
         *list<hash<DataProviderAppInfo>> l = DataProviderActionCatalog::getAllApps();
+
+        if (opts.json || opts.yaml) {
+            list<hash<auto>> result = ();
+            foreach hash<DataProviderAppInfo> app in (l) {
+                *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app.name);
+                push result, app + {"actions": actions};
+            }
+            output(result);
+            exit(0);
+        }
+
         foreach hash<DataProviderAppInfo> app in (l) {
             # get actions for app
             *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app.name);
-            printf("%s: scheme %y, %d action%s: %s\n", app.name, app.scheme, actions.size(),
+            printf("%s: scheme %y, %d action%s: %s\n", color.bold(app.name), app.scheme, actions.size(),
                 actions.size() == 1 ? "" : "s", app.desc);
             if (opts.verbose) {
-                map printf(" + %s (%s %y): %s\n", $1.action, ActionNameMap{$1.action_code}, $1.path, $1.short_desc),
-                    actions;
+                map printf(" + %s (%s %y): %s\n", color.key($1.action), ActionNameMap{$1.action_code}, $1.path,
+                    $1.short_desc), actions;
             }
         }
         exit(0);
@@ -1405,13 +1766,19 @@ class QdpCmd {
         *hash<string, string> h = map {$1.key: $1.value.url}, get_connection_hash(True).pairIterator();
         # add datasource connections
         h += get_ds_hash(True);
+
+        if (opts.json || opts.yaml) {
+            output(h);
+            exit(0);
+        }
+
         if (!h) {
             printf("no connections are present\n");
         } else {
             if (opts.verbose) {
-                map printf("%s: %s\n", $1.key, $1.value), h.pairIterator();
+                map printf("%s: %s\n", color.key($1.key), color.value($1.value)), h.pairIterator();
             } else {
-                map printf("%s\n", $1), keys h;
+                map printf("%s\n", color.key($1)), keys h;
             }
         }
         exit(0);
@@ -1423,10 +1790,24 @@ class QdpCmd {
         # load providers from environment
         DataProvider::loadProvidersFromEnvironment();
         *list<string> flist = DataProvider::listFactories();
+
+        if (opts.json || opts.yaml) {
+            if (opts.verbose) {
+                hash<auto> result = map {$1: DataProvider::getFactory($1).getInfoAsData()}, flist;
+                output(result);
+            } else {
+                output(flist);
+            }
+            exit(0);
+        }
+
         if (opts.verbose) {
-            map printf("%s: %N\n", $1, DataProvider::getFactory($1).getInfoAsData()), flist;
+            foreach string f in (flist) {
+                printf("%s: ", color.bold(f));
+                output(DataProvider::getFactory(f).getInfoAsData());
+            }
         } else {
-            printf("%y\n", flist);
+            output(flist);
         }
         exit(0);
     }
@@ -1437,111 +1818,209 @@ class QdpCmd {
         # load types from environment
         DataProvider::loadTypesFromEnvironment();
         *list<string> tlist = DataProvider::listTypes();
+
+        if (opts.json || opts.yaml) {
+            if (opts.verbose) {
+                hash<auto> result = map {$1: DataProvider::getType($1).getInfo()}, tlist;
+                output(result);
+            } else {
+                output(tlist);
+            }
+            exit(0);
+        }
+
         if (opts.verbose) {
-            map printf("%s: %N\n", $1, DataProvider::getType($1).getInfo()), tlist;
+            foreach string t in (tlist) {
+                printf("%s: ", color.bold(t));
+                output(DataProvider::getType(t).getInfo());
+            }
         } else {
-            printf("%y\n", tlist);
+            output(tlist);
         }
         exit(0);
     }
 
     static usage() {
-        printf("usage:
- %s [options] <connection>[/child1/child2...] <cmd> [args...]
- %s [options] <factory>{<options>}[/child1/child2...] <cmd> [args...]
- %s [options] @<app>/<action>[{<options>}] [args...]
-  <cmd> = create|delete|dorequest|errors|info|list|record|request|response|reply|rsearch|search|update|upsert (default=list)
-    action-info|ainfo|ai
-        show info for the given app action (must use @<app>/<action> for the data provider)
-    create <new record> (ex create id=123,name=\"my name\")
-        create a new record
-    example-error|exerror [error]
-        show an example error response
-    example-event|exevent [event]
-        show an example event
-    example-record|exrecord
-        show an example record
-    example-request|exrequest
-        show an example request
-    example-response|exresponse
-        show an example response
-    field-add|fadd <name> <field desc hash>
-        adds a field to a data provider
-    field-delete|fdelete <name>
-        deletes a field from a data provider
-    field-update|fupdate <old-name> <new-name> [<field desc hash>]
-        deletes a field from a data provider
-    delete <match criteria>
-        deletes record matching the given criteria
-    dorequest <request info>
-        executes a request against the given provider (if supported)
-    errors [<code>]
-        lists all error replies
-    event <event>
-        shows the event type
-    events
-        list all supported event types
-    info
-        show information about the data provider
-    interactive|ix
-        listen to events generated by an observable data provider and send response messages
-    list
-        list child data provider names
-    list-details|ldetails
-        list child data providers with details
-    list-events|levents
-        list event types
-    list-messages|lmessages|lmsgs
-        list message types
-    listen
-        listen to events generated by an observable data provider
-    message|msg <message>
-        shows the message type
-    provider-create|pcreate <name> <desc hash> [<option hash>]
-        create a new data provider
-    provider-delete|pdelete <name>
-        delete a child data provider
-    record
-        show the record format (more -v's = more info)
-    request
-        show request information (if supported)
-    response|reply
-        show successful response information (if supported)
-    rsearch <req> <search> [<options>]
-        executes a request and then a search on the results (if supported)
-    search [search criteria] (ex: search name=\"my name\")
-        search for record(s) matching the given criteria
-    send-message|send-msg|smsg <message id> [<message payload>] [<send options>]
-        sends a message
-    show-providers|sp
-        shows data provider endpoints from the given root
-    update <set criteria> <match criteria> (ex update name=other id=123)
-        update the given records with the given information
-    upsert <record> (ex update id=123,name=\"my name\")
-        upserts the given record
+        string script = get_script_name();
 
- -a,--list-apps            list applications
- -b,--bulk                 use the bulk API for searches
- -c,--list-connections     list known connections and exit
- -f,--list-factories       list known data provider factories and exit
- -H,--host=ARG             set the hostname (+ optionally port) for webhooks
- -I,--create-index         create data provider indices in QORE_PROVIDER_INDEX_DIR
- -m,--module=ARG           Data Provider modules to load manually
- -o,--options=ARG          set implied options for a data provider (must parse to a hash in Qore format)
- -R,--show-required        show only required attributes when showing types
- -S,--servers              enable data provider background threads and processes
- -s,--subtype=ARG          use Data Provider subtype when creating from a connection
- -t,--list-types           list known data provider types and exit
- -v,--verbose[=ARG]        show more output
- -x,--expressions          create search expressions when searching
- -h,--help                 this help text
-", get_script_name(), get_script_name(), get_script_name());
+        printf("%s - Qore Data Provider CLI Tool\n\n", color.bold(script));
+
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s [options] <provider> [command] [args...]\n\n", script);
+
+        printf("%s\n", color.bold("PROVIDER FORMATS"));
+        printf("  %s                   Use a named connection\n", color.key("<connection>"));
+        printf("  %s    Use a factory with options\n", color.key("<factory>{options}"));
+        printf("  %s             Use an app action\n", color.key("@<app>/<action>"));
+        printf("  %s       Navigate to child providers\n", color.key("<provider>/child/..."));
+        printf("\n");
+
+        printf("%s\n", color.bold("DISCOVERY COMMANDS"));
+        printf("  %s, %s                  List child providers (default)\n",
+            color.key("list"), color.key("l"));
+        printf("  %s, %s           List children with details\n",
+            color.key("list-details"), color.key("ldetails"));
+        printf("  %s                         Show provider information\n", color.key("info"));
+        printf("  %s, %s              Show record type schema\n",
+            color.key("record"), color.key("rec"));
+        printf("  %s                      Show request type (API providers)\n", color.key("request"));
+        printf("  %s, %s            Show response type (API providers)\n",
+            color.key("response"), color.key("reply"));
+        printf("  %s [code]                List error response types\n", color.key("errors"));
+        printf("  %s, %s         Show data provider tree\n",
+            color.key("show-providers"), color.key("sp"));
+        printf("\n");
+
+        printf("%s\n", color.bold("RECORD OPERATIONS"));
+        printf("  %s <criteria>            Search for records\n", color.key("search"));
+        printf("  %s <record>              Create new record(s)\n", color.key("create"));
+        printf("  %s <set> <where>         Update matching records\n", color.key("update"));
+        printf("  %s <record>              Create or update record\n", color.key("upsert"));
+        printf("  %s <criteria>            Delete matching records\n", color.key("delete"));
+        printf("\n");
+
+        printf("%s\n", color.bold("API OPERATIONS"));
+        printf("  %s <request>        Execute API request\n", color.key("dorequest"));
+        printf("  %s <req> <search>       Request then search results\n", color.key("rsearch"));
+        printf("  %s, %s <info>  Show app action details\n",
+            color.key("action-info"), color.key("ai"));
+        printf("\n");
+
+        printf("%s\n", color.bold("EVENT/MESSAGE OPERATIONS"));
+        printf("  %s                       Listen to events (read-only)\n", color.key("listen"));
+        printf("  %s, %s        Interactive mode (send/receive)\n",
+            color.key("interactive"), color.key("ix"));
+        printf("  %s, %s       List event types\n",
+            color.key("list-events"), color.key("levents"));
+        printf("  %s, %s     List message types\n",
+            color.key("list-messages"), color.key("lmsgs"));
+        printf("  %s <name>                  Show event type details\n", color.key("event"));
+        printf("  %s <name>                Show message type details\n", color.key("message"));
+        printf("  %s <id> [data]    Send a message\n", color.key("send-message"));
+        printf("\n");
+
+        printf("%s\n", color.bold("EXAMPLES"));
+        printf("  %s                 Show example request data\n", color.key("example-request"));
+        printf("  %s                Show example response data\n", color.key("example-response"));
+        printf("  %s                  Show example record data\n", color.key("example-record"));
+        printf("  %s [name]               Show example event data\n", color.key("example-event"));
+        printf("  %s [code]               Show example error response\n", color.key("example-error"));
+        printf("\n");
+
+        printf("%s\n", color.bold("SCHEMA MANAGEMENT"));
+        printf("  %s <name> <desc>       Add a field to the schema\n", color.key("field-add"));
+        printf("  %s <name>            Delete a field from schema\n", color.key("field-delete"));
+        printf("  %s <old> <new>    Rename/update a field\n", color.key("field-update"));
+        printf("  %s <name> <desc>    Create child provider\n", color.key("provider-create"));
+        printf("  %s <name>          Delete child provider\n", color.key("provider-delete"));
+        printf("\n");
+
+        printf("%s\n", color.bold("OUTPUT OPTIONS"));
+        printf("  %s                  Output in JSON format\n", color.key("-J, --json"));
+        printf("  %s                  Output in YAML format\n", color.key("-Y, --yaml"));
+        printf("  %s              Disable colored output\n", color.key("-C, --no-color"));
+        printf("  %s           Increase verbosity (can repeat)\n", color.key("-v, --verbose"));
+        printf("\n");
+
+        printf("%s\n", color.bold("SEARCH OPTIONS"));
+        printf("  %s          Use search expressions\n", color.key("-x, --expressions"));
+        printf("  %s             Limit number of results\n", color.key("-l, --limit=N"));
+        printf("  %s            Skip first N results\n", color.key("-O, --offset=N"));
+        printf("  %s           Use bulk API for searches\n", color.key("-b, --bulk"));
+        printf("  %s           Timeout in seconds\n", color.key("-T, --timeout=N"));
+        printf("\n");
+
+        printf("%s\n", color.bold("OTHER OPTIONS"));
+        printf("  %s              Preview changes without executing\n", color.key("-d, --dry-run"));
+        printf("  %s      Set data provider options (Qore hash format)\n", color.key("-o, --options=X"));
+        printf("  %s     Use subtype when creating from connection\n", color.key("-s, --subtype=X"));
+        printf("  %s           Hostname for webhooks\n", color.key("-H, --host=X"));
+        printf("  %s      Load additional module(s)\n", color.key("-m, --module=X"));
+        printf("  %s          Enable background servers\n", color.key("-S, --servers"));
+        printf("  %s      Show only required fields\n", color.key("-R, --show-required"));
+        printf("\n");
+
+        printf("%s\n", color.bold("INFORMATIONAL"));
+        printf("  %s      List known connections\n", color.key("-c, --list-connections"));
+        printf("  %s        List known factories\n", color.key("-f, --list-factories"));
+        printf("  %s           List known types\n", color.key("-t, --list-types"));
+        printf("  %s            List applications\n", color.key("-a, --list-apps"));
+        printf("  %s       Create provider indices\n", color.key("-I, --create-index"));
+        printf("  %s             Show version info\n", color.key("-V, --version"));
+        printf("  %s                Show this help\n", color.key("-h, --help"));
+        printf("\n");
+
+        printf("%s\n", color.bold("EXAMPLES"));
+        printf("  %s mydb info                        %s\n",
+            script, color.dim("# Show database provider info"));
+        printf("  %s mydb/users search name=John      %s\n",
+            script, color.dim("# Search users table"));
+        printf("  %s -J mydb/users search -l 10       %s\n",
+            script, color.dim("# JSON output, limit 10"));
+        printf("  %s rest'{url=http://api.example.com}' list\n", script);
+        printf("  %s @salesforce/search-records '{query=\"SELECT Id FROM Account\"}'\n", script);
+
         exit(1);
     }
 
     static error(string fmt) {
-        stderr.printf("%s: ERROR: %s\n", get_script_name(), vsprintf(fmt, argv));
+        stderr.printf("%s: %s %s\n", get_script_name(), color.error("ERROR:"), vsprintf(fmt, argv));
         exit(1);
+    }
+
+    static showVersion() {
+        printf("%s version %s\n", get_script_name(), Version);
+        printf("Qore %s\n", Qore::VersionString);
+%ifndef NoJson
+        printf("JSON output: supported\n");
+%else
+        printf("JSON output: not available (json module not installed)\n");
+%endif
+%ifndef NoYaml
+        printf("YAML output: supported\n");
+%else
+        printf("YAML output: not available (yaml module not installed)\n");
+%endif
+%ifndef NoLinenoise
+        printf("Line editing: supported (linenoise)\n");
+%else
+        printf("Line editing: basic (linenoise module not installed)\n");
+%endif
+        exit(0);
+    }
+
+    static signalHandler(int sig) {
+        shutdown_requested = True;
+        # Print message about graceful shutdown
+        stderr.printf("\n%s: received signal %d, shutting down gracefully...\n", get_script_name(), sig);
+    }
+
+    #! Output data in the requested format (JSON, YAML, or Qore)
+    static output(auto data) {
+        if (opts.json) {
+%ifndef NoJson
+            printf("%s\n", make_json(data, JGF_ADD_FORMATTING));
+%else
+            error("JSON output requested but json module is not available");
+%endif
+        } else if (opts.yaml) {
+%ifndef NoYaml
+            printf("%s", make_yaml(data));
+%else
+            error("YAML output requested but yaml module is not available");
+%endif
+        } else {
+            printf("%Y\n", data);
+        }
+    }
+
+    #! Output a single record/hash with optional color formatting
+    static outputRecord(auto data) {
+        if (opts.json || opts.yaml) {
+            output(data);
+        } else {
+            printf("%s\n", color.formatValue(data));
+        }
     }
 }
 
@@ -1610,28 +2089,29 @@ class MyObserver inherits Observer {
     }
 
     update(string event_id, hash<auto> data_) {
-        string msg = sprintf("received event %y:", event_id);
+        string msg = sprintf("received event %s:", QdpCmd::color.cyan(event_id));
         if (!data_) {
-            msg += " no data";
+            msg += " " + QdpCmd::color.dim("no data");
         }
         if (data_) {
-            msg += sprintf("\n  %N", data_);
+            msg += sprintf("\n%s", QdpCmd::color.formatValue(data_));
         }
         log("<", msg);
         if (info.connection_event == event_id) {
-            log("<", "connected to server");
+            string protocol = data_.http2 ? "HTTP/2" : "HTTP/1.1";
+            log("<", "%s (WebSocket over %s)", QdpCmd::color.success("connected to server"),
+                QdpCmd::color.info(protocol));
         } else if (info.disconnection_event == event_id) {
             if (info.supports_auto_reconnect) {
-                log("<", "disconnected from server%s", QdpCmd::ix ? "; trying to reconnect..." : "");
+                log("<", "%s%s", QdpCmd::color.warning("disconnected from server"),
+                    QdpCmd::ix ? "; trying to reconnect..." : "");
             } else {
-                log("<", "disconnected from server; auto_reconnect not enabled; exiting");
+                log("<", "%s; auto_reconnect not enabled; exiting",
+                    QdpCmd::color.error("disconnected from server"));
                 # restore original terminal attributes
                 stdin.setTerminalAttributes(TCSADRAIN, t);
                 exit(0);
             }
-        }
-        if (QdpCmd::ix) {
-            stdout.print("> ");
         }
         stdout.sync();
     }
@@ -1640,7 +2120,9 @@ class MyObserver inherits Observer {
         if (QdpCmd::ix) {
             stdout.print("\r");
         }
-        fmt = sprintf("%s %s ", inout, now_us().format("YYYY-MM-DD HH:mm:SS.xx")) + fmt;
+        string direction_color = inout == "<" ? QdpCmd::color.green(inout) : QdpCmd::color.yellow(inout);
+        string timestamp = QdpCmd::color.dim(now_us().format("YYYY-MM-DD HH:mm:SS.xx"));
+        fmt = sprintf("%s %s ", direction_color, timestamp) + fmt;
         string msg = vsprintf(fmt, argv);
 %ifndef NoLinenoise
         msg =~ s/\n/\015\012/g;
@@ -1674,6 +2156,8 @@ class InputHelper {
         AbstractDataProvider provider;
         # message map
         hash<string, hash<DataProviderMessageInfo>> mmap;
+        # event map
+        *hash<string, hash<DataProviderMessageInfo>> emap;
 
 %ifndef NoLinenoise
         static string path;
@@ -1683,10 +2167,12 @@ class InputHelper {
         const Prompt = "> ";
 
         const Commands = {
+            "event": True,
             "exit": True,
             "help": True,
             "history": True,
             "info": True,
+            "msg": True,
             "quit": True,
         };
     }
@@ -1694,6 +2180,7 @@ class InputHelper {
     constructor(AbstractDataProvider provider) {
         self.provider = provider;
         mmap = provider.getMessageTypes();
+        emap = provider.getEventTypes();
 
 %ifndef NoLinenoise
         Linenoise::history_set_max_len(100);
@@ -1752,26 +2239,27 @@ class InputHelper {
 %endif
 
             if (line == 'help' || line == '?') {
-                printf("commands:\n  help\n  info\n  quit\n  history\n");
+                interactiveHelp();
                 continue;
             }
             if (line == "info") {
-                string msg = sprintf("using: %y: %s", provider.getName(), provider.getShortDesc());
-                *hash<DataProviderConnectionInfo> cinfo = provider.getConnectionInfo();
-                if (cinfo.url) {
-                    msg += sprintf(" (%s connected: %y auto reconnect: %y)", cinfo.url, cinfo.connected,
-                        cinfo.auto_reconnect);
-                }
-                print(msg + "\n");
-                if (cinfo.info) {
-                    printf("info: %N\n", cinfo.info);
-                }
-                print("messages:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
-                    provider.getMessageTypes().pairIterator();
-                print("events:\n");
-                map (printf("+ %y: ", $1.key), QdpCmd::showType(provider, $1.value.type)),
-                    provider.getEventTypes().pairIterator();
+                interactiveInfo(provider);
+                continue;
+            }
+            if (line == "info messages" || line == "info msgs") {
+                showAllMessages();
+                continue;
+            }
+            if (line == "info events") {
+                showAllEvents();
+                continue;
+            }
+            if (line =~ /^msg\s+/) {
+                showMessageInfo(provider, trim(line.substr(4)));
+                continue;
+            }
+            if (line =~ /^event\s+/) {
+                showEventInfo(provider, trim(line.substr(6)));
                 continue;
             }
 %ifndef NoLinenoise
@@ -1791,10 +2279,209 @@ class InputHelper {
         return line;
     }
 
+    private interactiveHelp() {
+        printf("%s\n", QdpCmd::color.bold("SENDING MESSAGES"));
+        printHelpLine("<msg-id>: <data>", "Send a message to the provider");
+        printf("                    Example: data: action=ping,id=123\n");
+        if (mmap) {
+            printf("  %s: %s\n", QdpCmd::color.key("Available"),
+                (foldl $1 + ", " + $2, (map QdpCmd::color.type($1), keys mmap)));
+            printf("  (type '%s' or '%s <id>' for details)\n", QdpCmd::color.key("info msgs"),
+                QdpCmd::color.key("msg"));
+        }
+        printf("%s\n", QdpCmd::color.bold("SESSION COMMANDS"));
+        printHelpLine("help, ?", "Show this help");
+        printHelpLine("info", "Show connection info");
+        printHelpLine("info msgs", "List all available messages");
+        printHelpLine("info events", "List all available events");
+        printHelpLine("msg <id>", "Show message type details");
+        printHelpLine("event <id>", "Show event type details");
+%ifndef NoLinenoise
+        printHelpLine("history", "Show command history");
+%endif
+        printHelpLine("quit, exit", "Exit interactive mode");
+        printf("%s\n", QdpCmd::color.bold("KEYBOARD SHORTCUTS"));
+        printHelpLine("Enter", "Send message / execute command");
+        printHelpLine("Ctrl+C", "Exit interactive mode");
+%ifndef NoLinenoise
+        printHelpLine("Up/Down", "Previous command in history");
+        printHelpLine("Tab", "Autocomplete message ID");
+%endif
+    }
+
+    private printHelpLine(string key, string desc) {
+        printf("  %s%s%s\n", QdpCmd::color.key(key), strmul(" ", 18 - key.length()), desc);
+    }
+
+    private interactiveInfo(AbstractDataProvider provider) {
+        printf("%s\n", QdpCmd::color.bold("Connection Info"));
+        printf("  %s: %s\n", QdpCmd::color.key("Provider"), provider.getName());
+        printf("  %s: %s\n", QdpCmd::color.key("Description"), provider.getShortDesc());
+
+        # Connection details
+        *hash<DataProviderConnectionInfo> cinfo = provider.getConnectionInfo();
+        if (cinfo) {
+            if (cinfo.url) {
+                printf("  %s: %s\n", QdpCmd::color.key("URL"), cinfo.url);
+                printf("  %s: %s\n", QdpCmd::color.key("Connected"),
+                    cinfo.connected ? QdpCmd::color.success("Yes") : QdpCmd::color.error("No"));
+                printf("  %s: %s\n", QdpCmd::color.key("Auto Reconnect"),
+                    cinfo.auto_reconnect ? "Yes" : "No");
+            }
+            if (cinfo.info) {
+                formatConnectionInfo(cinfo.info);
+            }
+        }
+
+        # Messages summary
+        *hash<string, hash<DataProviderMessageInfo>> messages = provider.getMessageTypes();
+        if (messages) {
+            printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Outgoing Messages"),
+                (foldl $1 + ", " + $2, keys messages), QdpCmd::color.key("msg"));
+        }
+
+        # Events summary
+        *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+        if (events) {
+            printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Incoming Events"),
+                (foldl $1 + ", " + $2, keys events), QdpCmd::color.key("event"));
+        }
+    }
+
+    private formatConnectionInfo(hash<auto> info) {
+        # Format HTTP/2 info if available
+        if (info.hasKey("http2")) {
+            string protocol = info.http2 ? "HTTP/2 (RFC 8441)" : "HTTP/1.1";
+            printf("  %s: %s\n", QdpCmd::color.key("Protocol"), QdpCmd::color.info(protocol));
+        }
+        # Format peer info (remote endpoint)
+        if (info.peer) {
+            string peer_str = info.peer.hostname ?? info.peer.address;
+            if (info.peer.port) {
+                peer_str += ":" + info.peer.port;
+            }
+            if (info.peer.hostname && info.peer.address && info.peer.address != info.peer.hostname) {
+                peer_str += " (" + info.peer.address + ")";
+            }
+            printf("  %s: %s\n", QdpCmd::color.key("Peer"), peer_str);
+        }
+        # Format local socket info
+        if (info.socket.port) {
+            printf("  %s: %d\n", QdpCmd::color.key("Local Port"), info.socket.port);
+        }
+    }
+
+    private showMessageInfo(AbstractDataProvider provider, string msg_id) {
+        if (!msg_id.val()) {
+            printf("%s: usage: msg <message-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+                (foldl $1 + ", " + $2, keys mmap));
+            return;
+        }
+        *hash<DataProviderMessageInfo> info;
+        try {
+            info = provider.getMessageInfo(msg_id);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", QdpCmd::color.error("ERROR"), ex.desc);
+            return;
+        }
+        if (!info) {
+            printf("%s: unknown message '%s'; valid: %s\n", QdpCmd::color.error("ERROR"),
+                msg_id, (foldl $1 + ", " + $2, keys mmap));
+            return;
+        }
+        QdpCmd::showType(provider, msg_id, info);
+    }
+
+    private showEventInfo(AbstractDataProvider provider, string event_id) {
+        if (!event_id.val()) {
+            *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+            printf("%s: usage: event <event-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+                events ? (foldl $1 + ", " + $2, keys events) : "(none)");
+            return;
+        }
+        *hash<DataProviderMessageInfo> info;
+        try {
+            info = provider.getEventInfo(event_id);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s\n", QdpCmd::color.error("ERROR"), ex.desc);
+            return;
+        }
+        if (!info) {
+            *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+            printf("%s: unknown event '%s'; valid: %s\n", QdpCmd::color.error("ERROR"),
+                event_id, events ? (foldl $1 + ", " + $2, keys events) : "(none)");
+            return;
+        }
+        QdpCmd::showType(provider, event_id, info);
+    }
+
+    private showAllMessages() {
+        if (!mmap) {
+            printf("No messages available for this provider\n");
+            return;
+        }
+        printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED MESSAGES"),
+            QdpCmd::color.key("msg"));
+        foreach hash<auto> msg in (mmap.pairIterator()) {
+            string desc = msg.value.desc ?? "(no description)";
+            printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(msg.key));
+            printf("    %s\n", desc);
+        }
+    }
+
+    private showAllEvents() {
+        if (!emap) {
+            printf("No events available for this provider\n");
+            return;
+        }
+        printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED EVENTS"),
+            QdpCmd::color.key("event"));
+        foreach hash<auto> evt in (emap.pairIterator()) {
+            string desc = evt.value.desc ?? "(no description)";
+            printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(evt.key));
+            printf("    %s\n", desc);
+        }
+    }
+
     softlist<string> completion(string str) {
         list<string> rv = ();
-        rv += map $1, keys Commands, $1.equalPartial(str);
-        rv += map $1 + ": ", keys mmap, $1.equalPartial(str);
+        # Info subcommands
+        list<string> info_subcmds = ("msgs", "messages", "events");
+        # For empty input (after "msg ", "event ", or "info ")
+        if (!str.val()) {
+            rv += keys mmap;
+            if (emap) {
+                rv += keys emap;
+            }
+            rv += info_subcmds;
+            return rv;
+        }
+        # Complete command names
+        foreach string cmd in (keys Commands) {
+            if (cmd.equalPartial(str)) {
+                rv += cmd;
+            }
+        }
+        # Complete info subcommands (for after "info ")
+        foreach string subcmd in (info_subcmds) {
+            if (subcmd.equalPartial(str)) {
+                rv += subcmd;
+            }
+        }
+        # Complete message IDs (user adds ":" for sending)
+        foreach string msg in (keys mmap) {
+            if (msg.equalPartial(str)) {
+                rv += msg;
+            }
+        }
+        # Complete event IDs (for after "event ")
+        if (emap) {
+            foreach string evt in (keys emap) {
+                if (evt.equalPartial(str)) {
+                    rv += evt;
+                }
+            }
+        }
         return rv;
     }
 }
@@ -1846,6 +2533,14 @@ class WebhookHandler inherits RestHandler {
     }
 
     hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> patch(hash<auto> cx, *hash<auto> ah) {
+        return callWebhook(cx, ah);
+    }
+
+    hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         return callWebhook(cx, ah);
     }
 

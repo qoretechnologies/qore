@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -95,6 +95,9 @@ const ADK_Variable = ADK_Variable;
 
 //! Variable list declaration kind.
 const ADK_VarList = ADK_VarList;
+
+//! Typedef declaration kind.
+const ADK_Typedef = ADK_Typedef;
 ///@}
 
 /** @defgroup astparser_expression_kind_constants AST Expression Kind Constants
@@ -320,6 +323,9 @@ const ASYK_Boolean = ASYK_Boolean;
 
 //! Symbol kind constant for arrays.
 const ASYK_Array = ASYK_Array;
+
+//! Symbol kind constant for type aliases (typedefs).
+const ASYK_TypeAlias = ASYK_TypeAlias;
 ///@}
 
 /** @defgroup astparser_symbol_usage_kind_constants AST Symbol Usage Kind Constants
@@ -359,6 +365,12 @@ const ASUK_HashDeclName = ASUK_HashDeclName;
 
 //! Symbol usage kind for hash members in declarations.
 const ASUK_HashMemberName = ASUK_HashMemberName;
+
+//! Symbol usage kind for typedef names in declarations.
+const ASUK_TypedefDeclName = ASUK_TypedefDeclName;
+
+//! Symbol usage kind for typedef type names.
+const ASUK_TypedefTypeName = ASUK_TypedefTypeName;
 
 
 //! Symbol usage kind for variables whose members are accessed by the dot operator.

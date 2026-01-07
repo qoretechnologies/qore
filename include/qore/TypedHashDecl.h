@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -106,6 +106,31 @@ public:
         @since %Qore 0.9.5
     */
     DLLEXPORT QoreHashNode* doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const;
+
+    //! Returns the parent hashdecl if this hashdecl inherits from another, or nullptr if none
+    /** @return the parent hashdecl or nullptr
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT const TypedHashDecl* getParentHashDecl() const;
+
+    //! Returns true if this hashdecl inherits from the given hashdecl
+    /** @param parent the hashdecl to check for inheritance
+
+        @return true if this hashdecl is a descendant of the given hashdecl, false otherwise
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT bool inheritsFrom(const TypedHashDecl* parent) const;
+
+    //! Sets the parent hashdecl for system hashdecl inheritance
+    /** @param parent the parent hashdecl
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setParent(const TypedHashDecl* parent);
 
 protected:
     //! deletes the object and frees all memory

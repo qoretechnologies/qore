@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,8 @@
 #include "ast/ASTDeclaration.h"
 #include "ast/ASTSymbolInfo.h"
 #include "ast/ASTTree.h"
+#include "ast/declarations/ASTTypedefDeclaration.h"
+#include "queries/FindScopeSymbolsQuery.h"
 
 #include "QC_AstTree.h"
 
@@ -64,6 +66,9 @@ int64_t getSymbolKind(ASTDeclaration* decl) {
         case ASTDeclarationKind::ADK_Variable:
             return static_cast<int64_t>(ASYK_Variable);
         case ASTDeclarationKind::ADK_VarList:
+            break;
+        case ASTDeclarationKind::ADK_Typedef:
+            return static_cast<int64_t>(ASYK_TypeAlias);
         default:
             break;
     }
@@ -138,6 +143,8 @@ AstTreeSearcher::constructor() {
         AstPrinter::printHashDeclSignature(hoverInfo, reinterpret_cast<ASTHashDeclaration*>(decl));
     else if (kind == ASYK_Variable)
         AstPrinter::printVariableSignature(hoverInfo, reinterpret_cast<ASTVariableDeclaration*>(decl));
+    else if (kind == ASYK_TypeAlias)
+        AstPrinter::printTypedefSignature(hoverInfo, reinterpret_cast<ASTTypedefDeclaration*>(decl));
 
     result->setKeyValue("description", new QoreStringNode(hoverInfo.str()), xsink);
     if (xsink && *xsink)
@@ -296,6 +303,9 @@ AstTreeSearcher::constructor() {
         symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
         symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
         symbolInfo->setKeyValue("location", location.release(), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
         if (xsink && *xsink)
             return QoreValue();
         lst->push(symbolInfo.release(), xsink);
@@ -355,6 +365,79 @@ AstTreeSearcher::constructor() {
         symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
         symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
         symbolInfo->setKeyValue("location", location.release(), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
+        if (xsink && *xsink)
+            return QoreValue();
+        lst->push(symbolInfo.release(), xsink);
+    }
+
+    return lst.release();
+}
+
+//! Find symbols accessible from a specific scope position.
+/**
+    @param tree AST tree structure
+    @param uri document's uri
+    @param line on what line lies the position (0-indexed)
+    @param col on what column lies the position (0-indexed)
+
+    @return list of symbols with scope level information
+
+    Scope levels:
+    - 0: Local variables and parameters in the current function/method
+    - 1: Class members (when inside a class method)
+    - 2: Namespace-level symbols
+    - 3+: Outer namespaces
+
+    @since %Qore 2.2
+ */
+*list AstTreeSearcher::findScopeSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    // LSP uses 0-indexed line/col, internal AST uses 1-indexed
+    std::unique_ptr<std::vector<ASTScopeSymbolInfo> > vec(AstTreeSearcher::findScopeSymbols(tree->get(), line+1, col+1));
+    if (!vec)
+        return QoreValue();
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const ASTScopeSymbolInfo& ssi = vec->at(i);
+        const ASTSymbolInfo& si = ssi.symbol;
+        ReferenceHolder<QoreHashNode> start(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> end(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> range(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> location(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> symbolInfo(new QoreHashNode, xsink);
+        if (xsink && *xsink)
+            return QoreValue();
+        if (!start || !end || !range || !location || !symbolInfo)
+            return QoreValue();
+
+        start->setKeyValue("line", si.loc.firstLine-1, xsink);
+        start->setKeyValue("character", si.loc.firstCol-1, xsink);
+        if (xsink && *xsink)
+            return QoreValue();
+        end->setKeyValue("line", si.loc.lastLine-1, xsink);
+        end->setKeyValue("character", si.loc.lastCol-1, xsink);
+        if (xsink && *xsink)
+            return QoreValue();
+        range->setKeyValue("start", start.release(), xsink);
+        range->setKeyValue("end", end.release(), xsink);
+        if (xsink && *xsink)
+            return QoreValue();
+        location->setKeyValue("uri", uri->stringRefSelf(), xsink);
+        location->setKeyValue("range", range.release(), xsink);
+        if (xsink && *xsink)
+            return QoreValue();
+        symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
+        symbolInfo->setKeyValue("kind", static_cast<int64_t>(si.kind), xsink);
+        symbolInfo->setKeyValue("location", location.release(), xsink);
+        symbolInfo->setKeyValue("scope_level", static_cast<int64_t>(ssi.scopeLevel), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
         if (xsink && *xsink)
             return QoreValue();
         lst->push(symbolInfo.release(), xsink);

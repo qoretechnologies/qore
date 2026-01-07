@@ -38,6 +38,10 @@ if you have the open headers and libraries in a location the configure script ca
 	http://gmplib.org/
 This is for the arbitrary-precision numeric type introduced with Qore 0.8.6
 
+*) nghttp2
+	https://nghttp2.org/
+Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu) or nghttp2-devel (RHEL/Fedora).
+
 CMAKE Build
 -----------
 

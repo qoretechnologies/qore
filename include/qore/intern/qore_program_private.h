@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -442,7 +442,7 @@ public:
     ResolvedCallReferenceNode* thr_init = nullptr;
 
     // return value for use with %exec-class
-    QoreValue exec_class_rv;
+    QoreValue exec_class_rv{};
 
     // public object that owns this private implementation
     QoreProgram* pgm;
@@ -1346,6 +1346,13 @@ public:
             return;
         }
         ON_BLOCK_EXIT(fclose, fp);
+
+        // check for .qr extension and auto-enable modern mode
+        size_t len = strlen(filename);
+        if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
+            pwo.parse_options |= PO_MODERN;
+            pgm->setWarningMask(-1);
+        }
 
         setScriptPath(filename);
 

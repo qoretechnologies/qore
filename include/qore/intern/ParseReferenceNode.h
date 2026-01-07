@@ -91,7 +91,7 @@ public:
 
 protected:
     //! lvalue expression for reference
-    QoreValue lvexp;
+    QoreValue lvexp{};
     //! lvalue type info
     const QoreTypeInfo* typeInfo;
 

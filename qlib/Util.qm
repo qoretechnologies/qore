@@ -45,7 +45,7 @@
 %requires reflection
 
 module Util {
-    version = "2.1.1";
+    version = "2.3";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -102,7 +102,25 @@ module Util {
     - @ref Util::uniq()
     - @ref Util::zip()
 
+    Classes:
+    - @ref Util::TerminalColor "TerminalColor"
+
     @section utilrelnotes Release Notes
+
+    @subsection util_2_3 Util 2.3
+    - fixed @ref Util::get_bit_string() "get_bit_string()" to properly prepend padding zeros instead of
+      overwriting the result
+    - fixed @ref Util::lpad() "lpad()" to correctly truncate by keeping the rightmost characters and
+      handle zero/negative length
+    - fixed @ref Util::rpad() "rpad()" to correctly truncate by keeping the leftmost characters and
+      handle zero/negative length
+    - fixed @ref Util::parse_ranges() "parse_ranges()" to properly handle negative numbers, zero values,
+      and reverse ranges (e.g., "5-3" returns (5, 4, 3))
+    - fixed @ref Util::substitute_env_vars() "substitute_env_vars()" to properly handle \c "${VAR}" and
+      \c "$(VAR)" syntax by correctly stripping delimiters
+
+    @subsection util_2_2 Util 2.2
+    - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output
 
     @subsection util_2_1_1 Util 2.1.1
     - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
@@ -424,15 +442,26 @@ public string sub ip_address_type_ex(string address) {
 
 #! Returns a string of the bits set in an integer
 /** @param i the integer to process
-    @param min_bits the minimum bits to return; values less then 0 or greater than 64 will cause an \c INVALID-BITS
-    exception to be thrown
+    @param min_bits the minimum number of bits to return; if the result has fewer bits, it will be left-padded
+    with zeros; values less than 0 or greater than 64 will cause an \c INVALID-BITS exception to be thrown
 
-    @return a string of the bits set in the integer
+    @return a string representation of the binary value of the integer
 
-    @throw INVALID-BITS Thrown if \a min_bits is less then 0 or greater than 64
+    @par Example:
+    @code{.py}
+string s = get_bit_string(5);       # returns "101"
+string s = get_bit_string(5, 8);    # returns "00000101" (padded to 8 bits)
+string s = get_bit_string(0);       # returns "0"
+string s = get_bit_string(255);     # returns "11111111"
+string s = get_bit_string(255, 16); # returns "0000000011111111"
+    @endcode
+
+    @throw INVALID-BITS Thrown if \a min_bits is less than 0 or greater than 64
+
+    @since Util 2.0
 */
 public string sub get_bit_string(int i, *int min_bits) {
-    if (min_bits < 0 || min_bits > 64) {
+    if (exists min_bits && (min_bits < 0 || min_bits > 64)) {
         throw "INVALID-BITS", sprintf("Expecting a value between 0 - 64 inclusive; got %y", min_bits);
     }
     string str;
@@ -455,7 +484,7 @@ public string sub get_bit_string(int i, *int min_bits) {
     if (min_bits) {
         int d = min_bits - str.size();
         if (d > 0) {
-            str = strmul("0", d);
+            str = strmul("0", d) + str;
         }
     } else if (!exists str) {
         str = "0";
@@ -1409,7 +1438,7 @@ public string sub make_uri_query(hash<UriQueryInfo> h, string arg_separator = ";
 string pass = get_random_string();
     @endcode
 
-    @param len the length fo the string returned
+    @param len the length of the string returned
     @param level a value from 1 - 4 inclusive giving the range of printable ASCII characters included in the output (values out of the range result in the nearest value in the range being used):
     - 1: only upper case
     - 2: +lower case
@@ -1598,12 +1627,14 @@ public string sub get_marketing_byte_size(softnumber n, int decimals = 2) {
 #! checks whether given list has only unique elements
 /** @par Example:
     @code{.py}
-    if (same((1, 1, 1)) {
-        printf("only unique elements");
-    };
+    if (same((1, 1, 1))) {
+        printf("all elements are the same");
+    }
     @endcode
 
     @param l some list
+
+    @return @ref True if all elements are equal; @ref False otherwise
 
     @since Util 1.2
 */
@@ -1755,59 +1786,75 @@ public bool sub is_number(string text, bool pure = False) {
 }
 
 #! Returns a string left-padded to a specified length with the specified characters.
-/** Returns a string, left-padded to a specified length with the specified characters; or, when the string to be padded is longer than the length specified after padding, only that portion of the string that fits into the specified length.
+/** Returns a string, left-padded to a specified length with the specified characters; or, when the string to be
+    padded is longer than the length specified, the rightmost characters that fit are returned (truncating from
+    the left).
 
-    @param  text input string that you want to pad
-    @param  length total length of output string (in characters)
-    @param  padding padding character(s); default value is a single blank
-    @return a string left-padded to the specified length
+    @param text input string that you want to pad
+    @param length total length of output string (in characters); if <= 0, returns empty string
+    @param padding padding character(s); default value is a single blank
+    @return a string left-padded to the specified length, or truncated to keep rightmost characters if too long
 
     @par Example:
     @code{.py}
-string s = lpad ("123", 5); # returns "  123"
-string s = lpad ("ABC", 9, "-"); # returns "------ABC"
+string s = lpad("123", 5);       # returns "  123" (padded with spaces)
+string s = lpad("ABC", 9, "-");  # returns "------ABC" (padded with dashes)
+string s = lpad("ABCDEF", 4);    # returns "CDEF" (truncated, keeps rightmost)
+string s = lpad("test", 0);      # returns "" (zero length)
     @endcode
 
     @since Util 1.2
 */
 public string sub lpad(softstring text, int length, string padding = ' ') {
+    if (length <= 0) {
+        return "";
+    }
     int d = length - text.length();
     if (d > 0) {
-        string p = strmul (padding, d / padding.length() + 1);
+        string p = strmul(padding, d / padding.length() + 1);
         return p.substr(0, d) + text;
-    }
-    else if (d < 0)
-        return text.substr(-d);
-    else
+    } else if (d < 0) {
+        # For left-pad truncation, keep the rightmost characters
+        return text.substr(text.length() - length);
+    } else {
         return text;
+    }
 }
 
 #! Returns a string right-padded to a specified length with the specified characters.
-/** Returns a string, right-padded to a specified length with the specified characters; or, when the string to be padded is longer than the length specified after padding, only that portion of the string that fits into the specified length.
+/** Returns a string, right-padded to a specified length with the specified characters; or, when the string to be
+    padded is longer than the length specified, the leftmost characters that fit are returned (truncating from
+    the right).
 
-    @param  text input string that you want to pad
-    @param  length total length of output string (in characters)
-    @param  padding padding character(s); default value is a single blank
-    @return a string right-padded to the specified length
+    @param text input string that you want to pad
+    @param length total length of output string (in characters); if <= 0, returns empty string
+    @param padding padding character(s); default value is a single blank
+    @return a string right-padded to the specified length, or truncated to keep leftmost characters if too long
 
     @par Example:
     @code{.py}
-string s = rpad ("123", 5); # returns "123  "
-string s = rpad ("ABC", 9, "-"); # returns "ABC------"
+string s = rpad("123", 5);       # returns "123  " (padded with spaces)
+string s = rpad("ABC", 9, "-");  # returns "ABC------" (padded with dashes)
+string s = rpad("ABCDEF", 4);    # returns "ABCD" (truncated, keeps leftmost)
+string s = rpad("test", 0);      # returns "" (zero length)
     @endcode
 
     @since Util 1.2
 */
 public string sub rpad(softstring text, int length, string padding = ' ') {
+    if (length <= 0) {
+        return "";
+    }
     int d = length - text.length();
     if (d > 0) {
-        string p = strmul (padding, d / padding.length() + 1);
+        string p = strmul(padding, d / padding.length() + 1);
         return text + p.substr(0, d);
-    }
-    else if (d < 0)
-        return text.substr(0, d);
-    else
+    } else if (d < 0) {
+        # For right-pad truncation, keep the leftmost characters
+        return text.substr(0, length);
+    } else {
         return text;
+    }
 }
 
 #! Returns string with partially textual representation of ordinal integer value
@@ -1958,25 +2005,53 @@ public list<auto> sub flatten(softlist<auto> arg) {
 
 #! Parses a string and returns a list of integers.
 /**
-    @param text the string to parse
+    @param text the string to parse; supports comma-separated values, ranges (e.g., "1-5"), negative numbers,
+    zero, and reverse ranges (where start > end)
     @return a list of integer numbers
 
     @par Example:
     @code{.py}
-list<int> ints = parse_ranges("3,5, 7-9"); # returns (3, 5, 7, 8, 9)
+list<int> l = parse_ranges("1, 2, 3");     # returns (1, 2, 3)
+list<int> l = parse_ranges("1-5");         # returns (1, 2, 3, 4, 5)
+list<int> l = parse_ranges("3,5, 7-9");    # returns (3, 5, 7, 8, 9)
+list<int> l = parse_ranges("0");           # returns (0,)
+list<int> l = parse_ranges("-5");          # returns (-5,)
+list<int> l = parse_ranges("-3-1");        # returns (-3, -2, -1, 0, 1)
+list<int> l = parse_ranges("-5--3");       # returns (-5, -4, -3)
+list<int> l = parse_ranges("5-3");         # returns (5, 4, 3) (reverse range)
+list<int> l = parse_ranges("");            # returns () (empty list)
     @endcode
+
+    @throws PARSE-RANGES-ERROR if the input contains invalid range specifications (e.g., "abc", "1-2-3")
 
     @since Util 1.4
 */
 public list<int> sub parse_ranges(string text) {
     list<int> numbers = ();
-    list<string> parts = select (map trim($1), text.split(',')), $1;
+    # Filter by string length to keep "0" which is falsy but valid
+    list<string> parts = select (map trim($1), text.split(',')), $1.length() > 0;
     foreach string str in (parts) {
-        list<string> bounds = str.split("-");
-        if (bounds.size() == 2) {
-            numbers += range(int(bounds[0]), int(bounds[1]) + 1);
+        # Use regex to properly parse ranges, handling negative numbers
+        # Match: optional negative sign + digits, optional (dash + optional negative sign + digits)
+        if (*list<*string> m = (str =~ x/^(-?\d+)(?:-(-?\d+))?$/)) {
+            if (exists m[1]) {
+                # Range: start-end
+                int start = int(m[0]);
+                int end = int(m[1]);
+                if (start <= end) {
+                    numbers += range(start, end + 1);
+                } else {
+                    # Reverse range: build list manually since range() doesn't support negative step
+                    for (int i = start; i >= end; --i) {
+                        numbers += i;
+                    }
+                }
+            } else {
+                # Single number
+                numbers += int(m[0]);
+            }
         } else {
-            numbers += int(str);
+            throw "PARSE-RANGES-ERROR", sprintf("invalid range specification: %y", str);
         }
     }
     return numbers;
@@ -2256,7 +2331,21 @@ public data sub get_file_from_url(string url, *hash<UrlRetrievalOptions> options
 #! Substitutes environment variables in a string and returns the string
 /** @param str the string to process
 
-    @return the string with environment variables substituted
+    @return the string with environment variables substituted; undefined variables are replaced with empty strings
+
+    Supports the following syntax:
+    - \c $VAR - simple variable reference
+    - \c ${VAR} - braced variable reference (allows adjacent text without spaces)
+    - \c $(VAR) - parenthesized variable reference
+
+    @par Example:
+    @code{.py}
+string s = substitute_env_vars("$HOME/config");      # e.g., "/home/user/config"
+string s = substitute_env_vars("${HOME}/.config");   # e.g., "/home/user/.config"
+string s = substitute_env_vars("user: $USER");       # e.g., "user: david"
+string s = substitute_env_vars("$(PATH)");           # e.g., "/usr/bin:/bin"
+string s = substitute_env_vars("$UNDEFINED");        # returns "" (undefined vars become empty)
+    @endcode
 
     @since %Util 1.5.1
 */
@@ -2274,11 +2363,20 @@ public string sub substitute_env_vars(string str) {
         }
 
         foreach string var in (x) {
+            string match = var;
             # remove '$' character
             splice var, 0, 1;
+            # For ${VAR} syntax, remove braces
+            if (var[0] == "{") {
+                var = var.substr(1, var.length() - 2);
+            }
+            # For $(VAR) syntax, remove parentheses
+            else if (var[0] == "(") {
+                var = var.substr(1, var.length() - 2);
+            }
 
             # substitute environment variable
-            str = regex_subst(str, "\\\$" + var, ENV{var} ?? "");
+            str = replace(str, match, ENV{var} ?? "");
         }
     }
     return str;
@@ -2317,5 +2415,222 @@ public hash<ExceptionInfo> sub check_exception_serializable(hash<ExceptionInfo> 
         ex.arg = sprintf("unserializable arg: %y", ex.arg);
     }
     return ex;
+}
+
+#! Helper class for ANSI terminal color output
+/** This class provides methods for formatting text with ANSI color codes for terminal output.
+    Colors are automatically disabled when output is not connected to a terminal.
+
+    @par Example:
+    @code{.py}
+TerminalColor color();
+printf("%s: %s\n", color.error("ERROR"), "Something went wrong");
+printf("%s: %s\n", color.success("OK"), "Operation completed");
+printf("Value: %s\n", color.cyan("some value"));
+    @endcode
+
+    @since Util 2.2
+*/
+public class TerminalColor {
+    public {
+        #! Whether color output is enabled
+        bool enabled;
+    }
+
+    private {
+        # ANSI color codes
+        const Reset = "\033[0m";
+        const Bold = "\033[1m";
+        const Dim = "\033[2m";
+
+        # Foreground colors
+        const Red = "\033[31m";
+        const Green = "\033[32m";
+        const Yellow = "\033[33m";
+        const Blue = "\033[34m";
+        const Magenta = "\033[35m";
+        const Cyan = "\033[36m";
+        const White = "\033[37m";
+
+        # Bright foreground colors
+        const BrightRed = "\033[91m";
+        const BrightGreen = "\033[92m";
+        const BrightYellow = "\033[93m";
+        const BrightBlue = "\033[94m";
+        const BrightMagenta = "\033[95m";
+        const BrightCyan = "\033[96m";
+    }
+
+    #! Creates a TerminalColor object
+    /** @param enable_color if @ref True "True", color output is enabled if stdout is a terminal;
+        if @ref False "False", color output is always disabled
+    */
+    constructor(bool enable_color = True) {
+        # Check if stdout is a terminal and color is requested
+        enabled = enable_color && TerminalColor::isTerminal();
+    }
+
+    #! Check if stdout is connected to a terminal
+    /** @return @ref True "True" if stdout is connected to a terminal, @ref False "False" otherwise
+    */
+    static bool isTerminal() {
+        try {
+            # Try to get terminal window size - this will fail if not a terminal
+            hash<auto> ws = TermIOS::getWindowSize();
+            return ws.columns > 0;
+        } catch () {
+            return False;
+        }
+    }
+
+    #! Apply a color code to text if colors are enabled
+    /** @param color_code the ANSI color code to apply
+        @param text the text to colorize
+        @return the colorized text if colors are enabled, otherwise the original text
+    */
+    string apply(string color_code, string text) {
+        if (!enabled) {
+            return text;
+        }
+        return color_code + text + Reset;
+    }
+
+    #! Format text in red
+    string red(string text) {
+        return apply(Red, text);
+    }
+
+    #! Format text in green
+    string green(string text) {
+        return apply(Green, text);
+    }
+
+    #! Format text in yellow
+    string yellow(string text) {
+        return apply(Yellow, text);
+    }
+
+    #! Format text in blue
+    string blue(string text) {
+        return apply(Blue, text);
+    }
+
+    #! Format text in magenta
+    string magenta(string text) {
+        return apply(Magenta, text);
+    }
+
+    #! Format text in cyan
+    string cyan(string text) {
+        return apply(Cyan, text);
+    }
+
+    #! Format text in white
+    string white(string text) {
+        return apply(White, text);
+    }
+
+    #! Format error text (bright red + bold)
+    string error(string text) {
+        return apply(BrightRed + Bold, text);
+    }
+
+    #! Format success text (bright green)
+    string success(string text) {
+        return apply(BrightGreen, text);
+    }
+
+    #! Format warning text (bright yellow)
+    string warning(string text) {
+        return apply(BrightYellow, text);
+    }
+
+    #! Format info text (bright cyan)
+    string info(string text) {
+        return apply(BrightCyan, text);
+    }
+
+    #! Format a key/field name (cyan)
+    string key(string text) {
+        return apply(Cyan, text);
+    }
+
+    #! Format a type name (magenta)
+    string type(string text) {
+        return apply(Magenta, text);
+    }
+
+    #! Format a value (green)
+    string value(string text) {
+        return apply(Green, text);
+    }
+
+    #! Format a number (bright blue)
+    string number(string text) {
+        return apply(BrightBlue, text);
+    }
+
+    #! Format a string value (yellow)
+    string str(string text) {
+        return apply(Yellow, text);
+    }
+
+    #! Format dim/secondary text
+    string dim(string text) {
+        return apply(Dim, text);
+    }
+
+    #! Format bold text
+    string bold(string text) {
+        return apply(Bold, text);
+    }
+
+    #! Format a hash/record value with colors
+    /** @param val the value to format
+        @param indent the current indentation string
+        @return the colorized formatted value
+    */
+    string formatValue(auto val, string indent = "") {
+        switch (val.typeCode()) {
+            case NT_HASH: {
+                if (!val) {
+                    return "{}";
+                }
+                list<string> parts = ();
+                foreach hash<auto> i in (val.pairIterator()) {
+                    push parts, sprintf("%s  %s: %s", indent, key(i.key),
+                        formatValue(i.value, indent + "  "));
+                }
+                return sprintf("{\n%s\n%s}", parts.join(",\n"), indent);
+            }
+            case NT_LIST: {
+                if (!val) {
+                    return "[]";
+                }
+                list<string> parts = ();
+                foreach auto item in (val) {
+                    push parts, sprintf("%s  %s", indent, formatValue(item, indent + "  "));
+                }
+                return sprintf("[\n%s\n%s]", parts.join(",\n"), indent);
+            }
+            case NT_STRING:
+                return str(sprintf("%y", val));
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return number(sprintf("%y", val));
+            case NT_BOOLEAN:
+                return val ? success("True") : warning("False");
+            case NT_NULL:
+            case NT_NOTHING:
+                return dim("NOTHING");
+            case NT_DATE:
+                return info(sprintf("%y", val));
+            case NT_BINARY:
+                return dim(sprintf("<binary: %d bytes>", val.size()));
+            default:
+                return sprintf("%y", val);
+        }
+    }
 }
 }

@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 #! The ConnectionProvider namespace
 /** All public declarations in the %ConnectionProvider module are defined in this namespace
@@ -39,7 +36,8 @@ public namespace ConnectionProvider {
       \c HTTP-CLIENT-RECEIVE-ERROR exception to be raised, rather such responses will be passed through to the
       caller like any other response
     - \c "headers": headers to add in each outgoing request
-    - \c "http_version": HTTP version to use (\c "1.0" or \c "1.1", defaults to \c "1.1")
+    - \c "http_version": HTTP version to use (\c "auto", \c "1.0", \c "1.1", or \c "2.0", defaults to \c "auto");
+      HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN
     - \c "max_redirects": maximum redirects to support
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
@@ -56,6 +54,10 @@ public namespace ConnectionProvider {
     - \c "timeout": transfer timeout to use in milliseconds (default: 45 seconds)
     - \c "username": The username for HTTP basic authentication; only used if no username or password is set in the
       URL and if the \c password option is also used
+
+    @note <b>HTTP/2 Limitations:</b> WebSocket over HTTP/2 (RFC 8441) and Server-Sent Events (SSE) over HTTP/2
+    are not currently supported. WebSocket and SSE connections will use HTTP/1.x even when \c http_version is
+    set to \c "auto" or \c "2.0".
 
     @see @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient::constructor(hash<auto> opts)" for more
     information on the above options
@@ -117,16 +119,26 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                     "display_name": "HTTP Version",
                     "short_desc": "The HTTP version to use",
                     "type": "string",
-                    "desc": "The HTTP version to use (`1.0` or `1.1`, defaults to `1.1`)",
-                    "default_value": "1.1",
+                    "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
+                        "or `2.0`. HTTP/2 requires TLS and is negotiated via ALPN. Note: WebSocket and SSE "
+                        "connections will always use HTTP/1.x regardless of this setting",
+                    "default_value": "auto",
                     "allowed_values": (
                         <AllowedValueInfo>{
+                            "value": "auto",
+                            "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                        },
+                        <AllowedValueInfo>{
                             "value": "1.0",
-                            "desc": "For HTTP 1.0",
+                            "desc": "HTTP/1.0 only",
                         },
                         <AllowedValueInfo>{
                             "value": "1.1",
-                            "desc": "For HTTP 1.1",
+                            "desc": "HTTP/1.1 only",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "2.0",
+                            "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
                         },
                     ),
                 },

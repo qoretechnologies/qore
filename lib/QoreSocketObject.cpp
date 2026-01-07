@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     provides a thread-safe interface to the QoreSocket object
 
@@ -701,6 +701,37 @@ const char* QoreSocketObject::getSSLCipherVersion() {
 bool QoreSocketObject::isSecure() {
     AutoLocker al(priv->m);
     return priv->socket->isSecure();
+}
+
+void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    priv->socket->setAlpnProtocols(protocols, xsink);
+}
+
+QoreStringNode* QoreSocketObject::getAlpnProtocol() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getAlpnProtocol();
+}
+
+bool QoreSocketObject::isHttp2() const {
+    AutoLocker al(priv->m);
+    return priv->socket->isHttp2();
+}
+
+int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->submitHttp2PushPromise(stream_id, path, headers, xsink);
+}
+
+void QoreSocketObject::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp2ActiveStream(stream_id, xsink);
+}
+
+int32_t QoreSocketObject::getHttp2ActiveStream() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getHttp2ActiveStream();
 }
 
 long QoreSocketObject::verifyPeerCertificate() {

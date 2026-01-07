@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %allow-injection
 
 %requires ../../../../qlib/Util.qm
@@ -269,7 +266,14 @@ public class DataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private checkYaml() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
     expressionTests() {
+        checkYaml();
         hash<DataProviderExpression> exp = <DataProviderExpression>{
             "exp": DP_OP_AND,
             "args": (

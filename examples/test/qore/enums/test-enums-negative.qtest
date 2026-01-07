@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires QUnit
+%requires reflection
+
+%exec-class EnumNegativeTest
+
+class EnumNegativeTest inherits QUnit::Test {
+    constructor() : Test("EnumNegativeTest", "1.0") {
+        addTestCase("Test PO_NO_ENUM restriction", \testNoEnumRestriction());
+        addTestCase("Test invalid enum base type", \testInvalidBaseType());
+        addTestCase("Test unknown enum in reflection", \testUnknownEnum());
+        addTestCase("Test unknown enum member in reflection", \testUnknownEnumMember());
+        addTestCase("Test namespace getEnum error", \testNamespaceGetEnumError());
+        addTestCase("Test cast<enum<X>> parse-time type mismatch", \testCastParseTimeMismatch());
+        addTestCase("Test cast<enum<X>> with unknown enum", \testCastUnknownEnum());
+        set_return_value(main());
+    }
+
+    testNoEnumRestriction() {
+        # Test that PO_NO_ENUM prevents enum declarations
+        string code = "
+%modern
+%no-enum
+public enum TestEnum : int {
+    A = 1,
+}
+";
+        Program p(PO_NEW_STYLE);
+        p.setParseOptions(PO_NO_ENUM);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), (code, "test"));
+    }
+
+    testInvalidBaseType() {
+        # Test invalid base type for enum
+        string code = "
+%modern
+public enum TestEnum : bool {
+    A = True,
+}
+";
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), (code, "test"));
+    }
+
+    testUnknownEnum() {
+        # Test that trying to get unknown enum throws exception
+        assertThrows("UNKNOWN-ENUM", \Enum::forName(), ("NonExistentEnum",));
+    }
+
+    testUnknownEnumMember() {
+        # Create a simple enum for testing
+        string code = "
+%modern
+public enum SimpleEnum : int {
+    A = 1,
+}
+";
+        Program p(PO_NEW_STYLE);
+        p.parse(code, "test");
+
+        # Get the enum
+        Enum e = Enum::forName(p, "SimpleEnum");
+
+        # Try to get non-existent member
+        assertThrows("UNKNOWN-MEMBER", \e.getMember(), ("NonExistent",));
+    }
+
+    testNamespaceGetEnumError() {
+        # Test getting non-existent enum from namespace throws error
+        Namespace ns = Namespace::forName("::");
+        assertThrows("UNKNOWN-ENUM", \ns.getEnum(), ("NonExistentEnum",));
+    }
+
+    testCastParseTimeMismatch() {
+        # Test that casting from incompatible type at parse time raises error
+        string code = "
+%modern
+public enum Status : string {
+    Active = \"active\",
+}
+sub test() {
+    int i = 123;
+    Status s = cast<enum<Status>>(i);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), (code, "test"));
+    }
+
+    testCastUnknownEnum() {
+        # Test that casting to unknown enum at parse time raises error
+        string code = "
+%modern
+sub test() {
+    string s = \"test\";
+    auto x = cast<enum<NonExistentEnum>>(s);
+}
+";
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), (code, "test"));
+    }
+}

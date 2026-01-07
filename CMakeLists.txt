@@ -258,6 +258,8 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qore-openapi3-gen
+    bin/qore-asyncapi-gen
 )
 
 set(QORE_DOX_TMPL_SRC
@@ -318,40 +320,71 @@ find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 
-# Optional compression libraries
-# Brotli
-pkg_check_modules(BROTLI_ENC libbrotlienc)
-pkg_check_modules(BROTLI_DEC libbrotlidec)
+# Required compression libraries
+# Brotli (required)
+pkg_check_modules(BROTLI_ENC QUIET libbrotlienc)
+pkg_check_modules(BROTLI_DEC QUIET libbrotlidec)
 if(BROTLI_ENC_FOUND AND BROTLI_DEC_FOUND)
-    set(HAVE_BROTLI TRUE)
+    message(STATUS "Found Brotli: ${BROTLI_ENC_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARIES} ${BROTLI_DEC_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_ENC_INCLUDE_DIRS})
-    message(STATUS "Brotli compression: enabled")
 else()
-    message(STATUS "Brotli compression: disabled (libbrotli not found)")
+    # Try to find Brotli without pkg-config
+    find_path(BROTLI_INCLUDE_DIR brotli/encode.h)
+    find_library(BROTLI_ENC_LIBRARY NAMES brotlienc)
+    find_library(BROTLI_DEC_LIBRARY NAMES brotlidec)
+    if(BROTLI_INCLUDE_DIR AND BROTLI_ENC_LIBRARY AND BROTLI_DEC_LIBRARY)
+        message(STATUS "Found Brotli: ${BROTLI_ENC_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${BROTLI_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARY} ${BROTLI_DEC_LIBRARY})
+    else()
+        message(FATAL_ERROR "Brotli is required for compression support. Please install libbrotli-dev (Debian/Ubuntu) or brotli-devel (Fedora/RHEL)")
+    endif()
 endif()
+# Always defined since brotli is now required
+set(HAVE_BROTLI TRUE)
 
-# Zstandard
-pkg_check_modules(ZSTD libzstd)
+# Zstandard (required)
+pkg_check_modules(ZSTD QUIET libzstd)
 if(ZSTD_FOUND)
-    set(HAVE_ZSTD TRUE)
+    message(STATUS "Found Zstandard: ${ZSTD_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${ZSTD_INCLUDE_DIRS})
-    message(STATUS "Zstandard compression: enabled")
 else()
-    message(STATUS "Zstandard compression: disabled (libzstd not found)")
+    # Try to find Zstd without pkg-config
+    find_path(ZSTD_INCLUDE_DIR zstd.h)
+    find_library(ZSTD_LIBRARY NAMES zstd)
+    if(ZSTD_INCLUDE_DIR AND ZSTD_LIBRARY)
+        message(STATUS "Found Zstandard: ${ZSTD_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${ZSTD_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${ZSTD_LIBRARY})
+    else()
+        message(FATAL_ERROR "Zstandard is required for compression support. Please install libzstd-dev (Debian/Ubuntu) or libzstd-devel (Fedora/RHEL)")
+    endif()
 endif()
+# Always defined since zstd is now required
+set(HAVE_ZSTD TRUE)
 
-# LZ4
-pkg_check_modules(LZ4 liblz4)
+# LZ4 (required)
+pkg_check_modules(LZ4 QUIET liblz4)
 if(LZ4_FOUND)
-    set(HAVE_LZ4 TRUE)
+    message(STATUS "Found LZ4: ${LZ4_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
-    message(STATUS "LZ4 compression: enabled")
 else()
-    message(STATUS "LZ4 compression: disabled (liblz4 not found)")
+    # Try to find LZ4 without pkg-config
+    find_path(LZ4_INCLUDE_DIR lz4.h)
+    find_library(LZ4_LIBRARY NAMES lz4)
+    if(LZ4_INCLUDE_DIR AND LZ4_LIBRARY)
+        message(STATUS "Found LZ4: ${LZ4_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${LZ4_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARY})
+    else()
+        message(FATAL_ERROR "LZ4 is required for compression support. Please install liblz4-dev (Debian/Ubuntu) or lz4-devel (Fedora/RHEL)")
+    endif()
 endif()
+# Always defined since lz4 is now required
+set(HAVE_LZ4 TRUE)
 
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
@@ -360,6 +393,25 @@ if (NOT (WIN32 OR MINGW OR MSYS))
         list(APPEND LIBQORE_OPTIONAL_LIBS ${Backtrace_LIBRARIES})
     endif (Backtrace_FOUND)
 endif (NOT (WIN32 OR MINGW OR MSYS))
+
+# HTTP/2 support via nghttp2 (required)
+pkg_check_modules(NGHTTP2 QUIET libnghttp2)
+if (NGHTTP2_FOUND)
+    message(STATUS "Found nghttp2: ${NGHTTP2_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIRS})
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARIES})
+else()
+    # Try to find nghttp2 without pkg-config
+    find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
+    find_library(NGHTTP2_LIBRARY NAMES nghttp2)
+    if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY)
+        message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDES ${NGHTTP2_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
+    else()
+        message(FATAL_ERROR "nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev (Debian/Ubuntu) or libnghttp2-devel (Fedora/RHEL)")
+    endif()
+endif()
 
 if (WIN32 OR MINGW OR MSYS)
     SET(CMAKE_DL_LIBS dl)
@@ -549,6 +601,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreXSinkException.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
+    lib/QoreEnumDecl.cpp
     lib/QoreReflection.cpp
     lib/Context.cpp
     lib/FindNode.cpp
@@ -584,6 +637,7 @@ set(LIBQORE_CPP_SRC
     lib/ConstantList.cpp
     lib/QoreClassList.cpp
     lib/HashDeclList.cpp
+    lib/EnumList.cpp
     lib/thread.cpp
     lib/AbstractThreadResource.cpp
     lib/ThreadResourceList.cpp
@@ -698,6 +752,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreMultiplicationOperatorNode.cpp
     lib/QoreBackgroundOperatorNode.cpp
     lib/QoreValue.cpp
+    lib/QoreBigIntNode.cpp
+    lib/QoreBigFloatNode.cpp
     lib/StreamPipe.cpp
     lib/CompressionTransforms.cpp
     lib/EncryptionTransforms.cpp
@@ -733,6 +789,10 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
+# HTTP/2 support is always enabled (nghttp2 is required)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/Http2Session.cpp
+)
 
 # get list of header files
 file(GLOB LIBQORE_SOURCE_HEADERS "include/qore/*.h" "include/qore/intern/*.h")
@@ -815,6 +875,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreXSinkException.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClass.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/TypedHashDecl.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEnumDecl.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreReflection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/Context.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FindNode.cpp\"
@@ -846,6 +907,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ConstantList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClassList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/HashDeclList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/EnumList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/thread.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractThreadResource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadResourceList.cpp\"
@@ -965,6 +1027,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRangeOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSquareBracketsRangeOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreValue.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigIntNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigFloatNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperatorInterface.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperator.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/StreamPipe.cpp\"
@@ -1109,6 +1173,8 @@ if (SINGLE_COMPILATION_UNIT)
 #ifdef DEBUG
 #include \"${CMAKE_SOURCE_DIR}/lib/ql_debug.cpp\"
 #endif
+// HTTP/2 support is always enabled (nghttp2 is required)
+#include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
 ")
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
@@ -1141,12 +1207,12 @@ endif (WIN32 OR MINGW OR MSYS)
 
 set_target_properties(libqore PROPERTIES OUTPUT_NAME qore)
 if (APPLE)
-    set_target_properties(libqore PROPERTIES VERSION 12)
-    set_target_properties(libqore PROPERTIES SOVERSION 12)
+    set_target_properties(libqore PROPERTIES VERSION 20)
+    set_target_properties(libqore PROPERTIES SOVERSION 20)
     set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
 else (APPLE)
-    set_target_properties(libqore PROPERTIES VERSION 12.7.0)
-    set_target_properties(libqore PROPERTIES SOVERSION 12)
+    set_target_properties(libqore PROPERTIES VERSION 20.0.0)
+    set_target_properties(libqore PROPERTIES SOVERSION 20)
 endif (APPLE)
 
 if (ADDRESS_SANITIZER)
@@ -1265,19 +1331,22 @@ if (DOXYGEN_FOUND)
     )
     add_dependencies(docs docs-lib)
 
-    # lang
-    message(STATUS "Preparing Doxyfile for lang")
-    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang @ONLY)
+    # lang - two-pass build:
+    # 1. docs-lang: builds with empty TAGFILES, generates qore.tag for modules to use
+    # 2. docs-lang-final: rebuilds after modules are built, with module tagfiles for cross-referencing
+    message(STATUS "Preparing Doxyfile for lang (initial pass, without module tags)")
+    set(QORE_LANG_DOC_TAGFILES "" CACHE INTERNAL "Module tag files for lang docs cross-referencing")
+    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial @ONLY)
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
         COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
-        DEPENDS QORE_DOX_FILES
-        COMMENT "Generating API documentation with Doxygen for: lang"
+        DEPENDS QORE_DOX_FILES QPP_GENERATED_FILES
+        COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
-    add_dependencies(docs docs-lang)
+    # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
 endif (DOXYGEN_FOUND)
 
 add_custom_target(install-docs
@@ -1454,6 +1523,47 @@ qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
+
+# Configure lang Doxyfile final pass with module tag files after all modules are defined
+if (DOXYGEN_FOUND)
+    # Build TAGFILES string from collected module names
+    set(QORE_LANG_DOC_TAGFILES "")
+    foreach(mod ${QORE_USER_MODULE_NAMES})
+        # Tag file is generated in build root as {mod}.tag
+        # Relative path to module html from lang html: ../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
+    endforeach()
+    message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
+    configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final @ONLY)
+
+    # docs-lang-final: rebuilds lang docs after all modules are built, with module tagfiles
+    # This enables @ref links from lang docs to module symbols
+    add_custom_target(docs-lang-final
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMENT "Generating API documentation with Doxygen for: lang (final pass with module cross-references)"
+        VERBATIM
+    )
+
+    # docs-lang-final-fast: same as docs-lang-final but without module dependencies
+    # Use this for quick testing when module docs are already built manually
+    add_custom_target(docs-lang-final-fast
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
+        VERBATIM
+    )
+
+    # docs-lang-final depends on all module docs (so their tagfiles exist)
+    foreach(mod ${QORE_USER_MODULE_NAMES})
+        add_dependencies(docs-lang-final docs-${mod})
+    endforeach()
+
+    # docs depends on docs-lang-final (the final lang docs with module cross-refs)
+    add_dependencies(docs docs-lang-final)
+endif()
 
 # print info
 message(STATUS "")

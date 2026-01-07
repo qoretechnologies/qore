@@ -31,14 +31,19 @@
 # requires the RestClient module
 %requires RestClient
 
-# requires json module for make_json()
-%requires json
-
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
+
+# requires json module for make_json()
+%try-module json
+%define NoJson
+%endtry
+
+%ifdef NoJson
+# Stub functions when json module is not available
+auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+auto sub parse_json(string val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+%endif
 
 module ElasticSearchLoggerAppender {
     version = "1.0";

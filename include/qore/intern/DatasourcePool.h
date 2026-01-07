@@ -67,7 +67,7 @@ protected:
     // event queue
     Queue* q;
     // Queue argument
-    QoreValue arg;
+    QoreValue arg{};
 
 public:
     DLLLOCAL DatasourceConfig(DBIDriver* n_driver, const char* n_user, const char* n_pass, const char* n_db,
@@ -143,7 +143,7 @@ protected:
         ;
 
     ResolvedCallReferenceNode* warning_callback;
-    QoreValue callback_arg;
+    QoreValue callback_arg{};
 
     DatasourceConfig config;
 

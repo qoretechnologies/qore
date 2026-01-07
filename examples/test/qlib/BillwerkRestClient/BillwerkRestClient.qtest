@@ -17,10 +17,7 @@
 
 %requires qore >= 0.9.4
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 %disable-warning deprecated
 
@@ -82,7 +79,16 @@ class BillwerkTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
     globalSetUp() {
+%ifdef NoJson
+        return;
+%endif
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
@@ -118,6 +124,7 @@ class BillwerkTest inherits QUnit::Test {
     }
 
     billwerkRestClientRestTests() {
+        checkModule();
         if (!billwerkRestClient) {
             testSkip("no billwerk.com connection");
         }
@@ -135,6 +142,7 @@ class BillwerkTest inherits QUnit::Test {
     }
 
     negativeTest() {
+        checkModule();
         if (!billwerkRestClient) {
             testSkip("no client support");
         }
@@ -145,6 +153,7 @@ class BillwerkTest inherits QUnit::Test {
     }
 
     connectionTest() {
+        checkModule();
         string url = "http://user:pass@localhost:" + port;
         BillwerkRestConnection billwerkrc("test", "test", url, NOTHING, {
             "client_id": "a",

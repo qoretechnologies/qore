@@ -825,8 +825,8 @@ double LValueHelper::getAsFloat() const {
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {
     assert(!*vl.xsink);
-    if (n.type == QV_Node && n.v.n == &Nothing) {
-        n.v.n = nullptr;
+    if (n.hasNode() && n.getInternalNode() == &Nothing) {
+        n.set(static_cast<AbstractQoreNode*>(nullptr));
     }
 
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
@@ -973,8 +973,9 @@ int64 LValueHelper::plusEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i += va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() + va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
@@ -987,8 +988,9 @@ int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i -= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() - va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
@@ -1001,8 +1003,9 @@ int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i *= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() * va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
@@ -1016,8 +1019,9 @@ int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i /= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() / va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
@@ -1030,8 +1034,9 @@ int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i |= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() | va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
@@ -1044,8 +1049,9 @@ int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i ^= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() ^ va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
@@ -1058,8 +1064,9 @@ int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i %= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() % va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
@@ -1072,8 +1079,9 @@ int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i &= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() & va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
@@ -1086,8 +1094,9 @@ int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i <<= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() << va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
@@ -1100,8 +1109,9 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    qv->v.i >>= va;
-    return qv->v.i;
+    int64 newVal = qv->getAsBigInt() >> va;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::preIncrementBigInt(const char* desc) {
@@ -1114,7 +1124,9 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    return ++qv->v.i;
+    int64 newVal = qv->getAsBigInt() + 1;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
@@ -1127,7 +1139,9 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    return --qv->v.i;
+    int64 newVal = qv->getAsBigInt() - 1;
+    qv->set(newVal);
+    return newVal;
 }
 
 int64 LValueHelper::postIncrementBigInt(const char* desc) {
@@ -1141,7 +1155,9 @@ int64 LValueHelper::postIncrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    return qv->v.i++;
+    int64 oldVal = qv->getAsBigInt();
+    qv->set(oldVal + 1);
+    return oldVal;
 }
 
 int64 LValueHelper::postDecrementBigInt(const char* desc) {
@@ -1154,7 +1170,9 @@ int64 LValueHelper::postDecrementBigInt(const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    return qv->v.i--;
+    int64 oldVal = qv->getAsBigInt();
+    qv->set(oldVal - 1);
+    return oldVal;
 }
 
 double LValueHelper::preIncrementFloat(const char* desc) {
@@ -1165,7 +1183,9 @@ double LValueHelper::preIncrementFloat(const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    return ++qv->v.f;
+    double newVal = qv->getAsFloat() + 1.0;
+    qv->set(newVal);
+    return newVal;
 }
 
 double LValueHelper::preDecrementFloat(const char* desc) {
@@ -1176,7 +1196,9 @@ double LValueHelper::preDecrementFloat(const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    return --qv->v.f;
+    double newVal = qv->getAsFloat() - 1.0;
+    qv->set(newVal);
+    return newVal;
 }
 
 double LValueHelper::postIncrementFloat(const char* desc) {
@@ -1187,7 +1209,9 @@ double LValueHelper::postIncrementFloat(const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    return qv->v.f++;
+    double oldVal = qv->getAsFloat();
+    qv->set(oldVal + 1.0);
+    return oldVal;
 }
 
 double LValueHelper::postDecrementFloat(const char* desc) {
@@ -1198,7 +1222,9 @@ double LValueHelper::postDecrementFloat(const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    return qv->v.f--;
+    double oldVal = qv->getAsFloat();
+    qv->set(oldVal - 1.0);
+    return oldVal;
 }
 
 double LValueHelper::plusEqualsFloat(double va, const char* desc) {
@@ -1209,8 +1235,9 @@ double LValueHelper::plusEqualsFloat(double va, const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    qv->v.f += va;
-    return qv->v.f;
+    double newVal = qv->getAsFloat() + va;
+    qv->set(newVal);
+    return newVal;
 }
 
 double LValueHelper::minusEqualsFloat(double va, const char* desc) {
@@ -1221,8 +1248,9 @@ double LValueHelper::minusEqualsFloat(double va, const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    qv->v.f -= va;
-    return qv->v.f;
+    double newVal = qv->getAsFloat() - va;
+    qv->set(newVal);
+    return newVal;
 }
 
 double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
@@ -1233,8 +1261,9 @@ double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    qv->v.f *= va;
-    return qv->v.f;
+    double newVal = qv->getAsFloat() * va;
+    qv->set(newVal);
+    return newVal;
 }
 
 double LValueHelper::divideEqualsFloat(double va, const char* desc) {
@@ -1246,8 +1275,9 @@ double LValueHelper::divideEqualsFloat(double va, const char* desc) {
     }
     if (makeFloat(desc))
         return 0.0;
-    qv->v.f /= va;
-    return qv->v.f;
+    double newVal = qv->getAsFloat() / va;
+    qv->set(newVal);
+    return newVal;
 }
 
 void LValueHelper::preIncrementNumber(const char* desc) {
@@ -1534,7 +1564,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     if (*xsink)
         return;
 
-    QoreValue v;
+    QoreValue v{};
     if (o)
         v = qore_object_private::takeMember(*o, lvh, mem->c_str());
     else {
@@ -1555,7 +1585,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
 static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon,
         ind_set_t& iset, unsigned i, bool is_range = false) {
-    QoreValue p;
+    QoreValue p{};
     bool push;
     if (ind >= 0 && ind < (int64)l.size()) {
         iset.insert(ind);

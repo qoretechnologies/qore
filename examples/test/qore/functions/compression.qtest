@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../../qlib/QUnit.qm
 
@@ -37,15 +34,9 @@ public class CompressionTest inherits QUnit::Test {
         addTestCase("zlib tests", \zlibTest());
         addTestCase("bzip compression test", \bzip2Test());
         addTestCase("raw deflate tests", \rawDeflateTest());
-%ifdef HAVE_BROTLI
         addTestCase("brotli compression tests", \brotliTest());
-%endif
-%ifdef HAVE_ZSTD
         addTestCase("zstd compression tests", \zstdTest());
-%endif
-%ifdef HAVE_LZ4
         addTestCase("lz4 compression tests", \lz4Test());
-%endif
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -226,7 +217,6 @@ public class CompressionTest inherits QUnit::Test {
         }
     }
 
-%ifdef HAVE_BROTLI
     brotliTest() {
         # ========================================
         # Basic Functionality Tests
@@ -458,9 +448,7 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(11, BROTLI_MAX_QUALITY);
         assertEq("br", COMPRESSION_ALG_BROTLI);
     }
-%endif
 
-%ifdef HAVE_ZSTD
     zstdTest() {
         # ========================================
         # Basic Functionality Tests
@@ -692,9 +680,7 @@ public class CompressionTest inherits QUnit::Test {
         assertTrue(ZSTD_MAX_LEVEL >= 19, "max level should be at least 19");
         assertEq("zstd", COMPRESSION_ALG_ZSTD);
     }
-%endif
 
-%ifdef HAVE_LZ4
     lz4Test() {
         # ========================================
         # Basic Functionality Tests
@@ -935,5 +921,4 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(65537, LZ4_MAX_ACCELERATION);
         assertEq("lz4", COMPRESSION_ALG_LZ4);
     }
-%endif
 }

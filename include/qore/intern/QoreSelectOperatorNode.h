@@ -126,7 +126,7 @@ public:
 
 protected:
     const QoreSelectOperatorNode* select;
-    QoreValue v;
+    QoreValue v{};
     bool done = false;
     ExceptionSink* xsink;
 };

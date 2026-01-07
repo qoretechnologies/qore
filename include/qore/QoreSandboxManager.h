@@ -41,6 +41,10 @@
 
 #include <sys/socket.h>
 #include <atomic>
+#include <functional>
+#include <mutex>
+#include <vector>
+#include <utility>
 
 // Forward declarations
 class ExceptionSink;
@@ -510,6 +514,9 @@ public:
 
         Interrupted code receives a PROGRAM-INTERRUPTED exception.
 
+        When interrupt is requested, all registered cancel callbacks are invoked
+        to cancel any ongoing blocking operations (e.g., database queries).
+
         @note This is the preferred way to stop runaway sandboxed code.
         It allows for clean shutdown without corrupting state.
     */
@@ -518,10 +525,49 @@ public:
     //! Clears the interrupt request
     DLLEXPORT void clearInterrupt();
 
+    //! Cancel callback function type
+    /** Cancel callbacks are called when requestInterrupt() is invoked.
+        They should attempt to cancel any ongoing blocking operation.
+
+        @return true if a cancel was attempted, false otherwise
+    */
+    typedef std::function<bool()> cancel_callback_t;
+
+    //! Registers a cancel callback for interruptible operations
+    /** Call this before starting a blocking operation that should be cancellable.
+        The callback will be invoked when requestInterrupt() is called.
+
+        @param context Unique context pointer (used to unregister)
+        @param callback The callback function to invoke on interrupt
+
+        @note Thread-safe. The callback may be invoked from any thread.
+        @note The callback should be safe to call even if the operation
+              has already completed.
+    */
+    DLLEXPORT void registerCancelCallback(void* context, cancel_callback_t callback);
+
+    //! Unregisters a cancel callback
+    /** Call this after the blocking operation completes.
+
+        @param context The context pointer used during registration
+    */
+    DLLEXPORT void unregisterCancelCallback(void* context);
+
     //! Checks if interrupt has been requested
     /** @return true if an interrupt has been requested
     */
     DLLEXPORT bool isInterruptRequested() const;
+
+    //! Checks if interrupt has been requested and raises exception if so
+    /** This is a convenience method for I/O operations that need to check
+        for interrupts and raise an exception if interrupted.
+
+        @param xsink Exception sink for error reporting
+        @param operation Description of the operation being interrupted (e.g., "reading file")
+
+        @return true if interrupted (exception raised), false otherwise
+    */
+    DLLEXPORT bool checkIOInterrupt(ExceptionSink* xsink, const char* operation = "I/O operation") const;
 
     //! Returns the full configuration as a hash
     /** @return A hash containing all sandbox configuration including
@@ -610,6 +656,12 @@ private:
     //! Interrupt flag
     std::atomic<bool> interrupt_requested;
 
+    //! Mutex for cancel callbacks
+    mutable std::mutex cancel_mutex;
+
+    //! Registered cancel callbacks
+    std::vector<std::pair<void*, cancel_callback_t>> cancel_callbacks;
+
     //! Disallow copying via assignment
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
 };
@@ -621,5 +673,26 @@ private:
     security restrictions.
 */
 DLLEXPORT QoreSandboxManager* runtime_get_sandbox_manager();
+
+//! Checks if the current program has been interrupted and raises exception if so
+/** This is a convenience function for I/O operations that need to check
+    for interrupts. It checks if a SandboxManager exists for the current
+    program and if an interrupt has been requested.
+
+    @param xsink Exception sink for error reporting
+    @param operation Description of the operation being interrupted
+
+    @return true if interrupted (exception raised), false otherwise
+
+    @note If no SandboxManager is attached, this returns false (no interrupt).
+*/
+DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation = "I/O operation");
+
+//! Polling interval for blocking I/O operations in milliseconds
+/** This constant defines how frequently blocking I/O operations check for
+    interrupt requests. It matches the polling interval used for threading
+    primitives (500ms).
+*/
+#define QORE_IO_POLL_INTERVAL_MS 500
 
 #endif // _QORE_QORE_SANDBOX_MANAGER_H

@@ -1,8 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%enable-all-warnings
-%new-style
+%modern
 %allow-debugger
 
 %requires qore >= 1.0

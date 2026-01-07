@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     will unlink (delete) UNIX domain socket files when closed
 
@@ -138,6 +138,8 @@ class QoreSocket {
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
     friend class my_socket_priv;
+    friend class SocketHttp2ServerPollOperation;
+    friend class SocketHttp2SendResponsePollOperation;
 
 public:
     //! creates an empty, unconnected socket
@@ -1840,6 +1842,60 @@ public:
     /** @return true if an SSL connection is active
     */
     DLLEXPORT bool isSecure() const;
+
+    //! Sets ALPN protocols for TLS negotiation
+    /** Must be called before SSL upgrade methods (upgradeClientToSSL, upgradeServerToSSL).
+        ALPN (Application-Layer Protocol Negotiation) is used to negotiate HTTP/2 over TLS.
+
+        @param protocols List of protocol names in preference order (e.g., "h2", "http/1.1")
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return 0 on success, -1 on error
+
+        @since Qore 2.1
+    */
+    DLLEXPORT int setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
+
+    //! Returns the negotiated ALPN protocol after TLS handshake
+    /** @return the selected protocol string, or nullptr if ALPN was not negotiated
+
+        @since Qore 2.1
+    */
+    DLLEXPORT QoreStringNode* getAlpnProtocol() const;
+
+    //! Returns true if HTTP/2 ("h2") was negotiated via ALPN
+    /** @return true if the connection uses HTTP/2
+
+        @since Qore 2.1
+    */
+    DLLEXPORT bool isHttp2() const;
+
+    //! Submits an HTTP/2 PUSH_PROMISE frame for server push
+    /** @param stream_id the HTTP/2 stream ID of the associated request
+        @param path the path of the resource being pushed
+        @param headers hash of headers for the pushed resource
+        @param xsink exception sink for error reporting
+
+        @return the promised stream ID on success (positive integer), or -1 on error
+
+        @since Qore 2.2
+    */
+    DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Sets the active HTTP/2 stream ID for transparent send/recv operations
+    /** @param stream_id the stream ID to use for subsequent send/recv operations
+        @param xsink exception sink for error reporting
+
+        @since Qore 2.3
+    */
+    DLLEXPORT void setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Gets the active HTTP/2 stream ID
+    /** @return the active stream ID, or -1 if no stream is active
+
+        @since Qore 2.3
+    */
+    DLLEXPORT int32_t getHttp2ActiveStream() const;
 
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;

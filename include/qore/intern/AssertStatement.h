@@ -47,8 +47,8 @@ public:
     DLLLOCAL virtual ~AssertStatement();
 
 private:
-    QoreValue condition;  //!< The condition to assert
-    QoreValue message;    //!< Optional message/format args on failure (can be list for sprintf)
+    QoreValue condition{};  //!< The condition to assert
+    QoreValue message{};    //!< Optional message/format args on failure (can be list for sprintf)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
 

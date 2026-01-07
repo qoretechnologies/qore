@@ -597,7 +597,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv;
+    QoreValue rv{};
     if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
         rv = odata->priv->swapKeyValue(key, QoreTypeInfo::getDefaultQoreValue(mti), this);
     } else {
@@ -770,7 +770,7 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
 
     const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
 
-    QoreValue rv;
+    QoreValue rv{};
     if (odata) {
         rv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(mem);
     }
@@ -796,7 +796,7 @@ void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink
 // runtime class context
 void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val,
         ExceptionSink* xsink) {
-    QoreValue old_value;
+    QoreValue old_value{};
 
     // initial count (true = possible recursive cycle, false = no cycle possible)
     bool before;
@@ -1331,7 +1331,7 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
         return QoreValue();
     }
 
-    QoreValue rv;
+    QoreValue rv{};
     bool exists;
     {
         QoreAutoVarRWReadLocker al(priv->rml);
@@ -1540,7 +1540,7 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
         return;
     }
 
-    QoreValue v;
+    QoreValue v{};
     {
         QoreSafeVarRWWriteLocker sl(priv->rml);
 

@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 # try importing JSON and YAML modules
 %try-module json
@@ -13,6 +10,11 @@
 %try-module yaml
 %define NoYaml
 %endtry
+
+%ifdef NoYaml
+# Stub function when yaml module is not available
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%endif
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/Mime.qm
@@ -46,6 +48,7 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
     }
 
     compatTest() {
+        checkModules();
         hash<auto> schema = {
             "swagger": "2.0",
             "info": {

@@ -463,6 +463,30 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
     }
+%else
+    #! Stub for incoming message validation when AsyncAPI is not available
+    /** @param msg the message to validate (reference, may be modified)
+        @param headers optional headers hash for validation
+
+        @note This is a no-op stub when AsyncAPI is not available
+
+        @since WebSocketHandler 2.2
+    */
+    validateIncomingMessage(reference<auto> msg, hash<auto> headers = {}) {
+        # no-op when AsyncAPI is not available
+    }
+
+    #! Stub for outgoing message validation when AsyncAPI is not available
+    /** @param msg the message to validate
+        @param headers reference to headers (may be modified)
+
+        @note This is a no-op stub when AsyncAPI is not available
+
+        @since WebSocketHandler 2.2
+    */
+    validateOutgoingMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        # no-op when AsyncAPI is not available
+    }
 %endif
 
     #! Sets the active extensions for this connection
@@ -807,6 +831,34 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
         #logDebug("websocket request: cx: %N", cx);
         #logDebug("websocket request: hdr: %N", hdr);
+
+        # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
+        # Check if this is an HTTP/2 WebSocket CONNECT request
+        if (cx."header-info".is_websocket_connect) {
+            logDebug("HTTP/2 WebSocket CONNECT request received");
+
+            # Negotiate extensions if supported
+            *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+            hash<auto> rhdr;
+            if (ext_result.response_header) {
+                rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
+            }
+            # Store negotiated extensions in hdr for startImpl to access
+            if (ext_result.extensions) {
+                hdr."_ws_negotiated_extensions" = ext_result.extensions;
+                hdr."_ws_extension_rsv_mask" = ext_result.rsv_mask;
+            }
+
+            # RFC 8441: Return 200 OK for HTTP/2 WebSocket CONNECT
+            return {
+                "code": 200,
+                "hdr": rhdr,
+                "streaming": True,
+                "stream_type": "websocket",
+            };
+        }
+
+        # HTTP/1.1 WebSocket upgrade requires Sec-WebSocket-Key
         if (!hdr."sec-websocket-key") {
             return {
                 "code": 400,

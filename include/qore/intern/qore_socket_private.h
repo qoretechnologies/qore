@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,12 +41,15 @@
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
 
+#include "qore/intern/Http2Session.h"
+
 #include <cctype>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <strings.h>
+#include <sys/time.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -515,6 +518,8 @@ struct qore_socket_private {
     // issue #3053: client target for SNI
     std::string client_target;
     SSLSocketHelper* ssl = nullptr;
+    //! ALPN protocols for TLS negotiation (HTTP/2 support)
+    std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
 
@@ -552,9 +557,9 @@ struct qore_socket_private {
         ;
 
     //! callback argument for the warning queue
-    QoreValue warn_callback_arg;
+    QoreValue warn_callback_arg{};
     //! argument for the event queue
-    QoreValue event_arg;
+    QoreValue event_arg{};
     bool del = false,
         http_exp_chunked_body = false,
         ssl_accept_all_certs = false,
@@ -569,6 +574,25 @@ struct qore_socket_private {
 
     // issue #3818: verbose certificate verification error info
     QoreStringNode* ssl_err_str = nullptr;
+
+    //! HTTP/2 session for persistent HTTP/2 connections
+    /** The session is created during startPollReadHttp2Request() and reused
+        for subsequent operations on the same connection.
+    */
+    Http2Session* h2_session = nullptr;
+
+    //! Active HTTP/2 stream ID for WebSocket or other bidirectional streams
+    /** When set to a positive value, send() and recv() operations will use
+        HTTP/2 DATA frames on this stream instead of raw socket I/O.
+        Set to -1 when no stream is active.
+    */
+    int32_t h2_active_stream_id = -1;
+
+    //! Flag to prevent recursion in HTTP/2 receive path
+    /** When true, brecv skips HTTP/2 stream processing and reads raw socket data.
+        This is set when receiving HTTP/2 protocol frames to avoid infinite recursion.
+    */
+    bool h2_receiving_frames = false;
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -585,6 +609,11 @@ struct qore_socket_private {
 
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Returns true if ALPN protocols have been configured
+    DLLLOCAL bool hasAlpnProtocols() const {
+        return !alpn_protocols.empty();
     }
 
     DLLLOCAL int close() {
@@ -645,6 +674,10 @@ struct qore_socket_private {
         if (remote_cert) {
             remote_cert->deref(nullptr);
             remote_cert = nullptr;
+        }
+        if (h2_session) {
+            delete h2_session;
+            h2_session = nullptr;
         }
         if (sock >= 0) {
             // if an SSL connection has been established, shut it down first
@@ -1335,12 +1368,68 @@ struct qore_socket_private {
     }
 
     DLLLOCAL bool isSocketDataAvailable(int timeout_ms, const char* mname, ExceptionSink* xsink) {
+        // For SSL connections, first check if data is already buffered in the SSL layer
+        // (poll() on raw socket won't see SSL-buffered data)
+        if (ssl) {
+            int rc = ssl->doSSLRW(xsink, mname, rbuf, 1, 0, PEEK, false);
+            if (*xsink) {
+                return false;
+            }
+            if (rc > 0) {
+                return true;  // Data available in SSL buffer
+            }
+            // rc == QSE_TIMEOUT means no data in SSL buffer, need to poll socket
+        }
         return asyncIoWait(timeout_ms, true, false, "Socket", mname, xsink);
     }
 
     DLLLOCAL bool isDataAvailable(int timeout_ms, const char* mname, ExceptionSink* xsink) {
         if (buflen)
             return true;
+        // For HTTP/2 SERVER-SIDE connections with active stream, we need special handling:
+        // 1. Check if stream buffer already has data
+        // 2. If not, check if raw socket has data
+        // 3. If raw socket has data, process HTTP/2 frames to decode them
+        // 4. Then re-check if stream buffer now has data
+        //
+        // NOTE: For client-side connections (isServer() == false), the HTTPClient handles
+        // frame processing in isHttp2DataAvailable() with proper locking. The socket's
+        // isDataAvailable() should just check for raw socket data in that case.
+        bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
+        printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
+            h2_session, h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
+        if (h2_cond) {
+            Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
+            printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
+            if (stream && !stream->body.empty()) {
+                return true;
+            }
+
+            // Check if raw socket has data (HTTP/2 frames)
+            bool sock_avail = isSocketDataAvailable(timeout_ms, mname, xsink);
+            printd(5, "isDataAvailable() isSocketDataAvailable(%d)=%d\n", timeout_ms, sock_avail);
+            if (sock_avail) {
+                if (*xsink) {
+                    return false;
+                }
+
+                // Process pending HTTP/2 frames
+                h2_receiving_frames = true;
+                int rv = h2_session->receiveData(100, xsink);
+                h2_receiving_frames = false;
+                printd(5, "isDataAvailable() receiveData rv=%d\n", rv);
+
+                if (*xsink) {
+                    return false;
+                }
+
+                // Re-check stream buffer
+                stream = h2_session->getStream(h2_active_stream_id);
+                printd(5, "isDataAvailable() after recv stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
+                return stream && !stream->body.empty();
+            }
+            return false;
+        }
         return isSocketDataAvailable(timeout_ms, mname, xsink);
     }
 
@@ -1632,11 +1721,19 @@ struct qore_socket_private {
         if (!sni_target_host && !client_target.empty()) {
             sni_target_host = client_target.c_str();
         }
-        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey))
-            || ssl->connect(mname, timeout_ms,
-            xsink)) {
+        if ((rc = ssl->setClient(xsink, mname, sni_target_host, sock, cert, pkey))) {
             sshh.error();
-            return rc ? rc : -1;
+            return rc;
+        }
+
+        // Set ALPN protocols if configured (for HTTP/2 support)
+        if (!alpn_protocols.empty()) {
+            ssl->setAlpnProtocols(alpn_protocols);
+        }
+
+        if (ssl->connect(mname, timeout_ms, xsink)) {
+            sshh.error();
+            return -1;
         }
         do_ssl_established_event();
 
@@ -1650,7 +1747,17 @@ struct qore_socket_private {
         SSLSocketHelperHelper sshh(this, true);
 
         do_start_ssl_event();
-        if (ssl->setServer(xsink, mname, sock, cert, pkey) || ssl->accept(mname, timeout_ms, xsink)) {
+        if (ssl->setServer(xsink, mname, sock, cert, pkey)) {
+            sshh.error();
+            return -1;
+        }
+
+        // Set ALPN protocols if configured (for HTTP/2 support)
+        if (!alpn_protocols.empty()) {
+            ssl->setServerAlpnProtocols(alpn_protocols);
+        }
+
+        if (ssl->accept(mname, timeout_ms, xsink)) {
             sshh.error();
             return -1;
         }
@@ -1987,6 +2094,55 @@ struct qore_socket_private {
             return (ssize_t)bs;
         }
 
+        // Read from HTTP/2 stream buffer when stream is active (but not when receiving protocol frames)
+        // NOTE: Only do HTTP/2 stream handling for server-side connections. For client connections,
+        // HTTPClient's readHttp2StreamData() handles the stream-level reading.
+        bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
+        if (h2_cond) {
+            Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
+
+            // If no data buffered, receive more HTTP/2 frames
+            if (!stream || stream->body.empty()) {
+                // Wait for raw socket data (HTTP/2 frames)
+                if (timeout >= 0 && !isSocketDataAvailable(timeout, meth, xsink)) {
+                    if (*xsink) {
+                        return -1;
+                    }
+                    if (!suppress_exception) {
+                        se_timeout("Socket", meth, timeout, xsink);
+                    }
+                    return QSE_TIMEOUT;
+                }
+
+                // Set flag to prevent recursion when receiveData calls brecv
+                h2_receiving_frames = true;
+                int rv = h2_session->receiveData(timeout, xsink);
+                h2_receiving_frames = false;
+
+                if (rv < 0) {
+                    return -1;
+                }
+
+                // Re-fetch stream after receiving data
+                stream = h2_session->getStream(h2_active_stream_id);
+            }
+
+            if (stream && !stream->body.empty()) {
+                // Return data from HTTP/2 stream buffer
+                size_t bytes = std::min(bs, stream->body.size());
+                memcpy(rbuf, stream->body.data(), bytes);
+                stream->body.erase(stream->body.begin(), stream->body.begin() + bytes);
+                buf = rbuf;
+                if (do_event) {
+                    do_read_event((ssize_t)bytes, bytes);
+                }
+                return (ssize_t)bytes;
+            }
+
+            // No data available (stream may be closed)
+            return 0;
+        }
+
         // real socket reads are only done when the buffer is empty
 
         //printd(5, "qore_socket_private::brecv(buf: %p, bs: %d, flags: %d, timeout: %d, do_event: %d) this: %p "
@@ -2053,7 +2209,9 @@ struct qore_socket_private {
             }
         } else {
             // only close the socket if no data was recevied and the error is not EAGAIN or EINPROGRESS
-            if (!rc && isOpen() && errno != EAGAIN && errno != EINPROGRESS) {
+            // NOTE: For HTTP/2, don't close on rc=0 - it could be a timeout or flow control,
+            // not a connection close. Let the HTTP/2 layer handle connection lifecycle.
+            if (!rc && isOpen() && errno != EAGAIN && errno != EINPROGRESS && !h2_session) {
                 close();
             }
         }
@@ -2940,8 +3098,9 @@ struct qore_socket_private {
     DLLLOCAL int send(int fd, ssize_t size, int timeout_ms, ExceptionSink* xsink);
 
     // returns: 0 = OK
+    // If bypass_h2 is true, sends raw data even if HTTP/2 is active (used by Http2Session::sendPendingData)
     DLLLOCAL int send(ExceptionSink* xsink, const char* cname, const char* mname, const char* buf, size_t size,
-            int timeout_ms = -1, int source = QORE_SOURCE_SOCKET) {
+            int timeout_ms = -1, int source = QORE_SOURCE_SOCKET, bool bypass_h2 = false) {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {
             se_not_open(cname, mname, xsink, "send");
@@ -2956,6 +3115,23 @@ struct qore_socket_private {
             return 0;
         }
         if (!size) {
+            return 0;
+        }
+
+        // If HTTP/2 is active with a stream, send data via HTTP/2 DATA frames
+        // bypass_h2 is true when sending raw HTTP/2 frames (from Http2Session::sendPendingData)
+        if (h2_session && h2_active_stream_id > 0 && !bypass_h2) {
+            // Send data on the active HTTP/2 stream (no END_STREAM for WebSocket)
+            if (h2_session->sendStreamData(h2_active_stream_id, buf, size, false, xsink) < 0) {
+                return -1;
+            }
+            // Flush pending data
+            if (h2_session->sendPendingData(timeout_ms, xsink) < 0) {
+                return -1;
+            }
+            if (source > 0) {
+                do_data_event(QORE_EVENT_SOCKET_DATA_SENT, source, buf, size);
+            }
             return 0;
         }
 

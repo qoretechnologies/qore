@@ -37,7 +37,7 @@ class QoreDotEvalOperatorNode : public QoreOperatorNode {
 protected:
     static QoreString name;
 
-    QoreValue left;
+    QoreValue left{};
     MethodCallNode *m;
 
     const QoreTypeInfo *returnTypeInfo;

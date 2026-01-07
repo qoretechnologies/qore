@@ -661,7 +661,7 @@ bool QoreNumberNode::ordinary() const {
 }
 
 QoreNumberNodeHelper::QoreNumberNodeHelper(const QoreValue n) {
-    if (n.type == QV_Node && get_node_type(n.v.n) == NT_NUMBER) {
+    if (n.hasNode() && get_node_type(n.getInternalNode()) == NT_NUMBER) {
         del = false;
         num = n.get<const QoreNumberNode>();
     } else {

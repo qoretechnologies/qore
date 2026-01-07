@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,14 @@ public:
         @param bareNames whether to leave symbol name bare (without namespace and class prefixes)
      */
     static void fixVariableInfo(ASTTree* tree, ASTSymbolInfo& si, bool bareNames);
+
+    //! Fix symbol info for the passed typedef.
+    /**
+        @param tree AST tree of the symbols
+        @param si symbol info to fix
+        @param bareNames whether to leave symbol name bare (without namespace prefix)
+     */
+    static void fixTypedefInfo(ASTTree* tree, ASTSymbolInfo& si, bool bareNames);
 
     //! Fix symbol infos for the passed symbol info vector.
     /**

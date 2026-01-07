@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -23,6 +23,11 @@
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
   DEALINGS IN THE SOFTWARE.
+
+  IMPORTANT: This file should be kept in sync with the main Qore parser:
+      lib/parser.ypp
+  All syntax changes in the main parser should be mirrored here for IDE
+  integration to understand all Qore syntax.
 */
 
 #include <cstdio>
@@ -100,9 +105,14 @@ typedef void* yyscan_t;
     ASTHashExpression* hash;
     ASTHashDeclaration* hashdecl;
     ASTHashdeclHashExpression* hashdeclhash;
+    ASTEnumDeclaration* enumdecl;
+    ASTEnumMemberDeclaration* enummember;
+    std::vector<ASTEnumMemberDeclaration*>* enummemberlist;
+    ASTTypedefDeclaration* typedefdecl;
     ASTHashElementExpression* hashelem;
     ASTHashMemberDeclaration* hashmember;
     std::vector<ASTHashMemberDeclaration*>* hashmemberlist;
+    ASTName* astname;
     ASTListExpression* list;
     ASTMemberGroupDeclaration* membergroup;
     ASTNameExpression* nameexpr;
@@ -127,6 +137,52 @@ int yylex(YY_LEX_PARAMETERS);
 void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree* parseTree, const char* str) {
     errorLog->reportError(*loc, str);
 }
+
+// Defined in ast_scanner.lpp - takes ownership of pending doc comment
+extern std::string* takePendingDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed class doc comment
+extern std::string* takeClassDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed hashdecl doc comment
+extern std::string* takeHashdeclDocComment();
+
+// Defined in ast_scanner.lpp - takes ownership of claimed namespace doc comment
+extern std::string* takeNamespaceDocComment();
+
+// Helper macro to attach pending doc comment to a declaration
+#define ATTACH_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takePendingDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach class doc comment (claimed when scanner saw 'class' keyword)
+#define ATTACH_CLASS_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeClassDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach hashdecl doc comment (claimed when scanner saw 'hashdecl' keyword)
+#define ATTACH_HASHDECL_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeHashdeclDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach namespace doc comment (claimed when scanner saw 'namespace' keyword)
+#define ATTACH_NAMESPACE_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeNamespaceDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
 
 %}
 
@@ -182,6 +238,8 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %token TOK_ABSTRACT "abstract"
 %token TOK_HASHDECL "hashdecl"
 %token TOK_TRANSIENT "transient"
+%token TOK_TYPEDEF "typedef"
+%token TOK_ENUM "enum"
 %token TOK_NULL "NULL"
 %token TOK_NOTHING "NOTHING"
 %token TOK_TRUE "True"
@@ -364,7 +422,12 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <hashelem>       hash_element
 %type <hashmemberlist> hashdecl_attributes
 %type <hashdecl>       hashdecl_def
+%type <astname>        hashdecl_inherits
 %type <hashmember>     hashdecl_member
+%type <enumdecl>       enum_def
+%type <enummemberlist> enum_members
+%type <enummember>     enum_member
+%type <typedefdecl>    typedef_def
 %type <string>         ident_openparen
 %type <hashdeclhash>   immediate_typed_hash
 %type <sclist>         inheritance_list
@@ -411,9 +474,9 @@ void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree
 %type <constdecl>      unscoped_const_decl
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod exp exp_c exp_n gvardecl hash hash_element hashdecl_def hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement uncqtypedef unscoped_const_decl
+%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
-%destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
+%destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 
 %%
 top_level_commands:
@@ -429,24 +492,38 @@ top_level_commands:
 
 top_level_command:
         sub_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | scoped_sub_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | class_def {
             $$ = $1;
         }
         | hashdecl_def {
+            ATTACH_HASHDECL_DOC_COMMENT($1);
+            $$ = $1;
+        }
+        | enum_def {
+            ATTACH_DOC_COMMENT($1);
+            $$ = $1;
+        }
+        | typedef_def {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | scoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | unscoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | outofline_methoddef {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | statement {
@@ -459,6 +536,7 @@ top_level_command:
             $$ = $2;
         }
         | top_namespace_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
         | TOK_MODULE '{' module_decls '}' { $$ = nullptr; }
@@ -701,6 +779,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name), $4);
             $$->loc.set(@1, @5);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
             delete $4;
         }
         | nsc_modifiers NAMESPACE ';' {
@@ -710,6 +789,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name));
             $$->loc.set(@1, @3);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
         }
         | nsc_modifiers NAMESPACE '{' '}' {
             ASTName name($2, ASTNameKind::ANK_Namespace);
@@ -718,6 +798,7 @@ top_namespace_decl:
 
             $$ = new ASTNamespaceDeclaration($1, std::move(name));
             $$->loc.set(@1, @4);
+            ATTACH_NAMESPACE_DOC_COMMENT($$);
         }
         ;
 
@@ -735,15 +816,17 @@ namespace_decls:
         ;
 
 namespace_decl:
-        scoped_const_decl { $$ = $1; }
-        | unscoped_const_decl { $$ = $1; }
+        scoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | unscoped_const_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | class_def { $$ = $1; }
-        | hashdecl_def { $$ = $1; }
-        | sub_def { $$ = $1; }
-        | scoped_sub_def { $$ = $1; }
-        | gvardecl ';' { $$ = $1; }
-        | top_namespace_decl { $$ = $1; }
-        | outofline_methoddef { $$ = $1; }
+        | hashdecl_def { ATTACH_HASHDECL_DOC_COMMENT($1); $$ = $1; }
+        | enum_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | typedef_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | scoped_sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | gvardecl ';' { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | top_namespace_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | outofline_methoddef { ATTACH_DOC_COMMENT($1); $$ = $1; }
         ;
 
 unscoped_const_decl:
@@ -1134,26 +1217,175 @@ myexp:
         | error      { $$ = 0; }
         ;
 
+hashdecl_inherits:
+        TOK_INHERITS IDENTIFIER {
+            $$ = new ASTName($2, ASTNameKind::ANK_Identifier);
+            $$->loc = @2;
+            free($2);
+        }
+        | TOK_INHERITS SCOPED_REF {
+            $$ = new ASTName($2, ASTNameKind::ANK_ScopedRef);
+            $$->loc = @2;
+            free($2);
+        }
+        | /* empty */ {
+            $$ = nullptr;
+        }
+        ;
+
 hashdecl_def:
-        nsc_modifiers TOK_HASHDECL IDENTIFIER '{' hashdecl_attributes '}' {
+        nsc_modifiers TOK_HASHDECL IDENTIFIER hashdecl_inherits '{' hashdecl_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_Identifier);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTHashDeclaration(mods, std::move(name), $5);
-            $$->loc.set(@1, @6);
-            delete $5;
+            $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
+            delete $6;
         }
-        | nsc_modifiers TOK_HASHDECL SCOPED_REF '{' hashdecl_attributes '}' {
+        | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_ScopedRef);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTHashDeclaration(mods, std::move(name), $5);
+            $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
+            delete $6;
+        }
+        ;
+
+enum_def:
+        nsc_modifiers TOK_ENUM IDENTIFIER '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
             $$->loc.set(@1, @6);
             delete $5;
+        }
+        | nsc_modifiers TOK_ENUM IDENTIFIER ':' uncqtypedef '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+            ASTName baseTypeName($5, ASTNameKind::ANK_UncQTypedef);
+            baseTypeName.loc = @5;
+            delete $5;
+            ASTNameExpression* baseType = new ASTNameExpression(std::move(baseTypeName));
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
+            $$->loc.set(@1, @8);
+            delete $7;
+        }
+        | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
+            $$->loc.set(@1, @6);
+            delete $5;
+        }
+        | nsc_modifiers TOK_ENUM SCOPED_REF ':' uncqtypedef '{' enum_members '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+            ASTName baseTypeName($5, ASTNameKind::ANK_UncQTypedef);
+            baseTypeName.loc = @5;
+            delete $5;
+            ASTNameExpression* baseType = new ASTNameExpression(std::move(baseTypeName));
+
+            $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
+            $$->loc.set(@1, @8);
+            delete $7;
+        }
+        ;
+
+enum_members:
+        enum_member {
+            $$ = new std::vector<ASTEnumMemberDeclaration*>();
+            $$->push_back($1);
+        }
+        | enum_members ',' enum_member {
+            $$ = $1;
+            $$->push_back($3);
+        }
+        | enum_members ',' {
+            $$ = $1;  // trailing comma is allowed
+        }
+        ;
+
+enum_member:
+        IDENTIFIER {
+            ASTName name($1, ASTNameKind::ANK_Identifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTEnumMemberDeclaration(std::move(name), nullptr);
+            $$->loc = @1;
+        }
+        | IDENTIFIER '=' exp {
+            ASTName name($1, ASTNameKind::ANK_Identifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTEnumMemberDeclaration(std::move(name), $3);
+            $$->loc.set(@1, @3);
+        }
+        ;
+
+typedef_def:
+        TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+            ASTName name($2, ASTNameKind::ANK_Identifier);
+            name.loc = @2;
+            free($2);
+            ASTName typeName($4, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @4;
+            delete $4;
+
+            $$ = new ASTTypedefDeclaration(std::move(name), std::move(typeName));
+            $$->loc.set(@1, @5);
+        }
+        | TOK_PUBLIC TOK_TYPEDEF IDENTIFIER '=' uncqtypedef ';' {
+            ASTModifiers mods(ASTModifier::AM_Public);
+            mods.loc = @1;
+            ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+            ASTName typeName($5, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @5;
+            delete $5;
+
+            $$ = new ASTTypedefDeclaration(mods, std::move(name), std::move(typeName));
+            $$->loc.set(@1, @6);
+        }
+        | TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+            ASTName name($2, ASTNameKind::ANK_ScopedRef);
+            name.loc = @2;
+            free($2);
+            ASTName typeName($4, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @4;
+            delete $4;
+
+            $$ = new ASTTypedefDeclaration(std::move(name), std::move(typeName));
+            $$->loc.set(@1, @5);
+        }
+        | TOK_PUBLIC TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
+            ASTModifiers mods(ASTModifier::AM_Public);
+            mods.loc = @1;
+            ASTName name($3, ASTNameKind::ANK_ScopedRef);
+            name.loc = @3;
+            free($3);
+            ASTName typeName($5, ASTNameKind::ANK_UncQTypedef);
+            typeName.loc = @5;
+            delete $5;
+
+            $$ = new ASTTypedefDeclaration(mods, std::move(name), std::move(typeName));
+            $$->loc.set(@1, @6);
         }
         ;
 
@@ -1166,6 +1398,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
             $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
             delete $5;
         }
@@ -1177,6 +1410,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
             $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
             delete $5;
         }
@@ -1188,6 +1422,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @4);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
@@ -1198,6 +1433,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @4);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_STRING inheritance_list '{' '}' {
@@ -1208,6 +1444,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @5);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
@@ -1218,6 +1455,7 @@ class_def:
 
             $$ = new ASTClassDeclaration(mods, std::move(name), $3);
             $$->loc.set(@1, @5);
+            ATTACH_CLASS_DOC_COMMENT($$);
             delete $3;
         }
         ;
@@ -1378,6 +1616,7 @@ hashdecl_attributes:
 
 class_attributes:
         inline_methoddef {
+            ATTACH_DOC_COMMENT($1);
             $$ = new std::vector<ASTDeclaration*>;
             $$->push_back($1);
         }
@@ -1394,10 +1633,12 @@ class_attributes:
             $$->push_back($1);
         }
         | unscoped_const_decl {
+            ATTACH_DOC_COMMENT($1);
             $$ = new std::vector<ASTDeclaration*>;
             $$->push_back($1);
         }
         | class_attributes inline_methoddef {
+            ATTACH_DOC_COMMENT($2);
             $$ = $1;
             $1->push_back($2);
         }
@@ -1414,6 +1655,7 @@ class_attributes:
             $1->push_back($2);
         }
         | class_attributes unscoped_const_decl {
+            ATTACH_DOC_COMMENT($2);
             $$ = $1;
             $1->push_back($2);
         }
@@ -1422,6 +1664,12 @@ class_attributes:
 uncqtypedef:
         IDENTIFIER {
             $$ = new std::string($1);
+            free($1);
+        }
+        | IDENTIFIER '!' {
+            // Handle auto! syntax
+            $$ = new std::string($1);
+            $$->push_back('!');
             free($1);
         }
         | SCOPED_REF {
@@ -1435,6 +1683,13 @@ uncqtypedef:
         | '*' IDENTIFIER {
             $$ = new std::string("*");
             $$->append($2);
+            free($2);
+        }
+        | '*' IDENTIFIER '!' {
+            // Handle *auto! syntax
+            $$ = new std::string("*");
+            $$->append($2);
+            $$->push_back('!');
             free($2);
         }
         | '*' SCOPED_REF {

@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 %no-child-restrictions
 
 %requires ../../../../qlib/Util.qm
@@ -106,6 +103,8 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("ns path test", \nsPathTest());
         addTestCase("mod name tests", \modNameTests());
         addTestCase("type tests", \typeTests());
+        addTestCase("typed code tests", \typedCodeTests());
+        addTestCase("union type tests", \unionTypeTests());
         addTestCase("pgm tests", \pgmTests());
         addTestCase("issue 3145", \issue3145Test());
         addTestCase("issue 3141", \issue3141Test());
@@ -310,6 +309,157 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(("reference<string>", "nothing"), keys (new Type("*reference<string>")).getReturnTypeHash());
     }
 
+    typedCodeTests() {
+        # Test non-typed code types
+        {
+            Type t("int");
+            assertFalse(t.isTypedCode());
+            assertNothing(t.getCodeReturnType());
+            assertNothing(t.getCodeParamTypes());
+            assertFalse(t.codeHasVarargs());
+        }
+
+        {
+            Type t("code");
+            assertFalse(t.isTypedCode());
+            assertNothing(t.getCodeReturnType());
+            assertNothing(t.getCodeParamTypes());
+            assertFalse(t.codeHasVarargs());
+        }
+
+        # Test basic typed code type
+        {
+            Type t("code<int(string, bool)>");
+            assertTrue(t.isTypedCode());
+            assertFalse(t.isUnion());
+
+            # Check return type
+            *Type rt = t.getCodeReturnType();
+            assertTrue(exists rt);
+            assertEq("int", rt.getName());
+
+            # Check parameter types
+            *list<Type> params = t.getCodeParamTypes();
+            assertTrue(exists params);
+            assertEq(2, params.size());
+            assertEq("string", params[0].getName());
+            assertEq("bool", params[1].getName());
+
+            # Check varargs
+            assertFalse(t.codeHasVarargs());
+        }
+
+        # Test typed code with no parameters
+        {
+            Type t("code<string()>");
+            assertTrue(t.isTypedCode());
+            *Type rt = t.getCodeReturnType();
+            assertTrue(exists rt);
+            assertEq("string", rt.getName());
+            *list<Type> params = t.getCodeParamTypes();
+            assertTrue(exists params);
+            assertEq(0, params.size());
+            assertFalse(t.codeHasVarargs());
+        }
+
+        # Test typed code with varargs
+        {
+            Type t("code<int(string, ...)>");
+            assertTrue(t.isTypedCode());
+            *Type rt = t.getCodeReturnType();
+            assertTrue(exists rt);
+            assertEq("int", rt.getName());
+            *list<Type> params = t.getCodeParamTypes();
+            assertTrue(exists params);
+            assertEq(1, params.size());
+            assertEq("string", params[0].getName());
+            assertTrue(t.codeHasVarargs());
+        }
+
+        # Test or-nothing typed code type
+        {
+            Type t("*code<int(string)>");
+            assertTrue(t.isTypedCode());
+            assertTrue(t.isOrNothingType());
+            *Type rt = t.getCodeReturnType();
+            assertTrue(exists rt);
+            assertEq("int", rt.getName());
+        }
+
+        # Test complex return type
+        {
+            Type t("code<hash<string, int>(string)>");
+            assertTrue(t.isTypedCode());
+            *Type rt = t.getCodeReturnType();
+            assertTrue(exists rt);
+            assertEq("hash<string, int>", rt.getName());
+        }
+
+        # Test complex param types
+        {
+            Type t("code<int(list<string>, hash<string, int>)>");
+            assertTrue(t.isTypedCode());
+            *list<Type> params = t.getCodeParamTypes();
+            assertTrue(exists params);
+            assertEq(2, params.size());
+            assertEq("list<string>", params[0].getName());
+            assertEq("hash<string, int>", params[1].getName());
+        }
+    }
+
+    unionTypeTests() {
+        # Test basic union type
+        {
+            Type t("union<int, string>");
+            assertTrue(t.isUnion());
+            assertFalse(t.isTypedCode());
+
+            # Check member types
+            *list<Type> members = t.getUnionMemberTypes();
+            assertTrue(exists members);
+            assertEq(2, members.size());
+            # Note: order may vary, so use a set-like comparison
+            hash<string, bool> memberNames;
+            foreach Type m in (members) {
+                memberNames{m.getName()} = True;
+            }
+            assertTrue(memberNames.int ?? False);
+            assertTrue(memberNames.string ?? False);
+        }
+
+        # Test union type with multiple types
+        {
+            Type t("union<int, string, bool, float>");
+            assertTrue(t.isUnion());
+            *list<Type> members = t.getUnionMemberTypes();
+            assertTrue(exists members);
+            assertEq(4, members.size());
+        }
+
+        # Test or-nothing union type
+        {
+            Type t("*union<int, string>");
+            assertTrue(t.isUnion());
+            assertTrue(t.isOrNothingType());
+            *list<Type> members = t.getUnionMemberTypes();
+            assertTrue(exists members);
+            assertEq(2, members.size());
+        }
+
+        # Test non-union types
+        {
+            Type t("int");
+            assertFalse(t.isUnion());
+            assertNothing(t.getUnionMemberTypes());
+        }
+
+        {
+            Type t("hash<auto>");
+            assertFalse(t.isUnion());
+            assertNothing(t.getUnionMemberTypes());
+        }
+    }
+
     pgmTests() {
         Program p(PO_NEW_STYLE);
         p.parse("class TestClass {} const Test = 1; sub test() {} our int test; namespace Test1 {} hashdecl Test2 { int i; }", "");
@@ -401,7 +551,7 @@ class ReflectionTest inherits QUnit::Test {
         assertFalse(c.isAbstract());
         assertEq("Mutex", c.getName());
         assertEq("Qore::Thread::Mutex", c.getPathName());
-        assertGt(0, c.getId());
+        assertTrue(c.getId() > 0);
         assertEq(20, c.getHash().size());
         assertFalse(c.hasMemberGate());
         assertFalse(c.hasMethodGate());

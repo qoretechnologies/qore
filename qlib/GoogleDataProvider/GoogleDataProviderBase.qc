@@ -628,8 +628,8 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         if (for_input && info.location) {
             rv.setAttributes(info{"location",});
         }
-        if (info.enum) {
-            rv.setAllowedValues(info.enum);
+        if (info{"enum"}) {
+            rv.setAllowedValues(info{"enum"});
         }
         rv.updateFieldType(GoogleDataProviderBase::makeTypeFromSchemaInfo(rv, info, unresolved, for_input));
         return rv;

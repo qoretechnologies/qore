@@ -22,10 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 %enable-debug
 
 %requires Logger
@@ -55,17 +52,30 @@ module HttpServerAsyncIo {
 
     @section httpserverasyncio_components Components
 
-    - @ref HttpServerAsyncIo::HttpAcceptPollOperation "HttpAcceptPollOperation" - Composite operation for accept + SSL + header
+    - @ref HttpServerAsyncIo::HttpAcceptPollOperation "HttpAcceptPollOperation" - Composite operation for accept + SSL + ALPN negotiation
+    - @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" - HTTP/2 server connection handling
     - @ref HttpServerAsyncIo::HttpIdlePollOperation "HttpIdlePollOperation" - Monitors idle keep-alive connections
-    - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support
-    - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O
+    - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
+    - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
+
+    @subsection httpserverasyncio_abstract Protocol-Agnostic Abstractions
+
+    These abstract classes provide a unified interface for SSE and WebSocket connections
+    regardless of the underlying HTTP protocol version (HTTP/1.x or HTTP/2):
+
+    - @ref HttpServerAsyncIo::AbstractSseConnection "AbstractSseConnection" - Protocol-agnostic SSE interface
+    - @ref HttpServerAsyncIo::AbstractWebSocketConnection "AbstractWebSocketConnection" - Protocol-agnostic WebSocket interface
+    - @ref HttpServerAsyncIo::Http1SseConnection "Http1SseConnection" - HTTP/1.x SSE wrapper
+    - @ref HttpServerAsyncIo::Http1WebSocketConnection "Http1WebSocketConnection" - HTTP/1.x WebSocket wrapper
 
     @section httpserverasyncio_relnotes Release Notes
 
     @subsection httpserverasyncio_v1_0 Version 1.0
-    - Initial release
+    - Initial release with HTTP/1.x, HTTP/2, SSE, and WebSocket support
+    - Protocol-agnostic abstractions for SSE and WebSocket
+    - Infrastructure for WebSocket over HTTP/2 (RFC 8441) and SSE over HTTP/2
 */
 
 #! Main namespace for HttpServerAsyncIo module
@@ -103,17 +113,59 @@ public namespace HttpServerAsyncIo {
 
         #! Keep-alive timeout
         *timeout ttl;
+
+        #! HTTP response code (for HTTP/2 streaming responses like WebSocket CONNECT)
+        *int code;
+
+        #! Response headers (for HTTP/2 streaming responses)
+        *hash<auto> hdr;
     }
 
     #! Connection info passed to callbacks
+    /** For HTTP/2 connections, \c header_info contains:
+        - \c http2: True for HTTP/2 requests
+        - \c stream_id: The HTTP/2 stream ID (needed for sending response)
+        - \c push_resource: Callback for HTTP/2 Server Push (PUSH_PROMISE); signature:
+          \c int sub(string path, *hash<auto> headers) returns the promised stream ID
+        - \c h2op: The Http2PollOperation for sending pushed responses
+
+        For HTTP/2, the \c hdr hash also includes:
+        - \c method: The HTTP method
+        - \c path: The request path
+        - \c :authority: The :authority pseudo-header value
+        - \c :scheme: The :scheme pseudo-header value
+
+        @par Example: Using HTTP/2 Server Push
+        @code{.py}
+# In your request handler:
+hash<HttpResponseInfo> handleRequest(hash<HttpConnectionInfo> conn_info) {
+    if (conn_info.header_info.http2) {
+        code push_resource = conn_info.header_info.push_resource;
+        if (push_resource) {
+            # Push CSS file to client
+            int css_stream = push_resource("/style.css", {"content-type": "text/css"});
+            if (css_stream > 0) {
+                # Send the pushed content
+                conn_info.header_info.h2op.startSendPushedResponse(css_stream, 200,
+                    {"content-type": "text/css"}, css_content);
+            }
+        }
+    }
+    # Return main response
+    return makeResponse(200, html_content);
+}
+        @endcode
+
+        @since HttpServerAsyncIo 1.1
+    */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection
         Socket sock;
 
-        #! Parsed HTTP headers
+        #! Parsed HTTP headers (for HTTP/2, includes method, path, :authority, :scheme)
         hash<auto> hdr;
 
-        #! Header parsing info
+        #! Header parsing info (for HTTP/2, includes http2=True and stream_id)
         hash<auto> header_info;
 
         #! The listener that accepted this connection

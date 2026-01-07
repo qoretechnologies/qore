@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
@@ -16,6 +13,7 @@
 public class HttpServerUtilTest inherits QUnit::Test {
     constructor() : Test("HttpServerUtilTest", "1.0") {
         addTestCase("funcs", \funcTests());
+        addTestCase("hashdecl tests", \hashdeclTests());
 
         # Return for compatibility with test harness that checks the process's return value
         set_return_value(main());
@@ -74,5 +72,55 @@ public class HttpServerUtilTest inherits QUnit::Test {
         assertEq("\"passwd\" = 1", http_mask_data("\"passwd\" = 1"));
         assertEq("passenger = 1", http_mask_data("passenger = 1"));
         assertEq("\"passenger\" = 1", http_mask_data("\"passenger\" = 1"));
+    }
+
+    hashdeclTests() {
+        # Test HttpResponseInfo hashdecl with streaming keys
+        {
+            hash<HttpResponseInfo> resp = <HttpResponseInfo>{
+                "code": 200,
+                "streaming": True,
+                "stream_type": "sse",
+            };
+            assertEq(200, resp.code, "HttpResponseInfo code");
+            assertTrue(resp.streaming, "HttpResponseInfo streaming");
+            assertEq("sse", resp.stream_type, "HttpResponseInfo stream_type");
+        }
+
+        # Test HttpHandlerResponseInfo hashdecl with streaming keys
+        {
+            hash<HttpHandlerResponseInfo> resp = <HttpHandlerResponseInfo>{
+                "code": 200,
+                "streaming": True,
+                "stream_type": "websocket",
+            };
+            assertEq(200, resp.code, "HttpHandlerResponseInfo code");
+            assertTrue(resp.streaming, "HttpHandlerResponseInfo streaming");
+            assertEq("websocket", resp.stream_type, "HttpHandlerResponseInfo stream_type");
+        }
+
+        # Test cast from hash with streaming keys to HttpHandlerResponseInfo
+        {
+            hash<auto> src = {
+                "code": 200,
+                "body": "test",
+                "streaming": True,
+                "stream_type": "sse",
+            };
+            hash<HttpHandlerResponseInfo> resp = cast<hash<HttpHandlerResponseInfo>>(src);
+            assertEq(200, resp.code, "cast code");
+            assertEq("test", resp.body, "cast body");
+            assertTrue(resp.streaming, "cast streaming");
+            assertEq("sse", resp.stream_type, "cast stream_type");
+        }
+
+        # Test default values
+        {
+            hash<HttpHandlerResponseInfo> resp = <HttpHandlerResponseInfo>{
+                "code": 200,
+            };
+            assertFalse(resp.streaming, "default streaming should be False");
+            assertNothing(resp.stream_type, "default stream_type should be NOTHING");
+        }
     }
 }

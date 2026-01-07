@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,8 @@
 #include "QC_Type.h"
 #include "QC_TypedHash.h"
 #include "QC_AbstractReflectionFunction.h"
+
+#include <memory>
 
 QoreObject* get_type_object(const QoreTypeInfo* t) {
     return new QoreObject(QC_TYPE, getProgram(), new QoreType(t));
@@ -767,6 +769,110 @@ bool b = type.isTypedHash();
 */
 bool Type::isTypedHash() [flags=CONSTANT] {
     return typeInfoGetTypedHash(t->typeInfo) ? true : false;
+}
+
+//! Returns @ref Qore::True "True" if the type is a typed code type (code<ReturnType(ParamTypes...)>)
+/** @par Example:
+    @code{.py}
+bool b = type.isTypedCode();
+    @endcode
+
+    @return @ref Qore::True "True" if the type is a typed code type, @ref Qore::False "False" if not
+
+    @since %Qore 2.1
+*/
+bool Type::isTypedCode() [flags=CONSTANT] {
+    return qore_type_is_typed_code(t->typeInfo);
+}
+
+//! Returns the return type for typed code types, or @ref nothing if not a typed code type
+/** @par Example:
+    @code{.py}
+*Type returnType = type.getCodeReturnType();
+    @endcode
+
+    @return the return type for typed code types, or @ref nothing if not a typed code type
+
+    @since %Qore 2.1
+*/
+*Type Type::getCodeReturnType() [flags=CONSTANT] {
+    const QoreTypeInfo* rt = qore_type_get_code_return_type(t->typeInfo);
+    if (!rt) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_TYPE, getProgram(), new QoreType(rt));
+}
+
+//! Returns a list of parameter types for typed code types, or @ref nothing if not a typed code type
+/** @par Example:
+    @code{.py}
+*list<Type> params = type.getCodeParamTypes();
+    @endcode
+
+    @return a list of parameter types for typed code types, or @ref nothing if not a typed code type
+
+    @since %Qore 2.1
+*/
+*list<Type> Type::getCodeParamTypes() [flags=CONSTANT] {
+    const type_vec_t* params = qore_type_get_code_param_types(t->typeInfo);
+    if (!params) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    for (const QoreTypeInfo* ti : *params) {
+        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns @ref Qore::True "True" if the typed code type accepts variable arguments
+/** @par Example:
+    @code{.py}
+bool b = type.codeHasVarargs();
+    @endcode
+
+    @return @ref Qore::True "True" if the typed code type accepts variable arguments, @ref Qore::False "False" if not or if not a typed code type
+
+    @since %Qore 2.1
+*/
+bool Type::codeHasVarargs() [flags=CONSTANT] {
+    return qore_type_code_has_varargs(t->typeInfo);
+}
+
+//! Returns @ref Qore::True "True" if the type is a union type (union<T1, T2, ...>)
+/** @par Example:
+    @code{.py}
+bool b = type.isUnion();
+    @endcode
+
+    @return @ref Qore::True "True" if the type is a union type, @ref Qore::False "False" if not
+
+    @since %Qore 2.1
+*/
+bool Type::isUnion() [flags=CONSTANT] {
+    return qore_type_is_union(t->typeInfo);
+}
+
+//! Returns a list of member types for union types, or @ref nothing if not a union type
+/** @par Example:
+    @code{.py}
+*list<Type> members = type.getUnionMemberTypes();
+    @endcode
+
+    @return a list of member types for union types, or @ref nothing if not a union type
+
+    @since %Qore 2.1
+*/
+*list<Type> Type::getUnionMemberTypes() [flags=CONSTANT] {
+    std::unique_ptr<type_vec_t> members(qore_type_get_union_member_types(t->typeInfo));
+    if (!members) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    for (const QoreTypeInfo* ti : *members) {
+        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns @ref Qore::True "True" if the type is not a wildcard type; i.e. has type restrictions

@@ -25,18 +25,23 @@
 # minimum required Qore version
 %requires qore >= 2.0
 # assume local scope for variables, do not use "$" signs
-%new-style
+%modern
 # require type definitions everywhere
-%require-types
 # strict argument handling
-%strict-args
 # enable all warnings
-%enable-all-warnings
 
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
-%requires json
+
+%try-module json
+%define NoJson
+%endtry
+
+%ifdef NoJson
+# Stub function when json module is not available
+auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+%endif
 
 module ElasticSearchDataProvider {
     version = "1.2";

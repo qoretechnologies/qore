@@ -189,7 +189,7 @@ protected:
 
 public:
     const QoreTypeInfo* typeInfo;
-    QoreValue args;
+    QoreValue args{};
 
     DLLLOCAL NewComplexListNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a)
             : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
