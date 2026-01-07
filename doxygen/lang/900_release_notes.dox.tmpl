@@ -130,6 +130,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
+    - <b>Parameterized date type restrictions</b>
+      - new @ref date_type "date<absolute>" and @ref date_type "date<relative>" types restrict date values to absolute
+        or relative date/time values
+      - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
     - @ref AsyncApi "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings

@@ -72,6 +72,23 @@ typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
 static q_type_map_t null_to_nothing = [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); };
 
+static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, bool require_relative,
+        const char* type_name) {
+    if (!xsink) {
+        return;
+    }
+
+    if (n.getType() != NT_DATE) {
+        return;
+    }
+
+    bool is_relative = n.get<const DateTimeNode>()->isRelative();
+    if (is_relative != require_relative) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "expected %s date/time value for type '%s'",
+            require_relative ? "relative" : "absolute", type_name);
+    }
+}
+
 // returns type info for base types
 DLLLOCAL const QoreTypeInfo* getTypeInfoForType(qore_type_t t);
 // returns type info information for parse types (values)
@@ -2770,6 +2787,94 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+};
+
+class QoreAbsoluteDateTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreAbsoluteDateTypeInfo() : QoreTypeInfo("date<absolute>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, false, "date<absolute>"); }, true},
+        }, q_return_vec_t {{NT_DATE, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return ZeroDate->refSelf();
+    }
+};
+
+class QoreAbsoluteDateOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreAbsoluteDateOrNothingTypeInfo() : QoreTypeInfo("*date<absolute>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, false, "date<absolute>"); }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_DATE}, {NT_NOTHING}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+};
+
+class QoreRelativeDateTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreRelativeDateTypeInfo() : QoreTypeInfo("date<relative>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, true, "date<relative>"); }, true},
+        }, q_return_vec_t {{NT_DATE, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return new DateTimeNode(true);
+    }
+};
+
+class QoreRelativeDateOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreRelativeDateOrNothingTypeInfo() : QoreTypeInfo("*date<relative>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, true, "date<relative>"); }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_DATE}, {NT_NOTHING}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
