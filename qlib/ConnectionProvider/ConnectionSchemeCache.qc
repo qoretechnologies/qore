@@ -132,6 +132,8 @@ public class ConnectionSchemeCache {
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            "linear": "LinearRestClient",
+
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",

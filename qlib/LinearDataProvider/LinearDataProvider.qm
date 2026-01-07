@@ -1,0 +1,314 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore LinearDataProvider module definition
+
+/*  LinearDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) LinearRestClient
+
+module LinearDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Linear issue tracking services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new LinearDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": LinearDataProvider::AppName,
+            "display_name": "Linear",
+            "short_desc": "Linear issue tracking and project management",
+            "desc": "Linear is a modern issue tracking and project management tool for software teams. "
+                "This integration enables creating, reading, updating, and archiving issues, projects, "
+                "cycles, labels, and comments through Linear's GraphQL API.",
+            "scheme": "linear",
+            "logo": LinearLogo,
+            "logo_file_name": "linear-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # Register actions for issues
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues",
+            "action": "create-issue",
+            "display_name": "Create Issue",
+            "short_desc": "Create a new issue in Linear",
+            "desc": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+            "action_code": DPAT_CREATE,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues",
+            "action": "search-issues",
+            "display_name": "Search Issues",
+            "short_desc": "Search for issues in Linear",
+            "desc": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+            "action_code": DPAT_FIND,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues/{issue_id}",
+            "action": "get-issue",
+            "display_name": "Get Issue",
+            "short_desc": "Get a specific issue from Linear",
+            "desc": "Retrieve a specific issue by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "path_vars": {
+                "issue_id": <DataProviderPathVarInfo>{
+                    "display_name": "Issue ID",
+                    "short_desc": "The Linear issue ID",
+                    "desc": "The unique identifier of the Linear issue",
+                    "example_value": "abc123",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues/{issue_id}",
+            "action": "update-issue",
+            "display_name": "Update Issue",
+            "short_desc": "Update an existing Linear issue",
+            "desc": "Update the properties of an existing Linear issue",
+            "action_code": DPAT_UPDATE,
+            "path_vars": {
+                "issue_id": <DataProviderPathVarInfo>{
+                    "display_name": "Issue ID",
+                    "short_desc": "The Linear issue ID",
+                    "desc": "The unique identifier of the Linear issue to update",
+                    "example_value": "abc123",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues/{issue_id}",
+            "action": "archive-issue",
+            "display_name": "Archive Issue",
+            "short_desc": "Archive a Linear issue",
+            "desc": "Archive (soft delete) a Linear issue",
+            "action_code": DPAT_DELETE,
+            "path_vars": {
+                "issue_id": <DataProviderPathVarInfo>{
+                    "display_name": "Issue ID",
+                    "short_desc": "The Linear issue ID",
+                    "desc": "The unique identifier of the Linear issue to archive",
+                    "example_value": "abc123",
+                },
+            },
+        });
+
+        # Register actions for comments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/issues/{issue_id}/comments",
+            "action": "create-comment",
+            "display_name": "Create Comment",
+            "short_desc": "Add a comment to a Linear issue",
+            "desc": "Create a new comment on an existing Linear issue",
+            "action_code": DPAT_CREATE,
+            "path_vars": {
+                "issue_id": <DataProviderPathVarInfo>{
+                    "display_name": "Issue ID",
+                    "short_desc": "The Linear issue ID",
+                    "desc": "The issue to add a comment to",
+                    "example_value": "abc123",
+                },
+            },
+        });
+
+        # Register actions for projects
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/projects",
+            "action": "create-project",
+            "display_name": "Create Project",
+            "short_desc": "Create a new project in Linear",
+            "desc": "Create a new project for organizing related issues",
+            "action_code": DPAT_CREATE,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/projects",
+            "action": "search-projects",
+            "display_name": "Search Projects",
+            "short_desc": "Search for projects in Linear",
+            "desc": "Search for projects with optional state filter",
+            "action_code": DPAT_FIND,
+        });
+
+        # Register actions for cycles
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/cycles",
+            "action": "create-cycle",
+            "display_name": "Create Cycle",
+            "short_desc": "Create a new cycle (sprint) in Linear",
+            "desc": "Create a new cycle for time-boxed work",
+            "action_code": DPAT_CREATE,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/cycles",
+            "action": "search-cycles",
+            "display_name": "Search Cycles",
+            "short_desc": "Search for cycles in Linear",
+            "desc": "Search for cycles with optional team filter",
+            "action_code": DPAT_FIND,
+        });
+
+        # Register actions for labels
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/labels",
+            "action": "create-label",
+            "display_name": "Create Label",
+            "short_desc": "Create a new label in Linear",
+            "desc": "Create a new label for categorizing issues",
+            "action_code": DPAT_CREATE,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/labels",
+            "action": "search-labels",
+            "display_name": "Search Labels",
+            "short_desc": "Search for labels in Linear",
+            "desc": "Search for labels with optional team filter",
+            "action_code": DPAT_FIND,
+        });
+
+        # Register actions for teams (read-only)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/teams",
+            "action": "search-teams",
+            "display_name": "Search Teams",
+            "short_desc": "List teams in Linear",
+            "desc": "List all teams accessible to the authenticated user",
+            "action_code": DPAT_FIND,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/teams/{team_id}",
+            "action": "get-team",
+            "display_name": "Get Team",
+            "short_desc": "Get a specific team from Linear",
+            "desc": "Retrieve a specific team by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "path_vars": {
+                "team_id": <DataProviderPathVarInfo>{
+                    "display_name": "Team ID",
+                    "short_desc": "The Linear team ID",
+                    "desc": "The unique identifier of the Linear team",
+                    "example_value": "abc123",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage LinearDataProvider Module
+
+    @tableofcontents
+
+    @section lineardataproviderintro LinearDataProvider Introduction
+
+    The %LinearDataProvider module provides a data provider API for Linear issue tracking services.
+
+    Linear is a modern issue tracking and project management tool designed for software teams.
+    This module enables integration with Linear through its GraphQL API, supporting operations on:
+    - Issues (create, read, update, archive, search)
+    - Teams (read, search)
+    - Projects (create, read, update, archive, search)
+    - Cycles/Sprints (create, read, update, archive, search)
+    - Labels (create, read, update, archive, search)
+    - Comments (create, read, update, delete)
+
+    To use this module, use \c "%requires LinearDataProvider" in your code.
+
+    @section lineardataproviderauth Authentication
+
+    Linear supports two authentication methods:
+    - **API Key**: Personal API keys can be created in Linear settings. Use the \c token option.
+    - **OAuth 2.0**: For third-party applications. Use oauth2_client_id and oauth2_client_secret.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires LinearDataProvider
+
+LinearDataProvider provider({"token": ENV.LINEAR_TOKEN});
+
+# List all teams
+AbstractDataProviderRecordIterator i = provider.getChildProvider("teams").searchRecords();
+while (i.next()) {
+    printf("Team: %s (%s)\n", i.getValue().name, i.getValue().key);
+}
+
+# Create an issue
+hash<auto> issue = provider.getChildProvider("issues").createRecord({
+    "teamId": "team-id-here",
+    "title": "New issue from Qore",
+    "description": "Created via LinearDataProvider",
+    "priority": 2,
+});
+printf("Created issue: %s\n", issue.identifier);
+    @endcode
+
+    @section lineardataproviderrelnotes Release Notes
+
+    @subsection lineardataproviderv1_0 LinearDataProvider v1.0
+    - Initial release of the %LinearDataProvider module
+*/
+
+#! Contains all public definitions in the LinearDataProvider module
+public namespace LinearDataProvider {
+    # AppName is defined in LinearDataProviderDefs.qc
+}
