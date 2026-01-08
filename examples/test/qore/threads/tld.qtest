@@ -33,9 +33,11 @@ public class TldTest inherits QUnit::Test {
     test() {
         Counter cnt(1);
 
-        background sub () {
+        code dec = sub () {
             cnt.dec();
-        }();
+        };
+        background dec();
+        cnt.waitForZero();
         assertTrue(True);
     }
 }

@@ -1485,6 +1485,10 @@ union<int, string> sub getValue(bool useInt) {
 }
     @endcode
 
+    @par Member Order
+    Union member order is preserved. When a value matches multiple member types, the first matching
+    member in the source declaration is chosen.
+
     @par Or-Nothing Unions
     The or-nothing modifier allows the union to also accept NOTHING:
     @code{.py}
