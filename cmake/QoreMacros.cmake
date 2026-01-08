@@ -194,7 +194,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     if(DEFINED QORE_PRE_INCLUDES)
        include_directories( ${QORE_PRE_INCLUDES} )
     endif()
-    include_directories( ${QORE_INCLUDE_DIR} )
+    include_directories( ${QORE_INCLUDE_DIRS} )
     include_directories( ${CMAKE_BINARY_DIR} )
 
     # compiler stuff
