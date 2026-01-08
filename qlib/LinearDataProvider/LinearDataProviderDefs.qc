@@ -466,6 +466,63 @@ query Viewer {
 }
 ";
 
+#! GraphQL query for listing users with pagination (for reference data)
+public const ListUsersQuery = "
+query ListUsers($first: Int, $after: String) {
+    users(first: $first, after: $after) {
+        pageInfo {
+            hasNextPage
+            endCursor
+        }
+        nodes {
+            id
+            name
+            email
+            displayName
+            active
+        }
+    }
+}
+";
+
+#! GraphQL query for listing workflow states with pagination (for reference data)
+public const ListWorkflowStatesQuery = "
+query ListWorkflowStates($first: Int, $after: String, $filter: WorkflowStateFilter) {
+    workflowStates(first: $first, after: $after, filter: $filter) {
+        pageInfo {
+            hasNextPage
+            endCursor
+        }
+        nodes {
+            id
+            name
+            type
+            team {
+                id
+                name
+            }
+        }
+    }
+}
+";
+
+#! GraphQL query for listing issues for reference data (lightweight)
+public const ListIssuesRefQuery = "
+query ListIssuesRef($first: Int, $after: String, $filter: IssueFilter) {
+    issues(first: $first, after: $after, filter: $filter) {
+        pageInfo {
+            hasNextPage
+            endCursor
+        }
+        nodes {
+            id
+            identifier
+            title
+        }
+    }
+}
+";
+
 #! Linear logo in SVG format
 public const LinearLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <svg width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">

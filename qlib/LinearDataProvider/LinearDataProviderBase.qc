@@ -168,6 +168,177 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
         }
         return rv;
     }
+
+    #! Returns information on supported reference data
+    /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
+        @ref getReferenceData()
+    */
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "teams": True,
+            "users": True,
+            "projects": True,
+            "cycles": True,
+            "labels": True,
+            "states": True,
+            "issues": True,
+        };
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for this data
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "teams": return getReferenceTeams();
+            case "users": return getReferenceUsers();
+            case "projects": return getReferenceProjects();
+            case "cycles": return getReferenceCycles(action_opts.teamId);
+            case "labels": return getReferenceLabels(action_opts.teamId);
+            case "states": return getReferenceStates(action_opts.teamId);
+            case "issues": return getReferenceIssues(action_opts.teamId);
+        }
+    }
+
+    #! Returns available teams
+    private *list<hash<AllowedValueInfo>> getReferenceTeams() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> data = doGraphQL(ListTeamsQuery, {"first": 100});
+        foreach hash<auto> team in (data.teams.nodes) {
+            string desc = team.description ?? sprintf("Team %s (%s)", team.name, team.key);
+            rv += <AllowedValueInfo>{
+                "display_name": sprintf("%s (%s)", team.name, team.key),
+                "short_desc": desc,
+                "desc": desc,
+                "value": team.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available users
+    private *list<hash<AllowedValueInfo>> getReferenceUsers() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> data = doGraphQL(ListUsersQuery, {"first": 100});
+        foreach hash<auto> user in (data.users.nodes) {
+            if (!user.active) {
+                continue;
+            }
+            string display = user.displayName ?? user.name;
+            string desc = user.email ?? display;
+            rv += <AllowedValueInfo>{
+                "display_name": display,
+                "short_desc": desc,
+                "desc": desc,
+                "value": user.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available projects
+    private *list<hash<AllowedValueInfo>> getReferenceProjects() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> data = doGraphQL(ListProjectsQuery, {"first": 100});
+        foreach hash<auto> project in (data.projects.nodes) {
+            string desc = project.description ?? project.name;
+            rv += <AllowedValueInfo>{
+                "display_name": project.name,
+                "short_desc": desc,
+                "desc": desc,
+                "value": project.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available cycles for a team
+    private *list<hash<AllowedValueInfo>> getReferenceCycles(*string teamId) {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> vars;
+        vars.first = 100;
+        if (teamId) {
+            vars.filter = {"team": {"id": {"eq": teamId}}};
+        }
+        hash<auto> data = doGraphQL(ListCyclesQuery, vars);
+        foreach hash<auto> cycle in (data.cycles.nodes) {
+            string display = cycle.name ?? sprintf("Cycle %d", cycle.number);
+            string desc = sprintf("%s (Team: %s)", display, cycle.team.name);
+            rv += <AllowedValueInfo>{
+                "display_name": display,
+                "short_desc": desc,
+                "desc": desc,
+                "value": cycle.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available labels for a team
+    private *list<hash<AllowedValueInfo>> getReferenceLabels(*string teamId) {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> vars;
+        vars.first = 100;
+        if (teamId) {
+            vars.filter = {"team": {"id": {"eq": teamId}}};
+        }
+        hash<auto> data = doGraphQL(ListLabelsQuery, vars);
+        foreach hash<auto> label in (data.issueLabels.nodes) {
+            string desc = label.description ?? label.name;
+            rv += <AllowedValueInfo>{
+                "display_name": label.name,
+                "short_desc": desc,
+                "desc": desc,
+                "value": label.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available workflow states for a team
+    private *list<hash<AllowedValueInfo>> getReferenceStates(*string teamId) {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> vars;
+        vars.first = 100;
+        if (teamId) {
+            vars.filter = {"team": {"id": {"eq": teamId}}};
+        }
+        hash<auto> data = doGraphQL(ListWorkflowStatesQuery, vars);
+        foreach hash<auto> state in (data.workflowStates.nodes) {
+            string desc = sprintf("%s (%s)", state.name, state.type);
+            rv += <AllowedValueInfo>{
+                "display_name": state.name,
+                "short_desc": desc,
+                "desc": desc,
+                "value": state.id,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available issues for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceIssues(*string teamId) {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> vars;
+        vars.first = 100;
+        if (teamId) {
+            vars.filter = {"team": {"id": {"eq": teamId}}};
+        }
+        hash<auto> data = doGraphQL(ListIssuesRefQuery, vars);
+        foreach hash<auto> issue in (data.issues.nodes) {
+            string desc = issue.title;
+            rv += <AllowedValueInfo>{
+                "display_name": sprintf("%s: %s", issue.identifier, issue.title),
+                "short_desc": desc,
+                "desc": desc,
+                "value": issue.id,
+            };
+        }
+        return rv;
+    }
 }
 
 } # namespace LinearDataProvider
