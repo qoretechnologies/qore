@@ -65,6 +65,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require LINEAR_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
@@ -377,6 +378,143 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Test connection URL handling
         string url = conn.getUrl();
         assertTrue(url.val());
+    }
+
+    #! Action catalog tests - verify action registrations have proper options
+    actionCatalogTests() {
+        # Verify Linear app is registered
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Linear");
+        assertTrue(exists app, "Linear app should be registered");
+        assertEq("Linear", app.name);
+        assertEq("Linear", app.display_name);
+
+        # Get all actions for the Linear app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Linear");
+        assertTrue(actions.size() > 0, "Linear app should have actions");
+
+        # Verify create-issue action has proper options with ref_data
+        *hash<DataProviderActionInfo> createIssue = DataProviderActionCatalog::getAppAction("Linear", "create-issue");
+        assertTrue(exists createIssue, "create-issue action should exist");
+        assertEq("create-issue", createIssue.action);
+        assertEq(DPAT_CREATE, createIssue.action_code);
+        assertTrue(createIssue.options.hasKey("teamId"), "create-issue should have teamId option");
+        assertTrue(createIssue.options.hasKey("title"), "create-issue should have title option");
+        assertTrue(createIssue.options.hasKey("assigneeId"), "create-issue should have assigneeId option");
+        assertTrue(createIssue.options.hasKey("priority"), "create-issue should have priority option");
+        assertTrue(createIssue.options.hasKey("labelIds"), "create-issue should have labelIds option");
+
+        # Verify ref_data is set for dynamic dropdown fields
+        assertEq("teams", createIssue.options.teamId.ref_data, "teamId should have ref_data=teams");
+        assertEq("users", createIssue.options.assigneeId.ref_data, "assigneeId should have ref_data=users");
+        assertEq("projects", createIssue.options.projectId.ref_data, "projectId should have ref_data=projects");
+        assertEq("cycles", createIssue.options.cycleId.ref_data, "cycleId should have ref_data=cycles");
+        assertEq("states", createIssue.options.stateId.ref_data, "stateId should have ref_data=states");
+        assertEq("labels", createIssue.options.labelIds.element_ref_data, "labelIds should have element_ref_data=labels");
+
+        # Verify priority has static allowed_values
+        assertTrue(createIssue.options.priority.allowed_values.size() > 0, "priority should have allowed_values");
+
+        # Verify get-issue action has id option with ref_data (uses "id" not "issueId")
+        *hash<DataProviderActionInfo> getIssue = DataProviderActionCatalog::getAppAction("Linear", "get-issue");
+        assertTrue(exists getIssue, "get-issue action should exist");
+        assertEq(DPAT_FIND_SINGLE, getIssue.action_code);
+        assertTrue(getIssue.options.hasKey("id"), "get-issue should have id option");
+        assertEq("issues", getIssue.options.id.ref_data, "get-issue id should have ref_data=issues");
+        assertTrue(getIssue.options.id.required, "get-issue id should be required");
+
+        # Verify update-issue action has id and update options
+        *hash<DataProviderActionInfo> updateIssue = DataProviderActionCatalog::getAppAction("Linear", "update-issue");
+        assertTrue(exists updateIssue, "update-issue action should exist");
+        assertEq(DPAT_UPDATE, updateIssue.action_code);
+        assertTrue(updateIssue.options.hasKey("id"), "update-issue should have id option");
+        assertEq("issues", updateIssue.options.id.ref_data, "update-issue id should have ref_data=issues");
+        assertTrue(updateIssue.options.hasKey("title"), "update-issue should have title option");
+        assertTrue(updateIssue.options.hasKey("assigneeId"), "update-issue should have assigneeId option");
+
+        # Verify archive-issue action
+        *hash<DataProviderActionInfo> archiveIssue = DataProviderActionCatalog::getAppAction("Linear", "archive-issue");
+        assertTrue(exists archiveIssue, "archive-issue action should exist");
+        assertEq(DPAT_DELETE, archiveIssue.action_code);
+        assertTrue(archiveIssue.options.hasKey("id"), "archive-issue should have id option");
+        assertEq("issues", archiveIssue.options.id.ref_data, "archive-issue id should have ref_data=issues");
+
+        # Verify search-issues action (FIND type)
+        *hash<DataProviderActionInfo> searchIssues = DataProviderActionCatalog::getAppAction("Linear", "search-issues");
+        assertTrue(exists searchIssues, "search-issues action should exist");
+        assertEq(DPAT_FIND, searchIssues.action_code);
+        assertTrue(searchIssues.options.hasKey("teamId"), "search-issues should have teamId option");
+        assertEq("teams", searchIssues.options.teamId.ref_data, "search-issues teamId should have ref_data=teams");
+
+        # Verify create-comment action has issueId option
+        *hash<DataProviderActionInfo> createComment = DataProviderActionCatalog::getAppAction("Linear", "create-comment");
+        assertTrue(exists createComment, "create-comment action should exist");
+        assertEq(DPAT_CREATE, createComment.action_code);
+        assertTrue(createComment.options.hasKey("issueId"), "create-comment should have issueId option");
+        assertEq("issues", createComment.options.issueId.ref_data, "create-comment issueId should have ref_data=issues");
+        assertTrue(createComment.options.hasKey("body"), "create-comment should have body option");
+
+        # Verify get-team action has id option (uses "id" not "teamId")
+        *hash<DataProviderActionInfo> getTeam = DataProviderActionCatalog::getAppAction("Linear", "get-team");
+        assertTrue(exists getTeam, "get-team action should exist");
+        assertEq(DPAT_FIND_SINGLE, getTeam.action_code);
+        assertTrue(getTeam.options.hasKey("id"), "get-team should have id option");
+        assertEq("teams", getTeam.options.id.ref_data, "get-team id should have ref_data=teams");
+
+        # Verify search-teams action exists
+        *hash<DataProviderActionInfo> searchTeams = DataProviderActionCatalog::getAppAction("Linear", "search-teams");
+        assertTrue(exists searchTeams, "search-teams action should exist");
+        assertEq(DPAT_FIND, searchTeams.action_code);
+
+        # Verify project actions
+        *hash<DataProviderActionInfo> createProject = DataProviderActionCatalog::getAppAction("Linear", "create-project");
+        assertTrue(exists createProject, "create-project action should exist");
+        assertEq(DPAT_CREATE, createProject.action_code);
+        assertTrue(createProject.options.hasKey("name"), "create-project should have name option");
+        assertTrue(createProject.options.hasKey("teamIds"), "create-project should have teamIds option");
+        assertEq("teams", createProject.options.teamIds.element_ref_data, "create-project teamIds should have element_ref_data=teams");
+
+        # Verify cycle actions
+        *hash<DataProviderActionInfo> createCycle = DataProviderActionCatalog::getAppAction("Linear", "create-cycle");
+        assertTrue(exists createCycle, "create-cycle action should exist");
+        assertEq(DPAT_CREATE, createCycle.action_code);
+        assertTrue(createCycle.options.hasKey("teamId"), "create-cycle should have teamId option");
+        assertEq("teams", createCycle.options.teamId.ref_data, "create-cycle teamId should have ref_data=teams");
+        assertTrue(createCycle.options.hasKey("startsAt"), "create-cycle should have startsAt option");
+        assertTrue(createCycle.options.hasKey("endsAt"), "create-cycle should have endsAt option");
+
+        # Verify search-cycles action
+        *hash<DataProviderActionInfo> searchCycles = DataProviderActionCatalog::getAppAction("Linear", "search-cycles");
+        assertTrue(exists searchCycles, "search-cycles action should exist");
+        assertEq(DPAT_FIND, searchCycles.action_code);
+        assertTrue(searchCycles.options.hasKey("teamId"), "search-cycles should have teamId option");
+        assertEq("teams", searchCycles.options.teamId.ref_data, "search-cycles teamId should have ref_data=teams");
+
+        # Verify label actions
+        *hash<DataProviderActionInfo> createLabel = DataProviderActionCatalog::getAppAction("Linear", "create-label");
+        assertTrue(exists createLabel, "create-label action should exist");
+        assertEq(DPAT_CREATE, createLabel.action_code);
+        assertTrue(createLabel.options.hasKey("name"), "create-label should have name option");
+        assertTrue(createLabel.options.hasKey("color"), "create-label should have color option");
+        assertTrue(createLabel.options.hasKey("teamId"), "create-label should have teamId option");
+        assertEq("teams", createLabel.options.teamId.ref_data, "create-label teamId should have ref_data=teams");
+
+        # Verify search-labels action
+        *hash<DataProviderActionInfo> searchLabels = DataProviderActionCatalog::getAppAction("Linear", "search-labels");
+        assertTrue(exists searchLabels, "search-labels action should exist");
+        assertEq(DPAT_FIND, searchLabels.action_code);
+        assertTrue(searchLabels.options.hasKey("teamId"), "search-labels should have teamId option");
+        assertEq("teams", searchLabels.options.teamId.ref_data, "search-labels teamId should have ref_data=teams");
+
+        # Verify search-projects action
+        *hash<DataProviderActionInfo> searchProjects = DataProviderActionCatalog::getAppAction("Linear", "search-projects");
+        assertTrue(exists searchProjects, "search-projects action should exist");
+        assertEq(DPAT_FIND, searchProjects.action_code);
+        assertTrue(searchProjects.options.state.allowed_values.size() > 0, "search-projects state should have allowed_values");
+
+        if (m_options.verbose) {
+            printf("Action catalog tests passed - all actions have proper options with ref_data\n");
+            printf("Found %d actions for Linear app\n", actions.size());
+        }
     }
 
     #! Integration tests - require actual Linear credentials
