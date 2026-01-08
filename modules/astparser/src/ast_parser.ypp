@@ -344,6 +344,7 @@ extern std::string* takeNamespaceDocComment();
 %token <string> NUMBER "arbitrary-precision number"
 %token <string> IDENTIFIER "identifier"
 %token <string> HASHDECL_IDENTIFIER_OPENCURLY "typed hash identifier"
+%token HASH_PAREN_OPEN "hash literal open paren"
 %token <string> ANGLE_IDENTIFIER "complex type identifier"
 %token <string> VAR_REF "variable reference"
 %token <string> BACKQUOTE "backquote expression"
@@ -417,6 +418,7 @@ extern std::string* takeNamespaceDocComment();
 %type <expression>     exp
 %type <expression>     exp_c
 %type <expression>     exp_n
+%type <expression>     exp_nl
 %type <astdecl>        gvardecl
 %type <hash>           hash
 %type <hashelem>       hash_element
@@ -434,6 +436,7 @@ extern std::string* takeNamespaceDocComment();
 %type <funcdecl>       inline_methoddef
 %type <membergroup>    internal_member_list
 %type <list>           list
+%type <expression>     list_item list_item_n
 %type <list>           list_n
 %type <expression>     member
 %type <expression>     member2
@@ -474,7 +477,7 @@ extern std::string* takeNamespaceDocComment();
 %type <constdecl>      unscoped_const_decl
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
+%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n exp_nl gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_item list_item_n list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 
@@ -491,6 +494,11 @@ top_level_commands:
         ;
 
 top_level_command:
+        parse_option top_level_command {
+            delete $1;
+            $$ = $2;
+        }
+        |
         sub_def {
             ATTACH_DOC_COMMENT($1);
             $$ = $1;
@@ -541,7 +549,9 @@ top_level_command:
         }
         | TOK_MODULE '{' module_decls '}' { $$ = nullptr; }
         | parse_option {
-            $$ = $1;
+            // Allow directives inside module blocks for doc-only builds.
+            delete $1;
+            $$ = nullptr;
         }
         ;
 
@@ -567,6 +577,10 @@ module_decl:
         IDENTIFIER '=' exp ';' {
             free($1);
             delete $3;
+        }
+        | parse_option {
+            // Ignore parse directives inside module declarations.
+            delete $1;
         }
         ;
 
@@ -827,6 +841,10 @@ namespace_decl:
         | gvardecl ';' { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | top_namespace_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | outofline_methoddef { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | parse_option {
+            delete $1;
+            $$ = nullptr;
+        }
         ;
 
 unscoped_const_decl:
@@ -925,7 +943,17 @@ optname:
         ;
 
 statement:
+        parse_option statement {
+            delete $1;
+            $$ = $2;
+        }
+        |
         ';' {
+            $$ = new ASTStatementBlock;
+            $$->loc = @1;
+        }
+        | parse_option {
+            delete $1;
             $$ = new ASTStatementBlock;
             $$->loc = @1;
         }
@@ -1095,70 +1123,80 @@ case_block:
             $1->loc.setLast(@2);
             $$ = $1;
         }
+        | parse_option {
+            delete $1;
+            $$ = new ASTSwitchBodyExpression;
+            $$->loc = @1;
+        }
+        | case_block parse_option {
+            delete $2;
+            $1->loc.setLast(@2);
+            $$ = $1;
+        }
         ;
 
 case_code:
-        TOK_CASE LOGICAL_GE exp ':' statements {
+        TOK_CASE LOGICAL_GE exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_GreaterThanOrEquals, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE WS_LOGICAL_GE exp ':' statements {
+        | TOK_CASE WS_LOGICAL_GE exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_GE, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE LOGICAL_GE exp ':' { // nothing
+        | TOK_CASE LOGICAL_GE exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_GreaterThanOrEquals, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE WS_LOGICAL_GE exp ':' { // nothing
+        | TOK_CASE WS_LOGICAL_GE exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_GE, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE LOGICAL_LE exp ':' statements {
+        | TOK_CASE LOGICAL_LE exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_LessThanOrEquals, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE WS_LOGICAL_LE exp ':' statements {
+        | TOK_CASE WS_LOGICAL_LE exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_LE, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE LOGICAL_LE exp ':' { // nothing
+        | TOK_CASE LOGICAL_LE exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_LessThanOrEquals, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE WS_LOGICAL_LE exp ':' { // nothing
+        | TOK_CASE WS_LOGICAL_LE exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_LE, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE LOGICAL_EQ exp ':' statements {
+        | TOK_CASE LOGICAL_EQ exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_Equals, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE WS_LOGICAL_EQ exp ':' statements {
+        | TOK_CASE WS_LOGICAL_EQ exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_EQ, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE LOGICAL_EQ exp ':' { // nothing
+        | TOK_CASE LOGICAL_EQ exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_Equals, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE WS_LOGICAL_EQ exp ':' { // nothing
+        | TOK_CASE WS_LOGICAL_EQ exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_WS_LOGICAL_EQ, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE '<' exp ':' statements {
+        | TOK_CASE '<' exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_LessThan, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE '<' exp ':' { // nothing
+        | TOK_CASE '<' exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_LessThan, $3, 0);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE '>' exp ':' statements {
+        | TOK_CASE '>' exp_n ':' statements {
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_GreaterThan, $3, $5);
             $$->loc.set(@1, @5);
         }
-        | TOK_CASE '>' exp ':' { // nothing
+        | TOK_CASE '>' exp_n ':' { // nothing
             $$ = new ASTCaseExpression(ASTOperatorKind::AOK_GreaterThan, $3, 0);
             $$->loc.set(@1, @4);
         }
@@ -1186,11 +1224,11 @@ case_code:
             $$ = new ASTCaseExpression($2, 0);
             $$->loc.set(@1, @3);
         }
-        | TOK_CASE exp ':' statements {
+        | TOK_CASE exp_n ':' statements {
             $$ = new ASTCaseExpression($2, $4);
             $$->loc.set(@1, @4);
         }
-        | TOK_CASE exp ':' { // nothing
+        | TOK_CASE exp_n ':' { // nothing
             $$ = new ASTCaseExpression($2, 0);
             $$->loc.set(@1, @3);
         }
@@ -1310,11 +1348,33 @@ enum_def:
 enum_members:
         enum_member {
             $$ = new std::vector<ASTEnumMemberDeclaration*>();
-            $$->push_back($1);
+            if ($1)
+                $$->push_back($1);
+        }
+        | parse_option {
+            delete $1;
+            $$ = new std::vector<ASTEnumMemberDeclaration*>();
+        }
+        | parse_option enum_member {
+            delete $1;
+            $$ = new std::vector<ASTEnumMemberDeclaration*>();
+            if ($2)
+                $$->push_back($2);
         }
         | enum_members ',' enum_member {
             $$ = $1;
-            $$->push_back($3);
+            if ($3)
+                $$->push_back($3);
+        }
+        | enum_members ',' parse_option enum_member {
+            delete $3;
+            $$ = $1;
+            if ($4)
+                $$->push_back($4);
+        }
+        | enum_members ',' parse_option {
+            delete $3;
+            $$ = $1;
         }
         | enum_members ',' {
             $$ = $1;  // trailing comma is allowed
@@ -1335,6 +1395,10 @@ enum_member:
             free($1);
             $$ = new ASTEnumMemberDeclaration(std::move(name), $3);
             $$->loc.set(@1, @3);
+        }
+        | parse_option {
+            delete $1;
+            $$ = nullptr;
         }
         ;
 
@@ -1570,11 +1634,13 @@ superclass:
 hashdecl_attributes:
         hashdecl_member {
             $$ = new std::vector<ASTHashMemberDeclaration*>;
-            $$->push_back($1);
+            if ($1)
+                $$->push_back($1);
         }
         | hashdecl_attributes hashdecl_member {
             $$ = $1;
-            $1->push_back($2);
+            if ($2)
+                $1->push_back($2);
         }
         ;
 
@@ -1612,6 +1678,10 @@ hashdecl_attributes:
             $$ = new ASTHashMemberDeclaration(std::move(typeName), std::move(name), $4, true);
             $$->loc.set(@1, @5);
         }
+        | parse_option {
+            delete $1;
+            $$ = nullptr;
+        }
         ;
 
 class_attributes:
@@ -1619,6 +1689,10 @@ class_attributes:
             ATTACH_DOC_COMMENT($1);
             $$ = new std::vector<ASTDeclaration*>;
             $$->push_back($1);
+        }
+        | parse_option {
+            delete $1;
+            $$ = new std::vector<ASTDeclaration*>;
         }
         | internal_member_list {
             $$ = new std::vector<ASTDeclaration*>;
@@ -1641,6 +1715,10 @@ class_attributes:
             ATTACH_DOC_COMMENT($2);
             $$ = $1;
             $1->push_back($2);
+        }
+        | class_attributes parse_option {
+            delete $2;
+            $$ = $1;
         }
         | class_attributes internal_member_list {
             $$ = $1;
@@ -1967,6 +2045,11 @@ member2:
         | unscoped_const_decl {
             $$ = new ASTDeclExpression($1);
         }
+        | parse_option {
+            delete $1;
+            $$ = new ASTNothing;
+            $$->loc = @1;
+        }
         ;
 
 member:
@@ -1989,6 +2072,11 @@ member:
             ASTVariableDeclaration::Ptr vd(new ASTVariableDeclaration(std::move(name)));
             vd->loc.set(@1, @2);
             $$ = new ASTDeclExpression(vd.release());
+        }
+        | parse_option {
+            delete $1;
+            $$ = new ASTNothing;
+            $$->loc = @1;
         }
         ;
 
@@ -2057,6 +2145,11 @@ member_list:
             $$ = new std::vector<ASTExpression*>;
             $$->push_back($1);
         }
+        | parse_option member {
+            delete $1;
+            $$ = new std::vector<ASTExpression*>;
+            $$->push_back($2);
+        }
         | transient_member {
             $$ = new std::vector<ASTExpression*>;
             $$->push_back($1);
@@ -2067,6 +2160,16 @@ member_list:
         }
         | member_list ',' transient_member {
             $1->push_back($3);
+            $$ = $1;
+        }
+        | member_list ',' parse_option member {
+            delete $3;
+            $1->push_back($4);
+            $$ = $1;
+        }
+        | member_list ',' parse_option transient_member {
+            delete $3;
+            $1->push_back($4);
             $$ = $1;
         }
         ;
@@ -2429,71 +2532,195 @@ scoped_sub_def:
         ;
 
 list:
-        exp ',' exp {
+        list_item ',' list_item {
             $$ = new ASTListExpression;
-            $$->elements.push_back($1);
-            $$->elements.push_back($3);
+            if ($1) {
+                $$->elements.push_back($1);
+            }
+            if ($3) {
+                $$->elements.push_back($3);
+            }
             $$->loc.set(@1, @3);
         }
-        | exp ',' {
+        | list_item ',' {
             if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
                 $$ = static_cast<ASTListExpression*>($1);
             }
             else {
                 $$ = new ASTListExpression;
-                $$->elements.push_back($1);
+                if ($1) {
+                    $$->elements.push_back($1);
+                }
                 $$->loc = @1;
             }
+        }
+        | parse_option list {
+            delete $1;
+            $$ = $2;
+            if ($$) {
+                $$->loc.setFirst(@1);
+            }
+        }
+        | list parse_option {
+            delete $2;
+            $$ = $1;
+            if ($$) {
+                $$->loc.setLast(@2);
+            }
+        }
+        | parse_option {
+            delete $1;
+            $$ = new ASTListExpression;
+            $$->loc = @1;
         }
         ;
 
 list_n:
-        exp_n ',' exp {
+        list_item_n ',' list_item_n {
             $$ = new ASTListExpression;
-            $$->elements.push_back($1);
-            $$->elements.push_back($3);
+            if ($1) {
+                $$->elements.push_back($1);
+            }
+            if ($3) {
+                $$->elements.push_back($3);
+            }
             $$->loc.set(@1, @3);
         }
-        | exp_n ',' {
+        | list_item_n ',' {
             if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
                 $$ = static_cast<ASTListExpression*>($1);
             }
             else {
                 $$ = new ASTListExpression;
-                $$->elements.push_back($1);
+                if ($1) {
+                    $$->elements.push_back($1);
+                }
                 $$->loc = @1;
             }
         }
+        | parse_option list_n {
+            delete $1;
+            $$ = $2;
+            if ($$) {
+                $$->loc.setFirst(@1);
+            }
+        }
+        | list_n parse_option {
+            delete $2;
+            $$ = $1;
+            if ($$) {
+                $$->loc.setLast(@2);
+            }
+        }
+        | parse_option {
+            delete $1;
+            $$ = new ASTListExpression;
+            $$->loc = @1;
+        }
+        ;
+
+list_item:
+        exp { $$ = $1; }
+        ;
+
+list_item_n:
+        exp_n { $$ = $1; }
         ;
 
 hash:
         hash_element {
             $$ = new ASTHashExpression;
-            $$->elements.push_back($1);
+            if ($1) {
+                $$->elements.push_back($1);
+            }
             $$->loc = @1;
         }
         | hash ',' hash_element {
             $$ = $1;
-            $$->elements.push_back($3);
-            $$->loc.setLast(@3);
+            if ($3) {
+                $$->elements.push_back($3);
+                $$->loc.setLast(@3);
+            }
         }
         | hash ','
         { /* empty ',' on end of hash */ $$ = $1; }
+        | hash ',' parse_option {
+            delete $3;
+            $$ = $1;
+            $$->loc.setLast(@3);
+        }
+        | hash ',' parse_option hash_element {
+            delete $3;
+            $$ = $1;
+            if ($4) {
+                $$->elements.push_back($4);
+                $$->loc.setLast(@4);
+            }
+        }
+        | parse_option hash {
+            delete $1;
+            $$ = $2;
+            if ($$) {
+                $$->loc.setFirst(@1);
+            }
+        }
+        | hash parse_option {
+            delete $2;
+            $$ = $1;
+            if ($$) {
+                $$->loc.setLast(@2);
+            }
+        }
+        | hash parse_option hash_element {
+            delete $2;
+            $$ = $1;
+            if ($3) {
+                $$->elements.push_back($3);
+                $$->loc.setLast(@3);
+            }
+        }
+        | parse_option hash_element {
+            delete $1;
+            $$ = new ASTHashExpression;
+            if ($2) {
+                $$->elements.push_back($2);
+                $$->loc.setLast(@2);
+            } else {
+                $$->loc = @1;
+            }
+        }
+        | parse_option {
+            delete $1;
+            $$ = new ASTHashExpression;
+            $$->loc = @1;
+        }
         ;
 
 hash_element:
-        exp ':' exp
+        exp_nl ':' exp_nl %prec ':'
         { $$ = new ASTHashElementExpression($1, $3); }
         ;
 
 alt_hash:
-        '{' hash '}' {
+        '{' '}' {
+            $$ = new ASTHashExpression;
+            $$->loc.set(@1, @2);
+        }
+        | '{' hash '}' {
             $$ = $2;
         }
         ;
 
 immediate_typed_hash:
         HASHDECL_IDENTIFIER_OPENCURLY hash '}' {
+            ASTName hashdecl($1, ASTNameKind::ANK_HashdeclHash);
+            hashdecl.loc = @1;
+            free($1);
+
+            $$ = new ASTHashdeclHashExpression(std::move(hashdecl), $2);
+            $$->loc.set(@1, @3);
+        }
+        | HASHDECL_IDENTIFIER_OPENCURLY hash ')' {
             ASTName hashdecl($1, ASTNameKind::ANK_HashdeclHash);
             hashdecl.loc = @1;
             free($1);
@@ -2509,6 +2736,14 @@ immediate_typed_hash:
             $$ = new ASTHashdeclHashExpression(std::move(hashdecl));
             $$->loc.set(@1, @2);
         }
+        | HASHDECL_IDENTIFIER_OPENCURLY ')' {
+            ASTName hashdecl($1, ASTNameKind::ANK_HashdeclHash);
+            hashdecl.loc = @1;
+            free($1);
+
+            $$ = new ASTHashdeclHashExpression(std::move(hashdecl));
+            $$->loc.set(@1, @2);
+        }
         ;
 
 exp_c:
@@ -2516,8 +2751,14 @@ exp_c:
         { $$ = $1; }
         | BINARY
         { $$ = new ASTLiteralExpression(ALEKind::ALEK_Binary, $1); $$->loc = @1; }
-        | '(' hash ')'
-        { $$ = $2; }
+        | '(' hash ')' {
+            $$ = $2;
+            $$->loc.set(@1, @3);
+        }
+        | HASH_PAREN_OPEN hash ')' {
+            $$ = $2;
+            $$->loc.set(@1, @3);
+        }
         | SCOPED_REF {
             ASTName name($1, ASTNameKind::ANK_ScopedRef);
             name.loc = @1;
@@ -2650,15 +2891,15 @@ exp_c:
             $$ = new ASTFindExpression($2, $4, $7);
             $$->loc.set(@1, @8);
         }
-        | TOK_EXISTS exp {
+        | TOK_EXISTS exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Exists);
             $$->loc.setFirst(@1);
         }
-        | TOK_ELEMENTS exp {
+        | TOK_ELEMENTS exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Elements);
             $$->loc.setFirst(@1);
         }
-        | TOK_KEYS exp {
+        | TOK_KEYS exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Keys);
             $$->loc.setFirst(@1);
         }
@@ -2666,7 +2907,7 @@ exp_c:
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Unshift);
             $$->loc.setFirst(@1);
         }
-        | TOK_SHIFT exp {
+        | TOK_SHIFT exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Shift);
             $$->loc.setFirst(@1);
         }
@@ -2674,15 +2915,15 @@ exp_c:
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Push);
             $$->loc.setFirst(@1);
         }
-        | TOK_POP exp {
+        | TOK_POP exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Pop);
             $$->loc.setFirst(@1);
         }
-        | TOK_CHOMP exp {
+        | TOK_CHOMP exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Chomp);
             $$->loc.setFirst(@1);
         }
-        | TOK_TRIM exp {
+        | TOK_TRIM exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Trim);
             $$->loc.setFirst(@1);
         }
@@ -2740,26 +2981,26 @@ exp_c:
             /*if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
                 parse_error("reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $1);*/
         }
-        | '-' exp %prec NEG {
+        | '-' exp_nl %prec NEG {
             // FIXME: need to expand constant expression checking to determine
             //        if the expression can throw an exception at run-time
             // first check for constant expressions
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_UnaryMinus);
             $$->loc.setFirst(@1);
         }
-        | '+' exp %prec UPLUS {
+        | '+' exp_nl %prec UPLUS {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_UnaryPlus);
             $$->loc.setFirst(@1);
         }
-        | '~' exp {
+        | '~' exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_BinaryNot);
             $$->loc.setFirst(@1);
         }
-        | '!' exp {
+        | '!' exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_LogicalNot);
             $$->loc.setFirst(@1);
         }
-        | '\\' exp {
+        | '\\' exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Reference);
             $$->loc.setFirst(@1);
         }
@@ -2789,7 +3030,7 @@ exp_c:
             $$ = new ASTUnaryExpression(ce.release(), ASTOperatorKind::AOK_New);
             $$->loc.setFirst(@1);
         }
-        | TOK_BACKGROUND exp {
+        | TOK_BACKGROUND exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Background);
             $$->loc.setFirst(@1);
         }
@@ -2798,10 +3039,6 @@ exp_c:
             $$->loc = @1;
             free($1);
         }
-        | '(' exp ')' {
-            $$ = $2;
-        }
-        | '(' ')' { $$ = new ASTListExpression; $$->loc.set(@1, @2); }
         | TOK_SUB '(' myexp ')' return_value block {
             ASTClosureDeclaration::Ptr cd(new ASTClosureDeclaration($5, $3, $6));
             cd->loc.set(@1, @6);
@@ -2840,13 +3077,21 @@ exp_c:
             $$ = new ASTImplicitElemExpression;
             $$->loc = @1;
         }
-        | TOK_DELETE exp {
+        | TOK_DELETE exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Delete);
             $$->loc.setFirst(@1);
         }
-        | TOK_REMOVE exp {
+        | TOK_REMOVE exp_nl {
             $$ = new ASTUnaryExpression($2, ASTOperatorKind::AOK_Remove);
             $$->loc.setFirst(@1);
+        }
+        | '(' exp ')' {
+            $$ = $2;
+            $$->loc.set(@1, @3);
+        }
+        | '(' ')' {
+            $$ = new ASTListExpression;
+            $$->loc.set(@1, @2);
         }
         | QORE_CAST '(' exp ')' {
             ASTName castType($1, ASTNameKind::ANK_CastType);
@@ -2859,10 +3104,16 @@ exp_c:
 
 exp:
         exp_c
+        | parse_option exp {
+            delete $1;
+            $$ = $2;
+            $$->loc.setFirst(@1);
+        }
         | list                              { $$ = $1; }
-        | alt_hash                          { $$ = $1; }
-        | immediate_typed_hash              { $$ = $1; }
-        | '{' '}'                           { $$ = new ASTHashExpression; $$->loc.set(@1, @2); }
+        | alt_hash
+        { $$ = $1; }
+        | immediate_typed_hash
+        { $$ = $1; }
         | exp PLUS_EQUALS exp               { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_PlusEquals, $3); }
         | exp MINUS_EQUALS exp              { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_MinusEquals, $3); }
         | exp AND_EQUALS exp                { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_AndEquals, $3); }
@@ -2884,6 +3135,15 @@ exp:
         | exp WS_SHIFT_LEFT_EQUALS exp      { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_LEFT_EQUALS, $3); }
         | exp WS_SHIFT_RIGHT_EQUALS exp     { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_RIGHT_EQUALS, $3); }
         | exp '=' exp                       { $$ = new ASTAssignmentExpression($1, $3); }
+        | exp parse_option exp {
+            delete $2;
+            delete $1;
+            $$ = $3;
+        }
+        | exp parse_option {
+            delete $2;
+            $$ = $1;
+        }
         | exp WEAK_ASSIGNMENT exp           { $$ = new ASTAssignmentExpression($1, $3, true); }
         | exp TOK_INSTANCEOF uncqtypedef    {
             ASTName name($3, ASTNameKind::ANK_UncQTypedef);
@@ -2974,6 +3234,136 @@ exp:
         | exp RANGE exp                     { $$ = new ASTRangeExpression($1, $3); }
         | exp '.' exp                       { $$ = new ASTAccessExpression($1, $3); }
         | exp DOT_KW_IDENTIFIER             {
+            ASTName name($2, ASTNameKind::ANK_KWIdentifier);
+            name.loc = @2;
+            delete $2;
+            $$ = new ASTAccessExpression($1, new ASTNameExpression(std::move(name)));
+        }
+        ;
+
+
+exp_nl:
+        exp_c
+        | alt_hash
+        { $$ = $1; }
+        | immediate_typed_hash
+        { $$ = $1; }
+        | exp_nl PLUS_EQUALS exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_PlusEquals, $3); }
+        | exp_nl MINUS_EQUALS exp_nl           { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_MinusEquals, $3); }
+        | exp_nl AND_EQUALS exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_AndEquals, $3); }
+        | exp_nl OR_EQUALS exp_nl              { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_OrEquals, $3); }
+        | exp_nl MODULO_EQUALS exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ModuloEquals, $3); }
+        | exp_nl MULTIPLY_EQUALS exp_nl        { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_MultiplyEquals, $3); }
+        | exp_nl DIVIDE_EQUALS exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_DivideEquals, $3); }
+        | exp_nl XOR_EQUALS exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_XorEquals, $3); }
+        | exp_nl SHIFT_LEFT_EQUALS exp_nl      { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ShiftLeftEquals, $3); }
+        | exp_nl SHIFT_RIGHT_EQUALS exp_nl     { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ShiftRightEquals, $3); }
+        | exp_nl WS_PLUS_EQUALS exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_PLUS_EQUALS, $3); }
+        | exp_nl WS_MINUS_EQUALS exp_nl        { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_MINUS_EQUALS, $3); }
+        | exp_nl WS_AND_EQUALS exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_AND_EQUALS, $3); }
+        | exp_nl WS_OR_EQUALS exp_nl           { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_OR_EQUALS, $3); }
+        | exp_nl WS_MODULO_EQUALS exp_nl       { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_MODULO_EQUALS, $3); }
+        | exp_nl WS_MULTIPLY_EQUALS exp_nl     { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_MULTIPLY_EQUALS, $3); }
+        | exp_nl WS_DIVIDE_EQUALS exp_nl       { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_DIVIDE_EQUALS, $3); }
+        | exp_nl WS_XOR_EQUALS exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_XOR_EQUALS, $3); }
+        | exp_nl WS_SHIFT_LEFT_EQUALS exp_nl   { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_LEFT_EQUALS, $3); }
+        | exp_nl WS_SHIFT_RIGHT_EQUALS exp_nl  { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_RIGHT_EQUALS, $3); }
+        | exp_nl '=' exp_nl                    { $$ = new ASTAssignmentExpression($1, $3); }
+        | exp_nl WEAK_ASSIGNMENT exp_nl        { $$ = new ASTAssignmentExpression($1, $3, true); }
+        | exp_nl TOK_INSTANCEOF uncqtypedef {
+            ASTName name($3, ASTNameKind::ANK_UncQTypedef);
+            name.loc = @3;
+            delete $3;
+            $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Instanceof, new ASTNameExpression(std::move(name)));
+        }
+        | exp_nl NULL_COALESCING exp_nl        { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_NullCoalesce, $3); }
+        | exp_nl VALUE_COALESCING exp_nl       { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ValueCoalesce, $3); }
+        | exp_nl '?' exp_nl ':' exp_nl            { $$ = new ASTTernaryExpression($1, $3, $5); }
+        | exp_nl P_INCREMENT                { // post-increment
+            $$ = new ASTUnaryExpression($1, ASTOperatorKind::AOK_PostIncrement);
+            $$->loc.setLast(@2);
+        }
+        | exp_nl P_DECREMENT                { // post-decrement
+            $$ = new ASTUnaryExpression($1, ASTOperatorKind::AOK_PostDecrement);
+            $$->loc.setLast(@2);
+        }
+        | exp_nl '(' myexp ')'              {
+            $$ = new ASTCallExpression($1, $3);
+        }
+        | exp_nl LOGICAL_AND exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_LogicalAnd, $3); }
+        | exp_nl LOGICAL_OR exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_LogicalOr, $3); }
+        | exp_nl BROKEN_LOGICAL_OR exp_nl      { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BrokenLogicalOr, $3); }
+        | exp_nl BROKEN_BINARY_OR exp_nl       { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BrokenBinaryOr, $3); }
+        | exp_nl BROKEN_BINARY_XOR exp_nl      { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BrokenBinaryXor, $3); }
+        | exp_nl '|' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BinaryOr, $3); }
+        | exp_nl '&' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BinaryAnd, $3); }
+        | exp_nl '^' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_BinaryXor, $3); }
+        | exp_nl REGEX_MATCH REGEX          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_RegexMatch, $3); }
+        | exp_nl REGEX_NMATCH REGEX         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_RegexNotMatch, $3); }
+        | exp_nl REGEX_MATCH REGEX_SUBST    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_RegexMatch, $3); }
+        | exp_nl REGEX_MATCH REGEX_TRANS    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_RegexMatch, $3); }
+        | exp_nl REGEX_MATCH REGEX_EXTRACT  { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_RegexMatch, $3); }
+        | exp_nl '>' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_GreaterThan, $3); }
+        | exp_nl '<' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_LessThan, $3); }
+        | exp_nl LOGICAL_CMP exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Comparison, $3); }
+        | exp_nl LOGICAL_EQ exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Equals, $3); }
+        | exp_nl ABSOLUTE_EQ exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_AbsoluteEquals, $3); }
+        | exp_nl ABSOLUTE_NE exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_AbsoluteNotEquals, $3); }
+        | exp_nl LOGICAL_NE exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_NotEquals, $3); }
+        | exp_nl LOGICAL_LE exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_LessThanOrEquals, $3); }
+        | exp_nl LOGICAL_GE exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_GreaterThanOrEquals, $3); }
+        | exp_nl SHIFT_LEFT exp_nl             { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ShiftLeft, $3); }
+        | exp_nl SHIFT_RIGHT exp_nl            { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_ShiftRight, $3); }
+        | exp_nl WS_LOGICAL_AND exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_AND, $3); }
+        | exp_nl WS_LOGICAL_OR exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_OR, $3); }
+        | exp_nl WS_BROKEN_LOGICAL_OR exp_nl   { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_BROKEN_LOGICAL_OR, $3); }
+        | exp_nl WS_LOGICAL_CMP exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_CMP, $3); }
+        | exp_nl WS_LOGICAL_EQ exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_EQ, $3); }
+        | exp_nl WS_ABSOLUTE_EQ exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_ABSOLUTE_EQ, $3); }
+        | exp_nl WS_ABSOLUTE_NE exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_ABSOLUTE_NE, $3); }
+        | exp_nl WS_LOGICAL_NE exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_NE, $3); }
+        | exp_nl WS_LOGICAL_LE exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_LE, $3); }
+        | exp_nl WS_LOGICAL_GE exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_LOGICAL_GE, $3); }
+        | exp_nl WS_SHIFT_LEFT exp_nl          { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_LEFT, $3); }
+        | exp_nl WS_SHIFT_RIGHT exp_nl         { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_WS_SHIFT_RIGHT, $3); }
+        | exp_nl '+' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Plus, $3); }
+        | exp_nl '-' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Minus, $3); }
+        | exp_nl '%' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Modulo, $3); }
+        | exp_nl '/' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Divide, $3); }
+        | exp_nl '*' exp_nl                    { $$ = new ASTBinaryExpression($1, ASTOperatorKind::AOK_Multiply, $3); }
+        | exp_nl '[' exp RANGE ']'          {
+            ASTRangeExpression::Ptr re(new ASTRangeExpression($3, nullptr));
+            re->loc.setLast(@4);
+            $$ = new ASTIndexExpression($1, re.release(), ASTIndexExpression::IndexKind::AIE_SquareBrackets);
+        }
+        | exp_nl '[' RANGE exp ']'          {
+            ASTRangeExpression::Ptr re(new ASTRangeExpression(nullptr, $4));
+            re->loc.setFirst(@3);
+            $$ = new ASTIndexExpression($1, re.release(), ASTIndexExpression::IndexKind::AIE_SquareBrackets);
+        }
+        | exp_nl '[' exp RANGE exp ']'      {
+            ASTRangeExpression::Ptr re(new ASTRangeExpression($3, $5));
+            re->loc.set(@3, @4);
+            $$ = new ASTIndexExpression($1, re.release(), ASTIndexExpression::IndexKind::AIE_SquareBrackets);
+        }
+        | exp_nl '[' RANGE ']'              {
+            yynerrs++;
+            yyerror(&@3, yyscanner, errorLog, parseTree, "illegal range without start or end expressions; at least start or end must be given for a range");
+            ASTRangeExpression::Ptr re(new ASTRangeExpression(nullptr, nullptr));
+            re->loc = @3;
+            $$ = new ASTIndexExpression($1, re.release(), ASTIndexExpression::IndexKind::AIE_SquareBrackets);
+        }
+        | exp_nl '[' exp ']'                {
+            $3->loc.set(@2, @4);
+            $$ = new ASTIndexExpression($1, $3, ASTIndexExpression::IndexKind::AIE_SquareBrackets);
+        }
+        | exp_nl '{' exp '}'                {
+            $3->loc.set(@2, @4);
+            $$ = new ASTIndexExpression($1, $3, ASTIndexExpression::IndexKind::AIE_CurlyBrackets);
+        }
+        | exp_nl RANGE exp                  { $$ = new ASTRangeExpression($1, $3); }
+        | exp_nl '.' exp_nl                 { $$ = new ASTAccessExpression($1, $3); }
+        | exp_nl DOT_KW_IDENTIFIER          {
             ASTName name($2, ASTNameKind::ANK_KWIdentifier);
             name.loc = @2;
             delete $2;
@@ -3110,6 +3500,20 @@ string:
             $$ = $1;
             $$->append(*($2));
             delete $2;
+        }
+        | QUOTED_WORD parse_option {
+            delete $2;
+            $$ = $1;
+        }
+        | QUOTED_WORD parse_option string {
+            delete $2;
+            $$ = $1;
+            $$->append(*($3));
+            delete $3;
+        }
+        | parse_option string {
+            delete $1;
+            $$ = $2;
         }
         ;
 

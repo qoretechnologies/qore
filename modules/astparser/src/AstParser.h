@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 #define _QLS_ASTPARSER_H
 
 #include <string>
+#include <vector>
 
 #include "AstParseErrorLog.h"
 
@@ -66,6 +67,42 @@ public:
         @return parsed AST tree
      */
     ASTTree* parseString(std::string& str);
+
+    //! Enable or disable conditional parsing mode.
+    /**
+        When enabled, %ifdef/%ifndef/%if directives are evaluated and inactive
+        branches are skipped during parsing.
+     */
+    void setConditionalParsing(bool enabled);
+
+    //! Clears all predefined symbols for conditional parsing.
+    void clearDefines();
+
+    //! Adds a predefined symbol for conditional parsing.
+    /**
+        @param name symbol name
+     */
+    void addDefine(const std::string& name);
+
+    //! Sets the predefined symbols for conditional parsing.
+    /**
+        @param names list of symbol names
+     */
+    void setDefines(const std::vector<std::string>& names);
+
+    //! Returns true if conditional parsing is enabled.
+    bool getConditionalParsing() const {
+        return conditionalParsing;
+    }
+
+    //! Returns the current predefined symbols.
+    const std::vector<std::string>& getDefines() const {
+        return defines;
+    }
+
+private:
+    bool conditionalParsing = false;
+    std::vector<std::string> defines;
 };
 
 #endif // _QLS_ASTPARSER_H

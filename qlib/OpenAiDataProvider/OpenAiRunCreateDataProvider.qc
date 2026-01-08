@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiRunCreateDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiRunCreateDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -126,7 +126,7 @@ public class OpenAiTrunctationStrategyDataType inherits HashDataType {
             },
             "last_messages": {
                 "display_name": "Last Messages",
-                "short_desc": "The number of most recent messages from the thread when constructing the context for ",
+                "short_desc": "The number of most recent messages from the thread when constructing the context for "
                     "the run",
                 "desc": "The number of most recent messages from the thread when constructing the context for the "
                     "run",
