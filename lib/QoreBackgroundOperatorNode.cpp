@@ -34,7 +34,12 @@
 QoreString QoreBackgroundOperatorNode::name("background operator expression");
 
 QoreValue QoreBackgroundOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    return do_op_background(exp, xsink);
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue QoreBackgroundOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return do_op_background(rc, exp, xsink);
 }
 
 int QoreBackgroundOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

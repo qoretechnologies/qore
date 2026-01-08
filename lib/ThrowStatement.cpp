@@ -42,6 +42,17 @@ int ThrowStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return 0;
 }
 
+int ThrowStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalRefHolder a(rc, args, xsink);
+    if (*xsink)
+        return 0;
+
+    assert(a->getType() == NT_LIST);
+
+    xsink->raiseException(a->get<const QoreListNode>());
+    return 0;
+}
+
 int ThrowStatement::parseInitImpl(QoreParseContext& parse_context) {
     if (!args) {
         return 0;

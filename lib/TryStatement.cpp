@@ -85,6 +85,45 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
+int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueHolder trv(xsink);
+
+    QORE_TRACE("TryStatement::execImpl()");
+    int rc_state = 0;
+    if (try_block)
+        rc_state = try_block->execImpl(rc, *trv, xsink);
+
+    QoreException* except = xsink->catchException();
+    if (except) {
+        printd(5, "TryStatement::execImpl() entering catch handler, e=%p\n", except);
+
+        if (catch_block) {
+            CatchExceptionHelper ceh(except);
+
+            // instantiate exception information parameter
+            if (param)
+                id->instantiate(except->makeExceptionObject());
+
+            rc_state = catch_block->execImpl(rc, *trv, xsink);
+
+            // uninstantiate extra args
+            if (param)
+                id->uninstantiate(xsink);
+        } else
+            rc_state = 0;
+
+        // delete exception chain
+        except->del(xsink);
+    }
+
+    if (!trv->isNothing()) {
+        if (return_value.isNothing())
+            return_value = trv.release();
+    }
+
+    return rc_state;
+}
+
 int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

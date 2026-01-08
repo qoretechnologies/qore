@@ -107,6 +107,67 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return rc;
 }
 
+int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    if (is_ref)
+        return execRef(rc, return_value, xsink);
+
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    // get iterator object
+    FunctionalOperator::FunctionalValueType value_type;
+    std::unique_ptr<FunctionalOperatorInterface> f(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    if (*xsink || value_type == FunctionalOperator::nothing || !code)
+        return 0;
+
+    // execute "foreach" body
+    unsigned i = 0;
+
+    int rc_state = 0;
+
+    while (true) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
+        {
+            // get first value
+            ValueOptionalRefHolder iv(xsink);
+            if (f->getNext(iv, xsink))
+                break;
+            if (*xsink)
+                break;
+
+            LValueHelper n(var, rc, xsink);
+            if (!n)
+                break;
+
+            // assign variable to current value
+            if (n.assign(iv.takeReferencedValue(), "<foreach lvalue assignment>"))
+                break;
+        }
+
+        // set offset in thread-local data for "$#"
+        ImplicitElementHelper eh(i++);
+
+        // execute "foreach" body
+        if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
+            rc_state = 0;
+            break;
+        }
+
+        if (rc_state == RC_RETURN)
+            break;
+        else if (rc_state == RC_CONTINUE)
+            rc_state = 0;
+    }
+
+    return rc_state;
+}
+
 int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
@@ -219,6 +280,129 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     }
 
     return rc;
+}
+
+int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    int rc_state = 0;
+
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    ParseReferenceNode* r = list.get<ParseReferenceNode>();
+
+    // here we get the runtime reference
+    ReferenceHolder<ReferenceNode> vr(r->evalToRef(rc, xsink), xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    // get the current value of the lvalue expression
+    ValueEvalRefHolder tlist(rc, *vr, xsink);
+    if (!code || *xsink || tlist->isNothing()) {
+        return 0;
+    }
+
+    QoreListNode* l_tlist = tlist->getType() == NT_LIST ? tlist->get<QoreListNode>() : nullptr;
+    if (l_tlist && l_tlist->empty()) {
+        return 0;
+    }
+
+    // execute "foreach" body
+    ValueHolder ln(xsink);
+    unsigned i = 0;
+
+    if (l_tlist) {
+        ln = new QoreListNode(autoTypeInfo);
+    }
+
+    while (true) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
+        {
+            LValueHelper n(var, rc, xsink);
+            if (!n) {
+                return 0;
+            }
+
+            // assign variable to current value in list
+            if (n.assign(l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())) {
+                return 0;
+            }
+        }
+
+        // set offset in thread-local data for "$#"
+        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+
+        // execute "for" body
+        rc_state = code->execImpl(rc, return_value, xsink);
+        if (*xsink) {
+            return 0;
+        }
+
+        // get value of foreach variable
+        ValueEvalRefHolder nv(rc, var, xsink);
+        if (*xsink) {
+            return 0;
+        }
+
+        // assign new value to temporary variable for later assignment to referenced lvalue
+        if (l_tlist) {
+            if (!ln) {
+                ln = new QoreListNode(autoTypeInfo);
+            }
+            ln->get<QoreListNode>()->push(nv.takeReferencedValue(), nullptr);
+        } else {
+            ln = nv.takeReferencedValue();
+        }
+
+        if (rc_state == RC_BREAK) {
+            // assign remaining values to list unchanged
+            if (l_tlist) {
+                while (++i < l_tlist->size()) {
+                    ln->get<QoreListNode>()->push(l_tlist->getReferencedEntry(i), nullptr);
+                }
+            }
+
+            rc_state = 0;
+            break;
+        }
+
+        if (rc_state == RC_RETURN) {
+            break;
+        } else if (rc_state == RC_CONTINUE) {
+            rc_state = 0;
+        }
+        ++i;
+
+        // break out of loop if appropriate
+        if (!l_tlist || i == l_tlist->size()) {
+            break;
+        }
+    }
+
+    if (l_tlist) {
+        // assign remaining values to list unchanged
+        if (!ln) {
+            ln = new QoreListNode(autoTypeInfo);
+        }
+    }
+
+    // write the value back to the lvalue
+    LValueHelper val(**vr, rc, xsink);
+    if (!val) {
+        return 0;
+    }
+
+    if (val.assign(ln.release())) {
+        return 0;
+    }
+
+    return rc_state;
 }
 
 int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {

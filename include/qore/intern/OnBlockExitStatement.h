@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+struct RuntimeConfig;
+
 class OnBlockExitStatement : public AbstractStatement {
 public:
     DLLLOCAL OnBlockExitStatement(int start_line, int end_line, StatementBlock* n_code,
@@ -62,6 +64,7 @@ private:
     enum obe_type_e type;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

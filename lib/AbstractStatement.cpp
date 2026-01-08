@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/AbstractStatement.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
 
 #include <typeinfo>
@@ -84,13 +85,22 @@ void AbstractStatement::finalizeBlock(int sline, int eline) {
 }
 
 int AbstractStatement::exec(QoreValue& return_value, ExceptionSink *xsink) {
+    RuntimeConfig rc = rc_get_current();
+    return exec(rc, return_value, xsink);
+}
+
+int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     //QORE_TRACE("AbstractStatement::exec()");
     printd(1, "AbstractStatement::exec() this: %p file: %s:%d\n", this, loc->getFile(), loc->start_line);
-    QoreProgramLocationHelper stack_loc(xsink, loc, this, pwo.parse_options);
+    RuntimeConfigLocationHelper loc_helper(rc, loc, this, pwo.parse_options, xsink);
     //pthread_testcancel();
     if (*xsink) {
         return 0;
     }
+    return execImpl(rc, return_value, xsink);
+}
+
+int AbstractStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     return execImpl(return_value, xsink);
 }
 

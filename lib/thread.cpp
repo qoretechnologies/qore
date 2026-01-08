@@ -1760,6 +1760,31 @@ int save_implicit_element(int n_element) {
     return old;
 }
 
+void qore_get_runtime_context(QoreRuntimeContext* rc) {
+    if (!rc) {
+        return;
+    }
+
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        rc->pgm = nullptr;
+        rc->loc = nullptr;
+        rc->stmt = nullptr;
+        rc->po = 0;
+        rc->stack_loc = nullptr;
+        rc->element = 0;
+        return;
+    }
+
+    QoreProgram* pgm = td->current_pgm;
+    rc->pgm = pgm ? pgm : td->call_program_context;
+    rc->loc = td->runtime_loc;
+    rc->stmt = td->runtime_statement;
+    rc->po = td->runtime_po;
+    rc->stack_loc = td->current_stack_location;
+    rc->element = get_implicit_element();
+}
+
 void end_signal_thread(ExceptionSink* xsink) {
     thread_data.get()->tpd->del(xsink);
 }
@@ -2851,57 +2876,48 @@ namespace {
 }
 
 QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
+    RuntimeConfig rc = rc_get_current();
+    return do_op_background(rc, left, xsink);
+}
+
+QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
     if (!left)
         return QoreValue();
 
-    //printd(2, "op_background() before crlr left = %p\n", left);
-    ValueHolder nl(copy_value_and_resolve_lvar_refs(left, xsink), xsink);
-    //printd(2, "op_background() after crlr nl = %p\n", nl);
+    ValueHolder nl(copy_value_and_resolve_lvar_refs(rc, left, xsink), xsink);
     if (*xsink || !nl)
         return QoreValue();
 
-    // now we are ready to create the new thread
-
-    // get thread entry
-    //printd(2, "calling get_thread_entry()\n");
     int tid = get_thread_entry();
-    //printd(2, "got %d()\n", tid);
-
-    // if can't start thread, then throw exception
     if (tid == -1) {
         xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
         return QoreValue();
     }
 
     BGThreadParams* tp = new BGThreadParams(nl.release(), tid, xsink);
-    //printd(5, "created BGThreadParams(%p, %d) = %p\n", *nl, tid, tp);
     if (*xsink) {
         deregister_thread(tid);
         return QoreValue();
     }
-    //printd(5, "tp = %p\n", tp);
-    // create thread
-    int rc;
+
+    int rc_thread;
     pthread_t ptid;
 
-    //printd(5, "calling pthread_create(%p, %p, %p, %p)\n", &ptid, &ta_default, op_background_thread, tp);
     thread_counter.inc();
 
 #ifdef QORE_MANAGE_STACK
-    // make sure accesses to ta_default are made locked
     AutoLocker al(stack_lck);
 #endif
 
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
+    if ((rc_thread = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
         tp->cleanup(xsink);
         tp->del();
 
         thread_counter.dec();
         deregister_thread(tid);
-        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc_thread, "could not create thread");
         return QoreValue();
     }
-    //printd(5, "pthread_create() new thread TID %d, pthread_create() returned %d\n", tid, rc);
     return tid;
 }
 

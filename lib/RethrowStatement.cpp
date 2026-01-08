@@ -45,6 +45,19 @@ int RethrowStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return 0;
 }
 
+int RethrowStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    if (args) {
+        ValueEvalRefHolder v(rc, args, xsink);
+        if (!*xsink) {
+            QoreException* ex = catch_get_exception()->replaceTop(*v->get<QoreListNode>(), *xsink);
+            qore_es_private::get(*xsink)->rethrow(ex);
+        }
+    } else {
+        qore_es_private::get(*xsink)->rethrow(catch_get_exception());
+    }
+    return 0;
+}
+
 int RethrowStatement::parseInitImpl(QoreParseContext& parse_context) {
     int err;
     if (args) {

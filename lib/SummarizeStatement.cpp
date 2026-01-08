@@ -61,6 +61,35 @@ int SummarizeStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) 
     return rc;
 }
 
+int SummarizeStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    int rc_state = 0;
+    QoreValue sort = sort_ascending ? sort_ascending : sort_descending;
+    int sort_type = sort_ascending ? CM_SORT_ASCENDING : (sort_descending ? CM_SORT_DESCENDING : -1);
+
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    // create the context
+    ReferenceHolder<Context> context(new Context(name, xsink, exp, where_exp, sort_type, sort, summarize), xsink);
+
+    // execute the statements
+    if (code) {
+        if (context->max_group_pos && !xsink->isEvent())
+        do {
+            if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || xsink->isEvent()) {
+                rc_state = 0;
+                break;
+            } else if (rc_state == RC_RETURN) {
+                break;
+            } else if (rc_state == RC_CONTINUE) {
+                rc_state = 0;
+            }
+        } while (!xsink->isEvent() && context->next_summary());
+    }
+
+    return rc_state;
+}
+
 int SummarizeStatement::parseInitImpl(QoreParseContext& parse_context) {
     QORE_TRACE("SummarizeStatement::parseInit()");
 

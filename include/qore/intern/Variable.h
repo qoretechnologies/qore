@@ -60,6 +60,7 @@ class ScopedObjectCallNode;
 class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
+struct RuntimeConfig;
 
 union qore_gvar_ref_u {
     bool b;
@@ -399,9 +400,12 @@ protected:
     }
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
+    DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
+    DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL int makeIntQv(const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
@@ -439,6 +443,8 @@ public:
 
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
+    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink);
 
@@ -462,6 +468,8 @@ public:
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
+    DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
+    DLLLOCAL int doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL void setAndLock(QoreVarRWLock& rwl);
     DLLLOCAL void set(QoreVarRWLock& rwl);

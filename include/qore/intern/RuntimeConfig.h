@@ -32,12 +32,14 @@
 #ifndef _QORE_INTERN_RUNTIMECONFIG_H
 #define _QORE_INTERN_RUNTIMECONFIG_H
 
+#include <qore/common.h>
 #include <cstdint>
 
 class QoreProgram;
 class QoreObject;
 class AbstractStatement;
 class QoreProgramLocation;
+class ExceptionSink;
 struct ThreadLocalProgramData;
 class QoreClosureBase;
 class qore_class_private;
@@ -190,15 +192,20 @@ public:
     DLLLOCAL RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt = nullptr,
-        int64_t new_po = -1);
+        int64_t new_po = -1,
+        ExceptionSink* xsink = nullptr);
     DLLLOCAL ~RuntimeConfigLocationHelper();
 
 private:
     RuntimeConfig& rc;
     const QoreProgramLocation* old_loc;
     const AbstractStatement* old_stmt;
-    int64_t old_po;
+    int64 old_po;
+    const QoreProgramLocation* tls_old_loc;
+    const AbstractStatement* tls_old_stmt;
+    int64 tls_old_po;
     bool restore_po;
+    bool used_swap;
 };
 
 /**

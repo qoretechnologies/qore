@@ -123,6 +123,7 @@ public:
     }
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 
     DLLLOCAL void del();
@@ -181,6 +182,7 @@ protected:
     DLLLOCAL int parseCheckReturn();
 
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL StatementBlock(qore_program_private_base* p);
 };
@@ -215,6 +217,7 @@ public:
 
     // local vars are not instantiated here because they are instantiated by the QoreProgram object
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     // assign inherited local var list from parent program
     DLLLOCAL void assignLocalVars(const LVList* lvl) {

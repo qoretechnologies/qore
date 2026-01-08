@@ -36,6 +36,8 @@
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreParseListNode.h"
 
+struct RuntimeConfig;
+
 class ScopedObjectCallNode : public AbstractFunctionCallNode {
 public:
     NamedScope* name;
@@ -92,6 +94,7 @@ public:
 protected:
     // WARNING: pay attention when subclassing; this method must also be implemented in the subclass
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return oc ? oc->getTypeInfo() : objectTypeInfo;

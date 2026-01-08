@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+struct RuntimeConfig;
+
 class DebugStatement : public AbstractStatement {
 public:
     //! Creates a debug statement with an expression to evaluate
@@ -60,6 +62,7 @@ private:
     class StatementBlock* code;     //!< The statement block to execute (if block form)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };

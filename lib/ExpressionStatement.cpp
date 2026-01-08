@@ -66,6 +66,11 @@ int ExpressionStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink)
     return 0;
 }
 
+int ExpressionStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalRefHolder erh(rc, exp, xsink);
+    return 0;
+}
+
 int ExpressionStatement::parseInitImpl(QoreParseContext& parse_context) {
     //printd(5, "ExpressionStatement::parseInitImpl() exp=%p (%s)\n", exp, exp->getTypeName());
     int err = 0;

@@ -109,8 +109,11 @@ RuntimeConfigHelper::~RuntimeConfigHelper() {
 RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt,
-        int64_t new_po)
-    : rc(rc), old_loc(rc.loc), old_stmt(rc.stmt), old_po(rc.po), restore_po(new_po >= 0) {
+        int64_t new_po,
+        ExceptionSink* xsink)
+    : rc(rc), old_loc(rc.loc), old_stmt(rc.stmt), old_po(rc.po),
+      tls_old_loc(rc.loc), tls_old_stmt(rc.stmt), tls_old_po(rc.po),
+      restore_po(new_po >= 0), used_swap(false) {
     rc.loc = new_loc;
     if (new_stmt) {
         rc.stmt = new_stmt;
@@ -120,7 +123,12 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
     }
     // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
     // without RuntimeConfig access) gets the correct location
-    update_runtime_statement_location(rc.stmt, rc.loc, rc.po);
+    if (xsink) {
+        used_swap = true;
+        swap_runtime_statement_location(xsink, rc.stmt, rc.loc, rc.po, tls_old_stmt, tls_old_loc, tls_old_po);
+    } else {
+        update_runtime_statement_location(rc.stmt, rc.loc, rc.po);
+    }
 }
 
 RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
@@ -130,7 +138,13 @@ RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
         rc.po = old_po;
     }
     // Restore TLS to old values
-    update_runtime_statement_location(old_stmt, old_loc, restore_po ? old_po : rc.po);
+    if (restore_po) {
+        update_runtime_statement_location(tls_old_stmt, tls_old_loc, tls_old_po);
+    } else if (used_swap) {
+        update_runtime_statement_location(tls_old_stmt, tls_old_loc);
+    } else {
+        update_runtime_statement_location(old_stmt, old_loc, rc.po);
+    }
 }
 
 RuntimeConfigObjectHelper::RuntimeConfigObjectHelper(RuntimeConfig& rc,

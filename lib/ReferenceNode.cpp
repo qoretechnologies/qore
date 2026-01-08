@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 IntermediateParseReferenceNode::IntermediateParseReferenceNode(const QoreProgramLocation* loc, QoreValue exp,
         const QoreTypeInfo* typeInfo, QoreObject* o, const void* lvid, const qore_class_private* n_cls)
@@ -110,6 +111,83 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, QoreObject*& self, cons
     return n.refSelf();
 }
 
+QoreValue ParseReferenceNode::doPartialEval(QoreValue n, RuntimeConfig& rc, QoreObject*& self,
+        const void*& lvalue_id, const qore_class_private*& qc, ExceptionSink* xsink) const {
+    qore_type_t ntype = n.getType();
+
+    if (ntype == NT_SELF_VARREF) {
+        assert(!self);
+        if (rc.obj) {
+            self = rc.obj;
+            qc = rc.cls ? rc.cls : runtime_get_class();
+        } else {
+            runtime_get_object_and_class(self, qc);
+        }
+        lvalue_id = self;
+        return n.refSelf();
+    }
+
+    if (ntype == NT_VARREF) {
+        VarRefNode* v = n.get<VarRefNode>();
+        if (v->getType() == VT_CLOSURE) {
+            const char* name = v->ref.id->getName();
+            ClosureVarValue* cvv = thread_get_runtime_closure_var(v->ref.id);
+            return cvv->getReference(loc, name, lvalue_id);
+        }
+
+        if (v->getType() == VT_LOCAL_TS) {
+            const char* name = v->ref.id->getName();
+            if (v->ref.id->isSelf()) {
+                if (rc.obj) {
+                    self = rc.obj;
+                    qc = rc.cls ? rc.cls : runtime_get_class();
+                } else {
+                    runtime_get_object_and_class(self, qc);
+                }
+            }
+            ClosureVarValue* cvv = thread_find_closure_var(name);
+            return cvv->getReference(loc, name, lvalue_id);
+        }
+    }
+
+    if (ntype == NT_OPERATOR) {
+        {
+            QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            if (op) {
+                ValueEvalOptimizedRefHolder rh(op->getRight(), xsink);
+                if (*xsink)
+                    return QoreValue();
+
+                QoreValue nl = doPartialEval(op->getLeft(), rc, self, lvalue_id, qc, xsink);
+                if (*xsink) {
+                    assert(!nl);
+                    return QoreValue();
+                }
+                return new QoreSquareBracketsOperatorNode(loc, nl, rh.takeReferencedValue());
+            }
+        }
+        {
+            QoreHashObjectDereferenceOperatorNode* op =
+                dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+            if (op) {
+                ValueEvalOptimizedRefHolder rh(op->getRight(), xsink);
+                if (*xsink)
+                    return QoreValue();
+
+                QoreValue nl = doPartialEval(op->getLeft(), rc, self, lvalue_id, qc, xsink);
+                if (*xsink) {
+                    assert(!nl);
+                    return QoreValue();
+                }
+                return new QoreHashObjectDereferenceOperatorNode(loc, nl, rh.takeReferencedValue());
+            }
+        }
+    }
+
+    lvalue_id = n.getInternalNode();
+    return n.refSelf();
+}
+
 ReferenceNode* ParseReferenceNode::evalToRef(ExceptionSink* xsink) const {
     //printd(5, "ParseReferenceNode::evalToRef() '%s'\n", QoreTypeInfo::getName(typeInfo));
     QoreObject* self = nullptr;
@@ -123,12 +201,33 @@ ReferenceNode* ParseReferenceNode::evalToRef(ExceptionSink* xsink) const {
         : nullptr;
 }
 
+ReferenceNode* ParseReferenceNode::evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    QoreObject* self = nullptr;
+    const void* lvalue_id = nullptr;
+    const qore_class_private* qc = nullptr;
+    QoreValue nv = doPartialEval(lvexp, rc, self, lvalue_id, qc, xsink);
+    return nv
+        ? new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc)
+        : nullptr;
+}
+
 IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(ExceptionSink* xsink) const {
     //printd(5, "ParseReferenceNode::evalToIntermediate() '%s'\n", QoreTypeInfo::getName(typeInfo));
     QoreObject* self = nullptr;
     const void* lvalue_id = nullptr;
     const qore_class_private* qc = nullptr;
     QoreValue nv = doPartialEval(lvexp, self, lvalue_id, qc, xsink);
+    return nv
+        ? new IntermediateParseReferenceNode(loc, nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self,
+            lvalue_id, qc)
+        : nullptr;
+}
+
+IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    QoreObject* self = nullptr;
+    const void* lvalue_id = nullptr;
+    const qore_class_private* qc = nullptr;
+    QoreValue nv = doPartialEval(lvexp, rc, self, lvalue_id, qc, xsink);
     return nv
         ? new IntermediateParseReferenceNode(loc, nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self,
             lvalue_id, qc)
@@ -258,7 +357,12 @@ bool ReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
-    LValueHelper lvh(this, xsink);
+    RuntimeConfig rc = rc_get_current();
+    return doEval(rc, xsink);
+}
+
+QoreValue ReferenceNode::doEval(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    LValueHelper lvh(*this, rc, xsink);
     if (!lvh) {
         return QoreValue();
     }
@@ -269,8 +373,13 @@ QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
 }
 
 QoreValue ReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref == true);
-    return doEval(xsink);
+    return doEval(rc, xsink);
 }
 
 const QoreTypeInfo* ReferenceNode::getTypeInfo() const {
