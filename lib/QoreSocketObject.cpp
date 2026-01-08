@@ -734,6 +734,17 @@ int32_t QoreSocketObject::getHttp2ActiveStream() const {
     return priv->socket->getHttp2ActiveStream();
 }
 
+int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, timeout_ms, xsink);
+}
+
+BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->readHttp2StreamData(stream_id, max_bytes, xsink);
+}
+
 long QoreSocketObject::verifyPeerCertificate() {
     AutoLocker al(priv->m);
     return priv->socket->verifyPeerCertificate();

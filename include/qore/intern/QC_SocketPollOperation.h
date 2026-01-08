@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -66,7 +66,8 @@ public:
             AutoLocker al(sock->priv->m);
             sock->priv->clearNonBlock();
             if (abortNeedsClose()) {
-                sock->close();
+                // avoid re-locking priv->m via QoreSocketObject::close()
+                sock->priv->socket->close();
             }
             state = SPS_NONE;
         }
@@ -478,16 +479,17 @@ public:
         }
     }
 
-    //! Returns the Http2Session (caller takes ownership)
+    //! Returns nullptr - session is managed by socket
     DLLLOCAL Http2Session* takeSession();
 
     //! Returns the stream ID of the completed request
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
 
 private:
-    std::unique_ptr<Http2Session> h2_session;
+    Http2Session* h2_session = nullptr;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
+    bool peer_closed = false;
     mutable ReferenceHolder<QoreHashNode> out;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }

@@ -1448,6 +1448,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Check if this is an HTTP/2 connection
             if (cx."header-info".http2) {
                 int stream_id = cx."header-info".stream_id;
+                if (response_msg && !hdr."Content-Length") {
+                    hdr."Content-Length" = string(response_msg.size());
+                }
                 # Send HTTP/2 response using global async I/O controller
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, status_code, hdr,
                     response_msg ?? chunked_msg);
@@ -2253,12 +2256,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     handler.className());
             } else {
                 if (listener.registerDedicatedSocket(cx.id, handler, \dedicated)) {
-                    on_exit cx.close = True;
+                    if (!is_http2_websocket) {
+                        on_exit cx.close = True;
+                    }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
                     # Handle response sending based on protocol
                     if (is_http2_websocket) {
-                        # RFC 8441: HTTP/2 WebSocket - send 200 OK via HTTP/2 and set active stream
+                        # RFC 8441: HTTP/2 WebSocket - send 200 OK via HTTP/2
                         int stream_id = cx."header-info".stream_id;
                         listener.log("cid %d: HTTP/2 WebSocket - sending 200 OK on stream %d", cx.id, stream_id);
 
@@ -2267,10 +2272,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id, 200, rv.hdr);
                             execHttp2PollOperation(s, op);
                             listener.log("cid %d: HTTP/2 CONNECT response sent", cx.id);
-
-                            # Set the active stream so socket read/write use HTTP/2 DATA frames
-                            s.setHttp2ActiveStream(stream_id);
-                            listener.log("cid %d: HTTP/2 active stream set to %d", cx.id, stream_id);
                         } catch (hash<ExceptionInfo> ex) {
                             listener.logError("cid %d: HTTP/2 WebSocket setup error: %s: %s", cx.id, ex.err, ex.desc);
                             rethrow;
@@ -2279,6 +2280,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         # Clear the async response so caller knows it was sent
                         if (async_response_out) {
                             delete async_response_out;
+                        }
+                        # In async mode, return the HTTP/2 connection immediately so other streams can be served
+                        if (self.getAsyncMode()) {
+                            self.returnConnectionToAsyncIo(s, cx, listener, NOTHING);
                         }
                     } else if (async_response_out) {
                         # For async mode: the 101 response was captured but not sent.
@@ -2394,6 +2399,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
             # For async sending, we need to read streams into memory
+            # TODO: avoid buffering full InputStream responses in memory for async HTTP/2 sends
             if (body instanceof InputStream) {
                 body = readAllStream(body);
             }
@@ -2816,8 +2822,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
         if (body) {
-            string lstr = sprintf("cid %d src %y: %s %s HTTP/%s body (%db): ", cx.id, cx."peer-info".address_desc,
-                hdr.method, cx.masked_path, hdr.http_version, body.size());
+            string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+            string lstr = sprintf("cid %d src %y: %s %s %s body (%db): ", cx.id, cx."peer-info".address_desc,
+                hdr.method, cx.masked_path, http_ver, body.size());
             if (body.typeCode() == NT_STRING) {
                 try {
                     string bstr = body.size() > BodyLogLimit ? body.substr(0, BodyLogLimit) + "..." : body;
@@ -3380,14 +3387,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 {
                     # attempt to mask sensitive data in the URI path
-                    string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version, hdr."user-agent");
-                    if (hdr."transfer-encoding" == "chunked")
+                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
+                    if (hdr."transfer-encoding" == "chunked") {
                         lstr += " body: chunked";
-                    if (hdr."_qore_orig_content_type")
+                    }
+                    if (hdr."_qore_orig_content_type") {
                         lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
-                    if (ssl)
+                    }
+                    if (ssl) {
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+                    }
                     lstr += ")";
                     log("%s", lstr);
                 }
@@ -3469,6 +3480,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return context hash for new connection
     */
     hash<auto> getContextTemplate(hash<auto> info) {
+        bool async_mode = serv.isAsyncMode();
         return {
             "socket": socket,
             "socket-info": socket_info,
@@ -3477,6 +3489,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "ssl": ssl,
             "listener-id": id,
             "listener-name": name,
+            "async_mode": async_mode,
+            "async_ctrl": async_mode ? serv.getGlobalAsyncCtrl() : NOTHING,
         };
     }
 
@@ -3567,8 +3581,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Log the request
         {
-            string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version, hdr."user-agent");
+            string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+            string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
             if (hdr."transfer-encoding" == "chunked") {
                 lstr += " body: chunked";
             }
@@ -3797,9 +3812,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Log the request
                 {
-                    string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version,
-                        hdr."user-agent");
+                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
                     if (hdr."transfer-encoding" == "chunked") {
                         lstr += " body: chunked";
                     }
@@ -5026,6 +5041,10 @@ class HttpServerIoController {
                     connections{key}.hdr = hdr;
                     # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
                     bool is_ws_connect = (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
+                    if (is_ws_connect && getenv("QORE_HTTP2_WS_DEBUG_HEADERS")) {
+                        server.log("HTTP/2 WS CONNECT header keys: %y", keys hdr);
+                        server.log("HTTP/2 WS sec-websocket-key present: %y", hdr."sec-websocket-key" ? True : False);
+                    }
                     # Parse accept-encoding header for compression support
                     *list<string> accept_encoding;
                     if (hdr."accept-encoding") {
@@ -5039,12 +5058,13 @@ class HttpServerIoController {
                         "is_websocket_connect": is_ws_connect,
                         "body": request.body,  # HTTP/2 body is already read by poll operation
                         "accept-encoding": accept_encoding,
+                        "close": False,
                     };
 
                     # Dispatch to ThreadPool for handling
                     dispatchToThreadPool(key);
                 } else {
-                    log(LoggerLevel::ERROR, "Unexpected HTTP/2 result type for %y: %y", key, h2_output.type());
+                    @debug(log(LoggerLevel::DEBUG, "HTTP/2 connection %y closed before request complete", key));
                     closeConnectionIntern(key);
                 }
                 break;

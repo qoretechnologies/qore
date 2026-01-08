@@ -686,7 +686,7 @@ httpclient.sendHttp2StreamData(stream_id, frame);
 */
 nothing HTTPClient::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
         *int timeout_ms) {
-    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     client->sendHttp2StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
 }
 
@@ -713,7 +713,7 @@ if (data) {
     @since %Qore 2.2
 */
 *binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) {
-    int timeout = timeout_ms ? (int)timeout_ms : -1;
+    int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     return client->readHttp2StreamData(stream_id, timeout, xsink);
 }
 

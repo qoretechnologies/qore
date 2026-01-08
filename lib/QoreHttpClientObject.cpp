@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -398,7 +398,7 @@ struct qore_httpclient_priv {
         }
         // Also clear the stream ID
         if (msock) {
-            msock->socket->priv->h2_active_stream_id = -1;
+            msock->socket->priv->setH2ActiveStreamId(-1);
         }
         h2_stream_id = 0;
         http2_active = false;
@@ -408,7 +408,7 @@ struct qore_httpclient_priv {
     DLLLOCAL void setActiveH2StreamId(int32_t stream_id) {
         h2_stream_id = stream_id;
         if (msock) {
-            msock->socket->priv->h2_active_stream_id = stream_id;
+            msock->socket->priv->setH2ActiveStreamId(stream_id);
         }
     }
 
@@ -3971,9 +3971,74 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         return nullptr;
     }
 
+    // Ensure the request body is fully sent, driving flow control if necessary
+    int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
+    if (body_len > 0) {
+        while (h2_session->hasPendingBodyData(stream_id)) {
+            int remaining_ms = -1;
+            if (deadline_ms >= 0) {
+                int64 now_ms = q_clock_getmillis();
+                if (now_ms >= deadline_ms) {
+                    xsink->raiseException("HTTP2-TIMEOUT", "timeout sending HTTP/2 request body");
+                    return nullptr;
+                }
+                remaining_ms = static_cast<int>(deadline_ms - now_ms);
+            }
+            int rv = h2_session->receiveData(remaining_ms, xsink);
+            if (rv < 0 || *xsink) {
+                return nullptr;
+            }
+            if (rv == 1) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 connection closed by peer while sending request body");
+                return nullptr;
+            }
+            if (h2_session->sendPendingDataBlocking(remaining_ms, xsink)) {
+                return nullptr;
+            }
+        }
+    }
+    while (h2_session->wantWrite() || h2_session->hasPendingData()) {
+        int remaining_ms = -1;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting to send HTTP/2 request data");
+                return nullptr;
+            }
+            remaining_ms = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = h2_session->receiveData(remaining_ms, xsink);
+        if (rv < 0 || *xsink) {
+            return nullptr;
+        }
+        if (rv == 1) {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/2 connection closed by peer while sending request data");
+            return nullptr;
+        }
+        if (h2_session->sendPendingDataBlocking(remaining_ms, xsink)) {
+            return nullptr;
+        }
+    }
+
     // Receive data until we have a complete response
     while (!h2_session->hasCompletedStreams()) {
-        if (h2_session->receiveData(timeout_ms, xsink)) {
+        int remaining_ms = -1;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting for HTTP/2 response");
+                return nullptr;
+            }
+            remaining_ms = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = h2_session->receiveData(remaining_ms, xsink);
+        if (rv == 0 && remaining_ms >= 0) {
+            // no data yet; loop until the overall deadline expires
+            continue;
+        }
+        if (rv) {
             if (*xsink) {
                 return nullptr;
             }

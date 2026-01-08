@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,7 @@
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
 #include "qore/QoreSandboxManager.h"
+#include "qore/QoreThreadLock.h"
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
@@ -48,6 +49,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
 #include <strings.h>
 #include <sys/time.h>
 
@@ -587,12 +589,21 @@ struct qore_socket_private {
         Set to -1 when no stream is active.
     */
     int32_t h2_active_stream_id = -1;
+    mutable QoreThreadLock h2_active_stream_lock;
+    mutable QoreThreadLock h2_session_lock;
+    std::unordered_map<int, int32_t> h2_active_stream_ids;
 
     //! Flag to prevent recursion in HTTP/2 receive path
     /** When true, brecv skips HTTP/2 stream processing and reads raw socket data.
         This is set when receiving HTTP/2 protocol frames to avoid infinite recursion.
     */
     bool h2_receiving_frames = false;
+
+    //! Flag indicating HTTP/2 stream data is read by an external poll loop
+    /** When true, stream reads should not call receiveData() directly to avoid
+        concurrent HTTP/2 frame processing.
+    */
+    bool h2_stream_read_external = false;
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -609,6 +620,29 @@ struct qore_socket_private {
 
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
+    }
+
+    DLLLOCAL int32_t getH2ActiveStreamId() const {
+        if (!h2_session || h2_session->isServer()) {
+            AutoLocker al(h2_active_stream_lock);
+            auto it = h2_active_stream_ids.find(q_gettid());
+            return it == h2_active_stream_ids.end() ? -1 : it->second;
+        }
+        return h2_active_stream_id;
+    }
+
+    DLLLOCAL void setH2ActiveStreamId(int32_t stream_id) {
+        if (!h2_session || h2_session->isServer()) {
+            AutoLocker al(h2_active_stream_lock);
+            int tid = q_gettid();
+            if (stream_id > 0) {
+                h2_active_stream_ids[tid] = stream_id;
+            } else {
+                h2_active_stream_ids.erase(tid);
+            }
+        } else {
+            h2_active_stream_id = stream_id;
+        }
     }
 
     //! Returns true if ALPN protocols have been configured
@@ -1395,6 +1429,7 @@ struct qore_socket_private {
         // NOTE: For client-side connections (isServer() == false), the HTTPClient handles
         // frame processing in isHttp2DataAvailable() with proper locking. The socket's
         // isDataAvailable() should just check for raw socket data in that case.
+        int32_t h2_active_stream_id = getH2ActiveStreamId();
         bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
             h2_session, h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
@@ -1403,6 +1438,10 @@ struct qore_socket_private {
             printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
             if (stream && !stream->body.empty()) {
                 return true;
+            }
+
+            if (h2_stream_read_external) {
+                return false;
             }
 
             // Check if raw socket has data (HTTP/2 frames)
@@ -2097,50 +2136,72 @@ struct qore_socket_private {
         // Read from HTTP/2 stream buffer when stream is active (but not when receiving protocol frames)
         // NOTE: Only do HTTP/2 stream handling for server-side connections. For client connections,
         // HTTPClient's readHttp2StreamData() handles the stream-level reading.
+        int32_t h2_active_stream_id = getH2ActiveStreamId();
         bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
         if (h2_cond) {
-            Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
+            while (true) {
+                Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
 
-            // If no data buffered, receive more HTTP/2 frames
-            if (!stream || stream->body.empty()) {
-                // Wait for raw socket data (HTTP/2 frames)
-                if (timeout >= 0 && !isSocketDataAvailable(timeout, meth, xsink)) {
-                    if (*xsink) {
+                if (stream && !stream->body.empty()) {
+                    // Return data from HTTP/2 stream buffer
+                    size_t bytes = std::min(bs, stream->body.size());
+                    memcpy(rbuf, stream->body.data(), bytes);
+                    stream->body.erase(stream->body.begin(), stream->body.begin() + bytes);
+                    buf = rbuf;
+                    if (do_event) {
+                        do_read_event((ssize_t)bytes, bytes);
+                    }
+                    return (ssize_t)bytes;
+                }
+
+                // If the stream is closed and no data remains, report EOF
+                if (stream && (stream->state == Http2StreamState::Closed || stream->body_complete)) {
+                    return 0;
+                }
+
+                if (h2_stream_read_external) {
+                    if (timeout >= 0) {
+                        if (!suppress_exception) {
+                            se_timeout("Socket", meth, timeout, xsink);
+                        }
+                        return QSE_TIMEOUT;
+                    }
+
+                    // Blocking read: wait for socket readability and retry
+                    if (!isSocketDataAvailable(1000, meth, xsink)) {
+                        if (*xsink) {
+                            return -1;
+                        }
+                    }
+                    continue;
+                }
+
+                // If no data buffered, receive more HTTP/2 frames
+                if (!stream || stream->body.empty()) {
+                    // Wait for raw socket data (HTTP/2 frames)
+                    if (timeout >= 0 && !isSocketDataAvailable(timeout, meth, xsink)) {
+                        if (*xsink) {
+                            return -1;
+                        }
+                        if (!suppress_exception) {
+                            se_timeout("Socket", meth, timeout, xsink);
+                        }
+                        return QSE_TIMEOUT;
+                    }
+
+                    // Set flag to prevent recursion when receiveData calls brecv
+                    h2_receiving_frames = true;
+                    int rv = h2_session->receiveData(timeout, xsink);
+                    h2_receiving_frames = false;
+
+                    if (rv < 0) {
                         return -1;
                     }
-                    if (!suppress_exception) {
-                        se_timeout("Socket", meth, timeout, xsink);
-                    }
-                    return QSE_TIMEOUT;
+
+                    // Re-fetch stream after receiving data
+                    stream = h2_session->getStream(h2_active_stream_id);
                 }
-
-                // Set flag to prevent recursion when receiveData calls brecv
-                h2_receiving_frames = true;
-                int rv = h2_session->receiveData(timeout, xsink);
-                h2_receiving_frames = false;
-
-                if (rv < 0) {
-                    return -1;
-                }
-
-                // Re-fetch stream after receiving data
-                stream = h2_session->getStream(h2_active_stream_id);
             }
-
-            if (stream && !stream->body.empty()) {
-                // Return data from HTTP/2 stream buffer
-                size_t bytes = std::min(bs, stream->body.size());
-                memcpy(rbuf, stream->body.data(), bytes);
-                stream->body.erase(stream->body.begin(), stream->body.begin() + bytes);
-                buf = rbuf;
-                if (do_event) {
-                    do_read_event((ssize_t)bytes, bytes);
-                }
-                return (ssize_t)bytes;
-            }
-
-            // No data available (stream may be closed)
-            return 0;
         }
 
         // real socket reads are only done when the buffer is empty
@@ -3120,13 +3181,14 @@ struct qore_socket_private {
 
         // If HTTP/2 is active with a stream, send data via HTTP/2 DATA frames
         // bypass_h2 is true when sending raw HTTP/2 frames (from Http2Session::sendPendingData)
+        int32_t h2_active_stream_id = getH2ActiveStreamId();
         if (h2_session && h2_active_stream_id > 0 && !bypass_h2) {
             // Send data on the active HTTP/2 stream (no END_STREAM for WebSocket)
             if (h2_session->sendStreamData(h2_active_stream_id, buf, size, false, xsink) < 0) {
                 return -1;
             }
-            // Flush pending data
-            if (h2_session->sendPendingData(timeout_ms, xsink) < 0) {
+            // Flush pending data with blocking I/O to ensure frames are sent
+            if (h2_session->sendPendingDataBlocking(timeout_ms, xsink) < 0) {
                 return -1;
             }
             if (source > 0) {

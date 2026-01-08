@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,7 @@
 #include <map>
 #include <queue>
 #include <memory>
+#include <mutex>
 
 // Forward declarations
 struct qore_socket_private;
@@ -261,8 +262,17 @@ public:
     */
     DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
 
+    //! Returns true if there is pending request/response body data for stream_id
+    DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
+
     //! Get a stream by ID
     DLLLOCAL Http2StreamInfo* getStream(int32_t stream_id);
+
+    //! Take available stream data without blocking
+    /** @param stream_id stream ID
+        @param max_bytes maximum bytes to return; 0 means all available
+    */
+    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();
@@ -301,6 +311,7 @@ public:
     DLLLOCAL nghttp2_session* getSession() const { return session; }
 
 private:
+    mutable std::recursive_mutex m;
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);
 
@@ -366,6 +377,19 @@ private:
                    reinterpret_cast<const uint8_t*>(src) + len) {}
     };
     std::map<int32_t, BodyData> pending_body_data;
+
+    struct DataProviderContext {
+        nghttp2_data_provider provider{};
+        Http2Session* h2 = nullptr;
+        bool defer_on_empty = false;
+        bool no_end_stream = false;
+        bool remove_on_empty = true;
+    };
+    std::map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
+
+    DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data);
 };
 
 #endif // _QORE_HTTP2_SESSION_H

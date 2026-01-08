@@ -70,6 +70,12 @@ class MyWsHandler inherits WebSocketHandler {
     }
 }
 
+class HealthHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
 class WebSocketClientTest inherits QUnit::Test {
     public {
         HttpServer mServer;
@@ -147,6 +153,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("WebSocketClient tests", \webSocketClientTests());
+        addTestCase("HTTP/1.1 async WebSocket tests", \http1AsyncWebSocketTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("HTTP/2 WebSocket tests", \http2WebSocketTests());
 
@@ -160,6 +167,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         };
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
+        mServer.setHandler("health-handler", "/health", "text/plain", new HealthHandler());
         mServer.setDefaultHandler("ws-handler", wsHandler);
         linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
 
@@ -212,7 +220,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.stopListenerID(linfo.id);
 
         # check reconnecting status
-        prov.sendMessage(MESSAGE_WS_PING);
+        assertNothing(prov.sendMessage(MESSAGE_WS_PING),
+            "sending a ping while disconnected should not throw or return data");
         assertFalse(prov.isConnected());
 
         cinfo = prov.getConnectionInfo();
@@ -326,6 +335,36 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         wsc.send("REQUEST");
         c.waitForZero();
         assertEq(list("RESPONSE:REQUEST"), l);
+        wsc.disconnect();
+        delete wsc;
+    }
+
+    http1AsyncWebSocketTests() {
+        assertTrue(mServer.isAsyncMode(),
+            "HttpServer should run in async mode for HTTP/1.1 async WebSocket tests");
+
+        list<auto> l = ();
+        Counter c(1);
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                l += msg;
+                if (l.size() == responseSize) {
+                    c.dec();
+                }
+            }
+        };
+        responseSize = 1;
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+            "http_version": "1.1",
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        assertFalse(wsc.isHttp2(), "HTTP/1.1 WebSocket should not negotiate HTTP/2");
+        wsc.send("REQUEST");
+        c.waitForZero(5s);
+        assertEq(list("RESPONSE:REQUEST"), l, "HTTP/1.1 async WebSocket should echo message");
         wsc.disconnect();
         delete wsc;
     }
@@ -510,6 +549,46 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 testSkip(sprintf("HTTP/2 WebSocket large message test: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
+        }
+
+        # Test 5: HTTP/2 CONNECT handshake headers (Sec-WebSocket-Key/Accept)
+        {
+            hash<auto> http_opts = (
+                "url": "https://localhost:" + h2info.port,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+                "timeout": 5s,
+            );
+            HTTPClient hc(http_opts);
+            string key = get_random_string(16).toBase64();
+            hash<auto> info;
+            hash<auto> resp = hc.sendHttp2Connect("/", {"Sec-WebSocket-Key": key}, "websocket", \info);
+            if (resp.status_code != 200) {
+                testSkip(sprintf("HTTP/2 WebSocket CONNECT not supported (status %d)", resp.status_code));
+            }
+            hash<auto> rhdr = resp.headers ?? resp;
+            assertEq(ws_get_response_key(key), rhdr."sec-websocket-accept",
+                "HTTP/2 CONNECT should return Sec-WebSocket-Accept");
+
+            hash<auto> health_resp = hc.send(NOTHING, "GET", "/health");
+            assertEq(200, health_resp.status_code, "HTTP/2 GET should succeed with active CONNECT stream");
+            assertEq("OK", health_resp.body, "HTTP/2 GET should return health response");
+
+            binary close_frame = ws_encode_message("", WSOP_Close);
+            hc.sendHttp2StreamData(resp.stream_id, close_frame, True);
+            delete hc;
+
+            HTTPClient bad_hc(http_opts);
+            hash<auto> no_key_resp = bad_hc.sendHttp2Connect("/", {}, "websocket", NOTHING);
+            if (no_key_resp.status_code != 200) {
+                testSkip(sprintf("HTTP/2 WebSocket CONNECT not supported (status %d)", no_key_resp.status_code));
+            }
+            hash<auto> no_key_hdr = no_key_resp.headers ?? no_key_resp;
+            bool has_accept = (exists no_key_hdr."sec-websocket-accept") ?? False;
+            assertFalse(has_accept,
+                "HTTP/2 CONNECT without Sec-WebSocket-Key should not return Sec-WebSocket-Accept");
+            bad_hc.sendHttp2StreamData(no_key_resp.stream_id, close_frame, True);
+            delete bad_hc;
         }
     }
 }
