@@ -146,27 +146,8 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
 
-    @subsection http1_5_1 HttpServer 1.5.1
-    - updated to use \c Socket::startPollSendHttpResponse() for non-chunked async HTTP responses
-      - fixes bug where duplicate \c Content-Length headers could be sent
-      - uses native Qore method for proper HTTP header handling
-
     @subsection http1_5 HttpServer 1.5
-    - implemented async I/O mode for high-concurrency connection handling, enabled by default
-      (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
-      - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
-      - request processing is dispatched to ThreadPool for concurrent handler execution
-      - HTTP responses are sent asynchronously using \c Socket::startPollSendHttpResponse()
-      - enables handling many more concurrent connections with fewer threads
-      - sub-millisecond response latency for simple requests
-      - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
-      - new \c HttpServer::queueAsyncResponse() method for async response sending
-      - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
-    - added persistent handler support in async I/O mode
-      - handlers calling \c setPersistent(True) now automatically switch to synchronous/dedicated thread mode
-      - ensures thread affinity for thread-local resources (e.g. database transactions, DatasourcePool handles)
-      - connection returns to async I/O when handler releases persistence via \c setPersistent(False)
-      - new private \c HttpListener::handlePersistentConnectionSync() method for synchronous request handling
+    - introduced async I/O mode for HttpServer (unreleased feature)
 
     @subsection http1_4 HttpServer 1.4
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
@@ -1470,6 +1451,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
+        bool is_http2 = cx."header-info".http2 ?? False;
         data response_msg;
         if (msg || !chunked_msg) {
             # issue #3116: do not send a reply body if the response code does not allow it
@@ -1494,7 +1476,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # ignore any encoding passed in case of a string input stream response body, and use its encoding
                 encoding = cast<StringInputStream>(chunked_msg).getEncoding();
             }
-            extra_hdrs."Transfer-Encoding" = "chunked";
+            if (is_http2) {
+                response_msg = readAllStream(chunked_msg);
+                remove chunked_msg;
+            } else {
+                extra_hdrs."Transfer-Encoding" = "chunked";
+            }
         }
 
         # restore encoding on exit
@@ -1516,18 +1503,34 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             extra_hdrs."Content-Type" += ";charset=" + encoding;
         }
 
-        hdr.Connection = cx.close ? "close" : "Keep-Alive";
+        if (!is_http2) {
+            hdr.Connection = cx.close ? "close" : "Keep-Alive";
+        }
 
         if (extra_hdrs) {
             hdr += extra_hdrs;
         }
 
         hdr.Date = getDateHeader();
+        if (is_http2) {
+            remove hdr.Connection;
+            remove hdr.connection;
+            remove hdr."Keep-Alive";
+            remove hdr."keep-alive";
+            remove hdr."Proxy-Connection";
+            remove hdr."proxy-connection";
+            remove hdr."Transfer-Encoding";
+            remove hdr."transfer-encoding";
+            remove hdr.Upgrade;
+            remove hdr.upgrade;
+            remove hdr.TE;
+            remove hdr.te;
+        }
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
             # Check if this is an HTTP/2 connection
-            if (cx."header-info".http2) {
+            if (is_http2) {
                 int stream_id = cx."header-info".stream_id;
                 if (response_msg && !hdr."Content-Length") {
                     hdr."Content-Length" = string(response_msg.size());
@@ -1541,6 +1544,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     response_msg ?? chunked_msg);
             }
             listener.logResponse(cx, status_code, response_msg ?? chunked_msg, hdr);
+            if (status_code >= 200) {
+                cx."response-sent" = True;
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-SEND-ERROR") {
                 string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
@@ -1951,6 +1957,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        remove cx."response-sent";
+        bool is_http2 = cx."header-info".http2 ?? False;
+        if (is_http2) {
+            s.setHttp2ActiveStream(cx."header-info".stream_id);
+            on_exit s.setHttp2ActiveStream(-1);
+        }
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
@@ -2181,7 +2193,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
                             handler.decompress_to_string ? s.getEncoding() : NOTHING);
 
-                    rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
+                    hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);
+                    if (hrv.hasKey("raw_response")) {
+                        delete hrv."raw_response";
+                    }
+                    rv = cast<hash<HttpResponseInfo>>(hrv);
 
                     # manage persistent handler info, if applicable
                     if (!phi.handler) {
@@ -2200,6 +2216,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
+                bool is_http2 = cx."header-info".http2 ?? False;
+                if (!is_http2 && rv."code" >= 200) {
+                    cx."response-sent" = True;
+                }
                 return;
             }
 
@@ -2288,6 +2308,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             sendHttpError(listener, cx, s, rv."code", rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
                 rv.hdr, cx."response-encoding", head);
+            cx."response-sent" = True;
+            if (async_response_out) {
+                delete async_response_out;
+            }
             remove cx.persistent;
         } else {
             #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
@@ -2553,6 +2577,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             rethrow;
         }
         listener.logResponse(cx, rv);
+        if (rv."code" >= 200) {
+            cx."response-sent" = True;
+        }
     }
     #! @endcond
 }
@@ -3745,6 +3772,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Queue response for async sending - I/O controller will handle keep-alive
             serv.queueAsyncResponse(s, async_response);
         } else if (!request_helper.isDedicated()) {
+            bool response_sent = cx."response-sent" ?? False;
+            if (!response_sent) {
+                bool is_http2 = cx."header-info".http2 ?? False;
+                string err = sprintf("handler %y returned without sending a response", cx.handler_name);
+                logError("%s", err);
+                if (!is_http2) {
+                    cx.close = True;
+                }
+                serv.sendHttpError(self, cx, s, 500, err, NOTHING, NOTHING, cx."response-encoding", False);
+                if (s.isOpen()) {
+                    if (is_http2) {
+                        serv.returnConnectionToAsyncIo(s, cx, self, phi);
+                    } else {
+                        try {
+                            s.shutdown();
+                            s.close();
+                        } catch () {
+                            # Ignore close errors
+                        }
+                    }
+                }
+                return;
+            }
             # Response was already sent (reply_sent or error)
             # Note: isDedicatedExternal() implies isDedicated(), so checking isDedicated() covers both
             bool is_http2 = cx."header-info".http2 ?? False;

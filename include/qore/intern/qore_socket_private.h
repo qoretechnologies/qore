@@ -37,18 +37,20 @@
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
 #include "qore/QoreSandboxManager.h"
+#include "qore/QoreStringNode.h"
 #include "qore/QoreThreadLock.h"
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/qore_thread_intern.h"
 
-#include <cctype>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <unordered_map>
 #include <strings.h>
 #include <sys/time.h>
@@ -3486,6 +3488,53 @@ struct qore_socket_private {
             info->setKeyValue("response-uri", new QoreStringNode(hdr), nullptr);
         }
 
+        int32_t h2_active_stream_id = getH2ActiveStreamId();
+        if (h2_session && h2_session->isServer() && h2_active_stream_id > 0) {
+            if (send_callback || input_stream) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+                return -1;
+            }
+            std::map<std::string, std::string> hdr_map;
+            if (headers) {
+                ConstHashIterator hi(headers);
+                while (hi.next()) {
+                    const char* key = hi.getKey();
+                    const QoreValue val = hi.get();
+                    if (val.getType() == NT_LIST) {
+                        std::string joined;
+                        ConstListIterator li(val.get<const QoreListNode>());
+                        while (li.next()) {
+                            if (!joined.empty()) {
+                                joined += ", ";
+                            }
+                            joined += li.getValue().get<const QoreStringNode>()->c_str();
+                        }
+                        if (!joined.empty()) {
+                            hdr_map[key] = joined;
+                        }
+                    } else if (val.getType() == NT_STRING) {
+                        hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                    }
+                }
+            }
+
+            const void* body_ptr = nullptr;
+            size_t body_len = 0;
+            if (data && size) {
+                body_ptr = data;
+                body_len = size;
+            } else if (body && body->size()) {
+                body_ptr = body->c_str();
+                body_len = body->size();
+            }
+
+            if (h2_session->submitResponse(h2_active_stream_id, code, hdr_map, body_ptr, body_len, xsink) != 0) {
+                return -1;
+            }
+            return h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+        }
+
         return sendHttpMessageCommon(xsink, hdr, info, cname, mname, headers, body, data, size, send_callback,
             input_stream, max_chunk_size, trailer_callback, source, timeout_ms, l, aborted);
     }
@@ -3499,6 +3548,15 @@ struct qore_socket_private {
         assert(!(data && send_callback));
         assert(!(data && input_stream));
         assert(!(send_callback && input_stream));
+
+        if (h2_session) {
+            int32_t h2_active_stream_id = getH2ActiveStreamId();
+            printd(1, "HTTP2 WARN: sendHttpMessageCommon on HTTP/2 socket fd=%d stream_id=%d hdr='%s'\n",
+                sock, h2_active_stream_id, hdr.c_str());
+            xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (%s::%s)",
+                cname, mname);
+            return -1;
+        }
 
         // send event
         do_send_http_message_event(hdr, headers, source);

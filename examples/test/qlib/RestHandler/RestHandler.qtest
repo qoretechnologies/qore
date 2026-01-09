@@ -145,11 +145,44 @@ class B2543RestClass inherits AbstractRestClass {
     }
 }
 
+class RawResponseRestClass inherits AbstractRestClass {
+    string name() {
+        return "raw";
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "body": "raw-response",
+            "hdr": {"Content-Type": "text/plain"},
+            "raw_response": True,
+        };
+    }
+
+    hash<HttpHandlerResponseInfo> getBinary(hash<auto> cx, *hash<auto> ah) {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "body": <01020304>,
+            "hdr": {"Content-Type": "application/octet-stream"},
+            "raw_response": True,
+        };
+    }
+
+    hash<HttpHandlerResponseInfo> getNoType(hash<auto> cx, *hash<auto> ah) {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "body": "raw-no-type",
+            "raw_response": True,
+        };
+    }
+}
+
 class MyRestHandler inherits RestHandler {
     constructor() {
         addClass(new TestRestClass());
         addClass(new B3426RestClass());
         addClass(new B3427RestClass());
+        addClass(new RawResponseRestClass());
     }
 
     hash<HttpHandlerResponseInfo> putEcho(hash<auto> cx, *hash<auto> ah) {
@@ -347,6 +380,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("test bad request", \badRequestTest());
         addTestCase("Test direct interface", \directTest());
         addTestCase("Test external serialization", \serializationTest());
+        addTestCase("Raw response test", \rawResponseTest());
         addTestCase("Test xml", \xmlTest());
         addTestCase("Test swagger", \swaggerTest());
         addTestCase("issue 2398", \issue2398());
@@ -583,6 +617,28 @@ public class RestHandlerTest inherits QUnit::Test {
             # issue #3373 exception test
             assertThrows("EXCEPTION-TEST-ERROR", "exception test error", \mClient.doRequest(), ("PUT", "test/ex", NOTHING, \info));
         }
+    }
+
+    rawResponseTest() {
+        HTTPClient hc(("url": "http://localhost:" + port));
+
+        hash info;
+        on_error printf("info: %N\n", info);
+
+        string resp = hc.get("/raw", {"accept": "application/json"}, \info);
+        assertEq(200, info."response-headers".status_code);
+        assertEq("text/plain", info."body-content-type");
+        assertEq("raw-response", resp);
+
+        hash<auto> bin_resp = hc.send(NOTHING, "GET", "/raw?action=binary", {}, False, \info);
+        assertEq(200, info."response-headers".status_code);
+        assertEq("application/octet-stream", info."body-content-type");
+        assertEq(<01020304>, binary(bin_resp.body));
+
+        resp = hc.get("/raw?action=noType", NOTHING, \info);
+        assertEq(200, info."response-headers".status_code);
+        assertEq("application/octet-stream", info."body-content-type");
+        assertEq("raw-no-type", resp);
     }
 
     xmlTest() {

@@ -632,6 +632,28 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
     if (!send_buffer.empty()) {
         printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", send_buffer.size(), sock->ssl);
+        {
+            size_t off = 0;
+            int count = 0;
+            while (off + 9 <= send_buffer.size() && count < 32) {
+                const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
+                uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
+                uint8_t type = hdr[3];
+                uint8_t flags = hdr[4];
+                uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+                    | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
+                printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
+                    count, length, type, flags, stream_id);
+                size_t frame_size = 9 + length;
+                if (off + frame_size > send_buffer.size()) {
+                    printd(5, "sendPendingData() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
+                        count, off, frame_size, send_buffer.size());
+                    break;
+                }
+                off += frame_size;
+                ++count;
+            }
+        }
 
         // Always use non-blocking mode for async I/O
         OptionalNonBlockingHelper nbh(*sock, true, xsink);
@@ -747,6 +769,28 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
     if (!send_buffer.empty()) {
         printd(5, "sendPendingDataBlocking() sending %zu bytes with blocking timeout=%d\n",
             send_buffer.size(), timeout_ms);
+        {
+            size_t off = 0;
+            int count = 0;
+            while (off + 9 <= send_buffer.size() && count < 32) {
+                const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
+                uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
+                uint8_t type = hdr[3];
+                uint8_t flags = hdr[4];
+                uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+                    | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
+                printd(5, "sendPendingDataBlocking() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
+                    count, length, type, flags, stream_id);
+                size_t frame_size = 9 + length;
+                if (off + frame_size > send_buffer.size()) {
+                    printd(5, "sendPendingDataBlocking() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
+                        count, off, frame_size, send_buffer.size());
+                    break;
+                }
+                off += frame_size;
+                ++count;
+            }
+        }
 
         int64 total_sent = 0;
         ssize_t rc = sock->sendIntern(xsink, "Http2Session", "sendPendingDataBlocking",
@@ -758,6 +802,7 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
         if (total_sent > 0) {
             send_buffer.erase(send_buffer.begin(), send_buffer.begin() + total_sent);
         }
+        printd(5, "sendPendingDataBlocking() remaining send_buffer.size=%zu\n", send_buffer.size());
 
         if (!send_buffer.empty()) {
             printd(5, "sendPendingDataBlocking() buffer not empty, remaining=%zu\n", send_buffer.size());
@@ -795,10 +840,24 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
         return 1;  // Connection closed - distinct from timeout (0)
     }
+    if (len >= 9) {
+        uint8_t* hdr = reinterpret_cast<uint8_t*>(buf);
+        uint32_t flen = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
+        uint8_t ftype = hdr[3];
+        uint8_t fflags = hdr[4];
+        uint32_t fstream = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+            | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
+        if (local_settings.max_frame_size && flen > local_settings.max_frame_size) {
+            printd(5, "receiveData() first frame header len=%u type=%u flags=0x%x stream_id=%u local_max=%u\n",
+                flen, ftype, fflags, fstream, local_settings.max_frame_size);
+        }
+    }
 
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
     printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {
+        printd(1, "receiveData() nghttp2_session_mem_recv error: %s (rv=%zd)\n",
+            nghttp2_strerror(static_cast<int>(rv)), rv);
         xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_recv failed: %s",
             nghttp2_strerror(static_cast<int>(rv)));
         return -1;
@@ -902,6 +961,26 @@ bool Http2Session::wantWrite() const {
 
 int Http2Session::onFrameSendCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
+    Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    uint32_t remote_max = h2 ? h2->remote_settings.max_frame_size : 0;
+    uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
+    int is_server = h2 ? h2->is_server : 0;
+    int fd = h2 ? h2->sock->sock : -1;
+    printd(5, "onFrameSendCallback type=%d stream_id=%d flags=%d len=%d remote_max_frame=%u local_max_frame=%u "
+        "isServer=%d fd=%d\n",
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, remote_max, local_max,
+        is_server, fd);
+    if (remote_max && frame->hd.length > remote_max) {
+        printd(1, "HTTP2 WARN: outgoing frame length %d exceeds peer max_frame_size %u\n",
+            (int)frame->hd.length, remote_max);
+    }
+    if (frame->hd.type == NGHTTP2_GOAWAY) {
+        printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
+            frame->goaway.last_stream_id, frame->goaway.error_code);
+    } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
+        printd(5, "onFrameSendCallback RST_STREAM: stream_id=%d error_code=%u\n",
+            frame->hd.stream_id, frame->rst_stream.error_code);
+    }
     return 0;
 }
 
@@ -914,8 +993,20 @@ ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data
 int Http2Session::onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    if (h2 && h2->local_settings.max_frame_size
+        && frame->hd.length > h2->local_settings.max_frame_size) {
+        printd(1, "HTTP2 WARN: incoming frame length %d exceeds local max_frame_size %u\n",
+            (int)frame->hd.length, h2->local_settings.max_frame_size);
+    }
     printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server, h2->sock->sock);
+    if (frame->hd.type == NGHTTP2_GOAWAY) {
+        printd(5, "onFrameRecvCallback GOAWAY: last_stream_id=%d error_code=%u\n",
+            frame->goaway.last_stream_id, frame->goaway.error_code);
+    } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
+        printd(5, "onFrameRecvCallback RST_STREAM: stream_id=%d error_code=%u\n",
+            frame->hd.stream_id, frame->rst_stream.error_code);
+    }
 
     switch (frame->hd.type) {
         case NGHTTP2_HEADERS: {
@@ -992,6 +1083,10 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                             break;
                     }
                 }
+                printd(5, "onFrameRecvCallback SETTINGS: remote max_frame_size=%u initial_window=%u "
+                    "max_header_list=%u enable_connect_protocol=%u\n",
+                    h2->remote_settings.max_frame_size, h2->remote_settings.initial_window_size,
+                    h2->remote_settings.max_header_list_size, h2->remote_settings.enable_connect_protocol);
             }
             break;
 
@@ -1075,12 +1170,14 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     auto it = h2->pending_body_data.find(stream_id);
     if (it == h2->pending_body_data.end()) {
         if (ctx->defer_on_empty) {
+            printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu deferred\n", stream_id, length);
             return NGHTTP2_ERR_DEFERRED;
         }
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
         if (ctx->remove_on_empty) {
             h2->pending_data_providers.erase(stream_id);
         }
+        printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu EOF(no data)\n", stream_id, length);
         return 0;
     }
 
@@ -1105,6 +1202,10 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
         }
     }
 
+    printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu sent=%zu remaining=%zu flags=%s%s\n",
+        stream_id, length, to_copy, remaining > to_copy ? (remaining - to_copy) : 0,
+        (*data_flags & NGHTTP2_DATA_FLAG_EOF) ? "EOF" : "",
+        (*data_flags & NGHTTP2_DATA_FLAG_NO_END_STREAM) ? "+NO_END_STREAM" : "");
     return static_cast<ssize_t>(to_copy);
 }
 
@@ -1164,9 +1265,11 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
 int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, int lib_error_code, void* user_data) {
     // Log invalid frames for debugging but don't fail
-    printd(3, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x error: %s\n",
-        frame->hd.type, frame->hd.stream_id, frame->hd.flags,
-        nghttp2_strerror(lib_error_code));
+    Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    printd(1, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x len=%d err=%s "
+        "remote_max_frame=%u local_max_frame=%u\n",
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length,
+        nghttp2_strerror(lib_error_code), h2->remote_settings.max_frame_size, h2->local_settings.max_frame_size);
     return 0;
 }
 
@@ -1213,6 +1316,11 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         BodyData& bd = it->second;
         const uint8_t* src = reinterpret_cast<const uint8_t*>(data);
         bd.data.insert(bd.data.end(), src, src + len);
+    }
+    {
+        auto it2 = pending_body_data.find(stream_id);
+        size_t pending = it2 == pending_body_data.end() ? 0 : (it2->second.data.size() - it2->second.offset);
+        printd(5, "sendStreamData() stream_id=%d pending_buffer=%zu\n", stream_id, pending);
     }
 
     // Resume the stream's data provider to trigger sending the data

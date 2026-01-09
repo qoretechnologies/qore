@@ -1,11 +1,11 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   QC_AutoReadLock.qpp
- 
+
   Qore Programming Language
- 
+
   Copyright (C) 2003 - 2023 David Nichols
- 
+
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
   to deal in the Software without restriction, including without limitation
@@ -74,35 +74,37 @@ AutoReadLock arl(rwlock);
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoReadLock::constructor(RWLock[RWLock] rwl) {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
-      const int poll_ms = 500;  // 500ms polling interval
-      while (true) {
-         if (sm->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
-            return;
-         }
-         int rc = rwl->readLock(xsink, poll_ms);
-         if (*xsink) {
-            return;  // Error occurred
-         }
-         if (rc == 0) {
-            // Lock acquired - create the AutoReadLock object with already-locked rwl
-            QoreAutoReadLock *arwl = new QoreAutoReadLock(rwl);
-            self->setPrivate(CID_AUTOREADLOCK, arwl);
-            return;
-         }
-         // rc != 0 means timeout, loop and check interrupt again
-      }
-   }
-   ReferenceHolder<QoreAutoReadLock> arwl(new QoreAutoReadLock(rwl, xsink), xsink);
-   if (!*xsink)
-      self->setPrivate(CID_AUTOREADLOCK, arwl.release());
+    ReferenceHolder<RWLock> holder(rwl, xsink);
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        const int poll_ms = 500;  // 500ms polling interval
+        while (true) {
+            if (sm->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
+                return;
+            }
+            int rc = rwl->readLock(xsink, poll_ms);
+            if (*xsink) {
+                return;  // Error occurred
+            }
+            if (rc == 0) {
+                // Lock acquired - create the AutoReadLock object with already-locked rwl
+                QoreAutoReadLock *arwl = new QoreAutoReadLock(holder.release());
+                self->setPrivate(CID_AUTOREADLOCK, arwl);
+                return;
+            }
+            // rc != 0 means timeout, loop and check interrupt again
+        }
+    }
+    ReferenceHolder<QoreAutoReadLock> arwl(new QoreAutoReadLock(holder.release(), xsink), xsink);
+    if (!*xsink) {
+        self->setPrivate(CID_AUTOREADLOCK, arwl.release());
+    }
 }
 
 //! Calls RWLock::readUnlock() on the saved RWLock and destroys the AutoReadLock object
-/** 
+/**
     @par Example:
     @code{.py}
 delete arl;
@@ -116,7 +118,7 @@ AutoReadLock::destructor() {
 }
 
 //! Throws an exception; objects of this class cannot be copied
-/** 
+/**
     @throw AUTOREADLOCK-COPY-ERROR objects of this class cannot be copied
  */
 AutoReadLock::copy() {

@@ -73,9 +73,7 @@ module HttpServerAsyncIo {
     @section httpserverasyncio_relnotes Release Notes
 
     @subsection httpserverasyncio_v1_0 Version 1.0
-    - Initial release with HTTP/1.x, HTTP/2, SSE, and WebSocket support
-    - Protocol-agnostic abstractions for SSE and WebSocket
-    - Infrastructure for WebSocket over HTTP/2 (RFC 8441) and SSE over HTTP/2
+    - Initial release of HttpServer async I/O and HTTP/2 support
 */
 
 #! Main namespace for HttpServerAsyncIo module

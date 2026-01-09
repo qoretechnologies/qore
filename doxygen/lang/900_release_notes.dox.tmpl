@@ -450,6 +450,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref RestHandler "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
+      - added \c raw_response to bypass serialization and schema validation for custom response bodies
     - @ref Util "Util" module
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
