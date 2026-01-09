@@ -1183,7 +1183,11 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     private hash<HttpResponseInfo> sendFileChunked(HttpServer::HttpListenerInterface listener, Qore::Socket s,
             hash<auto> cx, hash<auto> hdr, *data body, InputStream stream, *hash<auto> respHdr) {
         AbstractStreamRequest fsr = getStreamRequestImpl(listener, s, cx, hdr, body, stream, respHdr);
-        return cast<hash<HttpResponseInfo>>(fsr.handleRequest());
+        hash<auto> rv = fsr.handleRequest();
+        if (exists rv."raw_response") {
+            delete rv."raw_response";
+        }
+        return cast<hash<HttpResponseInfo>>(rv);
     }
 
     #! this method is called when a directory should be rendered

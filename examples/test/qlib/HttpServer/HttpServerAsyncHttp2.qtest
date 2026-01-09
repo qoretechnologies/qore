@@ -240,6 +240,16 @@ class EmptyErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns without sending a response (simulates a buggy handler)
+class NoResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "reply_sent": True,
+        };
+    }
+}
+
 class HttpServerAsyncHttp2Test inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -317,6 +327,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("HTTP/2 gzip stream body", \testGzipStreamHttp2());
         addTestCase("HTTP/2 chunked stream body", \testHttp2ChunkedStreamBody());
         addTestCase("HTTP/2 error response headers", \testHttp2ErrorResponseHeaders());
+        addTestCase("HTTP/2 missing response fallback", \testHttp2MissingResponseFallback());
         addTestCase("HTTP/2 header lowercase normalization", \testHttp2HeaderLowercase());
         addTestCase("HTTP/2 request header lowercase normalization", \testHttp2RequestHeaderLowercase());
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
@@ -363,6 +374,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("unknown-encoding", "/unknown-encoding", NOTHING, new UnknownEncodingHandler());
         mServer.setHandler("chunked-stream", "/chunked-stream", NOTHING, new ChunkedStreamHandler());
         mServer.setHandler("empty-error", "/empty-error", NOTHING, new EmptyErrorHandler());
+        mServer.setHandler("no-response", "/no-response", NOTHING, new NoResponseHandler());
 
         # Add HTTPS listener for HTTP/2 (HTTP/2 requires HTTPS via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -609,6 +621,45 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
             assertTrue(exists info."content-length",
                 "HTTP/2 error responses should include Content-Length when body is buffered");
+            hash<auto> headers = info."response-headers" ?? {};
+            hash<auto> headers_raw = info."response-headers-raw" ?? {};
+            assertFalse(exists headers.connection, "HTTP/2 error response must not include Connection");
+            assertFalse(exists headers."keep-alive", "HTTP/2 error response must not include Keep-Alive");
+            assertFalse(exists headers."proxy-connection", "HTTP/2 error response must not include Proxy-Connection");
+            assertFalse(exists headers."transfer-encoding",
+                "HTTP/2 error response must not include Transfer-Encoding");
+            assertFalse(exists headers.upgrade, "HTTP/2 error response must not include Upgrade");
+            assertFalse(exists headers.te, "HTTP/2 error response must not include TE");
+            assertFalse(exists headers_raw.Connection, "HTTP/2 error response must not include Connection");
+            assertFalse(exists headers_raw."Keep-Alive", "HTTP/2 error response must not include Keep-Alive");
+            assertFalse(exists headers_raw."Proxy-Connection",
+                "HTTP/2 error response must not include Proxy-Connection");
+            assertFalse(exists headers_raw."Transfer-Encoding",
+                "HTTP/2 error response must not include Transfer-Encoding");
+            assertFalse(exists headers_raw.Upgrade, "HTTP/2 error response must not include Upgrade");
+            assertFalse(exists headers_raw.TE, "HTTP/2 error response must not include TE");
+        }
+    }
+
+    testHttp2MissingResponseFallback() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        try {
+            rc.get("/no-response", NOTHING, NOTHING);
+            assertTrue(False, "HTTP/2 missing response should raise REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, "Expected REST-RESPONSE-ERROR for missing response");
+            hash<auto> info = ex.arg ?? {};
+            assertEq(500, info.status_code, "HTTP/2 missing response should return 500");
+            if (info.http_version != "2" && info.http_version != "HTTP/2") {
+                testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", info.http_version));
+                return;
+            }
         }
     }
 

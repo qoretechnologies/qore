@@ -417,6 +417,10 @@ public hashdecl HttpHandlerResponseInfo {
     */
     *hash<auto> hdr;
 
+    #! set this key to @ref True to bypass response serialization and schema validation
+    /** When set, the response body is returned as-is and should include a \c Content-Type header. */
+    softbool raw_response = False;
+
     #! this key can be set to @ref True "True" if the reply has already been sent (by a chunked callback for example)
     bool reply_sent = False;
 
@@ -1805,7 +1809,13 @@ public class AbstractHttpRequestHandler {
         if (!stream) {
             auto rv = handleRequest(cx, hdr, body ?? getMessageBody(s, hdr, body));
             switch (rv.typeCode()) {
-                case NT_HASH: return cast<hash<HttpResponseInfo>>(rv);
+                case NT_HASH: {
+                    hash<auto!> hrv = rv;
+                    if (hrv.hasKey("raw_response")) {
+                        delete hrv."raw_response";
+                    }
+                    return cast<hash<HttpResponseInfo>>(hrv);
+                }
                 case NT_STRING:
                 case NT_BINARY: return cast<hash<HttpResponseInfo>>(("code": 200, "body": rv));
                 default:
@@ -1814,7 +1824,11 @@ public class AbstractHttpRequestHandler {
         }
 
         AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);
-        return cast<hash<HttpResponseInfo>>(req.handleRequest());
+        hash<auto!> hrv = req.handleRequest();
+        if (hrv.hasKey("raw_response")) {
+            delete hrv."raw_response";
+        }
+        return cast<hash<HttpResponseInfo>>(hrv);
     }
 
     #! returns the AbstractStreamRequest object for handling chunked requests
