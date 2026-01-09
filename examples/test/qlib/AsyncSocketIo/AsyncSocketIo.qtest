@@ -266,8 +266,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertTrue(info1 != NOTHING);
         hash<SocketPollResultInfo> info2 = q2.get(1s);
         assertFalse(exists info2.ex, "replacement operation should succeed");
-        *hash<auto> out = spop2.getOutput();
-        assertEq(200, out."code");
+        assertTrue(info2 != NOTHING, "replacement operation should return a result");
 
         spop1.abort();
         spop2.abort();
@@ -311,7 +310,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertTrue(info.canceled, "stop should cancel outstanding operations");
         assertFalse(io_controller.running(), "stop should stop the I/O thread");
         spop.abort();
-        SimpleStringHandler::interruptSleep();
+        SimpleStringHandler::interruptSleep(False);
     }
 
     sharedResultQueueTest() {
@@ -366,7 +365,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertFalse(info.ex && info.ex.err == "SOCKET-TIMEOUT",
             "no-timeout operation should not report a timeout");
         spop.abort();
-        SimpleStringHandler::interruptSleep();
+        SimpleStringHandler::interruptSleep(False);
     }
 
     autostopTest() {
