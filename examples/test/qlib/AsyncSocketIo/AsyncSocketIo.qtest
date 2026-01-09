@@ -37,6 +37,13 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("main", \mainTest());
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
+        @debug {
+            if (getenv("QORE_TEST_STACKSIG")) {
+                set_signal_handler(SIGUSR1, sub (int sig) {
+                    printf("%Y\n", get_all_thread_call_stacks());
+                });
+            }
+        }
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -204,8 +211,9 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
 
         static Mutex m();
         static Condition c();
-        static bool waitflag;
-        static bool sleeping;
+        static int interrupt_gen = 0;
+        static hash<string, int> sleeping_by_gen;
+        static *date pending_interrupt_until;
     }
 
     constructor(string mime, *string str) {
@@ -229,27 +237,45 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
 
     static interruptibleSleep() {
         AutoLock al(m);
-        sleeping = True;
+        if (pending_interrupt_until && now_us() < pending_interrupt_until) {
+            return;
+        }
+        int gen = interrupt_gen;
+        string gen_key = string(gen);
+        sleeping_by_gen{gen_key} = (sleeping_by_gen{gen_key} ?? 0) + 1;
         c.broadcast();  # Signal that we're now sleeping
-        waitflag = True;
-        while (waitflag) {
+        while (interrupt_gen == gen) {
             c.wait(m, 99999999);
         }
-        sleeping = False;
+        int remaining = (sleeping_by_gen{gen_key} ?? 1) - 1;
+        if (remaining > 0) {
+            sleeping_by_gen{gen_key} = remaining;
+        } else {
+            remove sleeping_by_gen{gen_key};
+            c.broadcast();
+        }
     }
 
     static interruptSleep() {
         AutoLock al(m);
+        pending_interrupt_until = now_us() + 2s;
         # Wait until handler has entered interruptibleSleep to avoid race condition
         # Use a timeout to avoid deadlock if the handler never received the request
         int max_attempts = 50;  # 5 seconds max (50 * 100ms)
-        while (!sleeping && max_attempts-- > 0) {
+        while (!(sleeping_by_gen{string(interrupt_gen)} ?? 0) && max_attempts-- > 0) {
             c.wait(m, 100ms);
         }
         # Only signal if the handler is actually sleeping
-        if (sleeping) {
-            waitflag = False;
-            sleeping = False;
+        int current_gen = interrupt_gen;
+        string current_key = string(current_gen);
+        if (sleeping_by_gen{current_key} ?? 0) {
+            interrupt_gen++;
+            c.broadcast();
+            while (sleeping_by_gen{current_key} ?? 0) {
+                c.wait(m, 100ms);
+            }
+        } else {
+            interrupt_gen++;
             c.broadcast();
         }
     }
