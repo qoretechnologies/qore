@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServerUtil.qm HTTP server base code
 
-/*  HttpServerUtil.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
+/*  HttpServerUtil.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -708,12 +708,33 @@ public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
 
 #! helper function for setting HTTP response headers
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
-    if (!rv.hdr.Connection) {
-        if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
-            rv.hdr.Connection = "close";
-        } else {
-            rv.hdr.Connection = "Keep-Alive";
+    bool is_http2 = cx."header-info".http2 ?? False;
+    if (!is_http2) {
+        if (!rv.hdr.Connection) {
+            if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
+                rv.hdr.Connection = "close";
+            } else {
+                rv.hdr.Connection = "Keep-Alive";
+            }
         }
+    } else {
+        # HTTP/2 forbids hop-by-hop headers
+        # Note: header removal here is case-sensitive; mixed-case variants may slip through
+        # until a case-insensitive hash for headers is implemented.
+        remove rv.hdr{
+            "Connection",
+            "connection",
+            "Keep-Alive",
+            "keep-alive",
+            "Proxy-Connection",
+            "proxy-connection",
+            "Transfer-Encoding",
+            "transfer-encoding",
+            "Upgrade",
+            "upgrade",
+            "TE",
+            "te",
+        };
     }
 
     if (!rv.hdr.Date) {
@@ -1402,10 +1423,11 @@ public class AbstractStreamRequest {
     */
     private hash<HttpHandlerResponseInfo> sendResponse() {
         hash<HttpHandlerResponseInfo> rv = getResponseHeaderMessage();
+        bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
         http_set_reply_headers(s, cx, \rv);
 
         # issue #4109: do not start async I/O with a HEAD request
-        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD") {
+        if (!chunked || hdr.method == "HEAD") {
             return rv;
         }
 
@@ -2148,6 +2170,19 @@ public class AbstractHttpSocketHandlerInterface {
             ++lh{lid};
         }
         on_error handlerStopped(lid);
+        bool h2_ws_debug_handler = False;
+        @debug {
+            if (cx."header-info".http2 && cx."header-info".is_websocket_connect
+                && getenv("QORE_HTTP2_WS_DEBUG_HANDLER")) {
+                h2_ws_debug_handler = True;
+            }
+        }
+        if (h2_ws_debug_handler) {
+            string handler_name = cx.handler_name ?? "<unknown>";
+            int stream_id = cx."header-info".stream_id;
+            cx.listener.log("HTTP/2 WS startImpl dispatch: cid %y stream_id %d handler %y", cx.id, stream_id,
+                handler_name);
+        }
         return startImpl(lid, cx, hdr, s);
     }
 

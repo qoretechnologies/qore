@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,7 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#include <cctype>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -2971,16 +2972,47 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
 }
 
+int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    (void)timeout_ms;
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+
+    if (priv->h2_session->sendStreamData(stream_id, ptr, len, end_stream, xsink) < 0) {
+        return -1;
+    }
+
+    int rv = priv->h2_session->sendPendingData(0, xsink);
+    if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+        return 0;
+    }
+    return rv < 0 ? -1 : 0;
+}
+
+BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return nullptr;
+    }
+
+    return priv->h2_session->takeStreamData(stream_id, max_bytes, xsink);
+}
+
 void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return;
     }
-    priv->h2_active_stream_id = stream_id;
+    priv->setH2ActiveStreamId(stream_id);
 }
 
 int32_t QoreSocket::getHttp2ActiveStream() const {
-    return priv->h2_active_stream_id;
+    return priv->getH2ActiveStreamId();
 }
 
 long QoreSocket::verifyPeerCertificate() const {
@@ -5098,12 +5130,11 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
     bool reused_session = false;
     if (sock->priv->socket->priv->h2_session) {
-        // Reuse existing session
-        h2_session.reset(sock->priv->socket->priv->h2_session);
-        sock->priv->socket->priv->h2_session = nullptr;
+        // Reuse existing session (socket owns it)
+        h2_session = sock->priv->socket->priv->h2_session;
         reused_session = true;
     } else {
-        // Initialize new HTTP/2 session
+        // Initialize new HTTP/2 session and store it on the socket
         if (initSession(xsink)) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -5126,10 +5157,12 @@ SocketHttp2ServerPollOperation::~SocketHttp2ServerPollOperation() {
 
 int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     // Create server-side HTTP/2 session using the underlying QoreSocket's priv
-    h2_session.reset(Http2Session::createServer(sock->priv->socket->priv, xsink));
+    h2_session = Http2Session::createServer(sock->priv->socket->priv, xsink);
     if (!h2_session) {
         return -1;
     }
+    // Store session on socket for shared access
+    sock->priv->socket->priv->h2_session = h2_session;
     return 0;
 }
 
@@ -5154,6 +5187,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
             case H2S_RECV_PREFACE:
             case H2S_READING: {
+                // If another thread already completed a stream, return it immediately
+                if (h2_session->hasCompletedStreams()) {
+                    h2_state = H2S_REQUEST_READY;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
                 // Try to receive data
                 int rv = h2_session->receiveData(0, xsink);
                 if (*xsink) {
@@ -5166,8 +5208,12 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 if (rv == 1) {
                     // Connection closed by peer - check if we have a completed request first
                     if (!h2_session->hasCompletedStreams()) {
-                        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection closed by peer before "
-                            "request was complete");
+                        peer_closed = true;
+                        h2_state = H2S_REQUEST_READY;
+                        if (set_non_block) {
+                            set_non_block = false;
+                            sock->priv->clearNonBlock();
+                        }
                         return nullptr;
                     }
                     // Fall through to handle the completed request
@@ -5229,6 +5275,9 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     if (h2_state != H2S_REQUEST_READY || !h2_session) {
         return QoreValue();
     }
+    if (peer_closed) {
+        return QoreValue();
+    }
 
     // Get the completed stream
     auto stream_info = h2_session->takeCompletedStream();
@@ -5237,14 +5286,6 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     }
 
     const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
-
-    // Store session in socket for use by subsequent send operations
-    // The session is transferred to the socket and will be cleaned up on socket close
-    SocketHttp2ServerPollOperation* mthis = const_cast<SocketHttp2ServerPollOperation*>(this);
-    if (sock->priv->socket->priv->h2_session) {
-        delete sock->priv->socket->priv->h2_session;
-    }
-    sock->priv->socket->priv->h2_session = mthis->h2_session.release();
 
     // Build output hash
     out = new QoreHashNode(autoTypeInfo);
@@ -5255,7 +5296,12 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     // Build headers hash
     QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
     for (const auto& h : stream_info->headers) {
-        headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), nullptr);
+        std::string lowered_name;
+        lowered_name.reserve(h.first.size());
+        for (unsigned char ch : h.first) {
+            lowered_name.push_back(std::tolower(ch));
+        }
+        headers->setKeyValue(lowered_name.c_str(), new QoreStringNode(h.second), nullptr);
     }
     out->setKeyValue("headers", headers, nullptr);
 
@@ -5282,7 +5328,7 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
 }
 
 Http2Session* SocketHttp2ServerPollOperation::takeSession() {
-    return h2_session.release();
+    return nullptr;
 }
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,

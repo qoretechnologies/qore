@@ -37,6 +37,7 @@
 #include "qore/intern/qore_socket_private.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cinttypes>
 #include <cstring>
 
@@ -76,6 +77,8 @@ Http2Session* Http2Session::createServer(qore_socket_private* sock, ExceptionSin
 }
 
 int Http2Session::init(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    local_settings.initial_window_size = 1024 * 1024;
     nghttp2_session_callbacks* callbacks;
     if (nghttp2_session_callbacks_new(&callbacks) != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to create nghttp2 session callbacks");
@@ -93,13 +96,24 @@ int Http2Session::init(ExceptionSink* xsink) {
     nghttp2_session_callbacks_set_on_invalid_frame_recv_callback(callbacks, onInvalidFrameRecvCallback);
     nghttp2_session_callbacks_set_on_invalid_header_callback(callbacks, onInvalidHeaderCallback);
 
-    int rv;
+    nghttp2_option* opts = nullptr;
+    int rv = nghttp2_option_new(&opts);
+    if (rv != 0) {
+        nghttp2_session_callbacks_del(callbacks);
+        xsink->raiseException("HTTP2-ERROR", "failed to create nghttp2 session options: %s",
+            nghttp2_strerror(rv));
+        return -1;
+    }
+    // We buffer DATA frames; manage WINDOW_UPDATE manually.
+    nghttp2_option_set_no_auto_window_update(opts, 1);
+
     if (is_server) {
-        rv = nghttp2_session_server_new(&session, callbacks, this);
+        rv = nghttp2_session_server_new2(&session, callbacks, this, opts);
     } else {
-        rv = nghttp2_session_client_new(&session, callbacks, this);
+        rv = nghttp2_session_client_new2(&session, callbacks, this, opts);
     }
 
+    nghttp2_option_del(opts);
     nghttp2_session_callbacks_del(callbacks);
 
     if (rv != 0) {
@@ -112,6 +126,7 @@ int Http2Session::init(ExceptionSink* xsink) {
 }
 
 int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     // Both client and server must send SETTINGS frame as part of the connection preface
     // For client: magic string + SETTINGS
     // For server: SETTINGS (sent in response to client preface)
@@ -147,6 +162,7 @@ int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
 }
 
 int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     local_settings = settings;
 
     // Note: SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
@@ -190,9 +206,18 @@ std::vector<nghttp2_nv> Http2Session::makeNv(const std::map<std::string, std::st
     return nva;
 }
 
+static std::string toLowerHeaderName(const std::string& name) {
+    std::string out(name);
+    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return out;
+}
+
 int32_t Http2Session::submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     if (is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit request on server session");
         return -1;
@@ -269,108 +294,52 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 
     // Add regular headers (excluding pseudo-headers, host, and connection-specific headers)
     // RFC 7540 Section 8.1.2.2: HTTP/2 MUST NOT use connection-specific header fields
+    std::vector<std::string> lowered_names;
+    lowered_names.reserve(headers.size());
     for (const auto& h : headers) {
+        std::string lname = toLowerHeaderName(h.first);
         // Skip pseudo-headers and host (handled separately)
-        if (h.first[0] == ':' || h.first == "host" || h.first == "Host") {
+        if (lname[0] == ':' || lname == "host") {
             continue;
         }
         // Skip connection-specific headers (forbidden in HTTP/2)
-        if (h.first == "Connection" || h.first == "connection" ||
-            h.first == "Keep-Alive" || h.first == "keep-alive" ||
-            h.first == "Proxy-Connection" || h.first == "proxy-connection" ||
-            h.first == "Transfer-Encoding" || h.first == "transfer-encoding" ||
-            h.first == "Upgrade" || h.first == "upgrade") {
+        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
+            lname == "transfer-encoding" || lname == "upgrade") {
             continue;
         }
+        lowered_names.push_back(lname);
         nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.first.c_str())),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
             reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            h.first.size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
+            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
     }
 
     nghttp2_data_provider* data_prd = nullptr;
-    nghttp2_data_provider data_provider;
+    std::unique_ptr<DataProviderContext> provider_ctx;
 
     // RFC 8441: For extended CONNECT (WebSocket over HTTP/2), we must NOT send END_STREAM
     // because we need to send data after the handshake completes.
     // Check if this is a CONNECT request with :protocol (extended CONNECT)
     bool is_extended_connect = (method_str == "CONNECT" && !protocol.empty());
 
+    bool has_body = false;
+    BodyData pending_data;
     if (body && body_len > 0) {
-        // Store body data for callback (copies the data)
-        int32_t stream_id = nghttp2_session_get_next_stream_id(session);
-        pending_body_data[stream_id] = BodyData(body, body_len);
-
-        data_provider.source.ptr = this;
-        data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
-                uint8_t* buf, size_t length, uint32_t* data_flags,
-                nghttp2_data_source* source, void* user_data) -> ssize_t {
-            Http2Session* h2 = static_cast<Http2Session*>(user_data);
-            auto it = h2->pending_body_data.find(stream_id);
-            if (it == h2->pending_body_data.end()) {
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-                return 0;
-            }
-
-            BodyData& bd = it->second;
-            size_t remaining = bd.data.size() - bd.offset;
-            size_t to_copy = std::min(remaining, length);
-
-            if (to_copy > 0) {
-                memcpy(buf, bd.data.data() + bd.offset, to_copy);
-                bd.offset += to_copy;
-            }
-
-            if (bd.offset >= bd.data.size()) {
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-                h2->pending_body_data.erase(it);
-            }
-
-            return static_cast<ssize_t>(to_copy);
-        };
-        data_prd = &data_provider;
-    } else if (is_extended_connect) {
-        // For extended CONNECT without initial body, provide a data provider that defers
-        // This prevents nghttp2 from sending END_STREAM on the HEADERS frame
-        data_provider.source.ptr = this;
-        data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
-                uint8_t* buf, size_t length, uint32_t* data_flags,
-                nghttp2_data_source* source, void* user_data) -> ssize_t {
-            // For extended CONNECT streams, defer data until explicitly provided via sendStreamData
-            Http2Session* h2 = static_cast<Http2Session*>(user_data);
-            printd(5, "CONNECT_DATA_PROVIDER stream_id=%d length=%zu h2=%p\n", stream_id, length, h2);
-            auto it = h2->pending_body_data.find(stream_id);
-            if (it == h2->pending_body_data.end()) {
-                // No data yet - defer until sendStreamData provides data
-                printd(5, "CONNECT_DATA_PROVIDER no data, returning DEFERRED\n");
-                return NGHTTP2_ERR_DEFERRED;
-            }
-
-            BodyData& bd = it->second;
-            size_t remaining = bd.data.size() - bd.offset;
-            size_t to_copy = std::min(remaining, length);
-            printd(5, "CONNECT_DATA_PROVIDER remaining=%zu to_copy=%zu\n", remaining, to_copy);
-
-            if (to_copy > 0) {
-                memcpy(buf, bd.data.data() + bd.offset, to_copy);
-                bd.offset += to_copy;
-            }
-
-            if (bd.offset >= bd.data.size()) {
-                // All current data has been copied - remove from pending
-                h2->pending_body_data.erase(it);
-                // Don't send END_STREAM - this is a bidirectional streaming protocol
-                *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
-                printd(5, "CONNECT_DATA_PROVIDER all data copied, returning %zu (NO_END_STREAM)\n", to_copy);
-            }
-
-            // Return bytes copied - nghttp2 will call us again if it needs more
-            // We return DEFERRED only when there's NO data (handled above at the find check)
-            return static_cast<ssize_t>(to_copy);
-        };
-        data_prd = &data_provider;
+        // Store body data for callback (copies the data) after stream_id is known
+        pending_data = BodyData(body, body_len);
+        has_body = true;
+    }
+    if (has_body || is_extended_connect) {
+        provider_ctx = std::make_unique<DataProviderContext>();
+        provider_ctx->h2 = this;
+        provider_ctx->provider.source.ptr = provider_ctx.get();
+        provider_ctx->provider.read_callback = dataProviderReadCallback;
+        provider_ctx->defer_on_empty = is_extended_connect;
+        provider_ctx->no_end_stream = is_extended_connect;
+        provider_ctx->remove_on_empty = !is_extended_connect;
+        data_prd = &provider_ctx->provider;
     }
 
     int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
@@ -382,8 +351,21 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         return -1;
     }
 
+    if (has_body) {
+        pending_body_data.emplace(stream_id, std::move(pending_data));
+    }
+    if (provider_ctx) {
+        pending_data_providers.emplace(stream_id, std::move(provider_ctx));
+    }
+
     // Create stream info and mark as streaming for extended CONNECT
     Http2StreamInfo* stream = getOrCreateStream(stream_id);
+    if (stream) {
+        stream->is_connect = (method_str == "CONNECT");
+        if (!protocol.empty()) {
+            stream->connect_protocol = protocol;
+        }
+    }
     if (is_extended_connect && stream) {
         stream->stream_type = Http2StreamType::WebSocket;  // Mark as bidirectional streaming
     }
@@ -394,6 +376,7 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 int Http2Session::submitResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
         return -1;
@@ -413,61 +396,39 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     nva.push_back(nv_status);
 
     // Add regular headers, filtering out connection-specific headers
+    std::vector<std::string> lowered_names;
+    lowered_names.reserve(headers.size());
     for (const auto& h : headers) {
-        if (h.first[0] == ':') {
+        std::string lname = toLowerHeaderName(h.first);
+        if (lname[0] == ':') {
             continue;
         }
         // Skip connection-specific headers (forbidden in HTTP/2)
-        if (h.first == "Connection" || h.first == "connection" ||
-            h.first == "Keep-Alive" || h.first == "keep-alive" ||
-            h.first == "Proxy-Connection" || h.first == "proxy-connection" ||
-            h.first == "Transfer-Encoding" || h.first == "transfer-encoding" ||
-            h.first == "Upgrade" || h.first == "upgrade") {
+        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
+            lname == "transfer-encoding" || lname == "upgrade") {
             continue;
         }
+        lowered_names.push_back(lname);
         nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.first.c_str())),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
             reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            h.first.size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
+            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
     }
 
     nghttp2_data_provider* data_prd = nullptr;
-    nghttp2_data_provider data_provider;
+    std::unique_ptr<DataProviderContext> provider_ctx;
 
     if (body && body_len > 0) {
         // Store body data for callback (copies the data)
         pending_body_data[stream_id] = BodyData(body, body_len);
 
-        data_provider.source.ptr = this;
-        data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
-                uint8_t* buf, size_t length, uint32_t* data_flags,
-                nghttp2_data_source* source, void* user_data) -> ssize_t {
-            Http2Session* h2 = static_cast<Http2Session*>(user_data);
-            auto it = h2->pending_body_data.find(stream_id);
-            if (it == h2->pending_body_data.end()) {
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-                return 0;
-            }
-
-            BodyData& bd = it->second;
-            size_t remaining = bd.data.size() - bd.offset;
-            size_t to_copy = std::min(remaining, length);
-
-            if (to_copy > 0) {
-                memcpy(buf, bd.data.data() + bd.offset, to_copy);
-                bd.offset += to_copy;
-            }
-
-            if (bd.offset >= bd.data.size()) {
-                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-                h2->pending_body_data.erase(it);
-            }
-
-            return static_cast<ssize_t>(to_copy);
-        };
-        data_prd = &data_provider;
+        provider_ctx = std::make_unique<DataProviderContext>();
+        provider_ctx->h2 = this;
+        provider_ctx->provider.source.ptr = provider_ctx.get();
+        provider_ctx->provider.read_callback = dataProviderReadCallback;
+        data_prd = &provider_ctx->provider;
     }
 
     printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
@@ -483,11 +444,15 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
 
     printd(5, "submitResponse() SUCCESS: stream_id=%d want_write=%d want_read=%d\n",
         stream_id, nghttp2_session_want_write(session), nghttp2_session_want_read(session));
+    if (provider_ctx) {
+        pending_data_providers.emplace(stream_id, std::move(provider_ctx));
+    }
     return 0;
 }
 
 int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
         const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit push promise on client session");
         return -1;
@@ -549,6 +514,7 @@ int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
 }
 
 int Http2Session::submitRstStream(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     int rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, error_code);
     if (rv != 0) {
         if (xsink) {
@@ -562,6 +528,7 @@ int Http2Session::submitRstStream(int32_t stream_id, uint32_t error_code, Except
 
 int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
         size_t len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     int32_t last_id = nghttp2_session_get_last_proc_stream_id(session);
     int rv = nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, last_id, error_code,
         reinterpret_cast<const uint8_t*>(opaque_data), len);
@@ -577,6 +544,7 @@ int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
 }
 
 int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     int rv = nghttp2_submit_ping(session, NGHTTP2_FLAG_NONE, opaque_data);
     if (rv != 0) {
         if (xsink) {
@@ -589,6 +557,7 @@ int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
 }
 
 int Http2Session::submitWindowUpdate(int32_t stream_id, int32_t increment, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     int rv = nghttp2_submit_window_update(session, NGHTTP2_FLAG_NONE, stream_id, increment);
     if (rv != 0) {
         if (xsink) {
@@ -602,6 +571,7 @@ int Http2Session::submitWindowUpdate(int32_t stream_id, int32_t increment, Excep
 
 int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t weight,
         bool exclusive, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     nghttp2_priority_spec pri_spec;
     nghttp2_priority_spec_init(&pri_spec, dependency, weight, exclusive ? 1 : 0);
 
@@ -626,11 +596,14 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 }
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d send_buffer.size=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, send_buffer.size());
-    // First, collect data from nghttp2
+    // First, collect data from nghttp2; drain until it reports no more data.
+    // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
+    // relying on nghttp2_session_want_write() as a loop condition.
     size_t total_collected = 0;
-    while (nghttp2_session_want_write(session)) {
+    while (true) {
         const uint8_t* data;
 #ifdef QORE_USE_NGHTTP2_MEM_SEND2
         nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
@@ -742,11 +715,12 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 }
 
 int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     printd(5, "sendPendingDataBlocking() want_write=%d send_buffer.size=%zu timeout_ms=%d\n",
         nghttp2_session_want_write(session), send_buffer.size(), timeout_ms);
 
     // First, collect any additional data from nghttp2
-    while (nghttp2_session_want_write(session)) {
+    while (true) {
         const uint8_t* data;
 #ifdef QORE_USE_NGHTTP2_MEM_SEND2
         nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
@@ -801,6 +775,7 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
     // Use suppress_exception=true to avoid exception on timeout
@@ -832,7 +807,13 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     return 0;
 }
 
+bool Http2Session::hasPendingBodyData(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    return pending_body_data.find(stream_id) != pending_body_data.end();
+}
+
 Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
         return it->second.get();
@@ -840,7 +821,28 @@ Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
     return nullptr;
 }
 
+BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    (void)xsink;
+    auto it = streams.find(stream_id);
+    if (it == streams.end() || it->second->body.empty()) {
+        return nullptr;
+    }
+
+    size_t avail = it->second->body.size();
+    size_t take = (!max_bytes || max_bytes > avail) ? avail : max_bytes;
+    if (!take) {
+        return nullptr;
+    }
+
+    BinaryNode* rv = new BinaryNode();
+    rv->append(it->second->body.data(), take);
+    it->second->body.erase(it->second->body.begin(), it->second->body.begin() + take);
+    return rv;
+}
+
 Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
         return it->second.get();
@@ -852,6 +854,7 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 }
 
 void Http2Session::markStreamComplete(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
         // Prevent duplicate entries in completed_streams
@@ -876,6 +879,7 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
 }
 
 std::unique_ptr<Http2StreamInfo> Http2Session::takeCompletedStream() {
+    std::lock_guard<std::recursive_mutex> lg(m);
     if (completed_streams.empty()) {
         return nullptr;
     }
@@ -885,10 +889,12 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeCompletedStream() {
 }
 
 bool Http2Session::wantRead() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
     return nghttp2_session_want_read(session) != 0;
 }
 
 bool Http2Session::wantWrite() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
     return nghttp2_session_want_write(session) != 0 || send_offset < send_buffer.size();
 }
 
@@ -1021,6 +1027,16 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
     }
+    if (len) {
+        int rv = h2->submitWindowUpdate(stream_id, len, nullptr);
+        if (rv) {
+            printd(5, "onDataChunkRecvCallback: submitWindowUpdate stream_id=%d failed\n", stream_id);
+        }
+        rv = h2->submitWindowUpdate(0, len, nullptr);
+        if (rv) {
+            printd(5, "onDataChunkRecvCallback: submitWindowUpdate connection failed\n");
+        }
+    }
     return 0;
 }
 
@@ -1040,7 +1056,56 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
             h2->markStreamComplete(stream_id);
         }
     }
+    h2->pending_body_data.erase(stream_id);
+    h2->pending_data_providers.erase(stream_id);
     return 0;
+}
+
+ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data) {
+    (void)session;
+    DataProviderContext* ctx = static_cast<DataProviderContext*>(source->ptr);
+    Http2Session* h2 = ctx ? ctx->h2 : static_cast<Http2Session*>(user_data);
+    if (!h2 || !ctx) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        return 0;
+    }
+
+    auto it = h2->pending_body_data.find(stream_id);
+    if (it == h2->pending_body_data.end()) {
+        if (ctx->defer_on_empty) {
+            return NGHTTP2_ERR_DEFERRED;
+        }
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        if (ctx->remove_on_empty) {
+            h2->pending_data_providers.erase(stream_id);
+        }
+        return 0;
+    }
+
+    BodyData& bd = it->second;
+    size_t remaining = bd.data.size() - bd.offset;
+    size_t to_copy = std::min(remaining, length);
+
+    if (to_copy > 0) {
+        memcpy(buf, bd.data.data() + bd.offset, to_copy);
+        bd.offset += to_copy;
+    }
+
+    if (bd.offset >= bd.data.size()) {
+        h2->pending_body_data.erase(it);
+        if (ctx->no_end_stream) {
+            *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+        } else {
+            *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+            if (ctx->remove_on_empty) {
+                h2->pending_data_providers.erase(stream_id);
+            }
+        }
+    }
+
+    return static_cast<ssize_t>(to_copy);
 }
 
 int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame* frame,
@@ -1118,6 +1183,7 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
 
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     printd(5, "sendStreamData() stream_id=%d len=%zu end_stream=%d isServer=%d\n", stream_id, len, end_stream, is_server);
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
@@ -1171,6 +1237,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
 }
 
 void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     Http2StreamInfo* stream = getStream(stream_id);
     if (stream) {
         stream->stream_type = type;
@@ -1179,6 +1246,7 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
         return -1;
@@ -1235,48 +1303,22 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         nva.push_back(nv);
     }
 
-    // For CONNECT response, we use submit_response with a data provider that defers
-    // This keeps the stream open for bidirectional data using NGHTTP2_DATA_FLAG_NO_END_STREAM
-    nghttp2_data_provider data_provider;
-    data_provider.source.ptr = this;
-    data_provider.read_callback = [](nghttp2_session* session, int32_t stream_id,
-            uint8_t* buf, size_t length, uint32_t* data_flags,
-            nghttp2_data_source* source, void* user_data) -> ssize_t {
-        // For CONNECT streams, defer data until explicitly provided via sendStreamData
-        Http2Session* h2 = static_cast<Http2Session*>(user_data);
-        printd(5, "CONNECT_RESPONSE_DATA_PROVIDER stream_id=%d length=%zu h2=%p\n", stream_id, length, h2);
-        auto it = h2->pending_body_data.find(stream_id);
-        if (it == h2->pending_body_data.end()) {
-            // No data yet - defer until sendStreamData provides data
-            printd(5, "CONNECT_RESPONSE_DATA_PROVIDER no data, returning DEFERRED\n");
-            return NGHTTP2_ERR_DEFERRED;
-        }
+    std::unique_ptr<DataProviderContext> provider_ctx = std::make_unique<DataProviderContext>();
+    provider_ctx->h2 = this;
+    provider_ctx->provider.source.ptr = provider_ctx.get();
+    provider_ctx->provider.read_callback = dataProviderReadCallback;
+    provider_ctx->defer_on_empty = true;
+    provider_ctx->no_end_stream = true;
+    provider_ctx->remove_on_empty = false;
 
-        BodyData& bd = it->second;
-        size_t remaining = bd.data.size() - bd.offset;
-        size_t to_copy = std::min(remaining, length);
-        printd(5, "CONNECT_RESPONSE_DATA_PROVIDER remaining=%zu to_copy=%zu\n", remaining, to_copy);
-
-        if (to_copy > 0) {
-            memcpy(buf, bd.data.data() + bd.offset, to_copy);
-            bd.offset += to_copy;
-        }
-
-        if (bd.offset >= bd.data.size()) {
-            h2->pending_body_data.erase(it);
-            // Don't send END_STREAM - this is a bidirectional streaming protocol
-            *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
-        }
-
-        return static_cast<ssize_t>(to_copy);
-    };
-
-    int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), &data_provider);
+    int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
+        &provider_ctx->provider);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));
         return -1;
     }
+    pending_data_providers.emplace(stream_id, std::move(provider_ctx));
 
     // If successful (2xx), mark stream as WebSocket type if protocol is websocket
     if (status_code >= 200 && status_code < 300 && stream->connect_protocol == "websocket") {

@@ -4288,3 +4288,29 @@ nothing Socket::setHttp2ActiveStream(int stream_id) {
 int Socket::getHttp2ActiveStream() {
     return s->getHttp2ActiveStream();
 }
+
+//! Sends HTTP/2 stream data without blocking
+/** @param stream_id the HTTP/2 stream ID to send on
+    @param data the binary data to send
+    @param end_stream set to @ref True "True" to end the stream after sending
+    @param timeout_ms ignored (non-blocking)
+
+    @since %Qore 2.3
+*/
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
+        timeout timeout_ms = 0) {
+    s->sendHttp2StreamData((int32_t)stream_id, data, (bool)end_stream, timeout_ms, xsink);
+    return QoreValue();
+}
+
+//! Reads available HTTP/2 stream data without blocking
+/** @param stream_id the HTTP/2 stream ID to read from
+    @param max_bytes maximum bytes to return; 0 means all available
+
+    @return binary data if available, or NOTHING if no data is buffered
+
+    @since %Qore 2.3
+*/
+*binary Socket::readHttp2StreamData(int stream_id, int max_bytes = 0) {
+    return s->readHttp2StreamData((int32_t)stream_id, (size_t)max_bytes, xsink);
+}

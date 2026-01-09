@@ -1,0 +1,31 @@
+# Valgrind suppression file for Qore
+# These are false positives caused by compiler optimizations with bitfield assignments
+
+# False positive: AbstractQoreNode bitfield initialization
+# The custom operator new zeros memory, but optimizer's bitfield handling confuses valgrind
+{
+   AbstractQoreNode_bitfield_init_in_math_constants
+   Memcheck:Cond
+   fun:_ZN10QoreValue3setEP17AbstractQoreNode
+   fun:_Z19init_math_constantsR14QoreNamespace
+   ...
+}
+
+{
+   AbstractQoreNode_bitfield_init_general
+   Memcheck:Cond
+   fun:_ZN10QoreValue3setEP17AbstractQoreNode
+   ...
+   fun:_Z15init_qore_typesv
+   ...
+}
+
+# Alternative pattern matching for different compiler name mangling
+{
+   QoreValue_set_AbstractQoreNode_cond
+   Memcheck:Cond
+   fun:*QoreValue*set*AbstractQoreNode*
+   ...
+   fun:*init_math_constants*
+   ...
+}

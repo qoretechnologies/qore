@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebSocketHandler.qm Qore handler definition for the HttpServer module for providing WebSocket server services
 
-/*  WebSocketHandler.qm Copyright 2013 - 2025 Qore Technologies, s.r.o.
+/*  WebSocketHandler.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 %requires HttpServerUtil >= 1.0.12
 %requires WebSocketUtil >= 1.6
 %requires Util
+%requires AsyncSocketIo
 %requires(reexport) Logger
 
 # Optional AsyncAPI support
@@ -214,6 +215,12 @@ public class WebSocketConnection {
         /** @since WebSocketHandler 2.3
         */
         int extension_rsv_mask = 0;
+
+        bool async_mode = False;
+        *AsyncSocketIo::AsyncSocketIoController async_ctrl;
+
+        #! Listener ID this connection belongs to
+        string lid;
     }
 
     private:internal {
@@ -233,6 +240,34 @@ public class WebSocketConnection {
     #! Sets the socket used by the server for the connection
     setSocket(Socket sock) {
         self.sock = sock;
+    }
+
+    setAsyncIo(bool async_mode, *AsyncSocketIo::AsyncSocketIoController async_ctrl) {
+        self.async_mode = async_mode;
+        self.async_ctrl = async_ctrl;
+    }
+
+    bool isAsyncMode() {
+        return async_mode;
+    }
+
+    *AsyncSocketIo::AsyncSocketIoController getAsyncCtrl() {
+        return async_ctrl;
+    }
+
+    #! Returns the owner ID for async I/O operations
+    string getOwnerId() {
+        return self.uniqueHash();
+    }
+
+    #! Sets the listener ID for this connection
+    setListenerId(string lid) {
+        self.lid = lid;
+    }
+
+    #! Returns the listener ID for this connection
+    string getListenerId() {
+        return lid;
     }
 
     #! This method is called to poll for messages from the client to send from the server
@@ -839,9 +874,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
             # Negotiate extensions if supported
             *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
-            hash<auto> rhdr;
+            # HTTP/2 header field names must be lowercase
+            hash<auto> rhdr = {};
+            if (hdr."sec-websocket-key") {
+                rhdr."sec-websocket-accept" = ws_get_response_key(hdr."sec-websocket-key");
+            }
             if (ext_result.response_header) {
-                rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
+                rhdr."sec-websocket-extensions" = ext_result.response_header;
             }
             # Store negotiated extensions in hdr for startImpl to access
             if (ext_result.extensions) {
@@ -909,15 +948,38 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         @param sock the @ref Qore::Socket "Socket" object for the dedicated connection to the client
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
-        logDebug("WebSocketHandler::startImpl() cid: %y from %s:%d", cx.id, cx."peer-info".hostname_desc,
-            cx."peer-info".port);
-
         softstring cid = cx.id;
+        bool is_http2_ws = cx."header-info".http2 && cx."header-info".is_websocket_connect;
+        int h2_stream_id = is_http2_ws ? cx."header-info".stream_id : -1;
+        softstring exit_reason = "unknown";
+        @debug(bool h2_ws_debug_handler = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
+        @debug {
+            if (h2_ws_debug_handler) {
+                log(LoggerLevel::INFO, "HTTP/2 WS handler start: cid=%y stream_id=%d from %s:%d", cx.id, h2_stream_id,
+                    cx."peer-info".hostname_desc, cx."peer-info".port);
+            } else {
+                logDebug("WebSocketHandler::startImpl() cid: %y from %s:%d", cx.id, cx."peer-info".hostname_desc,
+                    cx."peer-info".port);
+            }
+        }
+        # Debug helper for HTTP/2 WS frame headers
+        @debug(bool h2_ws_debug_frames = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
+        bool async_mode = cx."async_mode" ?? False;
+        *AsyncSocketIo::AsyncSocketIoController async_ctrl;
+        if (async_mode) {
+            async_ctrl = cx."async_ctrl";
+        }
+        if (is_http2_ws) {
+            sock.setHttp2ActiveStream(h2_stream_id);
+            on_exit sock.setHttp2ActiveStream(-1);
+        }
 
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
+        wsc.setListenerId(lid);
+        wsc.setAsyncIo(async_mode, async_ctrl);
 
         # Set negotiated extensions on the connection
         if (hdr."_ws_negotiated_extensions") {
@@ -958,21 +1020,37 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         data buf;
         # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
         hash<auto> first_frame_rsv;
+        binary http2_buf;
         while (True) {
             #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
             if (stop || lsh{lid} || wsc.stop_flag) {
                 logDebug("WebSocketHandler::startImpl() cid: %y stopping; stop: %y lsh{%y}: %y, "
                     "wsc.stop_flag: %y", cx.id, stop, lid, lsh{lid}, wsc.stop_flag);
-                sendClose(sock, WSCC_GoingAway);
+                sendClose(wsc, sock, WSCC_GoingAway);
+                exit_reason = "stopping";
                 break;
             }
 
+            if (is_http2_ws) {
+                # Re-assert stream mapping in case the thread has been reassigned
+                sock.setHttp2ActiveStream(h2_stream_id);
+            }
+
             try {
-                bool update;
+                bool update = False;
                 # send any and all messages on the queue
                 *binary d = wsc.pollData();
                 if (d) {
-                    sock.send2(d, send_timeout);
+                    @debug {
+                        if (h2_ws_debug_frames && d.size() >= 2) {
+                            int b0 = d[0];
+                            int b1 = d[1];
+                            log(LoggerLevel::INFO,
+                                "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
+                                (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+                        }
+                    }
+                    sendFrame(wsc, sock, d);
                     update = True;
                     flushIoIntern(wsc, sock, False);
                 }
@@ -980,21 +1058,75 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 if (wsc.stop_flag) {
                     continue;
                 }
-                if (!sock.isDataAvailable(0)) {
-                    int now = clock_getmillis() / 1000;
-                    if (!update) {
-                        if ((now - timestamp) >= heartbeat) {
-                            sock.send2(ws_encode_message(heartbeat_msg, WSOP_Ping), send_timeout);
+                hash<WsMsgInfo> h;
+                bool have_frame = False;
+                if (is_http2_ws && async_mode) {
+                    *binary incoming = sock.readHttp2StreamData(h2_stream_id);
+                    if (incoming) {
+                        http2_buf = http2_buf ? http2_buf + incoming : incoming;
+                    }
+                    int frame_len = getWsFrameLength(http2_buf);
+                    if (frame_len > 0) {
+                        binary frame = http2_buf.substr(0, frame_len);
+                        if (frame_len == http2_buf.size()) {
+                            remove http2_buf;
+                        } else {
+                            http2_buf = http2_buf.substr(frame_len);
+                        }
+                        h = ws_parse_frame(frame, sock.getEncoding());
+                        have_frame = True;
+                    } else {
+                        int now = clock_getmillis() / 1000;
+                        if (!update) {
+                            if ((now - timestamp) >= heartbeat) {
+                                binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
+                                @debug {
+                                    if (h2_ws_debug_frames && frame.size() >= 2) {
+                                        int b0 = frame[0];
+                                        int b1 = frame[1];
+                                        log(LoggerLevel::INFO,
+                                            "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
+                                            b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+                                    }
+                                }
+                                sendFrame(wsc, sock, frame);
+                                timestamp = now;
+                            }
+                        } else {
                             timestamp = now;
                         }
-                    } else {
-                        timestamp = now;
+                        continue;
                     }
+                } else {
+                    if (!sock.isDataAvailable(0ms)) {
+                        int now = clock_getmillis() / 1000;
+                        if (!update) {
+                            if ((now - timestamp) >= heartbeat) {
+                                binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
+                                @debug {
+                                    if (h2_ws_debug_frames && frame.size() >= 2) {
+                                        int b0 = frame[0];
+                                        int b1 = frame[1];
+                                        log(LoggerLevel::INFO,
+                                            "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
+                                            b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+                                    }
+                                }
+                                sendFrame(wsc, sock, frame);
+                                timestamp = now;
+                            }
+                        } else {
+                            timestamp = now;
+                        }
 
+                        continue;
+                    }
+                    h = ws_read_message(sock);
+                    have_frame = True;
+                }
+                if (!have_frame) {
                     continue;
                 }
-
-                hash<WsMsgInfo> h = ws_read_message(sock);
 
                 # update ping timestamp if we have done WS I/O in a callback
                 on_exit {
@@ -1009,26 +1141,47 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     continue;
                 }
                 if (state == WSC_Break) {
+                    exit_reason = "handler-break";
                     break;
                 }
 
                 if (h.op == WSOP_Close) {
                     if (!h.close) {
                         logDebug("client sent OpClose without code; closing immediately");
+                        exit_reason = "client-close-no-code";
                         break;
                     }
                     logDebug("client sent WSOP_Close code %d (%s): %s", h.close, WSCCMap.(h.close), h.msg);
-                    sendClose(sock, h.close, h.msg);
+                    sendClose(wsc, sock, h.close, h.msg);
+                    exit_reason = "client-close";
                     break;
                 }
 
+                @debug(int b0);
+                @debug(int b1);
+                @debug(*hash<auto> info);
+                @debug {
+                    if (h2_ws_debug_frames) {
+                    info = h.info;
+                    b0 = info."b0" ?? -1;
+                    b1 = info."b1" ?? -1;
+                        log(LoggerLevel::INFO,
+                            "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
+                            b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                    }
+                }
                 logDebug("received msg (%s: %d bytes%s%s): %s", WSOPMap{h.op} ?? "unknown", h.msg.size(),
                     h.masked ? " masked" : "", h.fin ? " FIN" : "", WebSocketHandler::getDataString(h.msg));
 
                 if (!h.masked) {
-                    logError("unmasked client frame received");
-                    sendClose(sock, WSCC_ProtocolError);
-                    break;
+                    if (!is_http2_ws) {
+                        logError("unmasked client frame received");
+                        sendClose(wsc, sock, WSCC_ProtocolError);
+                        exit_reason = "protocol-error-unmasked";
+                        break;
+                    }
+                    # HTTP/2 WebSocket frames are not masked (RFC 8441)
+                    logDebug("unmasked client frame received on HTTP/2 WebSocket");
                 }
 
                 # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
@@ -1037,14 +1190,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (any_rsv_set) {
                         logError("invalid RSV bits on control frame: op=%d rsv1=%y rsv2=%y rsv3=%y",
                             h.op, h.rsv1, h.rsv2, h.rsv3);
-                        sendClose(sock, WSCC_ProtocolError);
+                        sendClose(wsc, sock, WSCC_ProtocolError);
+                        exit_reason = "protocol-error-rsv-control";
                         break;
                     }
                 } else {
                     # For non-control frames, validate RSV bits against active extensions
                     if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
                         logError("invalid RSV bits received: rsv1=%y rsv2=%y rsv3=%y", h.rsv1, h.rsv2, h.rsv3);
-                        sendClose(sock, WSCC_ProtocolError);
+                        sendClose(wsc, sock, WSCC_ProtocolError);
+                        exit_reason = "protocol-error-rsv";
                         break;
                     }
                 }
@@ -1053,7 +1208,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 timestamp = clock_getmillis() / 1000;
 
                 if (h.op == WSOP_Ping) {
-                    sock.send2(ws_encode_message(h.msg ?? "", WSOP_Pong), send_timeout);
+                    sendFrame(wsc, sock, ws_encode_message(h.msg ?? "", WSOP_Pong));
                     continue;
                 }
 
@@ -1077,14 +1232,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             };
                         } else {
                             logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
-                            sendClose(sock, WSCC_ProtocolError);
+                            sendClose(wsc, sock, WSCC_ProtocolError);
+                            exit_reason = "protocol-error-fin";
                             break;
                         }
                     } else {
                         if (h.op != WSOP_Continuation) {
                             logError("FIN bit not set with buffer of type %y but opcode is %d: %y", buf.type(), h.op,
                                 WSOPMap{h.op} ?? "unknown");
-                            sendClose(sock, WSCC_ProtocolError);
+                            sendClose(wsc, sock, WSCC_ProtocolError);
+                            exit_reason = "protocol-error-continuation";
                             break;
                         } else {
                             if (buf.typeCode() == NT_STRING) {
@@ -1139,22 +1296,31 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 } else if (h.op == WSOP_Continuation) {
                     logError("FIN bit set with %d: %y opcode, but no data has been buffered", h.op,
                         WSOPMap{h.op} ?? "unknown");
-                    sendClose(sock, WSCC_ProtocolError);
+                    sendClose(wsc, sock, WSCC_ProtocolError);
+                    exit_reason = "protocol-error-continuation-without-buffer";
                     break;
                 }
 
                 # unrecognized opcode - close the connection
-                sendClose(sock, WSCC_UnsupportedData);
+                sendClose(wsc, sock, WSCC_UnsupportedData);
+                exit_reason = "unsupported-opcode";
                 break;
             } catch (hash<ExceptionInfo> ex) {
                 # error in websocket handler server, log and close the connection
                 string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                 logError(err);
-                sendClose(sock, WSCC_InternalServerError, err);
+                sendClose(wsc, sock, WSCC_InternalServerError, err);
+                exit_reason = "exception";
                 break;
             }
         }
-        #logDebug("WebSocketHandler::startImpl() exiting, cid: %y", cx.id);
+        @debug {
+            if (h2_ws_debug_handler) {
+                log(LoggerLevel::INFO, "HTTP/2 WS handler exit: cid=%y reason=%y", cx.id, exit_reason);
+            } else {
+                logDebug("WebSocketHandler::startImpl() exiting, cid: %y reason: %y", cx.id, exit_reason);
+            }
+        }
         return False;
     }
 
@@ -1168,7 +1334,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
         bool rv;
         while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
-            sock.send2(d, send_timeout);
+            sendFrame(wsc, sock, d);
             if (d && !rv) {
                 rv = True;
                 if (update_tld) {
@@ -1249,7 +1415,89 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ch{id}.stop();
     }
 
-    private sendClose(Qore::Socket sock, int code, *string txtmsg) {
+    #! Called when a specific listener is stopped; signals all connections to wake up blocked threads
+    /**
+        ## Purpose
+
+        This method is called by HttpListener::stop() when shutting down a specific listener.
+        It ensures WebSocket connections don't block server shutdown by signaling them to exit.
+
+        ## Deadlock Prevention
+
+        WebSocket connections run in their own threads (startImpl loop) and may be blocked on:
+        - pollData() waiting for messages to send (250ms timeout)
+        - Socket I/O operations
+
+        Without this method, the server shutdown sequence would hang waiting for these threads
+        to notice the shutdown flag. By calling stop() on each connection, we:
+        1. Set the connection's stop_flag to True
+        2. Push an empty message to wake up pollData() immediately
+
+        @param lid the listener ID being stopped
+
+        @see WebSocketConnection::stop() for how individual connections are signaled
+    */
+    private stopImpl(string lid) {
+        # Mark this listener as stopped; connections check lsh{lid} in their main loop
+        lsh{lid} = True;
+
+        # Wake up connections for this listener immediately
+        rwl.readLock();
+        on_exit rwl.readUnlock();
+        map $1.stop(), ch.iterator(), $1.getListenerId() == lid;
+    }
+
+    #! Called when the handler itself is stopped; signals all connections to wake up blocked threads
+    /**
+        ## Purpose
+
+        This method is called when the WebSocketHandler is being removed or the server is
+        shutting down. It ensures all WebSocket connections exit promptly.
+
+        ## Shutdown Sequence
+
+        This is called from HttpServer's handler cleanup, which happens after asyncIo.stop()
+        and globalAsyncCtrl.stop(). At this point:
+        1. No new connections can be accepted
+        2. Existing connections need to be signaled to exit
+        3. dThreads counter needs to reach zero for listener shutdown to complete
+
+        @see stopAllConnections() for the actual signaling logic
+    */
+    private stopImpl() {
+        stopAllConnections();
+    }
+
+    #! Signals all active WebSocket connections to stop and wake up blocked polling threads
+    /**
+        ## Implementation
+
+        Iterates over all active connections (ch hash) and calls stop() on each.
+        Uses a read lock since we're only reading the hash and calling methods on values.
+
+        ## Thread Safety
+
+        - Uses rwl.readLock() to allow concurrent access during iteration
+        - Each connection's stop() is thread-safe
+        - New connections can still be added during iteration (won't be signaled, but that's OK
+          since they'll see the shutdown flags on their next loop iteration)
+
+        ## WebSocketConnection::stop() Behavior
+
+        For each connection, stop() does:
+        1. Sets stop_flag = True (checked in startImpl's while loop)
+        2. Pushes empty binary to queue (wakes up pollData immediately)
+
+        This ensures the startImpl loop will exit on its next iteration, allowing the
+        connection thread to complete and decrement the dThreads counter.
+    */
+    private stopAllConnections() {
+        rwl.readLock();
+        on_exit rwl.readUnlock();
+        map $1.stop(), ch.iterator();
+    }
+
+    private sendClose(WebSocketConnection wsc, Qore::Socket sock, int code, *string txtmsg) {
         if (!WSCCMap{code}) {
             logError("WebSocketHandler::sendClose(): invalid close code %d received; expecting one of: %y", code,
                 (map $1.toInt(), WSCCMap.keyIterator()));
@@ -1263,7 +1511,101 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         else
             txtmsg = WSCCMap{code};
         msg += txtmsg;
-        sock.send2(ws_encode_message(msg, WSOP_Close), send_timeout);
+        binary frame = ws_encode_message(msg, WSOP_Close);
+        @debug {
+            if (sock.isHttp2() && getenv("QORE_HTTP2_WS_DEBUG_FRAMES") && frame.size() >= 2) {
+                int b0 = frame[0];
+                int b1 = frame[1];
+                log(LoggerLevel::INFO,
+                    "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
+                    b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
+            }
+        }
+        sendFrame(wsc, sock, frame);
+    }
+
+    private int getWsFrameLength(*binary buf) {
+        # Fast length-only parse to avoid ws_parse_frame() exceptions and decoding overhead
+        # when we just need to know if the buffer contains a complete frame.
+        if (!buf || buf.size() < 2) {
+            return 0;
+        }
+
+        int pos = 0;
+        pos += 1;
+        int b1 = buf[pos++];
+        bool masked = (b1 & 0x80) ? True : False;
+        int len = b1 & 0x7f;
+
+        if (len == 126) {
+            if (buf.size() < pos + 2) {
+                return 0;
+            }
+            len = (buf[pos] << 8) | buf[pos + 1];
+            pos += 2;
+        } else if (len == 127) {
+            if (buf.size() < pos + 8) {
+                return 0;
+            }
+            len = 0;
+            for (int i = 0; i < 8; ++i) {
+                len = (len << 8) | buf[pos++];
+            }
+        }
+
+        if (masked) {
+            if (buf.size() < pos + 4) {
+                return 0;
+            }
+            pos += 4;
+        }
+
+        int total = pos + len;
+        if (buf.size() < total) {
+            return 0;
+        }
+        return total;
+    }
+
+    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
+        if (wsc.isAsyncMode() && sock.isHttp2()) {
+            int stream_id = sock.getHttp2ActiveStream();
+            if (stream_id > 0) {
+                sock.sendHttp2StreamData(stream_id, frame, False, 0);
+                return;
+            }
+        }
+        if (wsc.isAsyncMode()) {
+            @assert(wsc.getAsyncCtrl(), "missing async controller for async mode WebSocket send");
+            AbstractPollOperation op;
+            try {
+                op = sock.startPollSend(frame);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
+                    # Another async send is already in progress
+                    # WARNING: Dropping frames can cause protocol issues, especially for control frames
+                    # (ping/pong/close). This is a known limitation of the current async implementation.
+                    # TODO: Consider implementing a message queue for proper frame ordering
+                    log(LoggerLevel::WARN,
+                        "WebSocketHandler::sendFrame(): async send already in progress; dropping frame "
+                        "(size=%d bytes)", frame.size());
+                    return;
+                }
+                throw ex.err, ex.desc, ex.arg;
+            }
+            hash<SocketPollResultInfo> result = wsc.getAsyncCtrl().exec(<SocketPollOperationInfo>{
+                "sock": sock,
+                "spop": op,
+                "to": send_timeout,
+                "owner": wsc.getOwnerId(),
+                "other": {"goal": "ws-send"},
+            });
+            if (result.ex) {
+                throw result.ex.err, result.ex.desc, result.ex.arg;
+            }
+            return;
+        }
+        sock.send2(frame, send_timeout);
     }
 
     static string getDataString(*data d) {

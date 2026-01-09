@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore AsyncSocketIoController class definition
 
-/*  AsyncSocketIoController.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  AsyncSocketIoController.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,9 @@ public hashdecl SocketPollOperationInfo {
 
     #! I/O timeout; use 0s to disable timeout (operation will wait indefinitely)
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+
+    #! Owner identifier for cancellation; required for proper cleanup during shutdown via cancelByOwner()
+    string owner;
 
     #! Free-form data to be returned when the operation completes
     *hash<auto> other;
@@ -91,14 +94,23 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! Stop monitoring thread when the last operation is complete
         bool autostop = True;
 
+        #! Shutdown flag to prevent new operations during stop
+        bool shutting_down = False;
+
         #! I/O thread command: add
         const IO_ADD = "add";
 
         #! I/O thread command: cancel
         const IO_CANCEL = "cancel";
 
+        #! I/O thread command: cancel by owner
+        const IO_CANCEL_OWNER = "cancel_owner";
+
         #! I/O thread command: quit
         const IO_QUIT = "quit";
+
+        #! I/O thread command: wake
+        const IO_WAKE = "wake";
     }
 
     private:internal {
@@ -175,6 +187,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             throw "CONTROLLER-START-ERROR", sprintf("I/O thread is already running in TID %d", tid);
         }
 
+        shutting_down = False;
         startIntern();
     }
 
@@ -183,7 +196,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         {
             AutoLock al(m);
             if (tid) {
+                shutting_down = True;
                 sendCmd(IO_QUIT);
+            } else {
+                shutting_down = True;
             }
         }
         mcnt.waitForZero();
@@ -253,11 +269,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         if (!info.spop) {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'spop' value; got: %y", info);
         }
+        if (!info.owner) {
+            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
+                "cancelByOwner(); got: %y", info);
+        }
         # get unique key for socket object
         string uh = info.sock.uniqueHash();
         hash<PollInfo> cinfo;
         {
             AutoLock al(m);
+            if (shutting_down) {
+                throw "CONTROLLER-ADD-ERROR", sprintf("Cannot add operation for socket %y; controller is shutting down",
+                    uh);
+            }
             if (*hash<PollInfo> existing = cache{uh}) {
                 if (replace) {
                     cancelIntern(uh);
@@ -270,6 +294,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "sock": info.sock,
                 "spop": info.spop,
                 "to": info.to,
+                "owner": info.owner,
                 "other": info.other,
                 "q": info.resultQueue ?? new Queue(),
             };
@@ -330,6 +355,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return rv;
     }
 
+    #! Wakes the I/O thread to re-evaluate poll state
+    wake() {
+        sendCmd(IO_WAKE);
+    }
+
     #! Cancels any operation in progress for the given Socket
     /** @param sock the socket to cancel any operation in progress for
 
@@ -347,6 +377,57 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
     }
 
+    #! Cancels all operations belonging to a specific owner
+    /** @param owner the owner identifier (typically from uniqueHash()) to cancel operations for
+
+        Operations are matched by checking the \c owner field in the @ref SocketPollOperationInfo hash.
+
+        @return the number of operations canceled
+
+        @note This method blocks until all matching operations have been canceled.
+        The I/O thread continues running and other owners' operations are not affected.
+
+        @since %AsyncSocketIo 1.1
+    */
+    int cancelByOwner(string owner) {
+        int rv;
+        {
+            AutoLock al(m);
+            if (!tid || !cache) {
+                return 0;
+            }
+            # count matching operations
+            foreach string key in (keys cache) {
+                if (cache{key}.owner == owner) {
+                    ++rv;
+                }
+            }
+            if (!rv) {
+                return 0;
+            }
+            sendCmd(IO_CANCEL_OWNER, owner);
+        }
+        # wait for the I/O thread to complete cancellation
+        # we use a simple polling approach since multiple operations may be canceled
+        while (True) {
+            {
+                AutoLock al(m);
+                bool found = False;
+                foreach string key in (keys cache) {
+                    if (cache{key}.owner == owner) {
+                        found = True;
+                        break;
+                    }
+                }
+                if (!found) {
+                    break;
+                }
+            }
+            usleep(1ms);
+        }
+        return rv;
+    }
+
     #! Common constructor code
     private constructorInit() {
         hash<PipeInfo> info = File::getPipe();
@@ -360,13 +441,20 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Cancels an operation in progress and sends an appropriate message on the result queue
     private cancelIntern(string uh) {
-        # called locked
+        # called locked; caller must hold m to ensure shutting_down/cache state is consistent
+        if (shutting_down || !tid || !cache{uh}) {
+            if (cancel_cond_map{uh}) {
+                cancel_cond_map{uh}.broadcast();
+                remove cancel_cond_map{uh};
+            }
+            return;
+        }
+        # register the cancel condition before sending the command to avoid races
+        cancel_cond_map{uh} = new Condition();
         # cancel the current operation
-        hash<PollInfo> cinfo = cache{uh};
         sendCmd(IO_CANCEL, uh);
 
         # wait for the I/O thread to confirm
-        cancel_cond_map{uh} = new Condition();
         while (cancel_cond_map{uh}) {
             cancel_cond_map{uh}.wait(m);
         }
@@ -377,6 +465,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     private startIntern() {
+        shutting_down = False;
         mcnt.inc();
         on_error mcnt.dec();
         tid = background ioThread();
@@ -384,6 +473,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     private int stopIntern() {
         int rv = cache.size();
+        shutting_down = True;
         sendCmd(IO_QUIT);
         return rv;
     }
@@ -444,6 +534,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             if (!info) {
                                 # operation successful
                                 remove cache{key};
+                                if (*Condition c = remove cancel_cond_map{key}) {
+                                    c.signal();
+                                }
                                 cinfo.q.push(<SocketPollResultInfo>{
                                     "sock": cinfo.sock,
                                     "spop": cinfo.spop,
@@ -462,6 +555,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             log(LoggerLevel::ERROR, "%s", get_exception_string(ex));
                             # poll operation failed with an exception
                             remove cache{key};
+                            if (*Condition c = remove cancel_cond_map{key}) {
+                                c.signal();
+                            }
                             cinfo.q.push(<SocketPollResultInfo>{
                                 "sock": cinfo.sock,
                                 "spop": cinfo.spop,
@@ -515,22 +611,93 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         try {
             while (hash<auto> h = cmdq.get(-1)) {
                 #log(LoggerLevel::DEBUG, "I/O thread got command: %y", h);
-                AutoLock al(m);
                 switch (h.cmd) {
-                    case IO_QUIT:
-                        # cancel all operations in progress
-                        map doCancelIntern($1), cache.iterator();
+                    case IO_QUIT: {
+                        # cancel all operations in progress without holding the lock while aborting
+                        list<hash<PollInfo>> cancel_list = ();
+                        list<Condition> cond_list = ();
+                        {
+                            AutoLock al(m);
+                            log(LoggerLevel::DEBUG, "AsyncSocketIoController canceling %d operations for shutdown",
+                                cache.size());
+                            foreach string key in (keys cache) {
+                                cancel_list += cache{key};
+                                if (*Condition c = remove cancel_cond_map{key}) {
+                                    cond_list += c;
+                                }
+                                remove cache{key};
+                            }
+                        }
+                        foreach Condition c in (cond_list) {
+                            c.signal();
+                        }
+                        foreach hash<PollInfo> cinfo in (cancel_list) {
+                            doCancelIntern(cinfo);
+                        }
                         return True;
+                    }
 
                     case IO_ADD:
                         # processed automatically
                         break;
 
                     case IO_CANCEL: {
-                        hash<PollInfo> cinfo = cache{h.args[0]};
-                        doCancelIntern(cinfo);
+                        hash<PollInfo> cinfo;
+                        *Condition c;
+                        {
+                            AutoLock al(m);
+                            if (cache{h.args[0]}) {
+                                cinfo = cache{h.args[0]};
+                                remove cache{h.args[0]};
+                                c = remove cancel_cond_map{h.args[0]};
+                            }
+                        }
+                        if (!cinfo) {
+                            log(LoggerLevel::DEBUG, "AsyncSocketIoController cancel request for unknown key: %y",
+                                h.args[0]);
+                        }
+                        if (c) {
+                            c.signal();
+                        }
+                        if (cinfo) {
+                            doCancelIntern(cinfo);
+                        }
                         break;
                     }
+
+                    case IO_CANCEL_OWNER: {
+                        # Cancel all operations belonging to a specific owner
+                        string owner = h.args[0];
+                        list<hash<PollInfo>> cancel_list = ();
+                        list<Condition> cond_list = ();
+                        {
+                            AutoLock al(m);
+                            log(LoggerLevel::DEBUG, "AsyncSocketIoController canceling operations for owner %s",
+                                owner);
+                            foreach string key in (keys cache) {
+                                if (cache{key}.owner == owner) {
+                                    cancel_list += cache{key};
+                                    if (*Condition c = remove cancel_cond_map{key}) {
+                                        cond_list += c;
+                                    }
+                                    remove cache{key};
+                                }
+                            }
+                        }
+                        foreach Condition c in (cond_list) {
+                            c.signal();
+                        }
+                        foreach hash<PollInfo> cinfo in (cancel_list) {
+                            doCancelIntern(cinfo);
+                        }
+                        log(LoggerLevel::DEBUG, "AsyncSocketIoController canceled %d operations for owner %s",
+                            cancel_list.size(), owner);
+                        break;
+                    }
+
+                    case IO_WAKE:
+                        # no-op; waking the I/O thread is enough
+                        break;
                 }
             }
         } catch(hash<ExceptionInfo> ex) {
@@ -542,12 +709,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     private doCancelIntern(hash<PollInfo> cinfo) {
         try {
+            log(LoggerLevel::DEBUG, "canceling async I/O op=%s sock=%s",
+                cinfo.spop.className(),
+                sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]));
             cinfo.spop.abort();
+            log(LoggerLevel::DEBUG, "canceled async I/O op=%s sock=%s",
+                cinfo.spop.className(),
+                sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]));
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::WARN, "Ignoring error aborting canceled async I/O: %s", get_exception_string(ex));
-        }
-        if (*Condition c = remove cancel_cond_map{cinfo.sock.uniqueHash()}) {
-            c.signal();
         }
         # push cancelation message on the queue
         cinfo.q.push(<SocketPollResultInfo>{
@@ -589,6 +759,9 @@ hashdecl PollInfo {
 
     #! I/O timeout; 0s or less means no timeout
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+
+    #! Owner identifier for cancellation
+    string owner;
 
     #! Other data stored alongside the socket
     *hash<auto> other;

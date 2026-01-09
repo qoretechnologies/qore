@@ -559,6 +559,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! HTTP/2 stream ID for WebSocket data (RFC 8441)
         int h2_stream_id = 0;
+
+        #! Buffer for HTTP/2 WebSocket frames spanning multiple DATA frames
+        *binary h2_frame_buf;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -1403,7 +1406,9 @@ ws.setEventQueue();
                 # For HTTP/2, use the HTTP/2-aware data availability check
                 bool data_available;
                 if (http2_websocket && h2_stream_id > 0) {
-                    data_available = hc.isHttp2DataAvailable(h2_stream_id, 50ms);
+                    data_available = h2_frame_buf && h2_frame_buf.size()
+                        ? True
+                        : hc.isHttp2DataAvailable(h2_stream_id, 50ms);
                 } else {
                     data_available = hc.isDataAvailable(50ms);
                 }
@@ -1751,16 +1756,39 @@ ws.setEventQueue();
             # HTTP/2: Read data from HTTP/2 stream and parse WebSocket frame
             # Large WebSocket frames may be split across multiple HTTP/2 DATA frames,
             # so we need to accumulate data until we have a complete WebSocket frame
-            binary buf;
+            binary buf = h2_frame_buf ?? binary();
             date start = now_us();
             date deadline = start + timeout_ms;
             while (True) {
+                *int needed = ws_get_frame_size(buf);
+                if (exists needed && buf.size() >= needed) {
+                    binary frame = buf.substr(0, needed);
+                    if (buf.size() > needed) {
+                        h2_frame_buf = buf.substr(needed);
+                    } else {
+                        remove h2_frame_buf;
+                    }
+                    hash<WsMsgInfo> h = ws_parse_frame(frame);
+                    @debug {
+                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
+                            log(LoggerLevel::INFO,
+                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                        }
+                    }
+                    return h;
+                }
+
                 # Calculate remaining time for this read
                 date remaining = deadline - now_us();
                 if (remaining <= 0s) {
-                    *int needed = ws_get_frame_size(buf);
+                    *int needed_timeout = ws_get_frame_size(buf);
                     throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from HTTP/2 stream "
-                        "(have %d bytes, need %s)", buf.size(), exists needed ? needed.toString() : "unknown");
+                        "(have %d bytes, need %s)", buf.size(),
+                        exists needed_timeout ? needed_timeout.toString() : "unknown");
                 }
 
                 # Use remaining time but cap at 100ms to allow checking for complete frames
@@ -1771,13 +1799,27 @@ ws.setEventQueue();
                 }
 
                 # Check if we have enough data for a complete frame
-                *int needed = ws_get_frame_size(buf);
-                if (exists needed) {
-                    if (buf.size() >= needed) {
-                        # We have a complete frame
-                        return ws_parse_frame(buf);
+                *int needed2 = ws_get_frame_size(buf);
+                if (exists needed2 && buf.size() >= needed2) {
+                    # We have a complete frame; preserve any remaining bytes
+                    binary frame = buf.substr(0, needed2);
+                    if (buf.size() > needed2) {
+                        h2_frame_buf = buf.substr(needed2);
+                    } else {
+                        remove h2_frame_buf;
                     }
-                    # Need more data - continue reading
+                    hash<WsMsgInfo> h = ws_parse_frame(frame);
+                    @debug {
+                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
+                            log(LoggerLevel::INFO,
+                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                        }
+                    }
+                    return h;
                 } else if (!data && buf.empty()) {
                     throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
                 }
@@ -1810,6 +1852,10 @@ ws.setEventQueue();
         } catch (hash<ExceptionInfo> ex) {
             # ignore SOCKET-NOT-OPEN errors when closing (server already closed the connection)
             if (ex.err == "SOCKET-NOT-OPEN") {
+                return;
+            }
+            if (ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-CLOSED") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
                 return;
             }
             rethrow;
@@ -1904,11 +1950,13 @@ ws.setEventQueue();
     }
 
     #! RFC 8441: HTTP/2 WebSocket handshake using extended CONNECT
-    /** @since WebSocketClient 2.6
+    /** Uses \c Sec-WebSocket-Key in the CONNECT request and validates the \c Sec-WebSocket-Accept response header.
+        @since WebSocketClient 2.6
     */
     private hash<auto> connectHttp2WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
         http2_websocket = True;
         h2_stream_id = 0;
+        remove h2_frame_buf;
         logDebug("Using HTTP/2 WebSocket handshake (RFC 8441)");
 
         # Merge HTTPClient's default headers (includes Authorization from token option)
@@ -1917,6 +1965,10 @@ ws.setEventQueue();
 
         # Remove :protocol from headers - it's handled by sendHttp2Connect
         remove hdr.":protocol";
+
+        # Add Sec-WebSocket-Key for RFC 8441 handshake
+        string key = get_random_string(16).toBase64();
+        hdr."Sec-WebSocket-Key" = key;
 
         # Add extension offers if configured (extensions work the same in HTTP/2)
         if (offered_extensions) {
@@ -1956,10 +2008,21 @@ ws.setEventQueue();
                 "expecting '200 OK' (RFC 8441)", hc.getURL(), rh.status_code, rh.status_message);
         }
 
-        # Note: HTTP/2 WebSocket does NOT use Sec-WebSocket-Accept header
-        # The CONNECT response is simpler - just 200 OK means success
+        hash<auto> rhdr = rh.headers ?? rh;
+        if (!rhdr."sec-websocket-accept") {
+            raiseError("HTTP/2 server at URL %y did not return the Sec-WebSocket-Accept response header (headers "
+                "returned: %y)", hc.getURL(), rhdr);
+        }
 
-        processExtensions(rh);
+        {
+            string expected_key = ws_get_response_key(key);
+            if (rhdr."sec-websocket-accept" != expected_key) {
+                raiseError("HTTP/2 server at URL %y returned an invalid value in the Sec-WebSocket-Accept response "
+                    "header: %y; expecting %y", hc.getURL(), rhdr."sec-websocket-accept", expected_key);
+            }
+        }
+
+        processExtensions(rhdr);
         finishConnect();
 
         return rh;
@@ -2917,6 +2980,15 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         date start_time = now_us();
         *string error_msg;
         try {
+            if (!client.isOpen()) {
+                error_msg = "SOCKET-NOT-OPEN: socket is closed";
+                @debug {
+                    if (logger) {
+                        logger.debug("skipping WebSocket send: %s", error_msg);
+                    }
+                }
+                return;
+            }
             switch (message_id) {
                 case MESSAGE_WS_DATA:
                     client.sendData(msg);
