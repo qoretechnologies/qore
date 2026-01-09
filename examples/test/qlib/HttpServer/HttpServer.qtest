@@ -89,6 +89,24 @@ class ReqHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class SlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue started;
+        date delay;
+    }
+
+    constructor(Queue started, date delay) {
+        self.started = started;
+        self.delay = delay;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        started.push(True);
+        sleep(delay);
+        return makeResponse(200, "OK");
+    }
+}
+
 # WebSocket connection for async mode tests
 class TestWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
@@ -260,7 +278,17 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
         addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
+        addTestCase("async mode global controller restart", \asyncModeGlobalCtrlRestartTest());
+        addTestCase("async mode stop inflight", \asyncModeStopInFlightTest());
         addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
+
+        @debug {
+            if (getenv("QORE_TEST_STACKSIG")) {
+                set_signal_handler(SIGUSR1, sub (int sig) {
+                    printf("%Y\n", get_all_thread_call_stacks());
+                });
+            }
+        }
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1533,6 +1561,81 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             blocked = ex.err == "CONTROLLER-ADD-LISTENER-ERROR";
         }
         assertTrue(blocked, "async I/O controller should reject new listeners after stop");
+    }
+
+    asyncModeStopInFlightTest() {
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": new Logger("async-stop-inflight", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        Queue started();
+        SlowHandler handler(started, 2s);
+        server.setHandler("slow-handler", "", MimeTypeHtml, handler);
+        server.setDefaultHandler("slow-handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        background sub () {
+            try {
+                HTTPClient client({"url": "http://localhost:" + port, "timeout": 10s});
+                client.connect();
+                client.get("/slow");
+                client.disconnect();
+            } catch () {
+                # Ignore errors if shutdown closes the socket early.
+            }
+        }();
+
+        assertTrue(started.get(5s) != NOTHING, "handler should start before shutdown");
+
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(5s) != NOTHING, "server.stop should finish without delay");
+    }
+
+    asyncModeGlobalCtrlRestartTest() {
+        hash<HttpServerOptionInfo> opts1 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-1", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server1(opts1);
+        on_exit server1.stop();
+        server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server1.setDefaultHandler("my-handler", new ReqHandler());
+        int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server1.waitForAsyncIo(5s), "async I/O should be ready after start");
+
+        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 5s});
+        client1.connect();
+        on_exit client1.disconnect();
+        assertEq("GET, restart1, /restart1", client1.get("/restart1"));
+        client1.disconnect();
+        server1.stop();
+
+        hash<HttpServerOptionInfo> opts2 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-2", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server2(opts2);
+        on_exit server2.stop();
+        server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server2.setDefaultHandler("my-handler", new ReqHandler());
+        int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server2.waitForAsyncIo(5s), "async I/O should restart after stop");
+
+        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 5s});
+        client2.connect();
+        on_exit client2.disconnect();
+        assertEq("GET, restart2, /restart2", client2.get("/restart2"));
+        client2.disconnect();
+        server2.stop();
     }
 
 }

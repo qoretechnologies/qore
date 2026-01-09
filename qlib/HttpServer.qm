@@ -1063,6 +1063,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # - Only the last server to stop actually stops the globalAsyncCtrl I/O thread
         @debug(log("stop: asyncMode=%y refcount=%d", asyncMode, globalAsyncCtrlRefCount.getCount()));
         if (asyncMode) {
+            if (asyncIo) {
+                asyncIo.beginShutdown();
+            }
             # Cancel only this server's operations - other servers can continue using globalAsyncCtrl
             string ownerId = self.uniqueHash();
             @debug(log("stop: calling globalAsyncCtrl.cancelByOwner(%s)", ownerId));
@@ -1745,6 +1748,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             @debug(log("init: globalAsyncCtrlRefCount=%d", globalAsyncCtrlRefCount.getCount()));
             # Set logger on globalAsyncCtrl for async I/O logging
             globalAsyncCtrl.setLogger(logger);
+            if (!globalAsyncCtrl.running()) {
+                globalAsyncCtrl.start();
+            }
             asyncIo = new Priv::HttpServerIoController(self, logger);
             asyncIo.start();
         }
@@ -4560,22 +4566,27 @@ class HttpServerIoController {
     stop() {
         @debug(log(LoggerLevel::INFO, "stop: ENTER mcnt=%d tid=%y shutting_down=%y",
             mcnt.getCount(), tid, shutting_down));
+        bool need_quit = False;
         {
             AutoLock al(m);
             if (!shutting_down) {
                 shutting_down = True;
+            }
+            if (!exit_flag) {
                 exit_flag = True;
                 if (tid) {
-                    # Push quit signal to result queue to wake up coordinator thread
-                    # The coordinator checks for {"quit": True} and breaks out of its loop
-                    @debug(log(LoggerLevel::INFO, "stop: pushing quit signal to resultQueue, tid=%d", tid));
-                    resultQueue.push({"quit": True});
-                } else {
-                    @debug(log(LoggerLevel::INFO, "stop: tid not set, not pushing quit signal"));
+                    need_quit = True;
                 }
-            } else {
-                @debug(log(LoggerLevel::INFO, "stop: already shutting down"));
             }
+        }
+        if (need_quit) {
+            # Push quit signal to result queue to wake up coordinator thread
+            # The coordinator checks for {"quit": True} and breaks out of its loop
+            @debug(log(LoggerLevel::INFO, "stop: pushing quit signal to resultQueue, tid=%d", tid));
+            resultQueue.push({"quit": True});
+        } else {
+            @debug(log(LoggerLevel::INFO, "stop: no quit signal needed (tid=%y exit_flag=%y)",
+                tid, exit_flag));
         }
         # IMPORTANT: Lock must be released before waiting, otherwise deadlock occurs
         # because coordinator's on_exit needs to acquire the lock
@@ -4586,6 +4597,14 @@ class HttpServerIoController {
             AutoLock al(m);
             remove listeners;
             remove connections;
+        }
+    }
+
+    #! Marks the controller as shutting down to prevent new operations
+    beginShutdown() {
+        AutoLock al(m);
+        if (!shutting_down) {
+            shutting_down = True;
         }
     }
 
