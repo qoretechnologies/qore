@@ -1525,7 +1525,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     private int getWsFrameLength(*binary buf) {
-        # Fast length-only parse to avoid full frame decoding.
+        # Fast length-only parse to avoid ws_parse_frame() exceptions and decoding overhead
+        # when we just need to know if the buffer contains a complete frame.
         if (!buf || buf.size() < 2) {
             return 0;
         }

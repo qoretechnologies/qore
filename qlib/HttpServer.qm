@@ -1948,7 +1948,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         If async_response_out is provided, captures response info instead of sending
     */
-    private:internal handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
+    private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         if (!http_methods{hdr.method}) {
@@ -2496,8 +2496,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
             exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
-            # For async sending, we need to read streams into memory
-            # NOTE: async capture of InputStream bodies buffers the full payload in memory
+            # For async sending, we need to read streams into memory.
+            # NOTE: async capture of InputStream bodies buffers the full payload in memory.
+            # For large payloads, prefer synchronous responses or pre-materialized bodies.
             if (body instanceof InputStream) {
                 body = readAllStream(body);
             }

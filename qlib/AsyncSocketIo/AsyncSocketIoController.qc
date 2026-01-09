@@ -441,7 +441,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Cancels an operation in progress and sends an appropriate message on the result queue
     private cancelIntern(string uh) {
-        # called locked
+        # called locked; caller must hold m to ensure shutting_down/cache state is consistent
         if (shutting_down || !tid || !cache{uh}) {
             if (cancel_cond_map{uh}) {
                 cancel_cond_map{uh}.broadcast();
@@ -449,11 +449,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
             return;
         }
+        # register the cancel condition before sending the command to avoid races
+        cancel_cond_map{uh} = new Condition();
         # cancel the current operation
         sendCmd(IO_CANCEL, uh);
 
         # wait for the I/O thread to confirm
-        cancel_cond_map{uh} = new Condition();
         while (cancel_cond_map{uh}) {
             cancel_cond_map{uh}.wait(m);
         }
@@ -533,6 +534,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             if (!info) {
                                 # operation successful
                                 remove cache{key};
+                                if (*Condition c = remove cancel_cond_map{key}) {
+                                    c.signal();
+                                }
                                 cinfo.q.push(<SocketPollResultInfo>{
                                     "sock": cinfo.sock,
                                     "spop": cinfo.spop,
@@ -551,6 +555,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             log(LoggerLevel::ERROR, "%s", get_exception_string(ex));
                             # poll operation failed with an exception
                             remove cache{key};
+                            if (*Condition c = remove cancel_cond_map{key}) {
+                                c.signal();
+                            }
                             cinfo.q.push(<SocketPollResultInfo>{
                                 "sock": cinfo.sock,
                                 "spop": cinfo.spop,

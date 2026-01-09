@@ -384,11 +384,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             "rsv2": rsv2,
             "rsv3": rsv3,
         });
-        @debug {
-            h.info = h.info ?? {};
-            h.info{"b0"} = b0;
-            h.info{"b1"} = b1;
-        }
+        h.info = h.info ?? {};
+        h.info{"b0"} = b0;
+        h.info{"b1"} = b1;
         if (h.op == WSOP_Close) {
             if (data) {
                 # get an unsigned 2-byte integer in network byte order (MSB) for the close code

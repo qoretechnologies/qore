@@ -283,11 +283,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
 
         @debug {
-            if (getenv("QORE_TEST_STACKSIG")) {
-                set_signal_handler(SIGUSR1, sub (int sig) {
-                    printf("%Y\n", get_all_thread_call_stacks());
-                });
-            }
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("%Y\n", get_all_thread_call_stacks());
+            });
         }
 
         # Return for compatibility with test harness that checks return value.
