@@ -282,6 +282,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         s.setNoDelay(True);
         s.send(ws_encode_message("WAIT", WSOP_Text, True));
 
+        # Use a longer timeout to avoid flakiness on slow or heavily loaded CI environments.
         auto v = wsHandler.errs.get(5s);
         assertRegex("SOCKET-TIMEOUT", v);
     }

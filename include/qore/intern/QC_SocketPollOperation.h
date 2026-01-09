@@ -67,6 +67,7 @@ public:
             sock->priv->clearNonBlock();
             if (abortNeedsClose()) {
                 // avoid re-locking priv->m via QoreSocketObject::close()
+                // QoreSocketObject cleanup is handled by the owning code path.
                 sock->priv->socket->close();
             }
             state = SPS_NONE;

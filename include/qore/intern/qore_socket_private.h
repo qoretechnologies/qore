@@ -623,7 +623,12 @@ struct qore_socket_private {
     }
 
     DLLLOCAL int32_t getH2ActiveStreamId() const {
-        if (!h2_session || h2_session->isServer()) {
+        bool use_thread_map;
+        {
+            AutoLocker al(h2_session_lock);
+            use_thread_map = !h2_session || h2_session->isServer();
+        }
+        if (use_thread_map) {
             AutoLocker al(h2_active_stream_lock);
             auto it = h2_active_stream_ids.find(q_gettid());
             return it == h2_active_stream_ids.end() ? -1 : it->second;
@@ -632,7 +637,12 @@ struct qore_socket_private {
     }
 
     DLLLOCAL void setH2ActiveStreamId(int32_t stream_id) {
-        if (!h2_session || h2_session->isServer()) {
+        bool use_thread_map;
+        {
+            AutoLocker al(h2_session_lock);
+            use_thread_map = !h2_session || h2_session->isServer();
+        }
+        if (use_thread_map) {
             AutoLocker al(h2_active_stream_lock);
             int tid = q_gettid();
             if (stream_id > 0) {

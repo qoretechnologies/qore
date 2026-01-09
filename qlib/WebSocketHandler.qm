@@ -218,6 +218,9 @@ public class WebSocketConnection {
 
         bool async_mode = False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
+
+        #! Listener ID this connection belongs to
+        string lid;
     }
 
     private:internal {
@@ -250,6 +253,21 @@ public class WebSocketConnection {
 
     *AsyncSocketIo::AsyncSocketIoController getAsyncCtrl() {
         return async_ctrl;
+    }
+
+    #! Returns the owner ID for async I/O operations
+    string getOwnerId() {
+        return self.uniqueHash();
+    }
+
+    #! Sets the listener ID for this connection
+    setListenerId(string lid) {
+        self.lid = lid;
+    }
+
+    #! Returns the listener ID for this connection
+    string getListenerId() {
+        return lid;
     }
 
     #! This method is called to poll for messages from the client to send from the server
@@ -934,12 +952,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         bool is_http2_ws = cx."header-info".http2 && cx."header-info".is_websocket_connect;
         int h2_stream_id = is_http2_ws ? cx."header-info".stream_id : -1;
         softstring exit_reason = "unknown";
-        bool h2_ws_debug_handler = False;
-        @debug {
-            if (is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER")) {
-                h2_ws_debug_handler = True;
-            }
-        }
+        @debug(bool h2_ws_debug_handler = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
         @debug {
             if (h2_ws_debug_handler) {
                 log(LoggerLevel::INFO, "HTTP/2 WS handler start: cid=%y stream_id=%d from %s:%d", cx.id, h2_stream_id,
@@ -949,27 +962,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     cx."peer-info".port);
             }
         }
-        # Debug helper for HTTP/2 WS stream readiness
-        bool h2_ws_debug_wait = False;
-        @debug {
-            if (is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_WAIT")) {
-                h2_ws_debug_wait = True;
-            }
-        }
         # Debug helper for HTTP/2 WS frame headers
-        bool h2_ws_debug_frames = False;
-        @debug {
-            if (is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
-                h2_ws_debug_frames = True;
-            }
-        }
+        @debug(bool h2_ws_debug_frames = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
         bool async_mode = cx."async_mode" ?? False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         if (async_mode) {
             async_ctrl = cx."async_ctrl";
-        }
-        # Avoid unreferenced-variable warning when debug blocks are disabled
-        if (h2_ws_debug_frames) {
         }
         if (is_http2_ws) {
             sock.setHttp2ActiveStream(h2_stream_id);
@@ -980,6 +978,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
+        wsc.setListenerId(lid);
         wsc.setAsyncIo(async_mode, async_ctrl);
 
         # Set negotiated extensions on the connection
@@ -1098,35 +1097,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         }
                         continue;
                     }
-                } else if (h2_ws_debug_wait) {
-                    try {
-                        h = ws_read_message(sock, 100ms);
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err == "SOCKET-TIMEOUT") {
-                            int now = clock_getmillis() / 1000;
-                            if (!update) {
-                                if ((now - timestamp) >= heartbeat) {
-                                    binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
-                                    @debug {
-                                        if (h2_ws_debug_frames && frame.size() >= 2) {
-                                            int b0 = frame[0];
-                                            int b1 = frame[1];
-                                            log(LoggerLevel::INFO,
-                                                "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
-                                                b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
-                                        }
-                                    }
-                                    sendFrame(wsc, sock, frame);
-                                    timestamp = now;
-                                }
-                            } else {
-                                timestamp = now;
-                            }
-                            continue;
-                        }
-                        rethrow;
-                    }
-                    have_frame = True;
                 } else {
                     if (!sock.isDataAvailable(0ms)) {
                         int now = clock_getmillis() / 1000;
@@ -1187,11 +1157,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
 
+                @debug(int b0);
+                @debug(int b1);
+                @debug(*hash<auto> info);
                 @debug {
                     if (h2_ws_debug_frames) {
+                    info = h.info;
+                    b0 = info."b0" ?? -1;
+                    b1 = info."b1" ?? -1;
                         log(LoggerLevel::INFO,
                             "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                            h.b0, h.b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                            b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
                     }
                 }
                 logDebug("received msg (%s: %d bytes%s%s): %s", WSOPMap{h.op} ?? "unknown", h.msg.size(),
@@ -1338,10 +1314,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 break;
             }
         }
-        if (h2_ws_debug_handler) {
-            log(LoggerLevel::INFO, "HTTP/2 WS handler exit: cid=%y reason=%y", cx.id, exit_reason);
-        } else {
-            logDebug("WebSocketHandler::startImpl() exiting, cid: %y reason: %y", cx.id, exit_reason);
+        @debug {
+            if (h2_ws_debug_handler) {
+                log(LoggerLevel::INFO, "HTTP/2 WS handler exit: cid=%y reason=%y", cx.id, exit_reason);
+            } else {
+                logDebug("WebSocketHandler::startImpl() exiting, cid: %y reason: %y", cx.id, exit_reason);
+            }
         }
         return False;
     }
@@ -1437,6 +1415,88 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ch{id}.stop();
     }
 
+    #! Called when a specific listener is stopped; signals all connections to wake up blocked threads
+    /**
+        ## Purpose
+
+        This method is called by HttpListener::stop() when shutting down a specific listener.
+        It ensures WebSocket connections don't block server shutdown by signaling them to exit.
+
+        ## Deadlock Prevention
+
+        WebSocket connections run in their own threads (startImpl loop) and may be blocked on:
+        - pollData() waiting for messages to send (250ms timeout)
+        - Socket I/O operations
+
+        Without this method, the server shutdown sequence would hang waiting for these threads
+        to notice the shutdown flag. By calling stop() on each connection, we:
+        1. Set the connection's stop_flag to True
+        2. Push an empty message to wake up pollData() immediately
+
+        @param lid the listener ID being stopped
+
+        @see WebSocketConnection::stop() for how individual connections are signaled
+    */
+    private stopImpl(string lid) {
+        # Mark this listener as stopped; connections check lsh{lid} in their main loop
+        lsh{lid} = True;
+
+        # Wake up connections for this listener immediately
+        rwl.readLock();
+        on_exit rwl.readUnlock();
+        map $1.stop(), ch.iterator(), $1.getListenerId() == lid;
+    }
+
+    #! Called when the handler itself is stopped; signals all connections to wake up blocked threads
+    /**
+        ## Purpose
+
+        This method is called when the WebSocketHandler is being removed or the server is
+        shutting down. It ensures all WebSocket connections exit promptly.
+
+        ## Shutdown Sequence
+
+        This is called from HttpServer's handler cleanup, which happens after asyncIo.stop()
+        and globalAsyncCtrl.stop(). At this point:
+        1. No new connections can be accepted
+        2. Existing connections need to be signaled to exit
+        3. dThreads counter needs to reach zero for listener shutdown to complete
+
+        @see stopAllConnections() for the actual signaling logic
+    */
+    private stopImpl() {
+        stopAllConnections();
+    }
+
+    #! Signals all active WebSocket connections to stop and wake up blocked polling threads
+    /**
+        ## Implementation
+
+        Iterates over all active connections (ch hash) and calls stop() on each.
+        Uses a read lock since we're only reading the hash and calling methods on values.
+
+        ## Thread Safety
+
+        - Uses rwl.readLock() to allow concurrent access during iteration
+        - Each connection's stop() is thread-safe
+        - New connections can still be added during iteration (won't be signaled, but that's OK
+          since they'll see the shutdown flags on their next loop iteration)
+
+        ## WebSocketConnection::stop() Behavior
+
+        For each connection, stop() does:
+        1. Sets stop_flag = True (checked in startImpl's while loop)
+        2. Pushes empty binary to queue (wakes up pollData immediately)
+
+        This ensures the startImpl loop will exit on its next iteration, allowing the
+        connection thread to complete and decrement the dThreads counter.
+    */
+    private stopAllConnections() {
+        rwl.readLock();
+        on_exit rwl.readUnlock();
+        map $1.stop(), ch.iterator();
+    }
+
     private sendClose(WebSocketConnection wsc, Qore::Socket sock, int code, *string txtmsg) {
         if (!WSCCMap{code}) {
             logError("WebSocketHandler::sendClose(): invalid close code %d received; expecting one of: %y", code,
@@ -1465,6 +1525,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     private int getWsFrameLength(*binary buf) {
+        # Fast length-only parse to avoid full frame decoding.
         if (!buf || buf.size() < 2) {
             return 0;
         }
@@ -1520,8 +1581,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 op = sock.startPollSend(frame);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
-                    @debug(log(LoggerLevel::INFO,
-                        "WebSocketHandler::sendFrame(): async send already in progress; dropping frame"));
+                    # Another async send is already in progress
+                    # WARNING: Dropping frames can cause protocol issues, especially for control frames
+                    # (ping/pong/close). This is a known limitation of the current async implementation.
+                    # TODO: Consider implementing a message queue for proper frame ordering
+                    log(LoggerLevel::WARN,
+                        "WebSocketHandler::sendFrame(): async send already in progress; dropping frame "
+                        "(size=%d bytes)", frame.size());
                     return;
                 }
                 throw ex.err, ex.desc, ex.arg;
@@ -1530,6 +1596,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 "sock": sock,
                 "spop": op,
                 "to": send_timeout,
+                "owner": wsc.getOwnerId(),
                 "other": {"goal": "ws-send"},
             });
             if (result.ex) {

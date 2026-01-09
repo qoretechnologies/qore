@@ -1771,9 +1771,12 @@ ws.setEventQueue();
                     hash<WsMsgInfo> h = ws_parse_frame(frame);
                     @debug {
                         if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
                             log(LoggerLevel::INFO,
                                 "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                                h.b0, h.b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
                         }
                     }
                     return h;
@@ -1808,9 +1811,12 @@ ws.setEventQueue();
                     hash<WsMsgInfo> h = ws_parse_frame(frame);
                     @debug {
                         if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
                             log(LoggerLevel::INFO,
                                 "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                                h.b0, h.b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
                         }
                     }
                     return h;
@@ -1845,7 +1851,11 @@ ws.setEventQueue();
             sendWsFrame(ws_encode_message(msg, WSOP_Close, True));
         } catch (hash<ExceptionInfo> ex) {
             # ignore SOCKET-NOT-OPEN errors when closing (server already closed the connection)
-            if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-CLOSED") {
+            if (ex.err == "SOCKET-NOT-OPEN") {
+                return;
+            }
+            if (ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-CLOSED") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
                 return;
             }
             rethrow;

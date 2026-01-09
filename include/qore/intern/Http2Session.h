@@ -311,6 +311,8 @@ public:
     DLLLOCAL nghttp2_session* getSession() const { return session; }
 
 private:
+    // NOTE: recursive mutex is required because nghttp2 callbacks can re-enter
+    // Http2Session methods that also lock the session state.
     mutable std::recursive_mutex m;
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);

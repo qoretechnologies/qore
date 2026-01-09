@@ -260,6 +260,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
         addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
+        addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1352,7 +1353,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, http2-test, /http2-test", resp);
 
         # Log which protocol was used
-        if (m_options.verbose > 0) {
+        if (m_options.verbose > 2) {
             printf("HTTP/2 test: negotiated version = %s, isHttp2Active = %y\n",
                 version, h2client.isHttp2Active());
         }
@@ -1365,7 +1366,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Verify response-uri is set in the format "HTTP/2 <code> <message>"
             assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
             assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 response-uri: %y\n", info."response-uri");
             }
         }
@@ -1420,7 +1421,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Note: HTTPClient auto-decompresses, so we check the original response headers
             *string content_encoding = info."response-headers"."content-encoding"
                 ?? info."response-headers"."Content-Encoding";
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
             }
             assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
@@ -1508,6 +1509,30 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Request should still work via HTTP/1.1
             assertEq("GET, h2disabled, /h2disabled", h2disabled.get("/h2disabled"));
         }
+    }
+
+    asyncModeShutdownGuardTest() {
+        Logger logger("shutdown-test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+        server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        server.stop();
+
+        bool blocked = False;
+        try {
+            server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        } catch (hash<ExceptionInfo> ex) {
+            blocked = ex.err == "CONTROLLER-ADD-LISTENER-ERROR";
+        }
+        assertTrue(blocked, "async I/O controller should reject new listeners after stop");
     }
 
 }

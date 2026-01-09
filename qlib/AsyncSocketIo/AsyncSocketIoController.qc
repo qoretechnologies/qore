@@ -37,6 +37,9 @@ public hashdecl SocketPollOperationInfo {
     #! I/O timeout; use 0s to disable timeout (operation will wait indefinitely)
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
+    #! Owner identifier for cancellation; required for proper cleanup during shutdown via cancelByOwner()
+    string owner;
+
     #! Free-form data to be returned when the operation completes
     *hash<auto> other;
 
@@ -99,6 +102,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         #! I/O thread command: cancel
         const IO_CANCEL = "cancel";
+
+        #! I/O thread command: cancel by owner
+        const IO_CANCEL_OWNER = "cancel_owner";
 
         #! I/O thread command: quit
         const IO_QUIT = "quit";
@@ -263,6 +269,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         if (!info.spop) {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'spop' value; got: %y", info);
         }
+        if (!info.owner) {
+            throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
+                "cancelByOwner(); got: %y", info);
+        }
         # get unique key for socket object
         string uh = info.sock.uniqueHash();
         hash<PollInfo> cinfo;
@@ -284,6 +294,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "sock": info.sock,
                 "spop": info.spop,
                 "to": info.to,
+                "owner": info.owner,
                 "other": info.other,
                 "q": info.resultQueue ?? new Queue(),
             };
@@ -364,6 +375,57 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         if (!cancel(sock)) {
             throw "CONTROLLER-CANCEL-ERROR", sprintf("Socket %y has no operation in progress", sock.uniqueHash());
         }
+    }
+
+    #! Cancels all operations belonging to a specific owner
+    /** @param owner the owner identifier (typically from uniqueHash()) to cancel operations for
+
+        Operations are matched by checking the \c owner field in the @ref SocketPollOperationInfo hash.
+
+        @return the number of operations canceled
+
+        @note This method blocks until all matching operations have been canceled.
+        The I/O thread continues running and other owners' operations are not affected.
+
+        @since %AsyncSocketIo 1.1
+    */
+    int cancelByOwner(string owner) {
+        int rv;
+        {
+            AutoLock al(m);
+            if (!tid || !cache) {
+                return 0;
+            }
+            # count matching operations
+            foreach string key in (keys cache) {
+                if (cache{key}.owner == owner) {
+                    ++rv;
+                }
+            }
+            if (!rv) {
+                return 0;
+            }
+            sendCmd(IO_CANCEL_OWNER, owner);
+        }
+        # wait for the I/O thread to complete cancellation
+        # we use a simple polling approach since multiple operations may be canceled
+        while (True) {
+            {
+                AutoLock al(m);
+                bool found = False;
+                foreach string key in (keys cache) {
+                    if (cache{key}.owner == owner) {
+                        found = True;
+                        break;
+                    }
+                }
+                if (!found) {
+                    break;
+                }
+            }
+            usleep(1ms);
+        }
+        return rv;
     }
 
     #! Common constructor code
@@ -596,6 +658,36 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         break;
                     }
 
+                    case IO_CANCEL_OWNER: {
+                        # Cancel all operations belonging to a specific owner
+                        string owner = h.args[0];
+                        list<hash<PollInfo>> cancel_list = ();
+                        list<Condition> cond_list = ();
+                        {
+                            AutoLock al(m);
+                            log(LoggerLevel::DEBUG, "AsyncSocketIoController canceling operations for owner %s",
+                                owner);
+                            foreach string key in (keys cache) {
+                                if (cache{key}.owner == owner) {
+                                    cancel_list += cache{key};
+                                    if (*Condition c = remove cancel_cond_map{key}) {
+                                        cond_list += c;
+                                    }
+                                    remove cache{key};
+                                }
+                            }
+                        }
+                        foreach Condition c in (cond_list) {
+                            c.signal();
+                        }
+                        foreach hash<PollInfo> cinfo in (cancel_list) {
+                            doCancelIntern(cinfo);
+                        }
+                        log(LoggerLevel::DEBUG, "AsyncSocketIoController canceled %d operations for owner %s",
+                            cancel_list.size(), owner);
+                        break;
+                    }
+
                     case IO_WAKE:
                         # no-op; waking the I/O thread is enough
                         break;
@@ -660,6 +752,9 @@ hashdecl PollInfo {
 
     #! I/O timeout; 0s or less means no timeout
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
+
+    #! Owner identifier for cancellation
+    string owner;
 
     #! Other data stored alongside the socket
     *hash<auto> other;

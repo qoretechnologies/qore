@@ -35,6 +35,8 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
     constructor() : Test("AsyncSocketIoTest Test", "1.0") {
         addTestCase("main", \mainTest());
+        addTestCase("owner required", \ownerRequiredTest());
+        addTestCase("cancel by owner", \cancelByOwnerTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -69,11 +71,14 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         auto ret = rest.get("/api_text");
         assertEq(VALUE_TEXT.output, ret.body);
 
+        string test_owner = "async-io-test";
+
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Do-Error": True});
         hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 10s,
+            "owner": test_owner,
         });
         *hash<auto> out = spop.getOutput();
         assertEq(500, out."code");
@@ -83,6 +88,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "sock": rest,
             "spop": spop,
             "to": 10s,
+            "owner": test_owner,
         });
         out = spop.getOutput();
         assertEq(200, out."code");
@@ -94,20 +100,100 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "sock": rest,
             "spop": spop,
             "to": 100ms,
+            "owner": test_owner,
         });
         assertEq("SOCKET-TIMEOUT", info.ex.err);
         spop.abort();
         SimpleStringHandler::interruptSleep();
 
         # test cancellation
-        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Secs": 30});
+        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
+            "owner": test_owner,
         });
         io_controller.cancel(rest);
         info = q.get();
         assertTrue(info.canceled);
+        spop.abort();
+        SimpleStringHandler::interruptSleep();
+    }
+
+    ownerRequiredTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+
+        # test that submitting without owner throws an error
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        assertThrows("CONTROLLER-ADD-ERROR", "Missing 'owner' value", \io_controller.exec(),
+            (<SocketPollOperationInfo>{
+                "sock": rest,
+                "spop": spop,
+                "to": 10s,
+            },));
+    }
+
+    cancelByOwnerTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # Create multiple RestClient connections for parallel operations
+        RestClient rest1({"url": "http://127.0.0.1:" + port});
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        RestClient rest3({"url": "http://127.0.0.1:" + port});
+
+        string owner_a = "owner-a";
+        string owner_b = "owner-b";
+
+        # Submit operations with different owners
+        AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop3 = rest3.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+
+        Queue q1 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest1,
+            "spop": spop1,
+            "owner": owner_a,
+        });
+        Queue q2 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "owner": owner_a,
+        });
+        Queue q3 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest3,
+            "spop": spop3,
+            "owner": owner_b,
+        });
+
+        # Cancel all operations for owner_a (should cancel 2 operations)
+        int canceled = io_controller.cancelByOwner(owner_a);
+        assertEq(2, canceled, "should cancel 2 operations for owner_a");
+
+        # Verify owner_a operations are canceled
+        hash<SocketPollResultInfo> info1 = q1.get(1s);
+        assertTrue(info1.canceled, "operation 1 should be canceled");
+        hash<SocketPollResultInfo> info2 = q2.get(1s);
+        assertTrue(info2.canceled, "operation 2 should be canceled");
+
+        # owner_b operation should still be running - cancel it
+        canceled = io_controller.cancelByOwner(owner_b);
+        assertEq(1, canceled, "should cancel 1 operation for owner_b");
+        hash<SocketPollResultInfo> info3 = q3.get(1s);
+        assertTrue(info3.canceled, "operation 3 should be canceled");
+
+        # Cleanup
+        spop1.abort();
+        spop2.abort();
+        spop3.abort();
+        SimpleStringHandler::interruptSleep();
+
+        # Test canceling non-existent owner returns 0
+        canceled = io_controller.cancelByOwner("non-existent-owner");
+        assertEq(0, canceled, "canceling non-existent owner should return 0");
     }
 }
 
@@ -168,4 +254,3 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
         }
     }
 }
-

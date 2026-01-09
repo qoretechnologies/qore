@@ -599,7 +599,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d send_buffer.size=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, send_buffer.size());
-    // First, collect data from nghttp2
+    // First, collect data from nghttp2; drain until it reports no more data
     size_t total_collected = 0;
     while (true) {
         const uint8_t* data;
