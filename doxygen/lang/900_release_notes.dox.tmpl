@@ -435,6 +435,15 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - Using the @ref QoreRepl "QoreRepl" module with a custom frontend that provides line editing
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
+    - @ref HttpServer "HttpServer" module
+      - fixed HTTP/2 responses to strip hop-by-hop headers (Connection, Transfer-Encoding, etc.)
+      - fixed HTTP/2 WebSocket CONNECT responses to return Sec-WebSocket-Accept when a Sec-WebSocket-Key is provided
+      - fixed HTTP/2 async chunked streaming responses to buffer and send bodies correctly
+      - fixed HTTP/2 error responses to set Content-Length when a body is present
+      - fixed HTTP/2 WebSocket CONNECT handling to allow other HTTP/2 streams to proceed
+      - ensure HTTP/2 request and response header names are lowercased before submission
+      - fixed a deadlock in async socket cancellation when aborting I/O operations
+      - fixed async I/O shutdown to avoid deadlocks when canceling socket poll operations
     - @ref RestClient "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
