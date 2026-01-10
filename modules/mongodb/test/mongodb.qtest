@@ -33,6 +33,8 @@
 %requires QUnit
 %requires mongodb
 
+%exec-class MongoDbTest
+
 public class MongoDbTest inherits QUnit::Test {
     private {
         *string mongodb_url;
@@ -142,7 +144,7 @@ public class MongoDbTest inherits QUnit::Test {
         for (int i = 0; i < 100; i++) {
             ObjectId oid();
             string s = oid.toString();
-            assertFalse(seen{s}, "ObjectId " + string(i) + " is unique");
+            assertFalse(exists seen{s}, "ObjectId " + string(i) + " is unique");
             seen{s} = True;
         }
     }
@@ -819,7 +821,7 @@ public class MongoDbTest inherits QUnit::Test {
         # Test insertMany with non-hash element
         # Note: This is caught at parse time due to type checking, so we use cast<> to test runtime
         assertThrows("MONGODB-COLLECTION-ERROR", sub() {
-            list<auto> bad_list = ("not a hash",);
+            list<auto!> bad_list = ("not a hash",);
             coll.insertMany(cast<list<hash<auto>>>(bad_list));
         });
 
@@ -1018,7 +1020,7 @@ public class MongoDbTest inherits QUnit::Test {
         MongoCollection coll = getCleanCollection();
 
         # Test deeply nested document (10 levels)
-        hash<auto> nested = {"value": "deepest"};
+        hash<auto!> nested = {"value": "deepest"};
         for (int i = 0; i < 10; i++) {
             nested = {"level" + string(i): nested};
         }
@@ -1051,10 +1053,11 @@ public class MongoDbTest inherits QUnit::Test {
         assertEq(100000, found.text.size(), "long string size");
 
         # Test many fields (100 fields)
-        doc = {"name": "ManyFields"};
+        hash<auto!> many_fields_doc = {"name": "ManyFields"};
         for (int i = 0; i < 100; i++) {
-            doc{"field" + string(i)} = i;
+            many_fields_doc{"field" + string(i)} = i;
         }
+        doc = many_fields_doc;
         coll.insertOne(doc);
         found = coll.findOne({"name": "ManyFields"});
         assertEq(50, found.field50, "many fields check");
