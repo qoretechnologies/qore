@@ -379,7 +379,7 @@ static bool ast_is_defined(const char* pstr) {
 //   and_expr := unary_expr ('&&' unary_expr)*
 //   unary_expr := '!' unary_expr | primary
 //   primary  := 'defined' '(' IDENT ')' | '(' expr ')'
-class ConditionParser {
+class AstConditionParser {
 private:
     const char* pos;
     const char* end;
@@ -395,6 +395,7 @@ private:
         skip_whitespace();
         size_t len = strlen(str);
         if (pos + len <= end && !strncmp(pos, str, len)) {
+            // For "defined", make sure next char isn't alphanumeric or underscore
             if (strcmp(str, "defined") == 0 && pos + len < end
                 && (isalnum(static_cast<unsigned char>(pos[len])) || pos[len] == '_')) {
                 return false;
@@ -501,7 +502,7 @@ private:
     }
 
 public:
-    ConditionParser(const char* expr, size_t len)
+    AstConditionParser(const char* expr, size_t len)
         : pos(expr), end(expr + len), error(false) {}
 
     bool parse(bool& result) {
@@ -586,10 +587,11 @@ static bool ast_evaluate_condition(const char* expr, bool& result) {
     if (!trimmed || !*trimmed) {
         return false;
     }
-    ConditionParser parser(trimmed, strlen(trimmed));
+    AstConditionParser parser(trimmed, strlen(trimmed));
     if (parser.parse(result)) {
         return true;
     }
+    // Fallback to simple parser for backwards compatibility
     return ast_parse_simple_defined_expr(trimmed, result);
 }
 
