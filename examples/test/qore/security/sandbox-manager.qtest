@@ -33,6 +33,7 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("Mutex interrupt test", \testMutexInterrupt());
         addTestCase("RWLock interrupt test", \testRWLockInterrupt());
         addTestCase("AutoLock interrupt test", \testAutoLockInterrupt());
+        addTestCase("AutoGate interrupt test", \testAutoGateInterrupt());
         addTestCase("Queue interrupt test", \testQueueInterrupt());
         addTestCase("Counter interrupt test", \testCounterInterrupt());
         addTestCase("Condition interrupt test", \testConditionInterrupt());
@@ -747,6 +748,32 @@ sub doAutoWriteLock() {
         assertEq(True, caught, "AutoWriteLock constructor was interrupted");
     }
 
+    testAutoGateInterrupt() {
+        # Test that AutoGate constructor is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+sub doAutoGate() {
+    Gate g();
+    AutoGate ag(g);
+}
+        ", "autogate_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doAutoGate");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "AutoGate interrupted correctly");
+        }
+        assertEq(True, caught, "AutoGate constructor was interrupted");
+    }
+
     testQueueInterrupt() {
         # Test that Queue::get/pop is interrupted when interrupt is pre-set
         SandboxManager sm();
@@ -898,7 +925,7 @@ sub doGateEnter() {
 
         # Test getting configuration
         hash<auto> config = sm.getNetworkConfiguration();
-        assertEq("hash<auto>", config.fullType(), "Network configuration is a hash");
+        assertEq("hash", config.fullType(), "Network configuration is a hash");
         assertEq("deny", config.default_policy, "Default policy in config is deny");
     }
 

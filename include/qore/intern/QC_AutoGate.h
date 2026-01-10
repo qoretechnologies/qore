@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -43,14 +43,18 @@ DLLLOCAL QoreClass *initAutoGateClass(QoreNamespace& ns);
 
 class QoreAutoGate : public AbstractPrivateData {
 public:
+    //! Constructor that grabs the gate
     DLLLOCAL QoreAutoGate(QoreGate* gt, ExceptionSink* xsink) : g(gt) {
         g->grab(xsink);
+    }
+
+    //! Constructor for when gate is already entered (used by polling implementation)
+    DLLLOCAL QoreAutoGate(QoreGate* gt) : g(gt) {
     }
 
     using AbstractPrivateData::deref;
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
-printf("QoreAutoGate::deref() this: %p: releasing gate\n", this);
             g->release(xsink);
             g->deref(xsink);
             delete this;

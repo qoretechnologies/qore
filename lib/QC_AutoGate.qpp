@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_AutoGate.h"
 #include "qore/intern/QC_Gate.h"
 
@@ -66,13 +67,40 @@ qclass AutoGate [dom=THREAD_CLASS; arg=QoreAutoGate* ag; ns=Qore::Thread];
     @code{.py}
 AutoGate ag(gate);
     @endcode
+
+    @throw LOCK-ERROR object deleted in another thread, etc
+    @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoGate::constructor(Gate[QoreGate] gate) {
-    QoreAutoGate* ag = new QoreAutoGate(gate, xsink);
-    if (*xsink) {
-        ag->deref(xsink);
-    } else {
-        self->setPrivate(CID_AUTOGATE, ag);
+    ReferenceHolder<QoreGate> holder(gate, xsink);
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    if (sm) {
+        const int poll_ms = 500;  // 500ms polling interval
+        while (true) {
+            if (sm->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting to enter gate");
+                return;
+            }
+            int rc = gate->grab(xsink, poll_ms);
+            if (*xsink) {
+                return;  // Error occurred
+            }
+            if (rc == 0) {
+                // Gate acquired - create the AutoGate object with already-entered gate
+                QoreAutoGate* ag = new QoreAutoGate(holder.release());
+                self->setPrivate(CID_AUTOGATE, ag);
+                return;
+            }
+            // rc != 0 means timeout, loop and check interrupt again
+        }
+    }
+    ReferenceHolder<QoreAutoGate> ag(new QoreAutoGate(holder.release(), xsink), xsink);
+    if (!*xsink) {
+        self->setPrivate(CID_AUTOGATE, ag.release());
     }
 }
 
