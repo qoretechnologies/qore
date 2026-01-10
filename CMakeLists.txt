@@ -1252,7 +1252,8 @@ set_target_properties(libqore PROPERTIES OUTPUT_NAME qore)
 if (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
-    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
+    # Keep libqore's install name consistent between build and install to avoid dyld loading duplicates.
+    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR "@rpath")
 else (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20.0.0)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
@@ -1269,8 +1270,9 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
-#set_target_properties(qore qr PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qore PROPERTIES INSTALL_RPATH_USE_LINK_PATH ${CMAKE_INSTALL_FULL_LIBDIR})
+# Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
+set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
+set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 if (DEFINED LIBJSIG AND APPLE)
     add_custom_command(TARGET qore

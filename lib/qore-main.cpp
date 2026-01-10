@@ -44,6 +44,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <set>
+#include <string>
 #include <unistd.h>
 #include <vector>
 
@@ -56,6 +58,14 @@
 
 #ifdef OPENSSL_3_PLUS
 #include <openssl/provider.h>
+#endif
+
+#if defined(DARWIN)
+#include <dlfcn.h>
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
+#include <link.h>
 #endif
 
 // initialized flag
@@ -114,9 +124,94 @@ OSSL_PROVIDER* ssl_prov_legacy = nullptr,
     * ssl_prov_default = nullptr;
 #endif
 
+#if defined(DARWIN) || defined(__linux__)
+static bool qore_is_libqore_basename(const char* path) {
+    if (!path || !*path) {
+        return false;
+    }
+    const char* base = strrchr(path, '/');
+    base = base ? base + 1 : path;
+    return !strncmp(base, "libqore.", 8) || !strncmp(base, "libqore.so", 10);
+}
+
+static std::string qore_canonicalize_path(const char* path) {
+    if (!path || !*path) {
+        return std::string();
+    }
+    char resolved[PATH_MAX];
+    if (realpath(path, resolved)) {
+        return std::string(resolved);
+    }
+    return std::string(path);
+}
+
+static bool qore_check_duplicate_libqore() {
+    std::set<std::string> paths;
+
+    Dl_info info;
+    if (dladdr((void*)&qore_check_duplicate_libqore, &info) && info.dli_fname) {
+        std::string self_path = qore_canonicalize_path(info.dli_fname);
+        if (!self_path.empty()) {
+            paths.insert(self_path);
+        }
+    }
+
+#if defined(DARWIN)
+    uint32_t count = _dyld_image_count();
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* name = _dyld_get_image_name(i);
+        if (!qore_is_libqore_basename(name)) {
+            continue;
+        }
+        std::string p = qore_canonicalize_path(name);
+        if (!p.empty()) {
+            paths.insert(p);
+        }
+    }
+#elif defined(__linux__)
+    auto callback = [](struct dl_phdr_info* info, size_t, void* data) -> int {
+        auto* setp = static_cast<std::set<std::string>*>(data);
+        if (!info || !info->dlpi_name || !info->dlpi_name[0]) {
+            return 0;
+        }
+        if (!qore_is_libqore_basename(info->dlpi_name)) {
+            return 0;
+        }
+        std::string p = qore_canonicalize_path(info->dlpi_name);
+        if (!p.empty()) {
+            setp->insert(p);
+        }
+        return 0;
+    };
+    dl_iterate_phdr(callback, &paths);
+#endif
+
+    if (paths.size() <= 1) {
+        return false;
+    }
+
+    fprintf(stderr, "qore_init(): multiple libqore images loaded; exiting to avoid crashes:\n");
+    for (const auto& p : paths) {
+        fprintf(stderr, "  %s\n", p.c_str());
+    }
+    fflush(stderr);
+    return true;
+}
+#endif
+
 void qore_init(qore_license_t license, const char* def_charset, bool show_module_errors, int n_qore_library_options) {
     qore_license = license;
     qore_library_options = n_qore_library_options;
+
+#if defined(DARWIN) || defined(__linux__)
+    static bool duplicate_checked = false;
+    if (!duplicate_checked) {
+        duplicate_checked = true;
+        if (qore_check_duplicate_libqore()) {
+            _exit(1);
+        }
+    }
+#endif
 
     // initialize openssl library
     if (!qore_check_option(QLO_DISABLE_OPENSSL_INIT)) {
