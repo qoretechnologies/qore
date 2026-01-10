@@ -6,6 +6,7 @@
 %require-types
 %strict-args
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 
 %try-module astparser
@@ -252,6 +253,8 @@ public hashdecl DateInfo {
         addTestCase("astparser module not available", \testNoModule());
 %else
         addTestCase("Basic parsing", \testBasicParsing());
+        addTestCase("Parse file", \testParseFile());
+        addTestCase("Diagnostics", \testDiagnostics());
         addTestCase("Modern module parsing", \testModernModuleParsing());
         addTestCase("Parse directives in blocks", \testParseDirectivesInBlocks());
         addTestCase("Parse directives in member lists", \testParseDirectivesInMemberLists());
@@ -313,6 +316,41 @@ public hashdecl DateInfo {
         *AstTree tree = parser.parseString(SimpleClassCode);
         testAssertion("parseString returns tree", \exists(), (tree,));
         testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseFile() {
+        string tmpfile = tmp_location() + "/astparser_parse_file_" + getpid() + ".q";
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(SimpleClassCode);
+        }
+        on_exit unlink(tmpfile);
+
+        AstParser parser();
+        *AstTree tree = parser.parseFile(tmpfile);
+        assertTrue(exists(tree), "parseFile returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+    }
+
+    testDiagnostics() {
+        string badCode = "%new-style\nsub broken() {\n    int x = ;\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(badCode);
+        assertTrue(!exists(tree) || parser.getErrorCount() > 0, "parse errors reported");
+
+        *list diags = parser.getDiagnostics();
+        assertTrue(exists(diags), "diagnostics returned");
+        assertTrue(diags.size() > 0, "diagnostic entries present");
+
+        hash diag = diags[0];
+        assertTrue(exists(diag.range), "diagnostic has range");
+        assertTrue(exists(diag.range.start), "diagnostic range has start");
+        assertTrue(exists(diag.range.end), "diagnostic range has end");
+        assertTrue(diag.range.start.line >= 0, "start line is 0-indexed");
+        assertTrue(diag.range.start.character >= 0, "start character is 0-indexed");
+        assertTrue(diag.range.end.line >= diag.range.start.line, "end line >= start line");
+        assertTrue(exists(diag.message), "diagnostic has message");
     }
 
     testModernModuleParsing() {
