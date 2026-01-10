@@ -3979,7 +3979,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
             if (deadline_ms >= 0) {
                 int64 now_ms = q_clock_getmillis();
                 if (now_ms >= deadline_ms) {
-                    xsink->raiseException("HTTP2-TIMEOUT", "timeout sending HTTP/2 request body");
+                    xsink->raiseException("HTTP2-TIMEOUT", "timeout sending HTTP/2 request body (timeout: %d ms)", (int)timeout_ms);
                     return nullptr;
                 }
                 remaining_ms = static_cast<int>(deadline_ms - now_ms);
@@ -4003,7 +4003,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         if (deadline_ms >= 0) {
             int64 now_ms = q_clock_getmillis();
             if (now_ms >= deadline_ms) {
-                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting to send HTTP/2 request data");
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting to send HTTP/2 request data (timeout: %d ms)", (int)timeout_ms);
                 return nullptr;
             }
             remaining_ms = static_cast<int>(deadline_ms - now_ms);
@@ -4028,7 +4028,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         if (deadline_ms >= 0) {
             int64 now_ms = q_clock_getmillis();
             if (now_ms >= deadline_ms) {
-                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting for HTTP/2 response");
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting for HTTP/2 response (timeout: %d ms)", (int)timeout_ms);
                 return nullptr;
             }
             remaining_ms = static_cast<int>(deadline_ms - now_ms);
