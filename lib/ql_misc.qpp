@@ -59,7 +59,7 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
 
-int64 q_get_byte_size(const QoreValue& v, ExceptionSink* xsink) {
+int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
     switch (v.getType()) {
         case NT_NOTHING:
         case NT_NULL:
@@ -82,7 +82,7 @@ int64 q_get_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             const QoreListNode* l = v.get<const QoreListNode>();
             ConstListIterator li(l);
             while (li.next()) {
-                total += q_get_byte_size(li.getValue(), xsink);
+                total += q_get_value_byte_size(li.getValue(), xsink);
                 if (*xsink) {
                     return 0;
                 }
@@ -95,7 +95,7 @@ int64 q_get_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             ConstHashIterator hi(h);
             while (hi.next()) {
                 total += strlen(hi.getKey());
-                total += q_get_byte_size(hi.get(), xsink);
+                total += q_get_value_byte_size(hi.get(), xsink);
                 if (*xsink) {
                     return 0;
                 }
@@ -103,7 +103,7 @@ int64 q_get_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             return total;
         }
         case NT_OBJECT:
-            xsink->raiseException("GET-BYTE-SIZE-ERROR",
+            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
                 "calculating byte size for objects is not currently supported");
             return 0;
         default:
@@ -3321,11 +3321,11 @@ string get_module_context_path_ex() [flags=CONSTANT] {
 
     @par Example:
     @code{.py}
-int size = get_byte_size("hello world");  # returns 11
-int hash_size = get_byte_size({"a": 1, "b": "test"});  # returns ~13
+int size = get_value_byte_size("hello world");  # returns 11
+int hash_size = get_value_byte_size({"a": 1, "b": "test"});  # returns ~13
     @endcode
 
-    @throw GET-BYTE-SIZE-ERROR thrown if an object is passed, as calculating byte size for objects
+    @throw GET-VALUE-BYTE-SIZE-ERROR thrown if an object is passed, as calculating byte size for objects
     is not currently supported
 
     @note For strings and binary data, the exact byte size is returned.
@@ -3334,7 +3334,7 @@ int hash_size = get_byte_size({"a": 1, "b": "test"});  # returns ~13
 
     @since %Qore 2.3
 */
-int get_byte_size(auto val) [flags=CONSTANT] {
-    return q_get_byte_size(val, xsink);
+int get_value_byte_size(auto val) [flags=CONSTANT] {
+    return q_get_value_byte_size(val, xsink);
 }
 ///@}
