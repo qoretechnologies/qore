@@ -63,8 +63,7 @@ done
 
 # If no test dirs were specified, run all the tests
 if [ -z "$TEST_DIRS" ]; then
-    #TEST_DIRS="$BASE_TEST_PATH ./modules"
-    TEST_DIRS="$BASE_TEST_PATH"
+    TEST_DIRS="$BASE_TEST_PATH ./modules"
 fi
 
 QORE=""
