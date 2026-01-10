@@ -61,6 +61,9 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) {
+        // Clear poll_state to release any buffers held by the poll state
+        // This prevents memory accumulation if the operation object remains referenced after timeout
+        poll_state.reset();
         if (set_non_block) {
             set_non_block = false;
             AutoLocker al(sock->priv->m);
@@ -194,6 +197,12 @@ public:
         }
     }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear data buffer to prevent memory accumulation on timeout
+        data.discard();
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
     DLLLOCAL virtual bool goalReached() const {
         return received;
     }
@@ -257,6 +266,12 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
     DLLLOCAL virtual QoreValue getOutput() const;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear output buffer to prevent memory accumulation on timeout
+        out = nullptr;
+        SocketRecvPollOperationBase::abort(xsink);
+    }
 
 private:
     mutable ReferenceHolder<QoreHashNode> out;
@@ -373,6 +388,13 @@ public:
         }
     }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear poll_state and accepted_socket to prevent memory accumulation on timeout
+        poll_state.reset();
+        accepted_socket.discard();
+        SocketAcceptPollSocketOperationBase::abort(xsink);
+    }
+
     DLLLOCAL virtual bool goalReached() const {
         return state == SPS_ACCEPTED;
     }
@@ -485,6 +507,12 @@ public:
 
     //! Returns the stream ID of the completed request
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear output buffer to prevent memory accumulation on timeout
+        out = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
 
 private:
     Http2Session* h2_session = nullptr;
