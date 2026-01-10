@@ -852,12 +852,16 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
 
     // issue #XXXX: strip narrowed type from hash/list when assigning to hash<auto>/list<auto> variables
     // This ensures that hash<auto!>/list<auto!> variables work correctly when initialized with literals
+    // Note: only strip complexTypeInfo, NOT hashdecl - hashdecls need their type info preserved
     if (typeInfo == autoHashTypeInfo || typeInfo == autoNoNarrowHashTypeInfo
         || typeInfo == autoHashOrNothingTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
         if (n.getType() == NT_HASH) {
             QoreHashNode* h = n.get<QoreHashNode>();
-            // Strip the narrowed type from the hash - it should be plain hash<auto>
-            qore_hash_private::get(*h)->complexTypeInfo = nullptr;
+            qore_hash_private* hp = qore_hash_private::get(*h);
+            // Only strip complexTypeInfo, not hashdecl - hashdecls need their type preserved
+            if (!hp->getHashDecl()) {
+                hp->complexTypeInfo = nullptr;
+            }
         }
     } else if (typeInfo == autoListTypeInfo || typeInfo == autoNoNarrowListTypeInfo
                || typeInfo == autoListOrNothingTypeInfo || typeInfo == autoNoNarrowListOrNothingTypeInfo) {

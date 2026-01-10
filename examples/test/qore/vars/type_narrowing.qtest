@@ -63,6 +63,7 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("list<auto!> runtime type stripping", \listAutoNoNarrowRuntimeTest());
         addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
         addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
+        addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
 
         set_return_value(main());
     }
@@ -1581,5 +1582,55 @@ sub test() {
         # Test *list<auto> variant
         *list<auto> nl = (1, 2, 3);
         assertEq("list", nl.fullType());
+    }
+
+    # Test that hashdecls preserve their type when assigned to hash<auto> variables
+    # This is important for DataProviderExpression and similar typed hashdecls
+    hashdeclPreservationTest() {
+        # Define a simple hashdecl for testing
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%modern
+hashdecl TestHashDecl {
+    string name;
+    int value;
+}
+
+hash<auto> sub getHashDeclInHashAuto() {
+    hash<auto> h = <TestHashDecl>{
+        'name': 'test',
+        'value': 42,
+    };
+    return h;
+}
+
+string sub getHashDeclType() {
+    hash<auto> h = <TestHashDecl>{
+        'name': 'test',
+        'value': 42,
+    };
+    return h.fullType();
+}
+
+# Test that hashdecl in list<auto> also preserves type
+list<auto> sub getHashDeclInListAuto() {
+    list<auto> l = (<TestHashDecl>{'name': 'a', 'value': 1},);
+    return l;
+}
+        ", "hashdecl_test");
+
+        # Hashdecl should preserve its type when assigned to hash<auto>
+        hash<auto> h = p.callFunction("getHashDeclInHashAuto");
+        assertEq("test", h.name, "hashdecl name field accessible");
+        assertEq(42, h.value, "hashdecl value field accessible");
+
+        # The type should be the hashdecl type, not stripped
+        string type = p.callFunction("getHashDeclType");
+        assertEq("hash<TestHashDecl>", type, "hashdecl type should be preserved in hash<auto>");
+
+        # Hashdecl in list should also preserve type
+        list<auto> l = p.callFunction("getHashDeclInListAuto");
+        assertEq(1, l.size());
+        assertEq("hash", l[0].fullType().substr(0, 4), "hashdecl element type should start with hash");
     }
 }
