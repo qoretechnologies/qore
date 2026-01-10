@@ -46,6 +46,6 @@ DLLLOCAL TypedHashDecl* init_hashdecl_UrlInfo(QoreNamespace& ns);
 
     @return the approximate byte size of the value
 */
-DLLLOCAL int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink);
+DLLEXPORT int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink);
 
 #endif

@@ -199,7 +199,12 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclSocketPollInfo,
     * hashdeclPipeInfo,
-    * hashdeclSseMessageInfo;
+    * hashdeclSseMessageInfo,
+    * hashdeclPortRangeInfo,
+    * hashdeclFilesystemPathInfo,
+    * hashdeclFilesystemSecurityConfigInfo,
+    * hashdeclNetworkSecurityConfigInfo,
+    * hashdeclSandboxConfigInfo;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
@@ -1142,6 +1147,11 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);
     hashdeclSseMessageInfo = init_hashdecl_SseMessageInfo(qns);
+    hashdeclPortRangeInfo = init_hashdecl_PortRangeInfo(qns);
+    hashdeclFilesystemPathInfo = init_hashdecl_FilesystemPathInfo(qns);
+    hashdeclFilesystemSecurityConfigInfo = init_hashdecl_FilesystemSecurityConfigInfo(qns);
+    hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
+    hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 

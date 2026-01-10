@@ -33,6 +33,7 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("Mutex interrupt test", \testMutexInterrupt());
         addTestCase("RWLock interrupt test", \testRWLockInterrupt());
         addTestCase("AutoLock interrupt test", \testAutoLockInterrupt());
+        addTestCase("AutoGate interrupt test", \testAutoGateInterrupt());
         addTestCase("Queue interrupt test", \testQueueInterrupt());
         addTestCase("Counter interrupt test", \testCounterInterrupt());
         addTestCase("Condition interrupt test", \testConditionInterrupt());
@@ -154,9 +155,9 @@ class SandboxManagerTest inherits QUnit::Test {
         sm.setMaxThreads(2);
         sm.setMaxRecursionDepth(50);
 
-        hash<auto> config = sm.getConfiguration();
+        hash<SandboxConfigInfo> config = sm.getConfiguration();
         assertEq(True, exists config, "Configuration hash exists");
-        assertEq("hash", type(config), "Configuration is a hash");
+        assertEq("hash<SandboxConfigInfo>", config.fullType(), "Configuration has correct type");
 
         # Verify config contains expected keys
         assertEq(True, exists config.memory_limit, "Config has memory_limit");
@@ -164,6 +165,8 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(True, exists config.wall_time_limit, "Config has wall_time_limit");
         assertEq(True, exists config.max_threads, "Config has max_threads");
         assertEq(True, exists config.max_recursion, "Config has max_recursion");
+        assertEq("hash<FilesystemSecurityConfigInfo>", config.filesystem.fullType(), "Filesystem config has correct type");
+        assertEq("hash<NetworkSecurityConfigInfo>", config.network.fullType(), "Network config has correct type");
     }
 
     testCopy() {
@@ -243,7 +246,7 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq("/tmp", sm.getFilesystemSandboxRoot(), "Sandbox root set to /tmp");
 
         # Get config and verify
-        hash<auto> config = sm.getFilesystemConfiguration();
+        hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
         assertEq("/tmp", config.sandbox_root, "Config shows sandbox root");
         assertEq("deny", config.default_policy, "Default policy is deny");
 
@@ -258,7 +261,7 @@ class SandboxManagerTest inherits QUnit::Test {
         # Add allowed path
         sm.addFilesystemAllowedPath("/tmp", QSEC_READ | QSEC_WRITE);
 
-        hash<auto> config = sm.getFilesystemConfiguration();
+        hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
         assertEq(1, config.allowed_paths.size(), "One allowed path added");
         assertEq("/tmp", config.allowed_paths[0].path, "Correct path added");
         assertEq(QSEC_READ | QSEC_WRITE, config.allowed_paths[0].mode, "Correct mode set");
@@ -281,7 +284,7 @@ class SandboxManagerTest inherits QUnit::Test {
         sm.setFilesystemDefaultPolicy(True);
         assertEq(True, sm.getFilesystemDefaultPolicy(), "Policy changed to allow");
 
-        hash<auto> config = sm.getFilesystemConfiguration();
+        hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
         assertEq("allow", config.default_policy, "Config shows allow policy");
 
         # Set back to deny
@@ -747,6 +750,32 @@ sub doAutoWriteLock() {
         assertEq(True, caught, "AutoWriteLock constructor was interrupted");
     }
 
+    testAutoGateInterrupt() {
+        # Test that AutoGate constructor is interrupted when interrupt is pre-set
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+sub doAutoGate() {
+    Gate g();
+    AutoGate ag(g);
+}
+        ", "autogate_interrupt");
+
+        bool caught = False;
+        try {
+            p.callFunction("doAutoGate");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("PROGRAM-INTERRUPTED", ex.err, "AutoGate interrupted correctly");
+        }
+        assertEq(True, caught, "AutoGate constructor was interrupted");
+    }
+
     testQueueInterrupt() {
         # Test that Queue::get/pop is interrupted when interrupt is pre-set
         SandboxManager sm();
@@ -897,8 +926,8 @@ sub doGateEnter() {
         sm.addNetworkDeniedIPRange("192.168.0.0/16");
 
         # Test getting configuration
-        hash<auto> config = sm.getNetworkConfiguration();
-        assertEq("hash<auto>", config.fullType(), "Network configuration is a hash");
+        hash<NetworkSecurityConfigInfo> config = sm.getNetworkConfiguration();
+        assertEq("hash<NetworkSecurityConfigInfo>", config.fullType(), "Network configuration has correct type");
         assertEq("deny", config.default_policy, "Default policy in config is deny");
     }
 
@@ -907,21 +936,21 @@ sub doGateEnter() {
         SandboxManager sm();
         sm.blockPrivateNetworks();
 
-        hash<auto> config = sm.getNetworkConfiguration();
+        hash<NetworkSecurityConfigInfo> config = sm.getNetworkConfiguration();
         assertEq(True, config.denied_ranges_count > 0, "Private networks added to denied list");
 
         # Test blockLocalhost
         SandboxManager sm2();
         sm2.blockLocalhost();
 
-        hash<auto> config2 = sm2.getNetworkConfiguration();
+        hash<NetworkSecurityConfigInfo> config2 = sm2.getNetworkConfiguration();
         assertEq(True, config2.denied_ranges_count > 0, "Localhost added to denied list");
 
         # Test allowHTTPSOnly
         SandboxManager sm3();
         sm3.allowHTTPSOnly();
 
-        hash<auto> config3 = sm3.getNetworkConfiguration();
+        hash<NetworkSecurityConfigInfo> config3 = sm3.getNetworkConfiguration();
         assertEq(True, config3.allowed_ports.size() > 0, "HTTPS port added to allowed list");
     }
 
