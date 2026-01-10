@@ -812,9 +812,12 @@ public class MongoDbTest inherits QUnit::Test {
         # Test insertMany with empty list
         assertThrows("MONGODB-COLLECTION-ERROR", \coll.insertMany(), ((),));
 
-        # Note: Testing insertMany with non-hash elements is tricky due to type checking
-        # The type system prevents passing invalid data at compile time, which is the
-        # desired behavior. Runtime behavior with cast<> may vary.
+        # Test insertMany with non-hash element
+        # Note: This is caught at parse time due to type checking, so we use cast<> to test runtime
+        assertThrows("MONGODB-COLLECTION-ERROR", sub() {
+            list<auto!> bad_list = ("not a hash",);
+            coll.insertMany(cast<list<hash<auto>>>(bad_list));
+        });
 
         # Test drop on already dropped collection (should not throw, MongoDB is idempotent)
         coll.drop();
@@ -1011,7 +1014,7 @@ public class MongoDbTest inherits QUnit::Test {
         MongoCollection coll = getCleanCollection();
 
         # Test deeply nested document (10 levels)
-        hash<auto> nested = {"value": "deepest"};
+        hash<auto!> nested = {"value": "deepest"};
         for (int i = 0; i < 10; i++) {
             nested = {"level" + string(i): nested};
         }
@@ -1044,8 +1047,7 @@ public class MongoDbTest inherits QUnit::Test {
         assertEq(100000, found.text.size(), "long string size");
 
         # Test many fields (100 fields)
-        hash<auto!> many_fields_doc();
-        many_fields_doc.name = "ManyFields";
+        hash<auto!> many_fields_doc = {"name": "ManyFields"};
         for (int i = 0; i < 100; i++) {
             many_fields_doc{"field" + string(i)} = i;
         }

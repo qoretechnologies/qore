@@ -578,53 +578,99 @@ public hashdecl DateInfo {
     }
 
     testConditionalParsingMode() {
-        string code = "%modern\n%define DOC_FLAG\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n%if defined(DOC_FLAG)\nconst IF_CONST = 3;\n%else\nconst IF_OTHER = 4;\n%endif\n";
-        AstParser parser();
-        parser.setConditionalParsing(True);
-        *AstTree tree = parser.parseString(code);
-        assertEq(0, parser.getErrorCount(), "no parse errors");
-
         AstTreeSearcher searcher();
-        *list syms = searcher.findSymbols(tree, "test.q");
-        assertEq(True, exists(syms), "symbols found");
 
-        bool has_doc = False;
-        bool has_other = False;
-        bool has_if = False;
-        bool has_if_other = False;
+        # Test 1: %ifdef with defined flag
+        {
+            string code = "%modern\n%define DOC_FLAG\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (ifdef defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertEq(True, exists(syms), "symbols found (ifdef defined)");
+            assertTrue(hasConstant(syms, "DOC_CONST"), "DOC_CONST present (ifdef defined)");
+            assertFalse(hasConstant(syms, "OTHER_CONST"), "OTHER_CONST absent (ifdef defined)");
+        }
+
+        # Test 2: %ifdef with undefined flag (else branch)
+        {
+            string code = "%modern\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (ifdef undefined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "OTHER_CONST"), "OTHER_CONST present (ifdef undefined)");
+            assertFalse(hasConstant(syms, "DOC_CONST"), "DOC_CONST absent (ifdef undefined)");
+        }
+
+        # Test 3: %if defined() with defined flag
+        {
+            string code = "%modern\n%define FLAG\n%if defined(FLAG)\nconst IF_CONST = 1;\n%else\nconst IF_OTHER = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (if defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "IF_CONST"), "IF_CONST present (if defined)");
+            assertFalse(hasConstant(syms, "IF_OTHER"), "IF_OTHER absent (if defined)");
+        }
+
+        # Test 4: %if defined() with undefined flag (else branch)
+        {
+            string code = "%modern\n%if defined(FLAG)\nconst IF_CONST = 1;\n%else\nconst IF_OTHER = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (if undefined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "IF_OTHER"), "IF_OTHER present (if undefined)");
+            assertFalse(hasConstant(syms, "IF_CONST"), "IF_CONST absent (if undefined)");
+        }
+
+        # Test 5: %if !defined() negation
+        {
+            string code = "%modern\n%if !defined(FLAG)\nconst NOT_DEFINED = 1;\n%else\nconst IS_DEFINED = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (!defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "NOT_DEFINED"), "NOT_DEFINED present (!defined)");
+            assertFalse(hasConstant(syms, "IS_DEFINED"), "IS_DEFINED absent (!defined)");
+        }
+
+        # Test 6: %if defined() && defined() compound expression
+        {
+            string code = "%modern\n%define A\n%define B\n%if defined(A) && defined(B)\nconst BOTH = 1;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (A && B)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "BOTH"), "BOTH present (A && B)");
+        }
+
+        # Test 7: %if defined() || defined() compound expression
+        {
+            string code = "%modern\n%define A\n%if defined(A) || defined(B)\nconst EITHER = 1;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (A || B)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "EITHER"), "EITHER present (A || B)");
+        }
+    }
+
+    private static bool hasConstant(list syms, string name) {
         foreach auto s in (syms) {
-            if (s.kind == ASYK_Constant && s.name == "DOC_CONST") {
-                has_doc = True;
-            } else if (s.kind == ASYK_Constant && s.name == "OTHER_CONST") {
-                has_other = True;
-            } else if (s.kind == ASYK_Constant && s.name == "IF_CONST") {
-                has_if = True;
-            } else if (s.kind == ASYK_Constant && s.name == "IF_OTHER") {
-                has_if_other = True;
+            if (s.kind == ASYK_Constant && s.name == name) {
+                return True;
             }
         }
-        testAssertion("DOC_CONST present", \equals(), (has_doc, True));
-        testAssertion("OTHER_CONST absent", \equals(), (has_other, False));
-        testAssertion("IF_CONST present", \equals(), (has_if, True));
-        testAssertion("IF_OTHER absent", \equals(), (has_if_other, False));
-
-        string code_else = "%modern\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n";
-        AstParser parser_else();
-        parser_else.setConditionalParsing(True);
-        *AstTree tree_else = parser_else.parseString(code_else);
-        assertEq(0, parser_else.getErrorCount(), "no parse errors (else)");
-        *list syms_else = searcher.findSymbols(tree_else, "test.q");
-        bool has_other_only = False;
-        bool has_doc_else = False;
-        foreach auto s in (syms_else) {
-            if (s.kind == ASYK_Constant && s.name == "OTHER_CONST") {
-                has_other_only = True;
-            } else if (s.kind == ASYK_Constant && s.name == "DOC_CONST") {
-                has_doc_else = True;
-            }
-        }
-        testAssertion("OTHER_CONST present (else)", \equals(), (has_other_only, True));
-        testAssertion("DOC_CONST absent (else)", \equals(), (has_doc_else, False));
+        return False;
     }
 
     testListAssignmentParsing() {
