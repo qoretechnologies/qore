@@ -59,6 +59,10 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("auto! in class members", \autoNoNarrowClassMemberTest());
         addTestCase("auto! in global variables", \autoNoNarrowGlobalVarTest());
         addTestCase("softlist<auto!> syntax", \softlistAutoNoNarrowTest());
+        addTestCase("hash<auto!> runtime type stripping", \hashAutoNoNarrowRuntimeTest());
+        addTestCase("list<auto!> runtime type stripping", \listAutoNoNarrowRuntimeTest());
+        addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
+        addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
 
         set_return_value(main());
     }
@@ -1501,5 +1505,81 @@ sub test() {
             p.parse(code_param, "softlist_auto_no_narrow_param");
         }
         assertTrue(True);
+    }
+
+    # Runtime tests for hash<auto!> - ensures type stripping works at runtime
+    hashAutoNoNarrowRuntimeTest() {
+        # Test that hash<auto!> variable can hold different types at runtime
+        hash<auto!> h = {"name": 1};
+        assertEq("hash", h.fullType(), "hash<auto!> should have plain hash type");
+
+        # Can add string key without error
+        h.value = "string";
+        assertEq("hash", h.fullType(), "hash should remain plain hash after adding string key");
+        assertEq(1, h.name);
+        assertEq("string", h.value);
+
+        # Can reassign with different structure
+        h = {"x": True, "y": 3.14};
+        assertEq("hash", h.fullType());
+
+        # Test *hash<auto!> variant
+        *hash<auto!> nh = {"a": 1};
+        assertEq("hash", nh.fullType());
+        nh.b = "test";
+        assertEq("hash", nh.fullType());
+    }
+
+    # Runtime tests for list<auto!> - ensures type stripping works at runtime
+    listAutoNoNarrowRuntimeTest() {
+        # Test that list<auto!> variable can hold different types at runtime
+        list<auto!> l = (1, 2, 3);
+        assertEq("list", l.fullType(), "list<auto!> should have plain list type");
+
+        # Can append string without error
+        l += "string";
+        assertEq("list", l.fullType(), "list should remain plain list after appending string");
+        assertEq(4, l.size());
+        assertEq("string", l[3]);
+
+        # Can reassign with different element types
+        l = ("a", "b", "c");
+        assertEq("list", l.fullType());
+
+        # Test *list<auto!> variant
+        *list<auto!> nl = (1, 2, 3);
+        assertEq("list", nl.fullType());
+        nl += "test";
+        assertEq("list", nl.fullType());
+    }
+
+    # Runtime tests for hash<auto> - ensures assignment initializer works correctly
+    hashAutoRuntimeTest() {
+        # Test that hash<auto> variable also gets type stripping when initialized
+        hash<auto> h = {"name": 1};
+        assertEq("hash", h.fullType(), "hash<auto> should have plain hash type after initialization");
+
+        # Note: parse-time narrowing still applies for hash<auto>,
+        # so we cannot add different types in the same code block.
+        # But the runtime hash type should be plain hash, not narrowed.
+
+        # Test *hash<auto> variant
+        *hash<auto> nh = {"a": 1};
+        assertEq("hash", nh.fullType());
+    }
+
+    # Runtime tests for list<auto> - ensures assignment initializer works correctly
+    listAutoRuntimeTest() {
+        # Test that list<auto> variable also gets type stripping when initialized
+        list<auto> l = (1, 2, 3);
+        assertEq("list", l.fullType(), "list<auto> should have plain list type after initialization");
+
+        # Note: parse-time narrowing still applies for list<auto>,
+        # so we cannot add different types in the same code block.
+        # But the runtime list type should be plain list, not narrowed.
+
+        # Test *list<auto> variant
+        *list<auto> nl = (1, 2, 3);
+        assertEq("list", nl.fullType());
     }
 }

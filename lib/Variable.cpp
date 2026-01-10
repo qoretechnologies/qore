@@ -4,7 +4,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -848,6 +848,24 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
             != lvid_set->end())) {
         saveTempRef(n);
         return doRecursiveException();
+    }
+
+    // issue #XXXX: strip narrowed type from hash/list when assigning to hash<auto>/list<auto> variables
+    // This ensures that hash<auto!>/list<auto!> variables work correctly when initialized with literals
+    if (typeInfo == autoHashTypeInfo || typeInfo == autoNoNarrowHashTypeInfo
+        || typeInfo == autoHashOrNothingTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
+        if (n.getType() == NT_HASH) {
+            QoreHashNode* h = n.get<QoreHashNode>();
+            // Strip the narrowed type from the hash - it should be plain hash<auto>
+            qore_hash_private::get(*h)->complexTypeInfo = nullptr;
+        }
+    } else if (typeInfo == autoListTypeInfo || typeInfo == autoNoNarrowListTypeInfo
+               || typeInfo == autoListOrNothingTypeInfo || typeInfo == autoNoNarrowListOrNothingTypeInfo) {
+        if (n.getType() == NT_LIST) {
+            QoreListNode* l = n.get<QoreListNode>();
+            // Strip the narrowed type from the list - it should be plain list<auto>
+            qore_list_private::get(*l)->complexTypeInfo = nullptr;
+        }
     }
 
     // process weak assignment
