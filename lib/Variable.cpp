@@ -852,32 +852,16 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
 
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
     // For hash<auto!>/list<auto!> (NoNarrow): always set to autoHashTypeInfo/autoListTypeInfo
-    // For hash<auto>/list<auto>: only set to auto if untyped, to prevent nested type stripping
     // Note: Setting to autoHashTypeInfo/autoListTypeInfo preserves nested hashdecl types
     // Setting to nullptr would make the hash untyped, which causes copy_strip_complex_types to be
     // called on nested values, losing hashdecl type info
+    // hash<auto>/list<auto> variables don't need any modification - they preserve the source type
     if (typeInfo == autoNoNarrowHashTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
         // hash<auto!> / *hash<auto!> - always strip to autoHashTypeInfo
         if (n.getType() == NT_HASH) {
             QoreHashNode* h = n.get<QoreHashNode>();
             qore_hash_private* hp = qore_hash_private::get(*h);
             if (!hp->getHashDecl()) {
-                if (!h->is_unique()) {
-                    QoreHashNode* copy = h->copy();
-                    qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
-                    n = copy;
-                    saveTemp(h);
-                } else {
-                    hp->complexTypeInfo = autoHashTypeInfo;
-                }
-            }
-        }
-    } else if (typeInfo == autoHashTypeInfo || typeInfo == autoHashOrNothingTypeInfo) {
-        // hash<auto> / *hash<auto> - only set to auto if currently untyped (to preserve nested types)
-        if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            qore_hash_private* hp = qore_hash_private::get(*h);
-            if (!hp->getHashDecl() && !hp->complexTypeInfo) {
                 if (!h->is_unique()) {
                     QoreHashNode* copy = h->copy();
                     qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
@@ -899,22 +883,6 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
                 saveTemp(l);
             } else {
                 qore_list_private::get(*l)->complexTypeInfo = autoListTypeInfo;
-            }
-        }
-    } else if (typeInfo == autoListTypeInfo || typeInfo == autoListOrNothingTypeInfo) {
-        // list<auto> / *list<auto> - only set to auto if currently untyped (to preserve nested types)
-        if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            qore_list_private* lp = qore_list_private::get(*l);
-            if (!lp->complexTypeInfo) {
-                if (!l->is_unique()) {
-                    QoreListNode* copy = l->copy();
-                    qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
-                    n = copy;
-                    saveTemp(l);
-                } else {
-                    lp->complexTypeInfo = autoListTypeInfo;
-                }
             }
         }
     }

@@ -32,6 +32,80 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 
+//! Port range configuration for network security
+/** @since %Qore 2.3
+*/
+hashdecl PortRangeInfo {
+    //! Low port number (inclusive)
+    int low;
+    //! High port number (inclusive)
+    int high;
+    //! Protocol (QSEC_NET_TCP, QSEC_NET_UDP, or QSEC_NET_ALL)
+    int proto;
+}
+
+//! Filesystem path access rule
+/** @since %Qore 2.3
+*/
+hashdecl FilesystemPathInfo {
+    //! Path pattern
+    string path;
+    //! Access mode bitmask (QSEC_READ, QSEC_WRITE, etc.)
+    int mode;
+}
+
+//! Filesystem security configuration
+/** @since %Qore 2.3
+*/
+hashdecl FilesystemSecurityConfigInfo {
+    //! Sandbox root path (if set)
+    *string sandbox_root;
+    //! Default policy: "allow" or "deny"
+    string default_policy;
+    //! List of allowed path rules
+    list<hash<FilesystemPathInfo>> allowed_paths;
+    //! List of denied path patterns
+    list<string> denied_paths;
+}
+
+//! Network security configuration
+/** @since %Qore 2.3
+*/
+hashdecl NetworkSecurityConfigInfo {
+    //! Default policy: "allow" or "deny"
+    string default_policy;
+    //! List of allowed hostname patterns
+    list<string> allowed_hosts;
+    //! Count of allowed IP ranges (ranges not exposed for security)
+    int allowed_ranges_count;
+    //! Count of denied IP ranges (ranges not exposed for security)
+    int denied_ranges_count;
+    //! List of allowed port configurations
+    list<hash<PortRangeInfo>> allowed_ports;
+}
+
+//! Full sandbox configuration
+/** @since %Qore 2.3
+*/
+hashdecl SandboxConfigInfo {
+    //! Filesystem security configuration
+    hash<FilesystemSecurityConfigInfo> filesystem;
+    //! Network security configuration
+    hash<NetworkSecurityConfigInfo> network;
+    //! Memory limit in bytes (0 = unlimited)
+    int memory_limit;
+    //! CPU time limit in milliseconds (0 = unlimited)
+    int cpu_time_limit;
+    //! Wall time limit in milliseconds (0 = unlimited)
+    int wall_time_limit;
+    //! Maximum number of threads (0 = unlimited)
+    int max_threads;
+    //! Maximum recursion depth (0 = unlimited)
+    int max_recursion;
+    //! Whether an interrupt has been requested
+    bool interrupt_requested;
+}
+
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
     These constants are used with the FilesystemSecurityManager class to specify access modes.
 */
@@ -238,11 +312,13 @@ bool SandboxManager::isInterruptRequested() {
     return sm->isInterruptRequested();
 }
 
-//! Returns the full configuration as a hash
-/** @return A hash containing all sandbox configuration
+//! Returns the full configuration
+/** @return a @ref SandboxConfigInfo hash with the full sandbox configuration
+
+    @see SandboxConfigInfo
 */
-hash<auto> SandboxManager::getConfiguration() {
-    return sm->getConfiguration();
+hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
+    return sm->getConfiguration(xsink);
 }
 
 //! Creates a preset for maximum restrictions ("lockdown" mode)
@@ -352,7 +428,7 @@ nothing SandboxManager::clearFilesystemSandboxRoot() {
 /** @return The sandbox root path or NOTHING if not set
 */
 *string SandboxManager::getFilesystemSandboxRoot() {
-    QoreHashNode* config = sm->filesystem().getConfiguration();
+    QoreHashNode* config = sm->filesystem().getConfiguration(xsink);
     if (!config) {
         return QoreValue();
     }
@@ -384,15 +460,13 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
     return sm->filesystem().getDefaultPolicy();
 }
 
-//! Returns the filesystem security configuration as a hash
-/** @return A hash containing:
-    - \c "sandbox_root": The sandbox root path or NOTHING
-    - \c "default_policy": "allow" or "deny"
-    - \c "allowed_paths": List of hashes with "path" and "mode" keys
-    - \c "denied_paths": List of denied path strings
+//! Returns the filesystem security configuration
+/** @return a @ref FilesystemSecurityConfigInfo hash with the current filesystem security configuration
+
+    @see FilesystemSecurityConfigInfo
 */
-hash<auto> SandboxManager::getFilesystemConfiguration() {
-    return sm->filesystem().getConfiguration();
+hash<FilesystemSecurityConfigInfo> SandboxManager::getFilesystemConfiguration() {
+    return sm->filesystem().getConfiguration(xsink);
 }
 
 //! Adds an allowed hostname pattern for network connections
@@ -525,14 +599,11 @@ bool SandboxManager::getNetworkDefaultPolicy() {
     return sm->network().getDefaultPolicy();
 }
 
-//! Returns the network security configuration as a hash
-/** @return A hash containing:
-    - \c "default_policy": "allow" or "deny"
-    - \c "allowed_hosts": List of allowed hostname patterns
-    - \c "allowed_ranges_count": Count of allowed IP ranges
-    - \c "denied_ranges_count": Count of denied IP ranges
-    - \c "allowed_ports": List of allowed port configurations
+//! Returns the network security configuration
+/** @return a @ref NetworkSecurityConfigInfo hash with the current network security configuration
+
+    @see NetworkSecurityConfigInfo
 */
-hash<auto> SandboxManager::getNetworkConfiguration() {
-    return sm->network().getConfiguration();
+hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
+    return sm->network().getConfiguration(xsink);
 }

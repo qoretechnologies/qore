@@ -110,7 +110,7 @@ public:
     //! Returns the parent hashdecl if this hashdecl inherits from another, or nullptr if none
     /** @return the parent hashdecl or nullptr
 
-        @since %Qore 2.1
+        @since %Qore 2.3
     */
     DLLEXPORT const TypedHashDecl* getParentHashDecl() const;
 
@@ -119,7 +119,7 @@ public:
 
         @return true if this hashdecl is a descendant of the given hashdecl, false otherwise
 
-        @since %Qore 2.1
+        @since %Qore 2.3
     */
     DLLEXPORT bool inheritsFrom(const TypedHashDecl* parent) const;
 
@@ -128,7 +128,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.1
+        @since %Qore 2.3
     */
     DLLEXPORT void setParent(const TypedHashDecl* parent);
 
@@ -275,5 +275,30 @@ DLLEXPORT extern const TypedHashDecl* hashdeclPipeInfo;
 /** @since %Qore 2.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSseMessageInfo;
+
+//! PortRangeInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclPortRangeInfo;
+
+//! FilesystemPathInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclFilesystemPathInfo;
+
+//! FilesystemSecurityConfigInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclFilesystemSecurityConfigInfo;
+
+//! NetworkSecurityConfigInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclNetworkSecurityConfigInfo;
+
+//! SandboxConfigInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSandboxConfigInfo;
 
 #endif
