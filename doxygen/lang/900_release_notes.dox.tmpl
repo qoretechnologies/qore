@@ -53,6 +53,19 @@ val = "string";      # OK
       @ref Qore::Program "Program" object
     @endparblock
 
+    @par LoggerAppenderQueue Default Memory Limit
+    @parblock
+    The @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" no-argument constructor now enforces a
+    default 10 MiB memory limit for backpressure. Previously, the queue was unlimited by default, which could
+    cause out-of-memory conditions when log producers outpace consumers.
+
+    Code that relies on unlimited queue behavior may now experience blocking when the queue reaches 10 MiB.
+
+    <b>Workaround:</b>
+    - Use @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "LoggerAppenderQueue(-1)" to explicitly
+      create an unlimited queue (not recommended for production)
+    @endparblock
+
     @par New typedef Keyword
     @parblock
     The new @ref typedef_keyword "typedef" keyword for type aliases may conflict with existing code that uses
@@ -207,6 +220,18 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 mode control
+    - @ref Logger "Logger" module
+      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
+        to prevent unbounded memory growth when log producers outpace consumers
+        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "constructor(softint max_bytes)" with
+          configurable memory limit (default: 10 MiB, -1 for unlimited)
+        - updated @ref Qore::Logger::LoggerAppenderQueue::push() "push()" with optional timeout parameter for
+          backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
+        - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()"
+      - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
+        constructor for memory-limited thread pool logging
     - @ref SqlUtil "SqlUtil" module
       - implemented support for specifying the columns to use for upserts separately from the row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
@@ -277,6 +302,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::get_byte_size() "get_byte_size()": returns the approximate memory size in bytes of any Qore value;
+        recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::inflate_raw_to_string() "inflate_raw_to_string()": raw DEFLATE decompression to string

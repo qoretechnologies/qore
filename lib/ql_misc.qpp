@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,6 +58,58 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 }
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
+
+int64 q_get_byte_size(const QoreValue& v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        case NT_NOTHING:
+        case NT_NULL:
+            return 0;
+        case NT_STRING:
+            return v.get<const QoreStringNode>()->size();
+        case NT_BINARY:
+            return v.get<const BinaryNode>()->size();
+        case NT_INT:
+        case NT_FLOAT:
+            return 8;
+        case NT_BOOLEAN:
+            return 1;
+        case NT_DATE:
+            return 64;  // Estimate for DateTime structure
+        case NT_NUMBER:
+            return 32;  // Estimate for arbitrary precision number
+        case NT_LIST: {
+            int64 total = 0;
+            const QoreListNode* l = v.get<const QoreListNode>();
+            ConstListIterator li(l);
+            while (li.next()) {
+                total += q_get_byte_size(li.getValue(), xsink);
+                if (*xsink) {
+                    return 0;
+                }
+            }
+            return total;
+        }
+        case NT_HASH: {
+            int64 total = 0;
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            ConstHashIterator hi(h);
+            while (hi.next()) {
+                total += strlen(hi.getKey());
+                total += q_get_byte_size(hi.get(), xsink);
+                if (*xsink) {
+                    return 0;
+                }
+            }
+            return total;
+        }
+        case NT_OBJECT:
+            xsink->raiseException("GET-BYTE-SIZE-ERROR",
+                "calculating byte size for objects is not currently supported");
+            return 0;
+        default:
+            return 64;  // Default estimate for other complex types
+    }
+}
 
 // signal constants - if they are not defined define them here
 #ifndef SIGABRT
@@ -3260,5 +3312,29 @@ string get_module_context_path_ex() [flags=CONSTANT] {
         return QoreValue();
     }
     return new QoreStringNode(str);
+}
+
+//! Returns the approximate memory size in bytes of any Qore value
+/** @param val the value to calculate the byte size for
+
+    @return the approximate byte size of the value's data
+
+    @par Example:
+    @code{.py}
+int size = get_byte_size("hello world");  # returns 11
+int hash_size = get_byte_size({"a": 1, "b": "test"});  # returns ~13
+    @endcode
+
+    @throw GET-BYTE-SIZE-ERROR thrown if an object is passed, as calculating byte size for objects
+    is not currently supported
+
+    @note For strings and binary data, the exact byte size is returned.
+    For hashes and lists, the function recursively calculates the total size of contained data.
+    For simple types (int, float, bool, date, number), fixed estimates are used.
+
+    @since %Qore 2.3
+*/
+int get_byte_size(auto val) [flags=CONSTANT] {
+    return q_get_byte_size(val, xsink);
 }
 ///@}
