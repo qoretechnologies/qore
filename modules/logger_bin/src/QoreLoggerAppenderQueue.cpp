@@ -31,61 +31,16 @@
 #include "qore_logger.h"
 #include "QoreLoggerAppenderQueue.h"
 #include "QC_LoggerAppender.h"
-
-//! Calculates the approximate byte size of a QoreValue for memory tracking
-/** @note Circular references are only possible with objects in Qore, and objects
-    return a fixed estimate, so no cycle detection is needed for hashes/lists.
-*/
-static int64 getValueByteSize(const QoreValue& v) {
-    switch (v.getType()) {
-        case NT_NOTHING:
-        case NT_NULL:
-            return 0;
-        case NT_STRING:
-            return v.get<const QoreStringNode>()->size();
-        case NT_BINARY:
-            return v.get<const BinaryNode>()->size();
-        case NT_INT:
-        case NT_FLOAT:
-            return 8;
-        case NT_BOOLEAN:
-            return 1;
-        case NT_DATE:
-            return 64;  // Estimate for DateTime structure
-        case NT_NUMBER:
-            return 32;  // Estimate for arbitrary precision number
-        case NT_LIST: {
-            int64 total = 0;
-            const QoreListNode* l = v.get<const QoreListNode>();
-            ConstListIterator li(l);
-            while (li.next()) {
-                total += getValueByteSize(li.getValue());
-            }
-            return total;
-        }
-        case NT_HASH: {
-            int64 total = 0;
-            const QoreHashNode* h = v.get<const QoreHashNode>();
-            ConstHashIterator hi(h);
-            while (hi.next()) {
-                total += strlen(hi.getKey());
-                total += getValueByteSize(hi.get());
-            }
-            return total;
-        }
-        case NT_OBJECT:
-            // Objects are out of scope for logging; use default estimate
-            return 64;
-        default:
-            return 64;  // Default estimate for other complex types
-    }
-}
+#include "qore/intern/ql_misc.h"
 
 //! Adds appender event with optional timeout for backpressure
 bool QoreLoggerAppenderQueue::push(ExceptionSink* xsink, const QoreObject* appender, int64 type,
         const QoreValue params, int64 timeout_ms) {
     // Calculate byte size of params for memory tracking
-    int64 param_size = getValueByteSize(params);
+    int64 param_size = q_get_value_byte_size(params, xsink);
+    if (*xsink) {
+        return false;
+    }
 
     // Check memory limit if set
     if (max_bytes > 0) {
