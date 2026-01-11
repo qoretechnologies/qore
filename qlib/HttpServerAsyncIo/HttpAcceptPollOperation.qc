@@ -154,7 +154,6 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                     @assert(client_sock.isOpen(), "accepted socket must be open");
                     # Set TCP_NODELAY to ensure responses are sent immediately
                     client_sock.setNoDelay(True);
-
                     if (ssl) {
                         # Check if SSL handshake was already done during accept
                         # This happens when the listener socket has SSL configured -
@@ -181,16 +180,18 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                         # Configure client certificate acceptance behavior
                         client_sock.acceptAllCertificates(ssl_accept_all_certs);
                         # Set ALPN protocols based on http_version mode
+                        list<string> alpn;
                         if (http_version == "auto") {
                             # Prefer HTTP/2, fall back to HTTP/1.1
-                            client_sock.setAlpnProtocols(("h2", "http/1.1"));
+                            alpn = ("h2", "http/1.1");
                         } else if (http_version == "2.0" || http_version == "2") {
                             # HTTP/2 only
-                            client_sock.setAlpnProtocols(("h2",));
+                            alpn = ("h2",);
                         } else {
                             # HTTP/1.x only - advertise http/1.1
-                            client_sock.setAlpnProtocols(("http/1.1",));
+                            alpn = ("http/1.1",);
                         }
+                        client_sock.setAlpnProtocols(alpn);
                         spop = client_sock.startPollUpgradeServerToSSL();
                         @assert(spop, "startPollUpgradeServerToSSL must return poll operation");
                         # Continue loop to poll the new operation
