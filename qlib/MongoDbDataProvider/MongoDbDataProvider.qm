@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MongoDbDataProvider module definition
 
-/*  MongoDbDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  MongoDbDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -207,8 +207,5 @@ module MongoDbDataProvider {
 */
 
 public namespace MongoDbDataProvider {
-}
-
-namespace Priv {
-    const MongoDbLogo = File::readTextFile(get_script_dir() + "/mongodb-logo.svg");
+public const MongoDbLogo = File::readTextFile(get_script_dir() + "/mongodb-logo.svg");
 }
