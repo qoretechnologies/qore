@@ -169,37 +169,7 @@ QoreHashNode* qore_qd_private::hstat(ExceptionSink *xsink) const {
 //! file status information hash as returned by @ref Qore::Dir::list() "Dir::list()", @ref Qore::Dir::listFiles() "Dir::listFiles()", and @ref Qore::Dir::listDirs() "Dir::listDirs()" if the appropriate arguments are used
 /** @since %Qore 0.8.13
 */
-hashdecl DirStatInfo {
-    //! device inode number the file is on
-    int dev;
-    //! inode of the file
-    int inode;
-    //! inode protection mode
-    int mode;
-    //! number of hard links to this file
-    int nlink;
-    //! user ID of the owner
-    int uid;
-    //! group ID of the owner
-    int gid;
-    //! device type number
-    int rdev;
-    //! file size in bytes
-    int size;
-    //! last access time of the file
-    date atime;
-    //! last modified time of the file
-    date mtime;
-    //! last change time of the file's inode
-    date ctime;
-    //! block size; may be zero if the platform's internal %stat() (2) function does not provide this info
-    int blksize;
-    //! blocks allocated for the file; may be zero if the platform's internal %stat() (2) function does not provide this info
-    int blocks;
-    //! a string giving the file type; one of:\n - \c "BLOCK-DEVICE" \n - \c "DIRECTORY" \n - \c "CHARACTER-DEVICE" \n - \c "FIFO" \n - \c "SYMBOLIC-LINK" \n - \c "SOCKET" \n - \c "REGULAR" \n - \c "UNKNOWN"
-    string type;
-    //! a string giving UNIX-style permissions for the file (ex: \c "-rwxr-xr-x")
-    string perm;
+hashdecl DirStatInfo inherits StatInfo {
     //! a string giving the file or directory name
     string name;
     //! symbolic link target (if present)

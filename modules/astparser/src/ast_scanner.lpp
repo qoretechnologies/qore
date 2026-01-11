@@ -1595,6 +1595,42 @@ class{WS}+{WORD}                        { claimClassDocComment(); yylval->string
 namespace{WS}+{WORD}                    { claimNamespaceDocComment(); yylval->string = trim(yytext + 10); return NAMESPACE; }
 module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
+\<({WORD}::)+{WORD}\>\{                 {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+\<(::{WORD})+\>\{                       {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<({WORD}::)+{WORD}\>\{             {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<(::{WORD})+\>\{                   {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
 \<{WORD}\>\{                            {
                                             yylval->string = strdup(yytext + 1);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';

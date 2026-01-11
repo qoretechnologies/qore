@@ -498,6 +498,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       for complex hash and list types (e.g. \c hash<string,X> or \c list<X>) at runtime, even though assignment
       to typed variables worked correctly
       (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
+    - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
+      (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
