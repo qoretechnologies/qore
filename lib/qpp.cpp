@@ -3688,9 +3688,9 @@ public:
         while (whitespace(*p1))
             ++p1;
 
-        // Check for inheritance: hashdecl Child : Parent { ... }
-        if (*p1 == ':') {
-            ++p1;
+        // Check for inheritance: hashdecl Child inherits Parent { ... }
+        if (!strncmp(p1, "inherits", 8) && (whitespace(p1[8]) || !p1[8])) {
+            p1 += 8;
             while (whitespace(*p1))
                 ++p1;
 

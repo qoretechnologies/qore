@@ -12,6 +12,7 @@ class DirTest inherits QUnit::Test {
     constructor() : QUnit::Test("Dir", "1.0") {
         addTestCase("DirTest", \dirTest());
         addTestCase("issue3192 test", \issue3192Test());
+        addTestCase("DirStatInfo inherits StatInfo", \dirStatInfoTest());
         set_return_value(main());
     }
 
@@ -86,5 +87,44 @@ class DirTest inherits QUnit::Test {
         list<string> files = d.listFiles();
         assertEq((fileA,), files);
         assertEq(list(), d.listDirs());
+    }
+
+    dirStatInfoTest() {
+%ifdef Windows
+        testSkip("skipping because the test is being run on Windows");
+%endif
+
+        string tmpdirPath = sprintf(tmp_location() + DirSep + "qoretest" + get_random_string());
+        Dir d();
+        bool b = d.chdir(tmpdirPath);
+        assertEq(False, b);
+        d.create();
+        on_exit system("rm -rf " + tmpdirPath + "/*");
+        on_exit rmdir(tmpdirPath);
+
+        string fileA = get_random_string() + "A";
+        string aPath = tmpdirPath + DirSep + fileA;
+        {
+            File f();
+            f.open2(aPath, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("abc\n");
+            f.close();
+        }
+        on_exit system("rm -f " + aPath);
+
+        list<auto> full = d.listFiles(True);
+        assertTrue(full.size() > 0);
+
+        *hash<DirStatInfo> entry;
+        foreach hash<DirStatInfo> h in (full) {
+            if (h.name == fileA) {
+                entry = h;
+                break;
+            }
+        }
+        assertTrue(exists entry);
+        assertEq("hash<DirStatInfo>", entry.fullType());
+        assertEq(Type::Date, entry.mtime.type());
+        assertTrue(exists entry.size);
     }
 }
