@@ -68,11 +68,11 @@ Refactoring to use inheritance can benefit users when:
 - You want runtime compatibility checks to treat derived hashes as the base type.
 - You want to reduce member duplication and keep docs consistent.
 
-Potential example:
-- `DirStatInfo` currently duplicates most of `StatInfo` members.
-- If `DirStatInfo` is a superset, the init function for `DirStatInfo` can set its parent to `hashdeclStatInfo`, enabling `inheritsFrom()` checks and runtime casts.
+Example: `DirStatInfo`
+- `DirStatInfo` previously duplicated most of `StatInfo` members.
+- It has been refactored so that the init function for `DirStatInfo` sets its parent to `hashdeclStatInfo`, enabling `inheritsFrom()` checks and runtime casts.
 
-If you make this change, keep the Qore source declaration and the C++ init wiring in sync, and verify that any API expecting `hash<StatInfo>` should accept `hash<DirStatInfo>` where appropriate.
+When applying this pattern to other hashdecls, keep the Qore source declaration and the C++ init wiring in sync, and verify that any API expecting `hash<BaseDecl>` should accept `hash<DerivedDecl>` where appropriate.
 
 ## Common pitfalls
 
