@@ -44,6 +44,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("stop", \stopTest());
         addTestCase("shared result queue", \sharedResultQueueTest());
         addTestCase("no timeout", \noTimeoutTest());
+        addTestCase("immediate timeout", \immediateTimeoutTest());
         addTestCase("autostop", \autostopTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -355,7 +356,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
-            "to": 0s,
+            "to": -1s,
             "owner": "no-timeout-owner",
         });
 
@@ -364,6 +365,23 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         hash<SocketPollResultInfo> info = q.get(1s);
         assertFalse(info.ex && info.ex.err == "SOCKET-TIMEOUT",
             "no-timeout operation should not report a timeout");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    immediateTimeoutTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 0s,
+            "owner": "immediate-timeout-owner",
+        });
+        assertEq("SOCKET-TIMEOUT", info.ex.err, "0s timeout should expire immediately");
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
     }

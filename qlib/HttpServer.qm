@@ -5063,7 +5063,7 @@ class HttpServerIoController {
             server.getGlobalAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": linfo.listener,
                 "spop": accept_op,
-                "to": 0s,  # No timeout - listeners wait indefinitely for connections
+                "to": -1s,  # No timeout - listeners wait indefinitely for connections
                 "resultQueue": resultQueue,
                 "owner": server.getOwnerId(),
                 "other": {"goal": "listener:" + key},
@@ -5089,6 +5089,7 @@ class HttpServerIoController {
             }
             AbstractPollOperation spop;
             date timeout = cinfo.timeout_date;
+            date now = now_us();
 
             switch (cinfo.state) {
                 case "idle":
@@ -5155,10 +5156,15 @@ class HttpServerIoController {
 
             connections{key}.spop = spop;
 
+            date to = timeout ? (timeout - now) : -1s;
+            if (timeout && to <= 0s) {
+                # Timeout already expired; force immediate timeout handling
+                to = 0s;
+            }
             server.getGlobalAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": cinfo.sock,
                 "spop": spop,
-                "to": timeout - now_us(),
+                "to": to,
                 "resultQueue": resultQueue,
                 "owner": server.getOwnerId(),
                 "other": {"goal": "connection:" + key},
@@ -5220,7 +5226,12 @@ class HttpServerIoController {
 
         # Accept completed successfully
         log(LoggerLevel::DEBUG, "processListenerResult: calling handleAcceptComplete for listener %s", key);
-        handleAcceptComplete(key, listeners{key});
+        try {
+            handleAcceptComplete(key, listeners{key});
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error handling accept for listener %s: %s: %s",
+                key, ex.err, ex.desc);
+        }
 
         # Reset accept operation and start next accept immediately
         remove listeners{key}.accept_op;

@@ -34,7 +34,7 @@ public hashdecl SocketPollOperationInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout; use 0s to disable timeout (operation will wait indefinitely)
+    #! I/O timeout; use a negative value to disable timeout (operation will wait indefinitely)
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Owner identifier for cancellation; required for proper cleanup during shutdown via cancelByOwner()
@@ -512,15 +512,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     hash<string, bool> dmap;
                     while ((*string key = (cache - keys dmap).firstKey()).val()) {
                         hash<PollInfo> cinfo = cache{key};
-                        # Only set timeout_date if a positive timeout was specified (0 or less means no timeout)
-                        if (!cinfo.timeout_date && cinfo.to > 0s) {
+                        # Only set timeout_date if a non-negative timeout was specified (negative means no timeout)
+                        if (!cinfo.timeout_date && cinfo.to >= 0s) {
                             cinfo.timeout_date = cache{key}.timeout_date = now_us() + cinfo.to;
                         }
                         dmap{key} = True;
                         Socket sock = cinfo.sock;
                         try {
-                            # Only check for timeout if timeout_date is set (not set when to <= 0)
-                            if (cinfo.timeout_date && cinfo.timeout_date < now) {
+                            # Only check for timeout if timeout_date is set (not set when to < 0)
+                            if (cinfo.timeout_date && cinfo.timeout_date <= now) {
                                 throw "SOCKET-TIMEOUT", sprintf("The I/O operation did not complete in the timeout "
                                     "period (%y)", cinfo.to);
                             }
@@ -757,7 +757,7 @@ hashdecl PollInfo {
     #! Poll operation
     AbstractPollOperation spop;
 
-    #! I/O timeout; 0s or less means no timeout
+    #! I/O timeout; negative means no timeout
     date to = AsyncSocketIoController::DefaultIoOperationTimeout;
 
     #! Owner identifier for cancellation

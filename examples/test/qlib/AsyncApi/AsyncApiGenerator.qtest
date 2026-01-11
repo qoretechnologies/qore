@@ -63,6 +63,7 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("nullable list type", \testNullableListType());
         addTestCase("multiple message blocks", \testMultipleMessageBlocks());
         addTestCase("message block field parsing", \testMessageBlockFieldParsing());
+        addTestCase("EventData extension fields", \testEventDataExtensions());
         set_return_value(main());
     }
 
@@ -902,5 +903,30 @@ trailing code";
         assertTrue(props.hasKey("typed_hash"), "Should have typed_hash");
         assertTrue(props.typed_hash.hasKey("$ref"), "typed_hash should have $ref");
         assertEq("#/components/schemas/EventInfo", props.typed_hash{"$ref"}, "typed_hash $ref");
+    }
+
+    testEventDataExtensions() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Test EventData Extensions",
+            "version": "1.0.0",
+            "event_data_fields": {
+                "origin": {
+                    "type": "string",
+                    "description": "Event origin",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Event category",
+                },
+            },
+            "event_data_required": ("origin",),
+        });
+
+        hash<auto> schema = gen.generate();
+        hash<auto> event_data = schema.components.schemas.EventData;
+        assertTrue(event_data.properties.origin.typeCode() == NT_HASH, "EventData should include origin");
+        assertTrue(event_data.properties.category.typeCode() == NT_HASH, "EventData should include category");
+        assertTrue(inlist("origin", event_data.required), "EventData should require origin");
+        assertFalse(inlist("category", event_data.required), "EventData should not require category");
     }
 }
