@@ -1360,10 +1360,13 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
                 assert(!real_io);
                 return -1;
             }
-            if (!rc && real_io) {
+            if (real_io) {
                 sent += real_io;
                 if (sent == size) {
                     break;
+                }
+                if (rc) {
+                    return rc;
                 }
                 // do not allow more than max_nonblock_ops loops at a time
                 if (++loop >= max_nonblock_ops) {
@@ -2406,6 +2409,29 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         }
 
         if (rc > 0) {
+#ifdef DEBUG
+            // Test-only hook to simulate SSL partial writes that require repeated polling.
+            static int force_count = 0;
+            static int force_max = 0;
+            const char* env = getenv("QORE_TEST_SSL_PARTIAL_WRITE");
+            if (!env || !*env || *env == '0') {
+                force_count = 0;
+                force_max = 0;
+            } else if (action == WRITE && real_io) {
+                if (!force_max) {
+                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    force_max = lim ? atoi(lim) : 4;
+                    if (force_max < 1) {
+                        force_max = 1;
+                    }
+                }
+                if (force_count < force_max) {
+                    ++force_count;
+                    rc = SOCK_POLLOUT;
+                    break;
+                }
+            }
+#endif
             // SSL accepted the data, but check if it still has pending encrypted data to write
             // This happens when SSL_write encrypts data but the socket would block
             if (action == WRITE && SSL_want_write(ssl)) {
