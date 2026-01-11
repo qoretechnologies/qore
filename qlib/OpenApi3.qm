@@ -5942,6 +5942,8 @@ public hashdecl ParamInfo {
     bool required;
     #! Location: "path", "query", "body", "header"
     string location;
+    #! Nesting depth for parameter fields
+    int depth = 0;
 }
 
 #! Return type information
@@ -6015,6 +6017,7 @@ public class OpenApi3SchemaTokenizer {
         string state = "";
         *list<hash<FieldInfo>> current_fields;
         int base_depth = 0;
+        int params_base_depth = 0;
 
         # Normalize line endings and split
         text =~ s/\r\n/\n/g;
@@ -6047,6 +6050,7 @@ public class OpenApi3SchemaTokenizer {
             if (trimmed =~ /^@params/) {
                 state = "params";
                 rv.params = ();
+                params_base_depth = depth;
                 continue;
             }
             if (trimmed =~ /^@return\s+/) {
@@ -6097,7 +6101,7 @@ public class OpenApi3SchemaTokenizer {
                 case "params":
                     # Parse parameter line: - name (type): description
                     if (trimmed =~ /^-\s+/) {
-                        *hash<ParamInfo> param = parseParamLine(trimmed);
+                        *hash<ParamInfo> param = parseParamLine(trimmed, depth - params_base_depth);
                         if (param) {
                             rv.params += param;
                         }
@@ -6131,7 +6135,7 @@ public class OpenApi3SchemaTokenizer {
     }
 
     #! Parse a parameter line
-    static *hash<ParamInfo> parseParamLine(string line) {
+    static *hash<ParamInfo> parseParamLine(string line, int depth) {
         # Pattern: - [Q ]name (type): description
         # Q prefix indicates query parameter
         *list<auto> parts = (line =~ x/^-\s+(Q\s+)?([a-zA-Z_][a-zA-Z0-9_-]*)\s+\(([^)]+)\):\s*(.*)$/);
@@ -6152,6 +6156,7 @@ public class OpenApi3SchemaTokenizer {
             "description": description,
             "required": required,
             "location": location,
+            "depth": depth,
         };
     }
 
@@ -6318,6 +6323,20 @@ public class OpenApi3TypeMapper {
             }
             return rv;
         }
+        # Check for hash type with space-separated named type (hash TypeName)
+        *list<string> hash_space_match = (qore_type =~ x/^hash\s+([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)$/);
+        if (hash_space_match) {
+            list<string> name_parts = hash_space_match[0].split("::");
+            string schema_name = name_parts[name_parts.size() - 1];
+            hash<auto> rv = {
+                "\$ref": sprintf("#/components/schemas/%s", schema_name),
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
         # Check for UndefinedHash
         if (qore_type == "UndefinedHash" || qore_type =~ /hash\s+UndefinedHash/) {
             hash<auto> rv = {
@@ -6372,6 +6391,10 @@ public class OpenApi3TypeMapper {
     #! Extract inner type from hash type (supports qualified names like Namespace::TypeName)
     static *string getHashType(string qore_type) {
         *list<string> match = (qore_type =~ x/^(?:\*)?hash<([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>$/);
+        if (match) {
+            return match[0];
+        }
+        match = (qore_type =~ x/^(?:\*)?hash\s+([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)$/);
         return match ? match[0] : NOTHING;
     }
 }
@@ -6579,6 +6602,9 @@ public class OpenApi3SchemaGenerator {
         # Add query parameters for GET methods
         if (method_info.http_method == "GET" && method_info.schema.params) {
             foreach hash<ParamInfo> param in (method_info.schema.params) {
+                if (param.depth) {
+                    continue;
+                }
                 params += {
                     "name": param.name,
                     "in": "query",
@@ -6590,6 +6616,97 @@ public class OpenApi3SchemaGenerator {
         }
 
         return params.size() ? params : NOTHING;
+    }
+
+    #! Builds a param tree based on nesting depth
+    private static list<hash<auto>> buildParamTree(list<hash<ParamInfo>> params) {
+        list<hash<auto>> roots = ();
+        list<auto!> node_stack = ();
+        list<int> depth_stack = ();
+
+        foreach hash<ParamInfo> param in (params) {
+            int depth = param.depth;
+            list<hash<auto>> children = ();
+            hash<auto> node = {
+                "info": param,
+                "children": children,
+            };
+
+            while (depth_stack && depth <= depth_stack.last()) {
+                pop depth_stack;
+                pop node_stack;
+            }
+
+            if (node_stack) {
+                reference<hash<auto>> parent = node_stack.last();
+                parent.children += node;
+                node_stack += \parent.children[parent.children.size() - 1];
+            } else {
+                roots += node;
+                node_stack += \roots[roots.size() - 1];
+            }
+
+            depth_stack += depth;
+        }
+
+        return roots;
+    }
+
+    #! Applies nested child schema to a base schema
+    private static hash<auto> applyChildSchema(hash<auto> schema, list<hash<auto>> children) {
+        hash<auto> child_schema = buildObjectSchema(children);
+        if (schema.type == "array") {
+            if (schema.items && schema.items."\$ref") {
+                schema.items = {"allOf": (schema.items, child_schema)};
+            } else {
+                schema.items = child_schema;
+            }
+            return schema;
+        }
+        if (schema."\$ref") {
+            hash<auto> rv = {
+                "allOf": (schema, child_schema),
+            };
+            if (schema.nullable) {
+                rv.nullable = schema.nullable;
+            }
+            return rv;
+        }
+
+        schema.type = "object";
+        schema.properties = child_schema.properties;
+        if (child_schema.required) {
+            schema.required = child_schema.required;
+        }
+        return schema;
+    }
+
+    #! Builds an object schema from a list of param nodes
+    private static hash<auto> buildObjectSchema(list<hash<auto>> nodes) {
+        hash<auto> properties = {};
+        list<string> required_props = ();
+
+        foreach hash<auto> node in (nodes) {
+            hash<ParamInfo> param = node.info;
+            hash<auto> schema = OpenApi3TypeMapper::mapType(param.type_str);
+            schema.description = param.description;
+            if (node.children && node.children.size()) {
+                schema = applyChildSchema(schema, node.children);
+            }
+            properties{param.name} = schema;
+            if (param.required) {
+                required_props += param.name;
+            }
+        }
+
+        hash<auto> obj = {
+            "type": "object",
+            "properties": properties,
+        };
+        if (required_props) {
+            obj.required = required_props;
+        }
+        return obj;
     }
 
     #! Generate request body from method info
@@ -6604,28 +6721,12 @@ public class OpenApi3SchemaGenerator {
             return;
         }
 
-        # Build schema for request body
-        hash<auto> properties = {};
-        list<string> required_props = ();
-
-        foreach hash<ParamInfo> param in (body_params) {
-            properties{param.name} = OpenApi3TypeMapper::mapType(param.type_str);
-            properties{param.name}.description = param.description;
-            if (param.required) {
-                required_props += param.name;
-            }
-        }
-
-        hash<auto> body_schema = {
-            "type": "object",
-            "properties": properties,
-        };
-        if (required_props) {
-            body_schema.required = required_props;
-        }
+        # Build schema for request body with nested params
+        hash<auto> body_schema = buildObjectSchema(buildParamTree(body_params));
+        bool required_body = body_schema.required && body_schema.required.size() > 0;
 
         return {
-            "required": required_props.size() > 0,
+            "required": required_body,
             "content": {
                 "application/json": {"schema": body_schema},
                 "application/x-yaml": {"schema": body_schema},
