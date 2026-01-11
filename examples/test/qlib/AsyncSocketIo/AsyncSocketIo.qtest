@@ -44,6 +44,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("stop", \stopTest());
         addTestCase("shared result queue", \sharedResultQueueTest());
         addTestCase("no timeout", \noTimeoutTest());
+        addTestCase("timeout timing", \timeoutTimingTest());
         addTestCase("immediate timeout", \immediateTimeoutTest());
         addTestCase("autostop", \autostopTest());
         @debug {
@@ -369,6 +370,36 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         SimpleStringHandler::interruptSleep(False);
     }
 
+    timeoutTimingTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        SimpleStringHandler::resetInterruptWindow();
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 200ms,
+            "owner": "timeout-timing-owner",
+        });
+        on_exit {
+            io_controller.cancel(rest);
+            spop.abort();
+            SimpleStringHandler::interruptSleep(False);
+        }
+
+        date start = now_us();
+        *hash<SocketPollResultInfo> info = q.get(2s);
+        date elapsed = now_us() - start;
+
+        assertTrue(exists info, "timeout result should be returned within 2s");
+        assertEq("SOCKET-TIMEOUT", info.ex.err, "expected timeout result");
+        assertTrue(elapsed >= 50ms, sprintf("timeout should not be immediate (elapsed=%y)", elapsed));
+        assertTrue(elapsed < 2s, sprintf("timeout should not be delayed excessively (elapsed=%y)", elapsed));
+    }
+
     immediateTimeoutTest() {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
@@ -485,6 +516,16 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
             }
         } else {
             interrupt_gen++;
+            c.broadcast();
+        }
+    }
+
+    static resetInterruptWindow() {
+        AutoLock al(m);
+        pending_interrupt_until = NOTHING;
+        # Wake any sleepers deterministically
+        if (sleeping_by_gen{string(interrupt_gen)} ?? 0) {
+            ++interrupt_gen;
             c.broadcast();
         }
     }

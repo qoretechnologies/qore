@@ -298,8 +298,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "other": info.other,
                 "q": info.resultQueue ?? new Queue(),
             };
-            @debug(log(LoggerLevel::INFO, "submit: added operation for socket %s goal=%y to=%y cache_size=%d",
-                uh, info.other.goal, info.to, cache.size()));
+            @debug {
+                if (getenv("QORE_ASYNCIO_DEBUG")) {
+                    log(LoggerLevel::INFO, "submit: added operation for socket %s goal=%y to=%y cache_size=%d",
+                        uh, info.other.goal, info.to, cache.size());
+                }
+                if (getenv("QORE_ASYNCIO_TRACE")) {
+                    log(LoggerLevel::DEBUG, "submit: info=%y", info);
+                }
+            }
             if (!tid) {
                 startIntern();
             }
@@ -502,10 +509,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         while (True) {
             try {
-                date poll_timeout;
+                *date poll_deadline;
                 softlist<hash<SocketPollInfo>> poll_list = sem_info;
                 {
                     AutoLock al(m);
+                    @debug {
+                        if (getenv("QORE_ASYNCIO_DEBUG")) {
+                            log(LoggerLevel::INFO, "poll cycle start: cache_size=%d", cache.size());
+                        }
+                    }
                     # scan for timed out operations
                     date now = now_us();
                     # take the first key that has not already been processed on this run
@@ -525,12 +537,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                     "period (%y)", cinfo.to);
                             }
                             *hash<SocketPollInfo> info = cinfo.spop.continuePoll();
-                            log(LoggerLevel::DEBUG, "%y: state: %y: got poll info: %y", key,
-                                cinfo.spop.getState(), info ? {
-                                    "events": PollEventMap{info.events} ?? "unknown",
-                                    "socket": sprintf("%s %s", info.socket.className(),
-                                        info.socket.uniqueHash()[0..8]),
-                                } : NOTHING);
+                            @debug {
+                                if (getenv("QORE_ASYNCIO_TRACE")) {
+                                    log(LoggerLevel::INFO, "%y: state: %y: got poll info: %y", key,
+                                        cinfo.spop.getState(), info ? {
+                                            "events": PollEventMap{info.events} ?? "unknown",
+                                            "socket": sprintf("%s %s", info.socket.className(),
+                                                info.socket.uniqueHash()[0..8]),
+                                            "timeout_date": cinfo.timeout_date,
+                                            "now": now,
+                                            "to": cinfo.to,
+                                        } : NOTHING);
+                                }
+                            }
                             if (!info) {
                                 # operation successful
                                 remove cache{key};
@@ -547,11 +566,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 poll_list += info;
                                 # Find the MINIMUM (earliest) timeout so poll returns in time to handle it
                                 # Only consider operations with timeouts
-                                if (cinfo.timeout_date && (!poll_timeout || (poll_timeout > cinfo.timeout_date))) {
-                                    poll_timeout = cinfo.timeout_date;
+                                if (cinfo.timeout_date && (!poll_deadline || (poll_deadline > cinfo.timeout_date))) {
+                                    poll_deadline = cinfo.timeout_date;
                                 }
                             }
                         } catch (hash<ExceptionInfo> ex) {
+                            @debug {
+                                if (getenv("QORE_ASYNCIO_TRACE")) {
+                                    log(LoggerLevel::ERROR, "%y: state: %y: poll exception: %s (sock=%s goal=%y)",
+                                        key, cinfo.spop.getState(), get_exception_string(ex),
+                                        sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
+                                        cinfo.other.goal);
+                                }
+                            }
                             log(LoggerLevel::ERROR, "%s", get_exception_string(ex));
                             # poll operation failed with an exception
                             remove cache{key};
@@ -568,10 +595,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                     }
 
-                    @debug(log(LoggerLevel::INFO, "poll_list: cache=%d items=%d poll_list: %y", cache.size(), poll_list.size(), (map $1 + {
-                        "events": PollEventMap{$1.events} ?? "unknown",
-                        "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
-                    }, poll_list)));
+                    @debug {
+                        if (getenv("QORE_ASYNCIO_DEBUG")) {
+                            log(LoggerLevel::INFO, "poll_list: cache=%d items=%d poll_list: %y", cache.size(),
+                                poll_list.size(), (map $1 + {
+                                    "events": PollEventMap{$1.events} ?? "unknown",
+                                    "socket": sprintf("%s %s", $1.socket.className(), $1.socket.uniqueHash()[0..8]),
+                                }, poll_list));
+                        }
+                    }
 
                     if (!cache && autostop) {
                         log(LoggerLevel::DEBUG, "All operations have completed; exiting the I/O thread");
@@ -582,10 +614,27 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 # ignore return value, all active ping operations are sent in each poll call
                 # Use -1 (infinite wait) when no timeout is set - the semaphore pipe in poll_list
                 # ensures we wake up immediately when commands are sent via sendCmd()
-                log(LoggerLevel::DEBUG, "calling poll() with %d items, timeout=%y", poll_list.size(),
-                    poll_timeout ?? "infinite");
-                Socket::poll(poll_list, poll_timeout ?? -1);
-                log(LoggerLevel::DEBUG, "poll() returned");
+                # Convert absolute deadline to relative timeout to avoid overflow
+                date poll_timeout = -1s;
+                if (poll_deadline) {
+                    date now = now_us();
+                    poll_timeout = poll_deadline - now;
+                    if (poll_timeout < 0s) {
+                        poll_timeout = 0s;
+                    }
+                }
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::INFO, "poll() call: items=%d timeout=%y deadline=%y", poll_list.size(),
+                            poll_deadline ? poll_timeout : "infinite", poll_deadline);
+                    }
+                }
+                Socket::poll(poll_list, poll_timeout);
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::INFO, "poll() returned: items=%d", poll_list.size());
+                    }
+                }
 
                 # first process commands, if any
                 if (processCommands()) {
