@@ -249,6 +249,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
+    lib/QC_EventLoop.qpp
     lib/ql_misc.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
@@ -354,6 +355,10 @@ set(QORE_CPP_SRC command-line.cpp qore-main.cpp)
 # find needed libraries
 qore_find_pthreads()
 find_package(ICONV REQUIRED)
+# Allow BISON_EXECUTABLE to be set from environment variable
+if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
+    set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
+endif()
 find_package(BISON REQUIRED)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -663,6 +668,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/QoreEventLoop.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -934,6 +940,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1199,6 +1206,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 
 #include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"
 

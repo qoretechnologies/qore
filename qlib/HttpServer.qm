@@ -4740,18 +4740,25 @@ class HttpServerIoController {
     /** @param listener_id the listener ID to remove
     */
     removeListener(int listener_id) {
-        AutoLock al(m);
-        string key = listener_id.toString();
+        Socket listener;
+        {
+            AutoLock al(m);
+            string key = listener_id.toString();
 
-        if (!listeners{key}) {
-            throw "CONTROLLER-REMOVE-LISTENER-ERROR", sprintf("Listener ID %d is not registered", listener_id);
-        }
+            if (!listeners{key}) {
+                throw "CONTROLLER-REMOVE-LISTENER-ERROR", sprintf("Listener ID %d is not registered", listener_id);
+            }
 
-        # Cancel any pending accept operation
-        if (listeners{key}.accept_op) {
-            server.getGlobalAsyncCtrl().cancel(listeners{key}.listener);
+            # Get listener socket for cancel if there's a pending accept operation
+            if (listeners{key}.accept_op) {
+                listener = listeners{key}.listener;
+            }
+            remove listeners{key};
         }
-        remove listeners{key};
+        # Cancel outside the lock to avoid deadlock - cancel() blocks waiting for I/O thread
+        if (listener) {
+            server.getGlobalAsyncCtrl().cancel(listener);
+        }
         log(LoggerLevel::INFO, "Removed listener %d from async I/O controller", listener_id);
     }
 
@@ -5102,6 +5109,15 @@ class HttpServerIoController {
                     break;
 
                 case "read_header":
+                    @debug {
+                        if (getenv("QORE_HTTP_HEADER_DEBUG")) {
+                            log(LoggerLevel::INFO,
+                                "startPollReadHttpHeader: key=%y sock=%s timeout=%y listener_id=%y http2=%y",
+                                key,
+                                sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
+                                timeout, cinfo.listener_id, cinfo.is_http2);
+                        }
+                    }
                     spop = cinfo.sock.startPollReadHttpHeader();
                     break;
 
@@ -5167,7 +5183,12 @@ class HttpServerIoController {
                 "to": to,
                 "resultQueue": resultQueue,
                 "owner": server.getOwnerId(),
-                "other": {"goal": "connection:" + key},
+                "other": {
+                    "goal": "connection:" + key,
+                    "state": cinfo.state,
+                    "listener_id": cinfo.listener_id,
+                    "http2": cinfo.is_http2,
+                },
             });
             @debug(log(LoggerLevel::DEBUG, "startConnectionOperation: submitted op for connection %s state=%y",
                 key, cinfo.state));
@@ -5254,6 +5275,12 @@ class HttpServerIoController {
 
         if (result.ex) {
             log(LoggerLevel::DEBUG, "Connection %s error: %s: %s", key, result.ex.err, result.ex.desc);
+            @debug {
+                log(LoggerLevel::INFO,
+                    "processConnectionResult: connection %s error=%y state=%y listener_id=%y http2=%y goal=%y",
+                    key, result.ex.err, connections{key}.state, connections{key}.listener_id,
+                    connections{key}.is_http2, result.other.goal);
+            }
             closeConnectionIntern(key);
             return;
         }

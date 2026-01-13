@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class PollAcceptBugTest
+
+#! Test to reproduce macOS poll() bug with listener sockets
+/** This test attempts to reproduce the macOS poll() bug where poll() fails
+    to detect pending connections on listener sockets.
+
+    The test creates multiple listeners, connects clients, and verifies that
+    poll() detects pending connections correctly.
+*/
+class PollAcceptBugTest inherits QUnit::Test {
+    public {
+        # Number of listeners (matches Qorus HTTP server)
+        const NumListeners = 6;
+
+        # Poll timeout in ms
+        const PollTimeout = 500;
+    }
+
+    constructor() : Test("PollAcceptBugTest", "1.0") {
+        addTestCase("multiple listeners sequential", \testMultiListenersSequential());
+        addTestCase("connect before poll", \testConnectBeforePoll());
+        addTestCase("stress with warmup", \testStressWithWarmup());
+        set_return_value(main());
+    }
+
+    #! Test with multiple listeners - connect then poll
+    testMultiListenersSequential() {
+        list<Socket> listeners = createListeners();
+        list<int> ports = getPorts(listeners);
+
+        int bug_count = 0;
+        int total_tests = 0;
+
+        for (int iter = 0; iter < 20; ++iter) {
+            for (int target_idx = 0; target_idx < NumListeners; ++target_idx) {
+                ++total_tests;
+
+                # Connect client first
+                Socket client();
+                client.setNoDelay(True);
+                client.connect("localhost:" + ports[target_idx]);
+
+                # Small delay to ensure connection is queued
+                usleep(1000);
+
+                # Poll all listeners
+                list<hash<SocketPollInfo>> poll_list = ();
+                foreach Socket l in (listeners) {
+                    push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
+                }
+
+                date start = now_us();
+                list<auto> ready = Socket::poll(poll_list, PollTimeout);
+                date elapsed = now_us() - start;
+
+                if (!ready) {
+                    # poll() returned empty - check if connection is actually pending
+                    bool connection_pending = False;
+                    try {
+                        *Socket accepted = listeners[target_idx].accept(0);
+                        if (accepted) {
+                            connection_pending = True;
+                            accepted.close();
+                        }
+                    } catch () {}
+
+                    if (connection_pending) {
+                        ++bug_count;
+                        printf("BUG iter=%d listener=%d: poll() empty after %y but accept() worked\n",
+                            iter, target_idx, elapsed);
+                    }
+                } else {
+                    # Clean up - accept and close
+                    try {
+                        Socket accepted = listeners[target_idx].accept(0);
+                        accepted.close();
+                    } catch () {}
+                }
+
+                client.close();
+            }
+        }
+
+        if (bug_count > 0) {
+            fail(sprintf("poll() bug detected %d/%d times", bug_count, total_tests));
+        }
+
+        assertTrue(True, sprintf("all %d poll() calls correctly detected pending accepts", total_tests));
+    }
+
+    #! Test where connection is established before poll starts
+    testConnectBeforePoll() {
+        list<Socket> listeners = createListeners();
+        list<int> ports = getPorts(listeners);
+
+        int bug_count = 0;
+
+        for (int iter = 0; iter < 50; ++iter) {
+            int target_idx = iter % NumListeners;
+
+            # Connect client
+            Socket client();
+            client.setNoDelay(True);
+            client.connect("localhost:" + ports[target_idx]);
+
+            # Longer delay to ensure connection is fully queued
+            usleep(10000);  # 10ms
+
+            # Now poll
+            list<hash<SocketPollInfo>> poll_list = ();
+            foreach Socket l in (listeners) {
+                push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
+            }
+
+            list<auto> ready = Socket::poll(poll_list, PollTimeout);
+
+            if (!ready) {
+                # Verify bug
+                try {
+                    *Socket accepted = listeners[target_idx].accept(0);
+                    if (accepted) {
+                        ++bug_count;
+                        printf("BUG iter=%d: poll() missed pending accept on listener %d\n", iter, target_idx);
+                        accepted.close();
+                    }
+                } catch () {}
+            } else {
+                try {
+                    Socket accepted = listeners[target_idx].accept(0);
+                    accepted.close();
+                } catch () {}
+            }
+
+            client.close();
+        }
+
+        if (bug_count > 0) {
+            fail(sprintf("poll() bug detected %d times", bug_count));
+        }
+
+        assertTrue(True, "connect before poll test passed");
+    }
+
+    #! Stress test with warmup phase to trigger socket state issues
+    testStressWithWarmup() {
+        list<Socket> listeners = createListeners();
+        list<int> ports = getPorts(listeners);
+
+        # Warmup: do many rapid connections to build up socket state
+        for (int warmup = 0; warmup < 100; ++warmup) {
+            int idx = warmup % NumListeners;
+            Socket client();
+            client.setNoDelay(True);
+            try {
+                client.connect("localhost:" + ports[idx]);
+                # Immediate poll and accept
+                list<hash<SocketPollInfo>> poll_list = (
+                    cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listeners[idx]}),
+                );
+                Socket::poll(poll_list, 50);
+                try {
+                    *Socket accepted = listeners[idx].accept(0);
+                    if (accepted) accepted.close();
+                } catch () {}
+            } catch () {}
+            client.close();
+        }
+
+        # Now test with all listeners
+        int bug_count = 0;
+
+        for (int iter = 0; iter < 20; ++iter) {
+            int target_idx = iter % NumListeners;
+
+            Socket client();
+            client.setNoDelay(True);
+            client.connect("localhost:" + ports[target_idx]);
+
+            usleep(5000);  # 5ms
+
+            # Poll all listeners with longer timeout
+            list<hash<SocketPollInfo>> poll_list = ();
+            foreach Socket l in (listeners) {
+                push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
+            }
+
+            date start = now_us();
+            list<auto> ready = Socket::poll(poll_list, 2000);  # 2 second timeout
+            date elapsed = now_us() - start;
+
+            if (!ready) {
+                try {
+                    *Socket accepted = listeners[target_idx].accept(0);
+                    if (accepted) {
+                        ++bug_count;
+                        printf("BUG after warmup iter=%d: poll() timeout after %y but accept() worked\n",
+                            iter, elapsed);
+                        accepted.close();
+                    }
+                } catch () {}
+            } else {
+                if (elapsed > 500ms) {
+                    printf("SLOW: iter=%d poll() took %y\n", iter, elapsed);
+                }
+                try {
+                    Socket accepted = listeners[target_idx].accept(0);
+                    accepted.close();
+                } catch () {}
+            }
+
+            client.close();
+        }
+
+        if (bug_count > 0) {
+            fail(sprintf("poll() bug detected %d times after warmup", bug_count));
+        }
+
+        assertTrue(True, "stress test with warmup passed");
+    }
+
+    private list<Socket> createListeners() {
+        list<Socket> listeners = ();
+        for (int i = 0; i < NumListeners; ++i) {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            push listeners, listener;
+        }
+        return listeners;
+    }
+
+    private list<int> getPorts(list<Socket> listeners) {
+        list<int> ports = ();
+        foreach Socket l in (listeners) {
+            push ports, l.getSocketInfo().port;
+        }
+        return ports;
+    }
+}

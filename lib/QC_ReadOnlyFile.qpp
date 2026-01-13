@@ -362,6 +362,43 @@ int ReadOnlyFile::close() {
     return f->read((qore_offset_t)size, timeout_ms, xsink);
 }
 
+//! Reads up to a certain amount of binary data from the %ReadOnlyFile and returns immediately with any available data
+/** @par Example:
+    @code{.py}
+binary b = f.readShortBinary(4096);
+    @endcode
+
+    @par Events:
+    @ref EVENT_DATA_READ
+
+    @param size the maximum number of bytes to read from the file; must be non-zero
+    @param timeout_ms a timeout period with a resolution of milliseconds (a
+    @ref relative_dates "relative date/time value"; integer arguments will be assumed to be milliseconds); if not
+    given or negative the call will never time out and will only return when any data is available
+
+    @return the data read from the file, returned as a binary object, or @ref nothing if no data is available or EOF
+
+    @throw READONLYFILE-READSHORT-BINARY-PARAMETER-ERROR zero size argument passed
+    @throw FILE-READ-ERROR file is not open
+    @throw FILE-READ-TIMEOUT timeout limit exceeded
+    @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
+    @ref stdout, @ref stderr) when @ref no-terminal-io is set
+
+    @since %Qore 2.3
+ */
+*binary ReadOnlyFile::readShortBinary(softint size, timeout timeout_ms = -1) {
+    if (check_terminal_io(self, "ReadOnlyFile::readShortBinary", xsink)) {
+        return QoreValue();
+    }
+
+    if (!size) {
+        return xsink->raiseException("READONLYFILE-READSHORT-BINARY-PARAMETER-ERROR",
+            "expecting non-zero size as first parameter of ReadOnlyFile::readShortBinary()");
+    }
+
+    return f->readShortBinary((qore_offset_t)size, timeout_ms, xsink);
+}
+
 //! Reads a 1-byte unsigned integer from the %ReadOnlyFile in binary format or @ref nothing if no data can be read
 /** @par Example:
     @code{.py}

@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class SslAcceptPollSocketTest
+
+#! Test that SSL accept poll operations return the correct socket
+/** This test verifies that during SSL handshake, the poll info from
+    SocketPollOperation returns the accepted client socket (not the listener)
+    so that kqueue/epoll can properly monitor for SSL handshake data.
+
+    Bug: Prior to this fix, getSocketPollInfoHash() always returned the
+    listener socket, even during SSL handshake state. This caused the
+    EventLoop to monitor the wrong socket, resulting in 30+ second delays
+    waiting for SSL handshake to complete.
+
+    @see QC_SocketPollOperation.h - getSocketPollInfoHash() override
+*/
+class SslAcceptPollSocketTest inherits QUnit::Test {
+    public {
+        # Maximum time for operations (ms)
+        const MaxTime = 5000;
+    }
+
+    constructor() : Test("SslAcceptPollSocketTest", "1.0") {
+        addTestCase("SSL accept poll returns client socket during handshake", \testSslAcceptPollSocket());
+        set_return_value(main());
+    }
+
+    #! Test that SSL accept poll operation returns the client socket during SSL handshake
+    /** This test verifies the fix for the bug where getSocketPollInfoHash() returned
+        the listener socket during SSL handshake instead of the accepted client socket.
+
+        The test:
+        1. Creates an SSL listener socket with a self-signed certificate
+        2. Starts a poll accept operation
+        3. Connects a client (TCP only, no SSL upgrade yet)
+        4. Verifies that when transitioning to SSL handshake state, the poll info
+           socket is the accepted client socket, NOT the listener socket
+    */
+    testSslAcceptPollSocket() {
+        # Generate a self-signed certificate for the listener
+        # Use openssl command to generate cert (common in test environments)
+        string certPem;
+        string keyPem;
+        {
+            # Try to generate a certificate using the ssl module if available
+            try {
+                # For this test, we need a cert/key pair. Use a pre-generated one
+                # that's embedded in the test, or generate dynamically
+                hash<auto> certs = generateCerts();
+                certPem = certs.cert;
+                keyPem = certs.key;
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip("Cannot generate SSL certificates: " + ex.err);
+                return;
+            }
+        }
+
+        # Create SSL listener
+        Socket listener();
+        listener.setCertificate(certPem);
+        listener.setPrivateKey(keyPem);
+        listener.bind("localhost:0");
+        listener.listen();
+        hash<auto> info = listener.getSocketInfo();
+        int port = info.port;
+        string listener_hash = listener.uniqueHash();
+
+        # Start accept poll operation
+        SocketPollOperation spop = listener.startPollAccept();
+        assertEq("accepting", spop.getState(), "initial state should be 'accepting'");
+
+        # Connect a client (TCP only - this creates a pending connection)
+        Socket client();
+        client.connect("localhost:" + port, 5s);
+
+        # Drive the poll operation until we see the SSL handshake state
+        date start = now_us();
+        bool found_ssl_state = False;
+        bool poll_socket_is_client = False;
+
+        while (True) {
+            *hash<SocketPollInfo> poll_info = spop.continuePoll();
+
+            if (!poll_info) {
+                # Operation complete (this shouldn't happen without SSL handshake from client)
+                break;
+            }
+
+            string state = spop.getState();
+
+            # Check if we're in SSL handshake state
+            if (state == "accepting-ssl") {
+                found_ssl_state = True;
+
+                # KEY CHECK: The socket in poll_info should be the CLIENT socket,
+                # not the listener socket. This is what the bug was about.
+                string poll_socket_hash = poll_info.socket.uniqueHash();
+                poll_socket_is_client = (poll_socket_hash != listener_hash);
+
+                if (!poll_socket_is_client) {
+                    # BUG: poll info contains the listener socket during SSL handshake!
+                    fail("BUG: During SSL handshake (state='accepting-ssl'), poll info returned "
+                        + "the listener socket instead of the accepted client socket. "
+                        + "This causes kqueue/epoll to monitor the wrong socket, "
+                        + "resulting in SSL handshake hangs.");
+                }
+                # We've verified the fix - no need to complete SSL handshake
+                break;
+            }
+
+            # Poll for the requested events
+            list<hash<SocketPollInfo>> poll_list = (poll_info,);
+            Socket::poll(poll_list, 100);
+
+            # Timeout check
+            if ((now_us() - start) > MaxTime * 1000) {
+                break;
+            }
+        }
+
+        assertTrue(found_ssl_state, "should have reached 'accepting-ssl' state");
+        assertTrue(poll_socket_is_client,
+            "during SSL handshake, poll socket should be the client socket, not the listener");
+    }
+
+    #! Generate self-signed certificate and key using system openssl command
+    private hash<auto> generateCerts() {
+        string tmpdir = tmp_location();
+        string keyFile = tmpdir + "/test_key_" + getpid() + ".pem";
+        string certFile = tmpdir + "/test_cert_" + getpid() + ".pem";
+
+        on_exit {
+            unlink(keyFile);
+            unlink(certFile);
+        }
+
+        # Generate key and self-signed certificate using openssl
+        int rc = system("openssl req -x509 -newkey rsa:2048 -keyout " + keyFile +
+            " -out " + certFile + " -days 1 -nodes -subj '/CN=localhost' 2>/dev/null");
+        if (rc != 0) {
+            throw "CERT-GEN-ERROR", "Failed to generate certificate using openssl";
+        }
+
+        return {
+            "cert": ReadOnlyFile::readTextFile(certFile),
+            "key": ReadOnlyFile::readTextFile(keyFile),
+        };
+    }
+}
