@@ -543,7 +543,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             return False;
         }
         # register the cancel condition before sending the command to avoid races
-        cancel_cond_map{uh} = new Condition();
+        # reuse existing condition if present to avoid losing waiters
+        if (!cancel_cond_map{uh}) {
+            cancel_cond_map{uh} = new Condition();
+        }
         return enqueueCmdLocked(IO_CANCEL, (uh,));
     }
 
@@ -741,7 +744,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 updateEventLoopRegistration(key, NOTHING);
                                 remove cache{key};
                                 if (*Condition c = remove cancel_cond_map{key}) {
-                                    c.signal();
+                                    c.broadcast();
                                 }
                                 cinfo.q.push(<SocketPollResultInfo>{
                                     "sock": cinfo.sock,
@@ -798,7 +801,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             updateEventLoopRegistration(key, NOTHING);
                             remove cache{key};
                             if (*Condition c = remove cancel_cond_map{key}) {
-                                c.signal();
+                                c.broadcast();
                             }
                             cinfo.q.push(<SocketPollResultInfo>{
                                 "sock": cinfo.sock,
@@ -941,7 +944,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 remove cache{key};
                             }
                         }
-                        map $1.signal(), cond_list;
+                        map $1.broadcast(), cond_list;
                         map doCancelIntern($1), cancel_list;
                         return True;
                     }
@@ -968,7 +971,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 args[0]));
                         }
                         if (c) {
-                            c.signal();
+                            c.broadcast();
                         }
                         if (cinfo) {
                             doCancelIntern(cinfo);
@@ -997,7 +1000,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 }
                             }
                         }
-                        map $1.signal(), cond_list;
+                        map $1.broadcast(), cond_list;
                         map doCancelIntern($1), cancel_list;
                         @debug(log(LoggerLevel::INFO, "AsyncSocketIoController canceled %d operations for owner %s",
                             cancel_list.size(), owner));
