@@ -202,7 +202,7 @@ class SapRestClient {
 
             h = rc.doRequest(meth, "", body, \info, NOTHING, hdr);
             if (!opt.lit)
-                printf("%N\n", h.body);
+                printf("%Y\n", h.body);
         } catch (hash<ExceptionInfo> ex) {
             if (opt.fullex)
                 printf("%s\n", get_exception_string(ex));
@@ -238,7 +238,7 @@ class SapRestClient {
     private showRestRequest(hash info, any args, *hash opt) {
         printf("> %s\n", info."request-uri");
         if (opt.lit > 1)
-            printf("> %N\n", info.headers);
+            printf("> %Y\n", info.headers);
         if (info."request-body") {
             *string str;
             if (opt.reformat) {
@@ -268,7 +268,7 @@ class SapRestClient {
             return;
         printf("< %s\n", info."response-uri");
         if (opt.lit > 1)
-            printf("< %N\n", info."response-headers" - "body");
+            printf("< %Y\n", info."response-headers" - "body");
         if (info."response-body") {
             if (!exists rv)
                 rv = info."response-body";

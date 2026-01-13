@@ -2546,7 +2546,7 @@ class WebhookHandler inherits RestHandler {
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data b) {
-        #logDebug("Webhook headers: %N", hdr);
+        #logDebug("Webhook headers: %Y", hdr);
 
         # handle OPTIONS requests
         if (hdr.method == "OPTIONS" && (*hash<auto> cors_hdrs = getCorsResponseHeaders(cx))) {
