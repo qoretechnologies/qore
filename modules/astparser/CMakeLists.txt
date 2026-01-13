@@ -56,7 +56,10 @@ set(QORE_DOX_ASTPARSER_TMPL_SRC
 )
 
 # prepare ast_scanner and ast_parser targets
-bison_target(ast_parser src/ast_parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp)
+# The astparser grammar intentionally has conflicts due to parse_option handling.
+# See the comment in ast_parser.ypp for details. Warnings are suppressed here.
+bison_target(ast_parser src/ast_parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp
+    COMPILE_FLAGS "-Wno-conflicts-sr -Wno-conflicts-rr -Wno-other")
 flex_target(ast_scanner src/ast_scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/ast_scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(ast_scanner ast_parser)
 

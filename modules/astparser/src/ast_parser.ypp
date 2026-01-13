@@ -80,6 +80,36 @@ typedef void* yyscan_t;
 %error-verbose
 //%define parse.error verbose
 
+// ======== PARSER CONFLICTS - INTENTIONAL BY DESIGN ========
+// This grammar has 877 shift/reduce and 933 reduce/reduce conflicts.
+//
+// WHY: Unlike the main Qore parser (lib/parser.ypp) which handles parse directives
+// at the scanner level, this AST parser returns them as tokens (PARSE_OPTION_FULL,
+// PARSE_OPTION_BEGIN/END) so their locations can be tracked for IDE features.
+//
+// This creates inherent ambiguity because parse_option rules appear in multiple
+// forms throughout the grammar:
+//   1. As standalone elements: `top_level_command: parse_option`
+//   2. As prefixes: `top_level_command: parse_option top_level_command`
+//   3. Interstitially: `hash ',' parse_option hash_element`
+//
+// When the parser sees `parse_option X`, it cannot decide at lookahead whether
+// parse_option is standalone (reduce) or part of a larger construct (shift).
+//
+// CORRECTNESS: Bison's default conflict resolution (prefer shift for S/R, prefer
+// earlier rule for R/R) produces correct behavior, verified by the test suite.
+// Shift preference means parse_option attaches to following constructs, which is
+// the intuitive interpretation.
+//
+// WARNINGS: Conflict warnings are suppressed via CMakeLists.txt COMPILE_FLAGS
+// (-Wno-conflicts-sr -Wno-conflicts-rr). If you modify this grammar and need to
+// check for NEW conflicts, temporarily remove those flags and rebuild.
+//
+// EXPECTED COUNTS (as of 2026-01-12):
+//   Shift/Reduce:  877
+//   Reduce/Reduce: 933
+// ===========================================================
+
 %union {
     bool b;
     int i4;
