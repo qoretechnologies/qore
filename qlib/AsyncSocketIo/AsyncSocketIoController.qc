@@ -904,7 +904,20 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     private *bool processCommands() {
-        # process any queued commands first without blocking
+        # Process any queued commands first without blocking
+        #
+        # IMPORTANT: There is a race condition between command enqueueing and pipe signaling.
+        # The main thread does: 1) enqueue command (with lock), 2) write to pipe (without lock)
+        # The I/O thread does: 1) process commands (with lock), 2) drain pipe (without lock)
+        #
+        # Race scenario:
+        # - I/O thread: finds cmdq empty, exits command loop
+        # - Main thread: enqueues command, writes to pipe
+        # - I/O thread: drain loop reads pipe data
+        # - I/O thread: returns without processing the new command!
+        #
+        # Fix: After draining the pipe, check if new commands arrived during the drain.
+        # Loop until both the command queue AND pipe are empty.
         try {
             @debug {
                 if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
@@ -913,15 +926,18 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 }
             }
             @debug(int cmd_count = 0);
+            # Outer loop: repeat until both cmdq and pipe are empty
             while (True) {
-                hash<auto> h;
-                {
-                    AutoLock al(m);
-                    if (!cmdq.size()) {
-                        break;
+                # Inner loop: process all commands in the queue
+                while (True) {
+                    hash<auto> h;
+                    {
+                        AutoLock al(m);
+                        if (!cmdq.size()) {
+                            break;
+                        }
+                        h = shift cmdq;
                     }
-                    h = shift cmdq;
-                }
                 @debug(++cmd_count);
                 @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
                 list<auto> args = h.args ?? ();
@@ -1011,57 +1027,74 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         # no-op; waking the I/O thread is enough
                         break;
                 }
-            }
-            # then read all data from semaphore file; use short non-blocking reads to drain the pipe
-            @debug(int drained_bytes = 0);
-            @debug {
-                if (getenv("QORE_ASYNCIO_TRACE")) {
-                    log(LoggerLevel::INFO, "processCommands: before drain cmdq=%d", cmdq.size());
+                }  # end of inner command processing loop
+
+                # Drain all data from semaphore pipe; use short non-blocking reads
+                @debug(int drained_bytes = 0);
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::INFO, "processCommands: before drain cmdq=%d", cmdq.size());
+                    }
                 }
-            }
-            while (True) {
-                try {
-                    binary data = sem_read.readShortBinary(4096, 0);
-                    if (!data.size()) {
+                while (True) {
+                    try {
+                        binary data = sem_read.readShortBinary(4096, 0);
+                        if (!data.size()) {
+                            @debug {
+                                if (getenv("QORE_ASYNCIO_TRACE")) {
+                                    log(LoggerLevel::INFO,
+                                        "pipe read: zero bytes; cmdq=%d sem_read_open=%y sem_write_open=%y",
+                                        cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
+                                }
+                            }
+                            break;
+                        }
+                        @debug(drained_bytes += data.size());
+                        @debug {
+                            if (getenv("QORE_ASYNCIO_TRACE")) {
+                                log(LoggerLevel::INFO, "pipe read: bytes=%d sem_read_open=%y sem_write_open=%y",
+                                    data.size(), sem_read.isOpen(), sem_write.isOpen());
+                            }
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "FILE-READ-TIMEOUT") {
+                            rethrow;
+                        }
                         @debug {
                             if (getenv("QORE_ASYNCIO_TRACE")) {
                                 log(LoggerLevel::INFO,
-                                    "pipe read: zero bytes; cmdq=%d sem_read_open=%y sem_write_open=%y",
+                                    "pipe read timeout; cmdq=%d sem_read_open=%y sem_write_open=%y",
                                     cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
                             }
                         }
                         break;
                     }
-                    @debug(drained_bytes += data.size());
-                    @debug {
-                        if (getenv("QORE_ASYNCIO_TRACE")) {
-                            log(LoggerLevel::INFO, "pipe read: bytes=%d sem_read_open=%y sem_write_open=%y",
-                                data.size(), sem_read.isOpen(), sem_write.isOpen());
+                }
+
+                # Check if new commands arrived during the drain (fixes race condition)
+                # If cmdq has commands, loop back to process them before returning
+                {
+                    AutoLock al(m);
+                    if (!cmdq.size()) {
+                        # Both cmdq and pipe are empty - safe to exit
+                        @debug {
+                            if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
+                                log(LoggerLevel::INFO, "processCommands: done cmd_count=%d drained_bytes=%d cmdq=%d",
+                                    cmd_count, drained_bytes, cmdq.size());
+                            }
                         }
+                        break;  # Exit outer loop
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err != "FILE-READ-TIMEOUT") {
-                        rethrow;
-                    }
+                    # New commands arrived - continue outer loop to process them
                     @debug {
-                        if (getenv("QORE_ASYNCIO_TRACE")) {
+                        if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
                             log(LoggerLevel::INFO,
-                                "pipe read timeout; cmdq=%d sem_read_open=%y sem_write_open=%y",
-                                cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
+                                "processCommands: new commands arrived during drain, looping back cmdq=%d",
+                                cmdq.size());
                         }
                     }
-                    break;
                 }
-            }
-            # No need to resignal - with "always signal" on enqueue, the pipe
-            # is already written to when commands are added. Resignaling here
-            # would cause double-signaling and busy loops.
-            @debug {
-                if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
-                    log(LoggerLevel::INFO, "processCommands: done cmd_count=%d drained_bytes=%d cmdq=%d",
-                        cmd_count, drained_bytes, cmdq.size());
-                }
-            }
+            }  # end of outer loop
         } catch(hash<ExceptionInfo> ex) {
             if (ex.err != "QUEUE-TIMEOUT") {
                 rethrow;
