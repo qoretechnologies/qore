@@ -421,7 +421,10 @@ protected:
     DLLLOCAL int startSslAccept(ExceptionSink* xsink);
 
     //! Returns the correct socket for poll info based on current state
-    /** During SSL handshake, returns the accepted client socket instead of the listener socket */
+    /** During SSL handshake, returns the accepted client socket instead of the listener socket.
+        The accepted_socket_obj cache is used to avoid creating a new QoreObject wrapper on each call.
+        Cache lifecycle: cleared in abort() and ownership transferred in getOutput().
+    */
     DLLLOCAL QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
         info->setKeyValue("events", events, xsink);

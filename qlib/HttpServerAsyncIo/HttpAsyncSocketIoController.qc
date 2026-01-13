@@ -57,6 +57,9 @@ public class HttpAsyncSocketIoController {
         };
 
         #! Maximum concurrent accept operations per listener
+        /** The default of 2 balances throughput (one accept completing while another is pending)
+            against resource usage. This is a conservative default suitable for most workloads.
+        */
         const DefaultAcceptOps = 2;
     }
 

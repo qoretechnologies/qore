@@ -95,6 +95,10 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         @param ssl_accept_all_certs if True, accept all client certificates including self-signed ones
         @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", "2.0", or "h2c"
                            - "h2c" enables HTTP/2 cleartext (prior knowledge) on non-SSL connections
+        @param do_ssl_handshake if False, defer SSL handshake to the caller. When deferred, the caller
+               must complete the handshake using Socket::upgradeServerToSSL() poll operation before
+               proceeding with HTTP communication. This allows the EventLoop to handle the SSL handshake
+               with proper socket monitoring.
     */
     constructor(Qore::Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
