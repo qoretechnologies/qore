@@ -48,14 +48,21 @@ public class HttpAsyncSocketIoController {
     public {
         #! Default poll timeout
         const DefaultPollTimeout = 100ms;
+
+        #! Polling event map
+        const PollEventMap = {
+            SOCK_POLLIN: "read",
+            SOCK_POLLOUT: "write",
+            SOCK_POLLIN | SOCK_POLLOUT: "read and write",
+        };
+
+        #! Maximum concurrent accept operations per listener
+        const DefaultAcceptOps = 2;
     }
 
     private {
         #! Lock for atomic operations
         Mutex m();
-
-        #! The underlying async I/O controller
-        AsyncSocketIoController asyncCtrl;
 
         #! Logger
         *LoggerInterface logger;
@@ -65,6 +72,10 @@ public class HttpAsyncSocketIoController {
 
         #! Active connections: socket unique hash -> connection info
         hash<string, hash<HttpActiveConnectionInfo>> connections;
+
+        #! Listener accept operation counters
+        hash<string, int> accept_counts;
+        int accept_seq = 0;
 
         #! I/O thread TID
         int tid;
@@ -79,8 +90,23 @@ public class HttpAsyncSocketIoController {
         File sem_write;
         ReadOnlyFile sem_read;
 
+        #! True if a signal is pending on the command pipe
+        bool sem_pending = False;
+
         #! Command queue
         Queue cmdq();
+
+        #! Persistent event loop for efficient kqueue/epoll/poll
+        EventLoop loop();
+
+        #! Map of poll key -> currently registered socket
+        hash<string, Socket> registered_sockets;
+
+        #! Map of socket unique hash -> current poll events
+        hash<string, int> registered_events;
+
+        #! Map of socket unique hash -> reference count (number of operations using this socket)
+        hash<string, int> socket_refcounts;
 
         #! Commands
         const CMD_ADD_LISTENER = "add_listener";
@@ -98,6 +124,8 @@ public class HttpAsyncSocketIoController {
         hash<PipeInfo> pipe = File::getPipe();
         sem_read = pipe.read;
         sem_write = pipe.write;
+        # Register semaphore pipe in persistent EventLoop
+        loop.add(sem_read, SOCK_POLLIN);
     }
 
     #! Destructor stops the controller
@@ -119,13 +147,17 @@ public class HttpAsyncSocketIoController {
 
     #! Stops the I/O thread
     stop() {
+        bool signal = False;
         {
             AutoLock al(m);
             if (!tid) {
                 return;
             }
             stop_flag = True;
-            sendCmd(CMD_QUIT);
+            signal = sendCmdLocked(CMD_QUIT);
+        }
+        if (signal) {
+            sem_write.write(".");
         }
         mcnt.waitForZero();
     }
@@ -151,6 +183,7 @@ public class HttpAsyncSocketIoController {
     addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, *data cert, *data key,
             string http_version = "auto") {
         string uh = listener.uniqueHash();
+        bool signal = False;
         {
             AutoLock al(m);
             if (listeners{uh}) {
@@ -164,7 +197,10 @@ public class HttpAsyncSocketIoController {
                 "key": key,
                 "http_version": http_version,
             };
-            sendCmd(CMD_ADD_LISTENER, uh);
+            signal = sendCmdLocked(CMD_ADD_LISTENER, uh);
+        }
+        if (signal) {
+            sem_write.write(".");
         }
         log(LoggerLevel::INFO, "Added listener %y (SSL: %y, HTTP version: %y)", uh, ssl, http_version);
     }
@@ -174,12 +210,16 @@ public class HttpAsyncSocketIoController {
     */
     removeListener(Socket listener) {
         string uh = listener.uniqueHash();
+        bool signal = False;
         {
             AutoLock al(m);
             if (!listeners{uh}) {
                 throw "LISTENER-NOT-FOUND", sprintf("Listener %y not registered", uh);
             }
-            sendCmd(CMD_REMOVE_LISTENER, uh);
+            signal = sendCmdLocked(CMD_REMOVE_LISTENER, uh);
+        }
+        if (signal) {
+            sem_write.write(".");
         }
         log(LoggerLevel::INFO, "Removed listener %y", uh);
     }
@@ -194,6 +234,7 @@ public class HttpAsyncSocketIoController {
     addIdleConnection(Socket sock, object listener, hash<auto> cx, HttpAsyncTarget target,
             timeout ttl = DefaultIdleTimeout) {
         string uh = sock.uniqueHash();
+        bool signal = False;
         {
             AutoLock al(m);
             connections{uh} = <HttpActiveConnectionInfo>{
@@ -204,7 +245,10 @@ public class HttpAsyncSocketIoController {
                 "state": "idle",
                 "ttl": ttl,
             };
-            sendCmd(CMD_ADD_IDLE, uh);
+            signal = sendCmdLocked(CMD_ADD_IDLE, uh);
+        }
+        if (signal) {
+            sem_write.write(".");
         }
         log(LoggerLevel::DEBUG, "Added idle connection %y", uh);
     }
@@ -231,43 +275,50 @@ public class HttpAsyncSocketIoController {
             mcnt.dec();
         }
 
-        # Poll info for the signaling pipe
-        hash<SocketPollInfo> sem_poll = <SocketPollInfo>{
-            "events": SOCK_POLLIN,
-            "socket": sem_read,
-        };
-
         # Active poll operations: socket unique hash -> poll info
         hash<string, hash<HttpPollInfo>> active_polls;
 
+        hash<string, bool> ready_sockets;
         while (!stop_flag) {
             try {
-                list<hash<SocketPollInfo>> poll_list = (sem_poll,);
                 date poll_timeout = DefaultPollTimeout;
 
                 {
                     AutoLock al(m);
 
-                    # Start accept operations for listeners without active accepts
+                    # Start accept operations for listeners (allow multiple in-flight accepts)
                     log(LoggerLevel::DEBUG, "ioThread: checking %d listeners", listeners.size());
                     foreach string key in (keys listeners) {
-                        log(LoggerLevel::DEBUG, "ioThread: listener %s, active_polls has key=%y", key, active_polls.hasKey(key));
-                        if (!active_polls{key}) {
+                        int cnt = accept_counts{key} ?? 0;
+                        log(LoggerLevel::DEBUG, "ioThread: listener %s, accept_ops=%d", key, cnt);
+                        while (cnt < DefaultAcceptOps) {
                             hash<HttpListenerInfo> linfo = listeners{key};
                             try {
                                 log(LoggerLevel::DEBUG, "Starting accept op for listener %s", key);
                                 HttpAcceptPollOperation op(linfo.listener, linfo.ssl,
-                                    linfo.cert, linfo.key, SSL_VERIFY_NONE, True, linfo.http_version);
-                                active_polls{key} = <HttpPollInfo>{
+                                    linfo.cert, linfo.key, SSL_VERIFY_NONE, True, linfo.http_version, False);
+                                @debug {
+                                    if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                                        log(LoggerLevel::INFO,
+                                            "ioThread: accept op created: listener=%s ssl=%y http_version=%s",
+                                            key, linfo.ssl, linfo.http_version);
+                                    }
+                                }
+                                string accept_key = sprintf("accept:%s:%d", key, ++accept_seq);
+                                active_polls{accept_key} = <HttpPollInfo>{
                                     "type": "accept",
                                     "op": op,
                                     "listener_key": key,
                                     "linfo": linfo,
                                 };
-                                log(LoggerLevel::DEBUG, "Accept op created for listener %s (HTTP version: %s)", key, linfo.http_version);
+                                cnt = ++accept_counts{key};
+                                log(LoggerLevel::DEBUG,
+                                    "Accept op created for listener %s (HTTP version: %s, count=%d)",
+                                    key, linfo.http_version, cnt);
                             } catch (hash<ExceptionInfo> ex) {
                                 log(LoggerLevel::ERROR, "Failed to start accept: %s: %s",
                                     ex.err, ex.desc);
+                                break;
                             }
                         }
                     }
@@ -300,6 +351,17 @@ public class HttpAsyncSocketIoController {
                                         "conn_key": key,
                                         "cinfo": cinfo,
                                     };
+                                    break;
+                                }
+                                case "ssl_handshake": {
+                                    if (cinfo.ssl_op) {
+                                        active_polls{key} = <HttpPollInfo>{
+                                            "type": "ssl",
+                                            "op": cinfo.ssl_op,
+                                            "conn_key": key,
+                                            "cinfo": cinfo,
+                                        };
+                                    }
                                     break;
                                 }
                                 case "sse": {
@@ -370,10 +432,24 @@ public class HttpAsyncSocketIoController {
                 foreach string key in (keys active_polls) {
                     hash<HttpPollInfo> pinfo = active_polls{key};
                     try {
+                        if (pinfo.poll_info && pinfo.poll_info.socket
+                            && !(ready_sockets{pinfo.poll_info.socket.uniqueHash()} ?? False)) {
+                            @debug {
+                                if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                                    log(LoggerLevel::INFO,
+                                        "ioThread: skip continuePoll for %s; socket=%s",
+                                        pinfo.type, sprintf("%s %s", pinfo.poll_info.socket.className(),
+                                            pinfo.poll_info.socket.uniqueHash()[0..8]));
+                                }
+                            }
+                            # Socket already registered in EventLoop; skip continuePoll
+                            continue;
+                        }
                         *hash<SocketPollInfo> info = pinfo.op.continuePoll();
                         if (info) {
-                            poll_list += info;
-                            @debug(log(LoggerLevel::DEBUG, "ioThread: poll %s added poll info, list size=%d", pinfo.type, poll_list.size()));
+                            pinfo.poll_info = info;
+                            active_polls{key} = pinfo;
+                            @debug(log(LoggerLevel::DEBUG, "ioThread: poll %s needs events=%d", pinfo.type, info.events));
                         } else {
                             # Operation complete
                             @debug(log(LoggerLevel::DEBUG, "ioThread: poll %s complete", pinfo.type));
@@ -381,21 +457,50 @@ public class HttpAsyncSocketIoController {
                             to_remove{key} = True;
                         }
                     } catch (hash<ExceptionInfo> ex) {
-                        log(LoggerLevel::ERROR, "Poll error for %y: %s: %s", key, ex.err, ex.desc);
+                        if ((pinfo.type == "idle" || pinfo.type == "header")
+                            && ex.err == "SOCKET-HTTP-ERROR"
+                            && ex.desc =~ /remote end closed connection/) {
+                            log(LoggerLevel::DEBUG, "Poll closed for %y: %s: %s", key, ex.err, ex.desc);
+                        } else {
+                            log(LoggerLevel::ERROR, "Poll error for %y: %s: %s", key, ex.err, ex.desc);
+                        }
                         handlePollError(pinfo, ex);
                         to_remove{key} = True;
                     }
                 }
 
-                # Remove completed operations
-                map remove active_polls{$1}, keys to_remove;
+                # Remove completed operations and unregister from EventLoop
+                foreach string key in (keys to_remove) {
+                    updateEventLoopRegistration(key, NOTHING);
+                    remove active_polls{key};
+                }
 
-                # Filter out any closed sockets from poll_list before calling poll
-                poll_list = map $1, poll_list, !($1.socket instanceof Socket) || cast<Socket>($1.socket).isOpen();
+                # Update EventLoop registrations for all active polls
+                foreach string key in (keys active_polls) {
+                    hash<HttpPollInfo> pinfo = active_polls{key};
+                    if (pinfo.poll_info && pinfo.poll_info.socket) {
+                        updateEventLoopRegistration(key, pinfo.poll_info.socket, pinfo.poll_info.events);
+                    }
+                }
 
-                # Perform the poll (skip if empty after filtering)
-                if (poll_list) {
-                    Socket::poll(poll_list, poll_timeout);
+                # Perform the poll using persistent EventLoop (kqueue on macOS, epoll on Linux)
+                *list<hash<SocketPollInfo>> ready_list = loop.poll(poll_timeout);
+                ready_sockets = {};
+                if (ready_list) {
+                    foreach hash<SocketPollInfo> info in (ready_list) {
+                        if (info.socket) {
+                            ready_sockets{info.socket.uniqueHash()} = True;
+                        }
+                    }
+                }
+                @debug {
+                    if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                        log(LoggerLevel::INFO, "ioThread: poll ready_list: %y", ready_list ? (map $1 + {
+                            "events": PollEventMap{$1.events} ?? "unknown",
+                            "socket": sprintf("%s %s", $1.socket.className(),
+                                $1.socket.uniqueHash()[0..8]),
+                        }, ready_list) : "(empty)");
+                    }
                 }
 
                 # Process commands
@@ -418,8 +523,19 @@ public class HttpAsyncSocketIoController {
     private handlePollComplete(hash<HttpPollInfo> pinfo) {
         switch (pinfo.type) {
             case "accept": {
+                if (pinfo.listener_key) {
+                    int cnt = accept_counts{pinfo.listener_key} ?? 0;
+                    if (cnt > 0) {
+                        accept_counts{pinfo.listener_key} = cnt - 1;
+                    }
+                }
                 hash<auto> output = pinfo.op.getOutput();
                 handleAcceptComplete(pinfo.linfo, output);
+                break;
+            }
+
+            case "ssl": {
+                handleSslHandshakeComplete(pinfo);
                 break;
             }
 
@@ -492,6 +608,61 @@ public class HttpAsyncSocketIoController {
         string uh = sock.uniqueHash();
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
+        @debug {
+            if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                log(LoggerLevel::INFO,
+                    "Accept complete: sock=%s ssl=%y secure=%y http2=%y",
+                    uh, output.ssl, sock.isSecure(), output.is_http2);
+            }
+        }
+
+        if (output.ssl && !sock.isSecure()) {
+            hash<auto> cx = {
+                "peer": sock.getPeerInfo(),
+                "socket": sock.getSocketInfo(),
+            };
+
+            if (linfo.cert) {
+                sock.setCertificate(linfo.cert);
+            }
+            if (linfo.key) {
+                sock.setPrivateKey(linfo.key);
+            }
+            sock.setSslVerifyMode(SSL_VERIFY_NONE);
+            sock.acceptAllCertificates(True);
+
+            list<string> alpn;
+            if (output.http_version == "auto") {
+                alpn = ("h2", "http/1.1");
+            } else if (output.http_version == "2.0" || output.http_version == "2") {
+                alpn = ("h2",);
+            } else {
+                alpn = ("http/1.1",);
+            }
+            sock.setAlpnProtocols(alpn);
+
+            SocketPollOperation ssl_op = sock.startPollUpgradeServerToSSL();
+            @debug {
+                if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                    log(LoggerLevel::INFO, "SSL handshake start: sock=%s alpn=%y", uh, alpn);
+                }
+            }
+
+            {
+                AutoLock al(m);
+                connections{uh} = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": linfo.target,
+                    "state": "ssl_handshake",
+                    "ssl_op": ssl_op,
+                    "http_version": output.http_version,
+                    "is_http2": False,
+                };
+            }
+            return;
+        }
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
@@ -539,8 +710,57 @@ public class HttpAsyncSocketIoController {
                 "cx": cx,
                 "target": linfo.target,
                 "state": "read_header",
+                "http_version": output.http_version,
                 "is_http2": False,
             };
+        }
+    }
+
+    #! Handles SSL handshake completion
+    private handleSslHandshakeComplete(hash<HttpPollInfo> pinfo) {
+        hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
+        string uh = cinfo.sock.uniqueHash();
+
+        cinfo.ssl_op = NOTHING;
+
+        string negotiated = cinfo.sock.getAlpnProtocol();
+        bool is_http2 = (negotiated == "h2");
+
+        if ((cinfo.http_version == "2.0" || cinfo.http_version == "2") && !is_http2) {
+            log(LoggerLevel::WARN, "HTTP/2 required but client negotiated: %y", negotiated ?? "none");
+            try {
+                cinfo.sock.close();
+            } catch () {}
+            {
+                AutoLock al(m);
+                remove connections{uh};
+            }
+            return;
+        }
+
+        @debug {
+            if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                log(LoggerLevel::INFO,
+                    "SSL handshake complete: sock=%s negotiated=%y http2=%y",
+                    uh, negotiated ?? "none", is_http2);
+            }
+        }
+
+        if (is_http2) {
+            Http2PollOperation h2op(cinfo.sock);
+            {
+                AutoLock al(m);
+                connections{uh}.state = "http2";
+                connections{uh}.stream_op = h2op;
+                connections{uh}.is_http2 = True;
+            }
+            return;
+        }
+
+        {
+            AutoLock al(m);
+            connections{uh}.state = "read_header";
+            connections{uh}.is_http2 = False;
         }
     }
 
@@ -903,10 +1123,17 @@ public class HttpAsyncSocketIoController {
     private handlePollError(hash<HttpPollInfo> pinfo, hash<ExceptionInfo> ex) {
         switch (pinfo.type) {
             case "accept":
+                if (pinfo.listener_key) {
+                    int cnt = accept_counts{pinfo.listener_key} ?? 0;
+                    if (cnt > 0) {
+                        accept_counts{pinfo.listener_key} = cnt - 1;
+                    }
+                }
                 # Accept errors - log but continue
                 log(LoggerLevel::WARN, "Accept error: %s: %s", ex.err, ex.desc);
                 break;
 
+            case "ssl":
             case "idle":
             case "header":
             case "sse":
@@ -916,6 +1143,22 @@ public class HttpAsyncSocketIoController {
             case "http2_websocket": {
                 hash<HttpActiveConnectionInfo> cinfo = pinfo.cinfo;
                 string uh = cinfo.sock.uniqueHash();
+
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::INFO,
+                            "poll error: type=%y state=%y conn=%y err=%s desc=%s",
+                            pinfo.type, cinfo.state, uh, ex.err, ex.desc);
+                    }
+                }
+
+                if ((pinfo.type == "idle" || pinfo.type == "header")
+                    && ex.err == "SOCKET-HTTP-ERROR"
+                    && ex.desc =~ /remote end closed connection/) {
+                    log(LoggerLevel::DEBUG, "Connection closed by peer during read: %y", uh);
+                    handleConnectionClosed(pinfo);
+                    break;
+                }
 
                 {
                     AutoLock al(m);
@@ -934,17 +1177,26 @@ public class HttpAsyncSocketIoController {
     #! Processes commands from the queue
     private bool processCommands() {
         # Drain the signaling pipe
-        try {
-            sem_read.read(-1, 0);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "FILE-READ-TIMEOUT") {
-                rethrow;
+        while (True) {
+            try {
+                binary data = sem_read.readShortBinary(4096, 0);
+                if (!data.size()) {
+                    break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "FILE-READ-TIMEOUT") {
+                    rethrow;
+                }
+                break;
             }
         }
+        # No need to resignal - with "always signal" on enqueue, the pipe
+        # is already written to when commands are added. Resignaling here
+        # would cause double-signaling and busy loops.
 
         # Process command queue
         try {
-            while (hash<auto> cmd = cmdq.get(0ms)) {
+            while (hash<auto> cmd = cmdq.get(-1)) {
                 switch (cmd.cmd) {
                     case CMD_QUIT:
                         return True;
@@ -965,14 +1217,90 @@ public class HttpAsyncSocketIoController {
         return False;
     }
 
-    #! Sends a command to the I/O thread
-    private sendCmd(string cmd) {
+    #! Sends a command to the I/O thread (caller must hold m)
+    private bool sendCmdLocked(string cmd) {
+        @assert(m.trylock() == -1);
         cmdq.push({
             "cmd": cmd,
             "args": argv,
         });
-        if (tid) {
-            sem_write.write(".");
+        # Always signal the I/O thread to avoid race conditions with sem_pending
+        return tid ? True : False;
+    }
+
+
+    #! Updates EventLoop registration for a socket
+    /** Uses reference counting to handle multiple operations sharing the same socket
+        (e.g., multiple concurrent accept operations on the same listener socket)
+    */
+    private updateEventLoopRegistration(string key, *Socket socket, *int events) {
+        *Socket prev_sock = registered_sockets{key};
+        string prev_sock_hash = prev_sock ? prev_sock.uniqueHash() : "";
+        string new_sock_hash = socket ? socket.uniqueHash() : "";
+
+        if (!socket) {
+            # Remove registration for this key
+            if (prev_sock) {
+                remove registered_sockets{key};
+                # Decrement reference count
+                int refcount = socket_refcounts{prev_sock_hash} ?? 0;
+                if (refcount <= 1) {
+                    # Last reference - actually remove from EventLoop
+                    try {
+                        loop.del(prev_sock);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # Ignore errors - socket may be closed
+                    }
+                    remove registered_events{prev_sock_hash};
+                    remove socket_refcounts{prev_sock_hash};
+                } else {
+                    # Other operations still using this socket
+                    socket_refcounts{prev_sock_hash} = refcount - 1;
+                }
+            }
+            return;
+        }
+
+        int prev_events = registered_events{new_sock_hash} ?? 0;
+
+        if (new_sock_hash == prev_sock_hash) {
+            # Same socket - check if events changed
+            if (events != prev_events) {
+                loop.modify(socket, events);
+                registered_events{new_sock_hash} = events;
+            }
+        } else {
+            # Different socket or new registration
+            if (prev_sock) {
+                # Decrement refcount for previous socket
+                int old_refcount = socket_refcounts{prev_sock_hash} ?? 0;
+                if (old_refcount <= 1) {
+                    try {
+                        loop.del(prev_sock);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # Ignore
+                    }
+                    remove registered_events{prev_sock_hash};
+                    remove socket_refcounts{prev_sock_hash};
+                } else {
+                    socket_refcounts{prev_sock_hash} = old_refcount - 1;
+                }
+            }
+            # Add/update new socket
+            int new_refcount = socket_refcounts{new_sock_hash} ?? 0;
+            if (new_refcount == 0) {
+                # First registration for this socket
+                loop.add(socket, events);
+                socket_refcounts{new_sock_hash} = 1;
+            } else {
+                # Socket already registered by another operation
+                socket_refcounts{new_sock_hash} = new_refcount + 1;
+                if (events != prev_events) {
+                    loop.modify(socket, events);
+                }
+            }
+            registered_sockets{key} = socket;
+            registered_events{new_sock_hash} = events;
         }
     }
 
@@ -1024,8 +1352,11 @@ hashdecl HttpActiveConnectionInfo {
     #! Target for callbacks
     HttpAsyncTarget target;
 
-    #! Connection state: "idle", "read_header", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
+    #! Connection state: "idle", "read_header", "ssl_handshake", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
     string state = "idle";
+
+    #! SSL handshake poll operation (for "ssl_handshake" state)
+    *AbstractPollOperation ssl_op;
 
     #! Stream operation (for SSE/WebSocket/HTTP2)
     *AbstractPollOperation stream_op;
@@ -1033,13 +1364,16 @@ hashdecl HttpActiveConnectionInfo {
     #! Keep-alive timeout
     timeout ttl = DefaultIdleTimeout;
 
+    #! HTTP version mode: "auto", "1.0", "1.1", or "2.0"
+    string http_version = "auto";
+
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
 }
 
 #! Internal hashdecl for poll operation tracking
 hashdecl HttpPollInfo {
-    #! Poll type: "accept", "idle", "header", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
+    #! Poll type: "accept", "ssl", "idle", "header", "sse", "websocket", "http2", "http2_sse", "http2_websocket"
     string type;
 
     #! The poll operation
@@ -1056,6 +1390,9 @@ hashdecl HttpPollInfo {
 
     #! Connection info (for connection operations)
     *hash<HttpActiveConnectionInfo> cinfo;
+
+    #! Last poll info for this operation
+    *hash<SocketPollInfo> poll_info;
 }
 
 } # namespace Priv

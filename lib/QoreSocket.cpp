@@ -1798,6 +1798,23 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 assert(!sock->bufoffset);
                 sock->buflen = real_io;
             }
+            if (rc == SOCK_POLLIN && !real_io) {
+                if (++loop >= max_nonblock_ops) {
+                    return SOCK_POLLIN;
+                }
+                struct pollfd pfd;
+                pfd.fd = sock->sock;
+                pfd.events = POLLIN | POLLERR | POLLHUP;
+                pfd.revents = 0;
+                int prc = ::poll(&pfd, 1, 0);
+                if (prc <= 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) {
+                    return SOCK_POLLIN;
+                }
+                if (pfd.revents & (POLLERR | POLLHUP)) {
+                    return 0;
+                }
+                continue;
+            }
             assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
             return rc;
         } else {
@@ -1978,7 +1995,7 @@ void qore_socket_private::captureRemoteCert(X509_STORE_CTX* x509_ctx) {
 }
 
 QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeout_ms, ExceptionSink* xsink) {
-#ifndef HAVE_POLL
+#if !defined(HAVE_POLL) && !defined(DARWIN)
     xsink->raiseException("MISSING-FEATURE-ERROR", "no support for async I/O polling on this platform");
     return nullptr;
 #else
@@ -1990,7 +2007,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
 
-    std::vector<pollfd> fds;
+    // Structure to track fd -> poll_list index mapping and requested events
+    struct FdInfo {
+        int fd;
+        int64 events;  // SOCK_POLLIN, SOCK_POLLOUT
+        size_t index;  // index in poll_list
+    };
+    std::vector<FdInfo> fd_info;
 
     ConstListIterator li(poll_list);
     while (li.next()) {
@@ -2034,25 +2057,141 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 "pollable object that is not open", li.index() + 1, poll_list->size());
             return nullptr;
         }
-        //printd(5, "qore_socket_private::poll() %s fd: %d\n", obj->getClassName(), fd);
 
-        short arg = 0;
-        if (events & SOCK_POLLIN) {
-            arg |= POLLIN;
-        }
-        if (events & SOCK_POLLOUT) {
-            arg |= POLLOUT;
-        }
-
-        if (!arg) {
+        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT))) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
+        fd_info.push_back({fd, events, li.index()});
+    }
+
+#ifdef DARWIN
+    // Use kqueue on macOS - it properly handles listener sockets unlike poll()
+    int kq = kqueue();
+    if (kq == -1) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kqueue() failed");
+        return nullptr;
+    }
+
+    // RAII cleanup for kqueue fd
+    struct KqueueGuard {
+        int kq;
+        KqueueGuard(int k) : kq(k) {}
+        ~KqueueGuard() { if (kq != -1) ::close(kq); }
+    } guard(kq);
+
+    // Build kevent change list - need up to 2 events per fd (read + write)
+    std::vector<struct kevent> changes;
+    changes.reserve(fd_info.size() * 2);
+
+    for (const auto& info : fd_info) {
+        if (info.events & SOCK_POLLIN) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+        if (info.events & SOCK_POLLOUT) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+    }
+
+    // Convert timeout to timespec (like nginx: NULL for infinite timeout)
+    struct timespec ts;
+    struct timespec* pts = nullptr;
+    if (timeout_ms >= 0) {
+        ts.tv_sec = timeout_ms / 1000;
+        ts.tv_nsec = (timeout_ms % 1000) * 1000000;
+        pts = &ts;
+    }
+
+    // Allocate space for returned events
+    std::vector<struct kevent> events(changes.size());
+
+    int rc;
+    // First do a zero-timeout kevent to register events and check for already-ready fds
+    // This handles the case where events occurred before we registered the filters
+    struct timespec ts_zero = {0, 0};
+
+    while (true) {
+        rc = kevent(kq, changes.data(), changes.size(), events.data(), events.size(), &ts_zero);
+        if (rc >= 0 || errno != EINTR) {
+            break;
+        }
+    }
+
+    if (rc < 0) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+    } else if (rc == 0 && (timeout_ms < 0 || timeout_ms > 0)) {
+        // No events ready yet, wait with actual timeout (events already registered)
+        while (true) {
+            rc = kevent(kq, nullptr, 0, events.data(), events.size(), pts);
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (rc < 0) {
+            qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+        }
+    }
+
+    // Process events if we have any
+    if (rc > 0) {
+        // Track which poll_list indices have events and what events they have
+        std::unordered_map<size_t, int> result_events;
+
+        for (int i = 0; i < rc; ++i) {
+            size_t idx = reinterpret_cast<size_t>(events[i].udata);
+            if (events[i].flags & EV_ERROR) {
+                result_events[idx] = SOCK_POLLERR;
+                continue;
+            }
+
+            int evt = result_events[idx];
+            if (events[i].filter == EVFILT_READ) {
+                evt |= SOCK_POLLIN;
+            } else if (events[i].filter == EVFILT_WRITE) {
+                if (events[i].flags & EV_EOF) {
+                    // EOF on write - error condition
+                    evt = SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLOUT;
+                }
+            }
+            result_events[idx] = evt;
+        }
+
+        // Build result list
+        for (const auto& [idx, evt] : result_events) {
+            if (evt) {
+                const QoreHashNode* orig = poll_list->retrieveEntry(idx).get<const QoreHashNode>();
+                ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+                assert(!*xsink);
+                entry->setKeyValue("events", evt, xsink);
+                entry->setKeyValue("socket", orig->getKeyValue("socket").refSelf(), xsink);
+                rv->push(entry.release(), xsink);
+                assert(!*xsink);
+            }
+        }
+    }
+
+#else  // HAVE_POLL
+    std::vector<pollfd> fds;
+    for (const auto& info : fd_info) {
         pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = arg;
+        pfd.fd = info.fd;
+        pfd.events = 0;
+        if (info.events & SOCK_POLLIN) {
+            pfd.events |= POLLIN;
+        }
+        if (info.events & SOCK_POLLOUT) {
+            pfd.events |= POLLOUT;
+        }
         pfd.revents = 0;
         fds.push_back(pfd);
     }
@@ -2102,9 +2241,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             break;
         }
     }
+#endif  // DARWIN
 
     return rv.release();
-#endif
+#endif  // !HAVE_POLL && !DARWIN
 }
 
 static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
@@ -4612,7 +4752,7 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketAcceptPollSocketOperationBase(sock) {
+        : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink) {
     sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
 
     AutoLocker al(sock->priv->m);
@@ -4769,6 +4909,12 @@ int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 
 QoreValue SocketAcceptPollOperation::getOutput() const {
     AutoLocker al(sock->priv->m);
+    // If we have a cached QoreObject wrapper (from SSL handshake polling), return that
+    if (accepted_socket_obj) {
+        // Release the cached object and clear accepted_socket to avoid double-free
+        accepted_socket.discard();
+        return accepted_socket_obj.release();
+    }
     if (accepted_socket) {
         return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
     }

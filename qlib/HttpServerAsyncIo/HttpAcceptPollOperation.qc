@@ -67,6 +67,9 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         #! HTTP version mode ("auto", "1.0", "1.1", "2.0")
         string http_version = "auto";
 
+        #! True to perform SSL handshake in this operation
+        bool do_ssl_handshake = True;
+
         #! Current poll operation being executed
         SocketPollOperation spop;
 
@@ -95,7 +98,7 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
     */
     constructor(Qore::Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            string http_version = "auto") {
+            string http_version = "auto", bool do_ssl_handshake = True) {
         @assert(listener, "listener socket cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
         self.listener = listener;
@@ -105,9 +108,21 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
         self.ssl_verify_flags = ssl_verify_flags;
         self.ssl_accept_all_certs = ssl_accept_all_certs;
         self.http_version = http_version;
+        self.do_ssl_handshake = do_ssl_handshake;
         # Start the accept poll operation
         spop = listener.startPollAccept();
         @assert(spop, "startPollAccept must return poll operation");
+        @debug {
+            if (getenv("QORE_HTTP_ACCEPT_DEBUG")) {
+                printf("%y TID %d: HttpAcceptPollOperation init: listener=%s ssl=%y http_version=%y "
+                    "do_ssl_handshake=%y\n", now_us(), gettid(), socketId(listener), ssl, http_version,
+                    do_ssl_handshake);
+            }
+        }
+    }
+
+    private string socketId(Socket s) {
+        return sprintf("%s %s", s.className(), s.uniqueHash()[0..8]);
     }
 
     #! Returns the goal of the operation
@@ -131,7 +146,21 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
             # Drive the current sub-operation
+            @debug {
+                if (getenv("QORE_ACCEPT_POLL_DEBUG")) {
+                    printf("%y TID %d: HttpAcceptPollOperation::continuePoll BEFORE: state=%y listener=%s "
+                        "spop_state=%y\n", now_us(), gettid(), state, socketId(listener), spop.getState());
+                }
+            }
             auto raw_info = spop.continuePoll();
+            @debug {
+                if (getenv("QORE_ACCEPT_POLL_DEBUG")) {
+                    printf("%y TID %d: HttpAcceptPollOperation::continuePoll AFTER: state=%y listener=%s "
+                        "spop_state=%y raw_info=%y\n", now_us(), gettid(), state, socketId(listener),
+                        spop.getState(), raw_info ? sprintf("events=%d socket=%s", raw_info.events,
+                            raw_info.socket ? socketId(raw_info.socket) : "null") : "NOTHING");
+                }
+            }
 
             # Check what we got back
             if (raw_info) {
@@ -146,6 +175,12 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                     # Note: getOutput() may return NOTHING if the listener was closed during accept
                     *Socket sock = spop.getOutput();
                     if (!sock) {
+                        @debug {
+                            if (getenv("QORE_HTTP_ACCEPT_DEBUG")) {
+                                printf("%y TID %d: HttpAcceptPollOperation accept: no socket returned; "
+                                    "listener=%s\n", now_us(), gettid(), socketId(listener));
+                            }
+                        }
                         # Listener closed - operation aborted
                         state = STATE_COMPLETE;
                         return NOTHING;
@@ -154,17 +189,52 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                     @assert(client_sock.isOpen(), "accepted socket must be open");
                     # Set TCP_NODELAY to ensure responses are sent immediately
                     client_sock.setNoDelay(True);
+                    @debug {
+                        if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                            printf("%y TID %d: HttpAcceptPollOperation accept: listener=%s client=%s ssl=%y\n",
+                                now_us(), gettid(), socketId(listener), socketId(client_sock), ssl);
+                        }
+                    }
                     if (ssl) {
+                        @debug {
+                            if (getenv("QORE_HTTP_ACCEPT_DEBUG")) {
+                                printf("%y TID %d: HttpAcceptPollOperation accept: client=%s secure=%y\n",
+                                    now_us(), gettid(), socketId(client_sock), client_sock.isSecure());
+                            }
+                        }
                         # Check if SSL handshake was already done during accept
                         # This happens when the listener socket has SSL configured -
                         # startPollAccept() automatically upgrades the accepted socket to SSL
                         if (client_sock.isSecure()) {
+                            negotiated_protocol = client_sock.getAlpnProtocol();
+                            is_http2 = (negotiated_protocol == "h2");
+
+                            # If HTTP/2 is required but not negotiated, reject the connection
+                            if ((http_version == "2.0" || http_version == "2") && !is_http2) {
+                                client_sock.close();
+                                throw "HTTP2-REQUIRED-ERROR",
+                                    sprintf("HTTP/2 required but client negotiated: %y",
+                                        negotiated_protocol ?? "none");
+                            }
+
                             # SSL already complete - done
                             state = STATE_COMPLETE;
                             return NOTHING;
                         }
 
+                        if (!do_ssl_handshake) {
+                            # Defer SSL handshake to the caller
+                            state = STATE_COMPLETE;
+                            return NOTHING;
+                        }
+
                         # Transition to SSL handshake
+                        @debug {
+                            if (getenv("QORE_HTTP_ACCEPT_DEBUG")) {
+                                printf("%y TID %d: HttpAcceptPollOperation ssl: starting handshake for %s\n",
+                                    now_us(), gettid(), socketId(client_sock));
+                            }
+                        }
                         state = STATE_SSL_HANDSHAKE;
                         if (cert) {
                             client_sock.setCertificate(cert);
@@ -213,6 +283,18 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
                     # SSL handshake complete - detect negotiated protocol
                     negotiated_protocol = client_sock.getAlpnProtocol();
                     is_http2 = (negotiated_protocol == "h2");
+                    @debug {
+                        if (getenv("QORE_HTTP_ACCEPT_DEBUG")) {
+                            printf("%y TID %d: HttpAcceptPollOperation ssl: complete client=%s alpn=%y "
+                                "http2=%y\n", now_us(), gettid(), socketId(client_sock), negotiated_protocol,
+                                is_http2);
+                        }
+                        if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                            printf("%y TID %d: HttpAcceptPollOperation ssl: complete client=%s alpn=%y "
+                                "http2=%y\n", now_us(), gettid(), socketId(client_sock), negotiated_protocol,
+                                is_http2);
+                        }
+                    }
 
                     # If HTTP/2 is required but not negotiated, reject the connection
                     if ((http_version == "2.0" || http_version == "2") && !is_http2) {

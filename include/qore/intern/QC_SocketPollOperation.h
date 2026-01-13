@@ -391,6 +391,7 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         // Clear poll_state and accepted_socket to prevent memory accumulation on timeout
         poll_state.reset();
+        accepted_socket_obj = nullptr;
         accepted_socket.discard();
         SocketAcceptPollSocketOperationBase::abort(xsink);
     }
@@ -405,6 +406,8 @@ public:
 
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
+    //! Cached QoreObject wrapper for the accepted socket during SSL handshake
+    mutable ReferenceHolder<QoreObject> accepted_socket_obj;
 
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
@@ -416,6 +419,26 @@ protected:
 
     //! Called to switch to the connect-ssl state
     DLLLOCAL int startSslAccept(ExceptionSink* xsink);
+
+    //! Returns the correct socket for poll info based on current state
+    /** During SSL handshake, returns the accepted client socket instead of the listener socket */
+    DLLLOCAL QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", events, xsink);
+        if (state == SPS_ACCEPTING_SSL && accepted_socket) {
+            // During SSL handshake, poll the accepted client socket, not the listener
+            // Cache the QoreObject wrapper to avoid creating a new one each time
+            if (!accepted_socket_obj) {
+                accepted_socket->ref();
+                accepted_socket_obj = new QoreObject(QC_SOCKET, getProgram(), *accepted_socket);
+            }
+            accepted_socket_obj->ref();
+            info->setKeyValue("socket", *accepted_socket_obj, xsink);
+        } else {
+            info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+        }
+        return info.release();
+    }
 
 private:
     std::unique_ptr<AbstractPollState> poll_state;

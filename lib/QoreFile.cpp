@@ -36,6 +36,7 @@
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
 
+#include <memory>
 #include <string>
 
 class FileReadPollState : public AbstractPollState {
@@ -894,6 +895,38 @@ BinaryNode* QoreFile::readBinary(qore_offset_t size, int timeout_ms, ExceptionSi
         return nullptr;
 
     return new BinaryNode(buf, size);
+}
+
+BinaryNode* QoreFile::readShortBinary(qore_offset_t size, int timeout_ms, ExceptionSink* xsink) {
+    if (!size) {
+        return nullptr;
+    }
+
+    qore_offset_t limit = size < 0 ? DEFAULT_FILE_BUFSIZE : size;
+    if (limit < 0) {
+        limit = DEFAULT_FILE_BUFSIZE;
+    }
+
+    std::unique_ptr<char, decltype(&free)> buf_guard((char*)malloc(limit), free);
+    if (!buf_guard) {
+        return nullptr;
+    }
+
+    qore_offset_t rc = -1;
+    {
+        AutoLocker al(priv->m);
+        if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
+            return nullptr;
+        }
+
+        rc = priv->readData(buf_guard.get(), limit, timeout_ms, "readShortBinary", xsink);
+    }
+
+    if (rc <= 0) {
+        return nullptr;
+    }
+
+    return new BinaryNode(buf_guard.release(), rc);
 }
 
 size_t QoreFile::read(void* ptr, size_t limit, int timeout_ms, ExceptionSink* xsink) {

@@ -2781,6 +2781,76 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
     return str->empty() ? 0 : str.release();
 }
 
+QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {
+    if (!size) {
+        return nullptr;
+    }
+
+    unsigned mw = enc->getMinCharWidth();
+    size_t bs;
+    if (size < 0) {
+        bs = DefaultStreamReaderHelperBufferSize;
+    } else {
+        size_t max_bs;
+        if (size > (int64)(SIZE_MAX / mw)) {
+            max_bs = DefaultStreamReaderHelperBufferSize;
+        } else {
+            max_bs = (size_t)size * mw;
+        }
+        bs = max_bs ? max_bs : mw;
+        if (bs > DefaultStreamReaderHelperBufferSize) {
+            bs = DefaultStreamReaderHelperBufferSize;
+        }
+    }
+
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
+    str->reserve(bs);
+    int rc = my_read((void*)str->c_str(), bs, xsink);
+    if (*xsink || rc <= 0) {
+        return nullptr;
+    }
+
+    str->terminate(rc);
+
+    if (!enc->isMultiByte()) {
+        return str.release();
+    }
+
+    if (str->size() > 1) {
+        q_remove_bom_utf16(*str, enc);
+    }
+
+    size_t last_char = 0;
+    size_t char_len = 0;
+    size_t max_chars = (size < 0) ? SIZE_MAX : (size_t)size;
+    const char* e = str->c_str() + str->size();
+    while (last_char < str->size() && char_len < max_chars) {
+        const char* p = str->c_str() + last_char;
+        int cc = enc->getCharLen(p, e - p);
+        if (!cc) {
+            xsink->raiseException("STREAM-ENCODING-ERROR", "invalid multi-byte character received in byte offset "
+                QSD " according to the input encoding: '%s'", last_char, enc->getCode());
+            return nullptr;
+        }
+        if (cc < 0) {
+            break;
+        }
+
+        ++char_len;
+        last_char += cc;
+    }
+
+    if (!last_char) {
+        return nullptr;
+    }
+
+    if (last_char != str->size()) {
+        str->terminate(last_char);
+    }
+
+    return str.release();
+}
+
 template <typename T>
 T* q_fix_decimal_tmpl(T* str, size_t offset) {
     char* p = const_cast<char*>(strchr(str->c_str() + offset, ','));

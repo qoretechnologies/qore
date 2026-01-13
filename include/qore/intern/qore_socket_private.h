@@ -55,6 +55,10 @@
 #include <strings.h>
 #include <sys/time.h>
 
+#ifdef DARWIN
+#include <sys/event.h>
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -903,6 +907,36 @@ struct qore_socket_private {
     DLLLOCAL int accept_intern(ExceptionSink* xsink, struct sockaddr *addr, socklen_t *size, int timeout_ms = -1) {
         //printd(5, "qore_socket_private::accept_intern() to: %d\n", timeout_ms);
         assert(xsink);
+
+        // For non-blocking mode (timeout_ms == 0), skip poll() and try accept() directly
+        // This works around platform-specific poll() issues (e.g., macOS poll() may not
+        // reliably detect pending connections on listener sockets)
+        if (timeout_ms == 0) {
+            // Temporarily set socket to non-blocking mode for the accept call
+            OptionalNonBlockingHelper onbh(*this, true, xsink);
+            if (*xsink) {
+                return -1;
+            }
+
+            int rc = ::accept(sock, addr, size);
+            if (rc != QORE_INVALID_SOCKET) {
+                return rc;
+            }
+
+            int err = sock_get_error();
+            // EAGAIN/EWOULDBLOCK means no pending connection - return timeout
+            if (err == EAGAIN || err == EWOULDBLOCK) {
+                return QSE_TIMEOUT;
+            }
+            // retry if interrupted by a signal
+            if (err == EINTR) {
+                return QSE_TIMEOUT;  // Let caller retry
+            }
+
+            qore_socket_error(xsink, "SOCKET-ACCEPT-ERROR", "error in accept()", 0, 0, 0, addr);
+            return -1;
+        }
+
         while (true) {
             if (timeout_ms >= 0 && !isDataAvailable(timeout_ms, "accept", xsink)) {
                 if (*xsink)
@@ -1308,7 +1342,10 @@ struct qore_socket_private {
 
     DLLLOCAL int asyncIoWait(int timeout_ms, bool read, bool write, ExceptionSink* xsink) const {
         assert(xsink);
-#if defined HAVE_POLL
+#if defined DARWIN
+        // Use kqueue on macOS - it properly handles listener sockets unlike poll()
+        return kqueue_intern(xsink, timeout_ms, read, write);
+#elif defined HAVE_POLL
         return poll_intern(xsink, timeout_ms, read, write);
 #elif defined HAVE_SELECT
         return select_intern(xsink, timeout_ms, read, write);
@@ -1316,6 +1353,85 @@ struct qore_socket_private {
 #error no async socket operations supported
 #endif
     }
+
+#ifdef DARWIN
+    // kqueue-based I/O wait for macOS - properly handles listener sockets
+    DLLLOCAL int kqueue_intern(ExceptionSink* xsink, int timeout_ms, bool read, bool write) const {
+        //fprintf(stderr, "kqueue_intern() sock=%d timeout_ms=%d read=%d write=%d\n", sock, timeout_ms, read, write);
+
+        int kq = kqueue();
+        if (kq == -1) {
+            qore_socket_error(xsink, "SOCKET-KQUEUE-ERROR", "kqueue() failed");
+            return -1;
+        }
+
+        // RAII cleanup for kqueue fd
+        struct KqueueGuard {
+            int kq;
+            KqueueGuard(int k) : kq(k) {}
+            ~KqueueGuard() { if (kq != -1) ::close(kq); }
+        } guard(kq);
+
+        // Register events
+        struct kevent changes[2];
+        int nchanges = 0;
+
+        if (read) {
+            EV_SET(&changes[nchanges++], sock, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
+        }
+        if (write) {
+            EV_SET(&changes[nchanges++], sock, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, nullptr);
+        }
+
+        // Convert timeout to timespec
+        struct timespec ts;
+        struct timespec* pts = nullptr;
+        if (timeout_ms >= 0) {
+            ts.tv_sec = timeout_ms / 1000;
+            ts.tv_nsec = (timeout_ms % 1000) * 1000000;
+            pts = &ts;
+        }
+
+        //fprintf(stderr, "kqueue_intern() calling kevent() kq=%d nchanges=%d timeout=%s\n",
+        //       kq, nchanges, pts ? "set" : "infinite");
+
+        struct kevent events[2];
+        int rc;
+        while (true) {
+            rc = kevent(kq, changes, nchanges, events, 2, pts);
+            if (rc == -1 && errno == EINTR)
+                continue;
+            break;
+        }
+
+        //fprintf(stderr, "kqueue_intern() kevent() returned rc=%d errno=%d\n", rc, rc < 0 ? errno : 0);
+
+        if (rc < 0) {
+            qore_socket_error(xsink, "SOCKET-KQUEUE-ERROR", "kevent() returned an error");
+            return -1;
+        }
+
+        // Check for errors in returned events
+        if (rc > 0) {
+            for (int i = 0; i < rc; ++i) {
+                //fprintf(stderr, "kqueue_intern() event[%d]: ident=%d filter=%d flags=0x%x\n",
+                //       i, (int)events[i].ident, events[i].filter, events[i].flags);
+                if (events[i].flags & EV_ERROR) {
+                    errno = events[i].data;
+                    qore_socket_error(xsink, "SOCKET-KQUEUE-ERROR", "kevent() reported socket error");
+                    return -1;
+                }
+                // EV_EOF indicates the socket has been closed/disconnected
+                if (events[i].flags & EV_EOF) {
+                    // Return as ready - the actual operation will detect the error
+                    return rc;
+                }
+            }
+        }
+
+        return rc;
+    }
+#endif
 
 #if defined HAVE_POLL
     DLLLOCAL int poll_intern(ExceptionSink* xsink, int timeout_ms, bool read, bool write) const {
@@ -1339,7 +1455,9 @@ struct qore_socket_private {
 
         return rc;
     }
-#elif defined HAVE_SELECT
+#endif
+
+#if defined HAVE_SELECT
     DLLLOCAL int select_intern(ExceptionSink* xsink, int timeout_ms, bool read, bool write) const {
         bool aborted = false;
         int rc = select_intern(xsink, timeout_ms, read, write, aborted);

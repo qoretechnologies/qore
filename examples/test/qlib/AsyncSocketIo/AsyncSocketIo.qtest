@@ -47,6 +47,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("timeout timing", \timeoutTimingTest());
         addTestCase("immediate timeout", \immediateTimeoutTest());
         addTestCase("autostop", \autostopTest());
+        addTestCase("debug closed socket log", \debugClosedSocketLogTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -436,6 +437,70 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             usleep(20ms);
         }
         assertFalse(io_controller.running(), "autostop should stop I/O thread after completion");
+    }
+
+    debugClosedSocketLogTest() {
+        setenv("QORE_ASYNCIO_DEBUG", "1");
+        on_exit unsetenv("QORE_ASYNCIO_DEBUG");
+
+        Logger debug_logger("async-io-debug", LoggerLevel::LevelDebug);
+        LoggerLayoutPattern layout("%m\n");
+        StringOutputStream sos();
+        StreamWriter sw(sos);
+        LoggerAppenderStream la("test", layout, sw);
+        la.setQueue(new LoggerAppenderQueue());
+        la.open();
+        debug_logger.addAppender(la);
+
+        AsyncSocketIoController io_controller(debug_logger);
+        on_exit delete io_controller;
+
+        int close_port = startCloseServer();
+        RestClient rest({"url": "http://127.0.0.1:" + close_port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 5s,
+            "owner": "debug-closed-socket",
+        });
+        assertTrue(exists info.ex, "expected an exception for closed server response");
+        assertEq("SOCKET-HTTP-ERROR", info.ex.err);
+        assertTrue(info.ex.desc =~ /remote end closed connection/,
+            "should report remote end closed connection");
+
+        int attempts = 50;
+        while (la.getQueue().size() == 0 && attempts-- > 0) {
+            usleep(20ms);
+        }
+        la.getQueue().process(100ms);
+        string log_data = sos.getData();
+        assertTrue(log_data =~ /remote end closed connection/,
+            "debug log should mention remote end closed connection");
+        assertFalse(log_data =~ /SOCKET-NOT-OPEN/,
+            "debug log should not access getPeerInfo on a closed socket");
+    }
+
+    private int startCloseServer() {
+        Socket server();
+        server.bind(0);
+        int listen_port = server.getSocketInfo().port;
+        server.listen();
+        background closeOnAccept(server);
+        return listen_port;
+    }
+
+    private closeOnAccept(Socket server) {
+        on_exit server.close();
+        Socket client = server.accept(5s);
+        if (client) {
+            try {
+                client.readHTTPHeader(5s);
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore read errors; the client still sees a closed response path.
+            }
+            client.close();
+        }
     }
 }
 

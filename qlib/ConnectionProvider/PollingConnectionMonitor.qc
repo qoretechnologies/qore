@@ -470,11 +470,17 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     private *bool processCommands() {
         # first read all data from semaphore file
-        try {
-            sem_read.read(-1, 0);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "FILE-READ-TIMEOUT") {
-                rethrow;
+        while (True) {
+            try {
+                binary data = sem_read.readShortBinary(4096, 0);
+                if (!data.size()) {
+                    break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "FILE-READ-TIMEOUT") {
+                    rethrow;
+                }
+                break;
             }
         }
         try {

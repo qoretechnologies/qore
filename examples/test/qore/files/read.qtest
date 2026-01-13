@@ -17,6 +17,7 @@ class ReadTest inherits QUnit::Test {
 
     constructor() : Test("Read Test", "1.0") {
         addTestCase("readTest", \readTest());
+        addTestCase("readShortBinaryTest", \readShortBinaryTest());
 
         set_return_value(main());
     }
@@ -24,9 +25,6 @@ class ReadTest inherits QUnit::Test {
     readTest() {
         string file = tmp_location() + "/test";
         File fw();
-
-        on_exit
-            unlink(file);
 
         fw.open(file, O_WRONLY | O_CREAT);
         fw.write(String);
@@ -43,5 +41,54 @@ class ReadTest inherits QUnit::Test {
         testAssertionValue('read string check', s, String);
         testAssertionValue('ReadOnlyFile::readTextFile() string check', ReadOnlyFile::readTextFile(file), String);
         assertThrows("FILE-OPEN2-ERROR", \ReadOnlyFile::readTextFile(), tmp_location() + DirSep + get_random_string());
+
+        unlink(file);
+    }
+
+    readShortBinaryTest() {
+        hash<PipeInfo> binfo = File::getPipe();
+        ReadOnlyFile rb = binfo.read;
+        File wb = binfo.write;
+
+        wb.write("abcdef");
+        *binary b = rb.readShortBinary(10, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() size check', b.size(), 6);
+
+        hash<PipeInfo> bninfo = File::getPipe();
+        ReadOnlyFile rbn = bninfo.read;
+        File wbn = bninfo.write;
+
+        wbn.write("123");
+        *binary bn = rbn.readShortBinary(-1, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() negative size check', bn.size(), 3);
+
+        hash<PipeInfo> blinfo = File::getPipe();
+        ReadOnlyFile rbl = blinfo.read;
+        File wbl = blinfo.write;
+
+        wbl.write("abcdef");
+        *binary bl = rbl.readShortBinary(2, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() max size check', bl.size(), 2);
+
+        hash<PipeInfo> bbinfo2 = File::getPipe();
+        ReadOnlyFile rbb2 = bbinfo2.read;
+        File wbb2 = bbinfo2.write;
+
+        date bstart = now_us();
+        background sub() {
+            usleep(50ms);
+            wbb2.write("yy");
+        }();
+        *binary bbs = rbb2.readShortBinary(10, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() blocking check', bbs.size(), 2);
+        date belapsed = now_us() - bstart;
+        testAssertionValue('ReadOnlyFile::readShortBinary() blocking duration check', belapsed >= 30ms, True);
+
+        hash<PipeInfo> tinfo = File::getPipe();
+        ReadOnlyFile rt = tinfo.read;
+        File wt = tinfo.write;
+
+        assertThrows("FILE-READ-TIMEOUT", \rt.readShortBinary(), list(1, 0));
+        assertThrows("READONLYFILE-READSHORT-BINARY-PARAMETER-ERROR", \rb.readShortBinary(), list(0));
     }
 }

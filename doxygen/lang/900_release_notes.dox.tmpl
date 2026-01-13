@@ -277,6 +277,9 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
+    - <b>ReadOnlyFile short reads</b>
+      - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
+        fill the requested size
     - new classes and methods in the @ref reflection "reflection" module:
       - @ref Qore::Reflection::Enum "Enum" class for enum reflection
       - @ref Qore::Reflection::EnumMember "EnumMember" class for enum member reflection
