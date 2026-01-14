@@ -52,6 +52,11 @@ public:
     // Reverse map of QoreObject* -> fd for removal after socket/file is closed
     std::unordered_map<QoreObject*, int> reverse_map;
 
+#ifdef DARWIN
+    // Map of EventNotifier* -> QoreObject* for optimized user event tracking
+    std::unordered_map<QoreEventNotifier*, QoreObject*> notifier_map;
+#endif
+
     DLLLOCAL EventLoopPriv(ExceptionSink* xsink) : loop(xsink) {}
 
     DLLLOCAL ~EventLoopPriv() {
@@ -71,6 +76,53 @@ public:
         }
         return rc;
     }
+
+#ifdef DARWIN
+    //! Add EventNotifier using optimized EVFILT_USER (macOS only)
+    DLLLOCAL int addNotifier(QoreEventNotifier* notifier, QoreObject* obj, ExceptionSink* xsink) {
+        // Bind the notifier to our kqueue for EVFILT_USER optimization
+        int rc = notifier->bindToKqueue(loop.getKqueueFd(), xsink);
+        if (rc < 0) {
+            return rc;
+        }
+
+        // Track the user event in the loop
+        rc = loop.addUserEvent(notifier->getUserIdent(), obj, xsink);
+        if (rc < 0) {
+            notifier->unbindFromKqueue();
+            return rc;
+        }
+
+        // Keep a reference to the object
+        obj->ref();
+        notifier_map[notifier] = obj;
+
+        return 0;
+    }
+
+    //! Remove EventNotifier (macOS only)
+    DLLLOCAL int removeNotifier(QoreEventNotifier* notifier, ExceptionSink* xsink) {
+        auto it = notifier_map.find(notifier);
+        if (it == notifier_map.end()) {
+            return 0;  // Not registered
+        }
+
+        QoreObject* obj = it->second;
+        notifier_map.erase(it);
+
+        // Remove from kqueue
+        loop.removeUserEvent(notifier->getUserIdent(), xsink);
+        notifier->unbindFromKqueue();
+
+        obj->deref(xsink);
+        return 0;
+    }
+
+    //! Check if a notifier is registered (macOS only)
+    DLLLOCAL bool hasNotifier(QoreEventNotifier* notifier) const {
+        return notifier_map.find(notifier) != notifier_map.end();
+    }
+#endif
 
     DLLLOCAL int remove(int fd, ExceptionSink* xsink) {
         auto it = obj_map.find(fd);
@@ -147,6 +199,16 @@ EventLoop::destructor() {
         obj->deref(xsink);
     }
     el->obj_map.clear();
+
+#ifdef DARWIN
+    // Clean up registered EventNotifiers
+    for (auto& [notifier, obj] : el->notifier_map) {
+        notifier->unbindFromKqueue();
+        obj->deref(xsink);
+    }
+    el->notifier_map.clear();
+#endif
+
     el->deref(xsink);
 }
 
@@ -284,6 +346,9 @@ nothing EventLoop::del(ReadOnlyFile[File] file) {
     @throw EVENT-LOOP-ERROR Failed to add notifier to event loop
     @throw EVENT-NOTIFIER-ERROR Notifier is not valid
 
+    @note On macOS, this uses an optimized kqueue EVFILT_USER implementation
+    that avoids the overhead of pipe-based signaling.
+
     @since %Qore 2.1
 */
 nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
@@ -292,6 +357,13 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
         xsink->raiseException("EVENT-NOTIFIER-ERROR", "Cannot add invalid notifier to event loop");
         return QoreValue();
     }
+
+#ifdef DARWIN
+    // macOS: use optimized EVFILT_USER path (nginx-style)
+    // This avoids pipe overhead and uses direct kqueue user events
+    el->addNotifier(notifier, const_cast<QoreObject*>(obj_notifier), xsink);
+#else
+    // Other platforms: use fd-based registration
     int fd = notifier->fd();
     // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
     int ev = 0;
@@ -302,6 +374,7 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
         ev |= QORE_EV_WRITE;
     }
     el->add(fd, ev, const_cast<QoreObject*>(obj_notifier), xsink);
+#endif
 }
 
 //! Removes an event notifier from the event loop
@@ -316,8 +389,13 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
 */
 nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
     ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
-    // Use obj_notifier (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
+#ifdef DARWIN
+    // macOS: use optimized removal path
+    el->removeNotifier(notifier, xsink);
+#else
+    // Other platforms: use fd-based removal
     el->removeByObject(const_cast<QoreObject*>(obj_notifier), xsink);
+#endif
 }
 
 //! Polls for events on registered sockets/files

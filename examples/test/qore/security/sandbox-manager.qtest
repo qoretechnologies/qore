@@ -241,13 +241,14 @@ class SandboxManagerTest inherits QUnit::Test {
         # Initially no sandbox root
         assertEq(NOTHING, sm.getFilesystemSandboxRoot(), "Initially no sandbox root");
 
-        # Set sandbox root
+        # Set sandbox root (use realpath to handle macOS /tmp -> /private/tmp symlink)
         sm.setFilesystemSandboxRoot("/tmp");
-        assertEq("/tmp", sm.getFilesystemSandboxRoot(), "Sandbox root set to /tmp");
+        string expectedRoot = realpath("/tmp");
+        assertEq(expectedRoot, sm.getFilesystemSandboxRoot(), "Sandbox root set to /tmp");
 
         # Get config and verify
         hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
-        assertEq("/tmp", config.sandbox_root, "Config shows sandbox root");
+        assertEq(expectedRoot, config.sandbox_root, "Config shows sandbox root");
         assertEq("deny", config.default_policy, "Default policy is deny");
 
         # Clear sandbox root
@@ -258,20 +259,22 @@ class SandboxManagerTest inherits QUnit::Test {
     testFilesystemAllowedPaths() {
         SandboxManager sm();
 
-        # Add allowed path
+        # Add allowed path (use realpath to handle macOS /tmp -> /private/tmp symlink)
         sm.addFilesystemAllowedPath("/tmp", QSEC_READ | QSEC_WRITE);
+        string expectedPath = realpath("/tmp");
 
         hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
         assertEq(1, config.allowed_paths.size(), "One allowed path added");
-        assertEq("/tmp", config.allowed_paths[0].path, "Correct path added");
+        assertEq(expectedPath, config.allowed_paths[0].path, "Correct path added");
         assertEq(QSEC_READ | QSEC_WRITE, config.allowed_paths[0].mode, "Correct mode set");
 
-        # Add denied path
+        # Add denied path (use realpath for base, then append subdir for macOS compatibility)
         sm.addFilesystemDeniedPath("/tmp/secrets");
+        string expectedDenied = realpath("/tmp") + "/secrets";
 
         config = sm.getFilesystemConfiguration();
         assertEq(1, config.denied_paths.size(), "One denied path added");
-        assertEq("/tmp/secrets", config.denied_paths[0], "Correct denied path");
+        assertEq(expectedDenied, config.denied_paths[0], "Correct denied path");
     }
 
     testFilesystemDefaultPolicy() {
@@ -314,7 +317,8 @@ class SandboxManagerTest inherits QUnit::Test {
         # Verify we can get the sandbox manager back
         SandboxManager sm2 = p.getSandboxManager();
         assertEq(True, sm2 instanceof SandboxManager, "Got sandbox manager from program");
-        assertEq("/tmp", sm2.getFilesystemSandboxRoot(), "Sandbox root preserved");
+        string expectedRoot = realpath("/tmp");
+        assertEq(expectedRoot, sm2.getFilesystemSandboxRoot(), "Sandbox root preserved");
 
         # Test reading file inside sandbox works
         p.parse("

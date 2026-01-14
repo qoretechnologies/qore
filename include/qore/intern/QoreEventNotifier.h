@@ -37,7 +37,11 @@
 
 #ifdef __linux__
 #include <sys/eventfd.h>
+#elif defined(DARWIN)
+#include <sys/event.h>
 #endif
+
+#include <atomic>
 
 //! Cross-thread event notification abstraction
 /**
@@ -122,9 +126,43 @@ public:
     */
     DLLLOCAL void acknowledge(ExceptionSink* xsink);
 
+#ifdef DARWIN
+    //! Binds to a kqueue for optimized EVFILT_USER notification (macOS only)
+    /** When bound, notify() uses the efficient EVFILT_USER mechanism instead
+        of a pipe. This should be called before registering with an EventLoop.
+
+        @param kqueue_fd the kqueue file descriptor to bind to
+        @param xsink exception sink for error reporting
+
+        @return 0 on success, -1 on error (exception raised)
+    */
+    DLLLOCAL int bindToKqueue(int kqueue_fd, ExceptionSink* xsink);
+
+    //! Returns true if using optimized kqueue-based notification
+    DLLLOCAL bool isOptimized() const {
+        return optimized.load(std::memory_order_acquire);
+    }
+
+    //! Returns the unique EVFILT_USER identifier
+    DLLLOCAL uintptr_t getUserIdent() const {
+        return user_ident;
+    }
+
+    //! Unbinds from kqueue (called when removing from EventLoop)
+    DLLLOCAL void unbindFromKqueue();
+#endif
+
 private:
 #ifdef __linux__
     int notify_fd = -1;     //!< eventfd file descriptor
+#elif defined(DARWIN)
+    std::atomic<int> kq_fd{-1};        //!< bound kqueue fd (when optimized)
+    uintptr_t user_ident = 0;          //!< unique EVFILT_USER identifier
+    std::atomic<bool> optimized{false}; //!< true when bound to kqueue
+    int pipe_fd[2] = {-1, -1};         //!< fallback pipe [read, write]
+
+    //! Global counter for generating unique EVFILT_USER identifiers
+    static std::atomic<uintptr_t> next_ident;
 #else
     int pipe_fd[2] = {-1, -1};  //!< pipe file descriptors [read, write]
 #endif

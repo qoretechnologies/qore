@@ -144,15 +144,49 @@ public:
     */
     DLLLOCAL int poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink);
 
-    //! Returns the number of registered file descriptors
+    //! Returns the number of registered event sources
     DLLLOCAL size_t size() const {
+#ifdef DARWIN
+        return fd_map.size() + user_event_map.size();
+#else
         return fd_map.size();
+#endif
     }
 
-    //! Returns true if no file descriptors are registered
+    //! Returns true if no event sources are registered
     DLLLOCAL bool empty() const {
+#ifdef DARWIN
+        return fd_map.empty() && user_event_map.empty();
+#else
         return fd_map.empty();
+#endif
     }
+
+#ifdef DARWIN
+    //! Returns the kqueue file descriptor (macOS only)
+    /** Used by QoreEventNotifier to bind for EVFILT_USER optimization.
+    */
+    DLLLOCAL int getKqueueFd() const {
+        return event_fd;
+    }
+
+    //! Adds a user event (EVFILT_USER) to the event loop
+    /** @param ident unique identifier for the user event
+        @param udata user data pointer to associate with this event
+        @param xsink exception sink for error reporting
+
+        @return 0 on success, -1 on error (exception raised)
+    */
+    DLLLOCAL int addUserEvent(uintptr_t ident, void* udata, ExceptionSink* xsink);
+
+    //! Removes a user event from the event loop
+    /** @param ident unique identifier for the user event
+        @param xsink exception sink for error reporting
+
+        @return 0 on success, -1 on error (exception raised)
+    */
+    DLLLOCAL int removeUserEvent(uintptr_t ident, ExceptionSink* xsink);
+#endif
 
 private:
     //! Internal fd info
@@ -166,6 +200,8 @@ private:
 
 #ifdef DARWIN
     int event_fd = -1;  //!< kqueue file descriptor
+    //! Map of user event ident -> udata (for EVFILT_USER)
+    std::unordered_map<uintptr_t, void*> user_event_map;
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
 #endif

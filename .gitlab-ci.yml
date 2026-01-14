@@ -122,3 +122,30 @@ test-alpine-arm64:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+
+test-macos:
+  stage: test
+  tags:
+    - macos
+    - shell
+  services: []
+  variables:
+    QORE_TEST_OPTS: '-penable-debug'
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
+  script:
+    - |
+        if test/docker_test/test-macos.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
