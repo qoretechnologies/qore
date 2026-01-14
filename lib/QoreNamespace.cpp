@@ -45,6 +45,7 @@
 // include files for default object classes
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_EventLoop.h"
+#include "qore/intern/QC_EventNotifier.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
@@ -1199,6 +1200,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLCertificateClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     qns.addSystemClass(initSocketClass(qns));
+    qns.addSystemClass(initEventNotifierClass(qns));
     qns.addSystemClass(initEventLoopClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class

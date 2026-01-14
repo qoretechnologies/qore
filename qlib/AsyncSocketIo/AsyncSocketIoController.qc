@@ -117,17 +117,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     private:internal {
-        #! File to signal the I/O thread
-        File sem_write;
-
-        #! File to read in the I/O thread
-        ReadOnlyFile sem_read;
-
-        #! Semaphore descriptor info
-        hash<SocketPollInfo> sem_info;
-
-        #! True if a signal is pending on the command pipe (wake byte already queued)
-        bool sem_pending = False;
+        #! Event notifier for cross-thread signaling
+        EventNotifier notifier();
 
         #! I/O thread condition for readiness/exit state changes
         Condition io_cond();
@@ -227,7 +218,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
         if (signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         waitStop();
     }
@@ -245,7 +236,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
         if (signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         waitStop();
         log(LoggerLevel::INFO, "Canceled all operations (%d operation%s canceled)", count, count == 1 ? "" : "s");
@@ -342,7 +333,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
         if (cancel_signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         if (wait_cancel) {
             waitCancel(uh);
@@ -377,7 +368,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             add_signal = enqueueCmdLocked(IO_ADD);
         }
         if (add_signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         return cinfo.q;
     }
@@ -421,7 +412,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
         if (cancel_signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         if (rv) {
             waitCancel(uh);
@@ -434,7 +425,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             }
         }
         if (stop_signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         if (stopped) {
             waitStop();
@@ -496,7 +487,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             signal = enqueueCmdLocked(IO_CANCEL_OWNER, (owner,));
         }
         if (signal) {
-            sem_write.write(".");
+            notifier.notify();
         }
         # wait for the I/O thread to complete cancellation
         # we use a simple polling approach since multiple operations may be canceled
@@ -521,15 +512,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Common constructor code
     private constructorInit() {
-        hash<PipeInfo> info = File::getPipe();
-        sem_read = info.read;
-        sem_write = info.write;
-        sem_info = <SocketPollInfo>{
-            "events": SOCK_POLLIN,
-            "socket": sem_read,
-        };
-        # Register semaphore pipe in persistent EventLoop
-        loop.add(sem_read, SOCK_POLLIN);
+        # Register EventNotifier in persistent EventLoop for cross-thread wakeup
+        loop.add(notifier, SOCK_POLLIN);
     }
 
     #! Queues a cancel command for an in-progress operation; caller must hold m
@@ -584,7 +568,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 AutoLock al(m);
                 ready_flag = False;
                 io_exiting = False;
-                sem_pending = False;
                 int cur_tid = gettid();
                 if (tid == cur_tid) {
                     tid = 0;
@@ -610,11 +593,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             io_cond.broadcast();
         }
 
-        string sem_hash = sem_read.uniqueHash();
+        string notifier_hash = notifier.uniqueHash();
         hash<string, bool> ready_sockets;
         while (True) {
             # Process commands at start of each cycle to ensure deterministic handling
-            # even if poll() doesn't wake up from pipe writes (platform-specific issues)
             if (processCommands()) {
                 break;
             }
@@ -632,7 +614,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 cache.size(), loop.size());
                         }
                     }
-                    # Note: sem_read is already registered in EventLoop from constructor
+                    # Note: notifier is already registered in EventLoop from constructor
                     # scan for timed out operations
                     now = now_us();
                     # take the first key that has not already been processed on this run
@@ -671,13 +653,13 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 # in EventLoop, so no action needed.
                                 @debug {
                                     if (getenv("QORE_ASYNCIO_TRACE")) {
-                                        bool only_sem_ready = ready_sockets.size() == 1 && (ready_sockets{sem_hash} ?? False);
+                                        bool only_notifier_ready = ready_sockets.size() == 1 && (ready_sockets{notifier_hash} ?? False);
                                         log(LoggerLevel::INFO,
-                                            "%s: skip continuePoll for unready socket (state=%y sock=%s ready=%d only_sem=%y goal=%y)",
+                                            "%s: skip continuePoll for unready socket (state=%y sock=%s ready=%d only_notifier=%y goal=%y)",
                                             key, cinfo.spop.getState(),
                                             sprintf("%s %s", poll_sock.className(),
                                                 poll_sock.uniqueHash()[0..8]),
-                                            ready_sockets.size(), only_sem_ready, cinfo.other.goal);
+                                            ready_sockets.size(), only_notifier_ready, cinfo.other.goal);
                                     }
                                 }
                                 # Socket already registered in EventLoop; just update poll_deadline for timeout handling
@@ -849,8 +831,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 @debug {
                     if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
                         log(LoggerLevel::INFO,
-                            "EventLoop::poll() pre: items=%d cmdq=%d sem_pending=%y shutting_down=%y",
-                            loop.size(), cmdq.size(), sem_pending, shutting_down);
+                            "EventLoop::poll() pre: items=%d cmdq=%d shutting_down=%y",
+                            loop.size(), cmdq.size(), shutting_down);
                     }
                 }
                 date poll_start = now_us();
@@ -866,20 +848,20 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 }
                 @debug {
                     if (getenv("QORE_ASYNCIO_TRACE")) {
-                        int non_pipe_ready = 0;
+                        int non_notifier_ready = 0;
                         if (ready_list) {
                             foreach hash<SocketPollInfo> info in (ready_list) {
-                                if (info.socket && info.socket.uniqueHash() != sem_hash) {
-                                    ++non_pipe_ready;
+                                if (info.socket && info.socket.uniqueHash() != notifier_hash) {
+                                    ++non_notifier_ready;
                                 }
                             }
                         }
                         log(LoggerLevel::INFO, "EventLoop::poll() returned: items=%d elapsed=%y",
                             loop.size(), now_us() - poll_start);
-                        if (ready_list && ready_list.size() && !non_pipe_ready) {
+                        if (ready_list && ready_list.size() && !non_notifier_ready) {
                             log(LoggerLevel::INFO,
-                                "EventLoop::poll() ready_list only pipe; items=%d cmdq=%d sem_read_open=%y sem_write_open=%y",
-                                ready_list.size(), cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
+                                "EventLoop::poll() ready_list only notifier; items=%d cmdq=%d notifier_valid=%y",
+                                ready_list.size(), cmdq.size(), notifier.isValid());
                         }
                         if (ready_list) {
                             log(LoggerLevel::INFO, "EventLoop::poll() ready_list: %y", (map $1 + {
@@ -906,18 +888,18 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     private *bool processCommands() {
         # Process any queued commands first without blocking
         #
-        # IMPORTANT: There is a race condition between command enqueueing and pipe signaling.
-        # The main thread does: 1) enqueue command (with lock), 2) write to pipe (without lock)
-        # The I/O thread does: 1) process commands (with lock), 2) drain pipe (without lock)
+        # IMPORTANT: There is a race condition between command enqueueing and notification.
+        # The main thread does: 1) enqueue command (with lock), 2) notify (without lock)
+        # The I/O thread does: 1) process commands (with lock), 2) acknowledge (without lock)
         #
         # Race scenario:
         # - I/O thread: finds cmdq empty, exits command loop
-        # - Main thread: enqueues command, writes to pipe
-        # - I/O thread: drain loop reads pipe data
+        # - Main thread: enqueues command, notifies
+        # - I/O thread: acknowledge loop consumes notification
         # - I/O thread: returns without processing the new command!
         #
-        # Fix: After draining the pipe, check if new commands arrived during the drain.
-        # Loop until both the command queue AND pipe are empty.
+        # Fix: After acknowledging, check if new commands arrived during the acknowledge.
+        # Loop until both the command queue AND notifications are consumed.
         try {
             @debug {
                 if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
@@ -926,7 +908,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 }
             }
             @debug(int cmd_count = 0);
-            # Outer loop: repeat until both cmdq and pipe are empty
+            # Outer loop: repeat until both cmdq and notifier are empty
             while (True) {
                 # Inner loop: process all commands in the queue
                 while (True) {
@@ -1029,58 +1011,24 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 }
                 }  # end of inner command processing loop
 
-                # Drain all data from semaphore pipe; use short non-blocking reads
-                @debug(int drained_bytes = 0);
+                # Acknowledge all pending notifications from the EventNotifier
                 @debug {
                     if (getenv("QORE_ASYNCIO_TRACE")) {
-                        log(LoggerLevel::INFO, "processCommands: before drain cmdq=%d", cmdq.size());
+                        log(LoggerLevel::INFO, "processCommands: before acknowledge cmdq=%d", cmdq.size());
                     }
                 }
-                while (True) {
-                    try {
-                        binary data = sem_read.readShortBinary(4096, 0);
-                        if (!data.size()) {
-                            @debug {
-                                if (getenv("QORE_ASYNCIO_TRACE")) {
-                                    log(LoggerLevel::INFO,
-                                        "pipe read: zero bytes; cmdq=%d sem_read_open=%y sem_write_open=%y",
-                                        cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
-                                }
-                            }
-                            break;
-                        }
-                        @debug(drained_bytes += data.size());
-                        @debug {
-                            if (getenv("QORE_ASYNCIO_TRACE")) {
-                                log(LoggerLevel::INFO, "pipe read: bytes=%d sem_read_open=%y sem_write_open=%y",
-                                    data.size(), sem_read.isOpen(), sem_write.isOpen());
-                            }
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "FILE-READ-TIMEOUT") {
-                            rethrow;
-                        }
-                        @debug {
-                            if (getenv("QORE_ASYNCIO_TRACE")) {
-                                log(LoggerLevel::INFO,
-                                    "pipe read timeout; cmdq=%d sem_read_open=%y sem_write_open=%y",
-                                    cmdq.size(), sem_read.isOpen(), sem_write.isOpen());
-                            }
-                        }
-                        break;
-                    }
-                }
+                notifier.acknowledge();
 
                 # Check if new commands arrived during the drain (fixes race condition)
                 # If cmdq has commands, loop back to process them before returning
                 {
                     AutoLock al(m);
                     if (!cmdq.size()) {
-                        # Both cmdq and pipe are empty - safe to exit
+                        # Both cmdq and notifier are empty - safe to exit
                         @debug {
                             if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
-                                log(LoggerLevel::INFO, "processCommands: done cmd_count=%d drained_bytes=%d cmdq=%d",
-                                    cmd_count, drained_bytes, cmdq.size());
+                                log(LoggerLevel::INFO, "processCommands: done cmd_count=%d cmdq=%d",
+                                    cmd_count, cmdq.size());
                             }
                         }
                         break;  # Exit outer loop
@@ -1137,8 +1085,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             "cmd": cmd,
             "args": args,
         };
-        # Always signal the I/O thread to avoid race conditions with sem_pending
-        # The cost of extra pipe writes is negligible compared to potential lost wakeups
+        # Always signal the I/O thread to ensure prompt wakeup
+        # The cost of extra notifier signals is negligible compared to potential lost wakeups
         @debug(log(LoggerLevel::INFO, "enqueueCmdLocked(): enqueued command %y args %y (signal)", cmd, args));
         return True;
     }
@@ -1152,8 +1100,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         bool signal = False;
         @debug {
             if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
-                log(LoggerLevel::INFO, "sendCmd: cmd=%y args=%y cmdq=%d tid=%d sem_read_open=%y sem_write_open=%y",
-                    cmd, argv, cmdq.size(), gettid(), sem_read.isOpen(), sem_write.isOpen());
+                log(LoggerLevel::INFO, "sendCmd: cmd=%y args=%y cmdq=%d tid=%d notifier_valid=%y",
+                    cmd, argv, cmdq.size(), gettid(), notifier.isValid());
             }
         }
         {
@@ -1162,7 +1110,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
         @debug(log(LoggerLevel::INFO, "wrote command %y args %y to the command queue", cmd, argv));
         if (signal) {
-            sem_write.write(".");
+            notifier.notify();
             @debug(log(LoggerLevel::INFO, "notified I/O thread to wake up"));
         }
     }

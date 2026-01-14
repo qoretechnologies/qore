@@ -32,10 +32,15 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/QoreEventLoop.h"
+#include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_File.h"
 
 #include <unordered_map>
+
+// Forward declarations for EventNotifier class
+extern qore_classid_t CID_EVENTNOTIFIER;
+extern QoreClass* QC_EVENTNOTIFIER;
 
 // Private data for EventLoop
 class EventLoopPriv : public AbstractPrivateData {
@@ -267,6 +272,52 @@ nothing EventLoop::del(ReadOnlyFile[File] file) {
     // Use obj_file (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
     // This handles the case where the file has been closed but is still registered
     el->removeByObject(const_cast<QoreObject*>(obj_file), xsink);
+}
+
+//! Adds an event notifier to the event loop
+/** @par Example:
+    @code{.py} loop.add(notifier, SOCK_POLLIN); @endcode
+
+    @param notifier The event notifier to add
+    @param events Events to monitor (typically SOCK_POLLIN)
+
+    @throw EVENT-LOOP-ERROR Failed to add notifier to event loop
+    @throw EVENT-NOTIFIER-ERROR Notifier is not valid
+
+    @since %Qore 2.1
+*/
+nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
+    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
+    if (!notifier->isValid()) {
+        xsink->raiseException("EVENT-NOTIFIER-ERROR", "Cannot add invalid notifier to event loop");
+        return QoreValue();
+    }
+    int fd = notifier->fd();
+    // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
+    int ev = 0;
+    if (events & SOCK_POLLIN) {
+        ev |= QORE_EV_READ;
+    }
+    if (events & SOCK_POLLOUT) {
+        ev |= QORE_EV_WRITE;
+    }
+    el->add(fd, ev, const_cast<QoreObject*>(obj_notifier), xsink);
+}
+
+//! Removes an event notifier from the event loop
+/** @par Example:
+    @code{.py} loop.del(notifier); @endcode
+
+    @param notifier The event notifier to remove
+
+    @note It is safe to call this method for notifiers that are not registered
+
+    @since %Qore 2.1
+*/
+nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
+    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
+    // Use obj_notifier (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
+    el->removeByObject(const_cast<QoreObject*>(obj_notifier), xsink);
 }
 
 //! Polls for events on registered sockets/files
