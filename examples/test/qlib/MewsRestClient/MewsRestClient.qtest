@@ -121,13 +121,17 @@ public class Main inherits QUnit::Test {
 
             monitor.add(mrc);
             hash<auto> info = monitor.waitForResult();
-            # check for rate limiting or timeout errors from the polling monitor
+            # check for rate limiting, timeout, or schema validation errors from the polling monitor
             if (info.result == "error" && info.ex) {
                 *softint status_code = info.ex.arg.status_code
                     ?? (info.ex.desc =~ x/status_code: ([0-9]+)/[0])
                     ?? (info.ex.desc =~ x/HTTP\/[\d.]+ 429/);
                 if (status_code == 429 || status_code == 408 || info.ex.desc =~ /429 Too Many Requests/) {
                     testSkip("rate limited");
+                }
+                # skip if external API returns unexpected response (null body, etc)
+                if (info.ex.err == "SCHEMA-VALIDATION-ERROR") {
+                    testSkip("external API returned unexpected response: " + info.ex.desc);
                 }
             }
             on_error if (info.ex) {
