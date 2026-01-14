@@ -41,7 +41,7 @@ export PATH="${BUILD_DIR}:${PATH}"
 # when creating 8000+ threads overwhelms the pthread subsystem
 export SKIP_MAX_THREAD_TEST=1
 
-# Run the test suite
-./run_tests.sh ${QORE_TEST_OPTS:-}
+# Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
+./run_tests.sh
 
 echo "=== macOS CI Tests Complete ==="
