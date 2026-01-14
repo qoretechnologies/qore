@@ -769,26 +769,35 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
 
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a info to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
+
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
+        list<hash<auto>> rv;
         if (bind !~ /:\w+/) {
             if (bind =~ /^\//) {
                 info.node = bind;
                 remove info.service;
-                return list(addListenerIntern(info).getInfo());
+                rv = list(addListenerIntern(info).getInfo());
+            } else {
+                # assume service only
+                remove info.node;
+                info.service = bind;
+                rv = addINETListenersIntern(info, \errmap);
             }
-
-            # assume service only
-            remove info.node;
-            info.service = bind;
-            return addINETListenersIntern(info, \errmap);
+        } else {
+            # add node and service
+            (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
+            rv = addINETListenersIntern(info, \errmap);
         }
-
-        # add node and service
-        (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
-        return addINETListenersIntern(info, \errmap);
+        if (info.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! adds one or more dedicated listeners to the server with the given bind address
@@ -803,14 +812,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
 
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a info to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
+
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+        list<hash<auto>> rv;
         if (exists info.node && !exists info.service) {
             # try to bind without a service, can be a UNIX domain socket
-            return list(addListenerIntern(info).getInfo());
+            rv = list(addListenerIntern(info).getInfo());
+        } else {
+            rv = addINETListenersIntern(info, \errmap);
         }
-        return addINETListenersIntern(info, \errmap);
+        if (info.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! adds a single global listener to the server
@@ -820,11 +839,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         description of the hash returned by this method
 
         @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+
+        @note This method blocks until async I/O is ready to accept connections.
+        Use @ref addListener(hash<HttpListenerOptionInfo>) with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
-        return addListenerIntern(<HttpListenerOptionInfo>{
+        hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{
             "service": port,
         }).getInfo();
+        # sync defaults to True, so wait for async I/O to be ready
+        waitForAsyncIo();
+        return rv;
     }
 
     #! adds a single global listener to the server
@@ -837,9 +862,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
+
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a opts to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
-        return addListenerIntern(opts).getInfo();
+        hash<auto> rv = addListenerIntern(opts).getInfo();
+        if (opts.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! throws an exception; these objects do not support copying
