@@ -219,6 +219,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # stop the listener
         mServer.stopListenerID(linfo.id);
 
+        # wait for the client to detect disconnection
+        observer.wait(EVENT_WS_CLOSED);
+        observer.clear();
+
         # check reconnecting status
         assertNothing(prov.sendMessage(MESSAGE_WS_PING),
             "sending a ping while disconnected should not throw or return data");
@@ -625,26 +629,26 @@ class MyObserver inherits Observer {
         on_exit m.unlock();
 
         bool found;
-        int last = l.size();
         while (!found) {
-            cond.wait(m, 1s);
-            date d = now_us() - start;
-            if (d > 5s) {
-                throw "ERROR", sprintf("no matching data received in timeout; msg: %y l: %y", msg, l);
-            }
             if (!msg.val()) {
                 if (l) {
                     found = True;
                 }
             } else {
-                # search new entries
-                for (int i = last; i < l.size(); ++i) {
+                # search all entries including those already in the list
+                for (int i = 0; i < l.size(); ++i) {
                     if (l[i].id == msg) {
                         found = True;
                         break;
                     }
                 }
-                last = l.size();
+            }
+            if (!found) {
+                cond.wait(m, 1s);
+                date d = now_us() - start;
+                if (d > 5s) {
+                    throw "ERROR", sprintf("no matching data received in timeout; msg: %y l: %y", msg, l);
+                }
             }
         }
     }

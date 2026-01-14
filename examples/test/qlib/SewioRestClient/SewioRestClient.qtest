@@ -76,7 +76,6 @@ public class Main inherits QUnit::Test {
         m_http = new HttpServer(http_opts);
         m_http.setHandler("/api_json", "/api_json", MimeTypeJson, new FakeSewioRestHandler(MimeTypeJson, VALUE_JSON.input));
         port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        m_http.waitForAsyncIo();
     }
 
     tearDown() {
