@@ -467,6 +467,8 @@ public class MemcachedDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 stderr.printf("connection error: %s: %s\n", ex.err, ex.desc);
             }
+            # Reset client so tests will skip
+            delete client;
         }
     }
 }
