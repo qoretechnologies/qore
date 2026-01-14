@@ -3101,28 +3101,49 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
         }
 
         // Convert headers from QoreHashNode to std::map
+        // Note: HTTP/2 header names are converted to lowercase by Http2Session::submitRequest()
         if (request_headers) {
-            ConstHashIterator hi(request_headers.release());
+            ConstHashIterator hi(*request_headers);
             while (hi.next()) {
                 const char* key = hi.getKey();
                 QoreValue val = hi.get();
                 if (val.getType() == NT_STRING) {
                     h2_headers[key] = val.get<const QoreStringNode>()->c_str();
                 } else if (val.getType() == NT_LIST) {
-                    // For multi-value headers, join with comma
+                    // For multi-value headers, HTTP/2 allows multiple header fields with same name
+                    // rather than comma-separated values. However, Http2Session::submitRequest()
+                    // expects a single value per header name in the map. Most headers can be
+                    // comma-joined, but Set-Cookie is an exception per RFC 7230.
+                    // For simplicity, we take only the first value for headers that shouldn't
+                    // be combined, and comma-join the rest.
                     const QoreListNode* l = val.get<const QoreListNode>();
-                    QoreStringNode* joined = new QoreStringNode;
-                    for (size_t i = 0; i < l->size(); ++i) {
-                        if (i > 0) {
-                            joined->concat(", ");
-                        }
-                        QoreValue lv = l->retrieveEntry(i);
-                        if (lv.getType() == NT_STRING) {
-                            joined->concat(lv.get<const QoreStringNode>());
+                    if (l->size() > 0) {
+                        // Check if this is a header that shouldn't be comma-combined
+                        // (case-insensitive comparison)
+                        if (!strcasecmp(key, "set-cookie") || !strcasecmp(key, "www-authenticate") ||
+                            !strcasecmp(key, "proxy-authenticate")) {
+                            // Take only the first value - HTTP/2 will need multiple frames
+                            // for multiple values, but our current API doesn't support this
+                            QoreValue lv = l->retrieveEntry(0);
+                            if (lv.getType() == NT_STRING) {
+                                h2_headers[key] = lv.get<const QoreStringNode>()->c_str();
+                            }
+                        } else {
+                            // Join with comma for other headers
+                            QoreStringNode* joined = new QoreStringNode;
+                            for (size_t i = 0; i < l->size(); ++i) {
+                                if (i > 0) {
+                                    joined->concat(", ");
+                                }
+                                QoreValue lv = l->retrieveEntry(i);
+                                if (lv.getType() == NT_STRING) {
+                                    joined->concat(lv.get<const QoreStringNode>());
+                                }
+                            }
+                            h2_headers[key] = joined->c_str();
+                            joined->deref();
                         }
                     }
-                    h2_headers[key] = joined->c_str();
-                    joined->deref();
                 }
             }
         }
