@@ -1,0 +1,171 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_EventNotifier.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QoreEventNotifier.h"
+
+//! Cross-thread event notification class
+/** The EventNotifier class provides an efficient mechanism for cross-thread
+    event notification, using the most efficient mechanism available on each
+    platform:
+    - eventfd on Linux (single fd, counter-based, very efficient)
+    - pipe on other platforms (BSD, macOS, etc.)
+
+    The notifier can be registered with an EventLoop for integration with
+    event-driven I/O.
+
+    @par Example:
+    @code{.py}
+EventNotifier notifier();
+EventLoop loop();
+
+# Register notifier with event loop
+loop.add(notifier, SOCK_POLLIN);
+
+# In another thread, to signal:
+notifier.notify();
+
+# After poll returns with event on notifier:
+notifier.acknowledge();
+    @endcode
+
+    @note This class is not available with the @ref PO_NO_NETWORK parse option
+
+    @since %Qore 2.1
+
+    @see EventLoop
+*/
+qclass EventNotifier [dom=NETWORK; arg=QoreEventNotifier* en; ns=Qore; vparent=AbstractPollableIoObjectBase];
+
+//! Creates a new EventNotifier object
+/** @par Example:
+    @code{.py} EventNotifier notifier(); @endcode
+
+    @throw EVENT-NOTIFIER-ERROR Failed to create the event notifier
+*/
+EventNotifier::constructor() {
+    ReferenceHolder<QoreEventNotifier> holder(new QoreEventNotifier(xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (!holder->isValid()) {
+        xsink->raiseException("EVENT-NOTIFIER-ERROR", "Failed to create event notifier");
+        return;
+    }
+    self->setPrivate(CID_EVENTNOTIFIER, holder.release());
+}
+
+//! Destroys the EventNotifier object
+/**
+*/
+EventNotifier::destructor() {
+    en->deref(xsink);
+}
+
+//! Creates a copy of the EventNotifier object
+/** @note The copy creates a new, independent event notifier
+*/
+EventNotifier::copy() {
+    ReferenceHolder<QoreEventNotifier> holder(new QoreEventNotifier(xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_EVENTNOTIFIER, holder.release());
+}
+
+//! Signals the notifier (thread-safe)
+/** This method can be called from any thread to wake up an event loop
+    waiting on this notifier.
+
+    Multiple calls to notify() before acknowledge() may be coalesced
+    (on Linux with eventfd) or queued (on other platforms with pipe).
+
+    @par Example:
+    @code{.py} notifier.notify(); @endcode
+
+    @note This method is thread-safe and lock-free
+*/
+nothing EventNotifier::notify() {
+    en->notify();
+}
+
+//! Acknowledges/consumes the notification
+/** This method should be called after the event loop returns with an
+    event on this notifier. It drains any pending notifications.
+
+    @par Example:
+    @code{.py}
+*list<hash<SocketPollInfo>> events = loop.poll(5s);
+for (hash<SocketPollInfo> ev in events) {
+    if (ev.socket instanceof EventNotifier) {
+        cast<EventNotifier>(ev.socket).acknowledge();
+        # process notification...
+    }
+}
+    @endcode
+
+    @throw EVENT-NOTIFIER-ERROR Error reading from notifier
+*/
+nothing EventNotifier::acknowledge() {
+    en->acknowledge(xsink);
+}
+
+//! Returns the file descriptor for this notifier
+/** This method returns the underlying file descriptor, which can be useful
+    for debugging or advanced integration scenarios.
+
+    @return The file descriptor, or -1 if the notifier is not valid
+
+    @par Example:
+    @code{.py} int fd = notifier.fd(); @endcode
+*/
+int EventNotifier::fd() {
+    return en->fd();
+}
+
+//! Returns True if the notifier is valid
+/** @par Example:
+    @code{.py} bool valid = notifier.isValid(); @endcode
+
+    @return True if the notifier was created successfully
+*/
+bool EventNotifier::isValid() {
+    return en->isValid();
+}
+
+//! Returns the pollable descriptor for use with EventLoop
+/** This method is required by AbstractPollableIoObjectBase.
+
+    @return The file descriptor, or -1 if the notifier is not valid
+*/
+int EventNotifier::getPollableDescriptor() {
+    return en->getPollableDescriptor();
+}

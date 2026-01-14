@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class EventNotifierTest
+
+class EventNotifierTest inherits QUnit::Test {
+    constructor() : QUnit::Test("EventNotifierTest", "1.0") {
+        addTestCase("basic test", \basicTest());
+        addTestCase("EventLoop integration test", \eventLoopTest());
+        addTestCase("multiple notifications test", \multipleNotificationsTest());
+        set_return_value(main());
+    }
+
+    private basicTest() {
+        EventNotifier n();
+        assertTrue(n.isValid(), "EventNotifier should be valid after creation");
+        assertGt(-1, n.fd(), "EventNotifier fd should be non-negative");
+
+        # Test getPollableDescriptor returns the same as fd
+        assertEq(n.fd(), n.getPollableDescriptor(), "getPollableDescriptor should match fd()");
+
+        # Test that notify and acknowledge work without error
+        n.notify();
+        n.acknowledge();
+    }
+
+    private eventLoopTest() {
+        EventNotifier n();
+        EventLoop loop();
+
+        # Add notifier to event loop
+        loop.add(n, SOCK_POLLIN);
+        assertEq(1, loop.size(), "EventLoop should have 1 item after adding notifier");
+
+        # Notify and poll
+        n.notify();
+        *list<hash<SocketPollInfo>> events = loop.poll(100ms);
+        assertTrue(exists events, "Should get events after notify()");
+        assertEq(1, events.size(), "Should get exactly one event");
+
+        hash<SocketPollInfo> ev = events[0];
+        assertTrue(ev.socket instanceof EventNotifier, "Socket should be EventNotifier");
+        assertTrue((ev.events & SOCK_POLLIN) != 0, "Should have POLLIN event");
+
+        # Acknowledge
+        cast<EventNotifier>(ev.socket).acknowledge();
+
+        # Poll again should timeout (no pending notifications)
+        events = loop.poll(10ms);
+        assertFalse(exists events, "No events expected after acknowledge()");
+
+        # Remove notifier
+        loop.del(n);
+        assertEq(0, loop.size(), "EventLoop should be empty after removing notifier");
+    }
+
+    private multipleNotificationsTest() {
+        EventNotifier n();
+        EventLoop loop();
+
+        loop.add(n, SOCK_POLLIN);
+
+        # Multiple notifications before poll
+        n.notify();
+        n.notify();
+        n.notify();
+
+        # Should coalesce to one event
+        *list<hash<SocketPollInfo>> events = loop.poll(100ms);
+        assertTrue(exists events, "Should get events");
+        assertEq(1, events.size(), "Multiple notifications should coalesce to one event");
+
+        cast<EventNotifier>(events[0].socket).acknowledge();
+
+        # Should be empty after acknowledge
+        events = loop.poll(10ms);
+        assertFalse(exists events, "No events after acknowledge()");
+    }
+}
