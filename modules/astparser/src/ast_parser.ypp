@@ -2724,6 +2724,57 @@ hash:
             $$ = new ASTHashExpression;
             $$->loc = @1;
         }
+        // Rules to handle consecutive parse_options (e.g., %endif followed by %ifndef)
+        // These are needed when conditional parsing is disabled and all branches are parsed
+        | hash ',' parse_option parse_option {
+            delete $3;
+            delete $4;
+            $$ = $1;
+            $$->loc.setLast(@4);
+        }
+        | hash ',' parse_option parse_option hash_element {
+            delete $3;
+            delete $4;
+            $$ = $1;
+            if ($5) {
+                $$->elements.push_back($5);
+                $$->loc.setLast(@5);
+            }
+        }
+        | hash parse_option parse_option {
+            delete $2;
+            delete $3;
+            $$ = $1;
+            if ($$) {
+                $$->loc.setLast(@3);
+            }
+        }
+        | hash parse_option parse_option hash_element {
+            delete $2;
+            delete $3;
+            $$ = $1;
+            if ($4) {
+                $$->elements.push_back($4);
+                $$->loc.setLast(@4);
+            }
+        }
+        | parse_option parse_option hash_element {
+            delete $1;
+            delete $2;
+            $$ = new ASTHashExpression;
+            if ($3) {
+                $$->elements.push_back($3);
+                $$->loc.setLast(@3);
+            } else {
+                $$->loc.set(@1, @2);
+            }
+        }
+        | parse_option parse_option {
+            delete $1;
+            delete $2;
+            $$ = new ASTHashExpression;
+            $$->loc.set(@1, @2);
+        }
         ;
 
 hash_element:
