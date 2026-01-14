@@ -4034,6 +4034,13 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
             remaining_ms = static_cast<int>(deadline_ms - now_ms);
         }
         int rv = h2_session->receiveData(remaining_ms, xsink);
+        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) after every receive
+        // This is critical for HTTP/2 flow control - without WINDOW_UPDATE frames,
+        // the server will stop sending data when the receive window is exhausted
+        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         if (rv == 0 && remaining_ms >= 0) {
             // no data yet; loop until the overall deadline expires
             continue;
@@ -4048,11 +4055,6 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
                 return nullptr;
             }
             break;
-        }
-        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) - use blocking version
-        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
-        if (*xsink) {
-            return nullptr;
         }
     }
 
