@@ -34,6 +34,7 @@
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
 #include <cctype>
+#include <map>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -2143,7 +2144,8 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     // Process events if we have any
     if (rc > 0) {
         // Track which poll_list indices have events and what events they have
-        std::unordered_map<size_t, int> result_events;
+        // Use std::map to preserve order (sorted by index) for consistent output order
+        std::map<size_t, int> result_events;
 
         for (int i = 0; i < rc; ++i) {
             size_t idx = reinterpret_cast<size_t>(events[i].udata);
@@ -2154,11 +2156,16 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
             int evt = result_events[idx];
             if (events[i].filter == EVFILT_READ) {
-                evt |= SOCK_POLLIN;
+                if (events[i].flags & EV_EOF) {
+                    // EOF on read - connection closed by peer
+                    evt |= SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLIN;
+                }
             } else if (events[i].filter == EVFILT_WRITE) {
                 if (events[i].flags & EV_EOF) {
                     // EOF on write - error condition
-                    evt = SOCK_POLLERR;
+                    evt |= SOCK_POLLERR;
                 } else {
                     evt |= SOCK_POLLOUT;
                 }

@@ -214,16 +214,52 @@ int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
 #endif
 }
 
+#ifdef DARWIN
+int QoreEventLoop::addUserEvent(uintptr_t ident, void* udata, ExceptionSink* xsink) {
+    // Store in user event map
+    user_event_map[ident] = udata;
+    // Note: the actual kevent registration is done by QoreEventNotifier::bindToKqueue()
+    // This method just tracks the user event for poll() result handling
+    return 0;
+}
+
+int QoreEventLoop::removeUserEvent(uintptr_t ident, ExceptionSink* xsink) {
+    auto it = user_event_map.find(ident);
+    if (it == user_event_map.end()) {
+        return 0;  // Not registered, not an error
+    }
+    user_event_map.erase(it);
+
+    // Remove from kqueue
+    struct kevent ev;
+    EV_SET(&ev, ident, EVFILT_USER, EV_DELETE, 0, 0, nullptr);
+
+    struct timespec ts = {0, 0};
+    // Ignore errors - the event may not exist or kqueue may be closing
+    kevent(event_fd, &ev, 1, nullptr, 0, &ts);
+    return 0;
+}
+#endif
+
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
+#ifdef DARWIN
+    if (fd_map.empty() && user_event_map.empty()) {
+        events.clear();
+        return 0;
+    }
+#else
     if (fd_map.empty()) {
         events.clear();
         return 0;
     }
+#endif
 
 #ifdef DARWIN
     // kqueue: use kevent() to wait for events
-    // Allocate space for events (at most 2 per fd: read + write)
-    std::vector<struct kevent> kevents(fd_map.size() * 2);
+    // Allocate space for events:
+    // - at most 2 per fd (read + write)
+    // - plus 1 per user event (EVFILT_USER)
+    std::vector<struct kevent> kevents(fd_map.size() * 2 + user_event_map.size());
 
     struct timespec ts;
     struct timespec* pts = nullptr;
@@ -254,12 +290,23 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     std::unordered_map<int, size_t> fd_to_idx;
 
     for (int i = 0; i < rc; ++i) {
-        int fd = static_cast<int>(kevents[i].ident);
+        uintptr_t ident = kevents[i].ident;
         void* udata = kevents[i].udata;
 
         int ev = 0;
         if (kevents[i].flags & EV_ERROR) {
             ev = QORE_EV_ERROR;
+        } else if (kevents[i].filter == EVFILT_USER) {
+            // User event from EventNotifier - treat as read event
+            // Look up the associated QoreObject* from user_event_map
+            auto uit = user_event_map.find(ident);
+            if (uit != user_event_map.end()) {
+                ev = QORE_EV_READ;
+                // Use -1 as a special fd value for user events
+                // The udata is the QoreObject* stored in addUserEvent()
+                events.push_back({-1, ev, uit->second});
+            }
+            continue;
         } else if (kevents[i].filter == EVFILT_READ) {
             ev = QORE_EV_READ;
         } else if (kevents[i].filter == EVFILT_WRITE) {
@@ -270,6 +317,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             }
         }
 
+        int fd = static_cast<int>(ident);
         auto it = fd_to_idx.find(fd);
         if (it != fd_to_idx.end()) {
             // Combine with existing entry
