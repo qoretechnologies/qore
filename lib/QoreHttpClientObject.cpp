@@ -841,37 +841,42 @@ struct qore_httpclient_priv {
             ? proxy_connection.ssl
             : connection.ssl;
 
-        // Set up ALPN protocols for HTTP/2 if not already set and http2_mode allows HTTP/2
-        if (connect_ssl && (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)) {
-            // Check global HTTP/2 mode - don't set ALPN if globally disabled
+        // Set up ALPN protocols based on current HTTP/2 mode and global settings
+        // Always re-evaluate to handle mode changes on reused connections
+        if (connect_ssl) {
+            // Check global HTTP/2 mode
             int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
             bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-            if (global_mode != HTTP2_MODE_DISABLED && !lib_disabled) {
-                // Set ALPN protocols if not already configured
-                if (!msock->socket->priv->hasAlpnProtocols()) {
-                    ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-                    if (http2_mode == HTTP2_MODE_REQUIRED) {
-                        // HTTP/2 only
-                        protocols->push(new QoreStringNode("h2"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
-                    } else {
-                        // Auto mode: prefer h2, fall back to http/1.1
-                        protocols->push(new QoreStringNode("h2"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
-                        protocols->push(new QoreStringNode("http/1.1"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
+            bool http2_enabled = (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)
+                && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+            if (http2_enabled) {
+                // Set ALPN protocols for HTTP/2
+                ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+                if (http2_mode == HTTP2_MODE_REQUIRED) {
+                    // HTTP/2 only
+                    protocols->push(new QoreStringNode("h2"), xsink);
+                    if (*xsink) {
+                        return -1;
                     }
-                    msock->socket->setAlpnProtocols(*protocols, xsink);
+                } else {
+                    // Auto mode: prefer h2, fall back to http/1.1
+                    protocols->push(new QoreStringNode("h2"), xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    protocols->push(new QoreStringNode("http/1.1"), xsink);
                     if (*xsink) {
                         return -1;
                     }
                 }
+                msock->socket->setAlpnProtocols(*protocols, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            } else {
+                // HTTP/2 is disabled - clear any previously set ALPN protocols
+                msock->socket->clearAlpnProtocols();
             }
         }
 
@@ -3057,9 +3062,47 @@ int HttpClientConnectSendRecvPollOperation::redirect(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
-    if (client->http_priv->proxy_connection.has_url()
+    bool connect_ssl = client->http_priv->proxy_connection.has_url()
         ? client->http_priv->proxy_connection.ssl
-        : client->http_priv->connection.ssl) {
+        : client->http_priv->connection.ssl;
+    if (connect_ssl) {
+        // Set up ALPN protocols based on current HTTP/2 mode and global settings
+        // Always re-evaluate to handle mode changes on reused connections
+        int http2_mode = client->http_priv->http2_mode;
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool http2_enabled = (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+        if (http2_enabled) {
+            // Set ALPN protocols for HTTP/2
+            ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+            if (http2_mode == HTTP2_MODE_REQUIRED) {
+                // HTTP/2 only
+                protocols->push(new QoreStringNode("h2"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            } else {
+                // Auto mode: prefer h2, fall back to http/1.1
+                protocols->push(new QoreStringNode("h2"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                protocols->push(new QoreStringNode("http/1.1"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            }
+            client->http_priv->msock->socket->setAlpnProtocols(*protocols, xsink);
+            if (*xsink) {
+                return -1;
+            }
+        } else {
+            // HTTP/2 is disabled - clear any previously set ALPN protocols
+            client->http_priv->msock->socket->clearAlpnProtocols();
+        }
+
         poll_state.reset(client->http_priv->msock->socket->startSslConnect(xsink,
             client->http_priv->msock->cert, client->http_priv->msock->pk));
         if (*xsink) {
@@ -3078,7 +3121,12 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
     // Check if HTTP/2 was negotiated via ALPN during the SSL connection
-    if (client->http_priv->msock->socket->isHttp2()) {
+    // First check global mode - even if ALPN negotiated h2, respect the global setting
+    int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+    bool http2_globally_disabled = (global_mode == HTTP2_MODE_DISABLED || lib_disabled);
+
+    if (!http2_globally_disabled && client->http_priv->msock->socket->isHttp2()) {
         // Set http2_active flag on the client
         client->http_priv->http2_active = true;
 
@@ -3705,18 +3753,11 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     } else if (!strcasecmp(version, "auto")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_AUTO;
-        // Set up ALPN protocols for auto mode
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        protocols->push(new QoreStringNode("h2"), xsink);
-        protocols->push(new QoreStringNode("http/1.1"), xsink);
-        priv->socket->setAlpnProtocols(*protocols, xsink);
+        // ALPN protocols are set at connect time based on both object mode and global mode
     } else if (!strcmp(version, "2.0") || !strcmp(version, "2")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_REQUIRED;
-        // Set up ALPN protocols for required mode (h2 only)
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        protocols->push(new QoreStringNode("h2"), xsink);
-        priv->socket->setAlpnProtocols(*protocols, xsink);
+        // ALPN protocols are set at connect time based on both object mode and global mode
     } else {
         xsink->raiseException("HTTP-VERSION-ERROR", "only 'auto', '1.0', '1.1', '2.0', '2' are valid "
             "(value passed: '%s')", version);
@@ -3752,14 +3793,8 @@ bool QoreHttpClientObject::isHttp2Enabled() const {
 void QoreHttpClientObject::setHttp2Enabled(bool enable) {
     // Map old API to new http2_mode
     http_priv->http2_mode = enable ? HTTP2_MODE_AUTO : HTTP2_MODE_DISABLED;
-    // Set up ALPN protocols when HTTP/2 is enabled
-    if (enable) {
-        ExceptionSink xsink;
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), &xsink);
-        protocols->push(new QoreStringNode("h2"), &xsink);
-        protocols->push(new QoreStringNode("http/1.1"), &xsink);
-        priv->socket->setAlpnProtocols(*protocols, &xsink);
-    }
+    // ALPN protocols are set at connect time based on both object mode and global mode
+    // This allows the global mode to override the object setting at runtime
 }
 
 void QoreHttpClientObject::setHttp2Mode(int mode, ExceptionSink* xsink) {
@@ -3769,19 +3804,8 @@ void QoreHttpClientObject::setHttp2Mode(int mode, ExceptionSink* xsink) {
         return;
     }
     http_priv->http2_mode = mode;
-    // Set up ALPN protocols based on mode (not used for h2c modes)
-    if (mode != HTTP2_MODE_DISABLED && mode != HTTP2_MODE_H2C_DIRECT && mode != HTTP2_MODE_H2C_UPGRADE) {
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        if (mode == HTTP2_MODE_REQUIRED) {
-            // Only advertise HTTP/2
-            protocols->push(new QoreStringNode("h2"), xsink);
-        } else {
-            // Auto mode: prefer h2, fall back to http/1.1
-            protocols->push(new QoreStringNode("h2"), xsink);
-            protocols->push(new QoreStringNode("http/1.1"), xsink);
-        }
-        priv->socket->setAlpnProtocols(*protocols, xsink);
-    }
+    // ALPN protocols are set at connect time based on both object mode and global mode
+    // This allows the global mode to override the object setting at runtime
 }
 
 int QoreHttpClientObject::getHttp2Mode() const {

@@ -1855,6 +1855,13 @@ public:
     */
     DLLEXPORT int setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
 
+    //! Clears ALPN protocol settings
+    /** This should be called when HTTP/2 mode is disabled to ensure proper protocol negotiation
+
+        @since Qore 2.1
+    */
+    DLLEXPORT void clearAlpnProtocols();
+
     //! Returns the negotiated ALPN protocol after TLS handshake
     /** @return the selected protocol string, or nullptr if ALPN was not negotiated
 

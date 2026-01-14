@@ -3111,6 +3111,10 @@ int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* x
     return 0;
 }
 
+void QoreSocket::clearAlpnProtocols() {
+    priv->alpn_protocols.clear();
+}
+
 QoreStringNode* QoreSocket::getAlpnProtocol() const {
     if (!priv->ssl) {
         return nullptr;
@@ -4306,6 +4310,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, Qo
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", -1, cert, pkey)) {
         assert(*xsink);
         delete s;
@@ -4346,6 +4354,10 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
 
     return s;
 }
@@ -4360,6 +4372,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLC
     s->priv->acceptAllCertificates(priv->ssl_accept_all_certs);
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
+    }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
     }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", timeout_ms, cert, pkey)) {
         assert(*xsink);
