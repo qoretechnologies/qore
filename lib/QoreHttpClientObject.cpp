@@ -67,8 +67,188 @@ constexpr int SPS_RECEIVING_HEADER = 5;
 constexpr int SPS_RECEIVING_BODY = 6;
 constexpr int SPS_CONNECTING_PROXY_SSL = 7;
 constexpr int SPS_RECEIVED = 8;
+constexpr int SPS_H2_ACTIVE = 9;  // HTTP/2 bidirectional send/receive
+
+//! Poll state for HTTP/2 client operations
+/** Handles bidirectional send/receive for HTTP/2 using Http2Session.
+    This state manages:
+    - Connection preface sending (on first call)
+    - Request submission
+    - Bidirectional data flow (sending pending data + receiving frames)
+    - Response completion detection
+*/
+class Http2ClientPollState : public AbstractPollState {
+public:
+    //! Constructor - creates HTTP/2 session and submits request
+    /** @param xsink Exception sink
+        @param sock Socket private data
+        @param method HTTP method
+        @param path Request path
+        @param headers Request headers
+        @param body Request body (can be nullptr)
+        @param body_len Length of body
+        @param scheme URL scheme ("https" or "http")
+    */
+    DLLLOCAL Http2ClientPollState(ExceptionSink* xsink, qore_socket_private* sock,
+            const char* method, const char* path,
+            const std::map<std::string, std::string>& headers,
+            const void* body, size_t body_len, const char* scheme = "https")
+            : sock(sock) {
+        // Create HTTP/2 session
+        h2_session.reset(Http2Session::createClient(sock, xsink, scheme));
+        if (*xsink || !h2_session) {
+            return;
+        }
+
+        // Send connection preface
+        if (h2_session->sendConnectionPreface(xsink)) {
+            return;
+        }
+
+        // Submit the request
+        stream_id = h2_session->submitRequest(method, path, headers, body, body_len, xsink);
+        if (*xsink || stream_id < 0) {
+            return;
+        }
+
+        // Try initial non-blocking send of pending data
+        h2_session->sendPendingData(0, xsink);
+    }
+
+    DLLLOCAL virtual ~Http2ClientPollState() = default;
+
+    //! Returns the HTTP/2 session
+    DLLLOCAL Http2Session* getSession() const { return h2_session.get(); }
+
+    //! Takes ownership of the HTTP/2 session
+    DLLLOCAL std::unique_ptr<Http2Session> takeSession() { return std::move(h2_session); }
+
+    //! Returns the stream ID
+    DLLLOCAL int32_t getStreamId() const { return stream_id; }
+
+    //! Returns true if the response is complete
+    DLLLOCAL bool isResponseComplete() const {
+        if (!h2_session) {
+            return false;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        return stream && stream->headers_complete && stream->body_complete;
+    }
+
+    //! Returns response headers if available
+    DLLLOCAL QoreHashNode* getResponseHeaders() const {
+        if (!h2_session) {
+            return nullptr;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        if (!stream || stream->headers.empty()) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+        for (const auto& h : stream->headers) {
+            rv->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), nullptr);
+        }
+        return rv.release();
+    }
+
+    //! Returns the HTTP status code
+    DLLLOCAL int getStatusCode() const {
+        if (!h2_session) {
+            return -1;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        return stream ? stream->status_code : -1;
+    }
+
+    //! Returns the response body
+    DLLLOCAL BinaryNode* getResponseBody(ExceptionSink* xsink) const {
+        if (!h2_session) {
+            return nullptr;
+        }
+        // Take all available stream data
+        return h2_session->takeStreamData(stream_id, 0, xsink);
+    }
+
+    /** @return:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - SOCK_POLLIN | SOCK_POLLOUT = wait for read or write
+        - 0 = done (response complete)
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override {
+        if (!h2_session) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+            return -1;
+        }
+
+        // Check if we're done
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        if (stream && stream->headers_complete && stream->body_complete) {
+            return 0;  // Done
+        }
+
+        // Try to send any pending data (e.g., WINDOW_UPDATE frames)
+        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+            int rc = h2_session->sendPendingData(0, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            // If send returned -1, we need to wait for POLLOUT
+            if (rc < 0) {
+                // Determine poll flags
+                int flags = SOCK_POLLOUT;
+                if (h2_session->wantRead()) {
+                    flags |= SOCK_POLLIN;
+                }
+                return flags;
+            }
+        }
+
+        // Try to receive data
+        if (h2_session->wantRead()) {
+            int rv = h2_session->receiveData(0, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (rv == 1) {
+                // EOF - connection closed by peer
+                stream = h2_session->getStream(stream_id);
+                if (!stream || !(stream->headers_complete && stream->body_complete)) {
+                    xsink->raiseException("HTTP2-ERROR", "connection closed before response was complete");
+                    return -1;
+                }
+                return 0;  // Done
+            }
+        }
+
+        // Check again if we're done after receiving
+        stream = h2_session->getStream(stream_id);
+        if (stream && stream->headers_complete && stream->body_complete) {
+            return 0;  // Done
+        }
+
+        // Determine what we need to poll for
+        int flags = 0;
+        if (h2_session->wantRead()) {
+            flags |= SOCK_POLLIN;
+        }
+        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+            flags |= SOCK_POLLOUT;
+        }
+
+        // If no flags, default to waiting for input
+        return flags ? flags : SOCK_POLLIN;
+    }
+
+private:
+    qore_socket_private* sock;
+    std::unique_ptr<Http2Session> h2_session;
+    int32_t stream_id = -1;
+};
 
 // states: none [-> connecting [-> connecting-ssl]] -> sending -> receiving-header [-> receiving-body] [-> connecting-proxy-ssl] -> [received | connected]
+// HTTP/2 path: none -> connecting -> connecting-ssl -> h2-active -> received
 /**
     state transitions:
     - none
@@ -156,6 +336,8 @@ private:
                 return "received";
             case SPS_CONNECTED:
                 return "connected";
+            case SPS_H2_ACTIVE:
+                return "h2-active";
             default:
                 assert(false);
         }
@@ -188,6 +370,7 @@ private:
     DLLLOCAL int processResponse(ExceptionSink* xsink);
     DLLLOCAL int redirect(ExceptionSink* xsink);
     DLLLOCAL int processReceivedBody(ExceptionSink* xsink);
+    DLLLOCAL int processH2Response(ExceptionSink* xsink);
     DLLLOCAL int responseDone(ExceptionSink* xsink);
     DLLLOCAL void setFinal(int final_state);
 };
@@ -2421,6 +2604,18 @@ QoreHashNode* HttpClientConnectSendRecvPollOperation::continuePoll(ExceptionSink
             }
 
             continue;
+        } else if (state == SPS_H2_ACTIVE) {
+            // HTTP/2 bidirectional send/receive
+            int rc = checkContinuePoll(xsink, true);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+            // Poll completed - process HTTP/2 response
+            if (processH2Response(xsink)) {
+                break;
+            }
+            continue;
         } else if (state == SPS_RECEIVED || state == SPS_CONNECTED) {
             if (close_connection) {
                 client->http_priv->disconnect_unlocked();
@@ -2658,6 +2853,101 @@ int HttpClientConnectSendRecvPollOperation::processReceivedBody(ExceptionSink* x
     return responseDone(xsink);
 }
 
+int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsink) {
+    assert(client->http_priv->msock->m.trylock());
+    assert(poll_state);
+
+    Http2ClientPollState* h2_poll = static_cast<Http2ClientPollState*>(poll_state.get());
+
+    // Get HTTP status code
+    http_response_code = h2_poll->getStatusCode();
+    if (http_response_code < 0) {
+        xsink->raiseException("HTTP2-ERROR", "no status code in HTTP/2 response");
+        return -1;
+    }
+
+    // Get response headers
+    response_headers = h2_poll->getResponseHeaders();
+    if (response_headers) {
+        info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    // Get response body
+    recv_data_holder = h2_poll->getResponseBody(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Process Content-Encoding (decompression) if present
+    if (recv_data_holder && response_headers) {
+        const char* content_encoding = get_string_header(xsink, **response_headers, "content-encoding");
+        if (*xsink) {
+            return -1;
+        }
+        if (content_encoding) {
+            // check for misuse of this header by including a character encoding value
+            if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
+                client->http_priv->msock->socket->setEncoding(QEM.findCreate(content_encoding));
+            } else {
+                qore_uncompress_to_binary_t dec = nullptr;
+                // only decode message bodies automatically if there is no receive callback
+                if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate")) {
+                    dec = qore_inflate_to_binary;
+                } else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip")) {
+                    dec = qore_gunzip_to_binary;
+                } else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2")) {
+                    dec = qore_bunzip2_to_binary;
+                } else if (!strcasecmp(content_encoding, "br")) {
+                    dec = qore_unbrotli_to_binary;
+                } else if (!strcasecmp(content_encoding, "zstd")) {
+                    dec = qore_unzstd_to_binary;
+                } else if (strcasecmp(content_encoding, "identity")) {
+                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
+                        "'%s'", content_encoding);
+                    return -1;
+                }
+                if (dec) {
+                    int64 body_size = recv_data_holder->size();
+                    recv_data_holder = dec(*recv_data_holder, xsink);
+                    if (*xsink) {
+                        xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size " QLLD,
+                            content_encoding, body_size);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
+
+    if (recv_data_holder) {
+        info->setKeyValue("response-body", recv_data_holder->refSelf(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    // Transfer HTTP/2 session to client for potential reuse
+    std::unique_ptr<Http2Session> session = h2_poll->takeSession();
+    if (session) {
+        client->http_priv->setH2Session(session.release());
+    }
+
+    // Clear the poll state
+    poll_state.reset();
+
+    // Handle redirects
+    if (!client->http_priv->redirect_passthru && http_response_code >= 300 && http_response_code < 400
+        && http_response_code != 304) {
+        return redirect(xsink);
+    }
+
+    setFinal(SPS_RECEIVED);
+    return 0;
+}
+
 int HttpClientConnectSendRecvPollOperation::responseDone(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
@@ -2787,9 +3077,82 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
-    // Check if HTTP/2 is active - poll operations don't support HTTP/2
+    // Check if HTTP/2 was negotiated via ALPN during the SSL connection
+    if (client->http_priv->msock->socket->isHttp2()) {
+        // Set http2_active flag on the client
+        client->http_priv->http2_active = true;
+
+        // For connect-only mode, we're done after HTTP/2 connection is established
+        if (connect_only) {
+            setFinal(SPS_CONNECTED);
+            return 0;
+        }
+
+        // Convert QoreHashNode headers to std::map<std::string, std::string> for HTTP/2
+        std::map<std::string, std::string> h2_headers;
+
+        // Set host field automatically if not overridden
+        if (!host_override && request_headers) {
+            request_headers->setKeyValue("Host", client->http_priv->getHostHeaderValueUnlocked(connection),
+                xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+
+        // Convert headers from QoreHashNode to std::map
+        if (request_headers) {
+            ConstHashIterator hi(request_headers.release());
+            while (hi.next()) {
+                const char* key = hi.getKey();
+                QoreValue val = hi.get();
+                if (val.getType() == NT_STRING) {
+                    h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+                } else if (val.getType() == NT_LIST) {
+                    // For multi-value headers, join with comma
+                    const QoreListNode* l = val.get<const QoreListNode>();
+                    QoreStringNode* joined = new QoreStringNode;
+                    for (size_t i = 0; i < l->size(); ++i) {
+                        if (i > 0) {
+                            joined->concat(", ");
+                        }
+                        QoreValue lv = l->retrieveEntry(i);
+                        if (lv.getType() == NT_STRING) {
+                            joined->concat(lv.get<const QoreStringNode>());
+                        }
+                    }
+                    h2_headers[key] = joined->c_str();
+                    joined->deref();
+                }
+            }
+        }
+
+        // Get the request path
+        qore_socket_private* spriv = client->http_priv->msock->socket->priv;
+        QoreString pathstr(spriv->enc);
+        client->http_priv->getMsgPath(xsink, connection, path.c_str(), pathstr, path_already_encoded);
+        if (*xsink) {
+            return -1;
+        }
+
+        // Determine scheme
+        const char* scheme = connection.ssl ? "https" : "http";
+
+        // Create HTTP/2 poll state
+        poll_state.reset(new Http2ClientPollState(xsink, spriv, method.c_str(), pathstr.c_str(),
+            h2_headers, data, size, scheme));
+        if (*xsink) {
+            return -1;
+        }
+
+        // Session transfer to client happens when poll completes (in processH2Response)
+        state = SPS_H2_ACTIVE;
+        return 0;
+    }
+
+    // Check if HTTP/2 is active from a previous operation (shouldn't happen in poll mode normally)
     if (client->http_priv->http2_active) {
-        xsink->raiseException("HTTP2-POLL-ERROR", "poll operations are not supported with HTTP/2 connections; "
+        xsink->raiseException("HTTP2-POLL-ERROR", "HTTP/2 session already active; "
             "use the synchronous send() method or disable HTTP/2 with http_version=1.1");
         return -1;
     }

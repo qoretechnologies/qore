@@ -1319,6 +1319,13 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
     if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey)) {
         sshh.error();
+        return;
+    }
+
+    // Set ALPN protocols if configured (for HTTP/2 support)
+    // This must match the synchronous path in upgradeClientToSSLIntern()
+    if (!sock->alpn_protocols.empty()) {
+        sock->ssl->setAlpnProtocols(sock->alpn_protocols);
     }
 }
 
