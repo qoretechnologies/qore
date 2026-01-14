@@ -282,6 +282,9 @@ public hashdecl DateInfo {
         addTestCase("Hash literal ternary values", \testHashLiteralTernaryValues());
         addTestCase("Hash literal access values", \testHashLiteralAccessValues());
         addTestCase("Hash literal operator values", \testHashLiteralOperatorValues());
+        addTestCase("Block comments in hash lookahead", \testBlockCommentsInHashLookahead());
+        addTestCase("Consecutive parse options in hash", \testConsecutiveParseOptionsInHash());
+        addTestCase("Last index operator in hash", \testLastIndexOperatorInHash());
         addTestCase("Conditional parsing mode", \testConditionalParsingMode());
         addTestCase("List assignment parsing", \testListAssignmentParsing());
         addTestCase("Class parsing", \testClassParsing());
@@ -1274,6 +1277,77 @@ namespace MyNamespace {
             assertTrue(docComments.hasKey("MyClass"), "no doc: class found");
             assertNothing(docComments{"MyClass"}, "no doc: class has no docComment");
         }
+    }
+
+    # Test for block comments in hash literal lookahead (fixed infinite loop bug)
+    testBlockCommentsInHashLookahead() {
+        # This pattern caused an infinite loop before the fix:
+        # The lookahead code didn't handle block comments, causing */ to be
+        # misinterpreted as a regex start
+        string code = '
+class Test {
+    /** @throw INVALID-REFERENCE invalid reference
+    */
+    test() {
+    }
+}
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for block comment before method");
+    }
+
+    # Test for consecutive parse options in hash literals with identifier keys
+    testConsecutiveParseOptionsInHash() {
+        # This pattern failed before the grammar fix:
+        # After %endif %ifndef, an identifier key like SomeConst: wasn't recognized
+        string code = '
+const h = {
+    "a": 1,
+%endif
+%ifndef X
+    SomeConst: 2,
+};
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for consecutive parse options with identifier key");
+
+        # Also test the exact Swagger.qm pattern
+        string code2 = '
+const MimeDataTypes = {
+    "yaml": 1,
+%endif
+%ifndef NoXml
+    MimeTypeXmlApp: {
+        "serialize": 1,
+    },
+%endif
+    "json": 2,
+};
+';
+        parser = new AstParser();
+        tree = parser.parseString(code2);
+        assertEq(True, exists(tree), "parseString returns tree for Swagger pattern");
+        assertEq(0, parser.getErrorCount(), "no parse errors for Swagger.qm pattern");
+    }
+
+    # Test that $# (last index operator) is not treated as a comment
+    testLastIndexOperatorInHash() {
+        # The $# operator should not be treated as starting a comment
+        string code = '
+sub test() {
+    list l = (1, 2, 3);
+    int last = l[$#];
+    int next = l[$# + 1];
+}
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for $# operator");
     }
 
     testDateSubtypeParsing() {
