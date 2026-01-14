@@ -1850,7 +1850,7 @@ hash\<{WORD}\>\{                        {
                                                     c = read_char();
                                                 } while (c == ' ' || c == '\t' || c == '\r' || c == '\n');
 
-                                                while (c != EOF) {
+                                                while (c != EOF && c != 0) {
                                                     if (c == '=' || c == '!') {
                                                         int nextc = read_char();
                                                         if (nextc == '~') {
@@ -1868,7 +1868,7 @@ hash\<{WORD}\>\{                        {
                                                         bool escaped = false;
                                                         while (true) {
                                                             c = read_char();
-                                                            if (c == EOF) {
+                                                            if (c == EOF || c == 0) {
                                                                 break;
                                                             }
                                                             if (escaped) {
@@ -1892,7 +1892,7 @@ hash\<{WORD}\>\{                        {
                                                             bool saw_star = false;
                                                             while (true) {
                                                                 c = read_char();
-                                                                if (c == EOF) {
+                                                                if (c == EOF || c == 0) {
                                                                     break;
                                                                 }
                                                                 if (saw_star && c == '/') {
@@ -1918,7 +1918,7 @@ hash\<{WORD}\>\{                        {
                                                         // Regex - read the content we already peeked
                                                         c = nextc;
                                                         bool escaped = false;
-                                                        while (c != EOF) {
+                                                        while (c != EOF && c != 0) {
                                                             if (escaped) {
                                                                 escaped = false;
                                                             } else if (c == '\\') {
@@ -1930,7 +1930,7 @@ hash\<{WORD}\>\{                        {
                                                         }
                                                         while (true) {
                                                             c = read_char();
-                                                            if (c == EOF) {
+                                                            if (c == EOF || c == 0) {
                                                                 break;
                                                             }
                                                             if (!isalpha(static_cast<unsigned char>(c))) {
@@ -1945,11 +1945,11 @@ hash\<{WORD}\>\{                        {
                                                         // Note: $# is the "last index" operator, not a comment
                                                         while (true) {
                                                             c = read_char();
-                                                            if (c == EOF || c == '\n' || c == '\r') {
+                                                            if (c == EOF || c == 0 || c == '\n' || c == '\r') {
                                                                 break;
                                                             }
                                                         }
-                                                        if (c != EOF) {
+                                                        if (c != EOF && c != 0) {
                                                             c = read_char();
                                                         }
                                                         continue;

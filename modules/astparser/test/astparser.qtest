@@ -285,6 +285,7 @@ public hashdecl DateInfo {
         addTestCase("Block comments in hash lookahead", \testBlockCommentsInHashLookahead());
         addTestCase("Consecutive parse options in hash", \testConsecutiveParseOptionsInHash());
         addTestCase("Last index operator in hash", \testLastIndexOperatorInHash());
+        addTestCase("Escaped quote in string", \testEscapedQuoteInString());
         addTestCase("Conditional parsing mode", \testConditionalParsingMode());
         addTestCase("List assignment parsing", \testListAssignmentParsing());
         addTestCase("Class parsing", \testClassParsing());
@@ -1348,6 +1349,35 @@ sub test() {
         *AstTree tree = parser.parseString(code);
         assertEq(True, exists(tree), "parseString returns tree");
         assertEq(0, parser.getErrorCount(), "no parse errors for $# operator");
+    }
+
+    # Test for escaped quote in string causing unterminated string (NUL infinite loop fix)
+    testEscapedQuoteInString() {
+        # This pattern with backslash before closing quote (like Windows paths 'C:\')
+        # would cause an infinite loop because the lookahead kept reading NUL characters
+        # after EOF when scanning an unterminated string.
+        # Note: In Qore, 'C:\' is actually 'C:' followed by escaped quote, making
+        # the string continue until the next single quote.
+        string code = "%new-style
+list x = ('C:\\', 'test');
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for escaped backslash pattern");
+
+        # Also test the pattern that originally caused issues in join_paths.qtest
+        # where 'C:\' has the backslash escaping the closing quote
+        code = "%new-style
+list results = (
+    ('C:\\', 'file.txt', 'C:\\file.txt'),
+);
+";
+        parser = new AstParser();
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for Windows path pattern");
+        # Note: May have parse errors since the string isn't properly terminated,
+        # but it shouldn't infinite loop
     }
 
     testDateSubtypeParsing() {
