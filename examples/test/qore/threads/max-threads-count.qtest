@@ -34,10 +34,18 @@ public class MaxThreadCountTest inherits QUnit::Test {
         c0.dec();
     }
 
-    testMaxThreadCount() {
+    private checkSkipMaxThreadTest() {
+        # Skip on macOS - creating 8000+ threads can cause kernel panics on Apple Silicon
+        if (PlatformOS == "Darwin") {
+            testSkip("skipping max thread test on macOS to prevent kernel panics");
+        }
         if (ENV.SKIP_MAX_THREAD_TEST) {
             testSkip("skipping max thread test due to environment variable");
         }
+    }
+
+    testMaxThreadCount() {
+        checkSkipMaxThreadTest();
 
         Counter c(1);
         Counter c0();
@@ -85,6 +93,8 @@ public class MaxThreadCountTest inherits QUnit::Test {
     }
 
     testTidAssignments() {
+        checkSkipMaxThreadTest();
+
         list<int> l;
         Counter c(1);
 
