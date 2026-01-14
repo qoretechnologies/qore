@@ -5086,8 +5086,11 @@ class HttpServerIoController {
             if (shutting_down) {
                 return;
             }
+            # Get the current HTTP version from the listener - this checks get_global_http2_mode()
+            # at runtime to respect dynamic changes to the global HTTP/2 mode
+            string http_version = linfo.listener.getHttpVersion();
             @debug(log(LoggerLevel::INFO, "startAcceptOperation: creating accept op for listener %s ssl=%y http_version=%y",
-                key, linfo.ssl, linfo.http_version));
+                key, linfo.ssl, http_version));
             AbstractPollOperation accept_op = new HttpServerAsyncIo::HttpAcceptPollOperation(
                 linfo.listener,
                 linfo.ssl,
@@ -5095,7 +5098,7 @@ class HttpServerIoController {
                 linfo.listener.getSslPrivateKeyObject(),
                 linfo.listener.getSslVerifyFlags(),
                 linfo.listener.getSslAcceptAllCerts(),
-                linfo.http_version,
+                http_version,
             );
             listeners{key}.accept_op = accept_op;
             @debug(log(LoggerLevel::INFO, "startAcceptOperation: submitting to globalAsyncCtrl for listener %s", key));

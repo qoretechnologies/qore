@@ -297,14 +297,16 @@ public class HttpAsyncSocketIoController {
                         while (cnt < DefaultAcceptOps) {
                             hash<HttpListenerInfo> linfo = listeners{key};
                             try {
+                                # Get the effective HTTP version - respect global HTTP/2 mode at runtime
+                                string http_version = getEffectiveHttpVersion(linfo.http_version);
                                 log(LoggerLevel::DEBUG, "Starting accept op for listener %s", key);
                                 HttpAcceptPollOperation op(linfo.listener, linfo.ssl,
-                                    linfo.cert, linfo.key, SSL_VERIFY_NONE, True, linfo.http_version, False);
+                                    linfo.cert, linfo.key, SSL_VERIFY_NONE, True, http_version, False);
                                 @debug {
                                     if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
                                         log(LoggerLevel::INFO,
                                             "ioThread: accept op created: listener=%s ssl=%y http_version=%s",
-                                            key, linfo.ssl, linfo.http_version);
+                                            key, linfo.ssl, http_version);
                                     }
                                 }
                                 string accept_key = sprintf("accept:%s:%d", key, ++accept_seq);
@@ -317,7 +319,7 @@ public class HttpAsyncSocketIoController {
                                 cnt = ++accept_counts{key};
                                 log(LoggerLevel::DEBUG,
                                     "Accept op created for listener %s (HTTP version: %s, count=%d)",
-                                    key, linfo.http_version, cnt);
+                                    key, http_version, cnt);
                             } catch (hash<ExceptionInfo> ex) {
                                 log(LoggerLevel::ERROR, "Failed to start accept: %s: %s",
                                     ex.err, ex.desc);
@@ -1312,6 +1314,23 @@ public class HttpAsyncSocketIoController {
         if (logger) {
             logger.log(level, vsprintf(fmt, argv));
         }
+    }
+
+    #! Returns the effective HTTP version respecting global HTTP/2 mode
+    /** This ensures that when HTTP/2 is globally disabled via set_global_http2_mode("disabled"),
+        the server will not advertise HTTP/2 in ALPN even if the listener was configured with
+        http_version "auto", "2.0", or "2".
+
+        @param configured_version the http_version value configured for the listener
+        @return the effective HTTP version to use for ALPN negotiation
+    */
+    private string getEffectiveHttpVersion(string configured_version) {
+        string global_mode = get_global_http2_mode();
+        if (global_mode == "disabled"
+            && (configured_version == "auto" || configured_version == "2.0" || configured_version == "2")) {
+            return "1.1";
+        }
+        return configured_version;
     }
 }
 
