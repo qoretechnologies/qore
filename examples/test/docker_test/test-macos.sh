@@ -37,6 +37,10 @@ export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR:-}"
 # Run tests using the built qore binary
 export PATH="${BUILD_DIR}:${PATH}"
 
+# Skip max thread test on macOS - it can cause kernel panics on Apple Silicon
+# when creating 8000+ threads overwhelms the pthread subsystem
+export SKIP_MAX_THREAD_TEST=1
+
 # Run the test suite
 ./run_tests.sh ${QORE_TEST_OPTS:-}
 
