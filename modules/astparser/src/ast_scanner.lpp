@@ -1885,6 +1885,26 @@ hash\<{WORD}\>\{                        {
                                                         }
                                                         prev_nonspace = 'S';
                                                     } else if (c == '/') {
+                                                        // First check for block comment /*...*/
+                                                        int nextc = read_char();
+                                                        if (nextc == '*') {
+                                                            // Block comment - skip until */
+                                                            bool saw_star = false;
+                                                            while (true) {
+                                                                c = read_char();
+                                                                if (c == EOF) {
+                                                                    break;
+                                                                }
+                                                                if (saw_star && c == '/') {
+                                                                    // End of block comment
+                                                                    break;
+                                                                }
+                                                                saw_star = (c == '*');
+                                                            }
+                                                            c = read_char();
+                                                            continue;
+                                                        }
+                                                        // Not a block comment - check for regex or division
                                                         // Treat only regex contexts as regex literals to avoid
                                                         // swallowing division operators when scanning for hash keys.
                                                         bool regex_candidate = saw_regex_op
@@ -1892,26 +1912,21 @@ hash\<{WORD}\>\{                        {
                                                             || strchr("([,{=:+-*!?&|^~", prev_nonspace) != nullptr;
                                                         if (!regex_candidate) {
                                                             prev_nonspace = c;
-                                                            c = read_char();
+                                                            c = nextc;
                                                             continue;
                                                         }
+                                                        // Regex - read the content we already peeked
+                                                        c = nextc;
                                                         bool escaped = false;
-                                                        while (true) {
-                                                            c = read_char();
-                                                            if (c == EOF) {
-                                                                break;
-                                                            }
+                                                        while (c != EOF) {
                                                             if (escaped) {
                                                                 escaped = false;
-                                                                continue;
-                                                            }
-                                                            if (c == '\\') {
+                                                            } else if (c == '\\') {
                                                                 escaped = true;
-                                                                continue;
-                                                            }
-                                                            if (c == '/') {
+                                                            } else if (c == '/') {
                                                                 break;
                                                             }
+                                                            c = read_char();
                                                         }
                                                         while (true) {
                                                             c = read_char();
@@ -1924,6 +1939,19 @@ hash\<{WORD}\>\{                        {
                                                         }
                                                         prev_nonspace = 'R';
                                                         saw_regex_op = false;
+                                                        continue;
+                                                    } else if (c == '#' && prev_nonspace != '$') {
+                                                        // Line comment - skip until newline
+                                                        // Note: $# is the "last index" operator, not a comment
+                                                        while (true) {
+                                                            c = read_char();
+                                                            if (c == EOF || c == '\n' || c == '\r') {
+                                                                break;
+                                                            }
+                                                        }
+                                                        if (c != EOF) {
+                                                            c = read_char();
+                                                        }
                                                         continue;
                                                     } else if (c == '(') {
                                                         paren_depth++;
