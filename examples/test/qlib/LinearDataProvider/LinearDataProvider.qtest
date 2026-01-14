@@ -33,8 +33,15 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%ifndef NoJson
 %requires ../../../../qlib/LinearRestClient.qm
 %requires ../../../../qlib/LinearDataProvider
+%endif
 
 %exec-class LinearDataProviderTest
 
@@ -94,8 +101,16 @@ public class LinearDataProviderTest inherits QUnit::Test {
         client = new LinearRestClient::LinearRestClient({"token": token});
     }
 
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
+        checkJson();
         # Test creating provider with fake credentials
         LinearDataProvider::LinearDataProvider prov({"token": "fake-token-for-testing"});
         assertEq("linear", prov.getName());
@@ -104,6 +119,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Factory tests - verify factory registration
     factoryTests() {
+        checkJson();
         # Verify factory is registered
         AbstractDataProviderFactory factory = DataProvider::getFactory("linear");
         assertEq("linear", factory.getInfo().name);
@@ -121,6 +137,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Metadata tests - verify provider info structure
     metadataTests() {
+        checkJson();
         LinearDataProvider::LinearDataProvider prov({"token": "x"});
         hash<DataProviderInfo> info = prov.getInfo();
 
@@ -138,6 +155,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Child provider tests - verify hierarchy
     childProviderTests() {
+        checkJson();
         LinearDataProvider::LinearDataProvider prov({"token": "x"});
 
         # Check child provider names
@@ -179,6 +197,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Data type tests - verify record type definitions
     dataTypeTests() {
+        checkJson();
         # Test issue data type
         LinearDataProvider::LinearIssueDataType issueType();
         hash<string, AbstractDataField> issueFields = issueType.getFields();
@@ -272,6 +291,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
+        checkJson();
         LinearDataProvider::LinearDataProvider prov({"token": "invalid-token"});
 
         # Test getting non-existent child provider
@@ -303,6 +323,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Corner case tests - test edge cases and boundary conditions
     cornerCaseTests() {
+        checkJson();
         LinearDataProvider::LinearDataProvider prov({"token": "test-token"});
 
         # Test empty child provider list iteration
@@ -358,6 +379,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Connection tests - test connection provider functionality
     connectionTests() {
+        checkJson();
         # Test connection scheme is registered
         hash<auto> schemeInfo = ConnectionSchemeCache::getScheme("linear");
         assertTrue(schemeInfo.hasKey("cls"));
@@ -382,6 +404,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Action catalog tests - verify action registrations have proper options
     actionCatalogTests() {
+        checkJson();
         # Verify Linear app is registered
         *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Linear");
         assertTrue(exists app, "Linear app should be registered");
@@ -519,6 +542,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
 
     #! Integration tests - require actual Linear credentials
     integrationTests() {
+        checkJson();
         if (!client) {
             testSkip("No connection to Linear (set LINEAR_TOKEN env var or use -t option)");
         }
