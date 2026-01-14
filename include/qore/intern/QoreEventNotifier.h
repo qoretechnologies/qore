@@ -39,8 +39,9 @@
 #include <sys/eventfd.h>
 #elif defined(DARWIN)
 #include <sys/event.h>
-#include <atomic>
 #endif
+
+#include <atomic>
 
 //! Cross-thread event notification abstraction
 /**
@@ -139,7 +140,7 @@ public:
 
     //! Returns true if using optimized kqueue-based notification
     DLLLOCAL bool isOptimized() const {
-        return optimized;
+        return optimized.load(std::memory_order_acquire);
     }
 
     //! Returns the unique EVFILT_USER identifier
@@ -155,9 +156,9 @@ private:
 #ifdef __linux__
     int notify_fd = -1;     //!< eventfd file descriptor
 #elif defined(DARWIN)
-    int kq_fd = -1;                    //!< bound kqueue fd (when optimized)
+    std::atomic<int> kq_fd{-1};        //!< bound kqueue fd (when optimized)
     uintptr_t user_ident = 0;          //!< unique EVFILT_USER identifier
-    bool optimized = false;            //!< true when bound to kqueue
+    std::atomic<bool> optimized{false}; //!< true when bound to kqueue
     int pipe_fd[2] = {-1, -1};         //!< fallback pipe [read, write]
 
     //! Global counter for generating unique EVFILT_USER identifiers

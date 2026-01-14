@@ -38,10 +38,8 @@
 %define NoJson
 %endtry
 
-%ifndef NoJson
 %requires ../../../../qlib/LinearRestClient.qm
 %requires ../../../../qlib/LinearDataProvider
-%endif
 
 %exec-class LinearDataProviderTest
 
