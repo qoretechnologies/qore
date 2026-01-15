@@ -826,9 +826,19 @@ public namespace RestHandler {
                 args = cx.body - "action";
             }
             cx.socketobject = s;
+            # Only set HTTP/2 active stream if the socket has an HTTP/2 session
+            # (may not be the case for forwarded requests to remote services)
+            bool h2_stream_set;
             if (cx."header-info".http2) {
-                cx.socketobject.setHttp2ActiveStream(cx."header-info".stream_id);
-                on_exit cx.socketobject.setHttp2ActiveStream(-1);
+                try {
+                    cx.socketobject.setHttp2ActiveStream(cx."header-info".stream_id);
+                    h2_stream_set = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    # Ignore - socket doesn't have HTTP/2 session (forwarded request)
+                }
+            }
+            on_exit if (h2_stream_set) {
+                cx.socketobject.setHttp2ActiveStream(-1);
             }
             if (cl) {
                 string cname = shift cl;

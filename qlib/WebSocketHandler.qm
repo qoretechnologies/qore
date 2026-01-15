@@ -969,9 +969,20 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         if (async_mode) {
             async_ctrl = cx."async_ctrl";
         }
+        # Only set HTTP/2 active stream if the socket has an HTTP/2 session
+        # (may not be the case for forwarded requests to remote services)
+        bool h2_stream_set;
         if (is_http2_ws) {
-            sock.setHttp2ActiveStream(h2_stream_id);
-            on_exit sock.setHttp2ActiveStream(-1);
+            try {
+                sock.setHttp2ActiveStream(h2_stream_id);
+                h2_stream_set = True;
+            } catch (hash<ExceptionInfo> ex) {
+                # Socket doesn't have HTTP/2 session (forwarded request) - treat as non-HTTP/2
+                is_http2_ws = False;
+            }
+        }
+        on_exit if (h2_stream_set) {
+            sock.setHttp2ActiveStream(-1);
         }
 
         # get new connection object
