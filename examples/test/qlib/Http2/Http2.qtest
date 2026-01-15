@@ -161,6 +161,7 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 stream priority test", \testHttp2StreamPriority());
         addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
         addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
+        addTestCase("HTTP/2 WebSocket external client verification", \testHttp2WebSocketExternalClients());
         addTestCase("HTTP/2 global mode test", \testGlobalHttp2Mode());
         addTestCase("HTTP/2 poll client operations test", \testHttp2PollClientOperations());
         addTestCase("HTTP/2 ALPN in poll SSL test", \testHttp2AlpnInPollSSL());
@@ -1744,6 +1745,80 @@ public class Http2Test inherits QUnit::Test {
         assertEq("h2c-upgrade", h2c_client.getHttp2Mode());
     }
 
+    private *string getNodeBin() {
+        string node_bin = getenv("NODE_BIN") ?? "node";
+        if (system(node_bin + " -v > /dev/null 2>&1") != 0) {
+            return NOTHING;
+        }
+        return node_bin;
+    }
+
+    private bool hasCurlHttp2() {
+        if (system("curl --version > /dev/null 2>&1") != 0) {
+            return False;
+        }
+        return system("curl --version | grep -q HTTP2") == 0;
+    }
+
+    private *string getHeaderValue(string headers, string name) {
+        string target = name.lwr() + ":";
+        list<string> lines = headers.split("\n");
+        foreach string line in (lines) {
+            string trimmed = trim(line);
+            if (!trimmed) {
+                continue;
+            }
+            string lower = trimmed.lwr();
+            if (lower.substr(0, target.size()) == target) {
+                return trim(trimmed.substr(target.size()));
+            }
+        }
+        return NOTHING;
+    }
+
+    private hash<auto> runNodeHttp2WebSocketClient(string node_bin, int port, string path) {
+        string script = get_script_dir() + DirSep + "http2-ws-client.js";
+        if (!is_file(script)) {
+            return {"ok": False, "error": "node client script missing"};
+        }
+
+        string log_path = tmp_location() + DirSep + "http2-ws-client-" + getpid() + ".log";
+        string cmd = sprintf("%s %s localhost %d %s > %s 2>&1", node_bin, script, port, path, log_path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            *string err;
+            if (log_path && is_file(log_path)) {
+                err = ReadOnlyFile::readTextFile(log_path);
+                unlink(log_path);
+            } else {
+                err = sprintf("node client failed with rc %d", rc);
+            }
+            return {"ok": False, "error": err};
+        }
+
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+        return {"ok": True};
+    }
+
+    private hash<auto> runCurlHttp2WebSocketConnect(int port, string path, string key) {
+        string log_path = tmp_location() + DirSep + "http2-ws-curl-" + getpid() + ".log";
+        string url = sprintf("https://localhost:%d%s", port, path);
+        string cmd = sprintf("curl --http2 -k -s -D %s -o /dev/null -X CONNECT "
+            + "-H ':protocol: websocket' -H 'Sec-WebSocket-Key: %s' -H 'Sec-WebSocket-Version: 13' %s",
+            log_path, key, url);
+        int rc = system(cmd);
+        string headers = is_file(log_path) ? ReadOnlyFile::readTextFile(log_path) : "";
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+        return {
+            "rc": rc,
+            "headers": headers,
+        };
+    }
+
     testHttp2WebSocketClientServer() {
         # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
         if (skip_complex_tests) {
@@ -1850,6 +1925,92 @@ public class Http2Test inherits QUnit::Test {
             } else {
                 server_error = sprintf("%s: %s", ex.err, ex.desc);
             }
+        }
+        server.stop();
+
+        if (skip_ws) {
+            testSkip("HTTP/2 WebSocket not supported by server");
+            return;
+        }
+        assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testHttp2WebSocketExternalClients() {
+        # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex WebSocket/HTTP2 test on Alpine");
+            return;
+        }
+
+        *string node_bin = getNodeBin();
+        bool have_node = exists node_bin;
+        bool have_curl = hasCurlHttp2();
+        if (!have_node && !have_curl) {
+            testSkip("No HTTP/2-capable external clients available (node/curl)");
+            return;
+        }
+
+        Counter cnt(1);
+        *string server_error;
+        bool skip_ws = False;
+
+        EchoWebSocketHandler ws_handler(cnt);
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        try {
+            server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
+            server.setDefaultHandler("websocket", ws_handler);
+
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": cert,
+                "key": key,
+                "http_version": "2.0",
+            });
+            int port = linfo.port;
+            string path = "/ws";
+
+            if (have_node) {
+                hash<auto> node_res = runNodeHttp2WebSocketClient(node_bin, port, path);
+                if (!node_res.ok) {
+                    *string node_err = node_res.error;
+                    if (node_err && node_err.find("status 501") >= 0) {
+                        skip_ws = True;
+                    } else {
+                        assertTrue(False, sprintf("node HTTP/2 WebSocket client failed: %s",
+                            node_err ?? "unknown"));
+                    }
+                }
+            }
+
+            if (!skip_ws && have_curl) {
+                string ws_key = get_random_string(16).toBase64();
+                hash<auto> curl_info = runCurlHttp2WebSocketConnect(port, path, ws_key);
+                if (curl_info.rc != 0) {
+                    assertTrue(False, sprintf("curl HTTP/2 WebSocket CONNECT failed (rc=%d)", curl_info.rc));
+                }
+                string headers = curl_info.headers ?? "";
+                if (headers.find("HTTP/2 501") >= 0) {
+                    skip_ws = True;
+                } else {
+                    assertTrue(headers.find("HTTP/2 200") >= 0,
+                        sprintf("curl HTTP/2 CONNECT did not return 200: %s", headers));
+                    *string accept = getHeaderValue(headers, "sec-websocket-accept");
+                    assertEq(ws_get_response_key(ws_key), accept,
+                        "curl HTTP/2 CONNECT should return Sec-WebSocket-Accept");
+                }
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
         }
         server.stop();
 
