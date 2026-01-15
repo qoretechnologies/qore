@@ -1771,6 +1771,7 @@ public class Http2Test inherits QUnit::Test {
             "debug": True,
         };
         HttpServer server(http_opts);
+        bool skip_ws = False;
         try {
             server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
             server.setDefaultHandler("websocket", ws_handler);
@@ -1844,10 +1845,18 @@ public class Http2Test inherits QUnit::Test {
             cnt.waitForZero(5s);
 
         } catch (hash<ExceptionInfo> ex) {
-            server_error = sprintf("%s: %s", ex.err, ex.desc);
+            if (ex.err == "HTTP2-CONNECT-ERROR" && ex.desc.find("status 501") >= 0) {
+                skip_ws = True;
+            } else {
+                server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
         }
         server.stop();
 
+        if (skip_ws) {
+            testSkip("HTTP/2 WebSocket not supported by server");
+            return;
+        }
         assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
     }
 

@@ -4029,8 +4029,11 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     std::map<std::string, std::string> h2_headers;
     h2_headers[":protocol"] = protocol;
 
-    // Add Host header
-    h2_headers["host"] = http_priv->connection.host.c_str();
+    // Add Host header with port when needed (used to derive :authority)
+    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
+    if (host_header) {
+        h2_headers["host"] = host_header->c_str();
+    }
 
     // Copy custom headers
     if (headers) {

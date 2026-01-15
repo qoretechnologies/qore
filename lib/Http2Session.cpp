@@ -147,7 +147,7 @@ int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
     iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
     iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
     // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
-    if (is_server && local_settings.enable_connect_protocol) {
+    if (local_settings.enable_connect_protocol) {
         iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
     }
 
@@ -176,7 +176,7 @@ int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* x
     iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, settings.max_frame_size});
     iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, settings.max_header_list_size});
     // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
-    if (is_server && settings.enable_connect_protocol) {
+    if (settings.enable_connect_protocol) {
         iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, settings.enable_connect_protocol});
     }
 

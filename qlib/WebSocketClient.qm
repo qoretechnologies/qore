@@ -1158,6 +1158,9 @@ ws.setEventQueue();
             }
             ws_ver = remove opts.version;
         }
+        if (!ws_ver) {
+            ws_ver = 13;
+        }
 
         # += to keep "http_opts" "hash<auto>"
         http_opts += opts;
@@ -1225,9 +1228,6 @@ ws.setEventQueue();
             http_opts."timeout" = timeout_ms;
         }
         # Default to HTTP/1.1 if http_version not specified
-        # NOTE: HTTP/2 WebSocket (RFC 8441) is temporarily disabled due to unresolved issues
-        # with HTTP/2 session management. HTTP/2 WebSocket is also disabled on the server side
-        # (HttpServer.qm).
         if (!http_opts.http_version) {
             http_opts.http_version = "1.1";
         }
@@ -1908,8 +1908,8 @@ ws.setEventQueue();
             # https://tools.ietf.org/html/rfc6455#section-4.1 specifies a 16-byte length for this random nonce
             "Sec-WebSocket-Key": key,
         };
-        if (ws_ver == 13) {
-            hdr."Sec-SebSocket-Version" = 13;
+        if (ws_ver) {
+            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
         }
 
         # Add extension offers if configured
@@ -1976,6 +1976,7 @@ ws.setEventQueue();
         # Add Sec-WebSocket-Key for RFC 8441 handshake
         string key = get_random_string(16).toBase64();
         hdr."Sec-WebSocket-Key" = key;
+        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
 
         # Add extension offers if configured (extensions work the same in HTTP/2)
         if (offered_extensions) {

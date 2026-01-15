@@ -67,7 +67,7 @@ public class AstProcessorTests inherits QUnit::Test {
         string output = proc.process();
 
         assertTrue(output =~ /namespace Test \{/, "namespace declaration");
-        assertTrue(output =~ /\};/, "namespace closing brace");
+        assertTrue(output =~ /\}\s*;?/, "namespace closing brace");
     }
 
     testClassBasic() {

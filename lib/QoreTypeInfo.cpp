@@ -707,12 +707,15 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
 }
 
 // Helper function to create a normalized key for union type caching
-// Sorts member types by pointer value to ensure consistent cache lookups
+// Preserve declaration order so union resolution honors the first matching type.
 static type_vec_t normalize_union_key(const type_vec_t& member_types) {
-    type_vec_t key(member_types);
-    std::sort(key.begin(), key.end());
-    // Remove duplicates
-    key.erase(std::unique(key.begin(), key.end()), key.end());
+    type_vec_t key;
+    key.reserve(member_types.size());
+    for (const QoreTypeInfo* ti : member_types) {
+        if (std::find(key.begin(), key.end(), ti) == key.end()) {
+            key.push_back(ti);
+        }
+    }
     return key;
 }
 
