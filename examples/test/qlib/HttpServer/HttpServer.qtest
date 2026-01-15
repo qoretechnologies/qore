@@ -908,8 +908,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.connect();
         on_exit wsc.disconnect();
 
-        # Verify we're using HTTP/2 (default behavior)
-        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+        # NOTE: HTTP/2 WebSocket is temporarily disabled due to unresolved issues with
+        # HTTP/2 session management. WebSocket now defaults to HTTP/1.1.
+        assertFalse(wsc.isHttp2(), "WebSocket should use HTTP/1.1 by default (HTTP/2 WebSocket disabled)");
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
@@ -1045,8 +1046,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         });
         on_exit wscGood.disconnect();
 
-        # Verify connection is using HTTP/2
-        assertTrue(wscGood.isHttp2(), "WebSocket with valid token should use HTTP/2 over SSL");
+        # NOTE: HTTP/2 WebSocket is temporarily disabled due to unresolved issues with
+        # HTTP/2 session management. WebSocket now defaults to HTTP/1.1.
+        assertFalse(wscGood.isHttp2(), "WebSocket should use HTTP/1.1 (HTTP/2 WebSocket disabled)");
 
         # Send a message and verify echo
         wscGood.send("authenticated-message");

@@ -2397,49 +2397,33 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE, or HTTP/2 WebSocket (200 + streaming)
+        # NOTE: HTTP/2 WebSocket support is currently disabled due to unresolved issues with
+        # HTTP/2 session management and WebSocket handler coordination. Clients will fall back
+        # to HTTP/1.1 for WebSocket connections.
         bool is_http2_websocket = rv.streaming && cx."header-info".is_websocket_connect;
-        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse || is_http2_websocket)) {
-            if (rv.close)
+        if (is_http2_websocket) {
+            listener.log("cid %d: HTTP/2 WebSocket not supported; client should use HTTP/1.1", cx.id);
+            # Return 501 Not Implemented to signal client should retry with HTTP/1.1
+            self.sendHttpError(listener, cx, s, 501, "WebSocket over HTTP/2 is not supported; please use HTTP/1.1",
+                NOTHING, NOTHING, NOTHING, False);
+            return;
+        }
+        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
+            if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
-            else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the handler does "
                     "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
                     handler.className());
             } else {
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
-                    if (!is_http2_websocket) {
-                        on_exit cx.close = True;
-                    }
+                    on_exit cx.close = True;
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    # Handle response sending based on protocol
-                    if (is_http2_websocket) {
-                        # RFC 8441: HTTP/2 WebSocket - send 200 OK via HTTP/2
-                        int stream_id = cx."header-info".stream_id;
-                        listener.log("cid %d: HTTP/2 WebSocket - sending 200 OK on stream %d", cx.id, stream_id);
-
-                        try {
-                            # Send 200 OK using HTTP/2 CONNECT response via global async I/O controller
-                            AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id, 200, rv.hdr);
-                            execHttp2PollOperation(s, op);
-                            listener.log("cid %d: HTTP/2 CONNECT response sent", cx.id);
-                        } catch (hash<ExceptionInfo> ex) {
-                            listener.logError("cid %d: HTTP/2 WebSocket setup error: %s: %s", cx.id, ex.err, ex.desc);
-                            rethrow;
-                        }
-
-                        # Clear the async response so caller knows it was sent
-                        if (async_response_out) {
-                            delete async_response_out;
-                        }
-                        # In async mode, return the HTTP/2 connection immediately so other streams can be served
-                        if (self.getAsyncMode()) {
-                            self.returnConnectionToAsyncIo(s, cx, listener, NOTHING);
-                        }
-                    } else if (async_response_out) {
-                        # For async mode: the 101 response was captured but not sent.
-                        # We must send it BEFORE calling start() so the client knows to switch protocols.
+                    # For async mode: the 101 response was captured but not sent.
+                    # We must send it BEFORE calling start() so the client knows to switch protocols.
+                    if (async_response_out) {
                         s.sendHTTPResponse(async_response_out."code",
                             HttpServer::HttpCodes{async_response_out."code"}, "1.1",
                             async_response_out.hdr ?? {}, async_response_out.body);

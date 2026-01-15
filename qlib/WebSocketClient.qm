@@ -1224,6 +1224,13 @@ ws.setEventQueue();
         } else {
             http_opts."timeout" = timeout_ms;
         }
+        # Default to HTTP/1.1 if http_version not specified
+        # NOTE: HTTP/2 WebSocket (RFC 8441) is temporarily disabled due to unresolved issues
+        # with HTTP/2 session management. HTTP/2 WebSocket is also disabled on the server side
+        # (HttpServer.qm).
+        if (!http_opts.http_version) {
+            http_opts.http_version = "1.1";
+        }
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
             http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
@@ -2623,13 +2630,16 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
+                # NOTE: Default changed from "auto" to "1.1" due to unresolved issues with
+                # HTTP/2 WebSocket (RFC 8441) session management. HTTP/2 WebSocket is also
+                # temporarily disabled on the server side (HttpServer.qm).
+                "desc": "The HTTP version to use: `1.1` (default), `auto` (HTTP/2 if available), `1.0`, "
                     "or `2.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN",
-                "default_value": "auto",
+                "default_value": "1.1",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -2637,7 +2647,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                     },
                     <AllowedValueInfo>{
                         "value": "1.1",
-                        "desc": "HTTP/1.1 only",
+                        "desc": "HTTP/1.1 only (default)",
                     },
                     <AllowedValueInfo>{
                         "value": "2.0",
