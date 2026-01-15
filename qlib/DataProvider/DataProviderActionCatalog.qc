@@ -160,7 +160,7 @@ public const DPAT_UPDATE = 8;
 public const DPAT_DELETE = 9;
 #/@}
 
-#! Maps @ref dp_action_type "action type codes"  to app action flags
+#! Maps DPAT_* action type codes to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
     DPAT_API: "supports_apis",
@@ -176,7 +176,7 @@ public const ActionCodeFlagMap = {
 #! List of app action flags
 public const AppActionFlags = ActionCodeFlagMap.values();
 
-#! Maps @ref dp_action_type "action type codes" to a data provider attribute string
+#! Maps DPAT_* action type codes to a data provider attribute string
 public const ActionAttrMap = {
     DPAT_EVENT: "supports_observable",
     DPAT_API: "supports_request",
@@ -189,7 +189,7 @@ public const ActionAttrMap = {
     DPAT_DELETE: "supports_delete",
 };
 
-#! Maps @ref dp_action_type "action type codes" to a user-friendly name
+#! Maps DPAT_* action type codes to a user-friendly name
 public const ActionNameMap = {
     DPAT_EVENT: "EVENT",
     DPAT_API: "API",
@@ -364,7 +364,7 @@ public hashdecl DataProviderActionInfo {
     string desc;
 
     #! Action type code
-    /** @see @ref dp_action_type for valid values
+    /** @see DPAT_* action type codes for valid values
     */
     int action_code;
 

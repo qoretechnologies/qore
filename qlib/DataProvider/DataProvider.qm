@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.5.0";
+    version = "3.6.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -77,6 +77,25 @@ module DataProvider {
     record-based data providers if supported by the underlying data provider implementation as well.
 
     The %Qore command-line program \c qdp provides a user-friendly interface to data provider functionality.
+    It auto-detects DPQL search expressions and also supports forcing DPQL parsing with the \c -q/--dpql option,
+    for example:
+    @code{.py}
+qdp mydb/tables/users search -q '@name == "John"'
+    @endcode
+
+    @section dataprovider_qdp qdp Command-Line Usage
+
+    The \c qdp CLI exposes the DataProvider API for inspection and data access. It supports DPQL for search criteria,
+    auto-detects DPQL expressions by default, and can show DPQL syntax help with \c --dpql-help. For a full DPQL
+    reference, see @ref dataprovider_dpql "DPQL - Data Provider Query Language".
+
+    @par Example Searches
+    @code{.py}
+qdp mydb/tables/users search '@name == "John"'
+qdp mydb/tables/users search '@age between 18 and 65'
+qdp mydb/tables/users search '(@active == true) && (@age >= 21)'
+qdp mydb/tables/users search '@role in ("admin", "editor")'
+    @endcode
 
     This module provides the following primary classes:
     - @ref DataProvider::AbstractDataField "AbstractDataField"
@@ -171,7 +190,7 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
 
     The following classes are provided for debug info collection:
     - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class - implement
-      your own collector by overriding the @ref DataProvider::AbstractDebugInfoCollector::collect() "collect()" method
+      your own collector by overriding the @ref DataProvider::AbstractDebugInfoCollector::collect "collect()" method
     - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for
       later retrieval and analysis
     - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to the console
@@ -258,35 +277,43 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     DPQL supports the following syntax elements:
 
     @par Field References
-    Fields are referenced using the \c @ prefix:
-    - \c @name - simple field name
-    - \c @"field with spaces" - quoted field names for special characters
-    - \c @user.email - dotted paths for nested fields
+    Fields are referenced using the \c \@ prefix:
+    - \c \@name - simple field name
+    - <tt>\@\"field with spaces\"</tt> - quoted field names for special characters
+    - \c \@user.email - dotted paths for nested fields
 
     @par Comparison Operators
+    These are standard DPQL operators; individual data providers can expose additional or different operators.
+    DPQL is translated to native server-side queries whenever possible to ensure maximum performance.
     - \c == - equals
     - \c != - not equals
     - \c < - less than
     - \c <= - less than or equal
     - \c > - greater than
     - \c >= - greater than or equal
-    - \c between - range comparison (\c @age \c between \c 18 \c and \c 65)
-    - \c in - set membership (\c @status \c in \c ("active", \c "pending"))
-    - \c =~ - regex match (\c @email \c =~ \c /example.com$/i)
+    - \c between - range comparison (\c \@age \c between \c 18 \c and \c 65)
+    - \c in - set membership (\c \@status \c in <tt>("active", "pending")</tt>)
+    - \c =~ - regex match (\c \@email \c =~ <tt>/example.com$/i</tt>)
 
     @par Logical Operators
+    These are standard DPQL operators; individual data providers can expose additional or different operators.
     - \c && - logical AND
     - \c || - logical OR
     - \c ! - logical NOT
 
     @par Literals
     - Strings: \c "hello" or \c 'world'
+    - Dates: <tt>2026-01-02</tt>, <tt>2026-01-02T15:20:11.123+01:00</tt>
+    - Binary: <tt>&lt;deadbeef&gt;</tt>
+    - Lists: <tt>(one, two, 3)</tt>
+    - Hashes: <tt>{a=1, b=two}</tt>
+    - Unquoted identifiers are treated as strings: \c \@domain \c == \c omq
     - Numbers: \c 123, \c 45.67, \c -10
     - Booleans: \c true, \c false
     - Null: \c null
 
     @par Function Calls
-    Custom functions can be used: \c calculate(@score, \c 100) \c > \c 50
+    Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
 
     @subsection dpql_examples DPQL Examples
 
@@ -323,6 +350,18 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@email =~ /example.com$/i');
     @endcode
 
+    @par Date Literal
+    @code{.py}
+# Find records created before a specific date
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@created < 2026-12-01');
+    @endcode
+
+    @par Binary Literal
+    @code{.py}
+# Match a binary hash field
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@checksum == <deadbeef>');
+    @endcode
+
     @par Negation
     @code{.py}
 # Find non-deleted records
@@ -333,7 +372,7 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('!(@deleted
     @code{.py}
 # Search a data provider using DPQL
 hash<DataProviderExpression> where = DataProvider::parseDpqlExpression(
-    '@created > "2024-01-01" && @type == "order"');
+    '@created > 2024-01-01 && @type == "order"');
 AbstractDataProviderRecordIterator i = provider.searchRecords({"where": where});
     @endcode
 
@@ -379,6 +418,10 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
     - \c DPQL_TOK_NUMBER (3) - numeric literals
     - \c DPQL_TOK_BOOLEAN (4) - boolean values
     - \c DPQL_TOK_IDENTIFIER (6) - identifiers/keywords
+    - \c DPQL_TOK_DATE (7) - date literals
+    - \c DPQL_TOK_BINARY (8) - binary literals
+    - \c DPQL_TOK_LIST (21) - list literals
+    - \c DPQL_TOK_HASH (22) - hash literals
     - \c DPQL_TOK_OP_EQ (10) through \c DPQL_TOK_OP_REGEX (19) - operators
     - \c DPQL_TOK_REGEX (20) - regex patterns
 
@@ -395,6 +438,25 @@ hash<string, AbstractDataField> fields = {
 list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3, fields);
 # Returns completions matching "na", e.g., [{"label": "name", "kind": "field", ...}]
     @endcode
+
+    @subsection dpql_websocket DPQL WebSocket API
+
+    The DPQL WebSocket API is provided by the optional <a href="../../DpqlWebSocket/html/index.html">DpqlWebSocket</a> module. It exposes
+    language-server services for tokenization, parsing, validation, and completion, and can be used by UI clients
+    for syntax highlighting, diagnostics, and completions in the context of a data provider.
+
+    @code{.py}
+%requires HttpServer
+%requires DpqlWebSocket
+
+DataProvider::DpqlWebSocketHandler handler();
+HttpServer server({"port": 8080});
+server.addHandler("/ws/dpql", handler);
+server.start();
+    @endcode
+
+    The WebSocket message protocol is defined in:
+    - @c DpqlWebSocket/DpqlApi.asyncapi.yaml
 
     @subsection dpql_validation Expression Validation
 
@@ -414,7 +476,8 @@ if (errors) {
 
     @section dataprovider_relnotes Release Notes
 
-    @subsection dataprovider_v3_5 DataProvider v3.5
+    @subsection dataprovider_v3_4 DataProvider v3.4
+    - moved DPQL WebSocket APIs to the <a href="../../DpqlWebSocket/html/index.html">DpqlWebSocket</a> module
     - added debug info collection infrastructure for data providers
       - @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo": Hashdecl for technical debug information
       - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class for debug collectors
@@ -424,8 +487,6 @@ if (errors) {
       - @ref DataProvider::AbstractDataProvider::getDebugCollector() "AbstractDataProvider::getDebugCollector()": Get current debug collector
       - @ref DataProvider::AbstractDataProvider::debugCollectionEnabled() "AbstractDataProvider::debugCollectionEnabled()": Check if debug collection is enabled
     - debug info includes HTTP headers, request/response bodies, timing, protocol info (HTTP/2), and more
-
-    @subsection dataprovider_v3_4 DataProvider v3.4
     - added DPQL (Data Provider Query Language) support for human-readable query expressions
       - @ref DataProvider::DpqlTokenizer "DpqlTokenizer": Tokenizes DPQL expressions with position tracking
       - @ref DataProvider::DpqlParser "DpqlParser": Parses DPQL strings into DataProviderExpression structures
@@ -463,7 +524,7 @@ if (errors) {
     - added an API to retrieve event data in the context of specific option values
     - fixed handling element allowed values in fields
       (<a href="https://github.com/qoretechnologies/qore/issues/4951">issue 4951</a>)
-    - fixed handling implicit default values in @ref HashDataType "HashDataType"
+    - fixed handling implicit default values in @ref DataProvider::HashDataType "HashDataType"
       (<a href="https://github.com/qoretechnologies/qore/issues/4941">issue 4941</a>)
 
     @subsection dataprovider_v3_0 DataProvider v3.0
@@ -586,7 +647,7 @@ if (errors) {
 
     @subsection dataprovider_v1_2_1 DataProvider v1.2.1
     - return the \c base_type key in input type info in
-      @ref DataProvider::AbstractDataProviderType::getInputInfo() "getInputInfo"
+      AbstractDataProviderType::getInputInfo()
       (<a href="https://github.com/qoretechnologies/qore/issues/4311">issue 4311</a>)
 
     @subsection dataprovider_v1_2 DataProvider v1.2

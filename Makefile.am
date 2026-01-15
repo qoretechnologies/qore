@@ -42,6 +42,7 @@ DOX_SRC_MODULES = qlib/Mime.qm \
 
 DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
+    qlib/DpqlWebSocket \
     qlib/DataProvider \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
@@ -82,7 +83,6 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/Pop3Client.qm \
 	qlib/Qdx.qm \
 	qlib/Qorize.qm \
-	qlib/QoreRepl.qm \
 	qlib/QUnit.qm \
 	qlib/MysqlSqlUtil.qm \
 	qlib/RestHandler.qm \
@@ -131,7 +131,9 @@ DOX_SPLIT_MODULES = \
     qlib/SwaggerDataProvider \
     qlib/AsyncApiDataProvider \
     qlib/HttpServerAsyncIo \
-    qlib/MongoDbDataProvider
+    qlib/MongoDbDataProvider \
+    qlib/DpqlWebSocket \
+    qlib/QoreRepl
 
 AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
 AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
@@ -165,6 +167,7 @@ ProviderIndex_modverdir = $(modverdir)/ProviderIndex
 RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
 QoreRepl_modverdir = $(modverdir)/QoreRepl
+DpqlWebSocket_modverdir = $(modverdir)/DpqlWebSocket
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 RestSchemaDataProvider_modverdir = $(modverdir)/RestSchemaDataProvider
 SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
@@ -204,6 +207,7 @@ dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider
 dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
 dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
 dist_QoreRepl_modver_DATA = $(wildcard qlib/QoreRepl/*.q[cm])
+dist_DpqlWebSocket_modver_DATA = $(wildcard qlib/DpqlWebSocket/*)
 dist_RedisDataProvider_modver_DATA = $(wildcard qlib/RedisDataProvider/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_RestSchemaDataProvider_modver_DATA = $(wildcard qlib/RestSchemaDataProvider/*.q[cm])

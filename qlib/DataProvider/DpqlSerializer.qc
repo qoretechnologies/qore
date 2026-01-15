@@ -60,6 +60,8 @@ public class DpqlSerializer {
     private {
         #! Expression map for rendering
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Cached set of reserved identifiers
+        *hash<string, bool> reserved_identifiers;
 
         #! Map of operators to their precedence
         const OperatorPrecedence = {
@@ -274,16 +276,12 @@ public class DpqlSerializer {
                 if (arg.hasKey("exp")) {
                     return serializeExpr(arg, context_prec);
                 }
-                # Unknown hash - serialize as JSON-like
-                return serializeLiteral(arg);
+                # Structured hash literal
+                return serializeStructuredLiteral(arg);
 
             case NT_LIST:
-                # List literal
-                list<string> items = ();
-                foreach auto item in (arg) {
-                    items += serializeArg(item, DPQL_PREC_PRIMARY);
-                }
-                return "(" + items.join(", ") + ")";
+                # Structured list literal
+                return serializeStructuredLiteral(arg);
 
             default:
                 return serializeLiteral(arg);
@@ -323,17 +321,113 @@ public class DpqlSerializer {
                 return value ? "true" : "false";
 
             case NT_DATE:
-                # Serialize dates as ISO strings
-                return serializeString(value.format("YYYY-MM-DDTHH:mm:SS.xxZ"));
+                # Serialize dates as ISO-8601 literal
+                return value.format("IF");
 
             case NT_BINARY:
-                # Serialize binary as base64 string
-                return serializeString(value.toBase64());
+                # Serialize binary as hex literal
+                return "<" + value.toHex() + ">";
+
+            case NT_LIST:
+            case NT_HASH:
+                return serializeStructuredLiteral(value);
 
             default:
                 # For other types, try to convert to string
                 return serializeString(string(value));
         }
+    }
+
+    #! Serializes list/hash literals using parse_to_qore_value-compatible syntax
+    private string serializeStructuredLiteral(auto value) {
+        switch (value.typeCode()) {
+            case NT_LIST:
+                return serializeStructuredList(value);
+            case NT_HASH:
+                return serializeStructuredHash(value);
+            default:
+                return serializeStructuredValue(value);
+        }
+    }
+
+    private string serializeStructuredList(list<auto> value) {
+        list<string> items = ();
+        foreach auto item in (value) {
+            items += serializeStructuredValue(item);
+        }
+        return "(" + items.join(",") + ")";
+    }
+
+    private string serializeStructuredHash(hash<auto> value) {
+        list<string> parts = ();
+        foreach hash<auto> i in (value.pairIterator()) {
+            parts += serializeStructuredKey(i.key) + "=" + serializeStructuredValue(i.value);
+        }
+        return "{" + parts.join(", ") + "}";
+    }
+
+    private string serializeStructuredKey(string key) {
+        if (canEmitBareIdentifier(key)) {
+            return key;
+        }
+        return serializeString(key);
+    }
+
+    private string serializeStructuredValue(auto value) {
+        if (value === NOTHING) {
+            return "null";
+        }
+
+        if (value.typeCode() == NT_STRING) {
+            if (canEmitBareIdentifier(value)) {
+                return value;
+            }
+            return serializeString(value);
+        }
+
+        if (value.typeCode() == NT_LIST || value.typeCode() == NT_HASH) {
+            return serializeStructuredLiteral(value);
+        }
+
+        return serializeLiteral(value);
+    }
+
+    #! Returns True if the string can be emitted without quoting
+    private bool canEmitBareIdentifier(string value) {
+        if (!(value =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+            return False;
+        }
+        return !getReservedIdentifiers(){value.lwr()};
+    }
+
+    private hash<string, bool> getReservedIdentifiers() {
+        if (reserved_identifiers) {
+            return reserved_identifiers;
+        }
+
+        hash<string, bool> reserved = {
+            "true": True,
+            "false": True,
+            "null": True,
+        };
+
+        if (expressions) {
+            foreach string key in (keys expressions) {
+                if (key =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{key.lwr()} = True;
+                }
+                hash<DataProviderExpressionInfo> info = expressions{key};
+                if (info.name && info.name =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{info.name.lwr()} = True;
+                }
+                if (info.symbol && info.symbol =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{info.symbol.lwr()} = True;
+                }
+            }
+        }
+
+        reserved_identifiers = reserved;
+        return reserved_identifiers;
     }
 
     #! Serializes a string with proper escaping

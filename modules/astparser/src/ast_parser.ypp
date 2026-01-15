@@ -177,6 +177,8 @@ extern std::string* takeHashdeclDocComment();
 
 // Defined in ast_scanner.lpp - takes ownership of claimed namespace doc comment
 extern std::string* takeNamespaceDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed sub doc comment
+extern std::string* takeSubDocComment();
 
 // Helper macro to attach pending doc comment to a declaration
 #define ATTACH_DOC_COMMENT(decl) \
@@ -209,6 +211,15 @@ extern std::string* takeNamespaceDocComment();
 #define ATTACH_NAMESPACE_DOC_COMMENT(decl) \
     do { \
         std::string* doc = takeNamespaceDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach sub doc comment (claimed when scanner saw 'sub' keyword)
+#define ATTACH_SUB_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeSubDocComment(); \
         if (doc && decl) { \
             (decl)->setDocComment(doc); \
         } \
@@ -530,11 +541,11 @@ top_level_command:
         }
         |
         sub_def {
-            ATTACH_DOC_COMMENT($1);
+            ATTACH_SUB_DOC_COMMENT($1);
             $$ = $1;
         }
         | scoped_sub_def {
-            ATTACH_DOC_COMMENT($1);
+            ATTACH_SUB_DOC_COMMENT($1);
             $$ = $1;
         }
         | class_def {
@@ -866,8 +877,8 @@ namespace_decl:
         | hashdecl_def { ATTACH_HASHDECL_DOC_COMMENT($1); $$ = $1; }
         | enum_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | typedef_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
-        | sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
-        | scoped_sub_def { ATTACH_DOC_COMMENT($1); $$ = $1; }
+        | sub_def { ATTACH_SUB_DOC_COMMENT($1); $$ = $1; }
+        | scoped_sub_def { ATTACH_SUB_DOC_COMMENT($1); $$ = $1; }
         | gvardecl ';' { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | top_namespace_decl { ATTACH_DOC_COMMENT($1); $$ = $1; }
         | outofline_methoddef { ATTACH_DOC_COMMENT($1); $$ = $1; }

@@ -150,13 +150,36 @@ public class DpqlTest inherits QUnit::Test {
 
         # Test parentheses and comma
         {
-            DpqlTokenizer tok("(a, b)");
+            DpqlTokenizer tok("func(a, b)");
             list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
-            assertEq(DPQL_TOK_LPAREN, tokens[0].type);
-            assertEq(DPQL_TOK_IDENTIFIER, tokens[1].type);
-            assertEq(DPQL_TOK_COMMA, tokens[2].type);
-            assertEq(DPQL_TOK_IDENTIFIER, tokens[4].type);
-            assertEq(DPQL_TOK_RPAREN, tokens[5].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
+            assertEq(DPQL_TOK_LPAREN, tokens[1].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[2].type);
+            assertEq(DPQL_TOK_COMMA, tokens[3].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[5].type);
+            assertEq(DPQL_TOK_RPAREN, tokens[6].type);
+        }
+
+        # Test date and binary literals
+        {
+            DpqlTokenizer tok("2026-01-02 <deadbeef>");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_DATE, tokens[0].type);
+            assertEq("2026-01-02", tokens[0].value);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_BINARY, tokens[2].type);
+            assertEq("<deadbeef>", tokens[2].value);
+        }
+
+        # Test list and hash literals
+        {
+            DpqlTokenizer tok("(a=1, b=two) {x=1, y=(1,2)}");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_LIST, tokens[0].type);
+            assertEq("(a=1, b=two)", tokens[0].value);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_HASH, tokens[2].type);
+            assertEq("{x=1, y=(1,2)}", tokens[2].value);
         }
     }
 
@@ -212,6 +235,46 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@value != null');
             assertEq(DP_SEARCH_OP_NE, exp.exp);
             assertEq(NOTHING, exp.args[1]);
+        }
+
+        # Test unquoted identifier as string
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@domain == omq');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("omq", exp.args[1]);
+        }
+
+        # Test date literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@created < 2026-12-01');
+            assertEq(DP_SEARCH_OP_LT, exp.exp);
+            assertTrue(exp.args[1].typeCode() == NT_DATE);
+        }
+
+        # Test binary literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@blob == <deadbeef>');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("deadbeef", exp.args[1].toHex());
+        }
+
+        # Test list literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@tags == (one, two, 3)');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(NT_LIST, exp.args[1].typeCode());
+            assertEq("one", exp.args[1][0]);
+            assertEq("two", exp.args[1][1]);
+            assertEq(3, exp.args[1][2]);
+        }
+
+        # Test hash literal
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@meta == {a=1, b=two}');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(NT_HASH, exp.args[1].typeCode());
+            assertEq(1, exp.args[1].a);
+            assertEq("two", exp.args[1].b);
         }
     }
 
@@ -634,6 +697,54 @@ public class DpqlTest inherits QUnit::Test {
             };
             string dpql = DataProvider::serializeDpqlExpression(exp);
             assertEq('@name == "John"', dpql);
+        }
+
+        # Test date literal serialization
+        {
+            date d = date("2026-01-02T15:20:11.123+01:00");
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "created"}, d),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertTrue(dpql =~ /^@created == 2026-01-02T15:20:11\.123/);
+            assertTrue(dpql =~ /[+-][0-9]{2}:[0-9]{2}$/);
+        }
+
+        # Test binary literal serialization
+        {
+            binary b = parse_hex_string("deadbeef");
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "blob"}, b),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@blob == <deadbeef>", dpql);
+        }
+
+        # Test list literal serialization
+        {
+            list<auto> l = ("one", "two", 3);
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "tags"}, l),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@tags == (one,two,3)", dpql);
+        }
+
+        # Test hash literal serialization
+        {
+            hash<auto> h = {"a": 1, "b": "two"};
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "meta"}, h),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertTrue(dpql =~ /^@meta == \{/);
+            assertTrue(dpql =~ /a=1/);
+            assertTrue(dpql =~ /b=two/);
+            assertTrue(dpql =~ /\}$/);
         }
     }
 

@@ -229,6 +229,26 @@ class MyClass {
 }
 ";
 
+        # Test for doc comment with line comments inside the function body
+        const DocCommentBodyCommentCode = "
+#! Doc for function with body comment
+sub func_with_body_comment() {
+    # body comment that should not clear the doc comment
+    return 1;
+}
+";
+
+        # Test for doc comment with nested sub expression in body
+        const DocCommentNestedSubCode = "
+#! Doc for function with nested sub
+sub func_with_nested_sub() {
+    code inner = sub () {
+        return 1;
+    };
+    return inner();
+}
+";
+
         const DateSubtypeCode = "
 %new-style
 public typedef AbsDate = date<absolute>;
@@ -1277,6 +1297,38 @@ namespace MyNamespace {
 
             assertTrue(docComments.hasKey("MyClass"), "no doc: class found");
             assertNothing(docComments{"MyClass"}, "no doc: class has no docComment");
+        }
+
+        # Test 4: Doc comment with line comment inside function body
+        {
+            *AstTree tree = parser.parseString(DocCommentBodyCommentCode);
+            assertEq(0, parser.getErrorCount(), "body comment: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(exists(docComments{"func_with_body_comment"}), "body comment: function has docComment");
+            assertTrue(docComments{"func_with_body_comment"} =~ /Doc for function with body comment/,
+                "body comment: docComment correct");
+        }
+
+        # Test 5: Doc comment with nested sub expression inside function body
+        {
+            *AstTree tree = parser.parseString(DocCommentNestedSubCode);
+            assertEq(0, parser.getErrorCount(), "nested sub: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(exists(docComments{"func_with_nested_sub"}), "nested sub: function has docComment");
+            assertTrue(docComments{"func_with_nested_sub"} =~ /Doc for function with nested sub/,
+                "nested sub: docComment correct");
         }
     }
 

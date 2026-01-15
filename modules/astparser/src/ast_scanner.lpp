@@ -262,6 +262,8 @@ static std::string* pendingClassDocComment = nullptr;
 static std::string* pendingHashdeclDocComment = nullptr;
 // Claimed doc comment for namespace declarations - stored separately so namespace body members don't steal it
 static std::string* pendingNamespaceDocComment = nullptr;
+// Claimed doc comment for sub declarations - stored separately so body comments don't steal it
+static std::string* pendingSubDocComment = nullptr;
 
 // Conditional parsing stack entry
 struct ConditionalEntry {
@@ -629,6 +631,18 @@ static void claimNamespaceDocComment() {
     inDocCommentBlock = false;
 }
 
+// Claims the pending doc comment for a sub declaration
+// This should be called when the scanner sees the 'sub' keyword, before the body is parsed
+static void claimSubDocComment() {
+    if (!pendingDocComment) {
+        return;
+    }
+    delete pendingSubDocComment;
+    pendingSubDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
 // Called when starting a new doc comment
 // If we're continuing a consecutive doc comment block, append; otherwise replace
 static void startDocComment(const char* text) {
@@ -685,6 +699,14 @@ std::string* takeHashdeclDocComment() {
 std::string* takeNamespaceDocComment() {
     std::string* result = pendingNamespaceDocComment;
     pendingNamespaceDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed sub doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeSubDocComment() {
+    std::string* result = pendingSubDocComment;
+    pendingSubDocComment = nullptr;
     return result;
 }
 %}
@@ -1355,7 +1377,7 @@ foreach                                 return TOK_FOREACH;
 in                                      return TOK_IN;
 elements                                return TOK_ELEMENTS;
 keys                                    return TOK_KEYS;
-sub                                     return TOK_SUB;
+sub                                     { claimSubDocComment(); return TOK_SUB; }
 const                                   return TOK_CONST;
 return                                  return TOK_RETURN;
 returns                                 return TOK_RETURNS;
