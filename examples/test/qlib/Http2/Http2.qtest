@@ -2055,6 +2055,30 @@ public class Http2Test inherits QUnit::Test {
             assertTrue(test_results.client_goal_reached ?? False, "client poll goal should be reached");
             assertEq(200, test_results.client_status_code ?? 0, "response status should be 200");
             assertTrue(test_results.client_http2_active ?? False, "client should be using HTTP/2");
+
+            hash<auto> output = test_results.client_output ?? {};
+            hash<auto> info = output.info ?? {};
+            hash<auto> headers = info."response-headers" ?? {};
+            hash<auto> headers_raw = info."response-headers-raw" ?? {};
+
+            assertEq("application/json", info."body-content-type" ?? "",
+                "poll response should include body-content-type for HTTP/2");
+            assertEq("application/json", headers."content-type" ?? "",
+                "poll response headers should include content-type for HTTP/2");
+            assertEq("application/json", headers_raw."content-type" ?? "",
+                "poll response raw headers should include content-type for HTTP/2");
+            assertEq(200, headers.status_code ?? 0,
+                "poll response headers should include status_code for HTTP/2");
+            assertEq("OK", headers.status_message ?? "",
+                "poll response headers should include status_message for HTTP/2");
+
+            string resp_version = headers.http_version ?? "";
+            assertTrue(resp_version == "2" || resp_version == "HTTP/2",
+                sprintf("poll response headers should include HTTP/2 version; got %y", resp_version));
+
+            string response_uri = info."response-uri" ?? "";
+            assertTrue(response_uri =~ /^HTTP\/2 200 /,
+                sprintf("poll response should include response-uri for HTTP/2; got %y", response_uri));
         }
     }
 

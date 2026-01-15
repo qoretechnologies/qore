@@ -412,6 +412,138 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
    return str && !str->empty() ? str->c_str() : nullptr;
 }
 
+static const char* get_http_status_message(int code) {
+    switch (code) {
+        // 1xx: Informational
+        case 100: return "Continue";
+        case 101: return "Switching Protocols";
+        case 102: return "Processing";
+        // 2xx: Success
+        case 200: return "OK";
+        case 201: return "Created";
+        case 202: return "Accepted";
+        case 203: return "Non-Authoritative Information";
+        case 204: return "No Content";
+        case 205: return "Reset Content";
+        case 206: return "Partial Content";
+        case 207: return "Multi-Status";
+        case 208: return "Already Reported";
+        case 226: return "IM Used";
+        // 3xx: Redirection
+        case 300: return "Multiple Choices";
+        case 301: return "Moved Permanently";
+        case 302: return "Found";
+        case 303: return "See Other";
+        case 304: return "Not Modified";
+        case 305: return "Use Proxy";
+        case 307: return "Temporary Redirect";
+        case 308: return "Permanent Redirect";
+        // 4xx: Client Errors
+        case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 402: return "Payment Required";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 406: return "Not Acceptable";
+        case 407: return "Proxy Authentication Required";
+        case 408: return "Request Timeout";
+        case 409: return "Conflict";
+        case 410: return "Gone";
+        case 411: return "Length Required";
+        case 412: return "Precondition Failed";
+        case 413: return "Request Entity Too Large";
+        case 414: return "Request-URI Too Long";
+        case 415: return "Unsupported Media Type";
+        case 416: return "Requested Range Not Satisfiable";
+        case 417: return "Expectation Failed";
+        case 418: return "I'm a teapot";
+        case 420: return "Enhance Your Calm";
+        case 422: return "Unprocessable Entity";
+        case 423: return "Locked";
+        case 424: return "Failed Dependency";
+        case 425: return "Unordered Collection";
+        case 426: return "Upgrade Required";
+        case 428: return "Precondition Required";
+        case 429: return "Too Many Requests";
+        case 431: return "Request Header Fields Too Large";
+        // 5xx: Server Errors
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 502: return "Bad Gateway";
+        case 503: return "Service Unavailable";
+        case 504: return "Gateway Timeout";
+        case 505: return "HTTP Version Not Supported";
+        case 509: return "Bandwidth Limit Exceeded";
+        case 510: return "Not Extended";
+        case 511: return "Network Authentication Required";
+    }
+    return "Unknown";
+}
+
+static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info,
+        int code) {
+    headers.setKeyValue("status_code", code, xsink);
+    const char* status_msg = get_http_status_message(code);
+    headers.setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
+    headers.setKeyValue("http_version", new QoreStringNode("2"), xsink);
+
+    QoreStringNode* response_uri = new QoreStringNode();
+    response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
+    info.setKeyValue("response-uri", response_uri, xsink);
+}
+
+static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info) {
+    const QoreStringNode* ct = get_string_header_node(xsink, headers, "content-type", true);
+    if (*xsink || !ct || ct->empty()) {
+        return;
+    }
+
+    const char* start = ct->c_str();
+    while (*start == ' ') {
+        ++start;
+    }
+    const char* end = start;
+    while (*end && *end != ';' && *end != ',') {
+        ++end;
+    }
+    QoreStringNode* base_ct = new QoreStringNode();
+    if (end > start) {
+        base_ct->concat(start, end - start);
+    }
+    base_ct->trim();
+    if (!base_ct->empty()) {
+        info.setKeyValue("body-content-type", base_ct, xsink);
+    } else {
+        base_ct->deref(xsink);
+    }
+
+    QoreValue orig = headers.getKeyValue("_qore_orig_content_type");
+    if (orig.getType() != NT_STRING) {
+        return;
+    }
+
+    const char* orig_str = orig.get<const QoreStringNode>()->c_str();
+    const char* p = strstr(orig_str, "charset=");
+    if (!p || (p != orig_str && *(p - 1) != ';' && *(p - 1) != ' ')) {
+        return;
+    }
+
+    const char* c = p + 8;
+    char quote = '\0';
+    if (*c == '\'' || *c == '"') {
+        quote = *c;
+        ++c;
+    }
+    QoreString enc;
+    while (*c && *c != ';' && *c != ' ' && *c != quote) {
+        enc.concat(*(c++));
+    }
+    if (!enc.empty()) {
+        info.setKeyValue("charset", new QoreStringNode(enc.c_str()), xsink);
+    }
+}
+
 static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
         bool& ignore_encoding) {
     ignore_encoding = false;
@@ -2873,11 +3005,32 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
 
     // Get response headers
     response_headers = h2_poll->getResponseHeaders();
-    if (response_headers) {
-        info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
-        if (*xsink) {
-            return -1;
-        }
+    if (!response_headers) {
+        response_headers = new QoreHashNode(autoTypeInfo);
+    }
+
+    ReferenceHolder<QoreHashNode> response_headers_raw(response_headers->copy(), xsink);
+    info->setKeyValue("response-headers-raw", response_headers_raw.release(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    set_http2_response_info(xsink, **response_headers, **info, http_response_code);
+    if (*xsink) {
+        return -1;
+    }
+
+    if (client->http_priv->processContentType(xsink, **response_headers)) {
+        return -1;
+    }
+    set_body_content_type_info(xsink, **response_headers, **info);
+    if (*xsink) {
+        return -1;
+    }
+
+    info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
     }
 
     // Get response body
@@ -4482,72 +4635,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     response->setKeyValue("status_code", code, xsink);
 
     // Map status codes to messages (HTTP/2 only transmits status code, not message)
-    const char* status_msg = "Unknown";
-    switch (code) {
-        // 1xx: Informational
-        case 100: status_msg = "Continue"; break;
-        case 101: status_msg = "Switching Protocols"; break;
-        case 102: status_msg = "Processing"; break;
-        // 2xx: Success
-        case 200: status_msg = "OK"; break;
-        case 201: status_msg = "Created"; break;
-        case 202: status_msg = "Accepted"; break;
-        case 203: status_msg = "Non-Authoritative Information"; break;
-        case 204: status_msg = "No Content"; break;
-        case 205: status_msg = "Reset Content"; break;
-        case 206: status_msg = "Partial Content"; break;
-        case 207: status_msg = "Multi-Status"; break;
-        case 208: status_msg = "Already Reported"; break;
-        case 226: status_msg = "IM Used"; break;
-        // 3xx: Redirection
-        case 300: status_msg = "Multiple Choices"; break;
-        case 301: status_msg = "Moved Permanently"; break;
-        case 302: status_msg = "Found"; break;
-        case 303: status_msg = "See Other"; break;
-        case 304: status_msg = "Not Modified"; break;
-        case 305: status_msg = "Use Proxy"; break;
-        case 307: status_msg = "Temporary Redirect"; break;
-        case 308: status_msg = "Permanent Redirect"; break;
-        // 4xx: Client Errors
-        case 400: status_msg = "Bad Request"; break;
-        case 401: status_msg = "Unauthorized"; break;
-        case 402: status_msg = "Payment Required"; break;
-        case 403: status_msg = "Forbidden"; break;
-        case 404: status_msg = "Not Found"; break;
-        case 405: status_msg = "Method Not Allowed"; break;
-        case 406: status_msg = "Not Acceptable"; break;
-        case 407: status_msg = "Proxy Authentication Required"; break;
-        case 408: status_msg = "Request Timeout"; break;
-        case 409: status_msg = "Conflict"; break;
-        case 410: status_msg = "Gone"; break;
-        case 411: status_msg = "Length Required"; break;
-        case 412: status_msg = "Precondition Failed"; break;
-        case 413: status_msg = "Request Entity Too Large"; break;
-        case 414: status_msg = "Request-URI Too Long"; break;
-        case 415: status_msg = "Unsupported Media Type"; break;
-        case 416: status_msg = "Requested Range Not Satisfiable"; break;
-        case 417: status_msg = "Expectation Failed"; break;
-        case 418: status_msg = "I'm a teapot"; break;
-        case 420: status_msg = "Enhance Your Calm"; break;
-        case 422: status_msg = "Unprocessable Entity"; break;
-        case 423: status_msg = "Locked"; break;
-        case 424: status_msg = "Failed Dependency"; break;
-        case 425: status_msg = "Unordered Collection"; break;
-        case 426: status_msg = "Upgrade Required"; break;
-        case 428: status_msg = "Precondition Required"; break;
-        case 429: status_msg = "Too Many Requests"; break;
-        case 431: status_msg = "Request Header Fields Too Large"; break;
-        // 5xx: Server Errors
-        case 500: status_msg = "Internal Server Error"; break;
-        case 501: status_msg = "Not Implemented"; break;
-        case 502: status_msg = "Bad Gateway"; break;
-        case 503: status_msg = "Service Unavailable"; break;
-        case 504: status_msg = "Gateway Timeout"; break;
-        case 505: status_msg = "HTTP Version Not Supported"; break;
-        case 509: status_msg = "Bandwidth Limit Exceeded"; break;
-        case 510: status_msg = "Not Extended"; break;
-        case 511: status_msg = "Network Authentication Required"; break;
-    }
+    const char* status_msg = get_http_status_message(code);
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
 

@@ -4223,7 +4223,9 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
             rc.debug("Prepared ping path: %y", path);
         }
 
-        rc.debug("RestConnecton ping: start ping: %s %y path: %y hdr: %y", method, rc.getURL(), path, headers);
+        string http_version = real_opts.http_version ?? "auto";
+        rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getURL(),
+            path, http_version, headers);
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
     }
