@@ -480,6 +480,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - fixed async I/O shutdown to avoid deadlocks when canceling socket poll operations
     - @ref WebSocketClient "WebSocketClient" module
       - fixed HTTP/2 WebSocket CONNECT requests to send Sec-WebSocket-Version and correct :authority values
+      - fall back to HTTP/1.1 when HTTP/2 WebSocket CONNECT returns 501 (HTTP/2 WebSocket disabled)
     - Core language
       - fixed union type resolution order to honor the first matching type in the declaration
     - @ref RestClient "RestClient" module

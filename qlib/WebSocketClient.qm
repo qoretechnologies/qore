@@ -1890,7 +1890,19 @@ ws.setEventQueue();
         # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
         bool h2_active = hc.isHttp2Active();
         if (h2_active) {
-            return connectHttp2WebSocket(hdr, \info, reconnect);
+            try {
+                return connectHttp2WebSocket(hdr, \info, reconnect);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-CONNECT-ERROR" && ex.desc.find("status 501") >= 0
+                        && http_opts.http_version == "auto") {
+                    logInfo("HTTP/2 WebSocket not supported by server; retrying with HTTP/1.1");
+                    http_opts.http_version = "1.1";
+                    hc = new HTTPClient(http_opts);
+                    hc.connect();
+                    return connectHttp1WebSocket(hdr, \info, reconnect);
+                }
+                rethrow;
+            }
         }
 
         # HTTP/1.1 WebSocket handshake

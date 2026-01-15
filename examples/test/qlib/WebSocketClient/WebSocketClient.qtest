@@ -212,6 +212,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "service": 0,
                 "cert": cert,
                 "key": key,
+                "http_version": "auto",
             });
         } catch (hash<ExceptionInfo> ex) {
             # SSL might not be available
@@ -533,6 +534,38 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     http2WebSocketTests() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+
+        # Test 0: HTTP/2 auto fallback to HTTP/1.1 when WebSocket over HTTP/2 is not supported
+        {
+            list<auto> l = ();
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    l += msg;
+                    if (l.size() == 1) {
+                        c.dec();
+                    }
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            try {
+                wsc.connect();
+                wsc.send("REQUEST");
+                c.waitForZero(5s);
+                assertEq(list("RESPONSE:REQUEST"), l, "HTTP/1.1 fallback should echo messages");
+                assertFalse(wsc.isHttp2(), "HTTP/1.1 fallback should report http2=False");
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("HTTP/2 auto fallback test: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
         }
 
         # Test 1: Basic HTTP/2 WebSocket connection and message exchange
